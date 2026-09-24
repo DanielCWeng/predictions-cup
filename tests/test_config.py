@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 
 import pytest
-from pydantic import SecretStr, ValidationError
+from pydantic import ValidationError
 
 from predictions_cup.config import AppSettings
 
@@ -49,22 +49,27 @@ def test_runtime_environment_overrides_local_dotenv(
     del clean_config_env
     env_file = tmp_path / ".env"
     env_file.write_text("PREDICTIONS_CUP_LOG_LEVEL=DEBUG\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("PREDICTIONS_CUP_LOG_LEVEL", "error")
 
-    settings = AppSettings(_env_file=env_file)
+    settings = AppSettings()
 
     assert settings.log_level == "ERROR"
 
 
-def test_secrets_are_redacted_from_normal_representations(clean_config_env: None) -> None:
+def test_secrets_are_redacted_from_normal_representations(
+    clean_config_env: None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     del clean_config_env
     read_value = "TEST_READ_SECRET_DO_NOT_LEAK"
     trade_value = "TEST_TRADE_SECRET_DO_NOT_LEAK"
-    settings = AppSettings(
-        _env_file=None,
-        sig_read_credential=SecretStr(read_value),
-        sig_trade_credential=SecretStr(trade_value),
-    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PREDICTIONS_CUP_SIG_READ_CREDENTIAL", read_value)
+    monkeypatch.setenv("PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL", trade_value)
+
+    settings = AppSettings()
 
     record = logging.LogRecord(
         "secret-regression",
