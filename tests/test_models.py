@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -24,7 +24,7 @@ from predictions_cup.models import (
     Trade,
 )
 
-NOW = datetime(2026, 9, 24, 20, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 24, 20, 0, tzinfo=UTC)
 
 
 def test_price_boundaries_and_decimal_precision_are_preserved() -> None:
@@ -107,7 +107,7 @@ def test_naive_timestamp_is_rejected_and_aware_timestamp_normalises_to_utc() -> 
         timestamp=datetime(2026, 9, 24, 22, 0, tzinfo=plus_two),
     )
     assert trade.timestamp == NOW
-    assert trade.timestamp.tzinfo == timezone.utc
+    assert trade.timestamp.tzinfo == UTC
 
 
 def test_market_and_exchange_are_distinct_and_context_is_explicit() -> None:
