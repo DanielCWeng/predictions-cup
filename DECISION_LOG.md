@@ -24,7 +24,7 @@
 
 ## DECISION 006 — Timezone-aware UTC timestamps
 
-**Decision:** Canonical records representing instants reject naive datetimes and normalise accepted timestamps to UTC.
+**Decision:** Canonical records representing instants accept only actual timezone-aware `datetime` objects and normalise them to UTC. Wire-format strings/epochs must be parsed by transport adapters before entering the canonical layer.
 
 ## DECISION 007 — Opaque external identifiers
 
@@ -41,3 +41,11 @@
 ## DECISION 010 — Read/trade credential separation
 
 **Decision:** Configuration represents read-capable and trade-capable credentials independently to support least privilege where SIG-issued key scopes allow it.
+
+## DECISION 011 — Stable canonical order kinds
+
+**Decision:** `OrderKind` is restricted to `MARKET` and `LIMIT`. LIMIT requires a limit price; MARKET forbids one.
+
+## DECISION 012 — Position means platform holdings
+
+**Decision:** Canonical `Position.quantity` represents non-negative outcome shares held on an Exchange. Signed directional/risk exposure must be derived in later risk/state models rather than encoded as negative platform holdings.
