@@ -1,6 +1,6 @@
 """Canonical domain contracts used across the modular monolith."""
 
-from predictions_cup.models.common import PriceKind, Side
+from predictions_cup.models.common import OrderKind, PriceKind, Side
 from predictions_cup.models.decisions import DecisionRecord
 from predictions_cup.models.market import (
     Exchange,
@@ -24,6 +24,7 @@ __all__ = [
     "OrderBook",
     "OrderBookLevel",
     "OrderIntent",
+    "OrderKind",
     "Position",
     "Price",
     "PriceKind",
