@@ -16,6 +16,7 @@ from predictions_cup.models import (
     OrderBook,
     OrderBookLevel,
     OrderIntent,
+    OrderKind,
     Position,
     Price,
     PriceKind,
@@ -110,6 +111,26 @@ def test_naive_timestamp_is_rejected_and_aware_timestamp_normalises_to_utc() -> 
     assert trade.timestamp.tzinfo == UTC
 
 
+@pytest.mark.parametrize(
+    "wire_timestamp",
+    [
+        1727208000,
+        "2026-09-24T20:00:00Z",
+    ],
+)
+def test_canonical_timestamp_rejects_wire_format_values(wire_timestamp: object) -> None:
+    payload: dict[str, Any] = {
+        "trade_id": "trade",
+        "exchange_id": "exchange",
+        "price": Decimal("0.4"),
+        "quantity": Decimal("2"),
+        "timestamp": wire_timestamp,
+    }
+
+    with pytest.raises(ValidationError):
+        Trade.model_validate(payload)
+
+
 def test_market_and_exchange_are_distinct_and_context_is_explicit() -> None:
     exchange = Exchange(
         exchange_id="0007",
@@ -156,7 +177,7 @@ def test_order_intent_and_order_are_distinct_contracts() -> None:
         exchange_id="exchange:001",
         side=Side.BUY,
         quantity=Decimal("3"),
-        order_kind="limit",
+        order_kind=OrderKind.LIMIT,
         limit_price=Decimal("0.44"),
         created_at=NOW,
         strategy_id="strategy:test",
@@ -177,6 +198,58 @@ def test_order_intent_and_order_are_distinct_contracts() -> None:
     assert isinstance(intent, OrderIntent)
     assert isinstance(order, Order)
     assert order.intent_id == intent.intent_id
+
+
+@pytest.mark.parametrize(
+    ("order_kind", "limit_price"),
+    [
+        ("banana", None),
+        ("limit", None),
+        ("market", Decimal("0.44")),
+    ],
+)
+def test_order_intent_rejects_invalid_order_semantics(
+    order_kind: str,
+    limit_price: Decimal | None,
+) -> None:
+    payload: dict[str, Any] = {
+        "intent_id": "intent:invalid",
+        "exchange_id": "exchange:001",
+        "side": "buy",
+        "quantity": Decimal("1"),
+        "order_kind": order_kind,
+        "limit_price": limit_price,
+        "created_at": NOW,
+        "strategy_id": "strategy:test",
+    }
+
+    with pytest.raises(ValidationError):
+        OrderIntent.model_validate(payload)
+
+
+def test_market_and_limit_order_kinds_accept_only_matching_price_shape() -> None:
+    market = OrderIntent(
+        intent_id="intent:market",
+        exchange_id="exchange:001",
+        side=Side.BUY,
+        quantity=Decimal("1"),
+        order_kind=OrderKind.MARKET,
+        created_at=NOW,
+        strategy_id="strategy:test",
+    )
+    limit = OrderIntent(
+        intent_id="intent:limit",
+        exchange_id="exchange:001",
+        side=Side.SELL,
+        quantity=Decimal("1"),
+        order_kind=OrderKind.LIMIT,
+        limit_price=Decimal("0.44"),
+        created_at=NOW,
+        strategy_id="strategy:test",
+    )
+
+    assert market.limit_price is None
+    assert limit.limit_price == Decimal("0.44")
 
 
 def test_orderbook_represents_multiple_explicit_levels() -> None:
@@ -218,16 +291,30 @@ def test_fill_retains_financially_material_fields() -> None:
     assert fill.timestamp == NOW
 
 
-def test_position_allows_signed_decimal_exposure_without_portfolio_logic() -> None:
-    position = Position(
+def test_position_represents_non_negative_platform_holdings() -> None:
+    flat = Position(
         exchange_id="exchange:opaque:0001",
-        quantity=Decimal("-2.500"),
+        quantity=Decimal("0"),
+        average_entry_price=None,
+        as_of=NOW,
+    )
+    held = Position(
+        exchange_id="exchange:opaque:0001",
+        quantity=Decimal("2.500"),
         average_entry_price=Decimal("0.51"),
         as_of=NOW,
     )
 
-    assert position.exchange_id == "exchange:opaque:0001"
-    assert position.quantity == Decimal("-2.500")
+    assert flat.quantity == Decimal("0")
+    assert held.quantity == Decimal("2.500")
+
+    with pytest.raises(ValidationError):
+        Position(
+            exchange_id="exchange:opaque:0001",
+            quantity=Decimal("-0.001"),
+            average_entry_price=Decimal("0.51"),
+            as_of=NOW,
+        )
 
 
 def test_decision_record_is_immutable_audit_primitive() -> None:
