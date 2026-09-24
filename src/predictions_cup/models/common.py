@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated
@@ -51,7 +51,7 @@ def _positive_quantity(value: Decimal) -> Decimal:
 def _aware_utc(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError("timestamp must be timezone aware")
-    return value.astimezone(timezone.utc)
+    return value.astimezone(UTC)
 
 
 Identifier = Annotated[str, AfterValidator(_non_blank)]
