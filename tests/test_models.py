@@ -252,6 +252,22 @@ def test_market_and_limit_order_kinds_accept_only_matching_price_shape() -> None
     assert limit.limit_price == Decimal("0.44")
 
 
+def test_order_rejects_mismatched_order_kind_and_price() -> None:
+    payload: dict[str, Any] = {
+        "order_id": "order:invalid",
+        "intent_id": "intent:invalid",
+        "exchange_id": "exchange:001",
+        "side": "buy",
+        "quantity": Decimal("1"),
+        "order_kind": "market",
+        "limit_price": Decimal("0.44"),
+        "created_at": NOW,
+    }
+
+    with pytest.raises(ValidationError):
+        Order.model_validate(payload)
+
+
 def test_orderbook_represents_multiple_explicit_levels() -> None:
     book = OrderBook(
         exchange_id="exchange",
