@@ -15,16 +15,19 @@ Canonical models are domain objects, not direct mirrors of remote JSON. Future a
 | FairValue | UNDEFINED / PLACEHOLDER | Later fair-value contract. | later fair-value ticket |
 | Opportunity | UNDEFINED / PLACEHOLDER | Later opportunity-scanning contract. | later opportunity-scanning ticket |
 | RiskDecision | UNDEFINED / PLACEHOLDER | Later risk contract. | later risk ticket |
-| OrderIntent | DEFINED | Proposed trading action before risk/execution; never itself an Order. | BUILD-002 |
-| Order | DEFINED | Order identity/state known to the system; no submission behavior. | BUILD-002 |
+| OrderIntent | DEFINED | Proposed MARKET/LIMIT trading action before risk/execution; never itself an Order. | BUILD-002 |
+| Order | DEFINED | MARKET/LIMIT order identity/state known to the system; no submission behavior. | BUILD-002 |
 | Fill | DEFINED | Financial execution fact retaining order/exchange/side/price/quantity/time. | BUILD-002 |
-| Position | DEFINED | Exchange-level signed exposure snapshot; no P&L/accounting algorithms. | BUILD-002 |
+| Position | DEFINED | Non-negative outcome-share holdings for one Exchange; signed risk exposure is derived elsewhere. | BUILD-002 |
 | DecisionRecord | DEFINED | Immutable audit/learning decision identity and reason primitive. | BUILD-002 |
 
 Shared canonical rules:
 
 - monetary, probability, price, and quantity values use `Decimal`; binary `float` inputs are rejected;
-- canonical timestamped records require timezone-aware datetimes and normalise them to UTC;
+- canonical timestamped records require an actual timezone-aware `datetime` object and normalise it to UTC;
+- wire-format timestamp strings/epoch values belong in future transport adapters and are rejected by canonical models;
 - external/platform identifiers remain opaque non-blank strings;
 - historical/value models are frozen and reject unknown fields;
-- undocumented remote statuses/order kinds remain opaque non-blank strings rather than speculative enums.
+- `OrderKind` is limited to `MARKET` and `LIMIT`: LIMIT requires `limit_price`, MARKET forbids it;
+- canonical `Position.quantity` is non-negative platform holdings; signed directional exposure is not represented by `Position`;
+- undocumented remote order/status values other than stable order-kind semantics remain opaque non-blank strings rather than speculative enums.
