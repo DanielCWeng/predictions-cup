@@ -23,12 +23,16 @@ Future adapters must conceptually perform:
 ```text
 remote API payload
         ↓
-transport validation
+transport validation / wire-format parsing
         ↓
 canonical domain object
 ```
 
 Canonical domain models are deliberately not endpoint-response DTOs. BUILD-003 may add SIG-specific transport types without redefining the canonical contracts.
+
+Canonical timestamp fields therefore accept only actual timezone-aware `datetime` objects. Parsing API strings, epoch values, or other wire representations is an adapter responsibility.
+
+Canonical `Position` represents non-negative platform outcome-share holdings. Any later signed directional exposure is a derived state/risk concept rather than a negative canonical holding.
 
 ## Planned architecture
 
@@ -61,5 +65,6 @@ learning/attribution
 - Avoid distributed infrastructure and generic abstraction frameworks without evidence.
 - Treat REST as the eventual authoritative financial/state truth; realtime may accelerate/invalidate state but must be reconciled.
 - Strategies may eventually propose `OrderIntent` objects, but central Risk must mediate any future execution.
+- Canonical order kinds are limited to MARKET and LIMIT, with matching price-shape validation.
 - Configuration is loaded on demand; no settings singleton/module-global state is created.
 - `trading_enabled` alone can never submit an order.
