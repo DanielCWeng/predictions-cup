@@ -48,6 +48,19 @@ def _positive_quantity(value: Decimal) -> Decimal:
     return value
 
 
+def _non_negative_decimal(value: Decimal) -> Decimal:
+    value = _finite_decimal(value)
+    if value < Decimal("0"):
+        raise ValueError("value must be greater than or equal to zero")
+    return value
+
+
+def _require_datetime(value: object) -> object:
+    if not isinstance(value, datetime):
+        raise ValueError("timestamp must be supplied as a datetime object")
+    return value
+
+
 def _aware_utc(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError("timestamp must be timezone aware")
@@ -61,6 +74,11 @@ FiniteDecimal = Annotated[
     BeforeValidator(_reject_binary_float),
     AfterValidator(_finite_decimal),
 ]
+NonNegativeDecimal = Annotated[
+    Decimal,
+    BeforeValidator(_reject_binary_float),
+    AfterValidator(_non_negative_decimal),
+]
 Probability = Annotated[
     Decimal,
     BeforeValidator(_reject_binary_float),
@@ -71,12 +89,21 @@ PositiveQuantity = Annotated[
     BeforeValidator(_reject_binary_float),
     AfterValidator(_positive_quantity),
 ]
-AwareDateTime = Annotated[datetime, AfterValidator(_aware_utc)]
+AwareDateTime = Annotated[
+    datetime,
+    BeforeValidator(_require_datetime),
+    AfterValidator(_aware_utc),
+]
 
 
 class Side(StrEnum):
     BUY = "buy"
     SELL = "sell"
+
+
+class OrderKind(StrEnum):
+    MARKET = "market"
+    LIMIT = "limit"
 
 
 class PriceKind(StrEnum):
