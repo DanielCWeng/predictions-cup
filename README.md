@@ -72,9 +72,13 @@ Core rules include:
 - `Decimal` rather than binary float for financial/probability/order values;
 - prices/probabilities constrained to `[0,1]`;
 - positive quantities where an economic amount must be positive;
-- timezone-aware timestamps normalised to UTC;
+- canonical timestamps require an actual timezone-aware `datetime` and normalise to UTC;
+- timestamp strings/epoch integers must be parsed by future transport adapters before canonical construction;
 - opaque non-blank string identifiers;
-- immutable historical/value models.
+- immutable historical/value models;
+- canonical `OrderKind` values are MARKET and LIMIT;
+- LIMIT orders require a `limit_price`, while MARKET orders forbid one;
+- canonical `Position.quantity` represents non-negative outcome-share holdings, not signed directional risk exposure.
 
 See `DATA_CONTRACTS.md` for contract ownership and meanings.
 
@@ -88,7 +92,7 @@ python -m predictions_cup.app
 python -m predictions_cup.app --smoke-test
 ```
 
-CI runs lint, strict type checking, and tests on Python 3.12.
+CI runs lint, strict type checking, tests, and both app invocations on Python 3.12.
 
 ## Repository orientation
 
