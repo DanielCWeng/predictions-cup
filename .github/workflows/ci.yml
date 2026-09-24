@@ -32,3 +32,8 @@ jobs:
 
       - name: Test
         run: pytest
+
+      - name: Application smoke
+        run: |
+          python -m predictions_cup.app
+          python -m predictions_cup.app --smoke-test
