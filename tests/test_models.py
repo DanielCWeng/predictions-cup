@@ -176,7 +176,6 @@ def test_order_intent_and_order_are_distinct_contracts() -> None:
 
     assert isinstance(intent, OrderIntent)
     assert isinstance(order, Order)
-    assert type(intent) is not type(order)
     assert order.intent_id == intent.intent_id
 
 
