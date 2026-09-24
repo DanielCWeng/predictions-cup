@@ -4,39 +4,79 @@ Foundation for a quantitative prediction-market trading system being developed f
 
 ## Current status
 
-This repository is in **FOUNDATION** phase. It has **no trading capability**. It does not connect to SIG or any external API, submit orders, calculate fair value, or run strategies.
+This repository is in **FOUNDATION / DOMAIN MODELS** phase. It has **no trading capability**. It does not connect to SIG or any external API, submit orders, calculate fair value, or run strategies.
+
+BUILD-002 defines the typed configuration and canonical core domain objects that future adapters and engines must consume.
 
 ## Requirements
 
 - Python 3.12 or newer
 - `pip`
 
-The repository uses a `src/` package layout with `pytest`, `ruff`, and `mypy`. Runtime code currently uses only the Python standard library. Development-tool and build-backend versions are pinned in `pyproject.toml` for reproducible setup.
+Runtime dependencies are intentionally limited to:
+
+- `pydantic` for canonical typed validation/serialization;
+- `pydantic-settings` for deterministic environment-driven configuration.
+
+The project uses a `src/` package layout with `pytest`, `ruff`, and strict `mypy`.
 
 ## Setup
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows PowerShell: .venv\\Scripts\\Activate.ps1
+source .venv/bin/activate  # Windows PowerShell: .venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -e '.[dev]'
 ```
 
-No credentials are required for BUILD-001.
+No credentials are required to install, test, or run the application shell.
+
+## Configuration
+
+Configuration is loaded on demand from environment variables. A local `.env` file is supported for developer convenience and remains ignored by Git; runtime environment variables take precedence.
+
+Canonical variables:
+
+```text
+PREDICTIONS_CUP_ENVIRONMENT
+PREDICTIONS_CUP_LOG_LEVEL
+PREDICTIONS_CUP_SIG_API_BASE_URL
+PREDICTIONS_CUP_SIG_READ_CREDENTIAL
+PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL
+PREDICTIONS_CUP_TOURNAMENT_ID
+PREDICTIONS_CUP_TOURNAMENT_SLUG
+PREDICTIONS_CUP_TRADING_ENABLED
+```
+
+The default SIG API base is `https://www.thesuper.market/api/v1`.
+
+`PREDICTIONS_CUP_TRADING_ENABLED` defaults to `false`. No API key, environment name, or other setting implicitly enables trading. Even a validated `true` setting creates no execution path.
+
+Read and trade credentials use Pydantic secret types. Ordinary settings representations/serialization redact them. Actual key scope remains a server-side property of the credential issued by SIG.
 
 ## Run the application shell
 
 ```bash
 python -m predictions_cup.app
-```
-
-For an explicit smoke-test invocation:
-
-```bash
 python -m predictions_cup.app --smoke-test
 ```
 
-Both paths only emit startup/shutdown logs and exit. No network access or trading behavior is implemented.
+Both paths load validated settings, emit non-secret state, make zero network calls, perform no trading, and exit.
+
+## Domain contracts
+
+Canonical contracts live under `predictions_cup.models`. They are deliberately separate from future SIG/external API transport payloads.
+
+Core rules include:
+
+- `Decimal` rather than binary float for financial/probability/order values;
+- prices/probabilities constrained to `[0,1]`;
+- positive quantities where an economic amount must be positive;
+- timezone-aware timestamps normalised to UTC;
+- opaque non-blank string identifiers;
+- immutable historical/value models.
+
+See `DATA_CONTRACTS.md` for contract ownership and meanings.
 
 ## Validation
 
@@ -44,9 +84,11 @@ Both paths only emit startup/shutdown logs and exit. No network access or tradin
 ruff check .
 mypy
 pytest
+python -m predictions_cup.app
+python -m predictions_cup.app --smoke-test
 ```
 
-CI runs these same checks on Python 3.12 for pushes and pull requests.
+CI runs lint, strict type checking, and tests on Python 3.12.
 
 ## Repository orientation
 
@@ -64,4 +106,4 @@ Start with `CURRENT_STATE.md`. The canonical control documents are:
 
 ## Secrets
 
-Secrets come from environment/runtime configuration. Secrets are never committed and never logged. `.env` and `.env.*` are ignored; `.env.example` is deliberately trackable and contains no credentials. BUILD-002 will define the typed configuration model and any required secret names.
+Secrets come from local/runtime configuration, are never committed, and must never be logged. `.env` and `.env.*` are ignored while `.env.example` remains safe to commit.
