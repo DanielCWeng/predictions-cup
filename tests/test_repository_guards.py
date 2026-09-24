@@ -15,6 +15,8 @@ def test_env_example_contains_no_secret_values() -> None:
     contents = (REPO_ROOT / ".env.example").read_text(encoding="utf-8")
 
     assert "PREDICTIONS_CUP_LOG_LEVEL=INFO" in contents
-    assert "TOKEN=" not in contents
-    assert "SECRET=" not in contents
-    assert "PASSWORD=" not in contents
+    assert "PREDICTIONS_CUP_TRADING_ENABLED=false" in contents
+    assert "TEST_READ_SECRET_DO_NOT_LEAK" not in contents
+    assert "TEST_TRADE_SECRET_DO_NOT_LEAK" not in contents
+    assert "PREDICTIONS_CUP_SIG_READ_CREDENTIAL=<" not in contents
+    assert "PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL=<" not in contents

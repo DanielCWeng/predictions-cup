@@ -1,29 +1,37 @@
 # Current State
 
-**Phase:** FOUNDATION
+**Phase:** FOUNDATION / DOMAIN MODELS
 
 ## Implemented
 
-- repository skeleton;
-- Python tooling;
-- CI;
-- canonical documents;
-- runnable non-trading application shell;
-- minimal logging configuration;
-- environment/secrets boundary for future configuration.
+- repository foundation;
+- Python tooling and CI;
+- typed application configuration;
+- environment-driven loading with optional local `.env` support;
+- secret-safe read/trade credential representation;
+- fail-closed trading configuration;
+- canonical core domain models;
+- Decimal-based financial/probability values;
+- timezone-aware canonical timestamps;
+- opaque external identifiers;
+- validation invariants;
+- runnable non-trading application shell.
 
 ## Not implemented
 
-- SIG integration;
+- SIG HTTP integration;
+- SIG authentication requests;
 - realtime;
-- state store;
-- external markets;
+- market-state engine;
+- external market adapters;
 - market mapping;
 - fair value;
 - relationships;
 - opportunity scanning;
-- risk;
+- risk decisions/calculations;
 - execution;
+- order submission;
+- portfolio accounting;
 - shadow trading;
 - live trading.
 
@@ -31,8 +39,8 @@
 
 **NONE**
 
-The application currently starts, reports FOUNDATION/non-trading state, and exits. It performs no external network calls and requires no credentials.
+`trading_enabled` defaults to `False`. Setting it to `True` is only configuration intent and requires a separately supplied trade credential; no execution path or network client exists.
 
 ## Recommended next ticket
 
-**BUILD-002 — Configuration, secrets and typed API/domain models**
+**BUILD-003 — SIG authenticated REST client**
