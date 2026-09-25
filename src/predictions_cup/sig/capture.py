@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import signal
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -120,10 +121,8 @@ async def _stop_after(seconds: float, stop_event: asyncio.Event) -> None:
 def _install_signal_handlers(stop_event: asyncio.Event) -> None:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
+        with suppress(NotImplementedError):
             loop.add_signal_handler(sig, stop_event.set)
-        except NotImplementedError:
-            pass
 
 
 def main() -> int:

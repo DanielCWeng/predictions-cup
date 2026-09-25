@@ -33,11 +33,6 @@ from predictions_cup.sig.dto import (
     Resolution,
     TradePageDto,
 )
-from predictions_cup.sig.realtime_models import (
-    RealtimeTokenDto,
-    TournamentListStatus,
-    TournamentPageDto,
-)
 from predictions_cup.sig.errors import (
     SigApiError,
     SigMalformedResponseError,
@@ -45,6 +40,11 @@ from predictions_cup.sig.errors import (
     SigTemporaryServiceError,
     SigTransportError,
     error_from_payload,
+)
+from predictions_cup.sig.realtime_models import (
+    RealtimeTokenDto,
+    TournamentListStatus,
+    TournamentPageDto,
 )
 
 logger = logging.getLogger(__name__)

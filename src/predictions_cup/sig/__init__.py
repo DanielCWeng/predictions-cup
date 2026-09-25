@@ -16,12 +16,6 @@ from predictions_cup.sig.dto import (
     PriceSnapshotDto,
     TradePageDto,
 )
-from predictions_cup.sig.realtime_models import (
-    MarketBatchDto,
-    RealtimeTokenDto,
-    TournamentPageDto,
-    TournamentSummaryDto,
-)
 from predictions_cup.sig.errors import (
     SigApiError,
     SigAuthenticationError,
@@ -34,6 +28,12 @@ from predictions_cup.sig.errors import (
     SigTemporaryServiceError,
     SigTransportError,
     SigUnexpectedServerError,
+)
+from predictions_cup.sig.realtime_models import (
+    MarketBatchDto,
+    RealtimeTokenDto,
+    TournamentPageDto,
+    TournamentSummaryDto,
 )
 
 __all__ = [
