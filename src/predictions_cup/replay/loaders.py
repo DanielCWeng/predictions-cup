@@ -616,7 +616,7 @@ def _count_trusted_sig_books_sql(
         f"AND {_RECOGNIZED_TRUST_SQL}"
         f"{trust_floor} "
         "ORDER BY t.observed_at DESC, "
-        "CASE WHEN t.exchange_id = b.exchange_id THEN 1 ELSE 0 END DESC, "
+        "CASE WHEN t.exchange_id IS NULL THEN 0 ELSE 1 END DESC, "
         "t.id DESC LIMIT 1) LIKE 'TRUSTED%'"
     )
     row = db.execute(sql, (*params, *trust_params)).fetchone()
