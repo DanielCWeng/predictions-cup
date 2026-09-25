@@ -13,6 +13,7 @@ from pathlib import Path
 
 from predictions_cup.config import AppSettings, load_settings
 from predictions_cup.sig.client import SigRestClient
+from predictions_cup.sig.errors import SigApiError
 from predictions_cup.sig.realtime_state import SigRealtimeStateEngine, SubscriptionReason
 from predictions_cup.sig.realtime_storage import SigRealtimeRecorder
 from predictions_cup.sig.realtime_subscriber import SubscriberExit, SupabaseTournamentSubscriber
@@ -80,23 +81,37 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
         try:
             cutoff = datetime.now(UTC) - timedelta(days=settings.sig_realtime_retention_days)
             recorder.prune_before(cutoff)
-            await engine.initialize()
             reason = SubscriptionReason.INITIAL_SUBSCRIBE
             while not stop_event.is_set():
-                await engine.prepare_subscription(reason)
-                token = await rest.mint_realtime_token()
-                subscriber = SupabaseTournamentSubscriber(
-                    topic=engine.topic,
-                    token=token,
-                    token_refresh_margin_seconds=(
-                        settings.sig_realtime_token_refresh_margin_seconds
-                    ),
-                )
-                outcome = await subscriber.run(
-                    on_batch=engine.handle_raw_batch,
-                    on_connected=engine.mark_connected,
-                    stop_event=stop_event,
-                )
+                try:
+                    # The documented lifecycle is token -> authoritative REST resync
+                    # -> private subscription. Initial seeding happens exactly once.
+                    token = await rest.mint_realtime_token()
+                    if reason == SubscriptionReason.INITIAL_SUBSCRIBE:
+                        await engine.initialize()
+                    else:
+                        await engine.prepare_subscription(reason)
+                    subscriber = SupabaseTournamentSubscriber(
+                        topic=engine.topic,
+                        token=token,
+                        token_refresh_margin_seconds=(
+                            settings.sig_realtime_token_refresh_margin_seconds
+                        ),
+                    )
+                    outcome = await subscriber.run(
+                        on_batch=engine.handle_raw_batch,
+                        on_connected=engine.mark_connected,
+                        stop_event=stop_event,
+                    )
+                except SigApiError as exc:
+                    engine.mark_disconnected()
+                    logger.warning(
+                        "SIG authoritative recovery failed error=%s",
+                        type(exc).__name__,
+                    )
+                    await asyncio.sleep(1.0)
+                    continue
+
                 engine.mark_disconnected()
                 logger.info("SIG Realtime subscriber exited reason=%s", outcome.value)
                 if outcome == SubscriberExit.STOPPED:

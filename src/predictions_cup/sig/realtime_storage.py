@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from predictions_cup.models import OrderBook
+from predictions_cup.sig.dto import MarketDto
 from predictions_cup.sig.realtime_models import (
     BookDirtyDto,
     MarketSettledDto,
@@ -75,6 +76,20 @@ class SigRealtimeRecorder:
             );
             CREATE INDEX IF NOT EXISTS ix_market_settled_events_market_time
                 ON market_settled_events(market_id, observed_at);
+
+            CREATE TABLE IF NOT EXISTS market_observations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                market_id TEXT NOT NULL,
+                tournament_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                settled_with TEXT,
+                market_json TEXT NOT NULL,
+                rest_observed_at TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                triggering_revision INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS ix_market_observations_market_time
+                ON market_observations(market_id, rest_observed_at);
 
             CREATE TABLE IF NOT EXISTS book_observations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -218,6 +233,35 @@ class SigRealtimeRecorder:
         )
         self._connection.commit()
 
+    def record_market(
+        self,
+        *,
+        tournament_id: str,
+        market: MarketDto,
+        observed_at: datetime,
+        reason: str,
+        triggering_revision: int | None,
+    ) -> None:
+        self._connection.execute(
+            """
+            INSERT INTO market_observations (
+                market_id, tournament_id, status, settled_with, market_json,
+                rest_observed_at, reason, triggering_revision
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                market.id,
+                tournament_id,
+                market.status,
+                market.settled_with,
+                market.model_dump_json(by_alias=True),
+                _iso(observed_at),
+                reason,
+                triggering_revision,
+            ),
+        )
+        self._connection.commit()
+
     def record_book(
         self,
         *,
@@ -285,6 +329,9 @@ class SigRealtimeRecorder:
             )
             self._connection.execute(
                 "DELETE FROM market_settled_events WHERE observed_at < ?", (cutoff_iso,)
+            )
+            self._connection.execute(
+                "DELETE FROM market_observations WHERE rest_observed_at < ?", (cutoff_iso,)
             )
             self._connection.execute(
                 "DELETE FROM book_observations WHERE rest_observed_at < ?", (cutoff_iso,)

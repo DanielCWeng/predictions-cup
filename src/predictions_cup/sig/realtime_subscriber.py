@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -17,6 +18,7 @@ from predictions_cup.sig.realtime_models import RealtimeTokenDto
 Clock = Callable[[], datetime]
 BatchHandler = Callable[[str, object, datetime], Awaitable[None]]
 ConnectedHandler = Callable[[], None]
+logger = logging.getLogger(__name__)
 
 
 class SubscriberExit(StrEnum):
@@ -73,10 +75,19 @@ class SupabaseTournamentSubscriber:
             status_queue.put_nowait((status, error))
 
         try:
-            await channel.on_broadcast("market_batch", handle_broadcast).subscribe(handle_status)
-            status, _ = await asyncio.wait_for(
-                status_queue.get(), timeout=self._subscribe_timeout_seconds
-            )
+            try:
+                await channel.on_broadcast("market_batch", handle_broadcast).subscribe(
+                    handle_status
+                )
+                status, _ = await asyncio.wait_for(
+                    status_queue.get(), timeout=self._subscribe_timeout_seconds
+                )
+            except Exception as exc:
+                logger.warning(
+                    "SIG Realtime subscription setup failed error=%s",
+                    type(exc).__name__,
+                )
+                return SubscriberExit.SOCKET_ERROR
             if status != RealtimeSubscribeStates.SUBSCRIBED:
                 return SubscriberExit.SOCKET_ERROR
             on_connected()

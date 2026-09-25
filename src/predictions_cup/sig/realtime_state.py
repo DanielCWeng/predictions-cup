@@ -14,7 +14,7 @@ from typing import Protocol
 from pydantic import ValidationError
 
 from predictions_cup.models import OrderBook
-from predictions_cup.sig.dto import ExchangeListItemDto, OrderBookSnapshotDto
+from predictions_cup.sig.dto import MarketDto, OrderBookSnapshotDto
 from predictions_cup.sig.realtime_models import MarketBatchDto, RealtimeTradeDto
 from predictions_cup.sig.realtime_storage import SigRealtimeRecorder
 
@@ -44,13 +44,19 @@ class TrustTransition(StrEnum):
 
 
 class SigStateRest(Protocol):
-    def iter_exchanges(
+    def iter_markets(
         self,
         *,
-        market_id: str | None = None,
+        limit: int = 100,
         tournament_id: str | None = None,
-        limit: int = 200,
-    ) -> AsyncIterator[ExchangeListItemDto]: ...
+    ) -> AsyncIterator[MarketDto]: ...
+
+    async def get_market(
+        self,
+        market_id: str,
+        *,
+        tournament_id: str | None = None,
+    ) -> MarketDto: ...
 
     async def get_orderbook(
         self,
@@ -59,6 +65,15 @@ class SigStateRest(Protocol):
         depth: int = 20,
         tournament_id: str | None = None,
     ) -> OrderBookSnapshotDto: ...
+
+
+@dataclass
+class MarketRuntimeState:
+    market_id: str
+    title: str
+    status: str
+    settled_with: str | None
+    last_rest_observed_at: datetime
 
 
 @dataclass
@@ -120,32 +135,48 @@ class SigRealtimeStateEngine:
         self._book_depth = book_depth
         self._semaphore = asyncio.Semaphore(max_reconciliation_concurrency)
         self._clock = clock
+        self.market_states: dict[str, MarketRuntimeState] = {}
         self.states: dict[str, ExchangeRuntimeState] = {}
         self.health = RuntimeHealth()
         self.last_accepted_revision: int | None = None
 
     async def initialize(self) -> None:
-        await self.refresh_universe()
+        """Perform the single authoritative seed required before first subscription."""
+        self.health.connected = False
+        self.last_accepted_revision = None
+        await self.refresh_universe(
+            reason=SubscriptionReason.INITIAL_SUBSCRIBE.value,
+            triggering_revision=None,
+        )
+        self._mark_untrusted(
+            self.states.keys(),
+            TrustTransition.UNTRUSTED_INITIAL_SUBSCRIBE,
+            revision=None,
+        )
         await self._reconcile_many(
             self.states.keys(),
-            reason="initial_snapshot",
-            final_transition=TrustTransition.TRUSTED,
+            reason=SubscriptionReason.INITIAL_SUBSCRIBE.value,
+            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
             triggering_revision=None,
         )
 
-    async def refresh_universe(self) -> None:
-        async for exchange in self._rest.iter_exchanges(tournament_id=self.tournament_id):
-            current = self.states.get(exchange.id)
-            if current is None:
-                self.states[exchange.id] = ExchangeRuntimeState(
-                    exchange_id=exchange.id,
-                    market_id=exchange.market_id,
-                    tournament_id=self.tournament_id,
-                )
-            elif current.market_id != exchange.market_id:
-                raise ValueError("SIG exchange changed market identity")
+    async def refresh_universe(
+        self,
+        *,
+        reason: str,
+        triggering_revision: int | None,
+    ) -> None:
+        async for market in self._rest.iter_markets(tournament_id=self.tournament_id):
+            observed_at = self._clock()
+            self._apply_market_snapshot(
+                market,
+                observed_at=observed_at,
+                reason=reason,
+                triggering_revision=triggering_revision,
+            )
 
     async def prepare_subscription(self, reason: SubscriptionReason) -> None:
+        """Invalidate, refresh authoritative market state, then reseed exchange books."""
         self.health.connected = False
         self.last_accepted_revision = None
         transition = {
@@ -157,6 +188,7 @@ class SigRealtimeStateEngine:
         if reason == SubscriptionReason.RECONNECT:
             self.health.reconnect_count += 1
         self._mark_untrusted(self.states.keys(), transition, revision=None)
+        await self.refresh_universe(reason=reason.value, triggering_revision=None)
         await self._reconcile_many(
             self.states.keys(),
             reason=reason.value,
@@ -184,13 +216,9 @@ class SigRealtimeStateEngine:
             self._validate_batch_tournament(batch)
         except (ValidationError, ValueError) as exc:
             logger.warning("SIG Realtime payload rejected: %s", type(exc).__name__)
-            self._mark_untrusted(
-                self.states.keys(), TrustTransition.UNTRUSTED_MALFORMED_PAYLOAD, revision=None
-            )
-            await self._reconcile_many(
-                self.states.keys(),
+            await self._full_resync(
+                transition=TrustTransition.UNTRUSTED_MALFORMED_PAYLOAD,
                 reason="malformed_payload",
-                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                 triggering_revision=None,
             )
             return
@@ -202,32 +230,19 @@ class SigRealtimeStateEngine:
         if self.last_accepted_revision == delivery.revision:
             return
 
-        if self.last_accepted_revision is None:
-            self._mark_untrusted(
-                self.states.keys(),
-                TrustTransition.UNTRUSTED_INITIAL_SUBSCRIBE,
-                revision=delivery.revision,
-            )
-            await self._reconcile_many(
-                self.states.keys(),
-                reason="first_realtime_message",
-                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
-                triggering_revision=delivery.revision,
-            )
-        elif delivery.previous_revision != self.last_accepted_revision:
+        if (
+            self.last_accepted_revision is not None
+            and delivery.previous_revision != self.last_accepted_revision
+        ):
             self.health.revision_gap_count += 1
-            self._mark_untrusted(
-                self.states.keys(),
-                TrustTransition.UNTRUSTED_REVISION_GAP,
-                revision=delivery.revision,
-            )
-            await self._reconcile_many(
-                self.states.keys(),
+            await self._full_resync(
+                transition=TrustTransition.UNTRUSTED_REVISION_GAP,
                 reason="revision_gap",
-                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                 triggering_revision=delivery.revision,
             )
 
+        # The authoritative subscription seed already ran before the socket joined.
+        # The first valid topic revision becomes the delivery baseline.
         self.last_accepted_revision = delivery.revision
         await self._ensure_known_exchanges(batch)
         self._record_trades(batch, observed_at)
@@ -246,7 +261,45 @@ class SigRealtimeStateEngine:
                 observed_at=observed_at,
             )
 
-        dirty_exchange_ids = {item.exchange_id for item in batch.book_dirty}
+        settled_market_ids = {item.market_id for item in batch.market_settled}
+        if settled_market_ids:
+            settled_exchange_ids = {
+                state.exchange_id
+                for state in self.states.values()
+                if state.market_id in settled_market_ids
+            }
+            for exchange_id in settled_exchange_ids:
+                self.states[exchange_id].last_realtime_observed_at = observed_at
+                self.states[exchange_id].last_accepted_revision = delivery.revision
+            self._mark_untrusted(
+                settled_exchange_ids,
+                TrustTransition.UNTRUSTED_SETTLEMENT,
+                revision=delivery.revision,
+            )
+            successful_markets: set[str] = set()
+            for market_id in settled_market_ids:
+                if await self._reconcile_market(
+                    market_id,
+                    reason="market_settled",
+                    triggering_revision=delivery.revision,
+                ):
+                    successful_markets.add(market_id)
+            await self._reconcile_many(
+                (
+                    exchange_id
+                    for exchange_id in settled_exchange_ids
+                    if self.states[exchange_id].market_id in successful_markets
+                ),
+                reason="market_settled",
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=delivery.revision,
+            )
+
+        dirty_exchange_ids = {
+            item.exchange_id
+            for item in batch.book_dirty
+            if self.states[item.exchange_id].market_id not in settled_market_ids
+        }
         for exchange_id in dirty_exchange_ids:
             self.states[exchange_id].last_realtime_observed_at = observed_at
             self.states[exchange_id].last_accepted_revision = delivery.revision
@@ -263,28 +316,6 @@ class SigRealtimeStateEngine:
                 triggering_revision=delivery.revision,
             )
 
-        settled_market_ids = {item.market_id for item in batch.market_settled}
-        if settled_market_ids:
-            settled_exchange_ids = {
-                state.exchange_id
-                for state in self.states.values()
-                if state.market_id in settled_market_ids
-            }
-            for exchange_id in settled_exchange_ids:
-                self.states[exchange_id].last_realtime_observed_at = observed_at
-                self.states[exchange_id].last_accepted_revision = delivery.revision
-            self._mark_untrusted(
-                settled_exchange_ids,
-                TrustTransition.UNTRUSTED_SETTLEMENT,
-                revision=delivery.revision,
-            )
-            await self._reconcile_many(
-                settled_exchange_ids,
-                reason="market_settled",
-                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
-                triggering_revision=delivery.revision,
-            )
-
     def health_snapshot(self) -> dict[str, object]:
         trusted = sum(1 for state in self.states.values() if state.trusted)
         return {
@@ -295,9 +326,29 @@ class SigRealtimeStateEngine:
             "revision_gap_count": self.health.revision_gap_count,
             "reconnect_count": self.health.reconnect_count,
             "reconciliation_failure_count": self.health.reconciliation_failure_count,
+            "market_count": len(self.market_states),
             "trusted_exchange_count": trusted,
             "untrusted_exchange_count": len(self.states) - trusted,
         }
+
+    async def _full_resync(
+        self,
+        *,
+        transition: TrustTransition,
+        reason: str,
+        triggering_revision: int | None,
+    ) -> None:
+        self._mark_untrusted(self.states.keys(), transition, revision=triggering_revision)
+        await self.refresh_universe(
+            reason=reason,
+            triggering_revision=triggering_revision,
+        )
+        await self._reconcile_many(
+            self.states.keys(),
+            reason=reason,
+            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+            triggering_revision=triggering_revision,
+        )
 
     async def _ensure_known_exchanges(self, batch: MarketBatchDto) -> None:
         referenced = {trade.exchange_id for trade in batch.trades} | {
@@ -306,7 +357,10 @@ class SigRealtimeStateEngine:
         unknown = referenced.difference(self.states)
         if not unknown:
             return
-        await self.refresh_universe()
+        await self.refresh_universe(
+            reason="new_exchange",
+            triggering_revision=batch.delivery.revision,
+        )
         still_unknown = unknown.difference(self.states)
         if still_unknown:
             raise ValueError(f"Realtime referenced unknown exchanges: {sorted(still_unknown)!r}")
@@ -339,6 +393,72 @@ class SigRealtimeStateEngine:
                 trade=trade,
                 observed_at=observed_at,
             )
+
+    def _apply_market_snapshot(
+        self,
+        market: MarketDto,
+        *,
+        observed_at: datetime,
+        reason: str,
+        triggering_revision: int | None,
+    ) -> None:
+        self.market_states[market.id] = MarketRuntimeState(
+            market_id=market.id,
+            title=market.title,
+            status=market.status,
+            settled_with=market.settled_with,
+            last_rest_observed_at=observed_at,
+        )
+        for exchange in market.exchanges:
+            current = self.states.get(exchange.id)
+            if current is None:
+                self.states[exchange.id] = ExchangeRuntimeState(
+                    exchange_id=exchange.id,
+                    market_id=market.id,
+                    tournament_id=self.tournament_id,
+                )
+            elif current.market_id != market.id:
+                raise ValueError("SIG exchange changed market identity")
+        self._recorder.record_market(
+            tournament_id=self.tournament_id,
+            market=market,
+            observed_at=observed_at,
+            reason=reason,
+            triggering_revision=triggering_revision,
+        )
+        self.health.last_rest_reconciliation = observed_at
+
+    async def _reconcile_market(
+        self,
+        market_id: str,
+        *,
+        reason: str,
+        triggering_revision: int | None,
+    ) -> bool:
+        try:
+            async with self._semaphore:
+                market = await self._rest.get_market(
+                    market_id,
+                    tournament_id=self.tournament_id,
+                )
+            observed_at = self._clock()
+            if market.id != market_id:
+                raise ValueError("authoritative market identity mismatch")
+            self._apply_market_snapshot(
+                market,
+                observed_at=observed_at,
+                reason=reason,
+                triggering_revision=triggering_revision,
+            )
+        except Exception as exc:
+            self.health.reconciliation_failure_count += 1
+            logger.warning(
+                "SIG REST market reconciliation failed market=%s error=%s",
+                market_id,
+                type(exc).__name__,
+            )
+            return False
+        return True
 
     def _mark_untrusted(
         self,
@@ -401,6 +521,26 @@ class SigRealtimeStateEngine:
             revision=triggering_revision,
             detail=reason,
         )
+
+        market_state = self.market_states.get(state.market_id)
+        if market_state is not None and market_state.status != "open":
+            observed_at = market_state.last_rest_observed_at
+            state.orderbook = None
+            state.last_rest_observed_at = observed_at
+            state.last_reconciliation_at = observed_at
+            state.trusted = True
+            if triggering_revision is not None:
+                state.last_accepted_revision = triggering_revision
+            self._recorder.record_transition(
+                topic=self.topic,
+                exchange_id=exchange_id,
+                transition=final_transition.value,
+                observed_at=observed_at,
+                revision=triggering_revision,
+                detail=f"{reason}:market_{market_state.status}",
+            )
+            return
+
         try:
             async with self._semaphore:
                 snapshot = await self._rest.get_orderbook(
