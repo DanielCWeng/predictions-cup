@@ -4,6 +4,7 @@ import asyncio
 import sqlite3
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 from predictions_cup.models import OrderBook, OrderBookLevel
@@ -279,8 +280,8 @@ def test_recorder_normalization_wal_and_retention(tmp_path: Path) -> None:
     )
     book = OrderBook(
         exchange_id="36",
-        bids=(OrderBookLevel(price="0.4", quantity="10"),),
-        asks=(OrderBookLevel(price="0.6", quantity="10"),),
+        bids=(OrderBookLevel(price=Decimal("0.4"), quantity=Decimal("10")),),
+        asks=(OrderBookLevel(price=Decimal("0.6"), quantity=Decimal("10")),),
         timestamp=old,
         source="sig-rest",
         revision=None,

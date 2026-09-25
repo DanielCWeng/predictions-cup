@@ -9,6 +9,7 @@ from enum import StrEnum
 from typing import Any, cast
 
 from realtime import RealtimeSubscribeStates
+from realtime.types import BroadcastPayload, RealtimeChannelOptions
 from supabase import acreate_client
 
 from predictions_cup.sig.realtime_models import RealtimeTokenDto
@@ -56,13 +57,16 @@ class SupabaseTournamentSubscriber:
             str(self._token.supabase_url), self._token.anon_key.get_secret_value()
         )
         await client.realtime.set_auth(self._token.token.get_secret_value())
-        channel = client.channel(self._topic, {"config": {"private": True}})
+        channel_options: RealtimeChannelOptions = {
+            "config": {"broadcast": None, "presence": None, "private": True}
+        }
+        channel = client.channel(self._topic, channel_options)
         payload_queue: asyncio.Queue[tuple[object, datetime]] = asyncio.Queue()
         status_queue: asyncio.Queue[tuple[RealtimeSubscribeStates, Exception | None]] = (
             asyncio.Queue()
         )
 
-        def handle_broadcast(message: dict[str, Any]) -> None:
+        def handle_broadcast(message: BroadcastPayload) -> None:
             payload_queue.put_nowait((message.get("payload"), self._clock()))
 
         def handle_status(status: RealtimeSubscribeStates, error: Exception | None) -> None:
