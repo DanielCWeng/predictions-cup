@@ -1,5 +1,10 @@
 """Deterministic observable-time replay and executable-markout foundation."""
 
+from predictions_cup.replay.historical import (
+    HistoricalReplayBatch,
+    HistoricalSnapshotError,
+    load_historical_snapshot_jsonl,
+)
 from predictions_cup.replay.loaders import (
     CaptureSchemaError,
     CaptureSelection,
@@ -31,6 +36,8 @@ __all__ = [
     "CaptureSummary",
     "Direction",
     "HealthPayload",
+    "HistoricalReplayBatch",
+    "HistoricalSnapshotError",
     "InstrumentView",
     "InvalidReason",
     "Markout",
@@ -44,6 +51,7 @@ __all__ = [
     "TradePayload",
     "TrustPayload",
     "evaluate_markout",
+    "load_historical_snapshot_jsonl",
     "load_polymarket_capture",
     "load_sig_capture",
     "summarize_captures",

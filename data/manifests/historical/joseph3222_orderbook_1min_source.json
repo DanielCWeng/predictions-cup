@@ -1,0 +1,22 @@
+{
+  "dataset_id": "joseph3222_orderbook_1min_source_2026",
+  "status": "SOURCE_VERIFIED_NOT_MATERIALIZED",
+  "source": "Joseph3222/polymarket-orderbook orderbook_1min",
+  "source_url_or_origin": "https://huggingface.co/datasets/Joseph3222/polymarket-orderbook",
+  "downloaded_at": null,
+  "source_version_if_known": "Hub dataset moved from polypipe R2 lake on 2026-09-02",
+  "sha256": null,
+  "file_size": null,
+  "format": "parquet",
+  "compression": "source parquet",
+  "markets": ["COL_2026_PRES", "PER_2026_GENERAL after exact-id extraction", "HUN_2026_PARL only if v1 presence is proved"],
+  "conditions": [],
+  "tokens": [],
+  "time_start": "2026-02-22T00:00:00Z",
+  "time_end": "2026-08-10T23:59:59Z",
+  "record_count": null,
+  "timestamp_semantics": "minute-end full-depth state derived from PMXT event stream; SOURCE_TIME_PROXY when adapted into BUILD-005",
+  "data_grade": "SNAPSHOT_ONLY",
+  "known_gaps": "Inherits PMXT source omissions; minutes with no activity have no row and require explicit carry-forward policy",
+  "known_limitations": "Normalization is not an independent recording. Populate exact extract checksum/size/count after materialization."
+}

@@ -1,0 +1,22 @@
+{
+  "dataset_id": "pmxt_v2_source_2026",
+  "status": "SOURCE_VERIFIED_NOT_MATERIALIZED",
+  "source": "PMXT v2 via PendulumFlow mirror",
+  "source_url_or_origin": "https://archive.pendulumflow.com/pmxt/v2/",
+  "downloaded_at": null,
+  "source_version_if_known": "pmxt/v2 snapshot-grade historical corpus",
+  "sha256": null,
+  "file_size": null,
+  "format": "parquet",
+  "compression": "ZSTD",
+  "markets": ["COL_2026_PRES", "PER_2026_GENERAL candidates after exact-id extraction"],
+  "conditions": [],
+  "tokens": [],
+  "time_start": "2026-04-13T19:00:00Z",
+  "time_end": "2026-08-09T23:59:59Z",
+  "record_count": null,
+  "timestamp_semantics": "millisecond source/receive timestamps; ties can be unordered; not local observable time",
+  "data_grade": "SNAPSHOT_ONLY",
+  "known_gaps": "PendulumFlow audit measured 0.8707 market coverage ratio against on-chain fills in its audit sample; equal-ms ordering unrecoverable",
+  "known_limitations": "Not exact event replay; no queue reconstruction; no faithful maker-fill/cancellation simulation. Populate checksum/size/count only after a concrete extract is materialized."
+}

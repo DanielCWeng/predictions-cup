@@ -1,0 +1,22 @@
+{
+  "dataset_id": "polyleviathan_rpc_fills_selected_elections",
+  "status": "PRIVATE_SOURCE_SCHEMA_VERIFIED_NOT_EXTRACTED",
+  "source": "PolyLeviathan OCI trades/ canonical RPC OrderFilled lake",
+  "source_url_or_origin": "oci://polymarket-bot-state/trades/YYYY-MM-DD.parquet",
+  "downloaded_at": null,
+  "source_version_if_known": "canonical trades/ schema in DanielCWeng/polymarketwhale",
+  "sha256": null,
+  "file_size": null,
+  "format": "parquet",
+  "compression": null,
+  "markets": ["USA_2024_GENERAL", "USA_2025_STATE", "CAN_2025_FEDERAL candidates"],
+  "conditions": [],
+  "tokens": [],
+  "time_start": null,
+  "time_end": null,
+  "record_count": null,
+  "timestamp_semantics": "OrderFilled execution block/event timestamp at second precision in canonical schema",
+  "data_grade": "TRADE_ONLY",
+  "known_gaps": "Current private OCI object inventory not queried by this execution environment",
+  "known_limitations": "Matching log, not custody ledger. maker/taker are matching roles. Cannot infer queue, resting depth, cancellations or passive quote survival."
+}
