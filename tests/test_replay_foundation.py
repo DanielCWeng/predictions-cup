@@ -685,9 +685,11 @@ def test_sql_selection_filters_before_materialization(tmp_path: Path) -> None:
             ),
         )
 
+    start = base - timedelta(seconds=1)
+    end = base + timedelta(minutes=1)
     selection = CaptureSelection(
-        start_at=base - timedelta(seconds=1),
-        end_at=base + timedelta(minutes=1),
+        start_at=start,
+        end_at=end,
         sig_exchange_ids=("sig-1",),
         polymarket_token_ids=("poly-1",),
     )
@@ -696,8 +698,8 @@ def test_sql_selection_filters_before_materialization(tmp_path: Path) -> None:
 
     assert {event.instrument_id for event in sig_events} <= {"sig-1", "*"}
     assert {event.instrument_id for event in poly_events} <= {"poly-1", "*"}
-    assert all(selection.start_at <= event.observed_at < selection.end_at for event in sig_events)
-    assert all(selection.start_at <= event.observed_at < selection.end_at for event in poly_events)
+    assert all(start <= event.observed_at < end for event in sig_events)
+    assert all(start <= event.observed_at < end for event in poly_events)
 
     summary = summarize_captures(
         sig_path=sig_path,
