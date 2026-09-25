@@ -1,9 +1,21 @@
 # Build Ledger
 
+Status semantics:
+
+- `MERGED / ACCEPTED` — accepted functionality exists on `main`.
+- `BLOCKED / IN REVIEW` — implementation exists only on the named branch/PR and is not part of `main`.
+- `PLANNED` — no accepted implementation exists.
+- An unmerged branch must never be described as implemented on `main`.
+
 | Ticket | Status | Branch | PR | Commit | Review | Acceptance |
 |---|---|---|---|---|---|---|
-| BUILD-001 — Repository Foundation and Canonical Project Control | ACCEPTED | `build/001-foundation` | #1 | `b930acd88b89faaada674790718bd34ac13c3d5e` (foundation implementation) | builder self-review complete; final CI green | project owner authorized merge |
-| BUILD-002 — Configuration, secrets and typed API/domain models | READY FOR RE-REVIEW | `build/002-config-domain-models` | #2 | `899201e1b60c9588772f21b83399248d8e05b0f5` (review revision validated) | blocker revision complete; branch CI green | pending |
-| BUILD-003 — SIG authenticated REST client | PLANNED | pending | pending | pending | pending | pending |
+| BUILD-001 — Repository Foundation and Canonical Project Control | MERGED / ACCEPTED | `build/001-foundation` | #1 | head `e0695cfe61a3b5070d08e64fe872da676b32db75`; merge `88a2578e25f4ee005a01955db7d9ef619ce5be30` | final review complete; CI green | merged 24 Sep 2026 |
+| BUILD-002 — Configuration, secrets and typed API/domain models | MERGED / ACCEPTED | `build/002-config-domain-models` | #2 | head `7d2dfc218e1ddc46685346b8a683bdc8a041c9ce`; merge `81cee3c0449fb5abe898df46c752ba312a5c8422` | blocker revision accepted; CI green | merged 24 Sep 2026 |
+| BUILD-003 — SIG authenticated read-only REST client | BLOCKED / IN REVIEW | `build/003-sig-rest-client` | #4 | head `7666e5cdf0309a7847edf8277de41ed6fe5cc970` | recursive `MarketNode` transport validation blocker remains; branch must reconcile canonical docs with cleaned `main` before merge | pending |
+| EXPERIMENT-001A — Polymarket live data capture foundation | BLOCKED / IN REVIEW | `experiment/001a-polymarket-live-capture` | #5 | head `070fbf391ea983d9f719933bf58fdbb5af493df9` | focused recorder revision required: durable event-time book changes, honest REST observation times, lean storage growth, missing-PONG detection, and `last_trade_price` consistency; integration gated after #4 | pending |
 
-Rows marked `PLANNED` are not implemented.
+## Active non-build work
+
+- PR #6 — **Docs — Competition research and six-day launch plan** — active and unmerged on `docs/competition-research-launch-plan`. It changes documentation only and does not alter runtime/trading capability.
+
+GitHub merge state and the actual contents of `main` are authoritative when documentation drifts.

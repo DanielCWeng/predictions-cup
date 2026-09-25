@@ -20,3 +20,11 @@ Future production operation is expected to provide, at minimum:
 - no dependency on a developer laptop.
 
 These mechanisms are expectations only and are not implemented by BUILD-001.
+
+## Repository state discipline
+
+- Every implementation branch starts from current `main`.
+- Every accepted merge updates canonical project state.
+- Builders do not merge their own PRs.
+- Active branch state must not be described as merged functionality.
+- GitHub merge state and actual `main` contents outrank stale documentation.
