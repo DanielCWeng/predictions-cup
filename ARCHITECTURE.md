@@ -21,7 +21,42 @@ BUILD-003 provides the accepted **read-only** SIG REST boundary under `predictio
 
 EXPERIMENT-001A additionally provides the accepted **public read-only Polymarket research capture** path under `predictions_cup.external.polymarket`: public Gamma/CLOB discovery, authoritative REST book seeding, persistent market WebSocket ingestion, normalized event-time book-change/trade persistence, a lean 1-second top-of-book panel, slower bounded depth snapshots, SQLite/WAL storage, and feed-health/reconnect handling.
 
-There is still no SIG realtime subsystem, production market-state/reconciliation engine, mapping, fair value, strategy logic, risk-decision engine, write/execution path, portfolio accounting, or trading capability.
+There is still no **accepted-on-main** SIG realtime subsystem, production market-state/reconciliation engine, mapping, fair value, strategy logic, risk-decision engine, write/execution path, portfolio accounting, or trading capability.
+
+### BUILD-004 candidate architecture — IN REVIEW, PR #12
+
+The unmerged BUILD-004 branch proposes a read-only venue-specific state subsystem under
+`predictions_cup.sig`:
+
+```text
+explicit tournament UUID
+        ↓
+authoritative REST market catalogue + open-market orderbook seed
+        ↓
+POST /realtime/token
+        ↓
+one private tournament:{tournament_id} broadcast subscription
+        ↓
+market_batch + local observed_at
+        ↓
+delivery revision continuity check
+        ↓
+bookDirty / settlement / lifecycle invalidation
+        ↓
+authoritative REST market + orderbook reconciliation
+        ↓
+trusted per-exchange runtime state + normalized SQLite/WAL capture
+```
+
+The design deliberately does not reconstruct authoritative depth from Realtime. Realtime says
+that something changed; REST determines what the trusted current book is. Topic
+`revision/previousRevision` is the delivery-continuity mechanism. Engine
+`sourceSequenceFrom/sourceSequenceThrough` is retained only as provenance.
+
+The branch keeps event/source timestamps, local Realtime `observed_at`, and REST response
+observation timestamps separate. A failed reconciliation leaves the affected state untrusted.
+No strategy, fair-value, mapping, order, cancellation or portfolio path is introduced by this
+candidate architecture.
 
 ## Transport / canonical boundary
 
@@ -85,7 +120,7 @@ learning/attribution
 - Canonical order kinds are limited to MARKET and LIMIT, with matching price-shape validation.
 - Configuration is loaded on demand; no settings singleton/module-global state is created.
 - `trading_enabled` alone can never submit an order.
-- BUILD-003 is read-only: no order placement/cancellation and no SIG realtime token/WebSocket path.
+- BUILD-003 remains read-only. BUILD-004 PR #12 adds a candidate read-only Realtime token/subscription path but no order placement/cancellation path; it is not accepted on `main` while unmerged.
 - EXPERIMENT-001A is public/read-only and isolated from normal application startup.
 - Polymarket disconnect or receive/PONG liveness failure invalidates local book trust; reconnect performs an authoritative REST reseed before subsequent deltas are trusted.
 - The 1-second research panel stores scalar top-of-book state only; top-20 depth defaults to a separate 60-second cadence, while normalized price-change deltas are durable at event observation time.

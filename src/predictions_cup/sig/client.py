@@ -41,6 +41,11 @@ from predictions_cup.sig.errors import (
     SigTransportError,
     error_from_payload,
 )
+from predictions_cup.sig.realtime_models import (
+    RealtimeTokenDto,
+    TournamentListStatus,
+    TournamentPageDto,
+)
 
 logger = logging.getLogger(__name__)
 ModelT = TypeVar("ModelT", bound=BaseModel)
@@ -113,6 +118,31 @@ class SigRestClient:
     async def get_account(self) -> AccountDto:
         payload = await self._get_json("account", route_template="/account")
         return self._validate(AccountDto, payload, route_template="/account")
+
+    async def list_tournaments(
+        self,
+        *,
+        status: TournamentListStatus = "any",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> TournamentPageDto:
+        self._require_range("limit", limit, 1, 100)
+        if offset < 0:
+            raise ValueError("offset must be non-negative")
+        payload = await self._get_json(
+            "tournaments",
+            params={"status": status, "limit": limit, "offset": offset},
+            route_template="/tournaments",
+        )
+        return self._validate(TournamentPageDto, payload, route_template="/tournaments")
+
+    async def mint_realtime_token(self) -> RealtimeTokenDto:
+        payload = await self._post_json(
+            "realtime/token", route_template="/realtime/token"
+        )
+        return self._validate(
+            RealtimeTokenDto, payload, route_template="/realtime/token"
+        )
 
     async def list_markets(
         self,
@@ -406,6 +436,43 @@ class SigRestClient:
             raise error
 
         raise AssertionError("unreachable retry loop")
+
+    async def _post_json(self, path: str, *, route_template: str) -> object:
+        started = time.monotonic()
+        try:
+            response = await self._client.post(path)
+        except httpx.TransportError as exc:
+            logger.warning(
+                "SIG REST transport failure",
+                extra={
+                    "sig_method": "POST",
+                    "sig_endpoint": route_template,
+                    "sig_status": None,
+                    "sig_attempt": 1,
+                    "sig_latency_ms": round((time.monotonic() - started) * 1000, 3),
+                    "sig_retry_reason": type(exc).__name__,
+                },
+            )
+            raise SigTransportError(
+                status_code=None,
+                code=None,
+                safe_message="SIG REST transport failed",
+            ) from exc
+
+        logger.info(
+            "SIG REST response",
+            extra={
+                "sig_method": "POST",
+                "sig_endpoint": route_template,
+                "sig_status": response.status_code,
+                "sig_attempt": 1,
+                "sig_latency_ms": round((time.monotonic() - started) * 1000, 3),
+            },
+        )
+        payload = self._decode_json(response, route_template=route_template)
+        if response.is_success:
+            return payload
+        raise error_from_payload(status_code=response.status_code, payload=payload)
 
     def _decode_json(self, response: httpx.Response, *, route_template: str) -> object:
         try:
