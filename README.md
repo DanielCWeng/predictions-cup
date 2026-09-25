@@ -4,7 +4,7 @@ Foundation for a quantitative prediction-market trading system being developed f
 
 ## Current status
 
-This repository is in **FOUNDATION / READ-ONLY SIG REST** phase. It has **no trading capability**. BUILD-003 adds an authenticated, read-only SIG REST adapter for market discovery, prices, orderbooks, trades/history, market nodes, exchanges, and account health. It does not submit/cancel orders, use realtime, calculate fair value, or run strategies.
+This PR #5 integration branch contains corrected BUILD-003 plus EXPERIMENT-001A, both still awaiting independent review/merge. It has **no trading capability**. BUILD-003 adds an authenticated, read-only SIG REST adapter for market discovery, prices, orderbooks, trades/history, market nodes, exchanges, and account health. It does not submit/cancel orders, use realtime, calculate fair value, or run strategies.
 
 BUILD-002 remains the owner of typed configuration and canonical domain objects. BUILD-003 validates SIG wire payloads separately and converts into those canonical contracts only where the conversion is lossless.
 
@@ -17,7 +17,8 @@ Runtime dependencies are intentionally limited to:
 
 - `pydantic` for canonical typed validation/serialization;
 - `pydantic-settings` for deterministic environment-driven configuration;
-- `httpx` for pooled asynchronous read-only SIG HTTP.
+- `httpx` for pooled asynchronous read-only SIG HTTP;
+- `aiohttp` for public Polymarket Gamma/CLOB HTTP and market WebSocket capture.
 
 The project uses a `src/` package layout with `pytest`, `ruff`, and strict `mypy`.
 
@@ -73,6 +74,19 @@ Tournament context is an explicit caller concern. Read methods accept `tournamen
 SIG JSON numbers used for prices and quantities are decoded through `Decimal` before validation. ISO-8601 wire timestamps are parsed in the SIG transport layer; canonical models continue to reject timestamp strings.
 
 The current SIG surface is read-only. There is no order placement, cancellation, realtime/WebSocket, automatic tournament resolver, or portfolio accounting.
+
+## Experimental Polymarket recorder
+
+EXPERIMENT-001A is a separate public read-only capture process. It is never started by normal application startup and contains no wallet, signing or order path.
+
+```bash
+PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true \
+python -m predictions_cup.external.polymarket.recorder
+```
+
+It persists normalized event-time book changes, public last-trade events, a lean 1-second top-of-book panel and slower configurable depth snapshots. REST seed batches retain their own local receipt timestamps, and stale receive/PONG liveness forces reconnect followed by authoritative REST reseeding.
+
+See `docs/experiments/EXPERIMENT_001_POLYMARKET_SHADOW.md` for storage sizing and capture semantics.
 
 ## Domain contracts
 
