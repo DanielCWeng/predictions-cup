@@ -255,6 +255,31 @@ def test_lifecycle_reasons_resync_and_persist_transitions(tmp_path: Path) -> Non
     asyncio.run(scenario())
 
 
+def test_malformed_batch_resynchronizes_and_never_advances_revision(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        rest = FakeRest()
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(rest=rest, recorder=recorder, tournament_id="cup")
+        await engine.initialize()
+        calls_before = len(rest.calls)
+        observed = datetime(2026, 9, 25, 14, 0, tzinfo=UTC)
+
+        await engine.handle_raw_batch(
+            engine.topic,
+            {"trades": [], "bookDirty": [], "marketSettled": []},
+            observed,
+        )
+
+        assert engine.last_accepted_revision is None
+        assert len(rest.calls) == calls_before + 2
+        assert all(state.trusted for state in engine.states.values())
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
 def test_recorder_normalization_wal_and_retention(tmp_path: Path) -> None:
     path = tmp_path / "sig.sqlite3"
     recorder = SigRealtimeRecorder(path)

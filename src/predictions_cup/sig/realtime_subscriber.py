@@ -87,6 +87,25 @@ class SupabaseTournamentSubscriber:
                     return SubscriberExit.STOPPED
                 if self._clock() >= refresh_at:
                     return SubscriberExit.TOKEN_REFRESH
+
+                # Supabase reuses the original subscribe callback when its channel
+                # auto-rejoins after a socket reconnect. A second SUBSCRIBED status
+                # therefore means this connection crossed a recovery boundary and
+                # must exit so the outer loop can REST-resynchronize before trusting
+                # any subsequent Realtime data.
+                try:
+                    reconnect_status, _ = status_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    reconnect_status = None
+                if reconnect_status == RealtimeSubscribeStates.SUBSCRIBED:
+                    return SubscriberExit.DISCONNECTED
+                if reconnect_status in {
+                    RealtimeSubscribeStates.CHANNEL_ERROR,
+                    RealtimeSubscribeStates.TIMED_OUT,
+                    RealtimeSubscribeStates.CLOSED,
+                }:
+                    return SubscriberExit.SOCKET_ERROR
+
                 if channel.is_errored:
                     return SubscriberExit.SOCKET_ERROR
                 if not client.realtime.is_connected or channel.is_closed:
