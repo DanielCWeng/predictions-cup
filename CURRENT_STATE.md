@@ -2,6 +2,14 @@
 
 **Phase:** FOUNDATION / DOMAIN MODELS
 
+## Operating posture — 25 September 2026
+
+- Broad strategy/mathematical research is now frozen by default; new work should answer a failed test, implementation ambiguity, live venue observation or specific architectural decision.
+- Initial empirical strategy work is limited to direct external lead/lag, simple residual/relative value and simple selective market making.
+- **Monday 28 September gate:** those initial hypotheses must be runnable through replay using data captured by our own infrastructure; otherwise priority collapses entirely onto data → replay → experiment.
+- Competition-history findings are canonicalized in docs/research/QUANT_COMPETITION_HISTORY_2021_2026.md.
+- BUILD-003 remains an independent branch/review stream and is not modified by the documentation launch-plan work.
+
 ## Implemented
 
 - repository foundation;
