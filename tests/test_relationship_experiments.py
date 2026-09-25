@@ -544,6 +544,5 @@ def test_serialization_is_deterministic() -> None:
     first = runner.run(events, (spec,))
     second = runner.run(tuple(reversed(events)), (spec,))
     assert serialize_relationship_observations(first) == serialize_relationship_observations(second)
-    assert serialize_relationship_observations(reversed(first)) == serialize_relationship_observations(
-        first
-    )
+    reversed_bytes = serialize_relationship_observations(reversed(first))
+    assert reversed_bytes == serialize_relationship_observations(first)
