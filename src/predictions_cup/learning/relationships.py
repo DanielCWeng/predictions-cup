@@ -389,11 +389,36 @@ class RelationshipExperimentRunner:
             )
             return
 
+        if (
+            spec.family is not ExperimentFamily.LEADLAG
+            and spec.target_price_mode is ReferencePriceMode.LAST_TRADE
+        ):
+            _, target_trade_reason = _valid_feature_view(
+                frame.state,
+                spec.target,
+                frame.observed_at,
+                spec.target_freshness,
+                ReferencePriceMode.LAST_TRADE,
+            )
+            if target_trade_reason is not None:
+                output.extend(
+                    self._invalid_without_signal(
+                        spec,
+                        frame.observed_at,
+                        target_trade_reason,
+                    )
+                )
+                return
+
         references: list[tuple[ReferenceSpec, InstrumentView]] = []
         first_reason: InvalidReason | None = None
         for ref in spec.references:
-            view, reason = _valid_view(
-                frame.state, ref.instrument, frame.observed_at, spec.reference_freshness
+            view, reason = _valid_feature_view(
+                frame.state,
+                ref.instrument,
+                frame.observed_at,
+                spec.reference_freshness,
+                spec.reference_price_mode,
             )
             if reason is not None or view is None:
                 first_reason = first_reason or _reference_reason(reason)
@@ -492,13 +517,21 @@ class RelationshipExperimentRunner:
             previous = _history_at_or_before(histories.get(ref.instrument, []), cutoff)
             if previous is None:
                 continue
-            current_p = _reference_price(current, spec.reference_price_mode)
-            previous_p = _reference_price(previous, spec.reference_price_mode)
+            if not _view_is_fresh_for_mode(
+                previous,
+                cutoff,
+                spec.reference_freshness,
+                spec.reference_price_mode,
+            ):
+                continue
+            current_p = _relationship_price(
+                current, spec.reference_price_mode, ref.relationship
+            )
+            previous_p = _relationship_price(
+                previous, spec.reference_price_mode, ref.relationship
+            )
             if current_p is None or previous_p is None:
                 continue
-            if ref.relationship is RelationshipDirection.COMPLEMENT:
-                current_p = Decimal("1") - current_p
-                previous_p = Decimal("1") - previous_p
             weighted_p += ref.weight * (current_p - previous_p)
             weighted_z += ref.weight * (
                 _logit(current_p, spec.clamp_epsilon) - _logit(previous_p, spec.clamp_epsilon)
@@ -529,11 +562,11 @@ class RelationshipExperimentRunner:
     ) -> tuple[Decimal, Direction | None, FeatureVector] | None:
         values: list[tuple[Decimal, Decimal]] = []
         for ref, view in references:
-            price = _reference_price(view, spec.reference_price_mode)
+            price = _relationship_price(
+                view, spec.reference_price_mode, ref.relationship
+            )
             if price is None:
                 continue
-            if ref.relationship is RelationshipDirection.COMPLEMENT:
-                price = Decimal("1") - price
             values.append((price, ref.weight))
         if len(values) < spec.min_active_references:
             return None
@@ -806,8 +839,21 @@ def split_relationship_observations(
 def serialize_relationship_observations(
     observations: Iterable[RelationshipObservation],
 ) -> bytes:
-    records = [row.as_record() for row in observations]
+    ordered = sorted(observations, key=_observation_sort_key)
+    records = [row.as_record() for row in ordered]
     return (json.dumps(records, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def _observation_sort_key(
+    row: RelationshipObservation,
+) -> tuple[datetime, str, str, timedelta, str]:
+    return (
+        row.decision_time,
+        row.experiment_id,
+        row.target,
+        row.horizon,
+        "" if row.signal_direction is None else row.signal_direction.value,
+    )
 
 
 def _valid_view(
@@ -822,6 +868,39 @@ def _valid_view(
         at=at,
         max_age=max_age,
     )
+
+
+def _valid_feature_view(
+    state: ReplayState,
+    instrument: InstrumentKey,
+    at: datetime,
+    max_age: timedelta | None,
+    mode: ReferencePriceMode,
+) -> tuple[InstrumentView | None, InvalidReason | None]:
+    if mode is ReferencePriceMode.LAST_TRADE:
+        return state.trade_status(
+            source=instrument.source,
+            instrument_id=instrument.instrument_id,
+            at=at,
+            max_age=max_age,
+        )
+    return _valid_view(state, instrument, at, max_age)
+
+
+def _view_is_fresh_for_mode(
+    view: InstrumentView,
+    at: datetime,
+    max_age: timedelta | None,
+    mode: ReferencePriceMode,
+) -> bool:
+    observed_at = (
+        view.last_trade_observed_at
+        if mode is ReferencePriceMode.LAST_TRADE
+        else view.quote_observed_at
+    )
+    if observed_at is None:
+        return False
+    return max_age is None or at - observed_at <= max_age
 
 
 def _reference_reason(reason: InvalidReason | None) -> InvalidReason:
@@ -846,6 +925,21 @@ def _reference_price(view: InstrumentView, mode: ReferencePriceMode) -> Decimal 
         if total > 0:
             return (ask.price * bid.quantity + bid.price * ask.quantity) / total
     return view.midpoint
+
+
+def _relationship_price(
+    view: InstrumentView,
+    mode: ReferencePriceMode,
+    relationship: RelationshipDirection,
+) -> Decimal | None:
+    if relationship is RelationshipDirection.SAME:
+        return _reference_price(view, mode)
+    if mode is ReferencePriceMode.BID:
+        return None if view.best_ask is None else Decimal("1") - view.best_ask
+    if mode is ReferencePriceMode.ASK:
+        return None if view.best_bid is None else Decimal("1") - view.best_bid
+    price = _reference_price(view, mode)
+    return None if price is None else Decimal("1") - price
 
 
 def _estimate_reference(
