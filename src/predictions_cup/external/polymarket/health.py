@@ -10,6 +10,7 @@ from datetime import datetime
 class IngestionHealth:
     websocket_connected: bool = False
     last_message_at: datetime | None = None
+    last_pong_at: datetime | None = None
     last_valid_book_update_at: datetime | None = None
     last_book_change_at: datetime | None = None
     last_trade_at: datetime | None = None
@@ -33,6 +34,7 @@ class IngestionHealth:
         return {
             "websocket_connected": self.websocket_connected,
             "last_message_at": iso(self.last_message_at),
+            "last_pong_at": iso(self.last_pong_at),
             "last_valid_book_update_at": iso(self.last_valid_book_update_at),
             "last_book_change_at": iso(self.last_book_change_at),
             "last_trade_at": iso(self.last_trade_at),
