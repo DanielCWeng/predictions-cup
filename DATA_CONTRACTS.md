@@ -11,7 +11,7 @@ Canonical models are domain objects, not direct mirrors of remote JSON. Adapters
 | OrderBook | DEFINED | Immutable timestamped bid/ask snapshot for one Exchange. | BUILD-002 |
 | Trade | DEFINED | Observed economic trade with Decimal price/quantity and aware timestamp. | BUILD-002 |
 | ExternalReference | DEFINED | Venue-agnostic identity for an external contract; no mapping semantics. | BUILD-002 |
-| MarketMapping | UNDEFINED / PLACEHOLDER | Later mapping contract. | later mapping ticket |
+| MarketMapping | DEFINED / IN REVIEW | One SIG exchange mapped to explicit Polymarket identity/token semantics, or failed closed as unresolved/NO_TRADE. | MAPPING-001 |
 | FairValue | UNDEFINED / PLACEHOLDER | Later fair-value contract. | later fair-value ticket |
 | Opportunity | UNDEFINED / PLACEHOLDER | Later opportunity-scanning contract. | later opportunity-scanning ticket |
 | RiskDecision | UNDEFINED / PLACEHOLDER | Later risk contract. | later risk ticket |
@@ -50,3 +50,20 @@ Key rules:
 - market-node trees are preserved as remote structure and are not yet promoted into a semantic relationship graph.
 
 The OpenAPI `Exchange.option` field is nullable while canonical `Exchange.outcome_label` is non-null. Transport parsing preserves null; canonical conversion fails visibly rather than inventing an outcome label.
+
+## Mapping contracts — MAPPING-001
+
+The MAPPING-001 branch defines mapping semantics separately from `ExternalReference`.
+
+Key rules:
+
+- every canonical mapping record identifies exactly one SIG exchange;
+- `EXACT` / `NEAR` require one explicit direct Polymarket identity and `SAME` or `COMPLEMENT` direction;
+- direct Polymarket identity preserves market ID, CID, all aligned outcomes/token IDs, and the selected outcome/token pair;
+- `DERIVED` requires at least two explicit component identities and does not masquerade as a direct contract;
+- `MODEL_ONLY` / `NO_TRADE` cannot claim Polymarket token IDs;
+- unresolved candidate similarity always fails closed to `NO_TRADE`;
+- duplicate SIG exchange mappings and stale override identities fail validation;
+- canonical JSON ordering/content is deterministic; CSV and summary are derived artifacts.
+
+These contracts remain branch-level / in-review capability until MAPPING-001 is independently accepted and merged.
