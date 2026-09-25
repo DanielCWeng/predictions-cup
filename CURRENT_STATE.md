@@ -48,6 +48,18 @@ This document describes the accepted repository state on `main`.
 - The MAPPING-001 framework is accepted on `main`, but the live credentialed 2026 SIG ↔ Polymarket crosswalk has **not** been generated or accepted.
 - LIVE-MAPPING-GATE-001 / GitHub issue #13 tracks live SIG exchange enumeration, reviewer promotion/overrides, mapped-token CLOB smoke, acceptance evidence and independent acceptance before mappings are treated as production-ready.
 
+## In review — not implemented on main
+
+BUILD-005 is in review as PR #15 on `build/005-deterministic-replay`. The branch adds an
+observable-time replay envelope/clock, read-only adapters for the accepted SIG and Polymarket
+SQLite capture schemas, trusted/fresh reconstructed state, standardized executable crossing
+markouts, a small experiment/evaluation contract, chronological splits, an offline capture smoke
+and deterministic synthetic end-to-end proof. Until independently accepted and merged, none of
+that capability is described as implemented on `main`.
+
+BUILD-005 does not depend on the live 2026 mapping gate: experiment instrument pairs are explicit
+fixture/manual configuration and can consume future accepted mapping artefacts later.
+
 ## Not implemented on main
 
 - validated production live 2026 SIG ↔ Polymarket crosswalk;
@@ -70,13 +82,12 @@ This document describes the accepted repository state on `main`.
 
 ## Next implementation target
 
-The next implementation target is:
+The active implementation target is still:
 
 > deterministic synchronized replay + experiment/evaluation foundation.
 
-Its purpose is to make captured SIG + Polymarket information testable using observable timestamps and standardized executable markouts.
-
-This is a target only. No BUILD-005 branch or PR is claimed to exist.
+BUILD-005 / PR #15 is the current in-review branch for that target. This status does not imply acceptance or
+availability on `main`.
 
 ## Repository state discipline
 
