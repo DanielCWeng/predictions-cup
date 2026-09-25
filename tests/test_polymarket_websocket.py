@@ -4,7 +4,6 @@ import asyncio
 from datetime import UTC, datetime
 from typing import Any, cast
 
-
 from predictions_cup.external.polymarket.health import IngestionHealth
 from predictions_cup.external.polymarket.models import JsonObject
 from predictions_cup.external.polymarket.websocket import MarketWebSocket
