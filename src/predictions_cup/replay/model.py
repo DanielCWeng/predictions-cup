@@ -31,6 +31,9 @@ class InvalidReason(StrEnum):
     DATA_GAP = "data_gap"
     MISSING_PAIR = "missing_pair"
     DATASET_END = "dataset_end"
+    REFERENCE_UNAVAILABLE = "reference_unavailable"
+    INSUFFICIENT_PREDICTOR_COVERAGE = "insufficient_predictor_coverage"
+    INVALID_SPREAD = "invalid_spread"
 
 
 @dataclass(frozen=True, slots=True)
