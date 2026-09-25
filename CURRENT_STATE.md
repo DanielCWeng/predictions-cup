@@ -27,6 +27,7 @@ This document describes what exists on `main`, then separately records active un
 - runnable non-trading application shell;
 - canonical maths ledger;
 - competition strategy/execution playbook.
+- competition-history research and six-day launch plan.
 
 ## Active / pending integration
 
