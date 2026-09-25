@@ -111,7 +111,11 @@ class MarketMapping(CanonicalModel):
             if self.mapping_direction is not None:
                 raise ValueError("MODEL_ONLY/NO_TRADE mapping cannot claim a direction")
 
-        if self.status is MappingStatus.UNRESOLVED and self.mapping_class is not MappingClass.NO_TRADE:
+        unresolved_direct = (
+            self.status is MappingStatus.UNRESOLVED
+            and self.mapping_class is not MappingClass.NO_TRADE
+        )
+        if unresolved_direct:
             raise ValueError("UNRESOLVED records must fail closed as NO_TRADE")
         if len(self.candidate_polymarket_market_ids) != len(
             set(self.candidate_polymarket_market_ids)
