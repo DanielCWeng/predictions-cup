@@ -33,6 +33,11 @@ class AppSettings(BaseSettings):
     tournament_slug: str | None = None
     trading_enabled: bool = False
 
+    sig_realtime_storage_path: Path = Path("data/sig_realtime.sqlite3")
+    sig_realtime_book_depth: int = Field(default=20, ge=1, le=200)
+    sig_realtime_token_refresh_margin_seconds: float = Field(default=300.0, ge=30, le=1800)
+    sig_realtime_retention_days: int = Field(default=14, ge=1, le=90)
+
     polymarket_capture_enabled: bool = False
     polymarket_gamma_base_url: AnyHttpUrl = AnyHttpUrl("https://gamma-api.polymarket.com")
     polymarket_clob_base_url: AnyHttpUrl = AnyHttpUrl("https://clob.polymarket.com")
@@ -56,7 +61,7 @@ class AppSettings(BaseSettings):
             raise ValueError("configuration string must not be blank")
         return value
 
-    @field_validator("polymarket_storage_path")
+    @field_validator("polymarket_storage_path", "sig_realtime_storage_path")
     @classmethod
     def reject_blank_storage_path(cls, value: Path) -> Path:
         if not str(value).strip():
@@ -94,6 +99,12 @@ class AppSettings(BaseSettings):
             "trading_enabled": self.trading_enabled,
             "sig_read_credential_configured": self.sig_read_credential is not None,
             "sig_trade_credential_configured": self.sig_trade_credential is not None,
+            "sig_realtime_storage_path": str(self.sig_realtime_storage_path),
+            "sig_realtime_book_depth": self.sig_realtime_book_depth,
+            "sig_realtime_token_refresh_margin_seconds": (
+                self.sig_realtime_token_refresh_margin_seconds
+            ),
+            "sig_realtime_retention_days": self.sig_realtime_retention_days,
             "polymarket_capture_enabled": self.polymarket_capture_enabled,
             "polymarket_universe": self.polymarket_universe,
             "polymarket_snapshot_interval_seconds": self.polymarket_snapshot_interval_seconds,
