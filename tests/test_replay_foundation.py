@@ -25,6 +25,7 @@ from predictions_cup.learning.splits import split_observations
 from predictions_cup.models import OrderBook, OrderBookLevel
 from predictions_cup.replay.loaders import (
     CaptureSchemaError,
+    CaptureSelection,
     load_polymarket_capture,
     load_sig_capture,
     summarize_captures,
@@ -590,3 +591,183 @@ def test_malformed_capture_schema_fails_clearly(tmp_path: Path) -> None:
         load_sig_capture(malformed)
     with pytest.raises(CaptureSchemaError, match="missing required tables"):
         load_polymarket_capture(malformed)
+
+
+def test_sql_selection_filters_before_materialization(tmp_path: Path) -> None:
+    sig_path, poly_path = _write_real_capture_fixtures(tmp_path)
+    base = datetime(2026, 9, 25, 12, tzinfo=UTC)
+    inside = (base + timedelta(seconds=30)).isoformat()
+    outside = (base + timedelta(hours=1)).isoformat()
+
+    with sqlite3.connect(sig_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO book_observations (
+                exchange_id, market_id, tournament_id, book_json,
+                best_bid, best_ask, rest_observed_at, reason, triggering_revision
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "sig-noise",
+                "noise-market",
+                "cup",
+                "not-json",
+                "0.1",
+                "0.2",
+                inside,
+                "noise",
+                None,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO book_observations (
+                exchange_id, market_id, tournament_id, book_json,
+                best_bid, best_ask, rest_observed_at, reason, triggering_revision
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "sig-1",
+                "sig-market",
+                "cup",
+                "not-json",
+                "0.1",
+                "0.2",
+                outside,
+                "late-noise",
+                None,
+            ),
+        )
+
+    with sqlite3.connect(poly_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO polymarket_book_observations (
+                token_id, market_id, source_timestamp, state_observed_at,
+                observed_at, best_bid, best_ask, midpoint, spread,
+                last_trade_price, book_valid
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "poly-noise",
+                "noise-market",
+                None,
+                inside,
+                inside,
+                "bad-decimal",
+                "0.2",
+                None,
+                None,
+                None,
+                1,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO polymarket_book_observations (
+                token_id, market_id, source_timestamp, state_observed_at,
+                observed_at, best_bid, best_ask, midpoint, spread,
+                last_trade_price, book_valid
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "poly-1",
+                "poly-market",
+                None,
+                outside,
+                outside,
+                "bad-decimal",
+                "0.2",
+                None,
+                None,
+                None,
+                1,
+            ),
+        )
+
+    selection = CaptureSelection(
+        start_at=base - timedelta(seconds=1),
+        end_at=base + timedelta(minutes=1),
+        sig_exchange_ids=("sig-1",),
+        polymarket_token_ids=("poly-1",),
+    )
+    sig_events = load_sig_capture(sig_path, selection=selection)
+    poly_events = load_polymarket_capture(poly_path, selection=selection)
+
+    assert {event.instrument_id for event in sig_events} <= {"sig-1", "*"}
+    assert {event.instrument_id for event in poly_events} <= {"poly-1", "*"}
+    assert all(selection.start_at <= event.observed_at < selection.end_at for event in sig_events)
+    assert all(selection.start_at <= event.observed_at < selection.end_at for event in poly_events)
+
+    summary = summarize_captures(
+        sig_path=sig_path,
+        polymarket_path=poly_path,
+        selection=selection,
+    )
+    assert summary.records_loaded == 8
+    assert summary.instruments == ("polymarket:poly-1", "sig:sig-1")
+    assert summary.trusted_sig_observations == 1
+    assert summary.external_observations == 3
+
+
+def test_window_start_does_not_seed_prior_sig_trust(tmp_path: Path) -> None:
+    path = tmp_path / "window-start.sqlite3"
+    recorder = SigRealtimeRecorder(path)
+    base = datetime(2026, 9, 25, 12, tzinfo=UTC)
+    recorder.record_transition(
+        topic="tournament:cup",
+        exchange_id="sig-1",
+        transition="TRUSTED_AFTER_RECONCILIATION",
+        observed_at=base,
+        revision=1,
+    )
+    recorder.record_book(
+        market_id="sig-market",
+        tournament_id="cup",
+        book=OrderBook(
+            exchange_id="sig-1",
+            bids=(OrderBookLevel(price=Decimal("0.50"), quantity=Decimal("10")),),
+            asks=(OrderBookLevel(price=Decimal("0.52"), quantity=Decimal("12")),),
+            timestamp=base + timedelta(seconds=2),
+            source="sig-rest",
+            revision=None,
+        ),
+        observed_at=base + timedelta(seconds=2),
+        reason="test",
+        triggering_revision=2,
+    )
+    recorder.close()
+
+    selection = CaptureSelection(
+        start_at=base + timedelta(seconds=1),
+        end_at=base + timedelta(seconds=3),
+        sig_exchange_ids=("sig-1",),
+    )
+    events = load_sig_capture(path, selection=selection)
+
+    assert all(event.event_type is not ReplayEventType.TRUST for event in events)
+    state = ReplayRunner(events).run(lambda frame: None)
+    _, reason = state.quote_status(
+        source=ReplaySource.SIG,
+        instrument_id="sig-1",
+        at=base + timedelta(seconds=2),
+        max_age=None,
+    )
+    assert reason is InvalidReason.SIG_UNTRUSTED
+
+
+def test_capture_selection_is_half_open_and_requires_aware_bounds() -> None:
+    base = datetime(2026, 9, 25, 12, tzinfo=UTC)
+    selection = CaptureSelection(
+        start_at=base,
+        end_at=base + timedelta(seconds=1),
+        sig_exchange_ids=("b", "a", "a"),
+        polymarket_token_ids=("z", "z"),
+    )
+    assert selection.sig_exchange_ids == ("a", "b")
+    assert selection.polymarket_token_ids == ("z",)
+
+    with pytest.raises(ValueError, match="timezone-aware"):
+        CaptureSelection(start_at=datetime(2026, 9, 25, 12))
+    with pytest.raises(ValueError, match="after start_at"):
+        CaptureSelection(start_at=base, end_at=base)
