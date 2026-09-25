@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 
 from predictions_cup.external.polymarket.health import IngestionHealth
-from predictions_cup.external.polymarket.models import BookLevel as PolymarketBookLevel
 from predictions_cup.external.polymarket.models import BookChangeEvent, BookSnapshot, TradeEvent
+from predictions_cup.external.polymarket.models import BookLevel as PolymarketBookLevel
 from predictions_cup.external.polymarket.storage import PolymarketStorage
 from predictions_cup.learning.evaluation import summarize
 from predictions_cup.learning.experiments import (
