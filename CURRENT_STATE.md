@@ -2,7 +2,14 @@
 
 **Phase:** FOUNDATION / DOMAIN MODELS — active integration work remains off-main.
 
-This document describes what exists on `main`, then separately records active unmerged work.
+## Operating posture — 25 September 2026
+
+- Broad strategy/mathematical research is frozen by default; new work should answer a failed test, implementation ambiguity, live venue observation or specific architectural decision.
+- Initial empirical strategy work is limited to direct external lead/lag, simple residual/relative value and simple selective market making.
+- **Monday 28 September gate:** those initial hypotheses must be runnable through replay using data captured by our own infrastructure; otherwise priority collapses entirely onto data → replay → experiment.
+- Competition-history findings and the six-day launch plan are canonical documentation; they add no runtime or trading capability.
+
+This document describes what exists on `main`, then separately records active unmerged implementation work.
 
 ## Implemented on main
 
@@ -39,12 +46,6 @@ Current review state: **BLOCKED / IN REVIEW**.
 
 Required revision covers durable normalized event-time book changes, honest REST batch observation timestamps, leaner storage growth, missing-PONG/feed-liveness detection, and `last_trade_price` consistency. It must be updated/rebased after PR #4 lands before final review.
 
-### PR #6 — competition research / six-day launch-plan documentation
-
-Documentation work exists on `docs/competition-research-launch-plan`, not on `main`.
-
-It adds `docs/research/QUANT_COMPETITION_HISTORY_2021_2026.md` and updates operating-priority documentation. It does **not** add runtime or trading capability.
-
 ## Not implemented on main
 
 - SIG HTTP integration or authenticated SIG requests;
@@ -78,8 +79,6 @@ PR #4 correction/review
 → merge PR #5
 → next implementation ticket
 ```
-
-PR #6 is a documentation-only stream and may be reviewed independently, but it must reconcile any overlapping control-document changes against the latest `main` before merge.
 
 ## Repository state discipline
 
