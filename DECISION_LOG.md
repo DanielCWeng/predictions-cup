@@ -50,8 +50,6 @@
 
 **Decision:** Canonical `Position.quantity` represents non-negative outcome shares held on an Exchange. Signed directional/risk exposure must be derived in later risk/state models rather than encoded as negative platform holdings.
 
-BUILD-003 decisions below are proposed by PR #4 and remain unmerged pending independent review.
-
 ## DECISION 013 — SIG read transport is separate from canonical models
 
 **Decision:** Validate SIG REST payloads in `predictions_cup.sig` transport DTOs and convert explicitly into BUILD-002 canonical models only where semantics are lossless.

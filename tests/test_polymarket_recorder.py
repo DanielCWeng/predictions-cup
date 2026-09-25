@@ -1,0 +1,234 @@
+from __future__ import annotations
+
+import asyncio
+import sqlite3
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+import pytest
+
+from predictions_cup.config import AppSettings
+from predictions_cup.external.polymarket.client import ObservedBookBatch
+from predictions_cup.external.polymarket.recorder import PolymarketRecorder
+
+
+def _book_payload(token_id: str, market_id: str = "0xmarket") -> dict[str, object]:
+    return {
+        "market": market_id,
+        "asset_id": token_id,
+        "timestamp": "1782753357257",
+        "bids": [{"price": "0.45", "size": "10"}],
+        "asks": [{"price": "0.46", "size": "10"}],
+    }
+
+
+def test_rest_seed_preserves_batch_level_observation_times(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = AppSettings.model_validate(
+        {"polymarket_storage_path": tmp_path / "capture.sqlite3"}
+    )
+    recorder = PolymarketRecorder(settings)
+    first_at = datetime(2026, 9, 25, 0, 0, 0, tzinfo=UTC)
+    second_at = first_at + timedelta(milliseconds=750)
+
+    async def fake_batches(token_ids: tuple[str, ...]) -> tuple[ObservedBookBatch, ...]:
+        assert token_ids == ("token-1", "token-2")
+        return (
+            ObservedBookBatch((_book_payload("token-1"),), first_at),
+            ObservedBookBatch((_book_payload("token-2"),), second_at),
+        )
+
+    monkeypatch.setattr(recorder.clob, "fetch_book_batches", fake_batches)
+    asyncio.run(recorder._seed_books(("token-1", "token-2"), invalidate=False))
+
+    first = recorder.books.snapshot("token-1", depth=1)
+    second = recorder.books.snapshot("token-2", depth=1)
+    assert first is not None and second is not None
+    assert first.observed_at == first_at
+    assert second.observed_at == second_at
+    assert recorder.health.last_valid_book_update_at == second_at
+
+
+def test_one_second_panel_is_lean_and_depth_uses_slower_cadence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = AppSettings.model_validate(
+        {
+            "polymarket_storage_path": tmp_path / "capture.sqlite3",
+            "polymarket_depth_snapshot_interval_seconds": 60,
+        }
+    )
+    recorder = PolymarketRecorder(settings)
+    recorder.storage.initialize()
+    start = datetime(2026, 9, 25, 0, 0, 0, tzinfo=UTC)
+    recorder.books.apply_full_snapshot(_book_payload("token-1"), start)
+    times = iter((start, start + timedelta(seconds=1)))
+    monkeypatch.setattr(
+        "predictions_cup.external.polymarket.recorder.utc_now",
+        lambda: next(times),
+    )
+
+    assert asyncio.run(recorder.record_snapshot_once()) == 1
+    assert asyncio.run(recorder.record_snapshot_once()) == 1
+
+    with sqlite3.connect(settings.polymarket_storage_path) as connection:
+        panel_count = connection.execute(
+            "SELECT COUNT(*) FROM polymarket_book_observations"
+        ).fetchone()[0]
+        depth_count = connection.execute(
+            "SELECT COUNT(*) FROM polymarket_book_snapshots"
+        ).fetchone()[0]
+        panel_columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(polymarket_book_observations)")
+        }
+
+    assert panel_count == 2
+    assert depth_count == 1
+    assert "bids_json" not in panel_columns
+    assert "asks_json" not in panel_columns
+
+
+def test_price_changes_are_durably_persisted_with_event_and_observation_time(
+    tmp_path: Path,
+) -> None:
+    settings = AppSettings.model_validate(
+        {"polymarket_storage_path": tmp_path / "capture.sqlite3"}
+    )
+    recorder = PolymarketRecorder(settings)
+    recorder.storage.initialize()
+    seeded_at = datetime(2026, 9, 25, 0, 0, 0, tzinfo=UTC)
+    observed_at = seeded_at + timedelta(milliseconds=500)
+    recorder.books.apply_full_snapshot(_book_payload("token-1"), seeded_at)
+
+    asyncio.run(
+        recorder.handle_message(
+            {
+                "event_type": "price_change",
+                "market": "0xmarket",
+                "timestamp": "1782753358257",
+                "price_changes": [
+                    {
+                        "asset_id": "token-1",
+                        "side": "BUY",
+                        "price": "0.44",
+                        "size": "7",
+                        "best_bid": "0.45",
+                        "best_ask": "0.46",
+                        "hash": "hash-after-change",
+                    }
+                ],
+            },
+            observed_at,
+        )
+    )
+
+    with sqlite3.connect(settings.polymarket_storage_path) as connection:
+        row = connection.execute(
+            """
+            SELECT token_id, market_id, side, price, size, source_timestamp,
+                   observed_at, best_bid, best_ask, book_hash
+            FROM polymarket_book_changes
+            """
+        ).fetchone()
+
+    assert row is not None
+    assert row[0:5] == ("token-1", "0xmarket", "BUY", "0.44", "7")
+    assert row[5] != row[6]
+    assert row[6] == observed_at.isoformat()
+    assert row[7:] == ("0.45", "0.46", "hash-after-change")
+
+
+def test_reconnect_hook_invalidates_old_state_and_reseeds_from_rest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = AppSettings.model_validate(
+        {"polymarket_storage_path": tmp_path / "capture.sqlite3"}
+    )
+    recorder = PolymarketRecorder(settings)
+    old_at = datetime(2026, 9, 25, 0, 0, 0, tzinfo=UTC)
+    new_at = old_at + timedelta(seconds=5)
+    recorder.books.apply_full_snapshot(_book_payload("token-1", "old-market"), old_at)
+    recorder._token_ids = ("token-1",)
+
+    async def fake_batches(token_ids: tuple[str, ...]) -> tuple[ObservedBookBatch, ...]:
+        assert token_ids == ("token-1",)
+        return (ObservedBookBatch((_book_payload("token-1", "new-market"),), new_at),)
+
+    monkeypatch.setattr(recorder.clob, "fetch_book_batches", fake_batches)
+    asyncio.run(recorder._before_websocket_connect())
+
+    snapshot = recorder.books.snapshot("token-1", depth=1)
+    assert snapshot is not None
+    assert snapshot.market_id == "new-market"
+    assert snapshot.observed_at == new_at
+
+
+def test_last_trade_event_updates_snapshot_state_and_trade_storage(tmp_path: Path) -> None:
+    settings = AppSettings.model_validate(
+        {"polymarket_storage_path": tmp_path / "capture.sqlite3"}
+    )
+    recorder = PolymarketRecorder(settings)
+    recorder.storage.initialize()
+    seeded_at = datetime(2026, 9, 25, 0, 0, 0, tzinfo=UTC)
+    observed_at = seeded_at + timedelta(seconds=1)
+    recorder.books.apply_full_snapshot(_book_payload("token-1"), seeded_at)
+
+    asyncio.run(
+        recorder.handle_message(
+            {
+                "event_type": "last_trade_price",
+                "market": "0xmarket",
+                "asset_id": "token-1",
+                "price": "0.455",
+                "size": "2",
+                "side": "BUY",
+                "timestamp": "1782753358257",
+            },
+            observed_at,
+        )
+    )
+
+    snapshot = recorder.books.snapshot("token-1", depth=1)
+    assert snapshot is not None
+    assert str(snapshot.last_trade_price) == "0.455"
+    with sqlite3.connect(settings.polymarket_storage_path) as connection:
+        count = connection.execute("SELECT COUNT(*) FROM polymarket_trades").fetchone()[0]
+    assert count == 1
+
+
+def test_snapshot_storage_failure_is_surfaced(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = AppSettings.model_validate(
+        {"polymarket_storage_path": tmp_path / "capture.sqlite3"}
+    )
+    recorder = PolymarketRecorder(settings)
+    recorder.storage.initialize()
+    recorder.books.apply_full_snapshot(
+        {
+            "market": "0xmarket",
+            "asset_id": "token-1",
+            "timestamp": "1782753357257",
+            "bids": [{"price": "0.45", "size": "10"}],
+            "asks": [{"price": "0.46", "size": "10"}],
+        },
+        datetime(2026, 9, 25, tzinfo=UTC),
+    )
+
+    def fail(*args: object, **kwargs: object) -> int:
+        del args, kwargs
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(recorder.storage, "append_snapshots", fail)
+
+    with pytest.raises(RuntimeError, match="disk full"):
+        asyncio.run(recorder.record_snapshot_once())
+    assert recorder.health.storage_failures == 1
+    assert recorder.health.snapshot_last_status is not None
+    assert recorder.health.snapshot_last_status.startswith("ERROR:")
