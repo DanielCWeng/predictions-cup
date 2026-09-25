@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal, Self
 
-from pydantic import AnyHttpUrl, SecretStr, field_validator, model_validator
+from pydantic import AnyHttpUrl, AnyUrl, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+PolymarketUniverse = Literal["us_elections_2026"]
 
 
 class AppSettings(BaseSettings):
@@ -31,11 +33,33 @@ class AppSettings(BaseSettings):
     tournament_slug: str | None = None
     trading_enabled: bool = False
 
+    polymarket_capture_enabled: bool = False
+    polymarket_gamma_base_url: AnyHttpUrl = AnyHttpUrl("https://gamma-api.polymarket.com")
+    polymarket_clob_base_url: AnyHttpUrl = AnyHttpUrl("https://clob.polymarket.com")
+    polymarket_ws_url: AnyUrl = AnyUrl(
+        "wss://ws-subscriptions-clob.polymarket.com/ws/market"
+    )
+    polymarket_snapshot_interval_seconds: float = Field(default=1.0, gt=0)
+    polymarket_book_depth: int = Field(default=20, ge=1, le=200)
+    polymarket_gamma_page_limit: int = Field(default=100, ge=1, le=500)
+    polymarket_gamma_refresh_seconds: float = Field(default=300.0, ge=30)
+    polymarket_storage_path: Path = Path("data/polymarket_capture.sqlite3")
+    polymarket_universe: PolymarketUniverse = "us_elections_2026"
+    polymarket_include_ids: str = ""
+    polymarket_exclude_ids: str = ""
+
     @field_validator("environment", "tournament_id", "tournament_slug")
     @classmethod
     def reject_blank_optional_strings(cls, value: str | None) -> str | None:
         if value is not None and not value.strip():
             raise ValueError("configuration string must not be blank")
+        return value
+
+    @field_validator("polymarket_storage_path")
+    @classmethod
+    def reject_blank_storage_path(cls, value: Path) -> Path:
+        if not str(value).strip():
+            raise ValueError("polymarket_storage_path must not be blank")
         return value
 
     @field_validator("log_level", mode="before")
@@ -58,7 +82,7 @@ class AppSettings(BaseSettings):
             raise ValueError("trading_enabled requires an explicitly supplied trade credential")
         return self
 
-    def diagnostic_fields(self) -> dict[str, str | bool | None]:
+    def diagnostic_fields(self) -> dict[str, str | bool | int | float | None]:
         """Return deliberately non-secret diagnostics suitable for logs."""
         return {
             "environment": self.environment,
@@ -69,6 +93,11 @@ class AppSettings(BaseSettings):
             "trading_enabled": self.trading_enabled,
             "sig_read_credential_configured": self.sig_read_credential is not None,
             "sig_trade_credential_configured": self.sig_trade_credential is not None,
+            "polymarket_capture_enabled": self.polymarket_capture_enabled,
+            "polymarket_universe": self.polymarket_universe,
+            "polymarket_snapshot_interval_seconds": self.polymarket_snapshot_interval_seconds,
+            "polymarket_book_depth": self.polymarket_book_depth,
+            "polymarket_storage_path": str(self.polymarket_storage_path),
         }
 
 
