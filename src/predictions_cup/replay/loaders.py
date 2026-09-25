@@ -8,7 +8,6 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
-from itertools import groupby
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +18,6 @@ from predictions_cup.replay.model import (
     ReplayEvent,
     ReplayEventType,
     ReplaySource,
-    ReplayState,
     TradePayload,
     TrustPayload,
 )
@@ -31,34 +29,107 @@ class CaptureSchemaError(ValueError):
 
 _SIG_SCHEMA = {
     "book_observations": {
-        "id", "exchange_id", "market_id", "book_json", "best_bid", "best_ask",
+        "id",
+        "exchange_id",
+        "market_id",
+        "book_json",
+        "best_bid",
+        "best_ask",
         "rest_observed_at",
     },
     "realtime_trades": {
-        "id", "exchange_id", "market_id", "price", "quantity", "executed_at",
+        "id",
+        "exchange_id",
+        "market_id",
+        "price",
+        "quantity",
+        "executed_at",
         "observed_at",
     },
     "trust_transitions": {"id", "exchange_id", "transition", "observed_at"},
 }
 _POLY_SCHEMA = {
     "polymarket_book_observations": {
-        "id", "token_id", "market_id", "source_timestamp", "state_observed_at",
-        "observed_at", "best_bid", "best_ask", "last_trade_price", "book_valid",
+        "id",
+        "token_id",
+        "market_id",
+        "source_timestamp",
+        "state_observed_at",
+        "observed_at",
+        "best_bid",
+        "best_ask",
+        "last_trade_price",
+        "book_valid",
     },
     "polymarket_book_changes": {
-        "id", "token_id", "market_id", "source_timestamp", "observed_at",
-        "best_bid", "best_ask",
+        "id",
+        "token_id",
+        "market_id",
+        "source_timestamp",
+        "observed_at",
+        "best_bid",
+        "best_ask",
     },
     "polymarket_book_snapshots": {
-        "id", "token_id", "market_id", "source_timestamp", "observed_at",
-        "best_bid", "best_ask", "bids_json", "asks_json", "last_trade_price",
+        "id",
+        "token_id",
+        "market_id",
+        "source_timestamp",
+        "observed_at",
+        "best_bid",
+        "best_ask",
+        "bids_json",
+        "asks_json",
+        "last_trade_price",
     },
     "polymarket_trades": {
-        "id", "token_id", "market_id", "price", "size", "side",
-        "source_timestamp", "observed_at",
+        "id",
+        "token_id",
+        "market_id",
+        "price",
+        "size",
+        "side",
+        "source_timestamp",
+        "observed_at",
     },
     "ingestion_health": {"id", "recorded_at", "payload_json"},
 }
+_RECOGNIZED_TRUST_SQL = (
+    "(transition LIKE 'TRUSTED%' OR transition LIKE 'UNTRUSTED%' "
+    "OR transition = 'RECONCILING')"
+)
+_UNTRUSTED_SQL = "(transition LIKE 'UNTRUSTED%' OR transition = 'RECONCILING')"
+
+
+@dataclass(frozen=True, slots=True)
+class CaptureSelection:
+    """SQL-pushed observable-time and instrument selection for a replay slice.
+
+    Bounds are [start_at, end_at). No state before start_at is seeded implicitly.
+    """
+
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    sig_exchange_ids: tuple[str, ...] | None = None
+    polymarket_token_ids: tuple[str, ...] | None = None
+
+    def __post_init__(self) -> None:
+        start = _normalize_bound(self.start_at, "start_at")
+        end = _normalize_bound(self.end_at, "end_at")
+        if start is not None and end is not None and end <= start:
+            raise ValueError("end_at must be after start_at")
+        object.__setattr__(self, "start_at", start)
+        object.__setattr__(self, "end_at", end)
+        object.__setattr__(
+            self,
+            "sig_exchange_ids",
+            _normalize_ids(self.sig_exchange_ids, "sig_exchange_ids"),
+        )
+        object.__setattr__(
+            self,
+            "polymarket_token_ids",
+            _normalize_ids(self.polymarket_token_ids, "polymarket_token_ids"),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,13 +156,28 @@ class CaptureSummary:
         }
 
 
-def load_sig_capture(path: Path) -> tuple[ReplayEvent, ...]:
+def load_sig_capture(
+    path: Path,
+    *,
+    selection: CaptureSelection | None = None,
+) -> tuple[ReplayEvent, ...]:
+    """Materialize only the selected SIG slice; filtering is performed by SQLite."""
+    selected = selection or CaptureSelection()
     events: list[ReplayEvent] = []
     with closing(_connect(path)) as db:
         _validate_schema(db, _SIG_SCHEMA, "SIG")
+
+        where, params = _where(
+            selected,
+            "rest_observed_at",
+            "exchange_id",
+            selected.sig_exchange_ids,
+        )
         for row in db.execute(
             "SELECT id, exchange_id, market_id, book_json, best_bid, best_ask, "
-            "rest_observed_at FROM book_observations ORDER BY id"
+            f"rest_observed_at FROM book_observations{where} "
+            "ORDER BY rest_observed_at, id",
+            params,
         ):
             book = _json_object(row[3], "SIG book_json")
             observed = _dt(row[6], "SIG rest_observed_at")
@@ -111,9 +197,17 @@ def load_sig_capture(path: Path) -> tuple[ReplayEvent, ...]:
                     asks=_sig_levels(book.get("asks"), "asks"),
                 )
             )
+
+        where, params = _where(
+            selected,
+            "observed_at",
+            "exchange_id",
+            selected.sig_exchange_ids,
+        )
         for row in db.execute(
             "SELECT id, exchange_id, market_id, price, quantity, executed_at, "
-            "observed_at FROM realtime_trades ORDER BY id"
+            f"observed_at FROM realtime_trades{where} ORDER BY observed_at, id",
+            params,
         ):
             events.append(
                 ReplayEvent(
@@ -130,14 +224,24 @@ def load_sig_capture(path: Path) -> tuple[ReplayEvent, ...]:
                     ),
                 )
             )
+
+        where, params = _where(
+            selected,
+            "observed_at",
+            "exchange_id",
+            selected.sig_exchange_ids,
+            include_null_instrument=True,
+            extra_clause=_RECOGNIZED_TRUST_SQL,
+        )
         for row in db.execute(
             "SELECT id, exchange_id, transition, observed_at "
-            "FROM trust_transitions ORDER BY id"
+            f"FROM trust_transitions{where} ORDER BY observed_at, id",
+            params,
         ):
             transition = _text(row[2], "SIG transition")
             trusted = _transition_trust(transition)
             if trusted is None:
-                continue
+                raise CaptureSchemaError("recognized SIG trust transition was not understood")
             events.append(
                 ReplayEvent(
                     observed_at=_dt(row[3], "SIG transition observed_at"),
@@ -155,14 +259,28 @@ def load_sig_capture(path: Path) -> tuple[ReplayEvent, ...]:
     return _ordered(events)
 
 
-def load_polymarket_capture(path: Path) -> tuple[ReplayEvent, ...]:
+def load_polymarket_capture(
+    path: Path,
+    *,
+    selection: CaptureSelection | None = None,
+) -> tuple[ReplayEvent, ...]:
+    """Materialize only the selected Polymarket slice; filtering is performed by SQLite."""
+    selected = selection or CaptureSelection()
     events: list[ReplayEvent] = []
     with closing(_connect(path)) as db:
         _validate_schema(db, _POLY_SCHEMA, "Polymarket")
+
+        where, params = _where(
+            selected,
+            "observed_at",
+            "token_id",
+            selected.polymarket_token_ids,
+        )
         for row in db.execute(
             "SELECT id, token_id, market_id, source_timestamp, state_observed_at, "
             "observed_at, best_bid, best_ask, last_trade_price, book_valid "
-            "FROM polymarket_book_observations ORDER BY id"
+            f"FROM polymarket_book_observations{where} ORDER BY observed_at, id",
+            params,
         ):
             events.append(
                 _quote_event(
@@ -184,9 +302,18 @@ def load_polymarket_capture(path: Path) -> tuple[ReplayEvent, ...]:
                     valid=_book_valid(row[9]),
                 )
             )
+
+        where, params = _where(
+            selected,
+            "observed_at",
+            "token_id",
+            selected.polymarket_token_ids,
+        )
         for row in db.execute(
             "SELECT id, token_id, market_id, source_timestamp, observed_at, "
-            "best_bid, best_ask FROM polymarket_book_changes ORDER BY id"
+            "best_bid, best_ask "
+            f"FROM polymarket_book_changes{where} ORDER BY observed_at, id",
+            params,
         ):
             observed = _dt(row[4], "Polymarket change observed_at")
             events.append(
@@ -203,10 +330,18 @@ def load_polymarket_capture(path: Path) -> tuple[ReplayEvent, ...]:
                     ask=_optional_decimal(row[6], "Polymarket change best_ask"),
                 )
             )
+
+        where, params = _where(
+            selected,
+            "observed_at",
+            "token_id",
+            selected.polymarket_token_ids,
+        )
         for row in db.execute(
             "SELECT id, token_id, market_id, source_timestamp, observed_at, "
             "best_bid, best_ask, bids_json, asks_json, last_trade_price "
-            "FROM polymarket_book_snapshots ORDER BY id"
+            f"FROM polymarket_book_snapshots{where} ORDER BY observed_at, id",
+            params,
         ):
             observed = _dt(row[4], "Polymarket snapshot observed_at")
             events.append(
@@ -230,9 +365,17 @@ def load_polymarket_capture(path: Path) -> tuple[ReplayEvent, ...]:
                     ),
                 )
             )
+
+        where, params = _where(
+            selected,
+            "observed_at",
+            "token_id",
+            selected.polymarket_token_ids,
+        )
         for row in db.execute(
             "SELECT id, token_id, market_id, price, size, side, source_timestamp, "
-            "observed_at FROM polymarket_trades ORDER BY id"
+            f"observed_at FROM polymarket_trades{where} ORDER BY observed_at, id",
+            params,
         ):
             events.append(
                 ReplayEvent(
@@ -254,8 +397,12 @@ def load_polymarket_capture(path: Path) -> tuple[ReplayEvent, ...]:
                     ),
                 )
             )
+
+        where, params = _where(selected, "recorded_at")
         for row in db.execute(
-            "SELECT id, recorded_at, payload_json FROM ingestion_health ORDER BY id"
+            "SELECT id, recorded_at, payload_json "
+            f"FROM ingestion_health{where} ORDER BY recorded_at, id",
+            params,
         ):
             payload = _json_object(row[2], "Polymarket health payload_json")
             connected = payload.get("websocket_connected")
@@ -283,41 +430,300 @@ def load_polymarket_capture(path: Path) -> tuple[ReplayEvent, ...]:
 
 
 def summarize_captures(
-    *, sig_path: Path | None = None, polymarket_path: Path | None = None
+    *,
+    sig_path: Path | None = None,
+    polymarket_path: Path | None = None,
+    selection: CaptureSelection | None = None,
 ) -> CaptureSummary:
-    events = list(load_sig_capture(sig_path)) if sig_path is not None else []
+    """Inspect selected capture rows using SQL aggregates, not ReplayEvent materialization."""
+    selected = selection or CaptureSelection()
+    records = 0
+    external_observations = 0
+    data_gaps = 0
+    trusted_sig_observations = 0
+    instruments: set[str] = set()
+    times: list[datetime] = []
+
+    if sig_path is not None:
+        with closing(_connect(sig_path)) as db:
+            _validate_schema(db, _SIG_SCHEMA, "SIG")
+            sig_records, sig_gaps, sig_trusted, sig_instruments, sig_times = (
+                _summarize_sig(db, selected)
+            )
+            records += sig_records
+            data_gaps += sig_gaps
+            trusted_sig_observations += sig_trusted
+            instruments.update(f"sig:{value}" for value in sig_instruments)
+            times.extend(sig_times)
+
     if polymarket_path is not None:
-        events.extend(load_polymarket_capture(polymarket_path))
-    ordered = list(_ordered(events))
-    instruments = tuple(
-        sorted(
-            {
-                f"{event.source.value}:{event.instrument_id}"
-                for event in ordered
-                if event.instrument_id != "*"
-            }
-        )
-    )
+        with closing(_connect(polymarket_path)) as db:
+            _validate_schema(db, _POLY_SCHEMA, "Polymarket")
+            poly_records, poly_quotes, poly_gaps, poly_instruments, poly_times = (
+                _summarize_polymarket(db, selected)
+            )
+            records += poly_records
+            external_observations += poly_quotes
+            data_gaps += poly_gaps
+            instruments.update(f"polymarket:{value}" for value in poly_instruments)
+            times.extend(poly_times)
+
     return CaptureSummary(
-        records_loaded=len(ordered),
-        start_at=None if not ordered else ordered[0].observed_at,
-        end_at=None if not ordered else ordered[-1].observed_at,
-        instruments=instruments,
-        trusted_sig_observations=_count_trusted_sig_books(ordered),
-        external_observations=sum(
-            event.source is ReplaySource.POLYMARKET
-            and event.event_type in _QUOTE_TYPES
-            for event in ordered
-        ),
-        data_gaps=sum(_is_gap(event) for event in ordered),
+        records_loaded=records,
+        start_at=min(times) if times else None,
+        end_at=max(times) if times else None,
+        instruments=tuple(sorted(instruments)),
+        trusted_sig_observations=trusted_sig_observations,
+        external_observations=external_observations,
+        data_gaps=data_gaps,
     )
 
 
-_QUOTE_TYPES = {
-    ReplayEventType.BOOK_OBSERVATION,
-    ReplayEventType.BOOK_CHANGE,
-    ReplayEventType.DEPTH_SNAPSHOT,
-}
+def _summarize_sig(
+    db: sqlite3.Connection,
+    selection: CaptureSelection,
+) -> tuple[int, int, int, set[str], list[datetime]]:
+    records = 0
+    gaps = 0
+    times: list[datetime] = []
+    instruments: set[str] = set()
+
+    table_specs = (
+        ("book_observations", "rest_observed_at", "exchange_id", None),
+        ("realtime_trades", "observed_at", "exchange_id", None),
+        (
+            "trust_transitions",
+            "observed_at",
+            "exchange_id",
+            _RECOGNIZED_TRUST_SQL,
+        ),
+    )
+    for table, time_column, instrument_column, extra_clause in table_specs:
+        where, params = _where(
+            selection,
+            time_column,
+            instrument_column,
+            selection.sig_exchange_ids,
+            include_null_instrument=table == "trust_transitions",
+            extra_clause=extra_clause,
+        )
+        records += _count(db, table, where, params)
+        times.extend(_minmax(db, table, time_column, where, params))
+
+    for table, time_column in (
+        ("book_observations", "rest_observed_at"),
+        ("realtime_trades", "observed_at"),
+        ("trust_transitions", "observed_at"),
+    ):
+        extra = "exchange_id IS NOT NULL"
+        if table == "trust_transitions":
+            extra = f"{extra} AND {_RECOGNIZED_TRUST_SQL}"
+        where, params = _where(
+            selection,
+            time_column,
+            "exchange_id",
+            selection.sig_exchange_ids,
+            extra_clause=extra,
+        )
+        instruments.update(
+            _distinct_text(db, table, "exchange_id", where, params, "SIG exchange_id")
+        )
+
+    where, params = _where(
+        selection,
+        "observed_at",
+        "exchange_id",
+        selection.sig_exchange_ids,
+        include_null_instrument=True,
+        extra_clause=_UNTRUSTED_SQL,
+    )
+    gaps += _count(db, "trust_transitions", where, params)
+    trusted = _count_trusted_sig_books_sql(db, selection)
+    return records, gaps, trusted, instruments, times
+
+
+def _summarize_polymarket(
+    db: sqlite3.Connection,
+    selection: CaptureSelection,
+) -> tuple[int, int, int, set[str], list[datetime]]:
+    records = 0
+    external_observations = 0
+    gaps = 0
+    times: list[datetime] = []
+    instruments: set[str] = set()
+
+    token_tables = (
+        ("polymarket_book_observations", "observed_at", True),
+        ("polymarket_book_changes", "observed_at", True),
+        ("polymarket_book_snapshots", "observed_at", True),
+        ("polymarket_trades", "observed_at", False),
+    )
+    for table, time_column, is_quote in token_tables:
+        where, params = _where(
+            selection,
+            time_column,
+            "token_id",
+            selection.polymarket_token_ids,
+        )
+        count = _count(db, table, where, params)
+        records += count
+        if is_quote:
+            external_observations += count
+        times.extend(_minmax(db, table, time_column, where, params))
+        instruments.update(
+            _distinct_text(db, table, "token_id", where, params, "Polymarket token_id")
+        )
+
+    where, params = _where(selection, "recorded_at")
+    health_count = _count(db, "ingestion_health", where, params)
+    records += health_count
+    times.extend(_minmax(db, "ingestion_health", "recorded_at", where, params))
+
+    where, params = _where(
+        selection,
+        "observed_at",
+        "token_id",
+        selection.polymarket_token_ids,
+        extra_clause="book_valid = 0",
+    )
+    gaps += _count(db, "polymarket_book_observations", where, params)
+    gaps += _count_disconnected_health(db, selection)
+    return records, external_observations, gaps, instruments, times
+
+
+def _count_trusted_sig_books_sql(
+    db: sqlite3.Connection,
+    selection: CaptureSelection,
+) -> int:
+    book_where, params = _where(
+        selection,
+        "b.rest_observed_at",
+        "b.exchange_id",
+        selection.sig_exchange_ids,
+    )
+    trust_floor = ""
+    trust_params: list[object] = []
+    if selection.start_at is not None:
+        trust_floor = " AND t.observed_at >= ?"
+        trust_params.append(selection.start_at.isoformat())
+    sql = (
+        "SELECT COUNT(*) FROM book_observations b"
+        f"{book_where}"
+        + (" AND " if book_where else " WHERE ")
+        + "(SELECT t.transition FROM trust_transitions t "
+        "WHERE t.observed_at <= b.rest_observed_at "
+        "AND (t.exchange_id IS NULL OR t.exchange_id = b.exchange_id) "
+        f"AND {_RECOGNIZED_TRUST_SQL}"
+        f"{trust_floor} "
+        "ORDER BY t.observed_at DESC, "
+        "CASE WHEN t.exchange_id = b.exchange_id THEN 1 ELSE 0 END DESC, "
+        "t.id DESC LIMIT 1) LIKE 'TRUSTED%'"
+    )
+    row = db.execute(sql, (*params, *trust_params)).fetchone()
+    return _integer(row[0], "trusted SIG observation count") if row is not None else 0
+
+
+def _count_disconnected_health(
+    db: sqlite3.Connection,
+    selection: CaptureSelection,
+) -> int:
+    where, params = _where(selection, "recorded_at")
+    count = 0
+    for row in db.execute(
+        f"SELECT payload_json FROM ingestion_health{where}",
+        params,
+    ):
+        payload = _json_object(row[0], "Polymarket health payload_json")
+        connected = payload.get("websocket_connected")
+        if not isinstance(connected, bool):
+            raise CaptureSchemaError(
+                "Polymarket health payload websocket_connected must be boolean"
+            )
+        count += int(not connected)
+    return count
+
+
+def _where(
+    selection: CaptureSelection,
+    time_column: str,
+    instrument_column: str | None = None,
+    instrument_ids: tuple[str, ...] | None = None,
+    *,
+    include_null_instrument: bool = False,
+    extra_clause: str | None = None,
+) -> tuple[str, tuple[object, ...]]:
+    clauses: list[str] = []
+    params: list[object] = []
+    if selection.start_at is not None:
+        clauses.append(f"{time_column} >= ?")
+        params.append(selection.start_at.isoformat())
+    if selection.end_at is not None:
+        clauses.append(f"{time_column} < ?")
+        params.append(selection.end_at.isoformat())
+    if instrument_column is not None and instrument_ids is not None:
+        if instrument_ids:
+            placeholders = ", ".join("?" for _ in instrument_ids)
+            instrument_clause = f"{instrument_column} IN ({placeholders})"
+            params.extend(instrument_ids)
+            if include_null_instrument:
+                instrument_clause = (
+                    f"({instrument_column} IS NULL OR {instrument_clause})"
+                )
+            clauses.append(instrument_clause)
+        elif include_null_instrument:
+            clauses.append(f"{instrument_column} IS NULL")
+        else:
+            clauses.append("0")
+    if extra_clause is not None:
+        clauses.append(extra_clause)
+    if not clauses:
+        return "", ()
+    return " WHERE " + " AND ".join(clauses), tuple(params)
+
+
+def _count(
+    db: sqlite3.Connection,
+    table: str,
+    where: str,
+    params: tuple[object, ...],
+) -> int:
+    row = db.execute(f"SELECT COUNT(*) FROM {table}{where}", params).fetchone()
+    return _integer(row[0], f"{table} count") if row is not None else 0
+
+
+def _minmax(
+    db: sqlite3.Connection,
+    table: str,
+    time_column: str,
+    where: str,
+    params: tuple[object, ...],
+) -> list[datetime]:
+    row = db.execute(
+        f"SELECT MIN({time_column}), MAX({time_column}) FROM {table}{where}",
+        params,
+    ).fetchone()
+    if row is None:
+        return []
+    result: list[datetime] = []
+    if row[0] is not None:
+        result.append(_dt(row[0], f"{table} min time"))
+    if row[1] is not None:
+        result.append(_dt(row[1], f"{table} max time"))
+    return result
+
+
+def _distinct_text(
+    db: sqlite3.Connection,
+    table: str,
+    column: str,
+    where: str,
+    params: tuple[object, ...],
+    label: str,
+) -> set[str]:
+    return {
+        _text(row[0], label)
+        for row in db.execute(f"SELECT DISTINCT {column} FROM {table}{where}", params)
+    }
 
 
 def _quote_event(
@@ -354,32 +760,6 @@ def _quote_event(
             last_trade=last_trade,
             book_valid=valid,
         ),
-    )
-
-
-def _count_trusted_sig_books(events: list[ReplayEvent]) -> int:
-    state = ReplayState()
-    count = 0
-    for _, group_iter in groupby(events, key=lambda event: event.observed_at):
-        group = tuple(group_iter)
-        for event in group:
-            state.apply(event)
-        for event in group:
-            if event.source is ReplaySource.SIG and event.event_type in _QUOTE_TYPES:
-                view = state.view(ReplaySource.SIG, event.instrument_id)
-                count += int(view is not None and view.trusted)
-    return count
-
-
-def _is_gap(event: ReplayEvent) -> bool:
-    payload = event.payload
-    return (
-        isinstance(payload, TrustPayload)
-        and not payload.trusted
-        or isinstance(payload, HealthPayload)
-        and not payload.available
-        or isinstance(payload, QuotePayload)
-        and not payload.book_valid
     )
 
 
@@ -525,6 +905,25 @@ def _book_valid(value: object) -> bool:
     if integer not in {0, 1}:
         raise CaptureSchemaError("Polymarket book_valid must be 0 or 1")
     return bool(integer)
+
+
+def _normalize_bound(value: datetime | None, label: str) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError(f"{label} must be timezone-aware")
+    return value.astimezone(UTC)
+
+
+def _normalize_ids(
+    values: tuple[str, ...] | None,
+    label: str,
+) -> tuple[str, ...] | None:
+    if values is None:
+        return None
+    if any(not value.strip() for value in values):
+        raise ValueError(f"{label} must not contain blank identifiers")
+    return tuple(sorted(set(values)))
 
 
 def _ordered(events: list[ReplayEvent]) -> tuple[ReplayEvent, ...]:
