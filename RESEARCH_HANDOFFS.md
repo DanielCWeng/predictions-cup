@@ -5,4 +5,4 @@ Use the following schema when research becomes accepted input to implementation 
 | Research ID | Question | Finding | Confidence | Implication | Decision | Status |
 |---|---|---|---|---|---|---|
 
-No research findings are accepted into the build at repository bootstrap.
+Canonical research and maths documents exist, but no research finding has yet been promoted through this table into implemented strategy or execution capability on `main`. Active documentation work does not change runtime state.
