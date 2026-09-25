@@ -217,6 +217,35 @@ Official source: https://readytradergo.optiver.com/how-to-play/
 
 ---
 
+### 2.9 UChicago Trading Competition 2026 — crowding and response-window compression
+
+A detailed 2026 UChicago participant write-up provides unusually relevant evidence about ecology changing during the competition rather than remaining fixed.
+
+Through the first six live rounds, the team's event-driven Stock C strategy performed strongly. Later, the participant reports that:
+
+- opposing bots reacted to news faster;
+- the top of book became thinner;
+- spreads widened;
+- the window between a CPI print and prediction-market repricing compressed;
+- fixed trade sizes and fixed edge thresholds that had worked earlier became materially worse execution choices.
+
+The participant's diagnosis was not that the fair-value model stopped working. The underlying model continued to track price discovery; the executable opportunity degraded because competing reactions became faster and liquidity conditions changed.
+
+**Transferable lessons:**
+
+1. an information edge can decay because the market ecology adapts even when the underlying signal remains valid;
+2. external-response latency, depth and executable edge should be re-estimated through the Cup rather than calibrated once;
+3. crowding can convert an alpha problem into an execution problem;
+4. opponent ecology can be economically important without identifying any participant.
+
+This is particularly relevant to a possible Polymarket/Kalshi → SIG signal: the external information may remain useful while the stale-price window shrinks as competitors converge on the same reaction.
+
+**Evidence strength:** HIGH for the observed competition dynamics; MODERATE transferability to SIG.
+
+Source: https://www.cs.utexas.edu/~kavish/blog/uchicago-trading-competition-2026.html
+
+---
+
 ## 3. What the raw AI corpus actually tells us
 
 The raw file `docs/research/AI Ideas` should remain unchanged.
@@ -594,7 +623,9 @@ A behavioural signal is invalid if it is really a feed gap or stale local state.
 
 ### ECO-001 — External impulse → local response function
 
-**Hypothesis:** some local SIG activity is a predictable reaction to external-market changes.
+**Priority:** HIGHEST PRIORITY ECOLOGY TEST.
+
+**Hypothesis:** some local SIG activity is a predictable reaction to external-market changes, and the observed local reaction may add incremental predictive/economic value beyond the external impulse itself.
 
 **Inputs:** synchronized Polymarket/Kalshi where available, SIG books/trades, observable timestamps.
 
@@ -606,11 +637,23 @@ A behavioural signal is invalid if it is really a feed gap or stale local state.
 - threshold/nonlinearity;
 - market/regime.
 
-**Baseline:** direct external lead/lag using only external impulse.
+**Baseline:** direct external lead/lag using external impulse plus ordinary contemporaneous SIG book state.
 
-**Test:** does observed local reaction behaviour improve prediction of subsequent executable SIG repricing beyond the direct external signal?
+**Test:** compare chronologically out of sample:
 
-**Falsifier:** no incremental OOS markout/predictive lift.
+```text
+Model A:
+external impulse + ordinary SIG book state
+→ subsequent executable SIG move
+
+Model B:
+external impulse + ordinary SIG book state + observed local reaction
+→ subsequent executable SIG move
+```
+
+The reaction window must be timestamp-safe: if a reaction is observed after the external impulse, any hypothetical trade must use the executable SIG state available **after** that reaction is observable to us, not the pre-reaction book.
+
+**Falsifier:** Model B produces no stable incremental OOS executable markout, trade-selection or P&L improvement over Model A.
 
 **Dependency:** synchronized SIG recorder + mapping.
 
@@ -733,7 +776,11 @@ Until then, replay and real live observation have higher expected value.
 
 ## 8. Relationship to the maths ledger
 
-No new maths workstream is required now.
+No new maths **workstream** is required now.
+
+The one potentially distinct hypothesis identified by this research is the ECO-001 question: whether an observable post-external SIG reaction contains incremental information beyond the external impulse itself. Treat this as a candidate **opponent-mediated lead/lag** estimator/hypothesis, not as a new modelling programme.
+
+Do not add a new `MATHS_LEDGER.md` item yet. Only promote it if live data shows stable chronological OOS executable value beyond M-087–M-089 and ordinary spread/depth/flow controls.
 
 Most necessary objects already exist:
 
@@ -869,6 +916,9 @@ If the answer to 9 or 10 is no, opponent ecology remains descriptive rather than
 
 - Optiver Ready Trader Go official competition description  
   https://readytradergo.optiver.com/how-to-play/
+
+- UChicago Trading Competition 2026 — live execution, faster opposing reactions and compressed response window  
+  https://www.cs.utexas.edu/~kavish/blog/uchicago-trading-competition-2026.html
 
 ---
 
