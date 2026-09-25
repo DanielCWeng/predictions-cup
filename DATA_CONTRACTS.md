@@ -34,7 +34,7 @@ Shared canonical rules:
 
 ## SIG transport contracts — BUILD-003
 
-SIG endpoint payloads are validated under `predictions_cup.sig` before any canonical object is created.
+The following transport contracts are implemented on PR #4's branch and remain unmerged pending independent review. SIG endpoint payloads are validated under `predictions_cup.sig` before any canonical object is created.
 
 Key rules:
 
