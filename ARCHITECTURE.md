@@ -8,7 +8,7 @@ BUILD-001 established the application shell, CI, logging, logical package bounda
 
 BUILD-002 added on-demand typed runtime configuration, secret-aware SIG credential representation, canonical domain contracts, Decimal/time/identifier validation, and deterministic Pydantic serialization.
 
-BUILD-003 adds a production-oriented **read-only** SIG REST boundary under `predictions_cup.sig`:
+On PR #4's branch, BUILD-003 adds a proposed **read-only** SIG REST boundary under `predictions_cup.sig`; it remains unmerged pending independent review:
 
 - one reusable asynchronous `httpx.AsyncClient` with a shared connection pool;
 - Bearer authentication from the BUILD-002 read credential only;
