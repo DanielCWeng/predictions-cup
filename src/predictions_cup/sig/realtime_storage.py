@@ -7,7 +7,12 @@ from datetime import datetime
 from pathlib import Path
 
 from predictions_cup.models import OrderBook
-from predictions_cup.sig.realtime_models import RealtimeDeliveryDto, RealtimeTradeDto
+from predictions_cup.sig.realtime_models import (
+    BookDirtyDto,
+    MarketSettledDto,
+    RealtimeDeliveryDto,
+    RealtimeTradeDto,
+)
 
 
 class SigRealtimeRecorder:
@@ -44,6 +49,32 @@ class SigRealtimeRecorder:
             );
             CREATE INDEX IF NOT EXISTS ix_realtime_trades_exchange_time
                 ON realtime_trades(exchange_id, observed_at);
+
+            CREATE TABLE IF NOT EXISTS book_dirty_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                topic TEXT NOT NULL,
+                revision INTEGER NOT NULL,
+                exchange_id TEXT NOT NULL,
+                market_id TEXT NOT NULL,
+                tournament_id TEXT NOT NULL,
+                source_at TEXT NOT NULL,
+                observed_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ix_book_dirty_events_exchange_time
+                ON book_dirty_events(exchange_id, observed_at);
+
+            CREATE TABLE IF NOT EXISTS market_settled_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                topic TEXT NOT NULL,
+                revision INTEGER NOT NULL,
+                market_id TEXT NOT NULL,
+                tournament_id TEXT NOT NULL,
+                settled_with TEXT NOT NULL,
+                source_at TEXT NOT NULL,
+                observed_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ix_market_settled_events_market_time
+                ON market_settled_events(market_id, observed_at);
 
             CREATE TABLE IF NOT EXISTS book_observations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -133,6 +164,60 @@ class SigRealtimeRecorder:
         )
         self._connection.commit()
 
+    def record_book_dirty(
+        self,
+        *,
+        topic: str,
+        revision: int,
+        event: BookDirtyDto,
+        observed_at: datetime,
+    ) -> None:
+        self._connection.execute(
+            """
+            INSERT INTO book_dirty_events (
+                topic, revision, exchange_id, market_id, tournament_id,
+                source_at, observed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                topic,
+                revision,
+                event.exchange_id,
+                event.market_id,
+                event.tournament_id,
+                _iso(event.at),
+                _iso(observed_at),
+            ),
+        )
+        self._connection.commit()
+
+    def record_market_settled(
+        self,
+        *,
+        topic: str,
+        revision: int,
+        event: MarketSettledDto,
+        observed_at: datetime,
+    ) -> None:
+        self._connection.execute(
+            """
+            INSERT INTO market_settled_events (
+                topic, revision, market_id, tournament_id, settled_with,
+                source_at, observed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                topic,
+                revision,
+                event.market_id,
+                event.tournament_id,
+                event.settled_with,
+                _iso(event.at),
+                _iso(observed_at),
+            ),
+        )
+        self._connection.commit()
+
     def record_book(
         self,
         *,
@@ -194,6 +279,12 @@ class SigRealtimeRecorder:
             )
             self._connection.execute(
                 "DELETE FROM realtime_trades WHERE observed_at < ?", (cutoff_iso,)
+            )
+            self._connection.execute(
+                "DELETE FROM book_dirty_events WHERE observed_at < ?", (cutoff_iso,)
+            )
+            self._connection.execute(
+                "DELETE FROM market_settled_events WHERE observed_at < ?", (cutoff_iso,)
             )
             self._connection.execute(
                 "DELETE FROM book_observations WHERE rest_observed_at < ?", (cutoff_iso,)

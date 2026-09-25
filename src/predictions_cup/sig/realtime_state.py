@@ -231,6 +231,20 @@ class SigRealtimeStateEngine:
         self.last_accepted_revision = delivery.revision
         await self._ensure_known_exchanges(batch)
         self._record_trades(batch, observed_at)
+        for event in batch.book_dirty:
+            self._recorder.record_book_dirty(
+                topic=self.topic,
+                revision=delivery.revision,
+                event=event,
+                observed_at=observed_at,
+            )
+        for event in batch.market_settled:
+            self._recorder.record_market_settled(
+                topic=self.topic,
+                revision=delivery.revision,
+                event=event,
+                observed_at=observed_at,
+            )
 
         dirty_exchange_ids = {item.exchange_id for item in batch.book_dirty}
         for exchange_id in dirty_exchange_ids:

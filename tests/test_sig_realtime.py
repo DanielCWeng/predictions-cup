@@ -10,7 +10,9 @@ from pathlib import Path
 from predictions_cup.models import OrderBook, OrderBookLevel
 from predictions_cup.sig.dto import ExchangeListItemDto, OrderBookSnapshotDto
 from predictions_cup.sig.realtime_models import (
+    BookDirtyDto,
     MarketBatchDto,
+    MarketSettledDto,
     RealtimeDeliveryDto,
     RealtimeTokenDto,
     RealtimeTradeDto,
@@ -313,6 +315,32 @@ def test_recorder_normalization_wal_and_retention(tmp_path: Path) -> None:
     )
     recorder.record_delivery(topic="tournament:cup", delivery=delivery, observed_at=old)
     recorder.record_trade(topic="tournament:cup", revision=1, trade=trade, observed_at=old)
+    recorder.record_book_dirty(
+        topic="tournament:cup",
+        revision=1,
+        event=BookDirtyDto.model_validate(
+            {
+                "exchangeId": "36",
+                "marketId": "26",
+                "tournamentId": "cup",
+                "at": "2026-09-01T00:00:00Z",
+            }
+        ),
+        observed_at=old,
+    )
+    recorder.record_market_settled(
+        topic="tournament:cup",
+        revision=1,
+        event=MarketSettledDto.model_validate(
+            {
+                "marketId": "26",
+                "tournamentId": "cup",
+                "settledWith": "YES",
+                "at": "2026-09-01T00:00:01Z",
+            }
+        ),
+        observed_at=old,
+    )
     recorder.record_book(
         market_id="26",
         tournament_id="cup",
@@ -335,6 +363,8 @@ def test_recorder_normalization_wal_and_retention(tmp_path: Path) -> None:
     for table in (
         "realtime_deliveries",
         "realtime_trades",
+        "book_dirty_events",
+        "market_settled_events",
         "book_observations",
         "trust_transitions",
     ):
