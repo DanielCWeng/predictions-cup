@@ -40,7 +40,10 @@ This document describes the accepted repository state on `main`.
 - SAME / COMPLEMENT direction semantics;
 - deterministic mapping artifact generation;
 - reviewer-owned override validation path;
-- deterministic live acceptance-evidence machinery.
+- deterministic live acceptance-evidence machinery;
+- deterministic observable-time SIG + Polymarket replay with bounded capture selection;
+- trusted/fresh reconstructed replay state and standardized executable crossing markouts;
+- generic experiment/evaluation contracts, chronological splits and deterministic synthetic replay proof.
 
 ## Outstanding operational / acceptance gates
 
@@ -50,20 +53,14 @@ This document describes the accepted repository state on `main`.
 
 ## In review — not implemented on main
 
-BUILD-005 is in review as PR #15 on `build/005-deterministic-replay`. The branch adds an
-observable-time replay envelope/clock, read-only adapters for the accepted SIG and Polymarket
-SQLite capture schemas, trusted/fresh reconstructed state, standardized executable crossing
-markouts, a small experiment/evaluation contract, chronological splits, an offline capture smoke
-and deterministic synthetic end-to-end proof. Until independently accepted and merged, none of
-that capability is described as implemented on `main`.
-
-BUILD-005 does not depend on the live 2026 mapping gate: experiment instrument pairs are explicit
-fixture/manual configuration and can consume future accepted mapping artefacts later.
+EXPERIMENT-002 is in review as PR #16 on `experiment/002-leadlag-rv-loo`. It builds the first
+LEADLAG / response-curve / relative-value / LOO-PRICE / LOO-FAMILY empirical experiment suite on
+the accepted BUILD-005 replay foundation. The branch remains non-trading and does not claim any
+empirical edge before verified historical/live data are run.
 
 ## Not implemented on main
 
 - validated production live 2026 SIG ↔ Polymarket crosswalk;
-- deterministic synchronized SIG + Polymarket replay/evaluation foundation;
 - fair value;
 - relationship/constraint engine;
 - opportunity scanning;
@@ -82,12 +79,12 @@ fixture/manual configuration and can consume future accepted mapping artefacts l
 
 ## Next implementation target
 
-The active implementation target is still:
+The active implementation target is:
 
-> deterministic synchronized replay + experiment/evaluation foundation.
+> executable lead/lag, response-curve, relative-value and LOO-family experiments over accepted replay.
 
-BUILD-005 / PR #15 is the current in-review branch for that target. This status does not imply acceptance or
-availability on `main`.
+EXPERIMENT-002 / PR #16 is the current in-review branch for that target. This status does not imply
+acceptance or availability on `main`.
 
 ## Repository state discipline
 
