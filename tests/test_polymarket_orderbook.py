@@ -40,6 +40,15 @@ def test_full_snapshot_delta_zero_delete_and_decimal_precision() -> None:
     snapshot = store.snapshot("token-1", depth=10)
     assert snapshot is not None
     assert result.uninitialized_deltas == 0
+    assert len(result.changes) == 3
+    assert result.changes[0].token_id == "token-1"
+    assert result.changes[0].market_id == "0xmarket"
+    assert result.changes[0].side == "BUY"
+    assert result.changes[0].price == Decimal("0.44")
+    assert result.changes[0].size == Decimal("0")
+    assert result.changes[0].observed_at == observed + timedelta(seconds=1)
+    assert result.changes[-1].best_bid == Decimal("0.450000000000000001")
+    assert result.changes[-1].best_ask == Decimal("0.46")
     assert snapshot.bids == (
         snapshot.bids[0],
         snapshot.bids[1],
@@ -68,7 +77,39 @@ def test_delta_before_snapshot_is_counted_and_not_applied() -> None:
 
     assert result.uninitialized_deltas == 1
     assert result.changed_tokens == frozenset()
+    assert result.changes == ()
     assert store.snapshot("missing-token", depth=10) is None
+
+
+def test_last_trade_price_updates_current_book_state() -> None:
+    store = OrderBookStore()
+    observed = datetime(2026, 9, 25, tzinfo=UTC)
+    store.apply_full_snapshot(
+        {
+            "market": "0xmarket",
+            "asset_id": "token-1",
+            "timestamp": "1782753357257",
+            "bids": [{"price": "0.45", "size": "10"}],
+            "asks": [{"price": "0.46", "size": "10"}],
+            "last_trade_price": "0.44",
+        },
+        observed,
+    )
+
+    assert store.apply_last_trade_price(
+        {
+            "event_type": "last_trade_price",
+            "market": "0xmarket",
+            "asset_id": "token-1",
+            "price": "0.455",
+            "timestamp": "1782753358257",
+        },
+        observed + timedelta(seconds=1),
+    )
+
+    snapshot = store.snapshot("token-1", depth=10)
+    assert snapshot is not None
+    assert snapshot.last_trade_price == Decimal("0.455")
 
 
 def test_reconnect_invalidation_discards_old_books() -> None:
