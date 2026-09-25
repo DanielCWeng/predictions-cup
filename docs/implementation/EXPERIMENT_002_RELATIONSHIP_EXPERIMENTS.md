@@ -57,6 +57,15 @@ Reference-price modes are:
 - `ASK`;
 - `LAST_TRADE`.
 
+`COMPLEMENT` transforms are side-aware: complement BID is `1 - source ASK` and complement ASK
+is `1 - source BID`. Symmetric modes such as midpoint, microprice and last trade transform as
+`1 - p`.
+
+`LAST_TRADE` freshness is tracked from the observable timestamp of a captured trade event, not
+from quote freshness. A fresh trade-only reference is usable; a stale trade does not become fresh
+because a later quote arrives. Quote snapshots that merely carry a last-trade value do not invent
+a new trade-observation timestamp.
+
 These modes build features only. Economic outcomes always use executable bid/ask crossing.
 
 ## LEADLAG
@@ -229,7 +238,8 @@ No Sharpe ratio is produced.
 
 ## Serialization
 
-`serialize_relationship_observations()` writes stable sorted JSON records. Financial values are
+`serialize_relationship_observations()` sorts its own input before writing stable JSON records,
+so determinism is an API property rather than a caller-order assumption. Financial values are
 serialized as decimal strings and observations are deterministically ordered by decision time,
 experiment, target, horizon and direction.
 
