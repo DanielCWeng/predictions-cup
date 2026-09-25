@@ -35,9 +35,11 @@ This document describes what exists on `main`, then separately records active un
 
 Implementation exists on `build/003-sig-rest-client`, not on `main`.
 
-Current review state: **BLOCKED / IN REVIEW**.
+Current review state: **IN REVIEW**.
 
-The remaining code blocker is strict recursive `MarketNode` transport validation for `/markets/{id}/nodes`. The branch must also reconcile its project-control documentation with the cleaned `main` state before merge.
+On this branch, the recursive `MarketNode` transport blocker has been corrected and focused regression coverage added. The branch is reconciled onto current `main`, but BUILD-003 remains unmerged and is not accepted `main` capability until independent review and merge.
+
+If accepted, BUILD-003 adds authenticated **read-only** SIG REST access for account health, market/exchange discovery, market-node transport data, prices, orderbooks, price history and trades. It adds no order submission, cancellation, realtime/WebSocket path or trading capability.
 
 ### PR #5 — EXPERIMENT-001A — Polymarket live data capture foundation
 
