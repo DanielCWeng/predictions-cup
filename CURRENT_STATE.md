@@ -47,7 +47,7 @@ Implementation exists on `experiment/001a-polymarket-live-capture`, not on `main
 
 Current review state: **IN REVIEW**.
 
-This branch is integrated against corrected BUILD-003 head `986bd52a7338f790eb00b3e8e333c10e41acd7b0` while PR #4 awaits independent review. The focused recorder revision is complete: normalized event-time book changes are durable, REST book batches retain receipt-time observations, the 1-second panel is scalar/lean with depth on a slower configurable cadence, receive/PONG liveness forces reconnect, and `last_trade_price` updates current book state.
+This branch is integrated against corrected BUILD-003 head `c788125df685950bf389df1adea56d166b3f9d23` while PR #4 awaits independent review. The focused recorder revision is complete: normalized event-time book changes are durable, REST book batches retain receipt-time observations, the 1-second panel is scalar/lean with depth on a slower configurable cadence, receive/PONG liveness forces reconnect, and `last_trade_price` updates current book state.
 
 EXPERIMENT-001A remains unmerged public read-only research infrastructure. It adds no wallet/signing, order submission, fair value, strategy, risk or execution capability.
 
