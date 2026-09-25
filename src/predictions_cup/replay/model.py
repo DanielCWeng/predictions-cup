@@ -31,6 +31,9 @@ class InvalidReason(StrEnum):
     DATA_GAP = "data_gap"
     MISSING_PAIR = "missing_pair"
     DATASET_END = "dataset_end"
+    REFERENCE_UNAVAILABLE = "reference_unavailable"
+    INSUFFICIENT_PREDICTOR_COVERAGE = "insufficient_predictor_coverage"
+    INVALID_SPREAD = "invalid_spread"
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +135,7 @@ class InstrumentView:
     trusted: bool
     book_valid: bool
     source_available: bool
+    last_trade_observed_at: datetime | None = None
 
     @property
     def midpoint(self) -> Decimal | None:
@@ -150,6 +154,7 @@ class _InstrumentState:
     bids: tuple[BookLevel, ...] = ()
     asks: tuple[BookLevel, ...] = ()
     last_trade: Decimal | None = None
+    last_trade_observed_at: datetime | None = None
     quote_observed_at: datetime | None = None
     last_event_observed_at: datetime | None = None
     trusted: bool = True
@@ -190,12 +195,13 @@ class ReplayState:
             state.best_ask = payload.best_ask
             state.bids = payload.bids
             state.asks = payload.asks
-            if payload.last_trade is not None:
+            if payload.last_trade is not None and state.last_trade_observed_at is None:
                 state.last_trade = payload.last_trade
             state.quote_observed_at = payload.quote_observed_at
             state.book_valid = payload.book_valid
         elif isinstance(payload, TradePayload):
             state.last_trade = payload.price
+            state.last_trade_observed_at = event.observed_at
         elif isinstance(payload, TrustPayload):
             state.trusted = payload.trusted
 
@@ -217,6 +223,7 @@ class ReplayState:
             trusted=state.trusted,
             book_valid=state.book_valid,
             source_available=self._source_available[source],
+            last_trade_observed_at=state.last_trade_observed_at,
         )
 
     def quote_status(
@@ -244,6 +251,36 @@ class ReplayState:
             return view, reason
         if view.best_bid is None or view.best_ask is None:
             return view, InvalidReason.NO_EXECUTABLE_START
+        return view, None
+
+    def trade_status(
+        self,
+        *,
+        source: ReplaySource,
+        instrument_id: str,
+        at: datetime,
+        max_age: timedelta | None,
+    ) -> tuple[InstrumentView | None, InvalidReason | None]:
+        """Validate last-trade availability/freshness independently of quote state."""
+        _require_aware(at, "at")
+        view = self.view(source, instrument_id)
+        if (
+            view is None
+            or view.last_trade is None
+            or view.last_trade_observed_at is None
+        ):
+            return view, InvalidReason.NO_EXECUTABLE_START
+        if source is ReplaySource.SIG and not view.trusted:
+            return view, InvalidReason.SIG_UNTRUSTED
+        if not view.source_available:
+            return view, InvalidReason.DATA_GAP
+        if max_age is not None and at - view.last_trade_observed_at > max_age:
+            reason = (
+                InvalidReason.SIG_STALE
+                if source is ReplaySource.SIG
+                else InvalidReason.EXTERNAL_STALE
+            )
+            return view, reason
         return view, None
 
     def _state_for(self, source: ReplaySource, instrument_id: str) -> _InstrumentState:
