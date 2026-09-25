@@ -9,14 +9,14 @@
 - **Monday 28 September gate:** those initial hypotheses must be runnable through replay using data captured by our own infrastructure; otherwise priority collapses entirely onto data → replay → experiment.
 - Competition-history findings and the six-day launch plan are canonical documentation; they add no runtime or trading capability.
 
-This document describes the accepted repository state on `main`.
+This document describes the accepted repository state on \`main\`.
 
 ## Implemented on main
 
 - repository foundation;
 - Python tooling and CI;
 - typed application configuration;
-- environment-driven loading with optional local `.env` support;
+- environment-driven loading with optional local \`.env\` support;
 - secret-safe read/trade credential representation;
 - fail-closed trading configuration;
 - canonical core domain models;
@@ -44,9 +44,21 @@ This document describes the accepted repository state on `main`.
 
 ## Outstanding operational / acceptance gates
 
-- BUILD-004 live credentialed tournament smoke remains operationally outstanding; the accepted implementation is on `main`.
-- The MAPPING-001 framework is accepted on `main`, but the live credentialed 2026 SIG ↔ Polymarket crosswalk has **not** been generated or accepted.
+- BUILD-004 live credentialed tournament smoke remains operationally outstanding; the accepted implementation is on \`main\`.
+- The MAPPING-001 framework is accepted on \`main\`, but the live credentialed 2026 SIG ↔ Polymarket crosswalk has **not** been generated or accepted.
 - LIVE-MAPPING-GATE-001 / GitHub issue #13 tracks live SIG exchange enumeration, reviewer promotion/overrides, mapped-token CLOB smoke, acceptance evidence and independent acceptance before mappings are treated as production-ready.
+
+## In review — not implemented on main
+
+BUILD-005 is being implemented on \`build/005-deterministic-replay\`. The branch adds an
+observable-time replay envelope/clock, read-only adapters for the accepted SIG and Polymarket
+SQLite capture schemas, trusted/fresh reconstructed state, standardized executable crossing
+markouts, a small experiment/evaluation contract, chronological splits, an offline capture smoke
+and deterministic synthetic end-to-end proof. Until independently accepted and merged, none of
+that capability is described as implemented on \`main\`.
+
+BUILD-005 does not depend on the live 2026 mapping gate: experiment instrument pairs are explicit
+fixture/manual configuration and can consume future accepted mapping artefacts later.
 
 ## Not implemented on main
 
@@ -66,22 +78,21 @@ This document describes the accepted repository state on `main`.
 
 **NONE**
 
-`trading_enabled` defaults to `False`. Setting it to `True` is only configuration intent and requires a separately supplied trade credential; no execution path or order-submission path exists on `main`.
+\`trading_enabled\` defaults to \`False\`. Setting it to \`True\` is only configuration intent and requires a separately supplied trade credential; no execution path or order-submission path exists on \`main\`.
 
 ## Next implementation target
 
-The next implementation target is:
+The active implementation target is still:
 
 > deterministic synchronized replay + experiment/evaluation foundation.
 
-Its purpose is to make captured SIG + Polymarket information testable using observable timestamps and standardized executable markouts.
-
-This is a target only. No BUILD-005 branch or PR is claimed to exist.
+BUILD-005 is the current in-review branch for that target. This status does not imply acceptance or
+availability on \`main\`.
 
 ## Repository state discipline
 
-- Every implementation branch starts from current `main`.
+- Every implementation branch starts from current \`main\`.
 - Every accepted merge updates canonical project state.
 - Builders do not merge their own PRs.
 - Active branch state must not be described as merged functionality.
-- GitHub merge state and actual `main` contents outrank stale documentation.
+- GitHub merge state and actual \`main\` contents outrank stale documentation.
