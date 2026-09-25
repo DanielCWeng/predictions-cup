@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from predictions_cup.external.polymarket.models import (
+    BookChangeEvent,
     BookLevel,
     BookSnapshot,
     JsonObject,
@@ -38,6 +39,7 @@ class _MutableBook:
 class DeltaResult:
     changed_tokens: frozenset[str]
     uninitialized_deltas: int
+    changes: tuple[BookChangeEvent, ...]
 
 
 class OrderBookStore:
@@ -102,6 +104,7 @@ class OrderBookStore:
         source_ts = parse_source_timestamp(event.get("timestamp"))
         observed = observed_at.astimezone(UTC)
         changed: set[str] = set()
+        normalized_changes: list[BookChangeEvent] = []
         missing = 0
 
         for change_raw in changes_raw:
@@ -118,8 +121,10 @@ class OrderBookStore:
             side_raw = require_text(change.get("side"), "price_change side").upper()
             if side_raw == "BUY":
                 side = book.bids
+                normalized_side = "BUY"
             elif side_raw == "SELL":
                 side = book.asks
+                normalized_side = "SELL"
             else:
                 raise PayloadError(f"unsupported price_change side: {side_raw}")
             price = parse_decimal(change.get("price"), "price")
@@ -135,8 +140,38 @@ class OrderBookStore:
             book.observed_at = observed
             book.book_hash = optional_text(change.get("hash")) or book.book_hash
             changed.add(token_id)
+            normalized_changes.append(
+                BookChangeEvent(
+                    market_id=book.market_id,
+                    token_id=token_id,
+                    side=normalized_side,
+                    price=price,
+                    size=size,
+                    source_timestamp=source_ts,
+                    observed_at=observed,
+                    best_bid=max(book.bids, default=None),
+                    best_ask=min(book.asks, default=None),
+                    book_hash=book.book_hash,
+                )
+            )
 
-        return DeltaResult(frozenset(changed), missing)
+        return DeltaResult(frozenset(changed), missing, tuple(normalized_changes))
+
+    def apply_last_trade_price(self, payload: JsonObject, observed_at: datetime) -> bool:
+        event = _unwrap_market_event(payload)
+        token_id = require_text(event.get("asset_id") or event.get("tokenId"), "asset_id")
+        book = self._books.get(token_id)
+        if book is None:
+            return False
+        price = parse_decimal(
+            event.get("price") or event.get("last_trade_price") or event.get("lastTradePrice"),
+            "last_trade_price",
+        )
+        assert price is not None
+        if price < 0 or price > 1:
+            raise PayloadError("last_trade_price outside valid range")
+        book.last_trade_price = price
+        return True
 
     def apply_tick_size_change(self, payload: JsonObject, observed_at: datetime) -> bool:
         event = _unwrap_market_event(payload)
