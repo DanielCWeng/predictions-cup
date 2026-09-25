@@ -1,13 +1,18 @@
 # Build Ledger
 
+Status semantics:
+
+- `MERGED / ACCEPTED` — accepted functionality exists on `main`.
+- `IN REVIEW` — requested corrections are implemented on the named branch/PR and await independent acceptance; the work is not part of `main`.
+- `BLOCKED / IN REVIEW` — implementation exists only on the named branch/PR and still has a known blocker.
+- `PLANNED` — no accepted implementation exists.
+- An unmerged branch must never be described as implemented on `main`.
+
 | Ticket | Status | Branch | PR | Commit | Review | Acceptance |
 |---|---|---|---|---|---|---|
-| BUILD-001 — Repository Foundation and Canonical Project Control | ACCEPTED | `build/001-foundation` | #1 | `b930acd88b89faaada674790718bd34ac13c3d5e` (foundation implementation) | builder self-review complete; final CI green | project owner authorized merge |
-| BUILD-002 — Configuration, secrets and typed API/domain models | READY FOR RE-REVIEW | `build/002-config-domain-models` | #2 | `899201e1b60c9588772f21b83399248d8e05b0f5` (review revision validated) | blocker revision complete; branch CI green | pending |
-| BUILD-003 — SIG authenticated REST client | PLANNED | pending | pending | pending | pending | pending |
-| EXPERIMENT-001A — Polymarket live data capture foundation | READY FOR REVIEW | `experiment/001a-polymarket-live-capture` | #5 | `ac0b1e2d4bebc28dc5832fdbbf9523b5d37b3ba9` (implementation) | builder self-review complete; local offline unit suite 18 passed; branch CI green on run #77 | pending independent review |
+| BUILD-001 — Repository Foundation and Canonical Project Control | MERGED / ACCEPTED | `build/001-foundation` | #1 | head `e0695cfe61a3b5070d08e64fe872da676b32db75`; merge `88a2578e25f4ee005a01955db7d9ef619ce5be30` | final review complete; CI green | merged 24 Sep 2026 |
+| BUILD-002 — Configuration, secrets and typed API/domain models | MERGED / ACCEPTED | `build/002-config-domain-models` | #2 | head `7d2dfc218e1ddc46685346b8a683bdc8a041c9ce`; merge `81cee3c0449fb5abe898df46c752ba312a5c8422` | blocker revision accepted; CI green | merged 24 Sep 2026 |
+| BUILD-003 — SIG authenticated read-only REST client | IN REVIEW | `build/003-sig-rest-client` | #4 | current branch head (see PR #4) | recursive `MarketNode` transport correction and regressions complete; reconciled onto current `main`; awaiting independent review | pending |
+| EXPERIMENT-001A — Polymarket live data capture foundation | BLOCKED / IN REVIEW | `experiment/001a-polymarket-live-capture` | #5 | head `070fbf391ea983d9f719933bf58fdbb5af493df9` | focused recorder revision required: durable event-time book changes, honest REST observation times, lean storage growth, missing-PONG detection, and `last_trade_price` consistency; integration gated after #4 | pending |
 
-Rows marked `PLANNED` are not implemented.
-
-EXPERIMENT-001A is experimental read-only research infrastructure and is not a production trading
-capability.
+GitHub merge state and the actual contents of `main` are authoritative when documentation drifts.

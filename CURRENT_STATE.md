@@ -1,10 +1,17 @@
 # Current State
 
-**Phase:** FOUNDATION / DOMAIN MODELS + EXPERIMENTAL EXTERNAL DATA CAPTURE
+**Phase:** FOUNDATION / DOMAIN MODELS — active integration work remains off-main.
 
-## Implemented
+## Operating posture — 25 September 2026
 
-Production-foundation work:
+- Broad strategy/mathematical research is frozen by default; new work should answer a failed test, implementation ambiguity, live venue observation or specific architectural decision.
+- Initial empirical strategy work is limited to direct external lead/lag, simple residual/relative value and simple selective market making.
+- **Monday 28 September gate:** those initial hypotheses must be runnable through replay using data captured by our own infrastructure; otherwise priority collapses entirely onto data → replay → experiment.
+- Competition-history findings and the six-day launch plan are canonical documentation; they add no runtime or trading capability.
+
+This document describes what exists on `main`, then separately records active unmerged implementation work.
+
+## Implemented on main
 
 - repository foundation;
 - Python tooling and CI;
@@ -17,56 +24,69 @@ Production-foundation work:
 - timezone-aware canonical timestamps;
 - opaque external identifiers;
 - validation invariants;
-- runnable non-trading application shell.
+- runnable non-trading application shell;
+- canonical maths ledger;
+- competition strategy/execution playbook.
+- competition-history research and six-day launch plan.
 
-EXPERIMENT-001A adds a deliberately separate, read-only Polymarket research recorder:
+## Active / pending integration
 
-- current Gamma keyset discovery and metadata normalization;
-- configurable 2026 U.S. election-market universe selection with manual overrides;
-- public CLOB `/books` initialization;
-- persistent market WebSocket capture with bounded heartbeat/reconnect handling;
-- Decimal order-book state with snapshot-before-delta enforcement;
-- source timestamp + local `observed_at` preservation;
-- public trade-event capture where emitted;
-- 1-second normalized research snapshots;
-- restart-safe local SQLite/WAL storage;
-- feed/book/trade/storage health separation.
+### PR #4 — BUILD-003 — SIG authenticated read-only REST client
 
-The recorder is **experimental research infrastructure**, not part of the live SIG trading path.
+Implementation exists on `build/003-sig-rest-client`, not on `main`.
 
-## Not implemented
+Current review state: **IN REVIEW**.
 
-- SIG HTTP integration;
-- SIG authentication requests;
-- SIG realtime;
-- production market-state engine;
-- SIG ↔ external market mapping;
-- semantic information-family graph;
-- LOO-PRICE / LOO-FAMILY fair value;
-- coherent probability solver;
+On this branch, the recursive `MarketNode` transport blocker has been corrected and focused regression coverage added. The branch is reconciled onto current `main`, but BUILD-003 remains unmerged and is not accepted `main` capability until independent review and merge.
+
+If accepted, BUILD-003 adds authenticated **read-only** SIG REST access for account health, market/exchange discovery, market-node transport data, prices, orderbooks, price history and trades. It adds no order submission, cancellation, realtime/WebSocket path or trading capability.
+
+### PR #5 — EXPERIMENT-001A — Polymarket live data capture foundation
+
+Implementation exists on `experiment/001a-polymarket-live-capture`, not on `main`.
+
+Current review state: **BLOCKED / IN REVIEW**.
+
+Required revision covers durable normalized event-time book changes, honest REST batch observation timestamps, leaner storage growth, missing-PONG/feed-liveness detection, and `last_trade_price` consistency. It must be updated/rebased after PR #4 lands before final review.
+
+## Not implemented on main
+
+- SIG HTTP integration or authenticated SIG requests;
+- SIG realtime/WebSocket ingestion;
+- persistent market-state/reconciliation engine;
+- Polymarket or other external live-data adapters/recorders;
+- production market mapping;
+- fair value;
+- relationship/constraint engine;
 - opportunity scanning;
 - risk decisions/calculations;
 - execution;
-- order submission;
+- order submission/cancellation;
 - portfolio accounting;
-- shadow/paper fills;
+- shadow trading;
 - live trading.
 
 ## Trading capability
 
 **NONE**
 
-`trading_enabled` defaults to `False`. Setting it to `True` is only configuration intent and
-requires a separately supplied trade credential; no execution path or network trading client
-exists.
+`trading_enabled` defaults to `False`. Setting it to `True` is only configuration intent and requires a separately supplied trade credential; no execution path or order-submission path exists on `main`.
 
-`polymarket_capture_enabled` controls only a separate read-only public-data recorder. It has no
-wallet, key, signing or order method.
+## Immediate integration queue
 
-## Recommended next work
+```text
+PR #4 correction/review
+→ merge PR #4
+→ update/rebase PR #5
+→ PR #5 correction/review
+→ merge PR #5
+→ next implementation ticket
+```
 
-Production path: **BUILD-003 — SIG authenticated REST client**.
+## Repository state discipline
 
-Experiment path: run EXPERIMENT-001A long enough to validate multi-day capture quality, then define
-EXPERIMENT-001B for LOO-FAMILY / structural-FV testing without adding strategy logic to the
-recorder.
+- Every implementation branch starts from current `main`.
+- Every accepted merge updates canonical project state.
+- Builders do not merge their own PRs.
+- Active branch state must not be described as merged functionality.
+- GitHub merge state and actual `main` contents outrank stale documentation.
