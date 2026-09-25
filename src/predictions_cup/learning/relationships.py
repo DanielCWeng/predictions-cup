@@ -414,6 +414,13 @@ class RelationshipExperimentRunner:
         else:
             computed = self._residual_signal(spec, references, target, frame.observed_at)
         if computed is None:
+            output.extend(
+                self._invalid_without_signal(
+                    spec,
+                    frame.observed_at,
+                    InvalidReason.INSUFFICIENT_PREDICTOR_COVERAGE,
+                )
+            )
             return
         signal_value, direction, features = computed
         if abs(signal_value) < spec.threshold:
@@ -749,11 +756,21 @@ def summarize_relationship_observations(
 
 def response_curve(
     observations: tuple[RelationshipObservation, ...],
-) -> dict[tuple[str, str, str, str], RelationshipSummary]:
-    groups: dict[tuple[str, str, str, str], list[RelationshipObservation]] = {}
+) -> dict[tuple[str, str, str, str, str, str, str], RelationshipSummary]:
+    groups: dict[
+        tuple[str, str, str, str, str, str, str], list[RelationshipObservation]
+    ] = {}
     for row in observations:
         direction = "NONE" if row.signal_direction is None else row.signal_direction.value
-        key = (row.experiment_id, direction, _timedelta_seconds(row.horizon), row.regime.value)
+        key = (
+            row.experiment_id,
+            row.dataset_id,
+            row.target,
+            direction,
+            str(row.threshold),
+            _timedelta_seconds(row.horizon),
+            row.regime.value,
+        )
         groups.setdefault(key, []).append(row)
     return {
         key: summarize_relationship_observations(tuple(rows))
