@@ -74,6 +74,18 @@ A `marketSettled` signal invalidates all known exchanges for that market and cal
 closed/settled, stale local books are cleared and the exchanges become trusted against that
 authoritative non-open state without an unnecessary orderbook request.
 
+SIG explicitly documents that **order expiry emits no Realtime event**. The same contract notes
+that expired orders are filtered at authoritative read time, but this implementation's
+aggregated exchange-orderbook DTO has no `expirationDate` metadata from which to schedule an
+exact expiry timer. BUILD-004 therefore applies a bounded freshness rule to trusted open books:
+after `PREDICTIONS_CUP_SIG_REALTIME_OPEN_BOOK_REFRESH_SECONDS` since the last successful REST
+book observation (default 30 seconds), the next one-second maintenance tick marks the exchange
+untrusted **before** issuing an authoritative REST refresh. A failed refresh leaves it
+untrusted. Closed/settled markets are excluded.
+
+This is deliberately not tight polling: Realtime remains the normal invalidation path, while the
+bounded REST refresh exists only to cover silent expiry and other no-event book aging.
+
 If a REST read fails, the exchange stays untrusted and
 `reconciliation_failure_count` increments. The subsystem does not manufacture apparently valid
 state from stale books.
@@ -150,6 +162,7 @@ last_rest_reconciliation
 revision_gap_count
 reconnect_count
 reconciliation_failure_count
+bounded_book_refresh_count
 market_count
 trusted_exchange_count
 untrusted_exchange_count
@@ -189,8 +202,8 @@ The BUILD-004 tests cover strict documented token/batch shapes, a single initial
 seed, source-sequence-vs-revision separation, duplicate delivery handling, revision-gap full
 resynchronization, `bookDirty` refresh, authoritative settlement-market refetch, stale-book
 clearing for settled markets, failed reconciliation remaining untrusted,
-reconnect/token-refresh/socket-error lifecycle transitions, normalized SQLite/WAL persistence
-and retention.
+reconnect/token-refresh/socket-error lifecycle transitions, quiet-connection maintenance,
+silent-expiry stale-depth removal, normalized SQLite/WAL persistence and retention.
 
 Repository CI runs:
 

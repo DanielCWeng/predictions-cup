@@ -58,6 +58,7 @@ PREDICTIONS_CUP_TOURNAMENT_SLUG
 PREDICTIONS_CUP_TRADING_ENABLED
 PREDICTIONS_CUP_SIG_REALTIME_STORAGE_PATH
 PREDICTIONS_CUP_SIG_REALTIME_BOOK_DEPTH
+PREDICTIONS_CUP_SIG_REALTIME_OPEN_BOOK_REFRESH_SECONDS
 PREDICTIONS_CUP_SIG_REALTIME_TOKEN_REFRESH_MARGIN_SECONDS
 PREDICTIONS_CUP_SIG_REALTIME_RETENTION_DAYS
 ```
@@ -118,9 +119,11 @@ python -m predictions_cup.sig.capture --tournament-id <TOURNAMENT_UUID>
 It mints the short-lived token, performs one authoritative market/open-book REST seed, then
 subscribes once to `tournament:{tournament_id}`. It records local batch receive time, checks
 topic `revision/previousRevision`, treats `bookDirty` as an orderbook invalidation, and
-refetches authoritative market state on settlement. Reconnect, token refresh, socket error or
-revision gap requires another authoritative REST reconciliation. A REST failure leaves state
-untrusted.
+refetches authoritative market state on settlement. Because SIG documents that order expiry
+emits no Realtime event and the aggregated orderbook carries no expiry metadata, trusted open
+books also receive a bounded authoritative REST refresh (30 seconds by default). Reconnect,
+token refresh, socket error or revision gap requires another authoritative REST reconciliation.
+A REST failure leaves state untrusted.
 
 This path is never started by `python -m predictions_cup.app` and contains no write/order path.
 See `docs/implementation/BUILD_004_SIG_REALTIME.md` for the candidate contract.

@@ -61,6 +61,7 @@ class FakeRest:
         self.calls: list[str] = []
         self.market_calls: list[str] = []
         self.fail: set[str] = set()
+        self.empty_books: set[str] = set()
         self.market_status = {"26": "open", "27": "open"}
         self.settled_with: dict[str, str | None] = {"26": None, "27": None}
 
@@ -105,16 +106,17 @@ class FakeRest:
         if exchange_id in self.fail:
             raise RuntimeError("synthetic REST failure")
         market_id = "26" if exchange_id == "36" else "27"
+        empty = exchange_id in self.empty_books
         return OrderBookSnapshotDto.model_validate(
             {
                 "exchangeId": exchange_id,
                 "marketId": market_id,
                 "depth": 20,
-                "bids": [{"price": 0.4, "quantity": 10}],
-                "asks": [{"price": 0.6, "quantity": 12}],
-                "bestBid": 0.4,
-                "bestAsk": 0.6,
-                "spread": 0.2,
+                "bids": [] if empty else [{"price": 0.4, "quantity": 10}],
+                "asks": [] if empty else [{"price": 0.6, "quantity": 12}],
+                "bestBid": None if empty else 0.4,
+                "bestAsk": None if empty else 0.6,
+                "spread": None if empty else 0.2,
             }
         )
 
@@ -231,6 +233,79 @@ def test_initial_seed_runs_once_and_source_sequence_is_not_gap_counter(
         assert engine.health_snapshot()["market_count"] == 2
         assert engine.health_snapshot()["trusted_exchange_count"] == 2
         recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_quiet_open_book_is_invalidated_and_rest_refreshed_for_silent_expiry(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        db = tmp_path / "sig.sqlite3"
+        rest = FakeRest()
+        recorder = SigRealtimeRecorder(db)
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            open_book_max_trusted_age_seconds=30.0,
+        )
+        await engine.initialize()
+
+        state = engine.states["36"]
+        assert state.trusted is True
+        assert state.orderbook is not None
+        assert state.orderbook.bids
+        assert state.last_rest_observed_at is not None
+        initial_calls = len(rest.calls)
+
+        # No Realtime batch arrives. Before the freshness bound the cached book
+        # remains trusted and no REST request is issued.
+        await engine.refresh_stale_open_books(
+            state.last_rest_observed_at + timedelta(seconds=29)
+        )
+        assert len(rest.calls) == initial_calls
+        assert state.trusted is True
+
+        # Simulate a resting order expiring server-side without a bookDirty event.
+        # The next maintenance tick must stop trusting the stale depth before
+        # reconciling it through authoritative REST.
+        rest.empty_books.add("36")
+        await engine.refresh_stale_open_books(
+            state.last_rest_observed_at + timedelta(seconds=31)
+        )
+
+        assert len(rest.calls) == initial_calls + 1
+        assert state.trusted is True
+        assert state.orderbook is not None
+        assert state.orderbook.bids == ()
+        assert state.orderbook.asks == ()
+        assert engine.health.bounded_book_refresh_count == 1
+        recorder.close()
+
+        connection = sqlite3.connect(db)
+        transitions = [
+            row[0]
+            for row in connection.execute(
+                """
+                SELECT transition
+                FROM trust_transitions
+                WHERE exchange_id = '36'
+                ORDER BY id
+                """
+            )
+        ]
+        reason = connection.execute(
+            """
+            SELECT reason
+            FROM book_observations
+            WHERE exchange_id = '36'
+            ORDER BY id DESC LIMIT 1
+            """
+        ).fetchone()
+        connection.close()
+        assert "UNTRUSTED_PERIODIC_REFRESH" in transitions
+        assert reason == ("expiry_safety_refresh",)
 
     asyncio.run(scenario())
 

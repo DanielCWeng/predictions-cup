@@ -77,6 +77,9 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
             recorder=recorder,
             tournament_id=tournament_id,
             book_depth=book_depth,
+            open_book_max_trusted_age_seconds=(
+                settings.sig_realtime_open_book_refresh_seconds
+            ),
         )
         try:
             cutoff = datetime.now(UTC) - timedelta(days=settings.sig_realtime_retention_days)
@@ -102,6 +105,7 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                         on_batch=engine.handle_raw_batch,
                         on_connected=engine.mark_connected,
                         stop_event=stop_event,
+                        on_maintenance=engine.refresh_stale_open_books,
                     )
                 except SigApiError as exc:
                     engine.mark_disconnected()

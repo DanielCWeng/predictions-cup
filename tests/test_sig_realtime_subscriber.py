@@ -161,6 +161,38 @@ def test_subscriber_follow_up_error_exits_as_socket_error(
     asyncio.run(scenario())
 
 
+def test_quiet_subscriber_runs_authoritative_book_maintenance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        _install_fake_client(monkeypatch, follow_up_status=None)
+        stop_event = asyncio.Event()
+        maintenance_calls: list[datetime] = []
+
+        async def on_maintenance(observed_at: datetime) -> None:
+            maintenance_calls.append(observed_at)
+            stop_event.set()
+
+        subscriber = SupabaseTournamentSubscriber(
+            topic="tournament:cup",
+            token=_token(expires_at=datetime.now(UTC) + timedelta(hours=2)),
+            maintenance_interval_seconds=1.0,
+        )
+
+        outcome = await subscriber.run(
+            on_batch=_never_batch,
+            on_connected=lambda: None,
+            stop_event=stop_event,
+            on_maintenance=on_maintenance,
+        )
+
+        assert outcome == SubscriberExit.STOPPED
+        assert len(maintenance_calls) == 1
+        assert maintenance_calls[0].tzinfo is not None
+
+    asyncio.run(scenario())
+
+
 def test_subscriber_token_refresh_and_graceful_stop(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

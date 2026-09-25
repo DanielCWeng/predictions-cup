@@ -6,7 +6,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable, Iterable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol
@@ -39,6 +39,7 @@ class TrustTransition(StrEnum):
     UNTRUSTED_MALFORMED_PAYLOAD = "UNTRUSTED_MALFORMED_PAYLOAD"
     UNTRUSTED_BOOK_DIRTY = "UNTRUSTED_BOOK_DIRTY"
     UNTRUSTED_SETTLEMENT = "UNTRUSTED_SETTLEMENT"
+    UNTRUSTED_PERIODIC_REFRESH = "UNTRUSTED_PERIODIC_REFRESH"
     RECONCILING = "RECONCILING"
     TRUSTED_AFTER_RECONCILIATION = "TRUSTED_AFTER_RECONCILIATION"
 
@@ -107,6 +108,7 @@ class RuntimeHealth:
     revision_gap_count: int = 0
     reconnect_count: int = 0
     reconciliation_failure_count: int = 0
+    bounded_book_refresh_count: int = 0
 
 
 class SigRealtimeStateEngine:
@@ -119,6 +121,7 @@ class SigRealtimeStateEngine:
         recorder: SigRealtimeRecorder,
         tournament_id: str,
         book_depth: int = 20,
+        open_book_max_trusted_age_seconds: float = 30.0,
         max_reconciliation_concurrency: int = 8,
         clock: Clock = lambda: datetime.now(UTC),
     ) -> None:
@@ -126,6 +129,8 @@ class SigRealtimeStateEngine:
             raise ValueError("tournament_id must not be blank")
         if book_depth < 1 or book_depth > 200:
             raise ValueError("book_depth must be between 1 and 200")
+        if open_book_max_trusted_age_seconds <= 0:
+            raise ValueError("open_book_max_trusted_age_seconds must be positive")
         if max_reconciliation_concurrency < 1:
             raise ValueError("max_reconciliation_concurrency must be positive")
         self._rest = rest
@@ -133,6 +138,9 @@ class SigRealtimeStateEngine:
         self.tournament_id = tournament_id
         self.topic = f"tournament:{tournament_id}"
         self._book_depth = book_depth
+        self._open_book_max_trusted_age = timedelta(
+            seconds=open_book_max_trusted_age_seconds
+        )
         self._semaphore = asyncio.Semaphore(max_reconciliation_concurrency)
         self._clock = clock
         self.market_states: dict[str, MarketRuntimeState] = {}
@@ -201,6 +209,45 @@ class SigRealtimeStateEngine:
 
     def mark_disconnected(self) -> None:
         self.health.connected = False
+
+    async def refresh_stale_open_books(self, observed_at: datetime) -> None:
+        """Bound trusted open-book age when silent order expiry emits no event."""
+        if observed_at.tzinfo is None or observed_at.utcoffset() is None:
+            raise ValueError("maintenance timestamp must be timezone aware")
+
+        due_exchange_ids: list[str] = []
+        for state in self.states.values():
+            market_state = self.market_states.get(state.market_id)
+            if (
+                not state.trusted
+                or market_state is None
+                or market_state.status != "open"
+            ):
+                continue
+            last_rest = state.last_rest_observed_at
+            if (
+                last_rest is None
+                or observed_at - last_rest >= self._open_book_max_trusted_age
+            ):
+                due_exchange_ids.append(state.exchange_id)
+
+        if not due_exchange_ids:
+            return
+
+        # Expiry produces no Realtime invalidation. Stop claiming these books are
+        # trusted before issuing any potentially rate-limited REST reads.
+        self.health.bounded_book_refresh_count += len(due_exchange_ids)
+        self._mark_untrusted(
+            due_exchange_ids,
+            TrustTransition.UNTRUSTED_PERIODIC_REFRESH,
+            revision=self.last_accepted_revision,
+        )
+        await self._reconcile_many(
+            due_exchange_ids,
+            reason="expiry_safety_refresh",
+            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+            triggering_revision=self.last_accepted_revision,
+        )
 
     async def handle_raw_batch(
         self,
@@ -326,6 +373,7 @@ class SigRealtimeStateEngine:
             "revision_gap_count": self.health.revision_gap_count,
             "reconnect_count": self.health.reconnect_count,
             "reconciliation_failure_count": self.health.reconciliation_failure_count,
+            "bounded_book_refresh_count": self.health.bounded_book_refresh_count,
             "market_count": len(self.market_states),
             "trusted_exchange_count": trusted,
             "untrusted_exchange_count": len(self.states) - trusted,

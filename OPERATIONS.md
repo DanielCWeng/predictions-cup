@@ -57,6 +57,10 @@ required authoritative REST seed/resync, then subscribes. Reconnect, token refre
 malformed payload or topic revision gap triggers authoritative REST reconciliation. A failed
 reconciliation leaves the affected exchange untrusted. `bookDirty` entries are coalesced by
 exchange within the batch before REST refresh; settlement refetches authoritative market state.
+SIG order expiry emits no Realtime event, so trusted open books are invalidated and
+authoritatively refreshed once their last successful REST observation reaches the configurable
+freshness bound (30 seconds by default). The maintenance loop checks once per second; books are
+marked untrusted before any refresh request is awaited.
 
 See `docs/implementation/BUILD_004_SIG_REALTIME.md` for exact timestamp, revision, health and
 storage semantics. This section describes an unmerged candidate until PR #12 is accepted.

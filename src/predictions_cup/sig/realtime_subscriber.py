@@ -17,6 +17,7 @@ from predictions_cup.sig.realtime_models import RealtimeTokenDto
 
 Clock = Callable[[], datetime]
 BatchHandler = Callable[[str, object, datetime], Awaitable[None]]
+MaintenanceHandler = Callable[[datetime], Awaitable[None]]
 ConnectedHandler = Callable[[], None]
 logger = logging.getLogger(__name__)
 
@@ -38,14 +39,18 @@ class SupabaseTournamentSubscriber:
         token: RealtimeTokenDto,
         token_refresh_margin_seconds: float = 300.0,
         subscribe_timeout_seconds: float = 15.0,
+        maintenance_interval_seconds: float = 1.0,
         clock: Clock = lambda: datetime.now(UTC),
     ) -> None:
         if token_refresh_margin_seconds <= 0:
             raise ValueError("token refresh margin must be positive")
+        if maintenance_interval_seconds <= 0:
+            raise ValueError("maintenance interval must be positive")
         self._topic = topic
         self._token = token
         self._refresh_margin = timedelta(seconds=token_refresh_margin_seconds)
         self._subscribe_timeout_seconds = subscribe_timeout_seconds
+        self._maintenance_interval = timedelta(seconds=maintenance_interval_seconds)
         self._clock = clock
 
     async def run(
@@ -54,6 +59,7 @@ class SupabaseTournamentSubscriber:
         on_batch: BatchHandler,
         on_connected: ConnectedHandler,
         stop_event: asyncio.Event,
+        on_maintenance: MaintenanceHandler | None = None,
     ) -> SubscriberExit:
         client = await acreate_client(
             str(self._token.supabase_url), self._token.anon_key.get_secret_value()
@@ -93,11 +99,18 @@ class SupabaseTournamentSubscriber:
             on_connected()
 
             refresh_at = self._token.expires_at - self._refresh_margin
+            next_maintenance_at = self._clock()
             while True:
                 if stop_event.is_set():
                     return SubscriberExit.STOPPED
-                if self._clock() >= refresh_at:
+                now = self._clock()
+                if now >= refresh_at:
                     return SubscriberExit.TOKEN_REFRESH
+                if on_maintenance is not None and now >= next_maintenance_at:
+                    await on_maintenance(now)
+                    next_maintenance_at = now + self._maintenance_interval
+                    if stop_event.is_set():
+                        return SubscriberExit.STOPPED
 
                 # Supabase reuses the original subscribe callback when its channel
                 # auto-rejoins after a socket reconnect. A second SUBSCRIBED status
