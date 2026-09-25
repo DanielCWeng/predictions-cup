@@ -75,7 +75,9 @@ market WebSocket (persistent)
         ↓
 in-memory Decimal books
         ↓
-normalized trade events + 1-second research snapshots
+normalized event-time book changes + public trade events
+        ↓
+lean 1-second top-of-book panel + slower depth snapshots
         ↓
 SQLite/WAL local research store
 ```
@@ -127,14 +129,18 @@ No undocumented sequence/checksum mechanism is assumed.
 
 ## Timestamps
 
-Every captured live observation keeps two clocks when the source supplies its own time:
+Every live event keeps two independent clocks when the source supplies its own time:
 
 - `source_timestamp` — the Polymarket event/book timestamp after wire parsing;
-- `observed_at` — the UTC time this process observed the payload.
+- `observed_at` — the UTC time this process actually observed the payload.
+
+The two fields are never backfilled from one another. REST `POST /books` seeding also records a
+separate `observed_at` for each HTTP batch at receipt, so an early batch is not falsely timestamped
+at the end of a multi-batch seed.
 
 Research must not replace `observed_at` with exchange event time when estimating lead/lag or signal
-half-life. Periodic snapshots also store `recorded_at`, the local sampler time, so a quiet but
-healthy book still produces a clock-time panel.
+half-life. The 1-second panel has its own sampler `observed_at` while retaining the last underlying
+book state's `state_observed_at`.
 
 ## Storage
 
@@ -148,36 +154,84 @@ Tables:
 
 - `polymarket_markets`
 - `polymarket_tokens`
-- `polymarket_book_snapshots`
+- `polymarket_book_observations` — lean 1-second scalar panel;
+- `polymarket_book_changes` — normalized event-time price changes;
+- `polymarket_book_snapshots` — slower top-N depth snapshots;
 - `polymarket_trades`
 - `ingestion_health`
 
-Market/token metadata upserts idempotently. Snapshot and trade history appends across ordinary
-process restarts. Trade rows with a transaction hash are de-duplicated by token + transaction
-hash.
+Market/token metadata upserts idempotently. Observation, delta, depth and trade history append
+across ordinary process restarts. Trade rows with a transaction hash are de-duplicated by token +
+transaction hash.
 
-### Book depth choice
+### One-second panel and depth policy
 
-The default research snapshot stores top **20** levels per side as compact JSON arrays in one row
-per token per sample. Best bid, best ask, midpoint and spread are also stored as scalar columns.
-This retains materially useful executable depth while avoiding an unbounded full-depth-per-second
-row explosion. The depth is configurable.
+The dominant 1-second path stores only scalar research fields: token/market identity,
+`source_timestamp`, state observation time, sampler observation time, best bid, best ask, midpoint,
+spread, current valid `last_trade_price`, and book-valid state. It does **not** repeat bid/ask JSON
+every second.
+
+Top **20** levels per side remain available as compact JSON depth snapshots, but the default depth
+cadence is **60 seconds** and is independently configurable. Normalized `price_change` records are
+also persisted at event observation time, preserving side, price, size, source/observation time,
+post-change best bid/ask and hash where supplied.
+
+This keeps 1-second research resolution while removing the old deep-book-every-second multiplier.
 
 ## Recorder cadence
 
-Default normalized snapshot cadence is 1 second. This is not REST polling every second:
+Default normalized panel cadence is 1 second. This is not REST polling every second:
 
 ```text
-WebSocket updates → in-memory book → 1-second snapshot sampler
+WebSocket updates → in-memory book → 1-second scalar sampler
+                                     ↘ 60-second depth sampler
 ```
 
-Gamma metadata refresh defaults to every 300 seconds. Universe additions are REST-seeded before
-being incrementally subscribed; removals are unsubscribed and invalidated.
+The default depth cadence is 60 seconds. Gamma metadata refresh defaults to every 300 seconds.
+Universe additions are REST-seeded before being incrementally subscribed; removals are
+unsubscribed and invalidated.
+
+### Storage projection
+
+The selected token count `N` is determined from live Gamma metadata, so the recorder must report
+and budget storage from the actual selected universe rather than pretend a fixed token count.
+
+Default row-count formulas are:
+
+```text
+lean panel rows/day       = N × 86,400
+depth snapshot rows/day   = N × 1,440        # 60-second default
+event delta rows/day      = D                # actual accepted price_change entries
+trade rows/day            = T                # actual public last_trade_price events
+```
+
+For an illustrative **100-token** selected universe:
+
+```text
+lean panel                = 8,640,000 rows/day
+depth snapshots           =   144,000 rows/day
+event deltas              = D
+trades                    = T
+```
+
+A planning range—not a storage guarantee—is roughly **150–250 bytes per scalar/delta row** and
+**1.5–3 KB per top-20 depth row** before SQLite page/index overhead. At 100 tokens this puts the
+fixed-cadence portion at approximately **1.5–2.6 GB/day** before event deltas, trades and SQLite
+overhead. One million event-delta rows would add roughly **0.15–0.25 GB** before overhead.
+
+The important operational property is bounded linear growth: deep-book rows are reduced by about
+60× versus the rejected every-second depth design, while the 1-second panel remains available.
+Actual database bytes/day must be measured during the first live soak and disk budget scaled with
+the observed `N`, `D` and `T`; the estimates above deliberately avoid false precision.
 
 ## Reconnect behavior
 
-The WebSocket uses Polymarket's documented application heartbeat: text `PING` every 10 seconds,
-with a shorter bounded local send timeout so a half-open connection cannot stall the event loop.
+The WebSocket uses Polymarket's documented application heartbeat: text `PING` every 10 seconds.
+It tracks receive freshness and observed text `PONG` time in addition to a bounded local send
+timeout. If no remote message/PONG activity is observed within the bounded liveness window, the
+socket is closed deliberately and the reconnect path is entered. Successful local writes alone are
+not treated as proof of remote health.
+
 Reconnects use bounded exponential backoff plus jitter.
 
 On every connection attempt:
@@ -195,7 +249,8 @@ so small metadata changes do not force reconnect storms.
 Health records and logs separate:
 
 - WebSocket connected state;
-- last feed message/heartbeat activity;
+- last feed message activity;
+- last observed PONG;
 - last valid book update;
 - last book change;
 - last trade;
@@ -225,6 +280,7 @@ PREDICTIONS_CUP_POLYMARKET_CLOB_BASE_URL
 PREDICTIONS_CUP_POLYMARKET_WS_URL
 PREDICTIONS_CUP_POLYMARKET_SNAPSHOT_INTERVAL_SECONDS
 PREDICTIONS_CUP_POLYMARKET_BOOK_DEPTH
+PREDICTIONS_CUP_POLYMARKET_DEPTH_SNAPSHOT_INTERVAL_SECONDS
 PREDICTIONS_CUP_POLYMARKET_GAMMA_PAGE_LIMIT
 PREDICTIONS_CUP_POLYMARKET_GAMMA_REFRESH_SECONDS
 PREDICTIONS_CUP_POLYMARKET_STORAGE_PATH
@@ -262,12 +318,14 @@ submits no order and modifies no external state.
 - Gamma page size `100` is a conservative configurable operating choice inherited from prior live
   experience; current documentation is authoritative for the keyset cursor contract and does not
   need that value to be treated as a mathematical/API guarantee.
-- Public `last_trade_price` events are stored when emitted; this ticket does not claim an
-  independently reconciled exchange-wide historical trade tape.
+- Public `last_trade_price` events are stored when emitted and update the current in-memory
+  last-trade field; this ticket does not claim an independently reconciled exchange-wide historical
+  trade tape.
 - No exchange sequence/checksum recovery is implemented because the current raw market-stream
   contract does not document one.
 - SQLite is deliberately local research storage, not a production server database.
-- No retention/compaction job is implemented yet; disk growth must be observed during the first
+- No retention/compaction job is implemented yet. Growth is now bounded by explicit panel/depth
+  cadences plus observed event volume, but actual bytes/day still must be measured during the first
   multi-day capture.
 
 ## Intentionally not implemented
