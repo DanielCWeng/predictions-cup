@@ -13,19 +13,19 @@ SIG ↔ Polymarket crosswalk.
 
 ## Observable-time semantics
 
-Every \`ReplayEvent\` preserves both:
+Every `ReplayEvent` preserves both:
 
-- \`observed_at\`: when the information became observable to this system;
-- \`source_at\`: the exchange/source timestamp when one exists.
+- `observed_at`: when the information became observable to this system;
+- `source_at`: the exchange/source timestamp when one exists.
 
-Replay ordering uses \`observed_at\` only. A source timestamp can be earlier or later than the local
+Replay ordering uses `observed_at` only. A source timestamp can be earlier or later than the local
 observation and cannot move information earlier in replay. Events that share the same observable
 time are deterministically ordered by source, instrument, event type and source-table sequence,
 then applied as one same-time batch before an experiment hook is invoked. This avoids inventing
 causality inside one observable timestamp while keeping repeated runs stable.
 
-For Polymarket's one-second observation panel, the row's sample \`observed_at\` controls when the row
-becomes visible, while \`state_observed_at\` is retained as the quote freshness timestamp. Repeated
+For Polymarket's one-second observation panel, the row's sample `observed_at` controls when the row
+becomes visible, while `state_observed_at` is retained as the quote freshness timestamp. Repeated
 sampling therefore cannot make an old quote look newly fresh.
 
 ## Capture schema compatibility
@@ -34,28 +34,28 @@ The offline loaders are read-only and validate the accepted tables/columns befor
 
 SIG consumes:
 
-- \`book_observations\`;
-- \`realtime_trades\`;
-- \`trust_transitions\`.
+- `book_observations`;
+- `realtime_trades`;
+- `trust_transitions`.
 
 Polymarket consumes:
 
-- \`polymarket_book_observations\`;
-- \`polymarket_book_changes\`;
-- \`polymarket_book_snapshots\`;
-- \`polymarket_trades\`;
-- \`ingestion_health\`.
+- `polymarket_book_observations`;
+- `polymarket_book_changes`;
+- `polymarket_book_snapshots`;
+- `polymarket_trades`;
+- `ingestion_health`.
 
-Decimal financial values remain \`Decimal\`; binary floats are rejected by the loaders. Malformed,
-missing or incompatible capture schemas raise \`CaptureSchemaError\` rather than silently guessing.
+Decimal financial values remain `Decimal`; binary floats are rejected by the loaders. Malformed,
+missing or incompatible capture schemas raise `CaptureSchemaError` rather than silently guessing.
 
 The offline compatibility command is:
 
-\`\`\`bash
+```bash
 python -m predictions_cup.replay \
   --sig-db path/to/sig.sqlite3 \
   --polymarket-db path/to/polymarket.sqlite3
-\`\`\`
+```
 
 It performs no network access and reports records loaded, observed time span, instruments, trusted
 SIG book observations, external quote observations and explicit data-gap events.
@@ -71,8 +71,8 @@ Replay reconstructs per-instrument state sufficient for first experiments:
 - SIG trusted/untrusted state;
 - external book validity / feed availability.
 
-SIG trust comes from the accepted BUILD-004 transition stream. \`UNTRUSTED_*\` and \`RECONCILING\`
-transitions are non-executable; \`TRUSTED*\` transitions restore trust. An experiment cannot use an
+SIG trust comes from the accepted BUILD-004 transition stream. `UNTRUSTED_*` and `RECONCILING`
+transitions are non-executable; `TRUSTED*` transitions restore trust. An experiment cannot use an
 untrusted SIG quote as an executable entry or target.
 
 External feed silence is not treated as trustworthy forever. Every experiment configures an
@@ -87,31 +87,31 @@ quote, SIG untrusted/stale, external stale, data gap, missing pair and dataset e
 
 Default horizons are:
 
-\`\`\`text
+```text
 1s
 5s
 30s
 1m
 5m
-\`\`\`
+```
 
 They are configurable per experiment.
 
 For a bullish / BUY-YES crossing decision:
 
-\`\`\`text
+```text
 entry = decision-time ask
 future executable exit = future bid
 gross markout = future bid - entry ask
-\`\`\`
+```
 
 For the economically opposite / SELL-YES crossing decision:
 
-\`\`\`text
+```text
 entry = decision-time bid
 future executable cover = future ask
 gross markout = entry bid - future ask
-\`\`\`
+```
 
 Midpoint markout is retained as an optional diagnostic, but executable markout is the primary
 economic target. BUILD-005 does not model maker fills.
@@ -119,16 +119,16 @@ economic target. BUILD-005 does not model maker fills.
 Target evaluation is lookahead-safe. If a requested horizon falls between two replay events, the
 state at the horizon is the latest state observed at or before that horizon. The next later event is
 not borrowed backward. If the target extends beyond the dataset, the observation is invalid with
-\`dataset_end\`.
+`dataset_end`.
 
 ## Experiment API
 
-\`ExperimentSpec\` contains:
+`ExperimentSpec` contains:
 
 - id and description;
 - required inputs;
 - parameters;
-- explicit \`InstrumentPair\` entries;
+- explicit `InstrumentPair` entries;
 - feature builder;
 - signal rule;
 - target horizons;
@@ -139,19 +139,19 @@ Instrument pairing may come from test fixtures, manual experiment configuration,
 accepted MAPPING-001 artefacts. There is no title-based pairing and no dependency on issue #13
 being closed.
 
-\`ExperimentRunner\` is single-pass. Decisions are created only after the current observable-time
+`ExperimentRunner` is single-pass. Decisions are created only after the current observable-time
 batch has advanced state. Pending targets are resolved before a later event is applied if their
 horizon lies between event times, or after a same-time event batch when the target timestamp
 matches exactly. This is the core no-lookahead guarantee.
 
 Experiment output records the decision time, instrument, features, signal/direction, executable
 entry, horizon, future executable price, gross/midpoint markout, optional cost, net markout and
-validity reason. \`serialize_observations\` produces deterministic sorted JSON bytes for regression
+validity reason. `serialize_observations` produces deterministic sorted JSON bytes for regression
 and evidence capture.
 
 ## Chronological split discipline
 
-\`ChronologicalBoundaries\` and \`split_observations\` provide explicit train / development / holdout
+`ChronologicalBoundaries` and `split_observations` provide explicit train / development / holdout
 boundaries. Rows are sorted chronologically and never random-shuffled. BUILD-005 does not tune
 parameters; later work must keep holdout data outside parameter selection.
 
@@ -173,12 +173,12 @@ potentially overlapping opportunities.
 
 The synthetic regression encodes:
 
-\`\`\`text
+```text
 external quote changes
 → external event becomes observable
 → SIG remains unchanged
 → SIG later reprices
-\`\`\`
+```
 
 It proves that source timestamps cannot create lookahead, executable entry/exit use the spread,
 future targets use only state observable by the horizon, stale/untrusted state is invalid, and
