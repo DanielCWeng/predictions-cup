@@ -10,6 +10,11 @@ BUILD-003 provides authenticated, read-only SIG REST access for market discovery
 
 BUILD-002 remains the owner of typed configuration and canonical domain objects. BUILD-003 validates SIG wire payloads separately and converts into those canonical contracts only where the conversion is lossless.
 
+BUILD-004 is currently **IN REVIEW in PR #12** and is not part of the accepted `main` baseline.
+Its candidate implementation adds read-only SIG Realtime invalidation, authoritative REST
+reconciliation, trusted/untrusted exchange state and replayable normalized capture. It adds no
+strategy or execution capability.
+
 ## Requirements
 
 - Python 3.12 or newer
@@ -20,7 +25,8 @@ Runtime dependencies are intentionally limited to:
 - `pydantic` for canonical typed validation/serialization;
 - `pydantic-settings` for deterministic environment-driven configuration;
 - `httpx` for pooled asynchronous read-only SIG HTTP;
-- `aiohttp` for public Polymarket Gamma/CLOB HTTP and market WebSocket capture.
+- `aiohttp` for public Polymarket Gamma/CLOB HTTP and market WebSocket capture;
+- `supabase` for the BUILD-004 candidate private SIG Realtime subscription.
 
 The project uses a `src/` package layout with `pytest`, `ruff`, and strict `mypy`.
 
@@ -50,6 +56,10 @@ PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL
 PREDICTIONS_CUP_TOURNAMENT_ID
 PREDICTIONS_CUP_TOURNAMENT_SLUG
 PREDICTIONS_CUP_TRADING_ENABLED
+PREDICTIONS_CUP_SIG_REALTIME_STORAGE_PATH
+PREDICTIONS_CUP_SIG_REALTIME_BOOK_DEPTH
+PREDICTIONS_CUP_SIG_REALTIME_TOKEN_REFRESH_MARGIN_SECONDS
+PREDICTIONS_CUP_SIG_REALTIME_RETENTION_DAYS
 ```
 
 EXPERIMENT-001A public capture variables:
@@ -93,7 +103,25 @@ Tournament context is an explicit caller concern. Read methods accept `tournamen
 
 SIG JSON numbers used for prices and quantities are decoded through `Decimal` before validation. ISO-8601 wire timestamps are parsed in the SIG transport layer; canonical models continue to reject timestamp strings.
 
-The current SIG surface is read-only. There is no order placement, cancellation, realtime/WebSocket, automatic tournament resolver, or portfolio accounting.
+The accepted `main` SIG surface is read-only REST. There is no order placement, cancellation,
+automatic tournament resolver, or portfolio accounting on `main`.
+
+### SIG Realtime candidate — BUILD-004 IN REVIEW
+
+PR #12 adds a separate explicit read-only capture command:
+
+```bash
+python -m predictions_cup.sig.capture --list-tournaments
+python -m predictions_cup.sig.capture --tournament-id <TOURNAMENT_UUID>
+```
+
+It subscribes once to `tournament:{tournament_id}`, records the local receive time for each
+batch, checks topic `revision/previousRevision`, and treats `bookDirty` as an invalidation
+signal. Initial subscription, reconnect, token refresh, socket error or revision gap requires
+authoritative REST reconciliation. A REST failure leaves state untrusted.
+
+This path is never started by `python -m predictions_cup.app` and contains no write/order path.
+See `docs/implementation/BUILD_004_SIG_REALTIME.md` for the candidate contract.
 
 ## Polymarket research recorder
 

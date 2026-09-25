@@ -31,6 +31,20 @@ This document describes the accepted repository state on `main`.
 - authenticated read-only SIG REST client for account health, market/exchange discovery, market-node transport data, prices, orderbooks, price history and trades;
 - public read-only Polymarket research recorder with Gamma/CLOB discovery, authoritative REST book seeding, normalized event-time book changes/trades, a lean 1-second top-of-book panel, slower bounded depth snapshots, SQLite/WAL persistence and feed-liveness/reconnect handling.
 
+## In review — not implemented on main
+
+BUILD-004 is open as PR #12 on `build/004-sig-realtime-state`. It is **not accepted
+functionality on `main`**. The candidate implementation adds explicit tournament selection,
+strict Realtime token validation, one private tournament-level SIG Realtime subscription,
+topic-revision gap detection, authoritative REST orderbook reconciliation, fail-closed
+trusted/untrusted exchange state, normalized SQLite/WAL capture, and runtime health counters.
+
+Realtime is treated only as a best-effort low-latency invalidation/event feed. REST remains the
+authoritative state source. A duplicate topic revision is ignored; a revision gap, reconnect,
+token refresh or socket error forces authoritative REST resynchronization before state can be
+trusted again. Engine source sequence ranges are recorded as provenance and are not used as the
+topic-local gap counter.
+
 ## Not implemented on main
 
 - SIG realtime/WebSocket ingestion;
@@ -52,9 +66,9 @@ This document describes the accepted repository state on `main`.
 
 `trading_enabled` defaults to `False`. Setting it to `True` is only configuration intent and requires a separately supplied trade credential; no execution path or order-submission path exists on `main`.
 
-## Next build target
+## Next acceptance gate
 
-Build trustworthy live SIG state before strategy expansion:
+Independently review and accept/reject BUILD-004 before strategy expansion:
 
 ```text
 resolve/select active tournament
@@ -63,7 +77,7 @@ resolve/select active tournament
 → persist synchronized SIG books/trades with source and observed timestamps
 ```
 
-This is the next implementation lane. Mapping, fair value, strategy and execution remain downstream until this live-state foundation is reliable.
+PR #12 is the active implementation lane, but it remains outside `main` until independent acceptance. Mapping, fair value, strategy and execution remain downstream until this live-state foundation is reliable.
 
 ## Repository state discipline
 
