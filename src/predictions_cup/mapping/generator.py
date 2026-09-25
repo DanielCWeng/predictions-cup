@@ -22,7 +22,6 @@ from predictions_cup.external.polymarket.gamma import GammaClient
 from predictions_cup.external.polymarket.models import PolymarketMarket
 from predictions_cup.external.polymarket.universe import ElectionUniverseSelector
 from predictions_cup.mapping.crosswalk import (
-    summary,
     summary_json,
     write_csv,
     write_document,
