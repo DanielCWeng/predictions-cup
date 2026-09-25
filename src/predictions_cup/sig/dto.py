@@ -232,9 +232,48 @@ class ExchangePageDto(TransportModel):
     pagination: CursorPaginationDto
 
 
+MarketNodeType = Literal["operator", "contract"]
+MarketNodeOperator = Literal["AND", "OR", "NOT", "IF"]
+MarketContractType = Literal[
+    "Freeform",
+    "Election Outcome",
+    "Sports Outcome",
+    "Economic Indicator",
+    "Financial Product",
+    "Corporate Earnings",
+    "Imported Market",
+    "Existing Market",
+]
+
+
+class MarketNodeDto(TransportModel):
+    """Recursive SIG market-node transport shape from the supplied OpenAPI contract."""
+
+    node_type: MarketNodeType = Field(alias="nodeType")
+    position: int
+    operator: MarketNodeOperator | None = None
+    title: str | None = None
+    settlement_date: WireDateTime | None = Field(default=None, alias="settlementDate")
+    settled_with: str | None = Field(default=None, alias="settledWith")
+    settled_on: WireDateTime | None = Field(default=None, alias="settledOn")
+    contract_type: MarketContractType | None = Field(default=None, alias="contractType")
+    contract_details: dict[str, object] | None = Field(default=None, alias="contractDetails")
+    settlement_options: tuple[str, ...] | None = Field(default=None, alias="settlementOptions")
+    children: tuple[MarketNodeDto, ...] | None = None
+
+    @model_validator(mode="after")
+    def validate_operator_shape(self) -> Self:
+        if self.node_type == "operator":
+            if self.operator is None:
+                raise ValueError("SIG operator market node requires operator")
+            if self.children is None:
+                raise ValueError("SIG operator market node requires children")
+        return self
+
+
 class MarketNodesDto(TransportModel):
     market_id: str
-    root: dict[str, object]
+    root: MarketNodeDto
     contexts: tuple[MarketReadContextDescriptorDto, ...]
 
 
