@@ -29,27 +29,29 @@ This document describes the accepted repository state on `main`.
 - competition strategy/execution playbook;
 - competition-history research and six-day launch plan;
 - authenticated read-only SIG REST client for account health, market/exchange discovery, market-node transport data, prices, orderbooks, price history and trades;
-- public read-only Polymarket research recorder with Gamma/CLOB discovery, authoritative REST book seeding, normalized event-time book changes/trades, a lean 1-second top-of-book panel, slower bounded depth snapshots, SQLite/WAL persistence and feed-liveness/reconnect handling.
+- public read-only Polymarket research recorder with Gamma/CLOB discovery, authoritative REST book seeding, normalized event-time book changes/trades, a lean 1-second top-of-book panel, slower bounded depth snapshots, SQLite/WAL persistence and feed-liveness/reconnect handling;
+- explicit SIG tournament handling and private tournament-level Realtime ingestion;
+- topic revision continuity, duplicate suppression and authoritative REST reconciliation after gaps/reconnects/token refresh/socket errors;
+- trusted/untrusted per-exchange SIG state with authoritative recovery before state is trusted again;
+- bounded authoritative refresh of trusted open books so silent order expiry cannot leave stale depth trusted indefinitely;
+- normalized replayable SIG persistence with source/revision provenance and runtime health state;
+- typed SIG ↔ Polymarket mapping contracts;
+- EXACT / NEAR / DERIVED / MODEL_ONLY mapping semantics where applicable;
+- SAME / COMPLEMENT direction semantics;
+- deterministic mapping artifact generation;
+- reviewer-owned override validation path;
+- deterministic live acceptance-evidence machinery.
 
-## In review — not implemented on main
+## Outstanding operational / acceptance gates
 
-BUILD-004 is open as PR #12 on `build/004-sig-realtime-state`. It is **not accepted
-functionality on `main`**. The candidate implementation adds explicit tournament selection,
-strict Realtime token validation, one private tournament-level SIG Realtime subscription,
-topic-revision gap detection, authoritative REST market/orderbook reconciliation, fail-closed
-trusted/untrusted exchange state, normalized SQLite/WAL capture, and runtime health counters.
-
-Realtime is treated only as a best-effort low-latency invalidation/event feed. REST remains the
-authoritative state source. A duplicate topic revision is ignored; a revision gap, reconnect,
-token refresh or socket error forces authoritative REST resynchronization before state can be
-trusted again. Engine source sequence ranges are recorded as provenance and are not used as the
-topic-local gap counter.
+- BUILD-004 live credentialed tournament smoke remains operationally outstanding; the accepted implementation is on `main`.
+- The MAPPING-001 framework is accepted on `main`, but the live credentialed 2026 SIG ↔ Polymarket crosswalk has **not** been generated or accepted.
+- LIVE-MAPPING-GATE-001 / GitHub issue #13 tracks live SIG exchange enumeration, reviewer promotion/overrides, mapped-token CLOB smoke, acceptance evidence and independent acceptance before mappings are treated as production-ready.
 
 ## Not implemented on main
 
-- SIG realtime/WebSocket ingestion;
-- persistent SIG market-state/reconciliation engine;
-- production market mapping;
+- validated production live 2026 SIG ↔ Polymarket crosswalk;
+- deterministic synchronized SIG + Polymarket replay/evaluation foundation;
 - fair value;
 - relationship/constraint engine;
 - opportunity scanning;
@@ -66,18 +68,15 @@ topic-local gap counter.
 
 `trading_enabled` defaults to `False`. Setting it to `True` is only configuration intent and requires a separately supplied trade credential; no execution path or order-submission path exists on `main`.
 
-## Next acceptance gate
+## Next implementation target
 
-Independently review and accept/reject BUILD-004 before strategy expansion:
+The next implementation target is:
 
-```text
-resolve/select active tournament
-→ ingest SIG realtime/WebSocket events
-→ reconcile realtime state to authoritative REST
-→ persist synchronized SIG books/trades with source and observed timestamps
-```
+> deterministic synchronized replay + experiment/evaluation foundation.
 
-PR #12 is the active implementation lane, but it remains outside `main` until independent acceptance. Mapping, fair value, strategy and execution remain downstream until this live-state foundation is reliable.
+Its purpose is to make captured SIG + Polymarket information testable using observable timestamps and standardized executable markouts.
+
+This is a target only. No BUILD-005 branch or PR is claimed to exist.
 
 ## Repository state discipline
 
