@@ -1,6 +1,6 @@
 # Current State
 
-**Phase:** FOUNDATION / DOMAIN MODELS — active integration work remains off-main.
+**Phase:** READ-ONLY LIVE-DATA FOUNDATION.
 
 ## Operating posture — 25 September 2026
 
@@ -9,7 +9,7 @@
 - **Monday 28 September gate:** those initial hypotheses must be runnable through replay using data captured by our own infrastructure; otherwise priority collapses entirely onto data → replay → experiment.
 - Competition-history findings and the six-day launch plan are canonical documentation; they add no runtime or trading capability.
 
-This document describes what exists on `main`, then separately records active unmerged implementation work.
+This document describes the accepted repository state on `main`.
 
 ## Implemented on main
 
@@ -26,37 +26,15 @@ This document describes what exists on `main`, then separately records active un
 - validation invariants;
 - runnable non-trading application shell;
 - canonical maths ledger;
-- competition strategy/execution playbook.
-- competition-history research and six-day launch plan.
-
-## Active / pending integration
-
-### PR #4 — BUILD-003 — SIG authenticated read-only REST client
-
-Implementation exists on `build/003-sig-rest-client`, not on `main`.
-
-Current review state: **IN REVIEW**.
-
-On this branch, the recursive `MarketNode` transport blocker has been corrected and focused regression coverage added. The branch is reconciled onto current `main`, but BUILD-003 remains unmerged and is not accepted `main` capability until independent review and merge.
-
-If accepted, BUILD-003 adds authenticated **read-only** SIG REST access for account health, market/exchange discovery, market-node transport data, prices, orderbooks, price history and trades. It adds no order submission, cancellation, realtime/WebSocket path or trading capability.
-
-### PR #5 — EXPERIMENT-001A — Polymarket live data capture foundation
-
-Implementation exists on `experiment/001a-polymarket-live-capture`, not on `main`.
-
-Current review state: **IN REVIEW**.
-
-This branch is integrated against corrected BUILD-003 head `c788125df685950bf389df1adea56d166b3f9d23` while PR #4 awaits independent review. The focused recorder revision is complete: normalized event-time book changes are durable, REST book batches retain receipt-time observations, the 1-second panel is scalar/lean with depth on a slower configurable cadence, receive/PONG liveness forces reconnect, and `last_trade_price` updates current book state.
-
-EXPERIMENT-001A remains unmerged public read-only research infrastructure. It adds no wallet/signing, order submission, fair value, strategy, risk or execution capability.
+- competition strategy/execution playbook;
+- competition-history research and six-day launch plan;
+- authenticated read-only SIG REST client for account health, market/exchange discovery, market-node transport data, prices, orderbooks, price history and trades;
+- public read-only Polymarket research recorder with Gamma/CLOB discovery, authoritative REST book seeding, normalized event-time book changes/trades, a lean 1-second top-of-book panel, slower bounded depth snapshots, SQLite/WAL persistence and feed-liveness/reconnect handling.
 
 ## Not implemented on main
 
-- SIG HTTP integration or authenticated SIG requests;
 - SIG realtime/WebSocket ingestion;
-- persistent market-state/reconciliation engine;
-- Polymarket or other external live-data adapters/recorders;
+- persistent SIG market-state/reconciliation engine;
 - production market mapping;
 - fair value;
 - relationship/constraint engine;
@@ -74,16 +52,18 @@ EXPERIMENT-001A remains unmerged public read-only research infrastructure. It ad
 
 `trading_enabled` defaults to `False`. Setting it to `True` is only configuration intent and requires a separately supplied trade credential; no execution path or order-submission path exists on `main`.
 
-## Immediate integration queue
+## Next build target
+
+Build trustworthy live SIG state before strategy expansion:
 
 ```text
-independent review PR #4
-→ merge PR #4 if accepted
-→ refresh PR #5 onto accepted #4/main history if required
-→ independent review PR #5
-→ merge PR #5 if accepted
-→ next implementation ticket
+resolve/select active tournament
+→ ingest SIG realtime/WebSocket events
+→ reconcile realtime state to authoritative REST
+→ persist synchronized SIG books/trades with source and observed timestamps
 ```
+
+This is the next implementation lane. Mapping, fair value, strategy and execution remain downstream until this live-state foundation is reliable.
 
 ## Repository state discipline
 
