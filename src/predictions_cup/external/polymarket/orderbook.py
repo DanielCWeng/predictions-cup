@@ -10,6 +10,7 @@ from typing import Any
 from predictions_cup.external.polymarket.models import (
     BookChangeEvent,
     BookLevel,
+    BookSide,
     BookSnapshot,
     JsonObject,
     PayloadError,
@@ -119,6 +120,7 @@ class OrderBookStore:
                 missing += 1
                 continue
             side_raw = require_text(change.get("side"), "price_change side").upper()
+            normalized_side: BookSide
             if side_raw == "BUY":
                 side = book.bids
                 normalized_side = "BUY"
