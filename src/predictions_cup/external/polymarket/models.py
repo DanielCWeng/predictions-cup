@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, Literal
 
 JsonObject = dict[str, Any]
 
@@ -272,6 +272,23 @@ class BookSnapshot:
         if self.best_bid is None or self.best_ask is None:
             return None
         return self.best_ask - self.best_bid
+
+
+BookSide = Literal["BUY", "SELL"]
+
+
+@dataclass(frozen=True, slots=True)
+class BookChangeEvent:
+    market_id: str
+    token_id: str
+    side: BookSide
+    price: Decimal
+    size: Decimal
+    source_timestamp: datetime | None
+    observed_at: datetime
+    best_bid: Decimal | None
+    best_ask: Decimal | None
+    book_hash: str | None
 
 
 @dataclass(frozen=True, slots=True)
