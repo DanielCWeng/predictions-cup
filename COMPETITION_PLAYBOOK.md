@@ -597,7 +597,7 @@ The counts reported at the end refer **only to this master checklist**, so repea
 
 # Contradictions / source tensions that must remain visible
 
-1. **BUILD-002 status document vs GitHub reality.** `main/BUILD_LEDGER.md` still labels BUILD-002 “READY FOR RE-REVIEW / pending,” but GitHub PR #2 is merged and `main/CURRENT_STATE.md` contains the resulting canonical models. Treat the GitHub merge and actual `main` contents as authoritative; fix the ledger separately rather than allowing the stale row to distort readiness.
+1. **Active branch state vs merged state.** BUILD-003 has implementation under review in PR #4 and EXPERIMENT-001A has implementation under review in PR #5, but neither is on `main`. Branch-level capability remains active/unmerged until accepted and merged; GitHub merge state and actual `main` contents are authoritative.
 
 2. **“Primary edge” language vs evidence.** Structural probability-graph / LOO-FAMILY work was discussed as the most promising candidate edge, but the research also explicitly requires it to beat direct-equivalent FV after costs. Therefore this playbook classifies it as **PLAUSIBLE, not proven**.
 
