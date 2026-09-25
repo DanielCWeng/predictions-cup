@@ -52,10 +52,11 @@ The default recorder path is `data/sig_realtime.sqlite3`. The candidate recorder
 SQLite/WAL and normalized tables for Realtime deliveries, trades, book/settlement
 invalidation events, authoritative REST book observations, and trust/reconciliation transitions. Retention defaults to 14 days.
 
-Operational trust rules are fail-closed: initial subscription, reconnect, token refresh, socket
-error, malformed payload or topic revision gap invalidates relevant state and triggers
-authoritative REST reconciliation. A failed reconciliation leaves the affected exchange
-untrusted. `bookDirty` entries are coalesced by exchange within the batch before REST refresh.
+Operational trust rules are fail-closed: the process mints/refreshes its token, performs the
+required authoritative REST seed/resync, then subscribes. Reconnect, token refresh, socket error,
+malformed payload or topic revision gap triggers authoritative REST reconciliation. A failed
+reconciliation leaves the affected exchange untrusted. `bookDirty` entries are coalesced by
+exchange within the batch before REST refresh; settlement refetches authoritative market state.
 
 See `docs/implementation/BUILD_004_SIG_REALTIME.md` for exact timestamp, revision, health and
 storage semantics. This section describes an unmerged candidate until PR #12 is accepted.

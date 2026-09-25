@@ -44,7 +44,8 @@ preserving tournament-scoped `trades[]`, `bookDirty[]`, `marketSettled[]` and `d
 Topic delivery continuity is determined only from `delivery.revision` and
 `delivery.previousRevision`.
 
-- first subscription/message: authoritative REST synchronization is required;
+- before first subscription: mint a Realtime token, then perform one authoritative REST seed;
+- first valid revision after that seed becomes the topic delivery baseline;
 - duplicate revision: delivery is recorded for diagnostics, but state effects are ignored;
 - continuous revision: accept when `previousRevision == last_accepted_revision`;
 - revision gap: mark state untrusted and REST-resynchronize before continuing;
@@ -58,16 +59,20 @@ are never used as the topic-local gap counter.
 
 ## Authoritative reconciliation
 
-Initial state enumerates the selected tournament exchange universe through REST and fetches an
-authoritative orderbook for every known exchange.
+Initial state enumerates the selected tournament market catalogue through REST, persists those
+authoritative market snapshots, derives the exchange universe from them, and fetches an
+authoritative orderbook for every exchange whose market is still open. Closed/settled markets
+retain authoritative market state but do not trigger pointless orderbook reads.
 
 A `bookDirty` item says that a book changed; it does not contain authoritative depth. Dirty
 exchange IDs are deduplicated within the batch, marked untrusted, then refreshed with the
 existing read-only REST orderbook method. State returns to trusted only after a successful
 response and identity check.
 
-A `marketSettled` signal invalidates all known exchanges for that market and triggers the same
-authoritative reconciliation path.
+A `marketSettled` signal invalidates all known exchanges for that market and calls
+`GET /markets/{id}` for authoritative market status/settlement state. If the market is now
+closed/settled, stale local books are cleared and the exchanges become trusted against that
+authoritative non-open state without an unnecessary orderbook request.
 
 If a REST read fails, the exchange stays untrusted and
 `reconciliation_failure_count` increments. The subsystem does not manufacture apparently valid
@@ -123,6 +128,8 @@ SQLite uses WAL and normalized tables:
 - `book_dirty_events` — documented book invalidations with source `at` and local observation time;
 - `market_settled_events` — documented settlement/refund invalidations with source `at`,
   stamped outcome, and local observation time;
+- `market_observations` — authoritative REST market status/settlement snapshots with REST
+  observation time, refresh reason, and triggering Realtime revision;
 - `book_observations` — authoritative bounded canonical book, best bid/ask, REST observation
   time, refresh reason, triggering Realtime revision;
 - `trust_transitions` — trusted/untrusted/reconciling lifecycle records.
@@ -143,6 +150,7 @@ last_rest_reconciliation
 revision_gap_count
 reconnect_count
 reconciliation_failure_count
+market_count
 trusted_exchange_count
 untrusted_exchange_count
 ```
@@ -177,10 +185,12 @@ mocked/local test doubles and requires no live SIG credential.
 
 ## Automated validation
 
-The BUILD-004 tests cover strict documented token/batch shapes, source-sequence-vs-revision
-separation, duplicate delivery handling, revision-gap full resynchronization, `bookDirty`
-refresh, failed reconciliation remaining untrusted, reconnect/token-refresh/socket-error
-lifecycle transitions, normalized SQLite/WAL persistence and retention.
+The BUILD-004 tests cover strict documented token/batch shapes, a single initial authoritative
+seed, source-sequence-vs-revision separation, duplicate delivery handling, revision-gap full
+resynchronization, `bookDirty` refresh, authoritative settlement-market refetch, stale-book
+clearing for settled markets, failed reconciliation remaining untrusted,
+reconnect/token-refresh/socket-error lifecycle transitions, normalized SQLite/WAL persistence
+and retention.
 
 Repository CI runs:
 

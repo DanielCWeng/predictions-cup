@@ -31,7 +31,7 @@ The unmerged BUILD-004 branch proposes a read-only venue-specific state subsyste
 ```text
 explicit tournament UUID
         ↓
-authoritative REST universe + orderbook seed
+authoritative REST market catalogue + open-market orderbook seed
         ↓
 POST /realtime/token
         ↓
@@ -41,9 +41,9 @@ market_batch + local observed_at
         ↓
 delivery revision continuity check
         ↓
-bookDirty / lifecycle invalidation
+bookDirty / settlement / lifecycle invalidation
         ↓
-authoritative REST orderbook reconciliation
+authoritative REST market + orderbook reconciliation
         ↓
 trusted per-exchange runtime state + normalized SQLite/WAL capture
 ```

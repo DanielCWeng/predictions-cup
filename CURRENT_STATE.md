@@ -36,7 +36,7 @@ This document describes the accepted repository state on `main`.
 BUILD-004 is open as PR #12 on `build/004-sig-realtime-state`. It is **not accepted
 functionality on `main`**. The candidate implementation adds explicit tournament selection,
 strict Realtime token validation, one private tournament-level SIG Realtime subscription,
-topic-revision gap detection, authoritative REST orderbook reconciliation, fail-closed
+topic-revision gap detection, authoritative REST market/orderbook reconciliation, fail-closed
 trusted/untrusted exchange state, normalized SQLite/WAL capture, and runtime health counters.
 
 Realtime is treated only as a best-effort low-latency invalidation/event feed. REST remains the

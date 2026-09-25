@@ -115,10 +115,12 @@ python -m predictions_cup.sig.capture --list-tournaments
 python -m predictions_cup.sig.capture --tournament-id <TOURNAMENT_UUID>
 ```
 
-It subscribes once to `tournament:{tournament_id}`, records the local receive time for each
-batch, checks topic `revision/previousRevision`, and treats `bookDirty` as an invalidation
-signal. Initial subscription, reconnect, token refresh, socket error or revision gap requires
-authoritative REST reconciliation. A REST failure leaves state untrusted.
+It mints the short-lived token, performs one authoritative market/open-book REST seed, then
+subscribes once to `tournament:{tournament_id}`. It records local batch receive time, checks
+topic `revision/previousRevision`, treats `bookDirty` as an orderbook invalidation, and
+refetches authoritative market state on settlement. Reconnect, token refresh, socket error or
+revision gap requires another authoritative REST reconciliation. A REST failure leaves state
+untrusted.
 
 This path is never started by `python -m predictions_cup.app` and contains no write/order path.
 See `docs/implementation/BUILD_004_SIG_REALTIME.md` for the candidate contract.
