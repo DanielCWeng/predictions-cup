@@ -30,17 +30,23 @@ class MarketWebSocket:
         *,
         heartbeat_seconds: float = 10.0,
         ping_send_timeout_seconds: float = 3.0,
+        receive_liveness_timeout_seconds: float = 30.0,
         max_backoff_seconds: float = 30.0,
     ) -> None:
         self.url = url
         self.health = health
         self.heartbeat_seconds = heartbeat_seconds
+        if receive_liveness_timeout_seconds <= 0:
+            raise ValueError("receive_liveness_timeout_seconds must be positive")
         self.ping_send_timeout_seconds = ping_send_timeout_seconds
+        self.receive_liveness_timeout_seconds = receive_liveness_timeout_seconds
         self.max_backoff_seconds = max_backoff_seconds
         self._desired_tokens: frozenset[str] = frozenset()
         self._ws: aiohttp.ClientWebSocketResponse | None = None
         self._subscription_lock = asyncio.Lock()
         self._stopping = False
+        self._last_receive_monotonic: float | None = None
+        self._forced_reconnect_reason: str | None = None
 
     async def set_tokens(self, token_ids: tuple[str, ...]) -> None:
         new_tokens = frozenset(token_ids)
@@ -81,14 +87,18 @@ class MarketWebSocket:
                         self.health.websocket_connected = True
                         has_connected = True
                         attempt = 0
+                        self._last_receive_monotonic = asyncio.get_running_loop().time()
+                        self._forced_reconnect_reason = None
                         ping_task = asyncio.create_task(self._ping_loop(ws))
                         async for message in ws:
                             if self._stopping:
                                 break
+                            self._last_receive_monotonic = asyncio.get_running_loop().time()
                             if message.type == aiohttp.WSMsgType.TEXT:
                                 observed_at = utc_now()
                                 self.health.last_message_at = observed_at
                                 if message.data == "PONG":
+                                    self.health.last_pong_at = observed_at
                                     continue
                                 await self._dispatch_text(message.data, observed_at, handler)
                             elif message.type in {
@@ -98,7 +108,9 @@ class MarketWebSocket:
                             }:
                                 raise ConnectionError(f"websocket closed: {message.type.name}")
                         if not self._stopping:
-                            raise ConnectionError("websocket stream ended")
+                            reason = self._forced_reconnect_reason or "websocket stream ended"
+                            self._forced_reconnect_reason = None
+                            raise ConnectionError(reason)
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
@@ -114,20 +126,31 @@ class MarketWebSocket:
                 finally:
                     self.health.websocket_connected = False
                     self._ws = None
+                    self._last_receive_monotonic = None
                     if ping_task is not None:
                         ping_task.cancel()
                         await asyncio.gather(ping_task, return_exceptions=True)
 
     async def _ping_loop(self, ws: aiohttp.ClientWebSocketResponse) -> None:
+        loop = asyncio.get_running_loop()
         while not ws.closed and not self._stopping:
             await asyncio.sleep(self.heartbeat_seconds)
+            last_receive = self._last_receive_monotonic
+            if (
+                last_receive is not None
+                and loop.time() - last_receive > self.receive_liveness_timeout_seconds
+            ):
+                self._forced_reconnect_reason = "heartbeat receive/PONG liveness timed out"
+                await ws.close()
+                return
             try:
                 await asyncio.wait_for(
                     ws.send_str("PING"), timeout=self.ping_send_timeout_seconds
                 )
-            except TimeoutError as exc:
+            except TimeoutError:
+                self._forced_reconnect_reason = "heartbeat send timed out"
                 await ws.close()
-                raise ConnectionError("heartbeat send timed out") from exc
+                return
 
     async def _dispatch_text(
         self,
