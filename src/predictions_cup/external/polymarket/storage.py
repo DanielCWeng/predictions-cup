@@ -10,7 +10,12 @@ from decimal import Decimal
 from pathlib import Path
 
 from predictions_cup.external.polymarket.health import IngestionHealth
-from predictions_cup.external.polymarket.models import BookSnapshot, PolymarketMarket, TradeEvent
+from predictions_cup.external.polymarket.models import (
+    BookChangeEvent,
+    BookSnapshot,
+    PolymarketMarket,
+    TradeEvent,
+)
 
 _SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -76,6 +81,41 @@ CREATE INDEX IF NOT EXISTS idx_polymarket_books_token_observed
     ON polymarket_book_snapshots(token_id, observed_at);
 CREATE INDEX IF NOT EXISTS idx_polymarket_books_market_observed
     ON polymarket_book_snapshots(market_id, observed_at);
+CREATE TABLE IF NOT EXISTS polymarket_book_observations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_id TEXT NOT NULL,
+    market_id TEXT NOT NULL,
+    source_timestamp TEXT,
+    state_observed_at TEXT NOT NULL,
+    observed_at TEXT NOT NULL,
+    best_bid TEXT,
+    best_ask TEXT,
+    midpoint TEXT,
+    spread TEXT,
+    last_trade_price TEXT,
+    book_valid INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_polymarket_observations_token_observed
+    ON polymarket_book_observations(token_id, observed_at);
+CREATE INDEX IF NOT EXISTS idx_polymarket_observations_market_observed
+    ON polymarket_book_observations(market_id, observed_at);
+CREATE TABLE IF NOT EXISTS polymarket_book_changes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token_id TEXT NOT NULL,
+    market_id TEXT NOT NULL,
+    side TEXT NOT NULL,
+    price TEXT NOT NULL,
+    size TEXT NOT NULL,
+    source_timestamp TEXT,
+    observed_at TEXT NOT NULL,
+    best_bid TEXT,
+    best_ask TEXT,
+    book_hash TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_polymarket_changes_token_observed
+    ON polymarket_book_changes(token_id, observed_at);
+CREATE INDEX IF NOT EXISTS idx_polymarket_changes_market_observed
+    ON polymarket_book_changes(market_id, observed_at);
 CREATE TABLE IF NOT EXISTS polymarket_trades (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     token_id TEXT NOT NULL,
@@ -209,6 +249,69 @@ class PolymarketStorage:
                             token.outcome_index,
                         ),
                     )
+
+    def append_observations(
+        self, snapshots: Iterable[BookSnapshot], observed_at: str
+    ) -> int:
+        rows = [
+            (
+                snapshot.token_id,
+                snapshot.market_id,
+                _iso(snapshot.source_timestamp),
+                snapshot.observed_at.isoformat(),
+                observed_at,
+                _decimal_text(snapshot.best_bid),
+                _decimal_text(snapshot.best_ask),
+                _decimal_text(snapshot.midpoint),
+                _decimal_text(snapshot.spread),
+                _decimal_text(snapshot.last_trade_price),
+                1,
+            )
+            for snapshot in snapshots
+        ]
+        if not rows:
+            return 0
+        with self._connect() as connection:
+            connection.executemany(
+                """
+                INSERT INTO polymarket_book_observations (
+                    token_id, market_id, source_timestamp, state_observed_at, observed_at,
+                    best_bid, best_ask, midpoint, spread, last_trade_price, book_valid
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                rows,
+            )
+        return len(rows)
+
+    def append_book_changes(self, changes: Iterable[BookChangeEvent]) -> int:
+        rows = [
+            (
+                change.token_id,
+                change.market_id,
+                change.side,
+                str(change.price),
+                str(change.size),
+                _iso(change.source_timestamp),
+                change.observed_at.isoformat(),
+                _decimal_text(change.best_bid),
+                _decimal_text(change.best_ask),
+                change.book_hash,
+            )
+            for change in changes
+        ]
+        if not rows:
+            return 0
+        with self._connect() as connection:
+            connection.executemany(
+                """
+                INSERT INTO polymarket_book_changes (
+                    token_id, market_id, side, price, size, source_timestamp,
+                    observed_at, best_bid, best_ask, book_hash
+                ) VALUES (?,?,?,?,?,?,?,?,?,?)
+                """,
+                rows,
+            )
+        return len(rows)
 
     def append_snapshots(self, snapshots: Iterable[BookSnapshot], recorded_at: str) -> int:
         rows = []
