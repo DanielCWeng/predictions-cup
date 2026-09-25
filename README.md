@@ -4,7 +4,9 @@ Foundation for a quantitative prediction-market trading system being developed f
 
 ## Current status
 
-This PR #5 integration branch contains corrected BUILD-003 plus EXPERIMENT-001A, both still awaiting independent review/merge. It has **no trading capability**. BUILD-003 adds an authenticated, read-only SIG REST adapter for market discovery, prices, orderbooks, trades/history, market nodes, exchanges, and account health. It does not submit/cancel orders, use realtime, calculate fair value, or run strategies.
+The accepted `main` baseline now includes BUILD-003 and EXPERIMENT-001A. It has **no trading capability**.
+
+BUILD-003 provides authenticated, read-only SIG REST access for market discovery, prices, orderbooks, trades/history, market nodes, exchanges, and account health. EXPERIMENT-001A provides a separate public read-only Polymarket research recorder for external market capture. Neither path submits or cancels orders, calculates fair value, or runs strategies.
 
 BUILD-002 remains the owner of typed configuration and canonical domain objects. BUILD-003 validates SIG wire payloads separately and converts into those canonical contracts only where the conversion is lossless.
 
@@ -93,9 +95,9 @@ SIG JSON numbers used for prices and quantities are decoded through `Decimal` be
 
 The current SIG surface is read-only. There is no order placement, cancellation, realtime/WebSocket, automatic tournament resolver, or portfolio accounting.
 
-## Experimental Polymarket recorder
+## Polymarket research recorder
 
-EXPERIMENT-001A is a separate public read-only capture process. It is never started by normal application startup and contains no wallet, signing or order path.
+EXPERIMENT-001A is an accepted, separate public read-only capture process. It is never started by normal application startup and contains no wallet, signing or order path.
 
 ```bash
 PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true \
