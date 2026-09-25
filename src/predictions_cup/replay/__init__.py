@@ -2,6 +2,7 @@
 
 from predictions_cup.replay.loaders import (
     CaptureSchemaError,
+    CaptureSelection,
     CaptureSummary,
     load_polymarket_capture,
     load_sig_capture,
@@ -26,6 +27,7 @@ from predictions_cup.replay.runner import ReplayFrame, ReplayRunner
 __all__ = [
     "BookLevel",
     "CaptureSchemaError",
+    "CaptureSelection",
     "CaptureSummary",
     "Direction",
     "HealthPayload",
