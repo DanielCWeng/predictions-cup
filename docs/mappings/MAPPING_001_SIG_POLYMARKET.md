@@ -19,7 +19,16 @@ data/mappings/sig_polymarket_2026.csv
 data/mappings/sig_polymarket_2026_summary.json
 ```
 
-These generated live artifacts must not be hand-edited.
+The live acceptance gate also requires these review/evidence artifacts:
+
+```text
+data/mappings/sig_polymarket_2026_overrides.json
+data/mappings/sig_polymarket_2026_acceptance.json
+```
+
+The override file is reviewer-owned semantic promotion input. The acceptance file is generated only
+after the live crosswalk is fully verified and the mapped-token CLOB smoke succeeds. Generated live
+artifacts must not be hand-edited.
 
 ## Safety model
 
@@ -73,7 +82,8 @@ python -m predictions_cup.mapping.generator \
   --tournament-id <live-tournament-id> \
   --overrides data/mappings/sig_polymarket_2026_overrides.json \
   --smoke-clob \
-  --require-verified
+  --require-verified \
+  --acceptance-evidence data/mappings/sig_polymarket_2026_acceptance.json
 ```
 
 The generator:
@@ -86,7 +96,17 @@ The generator:
 6. leaves non-reviewed candidates unresolved/NO_TRADE;
 7. validates one record per SIG exchange;
 8. writes canonical JSON, derived CSV, and a derived summary;
-9. optionally smoke-fetches verified mapped token books through the existing CLOB REST client.
+9. smoke-fetches verified mapped token books through the existing CLOB REST client when requested;
+10. when `--acceptance-evidence` is supplied, writes deterministic acceptance evidence only if:
+    - every live SIG exchange is `VERIFIED`;
+    - the reviewer-owned override file covers exactly the live exchange universe;
+    - at least one verified mapped CLOB token exists;
+    - `--smoke-clob` was requested; and
+    - the CLOB smoke returned one book for every mapped token.
+
+The acceptance evidence records the exact mapped token IDs, live/reviewer record counts, successful
+book count, and SHA-256 hashes of the canonical JSON, CSV, summary, and reviewer override artifact.
+It contains no credential and no generated timestamp.
 
 A Gamma parse failure aborts generation rather than silently producing an incomplete identity
 universe.
@@ -141,3 +161,8 @@ The repository code can be reviewed and tested without a credential, but the fin
 crosswalk itself can only be accepted after a credentialed run against the explicit SIG tournament
 and current Gamma/CLOB metadata. Historical pasted catalogues are sanity checks only and must not
 be promoted into the canonical artifact.
+
+Before MAPPING-001 can leave draft/block status, the existing branch must contain the reviewed
+override artifact, canonical JSON/CSV/summary, and generated acceptance evidence from the same live
+run. The acceptance evidence is intentionally impossible to emit from an unresolved mapping or a
+run that skipped the mapped-token CLOB smoke.

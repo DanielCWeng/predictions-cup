@@ -21,6 +21,7 @@ from predictions_cup.external.polymarket.client import ClobMarketDataClient
 from predictions_cup.external.polymarket.gamma import GammaClient
 from predictions_cup.external.polymarket.models import PolymarketMarket
 from predictions_cup.external.polymarket.universe import ElectionUniverseSelector
+from predictions_cup.mapping.acceptance import write_acceptance_evidence
 from predictions_cup.mapping.crosswalk import (
     summary_json,
     write_csv,
@@ -262,6 +263,7 @@ async def generate_live_crosswalk(
     csv_path: Path,
     summary_path: Path,
     smoke_clob: bool,
+    acceptance_evidence_path: Path | None = None,
 ) -> MappingDocument:
     settings = load_settings()
     if settings.sig_read_credential is None:
@@ -304,16 +306,33 @@ async def generate_live_crosswalk(
     write_csv(csv_path, document)
     write_summary(summary_path, document)
 
+    token_ids: tuple[str, ...] = ()
+    books_returned = 0
     if smoke_clob:
         token_ids = _verified_mapped_token_ids(document)
         if token_ids:
             books = await ClobMarketDataClient(
                 str(settings.polymarket_clob_base_url)
             ).fetch_books(token_ids)
-            if len(books) != len(token_ids):
+            books_returned = len(books)
+            if books_returned != len(token_ids):
                 raise ValueError(
                     "Polymarket CLOB smoke test returned a different number of books than tokens"
                 )
+
+    if acceptance_evidence_path is not None:
+        write_acceptance_evidence(
+            acceptance_evidence_path,
+            document=document,
+            overrides=overrides,
+            overrides_path=overrides_path,
+            json_path=json_path,
+            csv_path=csv_path,
+            summary_path=summary_path,
+            smoke_requested=smoke_clob,
+            mapped_token_ids=token_ids,
+            books_returned=books_returned,
+        )
     return document
 
 
@@ -434,6 +453,14 @@ def _parse_args() -> argparse.Namespace:
         help="Fetch mapped verified token books through the existing CLOB REST client",
     )
     parser.add_argument(
+        "--acceptance-evidence",
+        type=Path,
+        help=(
+            "Write deterministic live acceptance evidence after reviewer overrides, "
+            "verification, and CLOB smoke all pass"
+        ),
+    )
+    parser.add_argument(
         "--require-verified",
         action="store_true",
         help="Exit non-zero if any mapping remains non-VERIFIED",
@@ -458,6 +485,7 @@ async def _main() -> int:
         csv_path=args.csv,
         summary_path=args.summary,
         smoke_clob=args.smoke_clob,
+        acceptance_evidence_path=args.acceptance_evidence,
     )
     print(summary_json(document), end="")
     if args.require_verified and any(
