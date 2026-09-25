@@ -100,95 +100,77 @@ Common knowledge can still be useful infrastructure. It should not be mislabelle
 
 ---
 
-# 4. Strategy family freeze
+# 4. Initial strategy family freeze
 
-Do not generate more strategy families before these have been tested.
+For the first empirical loop, active experimentation is limited to **three** families. This is an operating freeze, not a claim that the backlog is worthless.
 
 ## [~] A. Direct external lead/lag
 
 **Hypothesis:** an observable move on a mapped Polymarket/Kalshi contract predicts a subsequent executable repricing on SIG.
 
-**Minimum data:** synchronized external and SIG books/trades, both exchange-event time and observable-by-us time, mapping confidence, executable depth.
+**Minimum data:** synchronized external and SIG books/trades, exchange-event time where available, observable-by-us time, mapping confidence and executable depth.
 
-**Baseline:** direct mapped external price; no structural model.
+**Success metric:** positive OOS executable forward return after measured latency, depth and slippage.
 
-**Success metric:** positive OOS executable forward return after our measured latency, depth and slippage, with stability across markets/regimes.
+**Falsifier:** apparent lead disappears with observable timestamps, executable prices, common-news controls or realistic latency.
 
-**Falsifier:** apparent lead disappears when using observable timestamps, executable asks/bids, common-news controls or realistic latency.
+## [~] B. Simple residual / relative value
 
-**Current readiness:** mathematics ready for experiment (M-087–M-089); live synchronized data infrastructure not ready.
+**Hypothesis:** a SIG market that deviates from the simplest direct or related-market reference tends to move toward that reference.
 
-## [~] B. Cross-market residual / mean reversion
+Start with the smallest defensible reference before LOO-FAMILY or a global probability model.
 
-**Hypothesis:** a SIG market that deviates from a simple coherent or related-market reference tends to move back toward that reference.
+**Success metric:** residual sign/magnitude predicts future executable repricing OOS and positive net economics.
 
-**Minimum data:** synchronized related-market prices/books, stable semantic relationships, executable SIG prices, future markouts.
+**Falsifier:** residuals do not decay OOS, only exist at midpoints, or are explained by stale/illiquid reference legs.
 
-**Baseline:** raw direct-equivalent external FV or simplest weighted reference.
-
-**Success metric:** residual sign/magnitude predicts future executable repricing OOS and produces positive net P&L.
-
-**Falsifier:** residuals do not decay OOS, only work at midpoints, or are explained by stale/illiquid reference legs.
-
-**Current readiness:** M-121 ready for experiment; data and research harness missing.
-
-## [~] C. LOO-FAMILY structural residual
-
-**Hypothesis:** markets outside the target's direct/equivalent/complement family contain incremental information about the target.
-
-**Minimum data:** semantic family graph, synchronized related markets, seat/count/control/joint markets, direct target book held out for evaluation.
-
-**Baseline:** direct external equivalent alone; LOO-PRICE is a reconstruction baseline, not proof of indirect alpha.
-
-**Success metric:** `FV_LOO-FAMILY` improves OOS target repricing/error and, ultimately, executable P&L versus direct FV.
-
-**Falsifier:** no incremental OOS value after full family exclusion, or gains arise only from information leakage / equivalent siblings.
-
-**Current readiness:** M-133/M-140/M-141 ready for experiment; family metadata and synchronized capture missing.
-
-## [~] D. Simple market making
+## [~] C. Simple selective market making
 
 **Hypothesis:** selected SIG markets have enough spread and benign enough post-fill markouts to earn positive passive expected value.
 
-**Minimum data:** SIG books, own orders/fills, queue context, future markouts, cancellation timestamps, inventory.
+Use a deliberately simple baseline.
 
-**Baseline:** deliberately simple quoting policy; no elaborate stochastic-control model.
+**Success metric:** positive realised/shadow spread capture minus adverse selection, risk and operations cost under calibrated fill assumptions.
 
-**Success metric:** positive realised/shadow `spread capture - adverse selection - risk/ops cost`, with calibrated fill assumptions.
+**Falsifier:** adverse-selection markouts dominate spread capture, fills are too sparse, or capital is trapped for poor return density.
 
-**Falsifier:** negative post-fill markouts dominate spread capture, fills are too sparse, or capital is trapped for poor return density.
+## Challenger / research backlog — do not block launch
 
-**Current readiness:** mathematical components captured; no execution, fill model or SIG live data yet.
+Preserve, but do not allow these to delay the first empirical loop:
 
-## [~] E. Hard structural / logical opportunities
+- LOO-FAMILY structural FV;
+- hard structural constraints / executable certificates;
+- combined MAKE / TAKE / STRUCTURAL routing;
+- global coherent probability surfaces;
+- advanced flow / toxicity models;
+- complex election-factor / seat-distribution models.
 
-**Hypothesis:** verified implication, partition, exclusivity, threshold or joint relationships occasionally violate executable no-arbitrage bounds.
+Promotion requires evidence from the captured-data → replay → test loop.
 
-**Minimum data:** audited semantic graph, executable bid/ask/depth, valid settlement-state representation.
+## Competition-research operating additions — 25 September 2026
 
-**Baseline:** bid/ask feasibility test; never midpoint-only.
+The historical competition review adds only the following genuinely new operating requirements:
 
-**Success metric:** positive worst-state payoff after executable costs at non-trivial size, with no semantic false positives.
+| Addition | Current decision |
+|---|---|
+| **Market ecology** | Test observable behavioural archetypes such as quote replenishment, sweep cadence and external-following. Do not assume this is alpha. |
+| **API/message budget** | Treat request/cancel capacity, retry rate, 429/503 tails and acknowledgement latency as trading variables. |
+| **Mechanics discovery harness** | First live days must explicitly test matching, partial fills, cancel races, reconciliation and recovery under documented behaviour. |
+| **Integration-complexity haircut** | A strategy's theoretical edge must pay for residual-leg, latency and operational complexity before admission. |
+| **Edge decay / crowding** | Track trigger count, gross edge, fill rate, markout, response lag and signal half-life through time. |
+| **Position-capacity opportunity cost** | Measure good signals skipped because inventory/risk/capital is already consumed. |
+| **Uncertain order state** | Execution must represent PENDING, ACKED, PARTIALLY_FILLED, CANCEL_PENDING, CANCELLED, UNCERTAIN and RECONCILED; timeout/503 never proves non-execution or successful cancellation. |
 
-**Falsifier:** violations disappear at executable prices/depth or fail settlement/payoff proof.
+### Monday-night gate
 
-**Current readiness:** highest-quality maths is ready (M-019/M-136); semantic graph and scanner not implemented.
+> **By the end of Monday 28 September, at least the three initial simple strategy hypotheses must be runnable through replay using data captured by our own infrastructure.**
 
-## [~] F. Combined MAKE / TAKE / STRUCTURAL decision
+If not, stop adding research, maths and strategy families until the data → replay → experiment pipeline works.
 
-**Hypothesis:** routing each opportunity by robust edge and urgency outperforms a one-action strategy.
+### Research freeze
 
-**Minimum data:** fair value + uncertainty, spread/depth, fill model, latency, risk and structural certificate state.
+No new broad strategy or mathematical workstream unless it answers a failed test, implementation ambiguity, live venue observation or specific architectural decision.
 
-**Baseline:** fixed action policy such as TAKE-only or simple MAKE-only.
-
-**Success metric:** higher OOS net P&L / capital efficiency with controlled drawdown and lower stale-fill losses.
-
-**Falsifier:** routing adds complexity without incremental OOS economics.
-
-**Current readiness:** policy specified in M-112; all operational dependencies incomplete.
-
----
 
 # 5. Build checklist
 
