@@ -4,7 +4,7 @@ Foundation for a quantitative prediction-market trading system being developed f
 
 ## Current status
 
-This repository is in **FOUNDATION / READ-ONLY SIG REST** phase. It has **no trading capability**. BUILD-003 adds an authenticated, read-only SIG REST adapter for market discovery, prices, orderbooks, trades/history, market nodes, exchanges, and account health. It does not submit/cancel orders, use realtime, calculate fair value, or run strategies.
+This PR branch contains the proposed **FOUNDATION / READ-ONLY SIG REST** BUILD-003 implementation and remains under independent review; it is not accepted on `main` until PR #4 merges. It has **no trading capability**. BUILD-003 adds an authenticated, read-only SIG REST adapter for market discovery, prices, orderbooks, trades/history, market nodes, exchanges, and account health. It does not submit/cancel orders, use realtime, calculate fair value, or run strategies.
 
 BUILD-002 remains the owner of typed configuration and canonical domain objects. BUILD-003 validates SIG wire payloads separately and converts into those canonical contracts only where the conversion is lossless.
 
