@@ -5,7 +5,7 @@
 - No production deployment exists.
 - No production trading daemon exists.
 - Normal application startup remains finite, network-free and non-trading.
-- PR #5 contains a separate, explicitly invoked public read-only Polymarket research recorder.
+- The accepted repository includes a separate, explicitly invoked public read-only Polymarket research recorder.
 
 The recorder uses local SQLite/WAL append storage, idempotent market metadata upserts, invalidation plus authoritative REST reseeding after reconnect, and explicit feed/book/trade/storage health clocks. These are experimental capture properties, not production trading/recovery guarantees.
 

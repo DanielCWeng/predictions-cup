@@ -8,7 +8,7 @@ BUILD-001 established the application shell, CI, logging, logical package bounda
 
 BUILD-002 added on-demand typed runtime configuration, secret-aware SIG credential representation, canonical domain contracts, Decimal/time/identifier validation, and deterministic Pydantic serialization.
 
-This PR #5 branch includes corrected BUILD-003 as its unmerged dependency baseline. BUILD-003 provides a proposed production-oriented **read-only** SIG REST boundary under `predictions_cup.sig`:
+BUILD-003 provides the accepted **read-only** SIG REST boundary under `predictions_cup.sig`:
 
 - one reusable asynchronous `httpx.AsyncClient` with a shared connection pool;
 - Bearer authentication from the BUILD-002 read credential only;
@@ -19,7 +19,7 @@ This PR #5 branch includes corrected BUILD-003 as its unmerged dependency baseli
 - typed API errors and bounded retries for documented transient GET failures;
 - explicit `tournament_id` parameters without any automatic context resolver.
 
-EXPERIMENT-001A additionally provides an unmerged **public read-only Polymarket research capture** path under `predictions_cup.external.polymarket`: public Gamma/CLOB discovery, authoritative REST book seeding, persistent market WebSocket ingestion, normalized event-time book-change/trade persistence, a lean 1-second top-of-book panel, slower bounded depth snapshots, SQLite/WAL storage, and feed-health/reconnect handling.
+EXPERIMENT-001A additionally provides the accepted **public read-only Polymarket research capture** path under `predictions_cup.external.polymarket`: public Gamma/CLOB discovery, authoritative REST book seeding, persistent market WebSocket ingestion, normalized event-time book-change/trade persistence, a lean 1-second top-of-book panel, slower bounded depth snapshots, SQLite/WAL storage, and feed-health/reconnect handling.
 
 There is still no SIG realtime subsystem, production market-state/reconciliation engine, mapping, fair value, strategy logic, risk-decision engine, write/execution path, portfolio accounting, or trading capability.
 

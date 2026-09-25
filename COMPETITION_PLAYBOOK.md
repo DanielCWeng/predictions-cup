@@ -466,7 +466,7 @@ The counts reported at the end refer **only to this master checklist**, so repea
 
 ## DATA
 
-- [~] Finish and merge verified authenticated read-only SIG REST client.
+- [x] Authenticated read-only SIG REST client is merged on `main`.
 - [~] Preserve working SIG market/exchange discovery and REST orderbook snapshots from BUILD-003.
 - [ ] Resolve/select the active tournament explicitly.
 - [ ] Ingest SIG realtime/WebSocket events.
@@ -579,7 +579,7 @@ The counts reported at the end refer **only to this master checklist**, so repea
 
 # Contradictions / source tensions that must remain visible
 
-1. **Active branch state vs merged state.** BUILD-003 has implementation under review in PR #4 and EXPERIMENT-001A has implementation under review in PR #5, but neither is on `main`. Branch-level capability remains active/unmerged until accepted and merged; GitHub merge state and actual `main` contents are authoritative.
+1. **Accepted baseline vs future branch state.** BUILD-003 and EXPERIMENT-001A are merged on `main`. Future branch work must continue to distinguish proposed capability from accepted repository state; GitHub merge state and actual `main` contents remain authoritative.
 
 2. **“Primary edge” language vs evidence.** Structural probability-graph / LOO-FAMILY work was discussed as the most promising candidate edge, but the research also explicitly requires it to beat direct-equivalent FV after costs. Therefore this playbook classifies it as **PLAUSIBLE, not proven**.
 
@@ -617,11 +617,11 @@ Use the ledger rather than re-copying the equations:
 
 ## Five highest-priority incomplete items
 
-1. **Finish, review and merge BUILD-003** so authenticated SIG read plumbing is actually on `main`.
-2. **Build tournament selection + realtime + REST reconciliation** so we have trustworthy live SIG state.
-3. **Stand up synchronized SIG + Polymarket recording with observable timestamps**; without this, lead/lag, markouts and execution research are mostly fiction.
-4. **Materialize semantic mapping / rule signatures / family grouping** so direct FV, hard constraints and LOO-FAMILY cannot leak or mis-map.
-5. **Build minimal shadow execution + markouts + conservative fill model** before spending time on sophisticated strategy logic.
+1. **Build tournament selection + realtime + REST reconciliation** so we have trustworthy live SIG state.
+2. **Stand up synchronized SIG recording with observable timestamps alongside the accepted Polymarket recorder**; without this, lead/lag, markouts and execution research are mostly fiction.
+3. **Materialize semantic mapping / rule signatures / family grouping** so direct FV, hard constraints and LOO-FAMILY cannot leak or mis-map.
+4. **Build minimal shadow execution + markouts + conservative fill model** before spending time on sophisticated strategy logic.
+5. **Add live health/latency/reconciliation metrics and measure the end-to-end path** before optimizing infrastructure or sophisticated strategy logic.
 
 ## Three things currently over-prioritized
 
