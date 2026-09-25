@@ -41,6 +41,7 @@ class AppSettings(BaseSettings):
     )
     polymarket_snapshot_interval_seconds: float = Field(default=1.0, gt=0)
     polymarket_book_depth: int = Field(default=20, ge=1, le=200)
+    polymarket_depth_snapshot_interval_seconds: float = Field(default=60.0, ge=1)
     polymarket_gamma_page_limit: int = Field(default=100, ge=1, le=500)
     polymarket_gamma_refresh_seconds: float = Field(default=300.0, ge=30)
     polymarket_storage_path: Path = Path("data/polymarket_capture.sqlite3")
@@ -97,6 +98,9 @@ class AppSettings(BaseSettings):
             "polymarket_universe": self.polymarket_universe,
             "polymarket_snapshot_interval_seconds": self.polymarket_snapshot_interval_seconds,
             "polymarket_book_depth": self.polymarket_book_depth,
+            "polymarket_depth_snapshot_interval_seconds": (
+                self.polymarket_depth_snapshot_interval_seconds
+            ),
             "polymarket_storage_path": str(self.polymarket_storage_path),
         }
 
