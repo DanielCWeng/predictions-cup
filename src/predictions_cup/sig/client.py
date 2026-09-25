@@ -432,13 +432,11 @@ class SigRestClient:
 
     def _retry_delay(self, failed_attempt: int) -> float:
         policy = self._retry_policy
-        base = min(
-            policy.max_delay_seconds,
-            policy.base_delay_seconds * (2 ** (failed_attempt - 1)),
-        )
+        exponential: float = policy.base_delay_seconds * (2.0 ** (failed_attempt - 1))
+        base: float = min(policy.max_delay_seconds, exponential)
         if base == 0 or policy.jitter_ratio == 0:
             return base
-        jitter = base * policy.jitter_ratio * random.random()
+        jitter: float = base * policy.jitter_ratio * random.random()
         return min(policy.max_delay_seconds, base + jitter)
 
     @staticmethod
