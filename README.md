@@ -4,9 +4,9 @@ Foundation for a quantitative prediction-market trading system being developed f
 
 ## Current status
 
-This repository is in **FOUNDATION / DOMAIN MODELS** phase. It has **no trading capability**. It does not connect to SIG or any external API, submit orders, calculate fair value, or run strategies.
+This PR branch contains the proposed **FOUNDATION / READ-ONLY SIG REST** BUILD-003 implementation and remains under independent review; it is not accepted on `main` until PR #4 merges. It has **no trading capability**. BUILD-003 adds an authenticated, read-only SIG REST adapter for market discovery, prices, orderbooks, trades/history, market nodes, exchanges, and account health. It does not submit/cancel orders, use realtime, calculate fair value, or run strategies.
 
-BUILD-002 defines the typed configuration and canonical core domain objects that future adapters and engines must consume.
+BUILD-002 remains the owner of typed configuration and canonical domain objects. BUILD-003 validates SIG wire payloads separately and converts into those canonical contracts only where the conversion is lossless.
 
 ## Requirements
 
@@ -16,7 +16,8 @@ BUILD-002 defines the typed configuration and canonical core domain objects that
 Runtime dependencies are intentionally limited to:
 
 - `pydantic` for canonical typed validation/serialization;
-- `pydantic-settings` for deterministic environment-driven configuration.
+- `pydantic-settings` for deterministic environment-driven configuration;
+- `httpx` for pooled asynchronous read-only SIG HTTP.
 
 The project uses a `src/` package layout with `pytest`, `ruff`, and strict `mypy`.
 
@@ -61,11 +62,21 @@ python -m predictions_cup.app
 python -m predictions_cup.app --smoke-test
 ```
 
-Both paths load validated settings, emit non-secret state, make zero network calls, perform no trading, and exit.
+Both paths load validated settings, emit non-secret state, make zero network calls, perform no trading, and exit. The SIG client is only constructed and used when explicitly invoked by application code.
+
+## SIG read-only REST adapter
+
+`predictions_cup.sig.SigRestClient` uses `PREDICTIONS_CUP_SIG_READ_CREDENTIAL` with `Authorization: Bearer ...`, a reusable `httpx.AsyncClient`, explicit timeouts, strict transport DTOs, and bounded retries for documented transient GET failures.
+
+Tournament context is an explicit caller concern. Read methods accept `tournament_id` where the API is context-sensitive, and the client never injects `PREDICTIONS_CUP_TOURNAMENT_ID` automatically. Omitting it therefore preserves the API-defined public / organization-wide / default-tournament behaviour.
+
+SIG JSON numbers used for prices and quantities are decoded through `Decimal` before validation. ISO-8601 wire timestamps are parsed in the SIG transport layer; canonical models continue to reject timestamp strings.
+
+The current SIG surface is read-only. There is no order placement, cancellation, realtime/WebSocket, automatic tournament resolver, or portfolio accounting.
 
 ## Domain contracts
 
-Canonical contracts live under `predictions_cup.models`. They are deliberately separate from future SIG/external API transport payloads.
+Canonical contracts live under `predictions_cup.models`. They are deliberately separate from SIG/external API transport payloads.
 
 Core rules include:
 
@@ -73,7 +84,7 @@ Core rules include:
 - prices/probabilities constrained to `[0,1]`;
 - positive quantities where an economic amount must be positive;
 - canonical timestamps require an actual timezone-aware `datetime` and normalise to UTC;
-- timestamp strings/epoch integers must be parsed by future transport adapters before canonical construction;
+- timestamp strings/epoch integers are parsed by transport adapters before canonical construction;
 - opaque non-blank string identifiers;
 - immutable historical/value models;
 - canonical `OrderKind` values are MARKET and LIMIT;
