@@ -7,6 +7,7 @@ from decimal import Decimal
 
 import httpx
 import pytest
+from pydantic import SecretStr
 
 from predictions_cup.config import AppSettings
 from predictions_cup.models import PriceKind
@@ -26,8 +27,8 @@ from predictions_cup.sig import (
 
 def _settings() -> AppSettings:
     return AppSettings(
-        sig_read_credential="read-secret",
-        sig_trade_credential="trade-secret",
+        sig_read_credential=SecretStr("read-secret"),
+        sig_trade_credential=SecretStr("trade-secret"),
         tournament_id="configured-tournament-must-not-be-injected",
     )
 
