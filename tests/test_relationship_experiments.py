@@ -135,9 +135,10 @@ def test_leadlag_response_curve_uses_executable_quotes_without_lookahead() -> No
     assert two_second.gross_markout == Decimal("0.06")
     assert two_second.entry_price == Decimal("0.51")
     assert two_second.signal_value == Decimal("0.10")
+    assert two_second.net_markout is None
 
     curve = response_curve(rows)
-    assert any(key[2] == "2" and summary.n_valid == 1 for key, summary in curve.items())
+    assert any(key[5] == "2" and summary.n_valid == 1 for key, summary in curve.items())
 
 
 def test_leadlag_down_signal_maps_to_sell_yes() -> None:
@@ -303,6 +304,20 @@ def test_loo_price_can_signal_when_indirect_loo_family_has_no_edge() -> None:
     assert not any(
         row.experiment_id == "LOO-FAMILY" and row.signal_direction is not None
         for row in rows
+    )
+
+
+def test_missing_leadlag_lookback_history_is_reported_as_coverage_invalidity() -> None:
+    base = datetime(2026, 9, 25, 12, tzinfo=UTC)
+    events = (
+        _quote(base, ReplaySource.POLYMARKET, "poly-1", "0.49", "0.51", 1),
+        _quote(base, ReplaySource.SIG, "sig-1", "0.49", "0.51", 1),
+        _trust(base),
+    )
+    spec = _leadlag_spec(target_horizons=(timedelta(seconds=1),))
+    rows = RelationshipExperimentRunner().run(events, (spec,))
+    assert any(
+        row.invalid_reason is InvalidReason.INSUFFICIENT_PREDICTOR_COVERAGE for row in rows
     )
 
 
