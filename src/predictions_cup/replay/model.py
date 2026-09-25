@@ -195,7 +195,7 @@ class ReplayState:
             state.best_ask = payload.best_ask
             state.bids = payload.bids
             state.asks = payload.asks
-            if payload.last_trade is not None:
+            if payload.last_trade is not None and state.last_trade_observed_at is None:
                 state.last_trade = payload.last_trade
             state.quote_observed_at = payload.quote_observed_at
             state.book_valid = payload.book_valid
