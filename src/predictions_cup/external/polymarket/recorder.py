@@ -41,6 +41,7 @@ class PolymarketRecorder:
         self.websocket = MarketWebSocket(str(settings.polymarket_ws_url), self.health)
         self._token_ids: tuple[str, ...] = ()
         self._market_count = 0
+        self._last_depth_snapshot_at: datetime | None = None
 
     async def initialize(self) -> None:
         await asyncio.to_thread(self.storage.initialize)
@@ -86,14 +87,17 @@ class PolymarketRecorder:
     async def _seed_books(self, token_ids: tuple[str, ...], *, invalidate: bool) -> None:
         if invalidate:
             self.books.invalidate(set(token_ids))
-        payloads = await self.clob.fetch_books(token_ids)
-        observed_at = utc_now()
-        for payload in payloads:
-            self.books.apply_full_snapshot(payload, observed_at)
+        batches = await self.clob.fetch_book_batches(token_ids)
+        latest_observed_at: datetime | None = None
+        for batch in batches:
+            for payload in batch.books:
+                self.books.apply_full_snapshot(payload, batch.observed_at)
+            latest_observed_at = batch.observed_at
         missing = set(token_ids) - set(self.books.initialized_tokens)
         if missing:
             raise RuntimeError(f"CLOB /books did not initialize {len(missing)} subscribed tokens")
-        self.health.last_valid_book_update_at = observed_at
+        if latest_observed_at is not None:
+            self.health.last_valid_book_update_at = latest_observed_at
 
     async def handle_message(self, payload: JsonObject, observed_at: datetime) -> None:
         kind = event_type(payload)
@@ -105,6 +109,12 @@ class PolymarketRecorder:
         if kind == "price_change":
             result = self.books.apply_price_change(payload, observed_at)
             self.health.book_uninitialized_delta_count += result.uninitialized_deltas
+            if result.changes:
+                try:
+                    await asyncio.to_thread(self.storage.append_book_changes, result.changes)
+                except Exception:
+                    self.health.storage_failures += 1
+                    raise
             if result.changed_tokens:
                 self.health.last_valid_book_update_at = observed_at
                 self.health.last_book_change_at = observed_at
@@ -112,6 +122,7 @@ class PolymarketRecorder:
         if kind == "last_trade_price":
             event = _event_payload(payload)
             trade = TradeEvent.from_ws(event, observed_at)
+            self.books.apply_last_trade_price(payload, observed_at)
             try:
                 await asyncio.to_thread(self.storage.append_trade, trade)
             except Exception:
@@ -132,18 +143,31 @@ class PolymarketRecorder:
     async def record_snapshot_once(self) -> int:
         recorded_at = utc_now()
         snapshots = self.books.snapshots(self.settings.polymarket_book_depth)
+        depth_rows = 0
         try:
-            count = await asyncio.to_thread(
-                self.storage.append_snapshots, snapshots, recorded_at.isoformat()
+            panel_rows = await asyncio.to_thread(
+                self.storage.append_observations, snapshots, recorded_at.isoformat()
             )
+            depth_due = (
+                self._last_depth_snapshot_at is None
+                or (recorded_at - self._last_depth_snapshot_at).total_seconds()
+                >= self.settings.polymarket_depth_snapshot_interval_seconds
+            )
+            if depth_due:
+                depth_rows = await asyncio.to_thread(
+                    self.storage.append_snapshots, snapshots, recorded_at.isoformat()
+                )
+                self._last_depth_snapshot_at = recorded_at
         except Exception as exc:
             self.health.storage_failures += 1
             self.health.snapshot_last_at = recorded_at
             self.health.snapshot_last_status = f"ERROR: {type(exc).__name__}: {exc}"
             raise
         self.health.snapshot_last_at = recorded_at
-        self.health.snapshot_last_status = f"OK rows={count}"
-        return count
+        self.health.snapshot_last_status = (
+            f"OK panel_rows={panel_rows} depth_rows={depth_rows}"
+        )
+        return panel_rows
 
     async def run(self) -> None:
         await self.initialize()
