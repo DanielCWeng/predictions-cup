@@ -1,0 +1,4557 @@
+Claude Free Sonnet
+
+# Election Market-Making + Cross-Market Arbitrage Bot
+
+Given the time constraint (a few days, one developer), I'm picking **one strategy**: a market maker that quotes around a fair-value estimate blended from (a) the book's own mid, (b) correlated/related contracts, and (c) an external reference market (Polymarket/Kalshi if available via API), combined with a **hard arbitrage layer** that trades cross-market mispricings (e.g., "candidate wins nomination" vs "candidate wins general" vs party-level markets) whenever they violate simple logical bounds. This is chosen over pure directional betting because market making + arb is more robust to model error and works even if I have no real edge on the underlying politics.
+
+---
+
+## 1. Estimating Fair Value
+
+For each contract `i`, maintain a fair value `f_i ∈ (0,1)`:
+
+```
+f_i = w1 * mid_i + w2 * external_ref_i + w3 * implied_from_related_i
+```
+
+- **mid_i**: `(best_bid + best_ask) / 2` from the order book, only if spread is reasonably tight; if the book is thin/wide, weight this down dynamically (weight inversely proportional to spread width).
+- **external_ref_i**: matching contract price from an external prediction market (Polymarket, Kalshi, PredictIt), pulled every N seconds via API/scrape. If no direct match, skip this term (renormalize weights).
+- **implied_from_related_i**: derived from logical/statistical relationships to other contracts in the same market (see §10), e.g. `P(candidate wins general) ≈ P(wins nomination) * P(party wins general | nominee)`.
+
+Weights start equal (1/3 each, renormalized for missing terms) and are adjusted by a simple decaying-accuracy tracker: each source's weight is nudged up/down based on how close it historically was to the realized outcome or to the post-hoc consensus price (a lightweight online reweighting, e.g., exponential moving average of squared error vs. eventual settlement or vs. a robust median of all sources).
+
+I do **not** build a sophisticated poll-aggregation/Bayesian model in a few days — that's a multi-week project and error-prone. The edge here is structural (arbitrage + spread capture), not superior forecasting.
+
+---
+
+## 2. When to Buy
+
+Buy (lift the ask or post a bid) when:
+- `ask_i < f_i - edge_threshold` (market is cheap vs. fair value), AND
+- current inventory in `i` is below max position, AND
+- no fresher/contradicting signal (see §7) in the last `cooldown` seconds.
+
+`edge_threshold` starts at ~2-3 cents on a $1 contract, scaled by estimated confidence (wider if external_ref is stale or missing).
+
+## 3. When to Sell
+
+Symmetric: sell (hit the bid or post an ask) when `bid_i > f_i + edge_threshold`, or to reduce inventory that has hit soft limits (§9), or to take profit when the price has moved favorably and reverted toward fair value (close position when `|price - f_i| < 0.5 * edge_threshold` and we're in profit).
+
+## 4. Do I Market Make?
+
+Yes, on the highest-volume contracts only (top ~10-20 by book depth/trade frequency). Market making needs continuous quoting and inventory risk control — not worth the engineering effort on illiquid long-tail contracts, where I'll instead just take resting mispriced orders (pure arb/limit-taking, no resting quotes).
+
+## 5. How I Choose Bid/Ask Quotes
+
+Standard Avellaneda-Stoikov-style skew, simplified:
+
+```
+half_spread = max(min_spread, k * volatility_i) + inventory_penalty
+reservation_price = f_i - γ * inventory_i * volatility_i²   (inventory skew)
+bid = reservation_price - half_spread
+ask = reservation_price + half_spread
+```
+
+- `min_spread`: exchange fee + small buffer (e.g., 1-2 cents).
+- `volatility_i`: rolling stdev of mid-price over last M minutes.
+- `γ` (inventory aversion): tuned so that at max position, skew shifts quotes by roughly one full spread width, discouraging further accumulation.
+- Clip bid/ask to `[0.01, 0.99]`.
+
+## 6. Order Sizing
+
+- Base clip size = fixed fraction of a per-market risk budget (e.g., $X per contract, same $X across all contracts to keep risk uniform, not proportional to price).
+- Reduce size as `|inventory_i|` approaches max position (linear taper to zero at the cap).
+- Reduce size when confidence in `f_i` is low (wide disagreement between sources → smaller size).
+- Never exceed exchange-imposed size/rate limits.
+
+## 7. Reacting to Other Markets Moving
+
+- Subscribe to price updates on all related contracts (same race, same candidate across markets, external reference feed).
+- On any related-market tick, recompute `f_i` immediately (event-driven, not just polled) and requote/cancel-replace if the new fair value moves quotes by more than a minimal tick threshold (avoid over-cancelling/order-churn — use a "requote if `|Δf| > 0.5 * tick_threshold`" rule).
+- If an external reference market gaps sharply (news event), widen spreads immediately and shrink size for a cooldown period (e.g., 60-120s) before resuming normal quoting — protects against being picked off during information shocks.
+
+## 8. Reacting After a Trade (Fill)
+
+- On fill, immediately update inventory and reservation price, then requote (skewed quotes per §5) rather than waiting for the next tick.
+- Log the fill; if we're repeatedly filled on one side (e.g., 3+ consecutive buys), treat this as a signal we may be mispriced/adverse-selected — widen spread and/or nudge `f_i` toward the fill side slightly, and shorten cooldown before allowing resizing back up.
+- Rate-limit: if fill frequency spikes abnormally (possible informed flow / news), pull quotes entirely for a short window.
+
+## 9. Inventory Management
+
+- Per-contract max position (in $ notional), and a global portfolio max exposure across all open contracts.
+- Soft limit at 70% of max: start skewing/tapering size.
+- Hard limit at 100%: stop adding, only quote/trade the reducing side.
+- Time-based decay: if inventory has been at a nonzero level for longer than `T_max` with no fair-value edge, actively unwind at/near mid to flatten (avoid holding directional risk indefinitely — this bot is meant to make spread, not bet).
+- Correlated-position netting: treat logically linked contracts (see §10) as a combined exposure for risk purposes, not independent — e.g., long "candidate wins nomination" + long "party wins general" is effectively a leveraged bet on the same outcome cluster, so cap combined notional too.
+
+## 10. Handling Related Election Markets
+
+This is the highest-confidence edge available in the time budget:
+
+- **Mutually exclusive sets** (all candidates in one race): probabilities must sum to 1 (or to the "yes" side of a spread). If `sum(asks) < 1 - ε`, buy all outcomes (guaranteed arb, minus fees). If `sum(bids) > 1 + ε`, sell all (or buy the "no" side of each). This is a pure, near-riskless arb and should get the largest size allocation.
+- **Nested/conditional markets** (e.g., "wins primary" implies "on general ballot"): enforce `P(implied) >= P(implying)`. If violated beyond fee/slippage buffer, trade both legs.
+- **Same event, multiple venues** (this exchange vs. external reference market): if the spread between them exceeds transfer/fee cost, trade the cheap one (and hedge on the other if that's tradable, otherwise just use it as a fair-value input, not an executable hedge, if cross-venue trading isn't feasible in the time available — simpler and safer for a few-day build).
+- Recompute these logical bound checks on every relevant tick, across the full known set of related contracts (maintain a config/mapping file of which contracts belong to which race/hierarchy).
+
+## 11. Parameters (initial, to be tuned)
+
+| Parameter | Initial value |
+|---|---|
+| edge_threshold | 0.02–0.03 |
+| min_spread | 0.01–0.02 |
+| γ (inventory aversion) | tuned so full-position skew ≈ 1 spread |
+| max position per contract | e.g. $500 notional |
+| max portfolio exposure | e.g. $5,000 notional |
+| soft limit | 70% of max |
+| requote threshold | 0.5 * min_spread |
+| cooldown after shock/adverse fills | 60–120s |
+| volatility window | 15–30 min rolling |
+| arb epsilon (fee buffer) | exchange fee + 0.5–1 cent |
+| poll interval (fallback) | 1–5s |
+| unwind timer T_max | e.g. 24h flat inventory age |
+
+---
+
+## 12. Pseudocode
+
+```python
+class ElectionMarketMaker:
+    def __init__(self, config):
+        self.contracts = load_contract_metadata(config)   # incl. related-market graph
+        self.inventory = defaultdict(float)
+        self.fair_value = {}
+        self.vol = defaultdict(lambda: RollingStd(window=30*60))
+        self.last_fill_side = defaultdict(list)
+        self.cooldown_until = defaultdict(float)
+        self.open_orders = {}
+
+    def on_market_data(self, contract_id, book_update):
+        self.update_fair_value(contract_id)
+        self.check_arb_relations(contract_id)
+        self.maybe_requote(contract_id)
+
+    def update_fair_value(self, cid):
+        book = get_book(cid)
+        mid = (book.best_bid + book.best_ask) / 2 if book.tight_enough() else None
+        ext = get_external_ref_price(cid)          # None if unavailable
+        rel = self.implied_from_related(cid)        # None if no relation
+
+        sources, weights = [], []
+        for val, w in [(mid, W_MID), (ext, W_EXT), (rel, W_REL)]:
+            if val is not None:
+                sources.append(val); weights.append(w * self.source_confidence(cid, val))
+        f = weighted_avg(sources, weights) if sources else self.fair_value.get(cid, 0.5)
+        self.fair_value[cid] = clip(f, 0.01, 0.99)
+        self.vol[cid].update(mid or f)
+
+    def implied_from_related(self, cid):
+        rel = self.contracts[cid].relations
+        if rel.type == "mutually_exclusive_group":
+            return None  # handled in check_arb_relations, not fair value
+        if rel.type == "conditional":
+            parent_f = self.fair_value.get(rel.parent_id)
+            return parent_f * rel.conditional_multiplier if parent_f else None
+        return None
+
+    def check_arb_relations(self, cid):
+        group = self.contracts[cid].mutex_group
+        if group:
+            asks_sum = sum(get_book(c).best_ask for c in group)
+            bids_sum = sum(get_book(c).best_bid for c in group)
+            if asks_sum < 1 - ARB_EPS:
+                for c in group: self.send_order(c, "buy", get_book(c).best_ask, arb_size(group))
+            elif bids_sum > 1 + ARB_EPS:
+                for c in group: self.send_order(c, "sell", get_book(c).best_bid, arb_size(group))
+
+        nested = self.contracts[cid].nested_constraint
+        if nested and violates_bound(nested):
+            trade_both_legs(nested, size=arb_size(nested))
+
+    def maybe_requote(self, cid):
+        if time.now() < self.cooldown_until[cid]:
+            return
+        if not self.is_market_making_candidate(cid):
+            self.opportunistic_take(cid)   # just lift/hit if mispriced, no resting quotes
+            return
+
+        f = self.fair_value[cid]
+        inv = self.inventory[cid]
+        sigma = self.vol[cid].value()
+        half_spread = max(MIN_SPREAD, K_VOL * sigma) + inventory_penalty(inv)
+        res_price = f - GAMMA * inv * sigma**2
+        bid = clip(res_price - half_spread, 0.01, 0.99)
+        ask = clip(res_price + half_spread, 0.01, 0.99)
+
+        size = base_size(cid) * taper_factor(inv)
+
+        if should_requote(cid, bid, ask):
+            cancel_existing_orders(cid)
+            if within_limits(cid, "buy", size):
+                self.send_order(cid, "buy", bid, size)
+            if within_limits(cid, "sell", size):
+                self.send_order(cid, "sell", ask, size)
+
+    def opportunistic_take(self, cid):
+        f = self.fair_value[cid]
+        book = get_book(cid)
+        if book.best_ask < f - EDGE_THRESHOLD and within_limits(cid, "buy"):
+            self.send_order(cid, "buy", book.best_ask, opportunistic_size(cid))
+        elif book.best_bid > f + EDGE_THRESHOLD and within_limits(cid, "sell"):
+            self.send_order(cid, "sell", book.best_bid, opportunistic_size(cid))
+
+    def on_fill(self, cid, side, price, qty):
+        self.inventory[cid] += qty if side == "buy" else -qty
+        self.last_fill_side[cid].append((side, time.now()))
+        if adverse_run_detected(self.last_fill_side[cid]):
+            self.cooldown_until[cid] = time.now() + COOLDOWN_SEC
+        self.maybe_requote(cid)   # immediate reprice/skew
+
+    def periodic_risk_check(self):
+        for cid, inv in self.inventory.items():
+            if abs(inv) > SOFT_LIMIT[cid]:
+                taper_or_unwind(cid)
+            if position_age(cid) > T_MAX and no_edge(cid):
+                flatten(cid)
+        if total_exposure() > MAX_PORTFOLIO_EXPOSURE:
+            reduce_riskiest_positions()
+
+    def run(self):
+        subscribe(self.on_market_data, self.on_fill)
+        while True:
+            self.periodic_risk_check()
+            sleep(POLL_INTERVAL)
+```
+
+---
+
+### Why this and not something fancier
+A superior forecasting model, ML-based fair-value estimation, or full limit-order-book microstructure modeling would take far longer than a few days to build and validate safely, and bad forecasts directly lose money. Structural arbitrage (mutually-exclusive-sum violations, nested-market bound violations) is close to riskless and simple to code. Market making on top of a blended, cross-checked fair value captures spread with controlled inventory risk. This is buildable by one developer in days: order book client, a fair-value blender, an Avellaneda-Stoikov-lite quoting loop, and a small relations config file for the arbitrage checks.
+
+---
+ChatGPT online no account
+I would build **one strategy: cross-market fair-value + passive liquidity**, with the local order book used for execution and a small set of external prediction markets used as a fast-moving information source.
+
+ The key idea is: **don't try to forecast elections yourself. Estimate the probability from the best available market consensus, then trade only when the executable price is sufficiently far from that estimate.** This is much more implementable in a few days than a political/news/NLP model.
+
+ Current exchange APIs make this architecture practical: for example, Kalshi exposes market/order-book data and authenticated trading, while Polymarket's CLOB provides L2 books and real-time market updates.  Kalshi Help Center+2
+
+ ## 1\. Fair value
+
+ For every contract $i$, maintain:
+
+ $$
+F_i = \text{estimated probability YES}
+$$
+
+ I would calculate it from three components:
+
+ ### A. External-market consensus — 60%
+
+ Map equivalent contracts from external prediction markets into the same YES probability.
+
+ For each external market $j$:
+
+ $$
+p_j = \frac{bid_j+ask_j}{2}
+$$
+
+ but only use markets with adequate liquidity.
+
+ Then take a **liquidity-weighted median**, not a mean:
+
+ $$
+P_{ext} = weightedMedian(p_j, w_j)
+$$
+
+ where approximately:
+
+ $$
+w_j = \sqrt{\text{recent volume}_j}\times \text{liquidity quality}
+$$
+
+ The median prevents one bizarre external market from dominating.
+
+ ### B. Local market — 30%
+
+ Use the local order book midpoint, but shrink it toward the external estimate:
+
+ $$
+P_{local}=0.5(B+A)
+$$
+
+ Then:
+
+ $$
+F = 0.7P_{ext}+0.3P_{local}
+$$
+
+ when external data is available.
+
+ If external data is stale or unavailable:
+
+ $$
+F=P_{local}
+$$
+
+ but dramatically reduce trading size.
+
+ ### C. Related-market information — 10%
+
+ Adjust the result using logically related contracts.
+
+ For example, suppose you have:
+
+ - Candidate A wins State X
+- Candidate A wins State Y
+- Candidate A wins Presidency
+
+ and the current prices imply an internally inconsistent joint distribution.
+
+ I would use a simple constrained model rather than machine learning.
+
+ For related contracts $k$:
+
+ $$
+F_i \leftarrow F_i + \lambda_i(P_{related}-P_{related}^{implied})
+$$
+
+ with $\lambda$ small, around 0.05–0.15.
+
+ **Important:** related markets are an adjustment, not the primary signal. Correlations between election contracts can be complicated and change as information arrives.
+
+---
+
+ ## 2\. When I buy
+
+ For a YES contract:
+
+ $$
+edge_{buy}=F-(ask+costs)
+$$
+
+ Buy only when:
+
+ $$
+edge_{buy} > E_{min}
+$$
+
+ I'd initially use:
+
+ **minimum edge = 2.5¢**
+
+ for liquid contracts.
+
+ For thin markets:
+
+ **minimum edge = 4–6¢**
+
+ Example:
+
+ - fair value = 64¢
+- ask = 59¢
+- estimated all-in cost = 1¢
+
+ Then:
+
+ $$
+64-59-1=4¢
+$$
+
+ That's a buy.
+
+ I would **cross the spread** when the edge is large enough. I would not insist on passive orders when a genuine mispricing is available.
+
+---
+
+ ## 3\. When I sell
+
+ Same calculation in reverse.
+
+ If I own YES:
+
+ $$
+edge_{sell}=bid-F
+$$
+
+ Sell when:
+
+ $$
+bid-F > E_{min}
+$$
+
+ Example:
+
+ - fair value = 61¢
+- bid = 66¢
+
+ Sell.
+
+ I would also sell simply to reduce inventory if the position becomes too large, even without a positive informational edge.
+
+---
+
+ ## 4\. Would I market make?
+
+ **Yes, but only as a secondary activity.**
+
+ I would not run a traditional symmetric market maker.
+
+ Instead, I would provide **one-sided liquidity around my fair value**.
+
+ If:
+
+ $$
+F=60¢
+$$
+
+ and the book is:
+
+ - bid 56
+- ask 64
+
+ I might quote:
+
+ - bid 58
+- ask 63
+
+ But if I already own a lot of YES, I might quote:
+
+ - bid 56
+- ask 61
+
+ This makes the inventory management mechanism part of the quoting strategy.
+
+ I would cancel passive quotes whenever fair value moves materially.
+
+---
+
+ # 5\. How I choose bid/ask prices
+
+ Start with:
+
+ $$
+bid=F-s
+$$
+
+ $$
+ask=F+s
+$$
+
+ where $s$ depends on volatility, liquidity and inventory.
+
+ A practical starting point:
+
+```
+base_half_spread = 1.5 cents
+```
+
+ Then:
+
+```
+half_spread =
+    base_half_spread
+    + 0.5 * short_term_volatility
+    + inventory_penalty
+```
+
+ Inventory penalty should be asymmetric.
+
+ Suppose target inventory is zero and I have too much YES.
+
+ Then:
+
+```
+bid = F - wide_spread
+ask = F - narrow_spread
+```
+
+ So I'm reluctant to acquire more YES and eager to sell it.
+
+ For example:
+
+```
+F = 60
+
+normal:
+    bid = 58
+    ask = 62
+
+long inventory:
+    bid = 55
+    ask = 60
+```
+
+ That is much safer than blindly quoting around the midpoint.
+
+---
+
+ # 6\. Order size
+
+ I would use a **risk-budget formula**, not fixed contract quantities.
+
+ For each market:
+
+```
+max_position_value = 2% of trading capital
+```
+
+ Initially I'd actually start at 1%.
+
+ Order size:
+
+ $$
+Q = \min(
+Q_{book},
+Q_{risk},
+Q_{edge},
+Q_{market}
+)
+$$
+
+ where:
+
+ ### Risk constraint
+
+ For a YES position:
+
+ $$
+Q_{risk} =
+\frac{R_{market}-|position|}
+{1}
+$$
+
+ because each contract has approximately $1 maximum exposure.
+
+ ### Edge constraint
+
+ Scale size with edge:
+
+```
+2.5¢ edge -> 25% normal size
+4¢       -> 50%
+6¢       -> 75%
+8¢+      -> 100%
+```
+
+ This gives:
+
+```
+size_multiplier = clip((edge - 0.025) / 0.055, 0.25, 1.0)
+```
+
+ I would also cap any single order at roughly **10–20% of displayed top-of-book liquidity**.
+
+ That prevents the bot from advertising itself as a large informed trader.
+
+---
+
+ # 7\. When another market moves
+
+ This is one of the most important parts.
+
+ Suppose our market says:
+
+```
+YES = 55¢
+```
+
+ but an external prediction market rapidly moves:
+
+```
+60¢ -> 67¢
+```
+
+ I immediately recompute fair value.
+
+ If:
+
+```
+old fair = 59
+new fair = 65
+```
+
+ then all existing passive orders become suspect.
+
+ I would:
+
+ 1. cancel stale bids/asks;
+2. recompute fair value;
+3. determine whether I have a tradeable edge;
+4. cross the spread if the edge is large;
+5. otherwise repost around the new fair.
+
+ ### Information shock rule
+
+ If external price changes by more than:
+
+```
+4¢ within 30 seconds
+```
+
+ temporarily switch to **aggressive mode**.
+
+ For the next 10–30 seconds:
+
+ - don't market make;
+- cancel passive orders;
+- allow only trades with \>4¢ net edge;
+- reduce order size by 50%.
+
+ This prevents getting picked off by faster information.
+
+---
+
+ # 8\. After a trade
+
+ Every fill triggers an immediate recalculation.
+
+ Suppose I post:
+
+```
+BUY YES @ 58
+```
+
+ and get filled.
+
+ I then:
+
+ 1. update position;
+2. update cash;
+3. recompute fair value;
+4. recompute inventory-adjusted fair value;
+5. cancel/reprice opposing orders;
+6. check whether the fill itself indicates adverse selection.
+
+ The last item matters.
+
+ If I repeatedly get filled immediately before the market moves against me, my passive quotes are probably too aggressive.
+
+ So maintain:
+
+```
+post_fill_return_5s
+post_fill_return_30s
+post_fill_return_2m
+```
+
+ for every fill.
+
+ If fills systematically have negative subsequent returns, widen quotes.
+
+---
+
+ # 9\. Inventory management
+
+ I would impose three levels.
+
+ ### Normal
+
+ Position \< 50% of limit.
+
+ Trade normally.
+
+ ### Caution
+
+ 50–80%.
+
+ Bias quotes toward reducing inventory.
+
+ ### Hard limit
+
+ 80–100%.
+
+ Do **not** increase the position.
+
+ Only allow:
+
+ - sells if long;
+- buys if short;
+- forced reductions if necessary.
+
+ For example:
+
+```
+inventory_skew = position / max_position
+
+fair_for_buy  = F + 0.03 * inventory_skew
+fair_for_sell = F + 0.03 * inventory_skew
+```
+
+ Conceptually, being long makes buying less attractive and selling more attractive.
+
+ For a more explicit implementation:
+
+```
+reservation_price = F - inventory_skew * 0.04
+```
+
+ If:
+
+```
+F = 60
+position/max = +0.5
+```
+
+ then:
+
+```
+reservation_price = 58
+```
+
+ The bot behaves as though fair value were lower for inventory-management purposes.
+
+---
+
+ # 10\. Related election markets
+
+ I would explicitly build a **market relationship graph**.
+
+ Nodes:
+
+```
+contract
+```
+
+ Edges:
+
+```
+same election
+same candidate
+same state
+same race
+logical implication
+mutually exclusive
+joint event
+```
+
+ The most useful relationships are deterministic ones.
+
+ For example:
+
+```
+A wins primary
+    =>
+A is candidate
+
+A wins state
+    =>
+A receives state's electoral votes
+```
+
+ For mutually exclusive outcomes:
+
+ $$
+P(A)+P(B)+P(C)+... \approx 1
+$$
+
+ If the prices imply:
+
+```
+A = 45
+B = 40
+C = 25
+```
+
+ that's internally coherent.
+
+ But if:
+
+```
+A = 55
+B = 40
+C = 20
+```
+
+ the total is 115%.
+
+ That's a potential relative-value signal.
+
+ I'd normalize:
+
+ $$
+P_i'=\frac{P_i}{\sum_j P_j}
+$$
+
+ and compare each market's executable price to its normalized probability.
+
+ ### However:
+
+ I would **not** blindly arbitrage every apparent inconsistency.
+
+ Different contracts can have different:
+
+ - settlement rules;
+- close times;
+- resolution sources;
+- fees;
+- liquidity;
+- interpretations of ambiguous outcomes.
+
+ So only trade relationships explicitly marked as logically equivalent or mutually exclusive by the market metadata.
+
+---
+
+ # 11\. Parameters I'd actually start with
+
+ I'd deliberately keep the parameter set small.
+
+ | Parameter | Initial value |
+| --- | --- |
+| Minimum liquid-market edge | 2.5¢ |
+| Minimum thin-market edge | 4¢ |
+| Base market-making half spread | 1.5¢ |
+| Maximum position / capital | 2% |
+| Initial max position during testing | 1% |
+| Max top-of-book consumption | 15% |
+| External fair-value weight | 70% |
+| Local midpoint weight | 30% |
+| Related-market adjustment | ≤10% |
+| Shock threshold | 4¢ / 30 sec |
+| Shock trading size | 50% normal |
+| Hard inventory limit | 100% |
+| Inventory caution threshold | 50% |
+| Quote lifetime | 5–15 sec |
+| Fair-value stale timeout | 30 sec |
+| External data stale timeout | 60 sec |
+
+I would **not optimize these parameters aggressively** with a tiny historical sample. That is an easy way to overfit.
+
+ I'd collect live paper-trading data and adjust perhaps 3–4 parameters.
+
+---
+
+ # 12\. Complete bot pseudocode
+
+```
+# ============================================================
+# ELECTION PREDICTION MARKET BOT
+# Cross-market fair value + opportunistic market making
+# ============================================================
+
+CAPITAL = get_starting_capital()
+
+MAX_POSITION_PCT = 0.02
+CAUTION_POSITION_PCT = 0.50
+
+LIQUID_EDGE = 0.025
+THIN_EDGE = 0.040
+
+BASE_HALF_SPREAD = 0.015
+
+EXTERNAL_WEIGHT = 0.70
+LOCAL_WEIGHT = 0.30
+
+SHOCK_MOVE = 0.04
+SHOCK_WINDOW = 30
+
+QUOTE_LIFETIME = 10
+
+MAX_BOOK_FRACTION = 0.15
+
+# ------------------------------------------------------------
+# STATE
+# ------------------------------------------------------------
+
+markets = {}
+positions = {}
+orders = {}
+external_prices = {}
+relationships = {}
+
+trade_stats = {
+    # market -> fill statistics
+}
+
+# ------------------------------------------------------------
+# FAIR VALUE
+# ------------------------------------------------------------
+
+def external_fair(market):
+
+    candidates = []
+
+    for external in get_equivalent_external_markets(market):
+
+        if external.age_seconds > 60:
+            continue
+
+        if external.liquidity < minimum_liquidity(market):
+            continue
+
+        mid = (external.bid + external.ask) / 2
+
+        quality = sqrt(max(external.volume_24h, 1))
+
+        candidates.append((mid, quality))
+
+    if not candidates:
+        return None
+
+    return weighted_median(candidates)
+
+def local_fair(market):
+
+    book = markets[market].book
+
+    bid = book.best_bid
+    ask = book.best_ask
+
+    if bid is None or ask is None:
+        return None
+
+    return (bid + ask) / 2
+
+def related_adjustment(market, base_fair):
+
+    adjustment = 0.0
+
+    for relation in relationships[market]:
+
+        if not relation.is_explicit:
+            continue
+
+        other = relation.market
+
+        other_fair = get_fair_value(other)
+
+        if other_fair is None:
+            continue
+
+        implied = relation.implied_probability(
+            market=market,
+            other_probability=other_fair
+        )
+
+        adjustment += relation.weight * (
+            implied - base_fair
+        )
+
+    # Never allow this component to dominate.
+    return clip(adjustment, -0.05, +0.05)
+
+def fair_value(market):
+
+    ext = external_fair(market)
+    local = local_fair(market)
+
+    if ext is None:
+        if local is None:
+            return None
+
+        return local
+
+    if local is None:
+        return ext
+
+    F = (
+        EXTERNAL_WEIGHT * ext
+        + LOCAL_WEIGHT * local
+    )
+
+    F += related_adjustment(market, F)
+
+    return clip(F, 0.001, 0.999)
+
+# ------------------------------------------------------------
+# SHOCK DETECTION
+# ------------------------------------------------------------
+
+def information_shock(market):
+
+    history = get_external_history(
+        market,
+        seconds=SHOCK_WINDOW
+    )
+
+    if len(history) < 2:
+        return False
+
+    old = history[0].price
+    new = history[-1].price
+
+    return abs(new - old) >= SHOCK_MOVE
+
+# ------------------------------------------------------------
+# INVENTORY
+# ------------------------------------------------------------
+
+def position_limit(market):
+
+    return CAPITAL * MAX_POSITION_PCT
+
+def inventory_fraction(market):
+
+    position_value = abs(
+        positions[market] * 1.0
+    )
+
+    return position_value / position_limit(market)
+
+def reservation_price(market, F):
+
+    limit = position_limit(market)
+
+    if limit == 0:
+        return F
+
+    position_value = positions[market]
+
+    inventory_ratio = (
+        position_value / limit
+    )
+
+    # Long -> reservation price falls.
+    # Short -> reservation price rises.
+    return F - inventory_ratio * 0.04
+
+# ------------------------------------------------------------
+# EXECUTION EDGE
+# ------------------------------------------------------------
+
+def estimated_cost(market):
+
+    return (
+        exchange_fee(market)
+        + estimated_slippage(market)
+    )
+
+def buy_edge(market, F):
+
+    ask = markets[market].book.best_ask
+
+    if ask is None:
+        return -999
+
+    return F - ask - estimated_cost(market)
+
+def sell_edge(market, F):
+
+    bid = markets[market].book.best_bid
+
+    if bid is None:
+        return -999
+
+    return bid - F - estimated_cost(market)
+
+# ------------------------------------------------------------
+# ORDER SIZE
+# ------------------------------------------------------------
+
+def order_size(market, edge):
+
+    limit = position_limit(market)
+
+    remaining = (
+        limit - abs(positions[market])
+    )
+
+    if remaining <= 0:
+        return 0
+
+    # Small edge -> small size.
+    multiplier = clip(
+        (edge - LIQUID_EDGE) / 0.055,
+        0.25,
+        1.0
+    )
+
+    size = remaining * multiplier
+
+    # Never consume too much displayed liquidity.
+    book_liquidity = (
+        markets[market].book.best_bid_size
+        + markets[market].book.best_ask_size
+    )
+
+    size = min(
+        size,
+        MAX_BOOK_FRACTION * book_liquidity
+    )
+
+    if information_shock(market):
+        size *= 0.50
+
+    return floor_to_contract(size)
+
+# ------------------------------------------------------------
+# AGGRESSIVE TRADING
+# ------------------------------------------------------------
+
+def evaluate_aggressive_trade(market):
+
+    F = fair_value(market)
+
+    if F is None:
+        return
+
+    pos = positions[market]
+
+    # BUY
+    edge = buy_edge(market, F)
+
+    if (
+        edge >= LIQUID_EDGE
+        and pos < position_limit(market)
+    ):
+
+        size = order_size(market, edge)
+
+        if size > 0:
+
+            submit_marketable_buy(
+                market,
+                size
+            )
+
+            return
+
+    # SELL
+    edge = sell_edge(market, F)
+
+    if (
+        edge >= LIQUID_EDGE
+        and pos > -position_limit(market)
+    ):
+
+        size = order_size(market, edge)
+
+        if size > 0:
+
+            submit_marketable_sell(
+                market,
+                size
+            )
+
+# ------------------------------------------------------------
+# PASSIVE QUOTING
+# ------------------------------------------------------------
+
+def quote_market(market):
+
+    F = fair_value(market)
+
+    if F is None:
+        return
+
+    # Do not market make during an information shock.
+    if information_shock(market):
+        cancel_quotes(market)
+        return
+
+    R = reservation_price(market, F)
+
+    vol = short_term_volatility(market)
+
+    half_spread = (
+        BASE_HALF_SPREAD
+        + 0.5 * vol
+    )
+
+    inv_ratio = inventory_fraction(market)
+
+    # Widen when inventory is large.
+    half_spread += 0.01 * inv_ratio
+
+    bid = R - half_spread
+    ask = R + half_spread
+
+    # Don't cross the current market accidentally.
+    book = markets[market].book
+
+    if book.best_ask is not None:
+        bid = min(bid, book.best_ask - tick_size(market))
+
+    if book.best_bid is not None:
+        ask = max(ask, book.best_bid + tick_size(market))
+
+    bid = round_to_tick(bid)
+    ask = round_to_tick(ask)
+
+    # Inventory limits.
+    if positions[market] >= position_limit(market):
+        bid = None
+
+    if positions[market] <= -position_limit(market):
+        ask = None
+
+    cancel_old_quotes(market)
+
+    if bid is not None:
+        submit_limit_buy(
+            market,
+            price=bid,
+            size=passive_size(market, "bid"),
+            ttl=QUOTE_LIFETIME
+        )
+
+    if ask is not None:
+        submit_limit_sell(
+            market,
+            price=ask,
+            size=passive_size(market, "ask"),
+            ttl=QUOTE_LIFETIME
+        )
+
+# ------------------------------------------------------------
+# FILL HANDLER
+# ------------------------------------------------------------
+
+def on_fill(fill):
+
+    market = fill.market
+
+    positions[market] += fill.signed_quantity
+
+    record_fill(fill)
+
+    # Re-evaluate immediately.
+    cancel_quotes(market)
+
+    F = fair_value(market)
+
+    if F is None:
+        return
+
+    # If the fill was favorable, potentially exit.
+    if positions[market] > 0:
+
+        if sell_edge(market, F) >= LIQUID_EDGE:
+            evaluate_aggressive_trade(market)
+
+    elif positions[market] < 0:
+
+        if buy_edge(market, F) >= LIQUID_EDGE:
+            evaluate_aggressive_trade(market)
+
+    # Otherwise establish new inventory-aware quotes.
+    quote_market(market)
+
+# ------------------------------------------------------------
+# ADVERSE SELECTION MONITOR
+# ------------------------------------------------------------
+
+def update_market_maker_parameters():
+
+    for market in markets:
+
+        stats = trade_stats[market]
+
+        five_sec = stats.average_forward_return(5)
+        thirty_sec = stats.average_forward_return(30)
+
+        # If our fills consistently precede adverse moves,
+        # become less aggressive.
+        if (
+            five_sec < -0.005
+            and thirty_sec < -0.008
+        ):
+
+            increase_market_making_spread(market)
+
+        elif (
+            five_sec > 0.003
+            and thirty_sec > 0.005
+        ):
+
+            cautiously_decrease_spread(market)
+
+# ------------------------------------------------------------
+# MARKET UPDATE HANDLER
+# ------------------------------------------------------------
+
+def on_market_update(update):
+
+    market = update.market
+
+    update_local_book(update)
+
+    # Recompute whenever either local or external information
+    # changes materially.
+    if material_change(update):
+
+        evaluate_aggressive_trade(market)
+
+        if not information_shock(market):
+            quote_market(market)
+
+# ------------------------------------------------------------
+# EXTERNAL MARKET UPDATE
+# ------------------------------------------------------------
+
+def on_external_update(update):
+
+    affected_markets = map_external_to_local(update)
+
+    for market in affected_markets:
+
+        old_F = cached_fair_value(market)
+
+        invalidate_fair_value_cache(market)
+
+        new_F = fair_value(market)
+
+        if new_F is None:
+            continue
+
+        # If fair value moved materially, all quotes are stale.
+        if (
+            old_F is not None
+            and abs(new_F - old_F) >= 0.01
+        ):
+
+            cancel_quotes(market)
+
+            evaluate_aggressive_trade(market)
+
+            if not information_shock(market):
+                quote_market(market)
+
+# ------------------------------------------------------------
+# RISK LOOP
+# ------------------------------------------------------------
+
+def risk_loop():
+
+    while True:
+
+        for market in markets:
+
+            # Kill switch conditions.
+            if data_is_stale(market):
+                cancel_quotes(market)
+
+            if exchange_connection_bad():
+                cancel_all_orders()
+
+            if market_resolution_imminent(market):
+                cancel_quotes(market)
+
+            # Hard inventory enforcement.
+            if abs(positions[market]) >= position_limit(market):
+
+                cancel_quotes(market)
+
+                reduce_position_if_needed(market)
+
+        sleep(1)
+
+# ------------------------------------------------------------
+# MAIN
+# ------------------------------------------------------------
+
+def main():
+
+    load_market_universe()
+
+    load_related_market_graph()
+
+    connect_exchange_websocket()
+
+    connect_external_market_feeds()
+
+    subscribe_to_relevant_markets()
+
+    start_thread(risk_loop)
+
+    while True:
+
+        event = next_event()
+
+        if event.type == "LOCAL_BOOK":
+            on_market_update(event)
+
+        elif event.type == "EXTERNAL_PRICE":
+            on_external_update(event)
+
+        elif event.type == "FILL":
+            on_fill(event)
+
+        elif event.type == "MARKET_STATUS":
+            handle_market_status(event)
+
+        elif event.type == "TIMER":
+            update_market_maker_parameters()
+```
+
+ ## What I would actually build in the first 2–3 days
+
+ I would **not** build the whole thing simultaneously.
+
+ ### Day 1
+
+ Build:
+
+ - exchange WebSocket;
+- local order-book state;
+- order submission/cancellation;
+- position accounting;
+- fair value = local midpoint;
+- aggressive mispricing strategy;
+- hard risk limits.
+
+ Get this paper trading.
+
+ ### Day 2
+
+ Add:
+
+ - external prediction-market feed;
+- contract mapping;
+- weighted-median external probability;
+- 70/30 fair-value calculation;
+- information-shock detection.
+
+ The exchange APIs are sufficiently data-rich for this architecture: Kalshi documents public order-book access and streaming market data, while Polymarket's CLOB exposes L2 books and real-time updates.  GitHub+1
+
+ ### Day 3
+
+ Add:
+
+ - passive quoting;
+- inventory skew;
+- related-market graph;
+- fill/adverse-selection statistics;
+- automatic quote widening.
+
+ Then stop adding features.
+
+---
+
+ ## The most important implementation detail
+
+ I would make **aggressive mispricing the core strategy and market making the secondary strategy**.
+
+ In pseudocode, the priority should effectively be:
+
+```
+1. Is my data fresh?
+       no -> cancel everything
+
+2. Is there a large external information shock?
+       yes -> cancel quotes, reassess
+
+3. Is there a large executable mispricing?
+       yes -> trade it
+
+4. Is inventory excessive?
+       yes -> quote only to reduce it
+
+5. Otherwise:
+       provide small passive liquidity
+```
+
+ That ordering matters.
+
+ A naive market maker can lose badly in election markets because an apparently attractive stale bid can be hit immediately after information changes elsewhere. The external-market signal is specifically there to protect against that.
+
+ I would also keep **every decision auditable**: log fair value, external inputs, executable price, estimated costs, edge, inventory, order decision, and subsequent 5s/30s/2m price movement. After a few hours of paper/live-small trading, that tells you whether the strategy is actually making money or merely getting systematically picked off.
+
+ This is an implementation blueprint rather than a claim that it will be profitable; prediction-market microstructure, fees, latency, settlement rules, and the quality of the external-market mapping will determine the realized P&L.
+
+
+---
+
+ChatGPT with account
+I would implement **one strategy: an external-anchor + related-market lead/lag market maker**.
+
+The idea is deliberately simple: **do not try to forecast elections from fundamentals. Estimate the probability from the prices that are already trading elsewhere, detect when your venue is stale, and make markets around that fair value with aggressive inventory control.**
+
+That is the highest-leverage strategy I would choose with only a few days of development time.
+
+## 1. How I estimate fair value
+
+Represent every probability as a **logit**:
+
+$$
+x=\log\frac{p}{1-p}
+$$
+
+I would maintain three estimates for each contract.
+
+### A. External anchor
+
+For each target contract, maintain 1–3 externally matched contracts from public prediction markets.
+
+For each source \(j\):
+
+$$
+w_j =
+q_j
+\cdot e^{-age_j/\tau_j}
+\cdot \sqrt{\min(volume_j/V_0,4)}
+$$
+
+where:
+
+* `q_j` = manually assigned source reliability, initially 1.0
+* `age_j` = seconds since its last meaningful price update
+* `τ` = 5 seconds
+* `volume_j` = recent traded volume
+* `V0` = liquidity normalization constant
+
+Then calculate a **weighted median of source logits**, rather than a simple mean. The median makes one stale or crazy source much less dangerous.
+
+$$
+x_{ext} = weighted\_median(x_1,x_2,\dots)
+$$
+
+$$
+p_{ext}=\sigma(x_{ext})
+$$
+
+I would also calculate source dispersion:
+
+$$
+\sigma_{source}=1.4826\times MAD(x_j)
+$$
+
+That becomes part of my model-risk estimate.
+
+Public APIs make this practical: Kalshi currently exposes real-time order-book snapshots and incremental deltas, while Polymarket exposes real-time book, price-change, and last-trade events. ([API Documentation][1])
+
+### B. Local microprice
+
+From my own venue's order book, calculate a short-term estimate of where the local book wants to trade.
+
+For top-of-book:
+
+$$
+p_{micro} =
+\frac{ask \cdot bidSize + bid \cdot askSize}
+{bidSize+askSize}
+$$
+
+I would extend this across the top 3 levels with exponentially decreasing weights.
+
+This is **not** my main fair value. It gets only a small weight because the local market is precisely what I'm trying to exploit.
+
+### C. Related-market lead/lag adjustment
+
+For related contracts, maintain an online exponentially weighted regression:
+
+$$
+\Delta x_{target}
+=
+\alpha+\beta_1\Delta x_1+\beta_2\Delta x_2+\dots+\epsilon
+$$
+
+Use a rolling 12-hour window with a 60-minute exponential half-life.
+
+Only keep relationships with:
+
+* positive out-of-sample explanatory power,
+* at least ~200 paired observations,
+* stable beta,
+* no obvious settlement-rule mismatch.
+
+Then:
+
+$$
+x_{fast}=x_{ext}+\sum_i\beta_i\Delta x_i
+$$
+
+This is especially useful when another liquid market moves first and my venue hasn't reacted yet.
+
+### Final fair
+
+I would use:
+
+$$
+x_f =
+0.55x_{ext}
++0.30x_{fast}
++0.15x_{micro}
+$$
+
+then:
+
+$$
+F=\sigma(x_f)
+$$
+
+The weights are dynamically reduced for stale sources. A source that has not updated recently eventually contributes zero.
+
+I would **not** use a large ML model. With a few days, the better use of engineering time is reliable market mapping, WebSockets, execution, and backtesting.
+
+---
+
+# 2. When I buy
+
+There are two modes.
+
+### Aggressive/taker buy
+
+Buy YES at the executable ask when:
+
+$$
+F - Ask - Fee - SlippageEstimate > EntryThreshold
+$$
+
+My initial threshold:
+
+**2.5 ticks above all-in costs.**
+
+So with a 1-cent tick, I want approximately 2.5¢ of raw model edge after accounting for fees and expected execution slippage.
+
+Example:
+
+* fair = 64¢
+* ask = 59¢
+* total expected costs = 1¢
+
+Net edge = 4¢ → buy.
+
+I would consume liquidity only up to the point where the remaining book stops being profitable.
+
+### Passive buy
+
+Place a resting bid when:
+
+$$
+F-Bid > MakerThreshold
+$$
+
+and the market is liquid enough to justify making.
+
+The maker threshold starts around **1.5–2 ticks** of expected edge.
+
+---
+
+# 3. When I sell
+
+Exactly symmetrical.
+
+### Aggressive sell
+
+Sell YES into the bid when:
+
+$$
+Bid-F-Fee-SlippageEstimate > EntryThreshold
+$$
+
+This means I'm selling because the contract is too expensive.
+
+### Passive sell
+
+Post an ask when the fair value is sufficiently above the price and I am not excessively short.
+
+The bot is therefore continuously doing one of three things:
+
+**buy mispriced liquidity, sell mispriced liquidity, or provide liquidity around fair.**
+
+---
+
+# 4. Do I market make?
+
+**Yes, but only selectively.**
+
+I would absolutely market make because binary markets often contain wide spreads, and a fair-value model gives me a way to shade the quote.
+
+But I would **not** blindly quote every market all the time.
+
+I would market make only when:
+
+* fair value is based on sufficiently fresh sources;
+* source disagreement is small;
+* the spread is at least 3 ticks;
+* recent volatility isn't extreme;
+* the contract isn't close to settlement;
+* inventory isn't already near its limit.
+
+This prevents the classic prediction-market MM failure:
+
+> You earn tiny spreads for an hour and then get filled immediately before a large repricing.
+
+---
+
+# 5. How I choose bid/ask prices
+
+First calculate an inventory-adjusted center.
+
+Let:
+
+* `q` = current YES inventory
+* `Qmax` = maximum desired YES inventory
+* positive q = long
+* negative q = short
+
+I shift the center against my inventory:
+
+$$
+C = F - Skew
+$$
+
+with:
+
+$$
+Skew =
+6\ ticks\cdot
+clip(q/Q_{max},-1,+1)
+$$
+
+So if I'm heavily long, I move both quotes downward to encourage selling.
+
+Then calculate a half-spread:
+
+$$
+H=
+\max(
+1.5\ ticks,\;
+0.5\cdot Spread_{book},\;
+0.75\sigma_{5s},\;
+0.75\sigma_{source}
+)
+$$
+
+All volatility terms are expressed in ticks.
+
+Desired quotes:
+
+$$
+Bid^*=C-H
+$$
+
+$$
+Ask^*=C+H
+$$
+
+Then round to the venue's tick size.
+
+### Queue-priority rule
+
+I don't blindly put my price wherever this formula lands.
+
+Suppose:
+
+* fair = 62¢
+* best bid = 59¢
+* best ask = 64¢
+
+If my theoretical bid is 60¢, I quote 60¢.
+
+If my theoretical bid is 59¢, I join 59¢.
+
+If my theoretical bid is 58¢ but fair value still justifies improving the existing 58¢ → 59¢ level, I improve one tick.
+
+**Never improve the quote unless the extra tick still leaves at least 1 tick of expected edge.**
+
+Only maintain **one price level per side**. A few days of development is not the time to build a full multi-level MM engine.
+
+---
+
+# 6. How I choose order size
+
+Position sizing should depend on four things:
+
+1. edge;
+2. bankroll;
+3. existing inventory;
+4. available liquidity.
+
+Let:
+
+$$
+e=|F-P_{exec}|
+$$
+
+Define a risk budget for the trade:
+
+$$
+R =
+B\cdot
+clip
+\left(
+0.005+
+0.20\cdot(e-0.02),
+0.005,
+0.02
+\right)
+$$
+
+where \(B\) is bankroll and probabilities are in decimal form.
+
+So a normal trade risks roughly **0.5% of bankroll**, while an unusually large edge can reach **2%**.
+
+Then:
+
+$$
+qty =
+\min(
+RiskQty,
+0.25\cdot VisibleLiquidity,
+RemainingInventoryCapacity
+)
+$$
+
+For a maker quote, use roughly **25% of displayed liquidity** at that price.
+
+For a strong taker opportunity, I would consume up to **50% of the available executable liquidity**, provided the entire sweep remains profitable.
+
+### Hard limits
+
+I would use:
+
+| Limit                        | Initial setting |
+| ---------------------------- | --------------: |
+| Per-order risk               | 0.5–2% bankroll |
+| Per-contract risk            |   1.5% bankroll |
+| Per-election/event           |     4% bankroll |
+| Related-market cluster       |    10% bankroll |
+| Maximum total inventory risk |    20% bankroll |
+
+Those are deliberately hard stops. In a competition I would rather lose opportunities than blow up from one correlated election shock.
+
+---
+
+# 7. How I react when another market moves
+
+This is the most important part of the bot.
+
+Suppose my market is:
+
+**YES = 51¢ / 53¢**
+
+and a highly liquid external market suddenly moves from 50¢ to 57¢.
+
+My bot should **not wait for my own market to trade**.
+
+Immediately:
+
+1. cancel stale resting orders;
+2. update \(x_{ext}\);
+3. apply the related-market beta adjustment;
+4. recompute fair;
+5. check the current executable book.
+
+If new fair becomes 57.5¢ and my venue still has:
+
+**YES 52¢ / 54¢**
+
+I buy 54¢ immediately.
+
+That is the primary alpha source.
+
+### Stale-quote trigger
+
+If an external/related leader moves by more than:
+
+**2 ticks within 1 second**
+
+and my contract hasn't moved correspondingly:
+
+**cancel both local quotes immediately.**
+
+Then recompute.
+
+If the resulting executable edge exceeds:
+
+**3 ticks net**
+
+cross the book.
+
+### Don't assume the external market always leads
+
+I maintain a rolling "leader score" for each reference market based on lagged return correlations.
+
+If my venue historically moves first, an external move gets less immediate weight.
+
+This prevents the strategy from repeatedly buying a market because some other venue is simply slower.
+
+---
+
+# 8. How I react after a trade
+
+Every fill triggers a state change.
+
+### If I get filled on a passive bid
+
+Example:
+
+I bid 55¢ and get filled.
+
+I immediately:
+
+* cancel my remaining bid;
+* increase long inventory;
+* move my center downward;
+* make my ask slightly more aggressive.
+
+The goal becomes:
+
+**"I have inventory; find someone to take it from me."**
+
+I don't immediately repost the same 55¢ bid.
+
+### Toxic-fill detection
+
+Track what happens after every fill.
+
+If, within 3 seconds of my fill:
+
+* external fair moves ≥ 2 ticks against me, or
+* related markets move strongly against me,
+
+mark the fill as toxic.
+
+After **2 toxic fills within 30 seconds**:
+
+**disable market making for 60 seconds.**
+
+I can still trade exceptionally strong cross-market discrepancies.
+
+This is much better than letting the bot repeatedly provide liquidity while informed traders hit it.
+
+---
+
+# 9. How I manage inventory
+
+The target inventory is always:
+
+$$
+q^*=0
+$$
+
+I don't want the bot accidentally turning into a directional election bettor.
+
+Inventory affects both **price and size**.
+
+If long:
+
+* lower bid price;
+* raise bid threshold;
+* lower bid size;
+* bring ask closer to fair;
+* allow larger ask size.
+
+If short, reverse.
+
+For example:
+
+| Inventory  | Bid                 | Ask                 |
+| ---------- | ------------------- | ------------------- |
+| -100% Qmax | aggressive          | wide                |
+| -50% Qmax  | slightly aggressive | normal              |
+| 0          | normal              | normal              |
+| +50% Qmax  | normal              | slightly aggressive |
+| +100% Qmax | wide                | aggressive          |
+
+### Emergency inventory rule
+
+At 80% of `Qmax`:
+
+**stop adding inventory in that direction.**
+
+At 100%:
+
+**no quotes that increase inventory; only quote to reduce it.**
+
+At 120% due to fills/race conditions:
+
+**actively flatten**, even if it costs a few ticks.
+
+---
+
+# 10. How I handle related election markets
+
+I would divide relationships into three types.
+
+### Type A — exact logical relationships
+
+These are the strongest.
+
+For mutually exclusive exhaustive outcomes:
+
+$$
+P(A)+P(B)+P(C)=1
+$$
+
+So if the market prices imply:
+
+* A = 54%
+* B = 31%
+* C = 23%
+
+the sum is 108%.
+
+That is an immediate structural inconsistency.
+
+I can infer:
+
+$$
+P(C)=1-P(A)-P(B)=15\%
+$$
+
+and trade accordingly, subject to fees and execution.
+
+Likewise, for an implication:
+
+$$
+A\Rightarrow B
+$$
+
+we must have:
+
+$$
+P(A)\le P(B)
+$$
+
+If the executable prices violate that by enough to cover costs, trade the inconsistency.
+
+### Type B — same event, different framing
+
+For example, several contracts that are economically driven by the same election event.
+
+I would use these in the **lead/lag model**, not treat them as deterministic arbitrage.
+
+Estimate:
+
+$$
+\Delta x_{target}
+\approx
+\beta \Delta x_{related}
+$$
+
+If the related contract jumps and the historical beta predicts a 4-tick move in my contract, I can act before it arrives.
+
+### Type C — loose thematic correlations
+
+Ignore them.
+
+A few days is not enough time to build a reliable causal model of "all election markets."
+
+Only use relationships that are either:
+
+* logically exact, or
+* demonstrably strong in recent market data.
+
+That restriction will save a lot of bad trades.
+
+---
+
+# 11. Parameters I would actually start with
+
+These are my initial settings before any tuning:
+
+| Parameter                              |                 Value |
+| -------------------------------------- | --------------------: |
+| External-source EW freshness half-life |                 5 sec |
+| Related-market regression window       |                 12 hr |
+| Regression half-life                   |                60 min |
+| Fast lead/lag horizon                  |              1–15 sec |
+| Source minimum freshness               |                10 sec |
+| Source dispersion cutoff               |               8 ticks |
+| Taker minimum net edge                 |             2.5 ticks |
+| Strong taker edge                      |               4 ticks |
+| Maker minimum expected edge            |             1.5 ticks |
+| Inventory skew                         |              ±6 ticks |
+| Max maker size                         | 25% visible liquidity |
+| Max taker sweep                        | 50% visible liquidity |
+| Toxic-fill window                      |                 3 sec |
+| Toxic-fill count                       |                     2 |
+| MM cooldown                            |                60 sec |
+| Stop new MM near settlement            |                15 min |
+| Hard flatten zone                      |                 5 min |
+| Per-contract risk                      |         1.5% bankroll |
+| Per-event risk                         |                    4% |
+| Correlated cluster risk                |                   10% |
+| Total inventory risk                   |                   20% |
+
+### One very important parameter
+
+`fee_per_share(price)` should be supplied by the venue adapter, **not hardcoded**.
+
+For example, Polymarket's current documentation says makers are not charged fees and that politics markets currently have a taker fee parameter of 0.04 under its formula \(C\times feeRate\times p(1-p)\). ([Polymarket Documentation][2])
+
+Your competition venue may be completely different.
+
+---
+
+# 12. Complete bot pseudocode
+
+```python
+CONFIG = {
+    "EXTERNAL_HALF_LIFE": 5.0,
+    "RELATED_HALF_LIFE": 3600.0,
+    "RELATED_WINDOW": 12 * 3600,
+    "FAST_HORIZON": 15.0,
+
+    "MIN_TAKER_EDGE_TICKS": 2.5,
+    "STRONG_TAKER_EDGE_TICKS": 4.0,
+    "MIN_MAKER_EDGE_TICKS": 1.5,
+
+    "MAX_INVENTORY_SKEW_TICKS": 6.0,
+
+    "MAX_ORDER_LIQUIDITY_FRACTION": 0.25,
+    "MAX_TAKER_LIQUIDITY_FRACTION": 0.50,
+
+    "MARKET_RISK": 0.015,      # bankroll fraction
+    "EVENT_RISK": 0.04,
+    "CLUSTER_RISK": 0.10,
+    "TOTAL_RISK": 0.20,
+
+    "TOXIC_WINDOW_SEC": 3,
+    "TOXIC_COUNT": 2,
+    "MM_COOLDOWN_SEC": 60,
+
+    "STOP_MM_MINUTES": 15,
+    "HARD_FLATTEN_MINUTES": 5,
+}
+
+
+class MarketState:
+    def __init__(self, contract):
+        self.contract = contract
+
+        self.bids = {}
+        self.asks = {}
+
+        self.best_bid = None
+        self.best_ask = None
+        self.last_trade = None
+
+        self.external_sources = []
+        self.related = []
+
+        self.external_prob = None
+        self.related_prob = None
+        self.micro_prob = None
+        self.fair_prob = None
+
+        self.source_dispersion = None
+        self.sigma_5s = None
+
+        self.inventory = 0
+        self.max_inventory = 0
+
+        self.open_orders = {}
+
+        self.toxic_fills = []
+        self.mm_disabled_until = 0
+
+        self.last_target_update = 0
+
+
+def logit(p):
+    p = clamp(p, 0.0001, 0.9999)
+    return math.log(p / (1 - p))
+
+
+def sigmoid(x):
+    return 1.0 / (1.0 + math.exp(-x))
+
+
+def weighted_median(values, weights):
+    # implementation omitted for clarity
+    return ...
+
+
+def estimate_external_fair(market, now):
+
+    points = []
+
+    for src in market.external_sources:
+
+        age = now - src.last_update
+
+        if age > 10:
+            continue
+
+        p = src.probability
+
+        quality = src.quality
+
+        freshness = math.exp(
+            -age / CONFIG["EXTERNAL_HALF_LIFE"]
+        )
+
+        liquidity_weight = math.sqrt(
+            min(src.recent_volume / src.volume_scale, 4.0)
+        )
+
+        weight = (
+            quality
+            * freshness
+            * liquidity_weight
+        )
+
+        points.append((logit(p), weight))
+
+    if not points:
+        return None, float("inf")
+
+    xs = [x for x, _ in points]
+    ws = [w for _, w in points]
+
+    x_ext = weighted_median(xs, ws)
+
+    dispersion = weighted_mad(xs, ws)
+
+    return sigmoid(x_ext), dispersion
+
+
+def estimate_microprice(market):
+
+    levels = 3
+
+    bid_levels = sorted(
+        market.bids.items(),
+        reverse=True
+    )[:levels]
+
+    ask_levels = sorted(
+        market.asks.items()
+    )[:levels]
+
+    numerator = 0.0
+    denominator = 0.0
+
+    for level in range(min(len(bid_levels), len(ask_levels))):
+
+        bid_p, bid_size = bid_levels[level]
+        ask_p, ask_size = ask_levels[level]
+
+        weight = math.exp(-0.8 * level)
+
+        micro = (
+            ask_p * bid_size
+            + bid_p * ask_size
+        ) / max(bid_size + ask_size, 1e-9)
+
+        numerator += weight * micro
+        denominator += weight
+
+    return numerator / denominator
+
+
+def related_fair(market, now, external_prob):
+
+    if external_prob is None:
+        return None
+
+    x = logit(external_prob)
+
+    for rel in market.related:
+
+        # short-horizon move of related contract
+        dx = (
+            logit(rel.current_prob)
+            - logit(rel.reference_prob)
+        )
+
+        x += rel.beta * dx
+
+    return sigmoid(x)
+
+
+def estimate_fair(market, now):
+
+    ext, dispersion = estimate_external_fair(
+        market, now
+    )
+
+    micro = estimate_microprice(market)
+
+    rel = related_fair(
+        market,
+        now,
+        ext
+    )
+
+    if ext is None:
+        # no trustworthy external anchor
+        return None
+
+    x_ext = logit(ext)
+    x_rel = logit(rel if rel is not None else ext)
+    x_micro = logit(micro)
+
+    # external anchor dominates
+    x_fair = (
+        0.55 * x_ext
+        + 0.30 * x_rel
+        + 0.15 * x_micro
+    )
+
+    market.external_prob = ext
+    market.related_prob = rel
+    market.micro_prob = micro
+    market.fair_prob = sigmoid(x_fair)
+    market.source_dispersion = dispersion
+
+    return market.fair_prob
+
+
+def inventory_center(fair, market):
+
+    q = market.inventory
+    qmax = market.max_inventory
+
+    inventory_ratio = clamp(
+        q / max(qmax, 1),
+        -1.0,
+        1.0
+    )
+
+    skew_ticks = (
+        CONFIG["MAX_INVENTORY_SKEW_TICKS"]
+        * inventory_ratio
+    )
+
+    skew_probability = skew_ticks * market.tick_size
+
+    return fair - skew_probability
+
+
+def estimate_half_spread(market):
+
+    book_spread = (
+        market.best_ask
+        - market.best_bid
+    ) / market.tick_size
+
+    sigma_ticks = (
+        market.sigma_5s
+        / market.tick_size
+    )
+
+    source_ticks = (
+        market.source_dispersion
+        / market.tick_size
+    )
+
+    half_spread_ticks = max(
+        1.5,
+        0.5 * book_spread,
+        0.75 * sigma_ticks,
+        0.75 * source_ticks
+    )
+
+    return half_spread_ticks
+
+
+def calculate_size(
+    market,
+    execution_price,
+    edge_ticks,
+    visible_liquidity,
+    bankroll
+):
+
+    # larger edge -> larger risk allocation
+    edge = edge_ticks * market.tick_size
+
+    risk_fraction = clamp(
+        0.005 + 0.20 * max(edge - 0.02, 0),
+        0.005,
+        0.02
+    )
+
+    risk_budget = bankroll * risk_fraction
+
+    # conservative worst-case capital/risk per share
+    risk_per_share = max(
+        execution_price,
+        1.0 - execution_price
+    )
+
+    risk_qty = (
+        risk_budget
+        / max(risk_per_share, 0.01)
+    )
+
+    liquidity_qty = (
+        visible_liquidity
+        * CONFIG["MAX_ORDER_LIQUIDITY_FRACTION"]
+    )
+
+    return floor(
+        min(
+            risk_qty,
+            liquidity_qty,
+            market.remaining_inventory_capacity()
+        )
+    )
+
+
+def should_trade_taker_buy(market, fair, now):
+
+    ask = market.best_ask
+
+    if ask is None:
+        return False
+
+    fee = fee_per_share(
+        side="buy",
+        price=ask
+    )
+
+    slippage = estimated_slippage(
+        market,
+        side="buy"
+    )
+
+    net_edge = (
+        fair
+        - ask
+        - fee
+        - slippage
+    )
+
+    edge_ticks = (
+        net_edge / market.tick_size
+    )
+
+    return (
+        edge_ticks
+        >= CONFIG["MIN_TAKER_EDGE_TICKS"]
+    )
+
+
+def should_trade_taker_sell(market, fair, now):
+
+    bid = market.best_bid
+
+    if bid is None:
+        return False
+
+    fee = fee_per_share(
+        side="sell",
+        price=bid
+    )
+
+    slippage = estimated_slippage(
+        market,
+        side="sell"
+    )
+
+    net_edge = (
+        bid
+        - fair
+        - fee
+        - slippage
+    )
+
+    edge_ticks = (
+        net_edge / market.tick_size
+    )
+
+    return (
+        edge_ticks
+        >= CONFIG["MIN_TAKER_EDGE_TICKS"]
+    )
+
+
+def quote_market(market, fair, now):
+
+    if mm_disabled(market, now):
+        cancel_all_quotes(market)
+        return
+
+    if minutes_to_settlement(market) <= CONFIG["STOP_MM_MINUTES"]:
+        cancel_all_quotes(market)
+        return
+
+    center = inventory_center(
+        fair,
+        market
+    )
+
+    half_spread_ticks = estimate_half_spread(market)
+
+    bid = center - (
+        half_spread_ticks * market.tick_size
+    )
+
+    ask = center + (
+        half_spread_ticks * market.tick_size
+    )
+
+    bid = round_down_to_tick(bid)
+    ask = round_up_to_tick(ask)
+
+    # Never cross the book accidentally.
+    if ask >= market.best_ask:
+        ask = market.best_ask - market.tick_size
+
+    if bid >= market.best_ask:
+        bid = None
+
+    if ask <= market.best_bid:
+        ask = None
+
+    # Inventory guardrails
+    if market.inventory >= market.max_inventory:
+        bid = None
+
+    if market.inventory <= -market.max_inventory:
+        ask = None
+
+    # Only improve queue if enough edge remains.
+    bid = improve_by_one_tick_if_worthwhile(
+        market, bid, fair, side="buy"
+    )
+
+    ask = improve_by_one_tick_if_worthwhile(
+        market, ask, fair, side="sell"
+    )
+
+    replace_quote(
+        market,
+        side="buy",
+        price=bid
+    )
+
+    replace_quote(
+        market,
+        side="sell",
+        price=ask
+    )
+
+
+def on_external_move(
+    market,
+    old_external,
+    new_external,
+    now
+):
+
+    move_ticks = abs(
+        new_external - old_external
+    ) / market.tick_size
+
+    # Immediate stale-quote protection
+    if move_ticks >= 2:
+        cancel_all_quotes(market)
+
+    fair = estimate_fair(
+        market,
+        now
+    )
+
+    if fair is None:
+        return
+
+    # Re-check executable stale quotes
+    if (
+        should_trade_taker_buy(
+            market, fair, now
+        )
+    ):
+        qty = calculate_size(
+            market,
+            market.best_ask,
+            (
+                fair - market.best_ask
+            ) / market.tick_size,
+            visible_liquidity_at_ask(market),
+            BANKROLL
+        )
+
+        if qty > 0:
+            market_buy(
+                market,
+                qty
+            )
+            return
+
+    if (
+        should_trade_taker_sell(
+            market, fair, now
+        )
+    ):
+        qty = calculate_size(
+            market,
+            market.best_bid,
+            (
+                market.best_bid - fair
+            ) / market.tick_size,
+            visible_liquidity_at_bid(market),
+            BANKROLL
+        )
+
+        if qty > 0:
+            market_sell(
+                market,
+                qty
+            )
+            return
+
+    quote_market(
+        market,
+        fair,
+        now
+    )
+
+
+def on_fill(fill, now):
+
+    market = markets[fill.market_id]
+
+    market.inventory += fill.signed_qty
+
+    record_fill(fill)
+
+    # Never leave the old quote sitting there
+    cancel_same_side_quote(
+        market,
+        fill.side
+    )
+
+    # Push inventory reduction
+    fair = estimate_fair(
+        market,
+        now
+    )
+
+    if fair is not None:
+
+        quote_market(
+            market,
+            fair,
+            now
+        )
+
+    # Toxic-fill detection
+    if fill.was_passive:
+
+        market.toxic_fills.append({
+            "time": now,
+            "price": fill.price,
+            "side": fill.side,
+            "fair_at_fill": fair
+        })
+
+        remove_old_toxic_fills(
+            market,
+            now - CONFIG["TOXIC_WINDOW_SEC"]
+        )
+
+        if count_adverse_fills(
+            market
+        ) >= CONFIG["TOXIC_COUNT"]:
+
+            market.mm_disabled_until = (
+                now + CONFIG["MM_COOLDOWN_SEC"]
+            )
+
+            cancel_all_quotes(market)
+
+
+def process_market_update(market, now):
+
+    fair = estimate_fair(
+        market,
+        now
+    )
+
+    if fair is None:
+        cancel_all_quotes(market)
+        return
+
+    # First priority: exploit executable mispricing
+    if should_trade_taker_buy(
+        market,
+        fair,
+        now
+    ):
+
+        execute_taker_buy(
+            market,
+            fair
+        )
+
+    elif should_trade_taker_sell(
+        market,
+        fair,
+        now
+    ):
+
+        execute_taker_sell(
+            market,
+            fair
+        )
+
+    else:
+
+        quote_market(
+            market,
+            fair,
+            now
+        )
+
+
+async def main():
+
+    load_market_definitions()
+
+    load_external_mappings()
+
+    load_related_market_graph()
+
+    connect_target_websocket()
+
+    connect_external_websockets()
+
+    bootstrap_orderbooks()
+
+    load_recent_trade_history()
+
+    while True:
+
+        event = await next_event()
+
+        now = event.timestamp
+
+        if event.type == "TARGET_BOOK":
+            update_target_book(event)
+            process_market_update(
+                markets[event.market_id],
+                now
+            )
+
+        elif event.type == "EXTERNAL_BOOK":
+            update_external_book(event)
+
+            market_ids = markets_linked_to(
+                event.market_id
+            )
+
+            for market_id in market_ids:
+
+                market = markets[market_id]
+
+                old = market.external_prob
+
+                new, _ = estimate_external_fair(
+                    market,
+                    now
+                )
+
+                if (
+                    old is not None
+                    and new is not None
+                ):
+                    on_external_move(
+                        market,
+                        old,
+                        new,
+                        now
+                    )
+
+        elif event.type == "RELATED_TRADE":
+
+            update_related_market(event)
+
+            affected = markets_linked_to(
+                event.market_id
+            )
+
+            for market_id in affected:
+
+                process_market_update(
+                    markets[market_id],
+                    now
+                )
+
+        elif event.type == "FILL":
+
+            on_fill(
+                event.fill,
+                now
+            )
+
+        elif event.type == "SETTLEMENT_WARNING":
+
+            market = markets[
+                event.market_id
+            ]
+
+            if event.minutes_left <= \
+               CONFIG["HARD_FLATTEN_MINUTES"]:
+
+                cancel_all_quotes(market)
+
+                flatten_inventory(
+                    market
+                )
+
+        elif event.type == "HEARTBEAT":
+
+            check_data_freshness()
+
+            cancel_quotes_for_stale_data()
+
+            enforce_global_risk_limits()
+
+```
+
+---
+
+# What I would actually build in the few days
+
+The architecture would be:
+
+```text
+              ┌──────────────────┐
+              │ Target exchange  │
+              │ WS book + fills  │
+              └────────┬─────────┘
+                       │
+              ┌────────▼─────────┐
+              │ Market state     │
+              │ order books      │
+              │ inventory        │
+              └────────┬─────────┘
+                       │
+      ┌────────────────▼─────────────────┐
+      │              Fair Value           │
+      │                                   │
+      │ external anchor                   │
+      │ + related-market lead/lag         │
+      │ + local microprice                │
+      └────────────────┬──────────────────┘
+                       │
+                ┌──────▼──────┐
+                │ Risk/Skew   │
+                └──────┬──────┘
+                       │
+             ┌─────────▼─────────┐
+             │ Execution engine  │
+             │                  │
+             │ take if edge     │
+             │ make otherwise   │
+             └──────────────────┘
+```
+
+I would spend almost no time on fancy prediction.
+
+The competitive advantage I would pursue is:
+
+**fast information → correct fair value → detect stale target quote → execute before the quote moves.**
+
+The market-making component then monetizes the periods when the market is noisy but your fair value is approximately right.
+
+## One worked example
+
+Suppose:
+
+* external market A = 61¢
+* external market B = 63¢
+* external market C = 62¢
+* target market = 57¢ bid / 59¢ ask
+* related liquid market jumps +3 ticks
+* historical beta = 0.8
+* target tick = 1¢
+
+External fair is about 62¢.
+
+The related move contributes:
+
+$$
+0.8\times3=2.4\text{ ticks}
+$$
+
+so the fast estimate moves toward roughly 64¢.
+
+Suppose final fair is **63.2¢**.
+
+Target ask is still **59¢**.
+
+Even with 1¢ total execution costs:
+
+$$
+63.2-59-1=3.2¢
+$$
+
+That comfortably exceeds the 2.5-tick threshold.
+
+**Cross the 59¢ ask.**
+
+After the fill, cancel the stale bid, skew your quotes downward because you're now long, and wait for either:
+
+* the market to converge upward, or
+* another trader to buy your inventory back through your ask.
+
+That is the core trade I would expect this bot to make repeatedly.
+
+### The single most important implementation detail
+
+Build **historical replay before deployment**.
+
+Record every:
+
+* target book update,
+* target trade,
+* external quote update,
+* related quote update,
+* bot decision.
+
+Then replay the stream at 1×, 5× and 20× speed.
+
+Your backtest must model:
+
+* actual displayed depth,
+* fees,
+* partial fills,
+* queue position approximately,
+* order cancellation latency,
+* stale external data,
+* inventory limits.
+
+Do **not** optimize the model against mid-price P&L. Optimize against **actual executable prices**.
+
+That will tell you whether the edge is real or merely a beautiful-looking chart.
+
+One current platform detail worth keeping behind the adapter layer: Polymarket's documentation says its real-time market feed includes book, price-change and last-trade events, and its current fee schedule makes maker orders free while politics-market taker fees are calculated from the market-specific fee parameter. Kalshi likewise exposes real-time order-book snapshots and deltas. ([Polymarket Documentation][3])
+
+**In one sentence: I would build a very fast, inventory-aware market maker whose real alpha is cross-market stale-quote arbitrage, with external prediction-market prices serving as the anchor and related election contracts serving as the short-horizon predictor.**
+
+[1]: https://docs.kalshi.com/websockets/orderbook-updates "Orderbook Updates - API Documentation"
+[2]: https://docs.polymarket.com/trading/fees "Fees - Polymarket Documentation"
+[3]: https://docs.polymarket.com/developers/CLOB/websocket/wss-overview "Real-Time Data - Polymarket Documentation"
+---
+
+ChatGPT Pro with account
+
+I would build **one bot: a reference-anchored, inventory-aware market maker with an aggressive taker overlay**.
+
+The basic idea is simple:
+
+> **External prediction markets tell us roughly what the contract is worth. We continuously quote around that value when competitors give us enough spread, and immediately take liquidity when the competition market gets materially out of line.**
+
+I would not spend the remaining days building an ML model, a sophisticated election forecaster, or full Avellaneda–Stoikov optimisation. The useful part of the market-making literature is the inventory-aware reservation price; recent prediction-market work specifically finds that binary settlement makes inventory management materially different, and a 2026 paper derives an especially convenient inventory adjustment directly in log-odds space. ([Department of Mathematics][1])
+
+## The strategy
+
+For contract \(i\), maintain four numbers:
+
+$$
+F_i = \text{our estimated true probability}
+$$
+
+$$
+R_i = \text{our inventory-adjusted reservation price}
+$$
+
+$$
+h_i = \text{minimum passive half-spread we require}
+$$
+
+$$
+q_i = \text{current inventory}
+$$
+
+Everything the bot does follows from those four numbers.
+
+### 1. Fair value
+
+The strongest information source should usually be the **direct equivalent contract on external markets**, not the competition's own midpoint.
+
+For every external venue \(v\), calculate an executable microprice:
+
+$$
+MP_v =
+\frac{A_v BSize_v + B_v ASize_v}
+{BSize_v + ASize_v}
+$$
+
+where \(A\) and \(B\) are best ask/bid.
+
+That pushes the estimate toward the side with greater displayed pressure without doing anything fancy.
+
+Don't simply average external venues. Give each one a reliability weight:
+
+$$
+w_v =
+C_{\text{mapping}}
+\times C_{\text{fresh}}
+\times C_{\text{liquidity}}
+\times C_{\text{spread}}
+$$
+
+I would combine them in **log-odds**, because movements near 5% and 50% should not be treated identically:
+
+$$
+z_v = \log\frac{MP_v}{1-MP_v}
+$$
+
+$$
+z_{\text{ext}}
+=
+\frac{\sum_v w_v z_v}{\sum_v w_v}
+$$
+
+Then:
+
+$$
+F_{\text{ext}}=\sigma(z_{\text{ext}})
+$$
+
+Use the competition market itself only as a small secondary signal:
+
+$$
+z_F =
+z_{\text{ext}}
++
+0.10\,
+clip(z_{\text{local-micro}}-z_{\text{ext}}, -0.20,+0.20)
++
+\Delta z_{\text{related}}
+$$
+
+and
+
+$$
+F=\sigma(z_F)
+$$
+
+So a healthy direct external analogue dominates the fair value. Local order flow can nudge it but cannot drag us around.
+
+I'd use these initial weights:
+
+| Component                    |                                          Initial importance |
+| ---------------------------- | ----------------------------------------------------------: |
+| Direct external analogue(s)  |                                                        ~90% |
+| Local competition microprice |                                                        ~10% |
+| Related markets              | event-driven adjustment rather than continuous large weight |
+
+If Polymarket says 54%, Kalshi says 55%, and the SIG book says 58%, I want my fair value around **54–55%, not 57%**.
+
+If the external venues disagree by more than about **4 percentage points**, stop aggressively trading the discrepancy. Something may be wrong with mapping, rules, or information propagation.
+
+---
+
+## 2. Inventory-adjusted fair value
+
+This is the most important piece people leave out.
+
+If \(F=55\%\), buying indefinitely below 55% is still stupid. Eventually you have far too much event risk.
+
+Define:
+
+$$
+x_i=\frac{q_i}{q_{max,i}}
+$$
+
+and a related-market exposure:
+
+$$
+g_i = \frac{G_i}{G_{max,i}}
+$$
+
+Then:
+
+$$
+x_i^{eff}=clip(x_i+0.5g_i,-1.5,1.5)
+$$
+
+Set:
+
+$$
+R_i=
+\sigma
+\left(
+\logit(F_i)-\lambda x_i^{eff}
+\right)
+$$
+
+with:
+
+$$
+\boxed{\lambda=0.16}
+$$
+
+initially.
+
+At 50% fair value, being at maximum long inventory knocks your personal reservation value down from about 50% to **46%**. Being maximally short pushes it toward 54%.
+
+This is very convenient because it remains inside \((0,1)\) and naturally makes inventory adjustments smaller in probability terms near 0 and 1. A recent binary-market treatment derives this same basic log-odds structure from utility indifference pricing. ([SSRN][2])
+
+---
+
+## 3. When I buy
+
+There are two ways.
+
+**Passive buy:** place a limit bid below \(R\), but only when the existing book gives us sufficient edge.
+
+**Aggressive buy:** cross the ask when the competition market is clearly cheap.
+
+Let short-horizon external volatility be:
+
+$$
+\sigma_5 = EWMA(|\Delta F|,\ 5\text{s horizon})
+$$
+
+Then set the passive minimum half-edge:
+
+$$
+h =
+tick
++\frac{external\ spread}{2}
++1.25\sigma_5
++toxicity
++staleness
++disagreement
+$$
+
+Typical quiet-market result with a 1-cent tick should be roughly **1.5–2 cents**.
+
+For taking liquidity:
+
+$$
+E_{take}=\max(3tick,\;2h)
+$$
+
+Buy immediately if:
+
+$$
+R-bestAsk > E_{take}
+$$
+
+Example:
+
+* fair value: 58%
+* inventory-adjusted reservation: 57%
+* best competition ask: 52%
+* take threshold: 3%
+
+Then **buy the 52 ask immediately**.
+
+A 5-point apparent discrepancy is far more valuable than earning another cent by patiently joining the bid.
+
+---
+
+## 4. When I sell
+
+Exactly symmetric.
+
+Take the competition bid when:
+
+$$
+bestBid-R > E_{take}
+$$
+
+If shorting isn't permitted, this becomes an inventory-reduction trade only.
+
+For passive selling, offer above reservation value whenever the current market leaves sufficient edge.
+
+---
+
+## 5. Yes, I market make — but selectively
+
+I would **not** blindly quote every market at all times.
+
+The bot supplies liquidity only when:
+
+* the reference is healthy;
+* the local touch leaves enough expected edge;
+* inventory permits it;
+* external markets aren't violently moving;
+* recent fills haven't shown signs we're being picked off.
+
+This distinction matters. Empirical work on binary event-contract liquidity provision highlights that passive makers can wind up absorbing persistent directional demand and carrying meaningful terminal exposure; spread capture alone isn't enough. ([SSRN][3])
+
+### Bid construction
+
+Calculate:
+
+$$
+B_{max}=floorTick(R-h)
+$$
+
+Ignoring our own resting order, suppose the competition best bid is \(B\).
+
+If:
+
+$$
+B_{max}\ge B+tick
+$$
+
+quote:
+
+$$
+B+tick
+$$
+
+If:
+
+$$
+B_{max}\ge B
+$$
+
+join:
+
+$$
+B
+$$
+
+Otherwise **do not bid**.
+
+### Ask construction
+
+Calculate:
+
+$$
+A_{min}=ceilTick(R+h)
+$$
+
+If:
+
+$$
+A_{min}\le A-tick
+$$
+
+quote:
+
+$$
+A-tick
+$$
+
+If:
+
+$$
+A_{min}\le A
+$$
+
+join:
+
+$$
+A
+$$
+
+Otherwise **do not offer**.
+
+That creates a useful rule:
+
+> Never improve the market unless the improved price still gives us our required edge.
+
+Don't quote behind the touch merely for the sake of having an order somewhere.
+
+---
+
+## 6. Order sizing
+
+I would use different sizing for passive and aggressive orders.
+
+For passive quotes, define `BASE_QUOTE` as roughly **0.05–0.10% of bankroll in maximum-loss terms**.
+
+Also never display more than roughly:
+
+$$
+25\%
+$$
+
+of the existing top-of-book quantity initially. We don't want to become the entire market.
+
+For the bid:
+
+$$
+size_{bid}
+=
+BASE
+\times
+clip(1-0.75x_i,0.25,1.75)
+$$
+
+For the ask:
+
+$$
+size_{ask}
+=
+BASE
+\times
+clip(1+0.75x_i,0.25,1.75)
+$$
+
+So if we're long, our bids shrink and our asks grow.
+
+For aggressive trades I would use **capped fractional Kelly**.
+
+For a YES contract at price \(p\), estimated probability \(F\):
+
+$$
+n_{Kelly}/W =
+\frac{F-p}{p(1-p)}
+$$
+
+Use only:
+
+$$
+\boxed{10\% \text{ Kelly}}
+$$
+
+and then cap it with market and group inventory limits.
+
+That means strong discrepancies get meaningfully larger trades without letting a 3-point modelling mistake blow up the bot.
+
+For example at \(p=0.50\), \(F=0.55\):
+
+$$
+n/W = \frac{0.05}{0.25}=20\%
+$$
+
+Full Kelly is enormous.
+
+At one-tenth Kelly, you hold about 2 contracts per $100 bankroll, costing about **1% of capital**.
+
+Much more sensible.
+
+---
+
+## 7. When another market moves
+
+This is where I think a large part of the competition edge can come from.
+
+Every external-market update triggers:
+
+**Direct equivalent moves:** if the external fair value changes by at least **0.5 tick**, recalculate immediately. If it moves by **1 tick or more**, cancel our resting orders first and recalculate second.
+
+Don't leave a stale 51 bid sitting there while Polymarket just dropped 54 → 49.
+
+### Related-market shock propagation
+
+Build a small relationship graph.
+
+Each relationship is one of:
+
+`EQUIVALENT`, `COMPLEMENT`, `MUTUALLY_EXCLUSIVE`, `MONOTONIC`, or `STATISTICAL`.
+
+The first four get deterministic treatment.
+
+For statistical relationships, estimate a simple ridge regression offline:
+
+$$
+\Delta logit(p_i)
+=
+\beta_{ij}\Delta logit(p_j)+\epsilon
+$$
+
+No neural network.
+
+If market \(j\) suddenly moves:
+
+$$
+\Delta z_i^{pred}=
+\beta_{ij}\Delta z_j
+$$
+
+Immediately temporarily adjust \(i\)'s fair value.
+
+I would cap this adjustment at roughly **3 probability points** unless multiple related markets confirm it.
+
+If the predicted move exceeds one tick, cancel/requote \(i\).
+
+To **cross the spread using only the related-market signal**, demand more evidence:
+
+$$
+E_{take,related}\approx4-5\text{ cents}
+$$
+
+rather than 3.
+
+So cross-market signals help us get ahead without making them equivalent to direct price evidence.
+
+---
+
+## 8. What happens after somebody trades with us
+
+This is critical.
+
+Suppose somebody hits our bid.
+
+Do **not** instantly replace exactly the same order.
+
+Immediately:
+
+1. update inventory;
+2. cancel the remaining orders in that market;
+3. refresh external references;
+4. recompute \(F,R,h\);
+5. classify the fill's toxicity;
+6. quote again from scratch.
+
+Maintain a `toxicity_score` per contract.
+
+If we buy at 52 and within two seconds external fair value falls 52 → 50, that fill was probably informed/adverse.
+
+Update:
+
+$$
+toxicity =
+0.9\,toxicity +
+0.1\,I(adverse\ move)
+$$
+
+Use it to add up to roughly **3 ticks** to the required spread and reduce displayed size by as much as 75%.
+
+Conversely, if fills repeatedly don't predict adverse reference movements, decay the penalty.
+
+This lets the bot learn something extremely useful without an ML system:
+
+> **Which contracts/opponents are repeatedly picking us off?**
+
+---
+
+## 9. Inventory limits
+
+I would start with:
+
+$$
+q_{max,i}
+=
+0.5\%-1.0\%
+$$
+
+of bankroll in worst-case market risk per individual contract.
+
+And:
+
+$$
+G_{max}
+\approx 5\%
+$$
+
+for a strongly correlated election cluster/factor.
+
+Total gross event risk:
+
+$$
+\le25\%
+$$
+
+initially.
+
+At:
+
+**60% of \(q_{max}\):** normal inventory skew does the work.
+
+**80%:** stop adding on that side. Quote only normally or aggressively in the inventory-reducing direction.
+
+**95%:** actively reduce toward ~70% when an executable price is within roughly one normal half-spread of fair value.
+
+The exact limits should be among the first things tuned in simulation.
+
+---
+
+## 10. Related election markets
+
+I would keep this surprisingly simple.
+
+For hard relationships:
+
+* A = NOT B → \(P(A)=1-P(B)\)
+* mutually exclusive exhaustive outcomes → probabilities sum to 1
+* seat threshold \(X\ge20\) cannot have lower probability than \(X\ge21\)
+* exact duplicate election outcomes → same underlying value
+
+Project raw fair values onto these constraints before quoting.
+
+For an exhaustive race, for example:
+
+$$
+\tilde p_i=\frac{p_i}{\sum_jp_j}
+$$
+
+For ordered thresholds, use isotonic regression.
+
+This gives us **internally coherent probabilities essentially for free**.
+
+For fuzzier relationships such as:
+
+> Republican Senate control ↔ individual state Senate race
+
+do not impose an arbitrage identity.
+
+Use the statistical shock model described above.
+
+Also count those markets together for portfolio inventory, because five individually reasonable positions can really be one giant bet on a national wave.
+
+---
+
+## 11. Parameters I would launch with
+
+These are deliberately specific enough to code immediately.
+
+| Parameter                          |         Initial value |
+| ---------------------------------- | --------------------: |
+| Local-market influence on FV       |                  0.10 |
+| Inventory logit skew \(\lambda\)   |                  0.16 |
+| Good external update age           |                <2 sec |
+| Taker disabled after reference age |                10 sec |
+| Maker disabled after reference age |                30 sec |
+| External disagreement warning      |              4 points |
+| Base maker edge                    |                1 tick |
+| Volatility multiplier              |   1.25 × 5s EWMA move |
+| Minimum taker edge                 |               3 ticks |
+| Related-signal taker edge          |             4–5 ticks |
+| Requote FV move                    |              0.5 tick |
+| Immediate cancel threshold         |                1 tick |
+| Fractional Kelly                   |                  0.10 |
+| Passive size                       | 5–10 bp bankroll risk |
+| Max fraction of touch displayed    |                   25% |
+| Soft inventory threshold           |                   60% |
+| Stop-add threshold                 |                   80% |
+| Emergency threshold                |                   95% |
+| Individual contract limit          |  0.5–1% bankroll risk |
+| Correlated-group limit             |          ~5% bankroll |
+| Gross event exposure limit         |                  ~25% |
+| Fill toxicity observation window   |                 2 sec |
+| Maximum toxicity widening          |              +3 ticks |
+
+I would tune only about **six** things initially: maker edge, taker threshold, \(\lambda\), base size, individual inventory limit and toxicity penalty.
+
+Don't create a 40-dimensional backtest optimisation problem.
+
+---
+
+# Complete bot pseudocode
+
+```python
+TICK = venue_tick
+
+LAMBDA_INV = 0.16
+LOCAL_WEIGHT = 0.10
+
+MIN_TAKE_EDGE = 3 * TICK
+RELATED_TAKE_EDGE = 5 * TICK
+
+MAX_REF_AGE_TAKE = 10.0
+MAX_REF_AGE_MAKE = 30.0
+
+REQUOTE_MOVE = 0.5 * TICK
+CANCEL_MOVE = 1.0 * TICK
+
+FRACTIONAL_KELLY = 0.10
+
+SOFT_INV = 0.60
+STOP_ADD_INV = 0.80
+HARD_INV = 0.95
+
+MAX_TOUCH_SHARE = 0.25
+
+
+def sigmoid(z):
+    return 1 / (1 + exp(-z))
+
+
+def logit(p):
+    p = clip(p, 0.01, 0.99)
+    return log(p / (1 - p))
+
+
+def microprice(book):
+    bid = book.best_bid
+    ask = book.best_ask
+
+    bq = book.best_bid_size
+    aq = book.best_ask_size
+
+    return (ask * bq + bid * aq) / (bq + aq)
+
+
+def external_fair_value(market):
+    observations = []
+
+    for ref in market.external_refs:
+
+        if not equivalent_resolution(market, ref):
+            continue
+
+        p = microprice(ref.book)
+
+        freshness = freshness_score(ref.age)
+        liquidity = liquidity_score(ref.book)
+        spread_score = spread_quality(ref.book)
+        mapping = ref.mapping_confidence
+
+        weight = (
+            freshness
+            * liquidity
+            * spread_score
+            * mapping
+        )
+
+        observations.append(
+            (logit(p), weight)
+        )
+
+    if not observations:
+        return None
+
+    z = weighted_average(observations)
+
+    return sigmoid(z)
+
+
+def related_market_adjustment(market):
+
+    dz = 0.0
+
+    for rel in market.relations:
+
+        if rel.type == "EQUIVALENT":
+            continue  # handled as external/direct reference
+
+        elif rel.type == "COMPLEMENT":
+            apply_exact_constraint(rel)
+
+        elif rel.type == "MUTUALLY_EXCLUSIVE":
+            apply_simplex_constraint(rel.group)
+
+        elif rel.type == "MONOTONIC":
+            apply_isotonic_constraint(rel.group)
+
+        elif rel.type == "STATISTICAL":
+
+            change = rel.other.external_logit_change
+
+            predicted = rel.beta * change
+
+            predicted = cap_probability_effect(
+                predicted,
+                max_probability_move=0.03
+            )
+
+            dz += predicted
+
+    return dz
+
+
+def fair_value(market):
+
+    ext = external_fair_value(market)
+
+    if ext is None:
+        return None
+
+    z = logit(ext)
+
+    # Competition market is deliberately low-weight.
+    if market.local_book.valid:
+        local = microprice(market.local_book)
+
+        local_residual = clip(
+            logit(local) - z,
+            -0.20,
+            +0.20
+        )
+
+        z += LOCAL_WEIGHT * local_residual
+
+    z += related_market_adjustment(market)
+
+    F = sigmoid(z)
+
+    F = enforce_hard_constraints(
+        market,
+        F
+    )
+
+    return F
+
+
+def effective_inventory(market):
+
+    own = market.position / market.position_limit
+
+    group = (
+        market.group_exposure
+        / market.group_limit
+    )
+
+    return clip(
+        own + 0.50 * group,
+        -1.5,
+        +1.5
+    )
+
+
+def reservation_price(market, F):
+
+    x = effective_inventory(market)
+
+    return sigmoid(
+        logit(F) - LAMBDA_INV * x
+    )
+
+
+def required_halfspread(market):
+
+    ext_spread = market.external_spread
+    sigma5 = market.external_volatility_5s
+
+    h = (
+        TICK
+        + 0.5 * ext_spread
+        + 1.25 * sigma5
+        + market.toxicity_penalty
+        + market.staleness_penalty
+        + market.disagreement_penalty
+    )
+
+    return max(TICK, h)
+
+
+def taker_edge(market, h):
+
+    return max(
+        MIN_TAKE_EDGE,
+        2.0 * h
+    )
+
+
+def fractional_kelly_size(F, price, bankroll):
+
+    edge = F - price
+
+    if edge <= 0:
+        return 0
+
+    full_kelly_contracts = (
+        bankroll
+        * edge
+        / (price * (1 - price))
+    )
+
+    return FRACTIONAL_KELLY * full_kelly_contracts
+
+
+def passive_size(market, side):
+
+    base = market.base_quote_size
+
+    x = (
+        market.position
+        / market.position_limit
+    )
+
+    if side == "BUY":
+        inv_multiplier = clip(
+            1 - 0.75 * x,
+            0.25,
+            1.75
+        )
+
+        room = (
+            market.position_limit
+            - market.position
+        )
+
+        depth = (
+            MAX_TOUCH_SHARE
+            * market.local_book.best_bid_size
+        )
+
+    else:
+        inv_multiplier = clip(
+            1 + 0.75 * x,
+            0.25,
+            1.75
+        )
+
+        room = (
+            market.position_limit
+            + market.position
+        )
+
+        depth = (
+            MAX_TOUCH_SHARE
+            * market.local_book.best_ask_size
+        )
+
+    toxicity_multiplier = (
+        1 - 0.75 * market.toxicity_score
+    )
+
+    size = (
+        base
+        * inv_multiplier
+        * toxicity_multiplier
+    )
+
+    return max(
+        0,
+        min(size, room, depth)
+    )
+
+
+def maybe_take(market, F, R, h):
+
+    book = market.local_book
+
+    threshold = taker_edge(market, h)
+
+    # BUY CHEAP CONTRACTS
+    buy_edge = R - book.best_ask
+
+    if buy_edge >= threshold:
+
+        size = fractional_kelly_size(
+            F,
+            book.best_ask,
+            portfolio.bankroll
+        )
+
+        size = risk_cap_buy(
+            market,
+            size
+        )
+
+        if size > 0:
+            send_IOC_buy(
+                market,
+                book.best_ask,
+                size
+            )
+
+    # SELL EXPENSIVE CONTRACTS
+    sell_edge = book.best_bid - R
+
+    if sell_edge >= threshold:
+
+        # Equivalent Kelly calculation
+        # from the NO / short perspective.
+        size = short_kelly_size(
+            F,
+            book.best_bid,
+            portfolio.bankroll
+        )
+
+        size = risk_cap_sell(
+            market,
+            size
+        )
+
+        if size > 0:
+            send_IOC_sell(
+                market,
+                book.best_bid,
+                size
+            )
+
+
+def build_passive_quotes(market, R, h):
+
+    book = market.book_excluding_our_orders()
+
+    max_bid = floor_tick(R - h)
+    min_ask = ceil_tick(R + h)
+
+    bid_price = None
+    ask_price = None
+
+    # BID
+    if market.position < (
+        STOP_ADD_INV * market.position_limit
+    ):
+
+        if max_bid >= book.best_bid + TICK:
+            bid_price = book.best_bid + TICK
+
+        elif max_bid >= book.best_bid:
+            bid_price = book.best_bid
+
+    # ASK
+    if market.position > (
+        -STOP_ADD_INV * market.position_limit
+    ):
+
+        if min_ask <= book.best_ask - TICK:
+            ask_price = book.best_ask - TICK
+
+        elif min_ask <= book.best_ask:
+            ask_price = book.best_ask
+
+    return bid_price, ask_price
+
+
+def refresh_market(market):
+
+    if market.external_reference_age > MAX_REF_AGE_MAKE:
+        cancel_all(market)
+        return
+
+    F = fair_value(market)
+
+    if F is None:
+        cancel_all(market)
+        return
+
+    R = reservation_price(market, F)
+
+    h = required_halfspread(market)
+
+    # TAKE FIRST.
+    if (
+        market.external_reference_age
+        <= MAX_REF_AGE_TAKE
+    ):
+        maybe_take(
+            market,
+            F,
+            R,
+            h
+        )
+
+    # THEN PASSIVELY MAKE.
+    bid_price, ask_price = (
+        build_passive_quotes(
+            market,
+            R,
+            h
+        )
+    )
+
+    bid_size = passive_size(
+        market,
+        "BUY"
+    )
+
+    ask_size = passive_size(
+        market,
+        "SELL"
+    )
+
+    reconcile_order(
+        market,
+        side="BUY",
+        price=bid_price,
+        size=bid_size
+    )
+
+    reconcile_order(
+        market,
+        side="SELL",
+        price=ask_price,
+        size=ask_size
+    )
+
+    market.last_fair_value = F
+    market.last_reservation = R
+
+
+def on_external_market_update(ref):
+
+    update_reference_state(ref)
+
+    for market in markets_using(ref):
+
+        old_F = market.last_fair_value
+
+        new_F = preview_fair_value(market)
+
+        if old_F is None:
+            refresh_market(market)
+            continue
+
+        move = abs(new_F - old_F)
+
+        # Stale resting quotes are dangerous.
+        if move >= CANCEL_MOVE:
+            cancel_all(market)
+
+        if move >= REQUOTE_MOVE:
+            refresh_market(market)
+
+
+def on_related_market_update(source):
+
+    for target in source.related_markets:
+
+        predicted_move = (
+            target.relationship.beta
+            * source.external_logit_change
+        )
+
+        if probability_equivalent(
+            predicted_move
+        ) >= TICK:
+
+            cancel_all(target)
+            refresh_market(target)
+
+
+def on_competition_book_update(market):
+
+    update_local_book(market)
+
+    refresh_market(market)
+
+
+def on_fill(fill):
+
+    market = fill.market
+
+    # Inventory is authoritative immediately.
+    update_position(fill)
+
+    # Don't blindly reload a stale quote.
+    cancel_all(market)
+
+    market.pending_fill_evaluation.append({
+        "time": now(),
+        "side": fill.side,
+        "price": fill.price,
+        "reference_at_fill":
+            market.current_external_fair
+    })
+
+    refresh_market(market)
+
+
+def evaluate_fill_toxicity(market):
+
+    for fill in fills_older_than(
+        market,
+        seconds=2
+    ):
+
+        ref_now = market.current_external_fair
+
+        if fill.side == "BUY":
+            adverse = (
+                ref_now
+                < fill.reference_at_fill - TICK
+            )
+
+        else:
+            adverse = (
+                ref_now
+                > fill.reference_at_fill + TICK
+            )
+
+        market.toxicity_score = (
+            0.90
+            * market.toxicity_score
+            + 0.10
+            * int(adverse)
+        )
+
+        market.toxicity_penalty = (
+            3
+            * TICK
+            * market.toxicity_score
+        )
+
+
+def risk_loop():
+
+    for market in all_markets:
+
+        x = abs(
+            market.position
+            / market.position_limit
+        )
+
+        if x >= HARD_INV:
+            actively_reduce_inventory(
+                market,
+                target_fraction=0.70
+            )
+
+        elif x >= STOP_ADD_INV:
+            disable_inventory_increasing_side(
+                market
+            )
+
+    enforce_group_limits()
+    enforce_total_exposure_limit()
+
+
+def main():
+
+    load_market_mapping()
+    load_external_mapping()
+    load_relationship_graph()
+    load_relation_betas()
+
+    connect_competition_websocket()
+    connect_external_websockets()
+
+    while True:
+
+        event = next_event()
+
+        if event.type == "EXTERNAL_BOOK":
+            on_external_market_update(
+                event.reference
+            )
+
+        elif event.type == "LOCAL_BOOK":
+            on_competition_book_update(
+                event.market
+            )
+
+        elif event.type == "FILL":
+            on_fill(
+                event.fill
+            )
+
+        elif event.type == "RELATED_MOVE":
+            on_related_market_update(
+                event.market
+            )
+
+        every_1_second:
+            evaluate_all_fill_toxicity()
+            risk_loop()
+
+        every_30_seconds:
+            sanity_check_references()
+            remove_stale_orders()
+            verify_positions()
+```
+
+## What I would actually prioritise over the next few days
+
+The competitive advantage here isn't some exotic pricing formula. It is getting **four things extremely reliable**:
+
+**Reference mapping → instantaneous fair-value propagation → safe execution → inventory control.**
+
+If I had to strip the system down even further, I would preserve the direct external fair value, 3-cent taker rule, inventory-skewed reservation price, selective maker quotes, and immediate cancel/reprice on reference moves.
+
+The crucial behavioural rule is:
+
+> **Our orders are expressions of fair value, not commitments. The instant the information that justified an order changes, the order disappears.**
+
+That is the bot I would actually enter.
+
+[1]: https://math.nyu.edu/inmemoriam/avellaneda/HighFrequencyTrading.pdf?utm_source=chatgpt.com "High-frequency trading in a limit order book"
+[2]: https://papers.ssrn.com/sol3/papers.cfm?abstract_id=7237578&utm_source=chatgpt.com "Quasi Fair Value under Inventory Risk in Prediction Markets by Neil Mitra, Sarthak Tyagi :: SSRN"
+[3]: https://papers.ssrn.com/sol3/Delivery.cfm/6325658.pdf?abstractid=6325658&mirid=1&utm_source=chatgpt.com "A Microstructure Perspective on Prediction Markets by Nicholas Palumbo :: SSRN"
+
+---
+
+Opus 5.5
+
+# Strategy: reference-anchored market maker with cross-market consistency and inventory skew
+
+I'd build a single bot that quotes both sides of every liquid contract around a fair value (FV). The FV comes mostly from external markets, corrected by the local order book and by consistency with related contracts. When the local book is far enough from FV, the bot also takes liquidity. Market making earns the spread; taking captures the local book lagging the external reference.
+
+The main risk is being picked off. When an external market moves, faster participants will hit stale quotes before you move them. Most of the design below exists to prevent that.
+
+---
+
+## 1. Fair value estimation
+
+Do all the maths in log-odds space, where `logit(p) = ln(p/(1−p))`. Log-odds handle the compression near 0 and 1 properly, and adding and averaging signals is well-behaved there.
+
+For each contract *i*, blend three signals:
+
+**a) External reference (`L_ext`)**
+- Take the mid from Polymarket, Kalshi, or whichever external venue lists the same contract.
+- Use the mid only if that venue's spread is ≤ 4¢. Otherwise use the side nearer the last trade.
+- If several venues list it, weight each by `1/spread²`.
+- Remove any overround: for mutually exclusive sets, normalise the external mids so they sum to 1.
+
+**b) Local microprice (`L_loc`)**
+- Formula: `(bid·ask_size + ask·bid_size)/(bid_size + ask_size)`, computed from the local top of book.
+- Use it only if the local spread is ≤ 6¢. Otherwise it gets zero weight.
+
+**c) Structural estimate (`L_struct`)**
+- This is what the related contracts imply for *i* (see §10).
+
+**Combine them with a weighted average:**
+
+`L_fv = (w_e·L_ext + w_l·L_loc + w_s·L_struct) / (w_e + w_l + w_s)`
+
+**Weights (starting values):**
+- `w_e = 3.0 × freshness`, where `freshness = exp(−age_sec / 60)`. The external signal decays if its feed goes stale.
+- `w_l = 1.0` if the local book is tight, else 0.
+- `w_s = 1.5` for exclusive sets (hard constraints). `0.5` for correlation-based links.
+
+**Two short-lived adjustments on top:**
+- **Fill drift:** after each fill, nudge FV toward the fill direction (see §8). This decays with a half-life of 30s.
+- **Uncertainty:** track `U_i`, the standard deviation of disagreement among the signals, in log-odds. It feeds into spread width and the taking threshold.
+
+**Calibrate the weights on day 1.** Log everything for a few hours and regress future local mid changes on (external − local) gaps.
+- If the local book reliably follows external moves, raise `w_e`.
+- If local leads external (the competition book has informed flow), raise `w_l`.
+
+This single regression is the highest-value hour of the build.
+
+## 2. When to buy (taking)
+
+Lift the ask when:
+
+`FV − best_ask > take_edge`, where `take_edge = fee + 2¢ + 1.5 × U_prob`
+
+`U_prob` is the log-odds uncertainty converted back to probability terms: `U × p(1−p)`.
+
+Also require all of the following:
+- The external data is fresh (age under 20s).
+- Inventory limits allow the trade.
+- The contract isn't in a post-fill cooldown on that side.
+
+Take only up to the book depth at prices that still satisfy the edge condition.
+
+## 3. When to sell
+
+This mirrors buying: hit the bid when `best_bid − FV > take_edge`.
+
+There is also one inventory-driven sell. If a position exceeds 80% of its limit, cross the spread to reduce it, provided the loss versus FV is no more than 1¢. Otherwise just rely on the skewed quotes (§9).
+
+There is no profit target or stop-loss in price terms. A position is held while FV supports it and unwound when FV or inventory says so.
+
+## 4. Market making
+
+Yes: market making is the core P&L engine. Quote every contract that meets all of these:
+- There is a usable external reference, or the contract is a leg of an exclusive set where FV can be derived.
+- The price is between 3¢ and 97¢. Near the extremes, the payoff is asymmetric and the edge is too thin.
+- It is not in a halt or cooldown state.
+
+Contracts with no external reference and no structural link get quoted only at a wide spread (≥ 8¢) and small size. Or they are skipped entirely; judge from the day-1 logs.
+
+## 5. Bid/ask prices
+
+**Half-spread:**
+
+```
+half = max(min_half, fee + k_vol·σ_i·p(1−p) + k_unc·U_i·p(1−p))
+```
+
+- `σ_i` is the recent volatility of FV in log-odds, measured as an EWMA of 10s changes, scaled up to a 30s horizon.
+- `p(1−p)` converts log-odds widths back into probability widths.
+
+**Skew for inventory:**
+
+```
+skew = −γ · (q_i / Q_max_i) · half
+```
+
+A positive `q` (a long position) pushes both quotes down. The quotes are then:
+
+```
+bid = FV − half + skew
+ask = FV + half + skew
+```
+
+**Book-aware rounding:**
+- Round the bid down and the ask up to the tick.
+- If the result would sit behind the best local price and there is room, improve by one tick ahead of the best, but never beyond `FV − min_half` on the bid or `FV + min_half` on the ask.
+- Never cross the local book with a passive order; that decision belongs to the taking logic.
+
+**Order replacement:**
+- Only cancel and replace when the target price moves by at least 1 tick or the size changes by more than 30%. This saves rate limit and queue position.
+- Cancel immediately if the FV move puts a resting order within `min_half` of FV on the wrong side.
+
+## 6. Order size
+
+**Passive quotes:**
+
+```
+size = base_size · liq_factor · room_factor
+```
+- `liq_factor = clip(local_depth_top3 / median_depth, 0.5, 2)`
+- `room_factor = (1 − q_i/Q_max_i)` on the side that adds to the position, and `(1 + q_i/Q_max_i)` on the side that reduces it, capped at 2×.
+
+**Taking orders:**
+
+Use a quarter-Kelly size, capped:
+
+```
+size = min(0.25 · edge / (p(1−p)) · bankroll_alloc, depth_at_edge, Q_max_i − |q_i|)
+```
+
+In practice the inventory cap binds far more often than the Kelly term does.
+
+## 7. When another market moves
+
+There are three cases, handled in this order:
+
+1. **External reference moves by at least 1.5¢ (or more than 0.5σ):**
+   - First, cancel quotes on that contract immediately.
+   - Then recompute FV and requote.
+   - Then check whether to take.
+
+   The cancellation comes first because this is exactly when you get picked off.
+
+2. **A structurally linked local market moves** (same exclusive set, or a correlated contract such as a state vs the national race):
+   - Recompute `L_struct` for all linked contracts.
+   - Requote them.
+   - For exclusive sets, also run the sum check (§10).
+
+3. **A correlated market moves on the external venue:** this propagates the same way through the betas in §10.
+
+## 8. After a trade
+
+After one of our orders fills:
+
+1. **Update inventory and P&L.**
+2. **Adverse-selection drift:** shift FV toward the counterparty's direction.
+
+   ```
+   L_fv += sign(taker_side) · α · (fill_size / base_size)
+   ```
+   With `α = 0.05` log-odds. This decays with a half-life of 30s. If the counterparty bought from us, FV goes up.
+3. **Cooldown:** do not re-post on the side that was just filled for 2s.
+4. **Widen the same-side half-spread** by 50% for 20s.
+5. **Log a markout:** record FV at +10s, +60s, and +300s after the fill. This is the most important diagnostic in the whole system. If 60s markouts are consistently negative on a contract, that contract's flow is informed: widen its spread or stop quoting it.
+
+After someone else trades on the local tape (not with us):
+- A trade at or through a price level is a weak signal.
+- Nudge `L_loc` by the trade's aggressor direction, using `α/3`.
+- Nothing else changes.
+
+## 9. Inventory management
+
+Exposure is managed at two levels.
+
+**Per contract:**
+- `|q_i| ≤ Q_max_i`, measured as dollar risk, which equals contracts × price for a long YES position.
+- The skew from §5 does most of the work of pulling positions back.
+- Above 80% of the limit, the bot takes to reduce the position (§3).
+
+**Per factor group:**
+- Contracts are grouped by a shared outcome driver, for example "Party A wins the national race" or "Party A controls the chamber".
+- Group exposure is computed as `E_g = Σ_i β_i · q_i · p_i(1−p_i)`, i.e. each position's sensitivity to the group's shared driver.
+- `|E_g|` is capped at `E_max`.
+- When group exposure is large, every contract in the group gets extra skew: `skew_i += −γ_g · (E_g/E_max) · β_i · half_i`.
+
+This stops the bot from building one large correlated position in small pieces spread across 30 state contracts.
+
+**Global limits:**
+- Total gross exposure has a cap.
+- If the day's P&L falls below `−L_kill`, the bot switches to reduce-only mode.
+
+## 10. Related election markets
+
+There are two relationship types. Hard-code the groupings in a config file; don't try to discover them automatically in a few days.
+
+**A) Mutually exclusive sets** (candidates in one race, or seat-count buckets). The probabilities must sum to 1.
+- `L_struct_i` is what's left for leg *i* after the other legs' FVs are removed: `1 − Σ_{j≠i} FV_j`, converted to log-odds.
+- **Arbitrage check each cycle:**
+  - If the sum of the best asks is below `1 − fee·n − 1¢`, buy every leg.
+  - If the sum of the best bids is above `1 + fee·n + 1¢`, sell every leg.
+  - Size to the thinnest leg.
+
+  This is risk-free if both sides fill. Fire all legs at once and accept that some legs won't fill; the per-contract logic then manages any leftover inventory.
+- Also renormalise each set's FVs so they sum to 1 before quoting.
+
+**B) Correlated contracts** (a state race vs the national race, a presidential race vs a Senate race in the same state, chamber control vs individual seats).
+- Estimate `β_ij` by EWMA regression of 60s log-odds changes of *i* on *j*, using a 6h half-life.
+- Clip `β` to [−1.5, 1.5], and require at least 50 observations before using it.
+- `L_struct_i` update: when *j* moves by `ΔL_j`, move *i*'s structural anchor by `β_ij · ΔL_j`. Between moves, let the anchor decay toward `L_fv_i` with a 10-minute half-life, so that a bad beta doesn't dominate.
+- Hard logical bounds must hold. For example, "Party wins ≥ 51 seats" must be ≤ "Party wins ≥ 50 seats". Clamp FV to these bounds, and treat any bound violation in the book as an arbitrage.
+
+## 11. Parameters (starting values)
+
+| Parameter | Value | Note |
+|---|---|---|
+| tick | 0.01 | check the venue |
+| fee | per venue | per contract, in probability terms |
+| min_half | max(1¢, fee+0.5¢) | |
+| k_vol | 1.0 | |
+| k_unc | 0.7 | |
+| γ (per-contract skew) | 1.0 | at full inventory, the reducing side sits at FV |
+| γ_g (group skew) | 0.7 | |
+| take_edge base | fee + 2¢ | + 1.5·U_prob |
+| α (fill drift) | 0.05 log-odds | 30s half-life |
+| cooldown after fill | 2s same side | |
+| post-fill widen | ×1.5 for 20s | |
+| base_size | 1% of bankroll ÷ typical price | |
+| Q_max_i | 5% of bankroll | dollar risk |
+| E_max | 15% of bankroll | per group |
+| gross cap | 60% of bankroll | |
+| L_kill | −5% of bankroll per day | switch to reduce-only |
+| stale external | 60s: stop taking; 180s: widen ×2; 300s: stop quoting | |
+| quote band | 3¢–97¢ | |
+| loop | event-driven + 1s timer | |
+| requote threshold | 1 tick or 30% size change | |
+
+The numbers that matter most are `w_e` vs `w_l` (calibrate them from logs), `min_half`, and `α`. Tune those three from the markout data; leave the rest alone unless something is clearly wrong.
+
+## 12. Pseudocode
+
+```python
+# ---------- state ----------
+class Contract:
+    id; group_ids; excl_set; ext_symbols
+    fv_L; drift=0; drift_t; sigma; U
+    q=0                       # signed position
+    ext_L=None; ext_ts=None
+    struct_L=None
+    orders={'bid':None,'ask':None}
+    cooldown={'bid':0,'ask':0}; widen_until={'bid':0,'ask':0}
+
+logit = lambda p: log(p/(1-p)); inv = lambda L: 1/(1+exp(-L))
+
+# ---------- fair value ----------
+def compute_fv(c, now):
+    sigs, ws = [], []
+    if c.ext_L is not None:
+        fresh = exp(-(now - c.ext_ts)/60)
+        sigs.append(c.ext_L); ws.append(W_E*fresh)
+    b = book[c.id]
+    if b.spread <= 0.06 and b.bid and b.ask:
+        micro = (b.bid*b.ask_sz + b.ask*b.bid_sz)/(b.bid_sz+b.ask_sz)
+        sigs.append(logit(micro)); ws.append(W_L)
+    if c.struct_L is not None:
+        sigs.append(c.struct_L); ws.append(W_S_EXCL if c.excl_set else W_S_CORR)
+    if not ws: return None
+    L = sum(w*s for w,s in zip(ws,sigs))/sum(ws)
+    c.U = weighted_std(sigs, ws)
+    c.drift *= 0.5**((now - c.drift_t)/30); c.drift_t = now
+    c.fv_L = clamp_logical_bounds(c, L + c.drift)
+    c.sigma = ewma_vol_update(c, c.fv_L)
+    return inv(c.fv_L)
+
+def normalize_excl_set(s):
+    ps = [inv(c.fv_L) for c in s]; tot = sum(ps)
+    for c,p in zip(s,ps): c.fv_L = logit(clip(p/tot, 0.005, 0.995))
+
+# ---------- structural ----------
+def update_struct(changed, dL):
+    for (i, beta) in links[changed.id]:          # correlated links
+        c = contracts[i]
+        base = c.struct_L if c.struct_L is not None else c.fv_L
+        c.struct_L = base + beta*dL
+    if changed.excl_set:
+        s = excl_sets[changed.excl_set]
+        for c in s:
+            rest = sum(inv(o.fv_L) for o in s if o is not c)
+            c.struct_L = logit(clip(1-rest, 0.005, 0.995))
+
+def decay_struct(c, dt):                         # pull anchor back toward fv
+    if c.struct_L is not None:
+        k = 0.5**(dt/600); c.struct_L = k*c.struct_L + (1-k)*c.fv_L
+
+# ---------- risk ----------
+def group_exposure(g):
+    return sum(beta_to_group[c.id][g]*c.q*p_pq(c) for c in groups[g])
+
+def p_pq(c): p = inv(c.fv_L); return p*(1-p)
+
+# ---------- quoting ----------
+def target_quotes(c, now):
+    p = inv(c.fv_L)
+    if not (0.03 <= p <= 0.97) or ext_age(c) > 300 or reduce_only_and_flat(c):
+        return None
+    half = max(MIN_HALF, FEE + K_VOL*c.sigma*p_pq(c) + K_UNC*c.U*p_pq(c))
+    if ext_age(c) > 180: half *= 2
+    skew = -GAMMA*(c.q/QMAX[c.id])*half
+    for g in c.group_ids:
+        skew += -GAMMA_G*(group_exposure(g)/EMAX)*beta_to_group[c.id][g]*half
+    hb = half*(1.5 if now < c.widen_until['bid'] else 1)
+    ha = half*(1.5 if now < c.widen_until['ask'] else 1)
+    bid = floor_tick(p - hb + skew); ask = ceil_tick(p + ha + skew)
+    b = book[c.id]
+    if b.bid and bid < b.bid and b.bid + TICK <= p - MIN_HALF: bid = b.bid + TICK  # penny ahead
+    if b.ask and ask > b.ask and b.ask - TICK >= p + MIN_HALF: ask = b.ask - TICK
+    bid = min(bid, b.ask - TICK) if b.ask else bid                                  # never cross
+    ask = max(ask, b.bid + TICK) if b.bid else ask
+    room = c.q/QMAX[c.id]
+    lf = clip(b.depth3/median_depth[c.id], 0.5, 2)
+    bsz = BASE*lf*clip(1-room, 0, 2); asz = BASE*lf*clip(1+room, 0, 2)
+    if now < c.cooldown['bid'] or REDUCE_ONLY and c.q >= 0: bsz = 0
+    if now < c.cooldown['ask'] or REDUCE_ONLY and c.q <= 0: asz = 0
+    if gross_exposure() > GROSS_CAP: (bsz, asz) = (bsz if c.q<0 else 0, asz if c.q>0 else 0)
+    return (bid, bsz, ask, asz)
+
+def sync_orders(c, tgt):
+    for side,(px,sz) in {'bid':tgt[0:2],'ask':tgt[2:4]}.items() if tgt else {'bid':(0,0),'ask':(0,0)}.items():
+        o = c.orders[side]
+        if sz <= 0:
+            if o: cancel(o); c.orders[side] = None
+        elif o is None or abs(o.px-px) >= TICK or abs(o.sz-sz)/o.sz > 0.3:
+            if o: cancel(o)
+            c.orders[side] = place(c.id, side, px, sz, post_only=True)
+
+# ---------- taking ----------
+def maybe_take(c, now):
+    if ext_age(c) > 20: return
+    p = inv(c.fv_L); edge_req = FEE + 0.02 + 1.5*c.U*p_pq(c)
+    b = book[c.id]
+    if b.ask and p - b.ask > edge_req and not REDUCE_ONLY:
+        sz = min(0.25*(p-b.ask)/p_pq(c)*ALLOC, depth_at(b,'ask',p-edge_req), QMAX[c.id]-c.q)
+        if sz > 0: ioc(c.id, 'buy', b.ask_levels_until(p-edge_req), sz)
+    if b.bid and b.bid - p > edge_req and not REDUCE_ONLY:
+        sz = min(0.25*(b.bid-p)/p_pq(c)*ALLOC, depth_at(b,'bid',p+edge_req), QMAX[c.id]+c.q)
+        if sz > 0: ioc(c.id, 'sell', b.bid_levels_until(p+edge_req), sz)
+    if abs(c.q) > 0.8*QMAX[c.id]:                      # inventory dump
+        side = 'sell' if c.q > 0 else 'buy'
+        px_ok = (b.bid >= p-0.01) if c.q > 0 else (b.ask <= p+0.01)
+        if px_ok: ioc(c.id, side, b.bid if c.q>0 else b.ask, abs(c.q)-0.6*QMAX[c.id])
+
+def excl_arb(s):
+    n = len(s); asks = [book[c.id].ask for c in s]; bids = [book[c.id].bid for c in s]
+    if all(asks) and sum(asks) < 1 - FEE*n - 0.01:
+        sz = min(book[c.id].ask_sz for c in s)
+        for c in s: ioc(c.id,'buy',book[c.id].ask,sz)
+    if all(bids) and sum(bids) > 1 + FEE*n + 0.01:
+        sz = min(book[c.id].bid_sz for c in s)
+        for c in s: ioc(c.id,'sell',book[c.id].bid,sz)
+
+# ---------- event handlers ----------
+def on_external_update(sym, mid, spread, ts):
+    for c in contracts_for_ext[sym]:
+        newL = logit(clip(mid,0.005,0.995))
+        oldp = inv(c.fv_L) if c.fv_L else None
+        if oldp and abs(mid - oldp) >= max(0.015, 0.5*c.sigma*p_pq(c)):
+            cancel_all(c)                                   # step 1: get out of the way
+        prevL = c.fv_L
+        c.ext_L, c.ext_ts = newL, ts
+        if compute_fv(c, now()) is None: continue
+        if c.excl_set: normalize_excl_set(excl_sets[c.excl_set])
+        update_struct(c, c.fv_L - (prevL or c.fv_L))
+        refresh(c); refresh_linked(c)
+
+def on_book_update(cid):
+    c = contracts[cid]; compute_fv(c, now()); refresh(c)
+    if c.excl_set: excl_arb(excl_sets[c.excl_set])
+
+def on_public_trade(cid, px, sz, aggressor):
+    c = contracts[cid]; c.drift += (1 if aggressor=='buy' else -1)*ALPHA/3*min(sz/BASE,3)
+
+def on_our_fill(cid, side, px, sz):
+    c = contracts[cid]
+    c.q += sz if side=='bid' else -sz
+    pnl.record(cid, side, px, sz)
+    taker_dir = -1 if side=='bid' else 1       # they sold to our bid → price down
+    c.drift += taker_dir*ALPHA*min(sz/BASE,3)
+    c.cooldown[side] = now()+2; c.widen_until[side] = now()+20
+    markouts.schedule(cid, px, side, [10,60,300])
+    compute_fv(c, now()); refresh(c); refresh_linked(c)
+    check_kill_switch()
+
+def refresh(c):
+    maybe_take(c, now()); sync_orders(c, target_quotes(c, now()))
+
+def refresh_linked(c):
+    for i,_ in links[c.id]: compute_fv(contracts[i], now()); refresh(contracts[i])
+
+# ---------- timer loop (1s) ----------
+def on_timer():
+    for c in contracts.values():
+        decay_struct(c, 1.0); compute_fv(c, now())
+        if ext_age(c) > 60: cancel_takers(c)
+        refresh(c)
+    for s in excl_sets.values(): normalize_excl_set(s); excl_arb(s)
+    if every(60s):  update_betas()            # EWMA regression on 60s log-odds changes
+    if every(300s): review_markouts()         # widen/disable contracts with neg 60s markout
+
+def check_kill_switch():
+    global REDUCE_ONLY
+    if pnl.today() < -L_KILL: REDUCE_ONLY = True
+
+def review_markouts():
+    for cid, m in markouts.stats(window='2h').items():
+        if m.n >= 20 and m.mean_60s < -0.5*MIN_HALF: SPREAD_MULT[cid] *= 1.3
+        if m.n >= 20 and m.mean_60s < -MIN_HALF:     DISABLED.add(cid)
+```
+
+---
+
+## Build order for a few days
+
+- **Day 1:** feed handlers for the local and external markets, logging everything, the log-odds FV blend, the calibration regression, and a hand-written config for exclusive sets and links.
+- **Day 2:** quoting, order sync, taking, inventory limits and skew, the kill switch, and a paper-trade run against live data.
+- **Day 3:** exclusive-set arbitrage, correlation betas, the group-exposure cap, and markout review. Then tune `w_e`/`w_l`, `min_half` and `α` from the logs.
+
+## Where this can go wrong
+
+- **Latency:** if the competition has faster bots reacting to external moves, cancel-on-move is your only defence. If markouts after external jumps are bad even so, stop quoting within ±5s of any external update larger than 1.5¢.
+- **Informed local flow:** if the local market regularly leads the external venues, the whole external-anchor premise is wrong for those contracts. The day-1 regression tells you this; don't skip it.
+- **Correlation betas:** these are the flakiest component. The hard-coded exclusive sets are where the reliable structural edge is. If the betas are noisy, set `w_s` for correlated links to 0 and treat those links only as a risk-grouping tool.
+
