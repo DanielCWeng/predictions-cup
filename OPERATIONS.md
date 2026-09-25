@@ -49,8 +49,8 @@ python -m predictions_cup.sig.capture \
 ```
 
 The default recorder path is `data/sig_realtime.sqlite3`. The candidate recorder uses
-SQLite/WAL and normalized tables for Realtime deliveries, trades, authoritative REST book
-observations, and trust/reconciliation transitions. Retention defaults to 14 days.
+SQLite/WAL and normalized tables for Realtime deliveries, trades, book/settlement
+invalidation events, authoritative REST book observations, and trust/reconciliation transitions. Retention defaults to 14 days.
 
 Operational trust rules are fail-closed: initial subscription, reconnect, token refresh, socket
 error, malformed payload or topic revision gap invalidates relevant state and triggers

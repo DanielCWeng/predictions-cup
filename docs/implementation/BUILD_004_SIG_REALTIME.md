@@ -120,6 +120,9 @@ SQLite uses WAL and normalized tables:
   local observation time;
 - `realtime_trades` — exact documented market-batch trade fields plus revision and local
   observation time;
+- `book_dirty_events` — documented book invalidations with source `at` and local observation time;
+- `market_settled_events` — documented settlement/refund invalidations with source `at`,
+  stamped outcome, and local observation time;
 - `book_observations` — authoritative bounded canonical book, best bid/ask, REST observation
   time, refresh reason, triggering Realtime revision;
 - `trust_transitions` — trusted/untrusted/reconciling lifecycle records.
