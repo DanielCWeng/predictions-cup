@@ -14,8 +14,4 @@ Status semantics:
 | BUILD-003 — SIG authenticated read-only REST client | BLOCKED / IN REVIEW | `build/003-sig-rest-client` | #4 | head `7666e5cdf0309a7847edf8277de41ed6fe5cc970` | recursive `MarketNode` transport validation blocker remains; branch must reconcile canonical docs with cleaned `main` before merge | pending |
 | EXPERIMENT-001A — Polymarket live data capture foundation | BLOCKED / IN REVIEW | `experiment/001a-polymarket-live-capture` | #5 | head `070fbf391ea983d9f719933bf58fdbb5af493df9` | focused recorder revision required: durable event-time book changes, honest REST observation times, lean storage growth, missing-PONG detection, and `last_trade_price` consistency; integration gated after #4 | pending |
 
-## Active non-build work
-
-- PR #6 — **Docs — Competition research and six-day launch plan** — active and unmerged on `docs/competition-research-launch-plan`. It changes documentation only and does not alter runtime/trading capability.
-
 GitHub merge state and the actual contents of `main` are authoritative when documentation drifts.
