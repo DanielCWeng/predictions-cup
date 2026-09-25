@@ -1,4 +1,58 @@
-"""sig logical domain.
+"""SIG REST transport package."""
 
-BUILD-001 provides only the package boundary. Domain behavior is intentionally not implemented.
-"""
+from predictions_cup.sig.client import RetryPolicy, SigRestClient
+from predictions_cup.sig.dto import (
+    AccountDto,
+    BulkPricesDto,
+    ExchangeListItemDto,
+    ExchangePageDto,
+    ExchangeTradeDto,
+    MarketDto,
+    MarketNodesDto,
+    MarketPageDto,
+    OrderBookSnapshotDto,
+    PriceHistoryDto,
+    PriceSnapshotDto,
+    TradePageDto,
+)
+from predictions_cup.sig.errors import (
+    SigApiError,
+    SigAuthenticationError,
+    SigAuthorizationError,
+    SigClientRequestError,
+    SigConflictError,
+    SigMalformedResponseError,
+    SigNotFoundError,
+    SigRateLimitError,
+    SigTemporaryServiceError,
+    SigTransportError,
+    SigUnexpectedServerError,
+)
+
+__all__ = [
+    "AccountDto",
+    "BulkPricesDto",
+    "ExchangeListItemDto",
+    "ExchangePageDto",
+    "ExchangeTradeDto",
+    "MarketDto",
+    "MarketNodesDto",
+    "MarketPageDto",
+    "OrderBookSnapshotDto",
+    "PriceHistoryDto",
+    "PriceSnapshotDto",
+    "RetryPolicy",
+    "SigApiError",
+    "SigAuthenticationError",
+    "SigAuthorizationError",
+    "SigClientRequestError",
+    "SigConflictError",
+    "SigMalformedResponseError",
+    "SigNotFoundError",
+    "SigRateLimitError",
+    "SigRestClient",
+    "SigTemporaryServiceError",
+    "SigTransportError",
+    "SigUnexpectedServerError",
+    "TradePageDto",
+]
