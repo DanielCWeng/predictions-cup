@@ -76,6 +76,58 @@ def _public_market(market_id: str = "opaque-market") -> dict[str, object]:
     }
 
 
+def _market_node_leaf(*, position: int = 0) -> dict[str, object]:
+    return {
+        "nodeType": "contract",
+        "position": position,
+        "title": "Will the event occur?",
+        "settlementDate": "2026-12-31T23:59:59.000Z",
+        "contractType": "Freeform",
+        "contractDetails": {
+            "contractType": "Freeform",
+            "description": "Resolves YES if the event occurs.",
+            "providerSpecific": {"nested": True},
+        },
+        "settlementOptions": ["YES"],
+        "settledWith": None,
+        "settledOn": None,
+    }
+
+
+def _market_nodes_payload() -> dict[str, object]:
+    return {
+        "market_id": "26",
+        "root": {
+            "nodeType": "operator",
+            "position": 0,
+            "operator": "AND",
+            "children": [
+                _market_node_leaf(position=0),
+                {
+                    "nodeType": "operator",
+                    "position": 1,
+                    "operator": "OR",
+                    "children": [_market_node_leaf(position=0)],
+                },
+            ],
+        },
+        "contexts": [],
+    }
+
+
+def _assert_market_nodes_rejected(payload: dict[str, object]) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(200, json=payload)
+
+    async def scenario() -> None:
+        async with SigRestClient(_settings(), transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(SigMalformedResponseError):
+                await client.get_market_nodes("26")
+
+    asyncio.run(scenario())
+
+
 def _price_payload(exchange_id: str = "36") -> dict[str, object]:
     return {
         "exchangeId": exchange_id,
@@ -368,6 +420,92 @@ def test_null_exchange_option_is_preserved_in_transport_but_not_invented_canonic
             market_dto.to_canonical()
 
     asyncio.run(scenario())
+
+
+def test_market_nodes_parse_leaf_and_recursive_operator_structure() -> None:
+    payload = _market_nodes_payload()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(200, json=payload)
+
+    async def scenario() -> None:
+        async with SigRestClient(_settings(), transport=httpx.MockTransport(handler)) as client:
+            nodes = await client.get_market_nodes("26")
+
+        assert nodes.root.node_type == "operator"
+        assert nodes.root.operator == "AND"
+        assert nodes.root.children is not None
+        leaf = nodes.root.children[0]
+        assert leaf.node_type == "contract"
+        assert leaf.position == 0
+        assert leaf.contract_details == {
+            "contractType": "Freeform",
+            "description": "Resolves YES if the event occurs.",
+            "providerSpecific": {"nested": True},
+        }
+
+        nested_operator = nodes.root.children[1]
+        assert nested_operator.children is not None
+        assert nested_operator.children[0].node_type == "contract"
+
+    asyncio.run(scenario())
+
+
+def test_market_nodes_accept_valid_leaf_root() -> None:
+    payload = {"market_id": "26", "root": _market_node_leaf(), "contexts": []}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(200, json=payload)
+
+    async def scenario() -> None:
+        async with SigRestClient(_settings(), transport=httpx.MockTransport(handler)) as client:
+            nodes = await client.get_market_nodes("26")
+        assert nodes.root.node_type == "contract"
+        assert nodes.root.position == 0
+
+    asyncio.run(scenario())
+
+
+def test_market_nodes_reject_missing_node_type() -> None:
+    payload = _market_nodes_payload()
+    root = payload["root"]
+    assert isinstance(root, dict)
+    root.pop("nodeType")
+    _assert_market_nodes_rejected(payload)
+
+
+def test_market_nodes_reject_missing_position() -> None:
+    payload = _market_nodes_payload()
+    root = payload["root"]
+    assert isinstance(root, dict)
+    root.pop("position")
+    _assert_market_nodes_rejected(payload)
+
+
+def test_market_nodes_reject_invalid_operator() -> None:
+    payload = _market_nodes_payload()
+    root = payload["root"]
+    assert isinstance(root, dict)
+    root["operator"] = "XOR"
+    _assert_market_nodes_rejected(payload)
+
+
+def test_market_nodes_reject_malformed_child() -> None:
+    payload = _market_nodes_payload()
+    root = payload["root"]
+    assert isinstance(root, dict)
+    root["children"] = [{"nodeType": "contract", "position": "not-an-integer"}]
+    _assert_market_nodes_rejected(payload)
+
+
+def test_market_nodes_reject_structurally_invalid_nested_operator() -> None:
+    payload = _market_nodes_payload()
+    root = payload["root"]
+    assert isinstance(root, dict)
+    root["children"] = [{"nodeType": "operator", "position": 1, "operator": "AND"}]
+    _assert_market_nodes_rejected(payload)
 
 
 def test_price_snapshot_keeps_latest_bid_ask_and_transport_spread() -> None:
