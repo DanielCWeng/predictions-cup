@@ -3,8 +3,7 @@
 ## Current state
 
 - No production deployment exists.
-- No trading daemon exists.
-- No production trading daemon or production deployment exists.
+- No production trading daemon exists.
 - Normal application startup remains finite, network-free and non-trading.
 - PR #5 contains a separate, explicitly invoked public read-only Polymarket research recorder.
 
