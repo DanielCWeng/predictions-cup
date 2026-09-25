@@ -45,9 +45,11 @@ If accepted, BUILD-003 adds authenticated **read-only** SIG REST access for acco
 
 Implementation exists on `experiment/001a-polymarket-live-capture`, not on `main`.
 
-Current review state: **BLOCKED / IN REVIEW**.
+Current review state: **IN REVIEW**.
 
-Required revision covers durable normalized event-time book changes, honest REST batch observation timestamps, leaner storage growth, missing-PONG/feed-liveness detection, and `last_trade_price` consistency. It must be updated/rebased after PR #4 lands before final review.
+This branch is integrated against corrected BUILD-003 head `986bd52a7338f790eb00b3e8e333c10e41acd7b0` while PR #4 awaits independent review. The focused recorder revision is complete: normalized event-time book changes are durable, REST book batches retain receipt-time observations, the 1-second panel is scalar/lean with depth on a slower configurable cadence, receive/PONG liveness forces reconnect, and `last_trade_price` updates current book state.
+
+EXPERIMENT-001A remains unmerged public read-only research infrastructure. It adds no wallet/signing, order submission, fair value, strategy, risk or execution capability.
 
 ## Not implemented on main
 
@@ -75,11 +77,11 @@ Required revision covers durable normalized event-time book changes, honest REST
 ## Immediate integration queue
 
 ```text
-PR #4 correction/review
-→ merge PR #4
-→ update/rebase PR #5
-→ PR #5 correction/review
-→ merge PR #5
+independent review PR #4
+→ merge PR #4 if accepted
+→ refresh PR #5 onto accepted #4/main history if required
+→ independent review PR #5
+→ merge PR #5 if accepted
 → next implementation ticket
 ```
 
