@@ -275,12 +275,14 @@ def test_quiet_open_book_is_invalidated_and_rest_refreshed_for_silent_expiry(
             state.last_rest_observed_at + timedelta(seconds=31)
         )
 
-        assert len(rest.calls) == initial_calls + 1
+        # Both open books crossed the same freshness bound, so both are
+        # authoritatively refreshed. Exchange 36 demonstrates silent expiry.
+        assert len(rest.calls) == initial_calls + 2
         assert state.trusted is True
         assert state.orderbook is not None
         assert state.orderbook.bids == ()
         assert state.orderbook.asks == ()
-        assert engine.health.bounded_book_refresh_count == 1
+        assert engine.health.bounded_book_refresh_count == 2
         recorder.close()
 
         connection = sqlite3.connect(db)
