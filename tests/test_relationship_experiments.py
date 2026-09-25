@@ -12,6 +12,7 @@ from predictions_cup.learning.relationships import (
     LeakageClass,
     PriceCoordinate,
     ReferenceEstimator,
+    ReferencePriceMode,
     ReferenceSpec,
     Regime,
     RelationshipDirection,
@@ -28,6 +29,7 @@ from predictions_cup.replay.model import (
     ReplayEvent,
     ReplayEventType,
     ReplaySource,
+    TradePayload,
     TrustPayload,
 )
 
@@ -55,6 +57,25 @@ def _quote(
             best_ask=Decimal(ask),
             quote_observed_at=quote_at or at,
         ),
+    )
+
+
+def _trade(
+    at: datetime,
+    source: ReplaySource,
+    instrument: str,
+    price: str,
+    sequence: int,
+) -> ReplayEvent:
+    return ReplayEvent(
+        observed_at=at,
+        source_at=None,
+        source=source,
+        event_type=ReplayEventType.TRADE,
+        instrument_id=instrument,
+        market_id=f"market-{instrument}",
+        sequence=sequence,
+        payload=TradePayload(price=Decimal(price), quantity=Decimal("1")),
     )
 
 
@@ -401,6 +422,114 @@ def test_complement_relationship_flips_impulse_direction() -> None:
     assert signal.signal_value == Decimal("-0.10")
 
 
+def test_complement_bid_and_ask_are_side_aware() -> None:
+    base = datetime(2026, 9, 25, 12, tzinfo=UTC)
+    target = InstrumentKey(ReplaySource.SIG, "sig-1")
+    complement = ReferenceSpec(
+        InstrumentKey(ReplaySource.POLYMARKET, "poly-1"),
+        relationship=RelationshipDirection.COMPLEMENT,
+        leakage_class=LeakageClass.COMPLEMENT,
+    )
+    bid_spec = RelationshipExperimentSpec(
+        id="RV-COMPLEMENT-BID",
+        dataset_id="synthetic",
+        family=ExperimentFamily.RV,
+        target=target,
+        references=(complement,),
+        threshold=Decimal("0.05"),
+        coordinate=PriceCoordinate.PROBABILITY,
+        estimator=ReferenceEstimator.WEIGHTED_PROBABILITY,
+        reference_price_mode=ReferencePriceMode.BID,
+        target_horizons=(timedelta(seconds=1),),
+        reference_freshness=timedelta(seconds=10),
+    )
+    ask_spec = RelationshipExperimentSpec(
+        id="RV-COMPLEMENT-ASK",
+        dataset_id="synthetic",
+        family=ExperimentFamily.RV,
+        target=target,
+        references=(complement,),
+        threshold=Decimal("0.05"),
+        coordinate=PriceCoordinate.PROBABILITY,
+        estimator=ReferenceEstimator.WEIGHTED_PROBABILITY,
+        reference_price_mode=ReferencePriceMode.ASK,
+        target_horizons=(timedelta(seconds=1),),
+        reference_freshness=timedelta(seconds=10),
+    )
+    events = (
+        _quote(base, ReplaySource.POLYMARKET, "poly-1", "0.20", "0.30", 1),
+        _quote(base, ReplaySource.SIG, "sig-1", "0.59", "0.61", 1),
+        _trust(base),
+        _quote(base + timedelta(seconds=1), ReplaySource.SIG, "sig-1", "0.64", "0.66", 2),
+    )
+
+    rows = RelationshipExperimentRunner().run(events, (bid_spec, ask_spec))
+    bid_row = next(
+        row
+        for row in rows
+        if row.experiment_id == "RV-COMPLEMENT-BID" and row.signal_direction is not None
+    )
+    ask_row = next(
+        row
+        for row in rows
+        if row.experiment_id == "RV-COMPLEMENT-ASK" and row.signal_direction is not None
+    )
+
+    assert bid_row.features.reference_residual_probability == Decimal("-0.10")
+    assert ask_row.features.reference_residual_probability == Decimal("-0.20")
+    assert bid_row.signal_direction is Direction.BUY_YES
+    assert ask_row.signal_direction is Direction.BUY_YES
+
+
+def test_last_trade_mode_uses_trade_timestamp_not_quote_timestamp() -> None:
+    base = datetime(2026, 9, 25, 12, tzinfo=UTC)
+    spec = RelationshipExperimentSpec(
+        id="RV-LAST-TRADE",
+        dataset_id="synthetic",
+        family=ExperimentFamily.RV,
+        target=InstrumentKey(ReplaySource.SIG, "sig-1"),
+        references=(ReferenceSpec(InstrumentKey(ReplaySource.POLYMARKET, "poly-1")),),
+        threshold=Decimal("0.05"),
+        coordinate=PriceCoordinate.PROBABILITY,
+        estimator=ReferenceEstimator.WEIGHTED_PROBABILITY,
+        reference_price_mode=ReferencePriceMode.LAST_TRADE,
+        target_horizons=(timedelta(seconds=1),),
+        reference_freshness=timedelta(seconds=2),
+    )
+
+    fresh_trade_only = (
+        _quote(base, ReplaySource.SIG, "sig-1", "0.49", "0.51", 1),
+        _trust(base),
+        _trade(base + timedelta(seconds=1), ReplaySource.POLYMARKET, "poly-1", "0.70", 1),
+        _quote(base + timedelta(seconds=2), ReplaySource.SIG, "sig-1", "0.55", "0.57", 2),
+    )
+    fresh_rows = RelationshipExperimentRunner().run(fresh_trade_only, (spec,))
+    fresh_signal = next(row for row in fresh_rows if row.signal_direction is not None)
+    assert fresh_signal.signal_direction is Direction.BUY_YES
+    assert fresh_signal.features.reference_residual_probability == Decimal("-0.20")
+    assert fresh_signal.gross_markout == Decimal("0.04")
+
+    stale_trade_with_fresh_quote = (
+        _trade(base, ReplaySource.POLYMARKET, "poly-1", "0.70", 1),
+        _quote(
+            base + timedelta(seconds=10),
+            ReplaySource.POLYMARKET,
+            "poly-1",
+            "0.69",
+            "0.71",
+            2,
+        ),
+        _quote(base + timedelta(seconds=10), ReplaySource.SIG, "sig-1", "0.49", "0.51", 1),
+        _trust(base + timedelta(seconds=10)),
+    )
+    stale_rows = RelationshipExperimentRunner().run(stale_trade_with_fresh_quote, (spec,))
+    assert any(
+        row.invalid_reason is InvalidReason.EXTERNAL_STALE
+        for row in stale_rows
+        if row.decision_time == base + timedelta(seconds=10)
+    )
+
+
 def test_serialization_is_deterministic() -> None:
     base = datetime(2026, 9, 25, 12, tzinfo=UTC)
     events = (
@@ -415,3 +544,6 @@ def test_serialization_is_deterministic() -> None:
     first = runner.run(events, (spec,))
     second = runner.run(tuple(reversed(events)), (spec,))
     assert serialize_relationship_observations(first) == serialize_relationship_observations(second)
+    assert serialize_relationship_observations(reversed(first)) == serialize_relationship_observations(
+        first
+    )
