@@ -60,6 +60,57 @@ python -m predictions_cup.replay \
 It performs no network access and reports records loaded, observed time span, instruments, trusted
 SIG book observations, external quote observations and explicit data-gap events.
 
+### Bounded real-capture selection
+
+Large capture databases are not materialized wholesale when an experiment needs only a small
+slice. `CaptureSelection` pushes the following predicates into SQLite before rows are converted to
+`ReplayEvent` objects:
+
+- optional observable-time `start_at`;
+- optional observable-time `end_at`;
+- explicit SIG exchange IDs;
+- explicit Polymarket token IDs.
+
+The time interval is half-open: `[start_at, end_at)`. Every accepted source table is filtered on
+the timestamp that controls replay visibility: SIG `rest_observed_at` / `observed_at`,
+Polymarket `observed_at`, and ingestion-health `recorded_at`. Global SIG trust transitions and
+Polymarket feed-health rows remain in a selected slice because they can invalidate selected
+instruments.
+
+For example:
+
+```python
+selection = CaptureSelection(
+    start_at=start,
+    end_at=end,
+    sig_exchange_ids=("36",),
+    polymarket_token_ids=("token-id",),
+)
+sig_events = load_sig_capture(sig_path, selection=selection)
+poly_events = load_polymarket_capture(poly_path, selection=selection)
+```
+
+The offline inspector accepts the same bounds without creating replay events:
+
+```bash
+python -m predictions_cup.replay \
+  --sig-db path/to/sig.sqlite3 \
+  --polymarket-db path/to/polymarket.sqlite3 \
+  --start-at 2026-09-25T12:00:00Z \
+  --end-at 2026-09-25T12:10:00Z \
+  --sig-exchange-id 36 \
+  --polymarket-token-id token-id
+```
+
+Its counts, time span and instrument discovery are SQL aggregates / distinct queries rather than a
+full `ReplayEvent` materialization. Only the relatively sparse ingestion-health payloads are read
+to classify disconnect gaps.
+
+Window starts are deliberately fail-closed. A bounded slice does not inspect or inherit a quote,
+trust transition or feed-health state that occurred before `start_at`. If an experiment needs
+warm state, the caller must request an explicit pre-roll by moving `start_at` earlier; BUILD-005
+does not invent prior state.
+
 ## Replay state and validity
 
 Replay reconstructs per-instrument state sufficient for first experiments:
