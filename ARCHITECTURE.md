@@ -48,9 +48,9 @@ The candidate runtime is:
                     NORMAL: tracked seed/expiry-safety
                     BACKGROUND: broad scalar/metadata work
 
-Untracked exchanges use the explicit UNTRACKED_DEPTH state. Tracked depth is usable only in TRACKED_TRUSTED; invalidation/freshness expiry moves it to TRACKED_UNTRUSTED before an awaited REST recovery.
+Untracked exchanges use the explicit UNTRACKED_DEPTH state. Tracked depth is usable only in TRACKED_TRUSTED; invalidation/freshness expiry moves it to TRACKED_UNTRUSTED before an awaited REST recovery. Broad scalar/BBO state is independently fail-closed: a bulk missingIds result clears any prior scalar latest-price/BBO/spread values and observation timestamp so stale fallback state cannot remain resident.
 
-The live governed client wraps the accepted BUILD-003 transport rather than replacing it. Every live HTTP attempt shares configurable pacing and a per-key 429 cooldown. The branch default is 3 requests/second as an operational deployment choice informed by live observation, not a SIG-published venue limit.
+The live governed client wraps the accepted BUILD-003 transport rather than replacing it. Every live HTTP attempt shares configurable pacing and a per-key 429 cooldown. The branch default is 2 requests/second. The prior blocking curl + sleep probe demonstrated only roughly 2.0–2.4 request starts/second, so a 3 requests/second default is not treated as validated until a fixed-cadence live probe schedules request starts independently of response time. No numeric SIG venue limit is published in the supplied contract.
 
 The 30-second tracked-depth freshness default is similarly project policy. SIG documents silent order expiry, while the aggregate exchange orderbook has no expirationDate metadata. BUILD-006 therefore retains a bounded fallback only for tracked books instead of polling the entire tournament.
 
