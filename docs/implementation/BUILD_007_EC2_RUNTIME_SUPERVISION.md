@@ -20,7 +20,7 @@ The default rendered ExecStart values are:
 
 ```text
 <repo-root>/.venv/bin/python -m predictions_cup.sig.capture --runtime-env-only
-<repo-root>/.venv/bin/python -m predictions_cup.external.polymarket.recorder --runtime-env-only
+<repo-root>/.venv/bin/python -m predictions_cup.external.polymarket.recorder --runtime-env-only --require-explicit-universe
 ```
 
 The installer may use an explicitly supplied `PREDICTIONS_CUP_PYTHON` instead of the default
@@ -55,6 +55,25 @@ PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS=
 It is comma-separated when explicitly configured and empty by default. The capture entrypoint
 deduplicates values from that setting and any explicit CLI `--tracked-exchange-id` arguments.
 Therefore systemd startup preserves BUILD-006's safe default of no resident tracked full depth.
+
+## Polymarket supervised universe
+
+The broad EXPERIMENT-001A election heuristic remains a useful explicit/manual research mode, but
+the BUILD-007 systemd service no longer permits it as the always-on Cup lane.
+
+The service passes `--require-explicit-universe`. If Polymarket capture is enabled, the installer
+requires non-empty `PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS`; the recorder resolves those IDs
+strictly against active Gamma markets. IDs may be market IDs, condition IDs or token IDs:
+
+- market/condition match -> all aligned tokens for that market;
+- token match -> only the explicit matching token;
+- any unresolved configured ID -> fail closed;
+- no heuristic additions are permitted in strict mode.
+
+No Cup identity is hard-coded. The intended production input is the independently accepted
+LIVE-MAPPING-GATE-001 SIG ↔ Polymarket crosswalk. Until that exists, Polymarket capture can remain
+disabled; the installer leaves its unit disabled/stopped while SIG continues normally.
+
 
 ## systemd behavior
 
@@ -102,15 +121,65 @@ remain fail-closed.
 
 ## Storage
 
-The units set `WorkingDirectory` to the repository root, preserving the existing relative
-defaults:
+The live soak invalidated the original broad high-frequency SQLite deployment shape.
+
+Measured broad-soak evidence:
+
+- 3,160 selected markets / 6,320 tokens;
+- 1-second panel = 6,320 rows/second = 546,048,000 scalar rows/day;
+- 60-second depth cadence = 9,100,800 depth rows/day before deltas/trades;
+- main SQLite grew 1,145,905,152 -> 1,159,487,488 bytes in ~22.15 seconds;
+- that interval corresponds to roughly 2.21 GB/hour / 53 GB/day at that measured point;
+- WAL was already ~2.61 GB;
+- the EC2 root volume is roughly 30 GiB.
+
+BUILD-007 does not solve that by weakening research cadence. It separates operational state from
+research history.
+
+Fresh operational SQLite:
 
 ```text
-data/sig_realtime.sqlite3
-data/polymarket_capture.sqlite3
+data/polymarket_operational.sqlite3
 ```
 
-BUILD-007 does not move, delete, migrate or truncate capture data.
+contains only:
+
+- market metadata;
+- token metadata;
+- ingestion health.
+
+High-frequency history:
+
+```text
+data/polymarket_research/
+    observations/
+    book_changes/
+    trades/
+    depth_snapshots/
+```
+
+is stored as immutable PyArrow Parquet shards with ZSTD compression. Defaults are 60-second time
+buckets and a 100,000-row per-shard cap. Each publication uses:
+
+```text
+write temporary file -> fsync file -> os.replace final .parquet -> fsync directory
+```
+
+so readers never see a partially published final shard. Published shard names are unique and never
+reopened for append. Graceful shutdown flushes resident buffers. A hard process/host loss can lose
+the bounded not-yet-published in-memory shard, but cannot corrupt a previously published shard.
+
+Source/event timestamps and local observation/sample timestamps remain separate. Financial
+price/size values are represented as exact decimal text rather than binary floats. Depth levels
+use typed nested structures rather than JSON blobs.
+
+The pre-correction broad `data/polymarket_capture.sqlite3*` soak artifacts are legacy evidence.
+BUILD-007 neither deletes nor migrates them automatically, and the supervised service uses a fresh
+operational SQLite path.
+
+Replay remains backward-compatible with legacy Polymarket SQLite captures. New Parquet research
+directories are readable directly, with the operational SQLite supplied separately when health /
+disconnect events are required.
 
 ## Installer/update behavior
 
@@ -123,9 +192,10 @@ BUILD-007 does not move, delete, migrate or truncate capture data.
 5. rejects unresolved placeholders, trade-secret references or a tracked-ID argument in the SIG unit;
 6. installs units to `/etc/systemd/system` by default;
 7. runs `systemctl daemon-reload`;
-8. enables both services;
-9. restarts both services;
-10. verifies active state and returns non-zero on restart/active failure.
+8. always enables/restarts SIG;
+9. enables/restarts Polymarket only when capture is explicitly enabled with a non-empty strict
+   supervised universe; otherwise disables/stops its installed unit;
+10. verifies active configured services and returns non-zero on restart/active failure.
 
 The script is idempotent and supports test-only/tooling overrides for the runtime user/home,
 Python, systemd destination and systemctl executable. It never deletes runtime data or secrets.
@@ -153,19 +223,46 @@ BUILD-007 adds tests proving:
 - initial Gamma failure remains fail-closed;
 - periodic Gamma failure after a valid universe is resident is fail-soft and later recovery is covered;
 - local storage failure during refresh still propagates;
-- the Polymarket unit has a slower 30-second restart cadence after unrecoverable startup failure.
+- the Polymarket unit has a slower 30-second restart cadence after unrecoverable startup failure;
+- supervised Polymarket startup requires an explicit universe and unresolved IDs fail closed;
+- disabled Polymarket capture leaves the unit disabled/stopped while SIG remains supervised;
+- fresh operational SQLite contains no high-frequency panel/delta/trade/depth tables;
+- ZSTD Parquet shards preserve source/observed timestamps and depth structure;
+- Parquet publication is atomic and leaves no final partial shard;
+- replay reads the new Parquet research format and can combine separate operational health.
 
 CI also runs `bash -n` and runs `shellcheck` when it is available on the runner.
 
 ## Live acceptance boundary
 
-EC2 validation is partial. The SIG service/env-file side is healthy. Polymarket has now proven
-successful startup, 3,160-market / 6,320-token discovery, WebSocket capture/recovery, 6,320-row
-snapshot output and zero storage failures. The second live attempt exposed the periodic-refresh
-TaskGroup failure described above. After this correction passes CI/re-review, the Polymarket
-service must be rerun through a scheduled refresh window and shown to stay active with SQLite
-output advancing; SSH-disconnect and reboot validation still follow before merge.
+EC2 validation is partial and has produced two classes of useful evidence.
 
-The exact conservative operator procedure is in `OPERATIONS.md`. It verifies enabled/active
-state, resolved EnvironmentFiles, journals, capture output, manual restart, SSH disconnect
-survival and an operator-controlled reboot without any trading action.
+The SIG service/environment side is healthy. The broad Polymarket soak also proved the core public
+capture machinery: 3,160 markets / 6,320 tokens discovered, WebSocket connected, 6,320-row
+snapshots written, WebSocket reconnect recovered and zero storage failures. It exposed and drove
+the Gamma startup/periodic-refresh corrections.
+
+That same soak then falsified the storage/universe architecture for always-on use. The broad
+heuristic plus SQLite growth cannot be accepted on the ~30 GiB host. It is explicitly **not** the
+production-intended Cup lane.
+
+The next live Polymarket acceptance run must therefore use this corrected branch and an explicit
+mapping-bounded universe. Because production IDs must come from the accepted live crosswalk,
+BUILD-007's final Polymarket acceptance is dependent on LIVE-MAPPING-GATE-001. No guessed IDs
+should be substituted merely to clear the gate.
+
+Once the accepted IDs exist, live acceptance must prove:
+
+1. installed Polymarket unit contains `--require-explicit-universe`;
+2. runtime.env contains the accepted mapped IDs and no trade credential;
+3. subscribed market/token scope matches the accepted mapping universe;
+4. operational SQLite stays small and research history appears only in ZSTD Parquet shards;
+5. Parquet bytes/files advance through a soak window;
+6. Gamma 429/degraded refresh does not kill last-good capture;
+7. manual restart resumes capture;
+8. SSH disconnect/reconnect does not affect the services;
+9. reboot returns both configured services and writing resumes.
+
+Until then, Polymarket may remain disabled/stopped while SIG supervision continues.
+
+The exact operator procedure is in `OPERATIONS.md`.
