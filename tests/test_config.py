@@ -55,7 +55,10 @@ def test_tracked_depth_runtime_configuration_is_external_and_nonsecret(
 ) -> None:
     del clean_config_env
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS", "exchange-a, exchange-b,exchange-a")
+    monkeypatch.setenv(
+        "PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS",
+        "exchange-a, exchange-b,exchange-a",
+    )
 
     settings = AppSettings()
 
