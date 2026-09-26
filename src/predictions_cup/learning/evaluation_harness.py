@@ -9,7 +9,7 @@ from decimal import Decimal
 from predictions_cup.learning.research_spec import (
     AblationSpec,
     ExecutionStressSpec,
-    NegativeControlKind,
+    NegativeControlKind as _NegativeControlKind,
     NegativeControlSpec,
     ResearchEvaluationSpec,
     RunIdentity,
@@ -17,6 +17,7 @@ from predictions_cup.learning.research_spec import (
 )
 from predictions_cup.learning.validation import EvaluationObservation
 
+NegativeControlKind = _NegativeControlKind
 NegativeControl = NegativeControlSpec
 AblationVariant = AblationSpec
 ExecutionStress = ExecutionStressSpec
