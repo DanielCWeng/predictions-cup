@@ -54,6 +54,28 @@ The default recorder path is data/sig_realtime.sqlite3. SQLite/WAL persistence i
 
 See docs/implementation/BUILD_004_SIG_REALTIME.md for the accepted historical baseline and docs/implementation/BUILD_006_SIG_REST_GOVERNOR.md for the corrective candidate.
 
+
+## AWS EC2 runtime secret layout
+
+The current AWS runtime host keeps SIG credentials outside the repository under the operator's
+home directory:
+
+```text
+~/.config/predictions-cup/runtime.env
+~/.config/predictions-cup/trade.env
+```
+
+The intended split is:
+
+- `runtime.env` — read credential plus fail-closed runtime settings such as
+  `PREDICTIONS_CUP_TRADING_ENABLED=false`;
+- `trade.env` — `PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL` only.
+
+The directory is expected to be mode `700`; both files are expected to be mode `600`.
+Read-only capture, replay and research processes must load `runtime.env` only. The trade-secret
+file must remain unsourced unless a separately approved execution path explicitly requires it.
+Code, logs, CI, GitHub and operator documentation must never contain the credential values.
+
 ## Eventual operating expectations
 
 Future production operation is expected to provide, at minimum:
