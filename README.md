@@ -4,18 +4,17 @@ Foundation for a quantitative prediction-market trading system being developed f
 
 ## Current status
 
-The accepted `main` baseline now includes BUILD-003 and EXPERIMENT-001A. It has **no trading capability**.
+The accepted `main` baseline includes BUILD-006 and EXPERIMENT-001A. It has **no trading capability**. BUILD-007 / PR #20 is an in-review read-only EC2 supervision layer and is not yet accepted/live validated.
 
 BUILD-003 provides authenticated, read-only SIG REST access for market discovery, prices, orderbooks, trades/history, market nodes, exchanges, and account health. EXPERIMENT-001A provides a separate public read-only Polymarket research recorder for external market capture. Neither path submits or cancels orders, calculates fair value, or runs strategies.
 
 BUILD-002 remains the owner of typed configuration and canonical domain objects. BUILD-003 validates SIG wire payloads separately and converts into those canonical contracts only where the conversion is lossless.
 
-BUILD-004 is accepted on `main` as the read-only SIG Realtime/state foundation. Its first live
-credentialed tournament smoke exposed a scalability defect in the original all-exchange
-full-depth freshness fallback. BUILD-006 / PR #19 is the in-review corrective branch: it keeps
-full-tournament Realtime capture, makes resident authoritative depth explicitly tracked-only,
-uses the bulk price/BBO endpoint for broad state, and places live SIG REST behind one priority
-governor with shared 429 cooldown. It adds no strategy or execution capability.
+BUILD-004 is accepted on `main` as the read-only SIG Realtime/state foundation. BUILD-006 /
+PR #19 is also accepted: it keeps full-tournament Realtime capture, makes resident authoritative
+depth explicitly tracked-only, uses the bulk price/BBO endpoint for broad state, and places live
+SIG REST behind one priority governor with shared 429 cooldown. It adds no strategy or execution
+capability.
 
 ## Requirements
 
@@ -28,7 +27,8 @@ Runtime dependencies are intentionally limited to:
 - `pydantic-settings` for deterministic environment-driven configuration;
 - `httpx` for pooled asynchronous read-only SIG HTTP;
 - `aiohttp` for public Polymarket Gamma/CLOB HTTP and market WebSocket capture;
-- `supabase` for the BUILD-004 candidate private SIG Realtime subscription.
+- `pyarrow` for immutable ZSTD Parquet research shards and replay reads;
+- `supabase` for the accepted BUILD-004 private SIG Realtime subscription.
 
 The project uses a `src/` package layout with `pytest`, `ruff`, and strict `mypy`.
 
@@ -60,6 +60,7 @@ PREDICTIONS_CUP_TOURNAMENT_SLUG
 PREDICTIONS_CUP_TRADING_ENABLED
 PREDICTIONS_CUP_SIG_REALTIME_STORAGE_PATH
 PREDICTIONS_CUP_SIG_REALTIME_BOOK_DEPTH
+PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS
 PREDICTIONS_CUP_SIG_REST_GOVERNOR_RATE_PER_SECOND
 PREDICTIONS_CUP_SIG_REST_SHARED_COOLDOWN_MAX_SECONDS
 PREDICTIONS_CUP_SIG_REALTIME_OPEN_BOOK_REFRESH_SECONDS
@@ -81,9 +82,13 @@ PREDICTIONS_CUP_POLYMARKET_DEPTH_SNAPSHOT_INTERVAL_SECONDS
 PREDICTIONS_CUP_POLYMARKET_GAMMA_PAGE_LIMIT
 PREDICTIONS_CUP_POLYMARKET_GAMMA_REFRESH_SECONDS
 PREDICTIONS_CUP_POLYMARKET_STORAGE_PATH
+PREDICTIONS_CUP_POLYMARKET_RESEARCH_PATH
+PREDICTIONS_CUP_POLYMARKET_PARQUET_SHARD_SECONDS
+PREDICTIONS_CUP_POLYMARKET_PARQUET_MAX_ROWS_PER_SHARD
 PREDICTIONS_CUP_POLYMARKET_UNIVERSE
 PREDICTIONS_CUP_POLYMARKET_INCLUDE_IDS
 PREDICTIONS_CUP_POLYMARKET_EXCLUDE_IDS
+PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS
 ```
 
 The default SIG API base is `https://www.thesuper.market/api/v1`.
@@ -112,7 +117,7 @@ SIG JSON numbers used for prices and quantities are decoded through `Decimal` be
 The accepted `main` SIG surface is read-only REST. There is no order placement, cancellation,
 automatic tournament resolver, or portfolio accounting on `main`.
 
-### SIG Realtime — accepted BUILD-004 baseline / BUILD-006 corrective candidate
+### SIG Realtime — accepted BUILD-006 runtime
 
 BUILD-004 provides the explicit read-only SIG capture command:
 
@@ -121,7 +126,8 @@ BUILD-004 provides the explicit read-only SIG capture command:
 
 BUILD-006 / PR #19 changes live depth maintenance so tournament-wide Realtime no longer implies
 tournament-wide resident full depth. Full depth is opt-in with repeatable --tracked-exchange-id
-arguments; the safe default is no tracked depth. The broad universe is maintained through
+arguments or the comma-separated `PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS` runtime
+setting; the safe default is no tracked depth. The broad universe is maintained through
 GET /exchanges/prices in batches of at most 100 IDs, while tracked bookDirty/recovery work is
 HIGH priority behind one governed REST budget.
 
@@ -147,7 +153,53 @@ scalar/BBO state rather than leaving a stale fallback. Failed tracked reconcilia
 fail-closed. Normal application startup remains network-free and no write/order path exists.
 
 See docs/implementation/BUILD_004_SIG_REALTIME.md for the historical accepted baseline and
-docs/implementation/BUILD_006_SIG_REST_GOVERNOR.md for the corrective candidate contract.
+docs/implementation/BUILD_006_SIG_REST_GOVERNOR.md for the accepted corrective contract.
+
+## EC2 systemd supervision — BUILD-007 candidate
+
+PR #20 adds two read-only systemd services and `scripts/install_runtime_services.sh`. Both use
+only `~/.config/predictions-cup/runtime.env`, disable repo-local dotenv loading, strip the SIG
+trade credential from the process environment and remain non-trading.
+
+The supervised Polymarket path is now deliberately different from the accepted broad
+EXPERIMENT-001A research baseline. A live broad-universe soak selected 3,160 markets / 6,320
+tokens and demonstrated that 1 Hz SQLite research history is not operationally sustainable on the
+EC2 host. BUILD-007 therefore preserves the 1-second research cadence while changing **scope and
+storage**:
+
+- systemd requires non-empty `PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS`;
+- those IDs are a strict include-only market/condition/token universe with no heuristic fallback;
+- the intended production source is the accepted SIG ↔ Polymarket live crosswalk;
+- unresolved IDs fail closed;
+- an upgrade that still requests Polymarket capture but lacks the new strict IDs first disables/
+  stops any existing Polymarket service before failing;
+- 1-second scalar/BBO, book changes, public trades and depth snapshots write to immutable ZSTD
+  Parquet shards below `data/polymarket_research/`;
+- fresh `data/polymarket_operational.sqlite3` stores only metadata/tokens/health;
+- raw Parquet trade capture is at-least-once, but hashed trades carry deterministic token+hash
+  event identity and canonical replay de-duplicates them;
+- legacy `data/polymarket_capture.sqlite3` captures remain readable and are not deleted.
+
+The service command is:
+
+```text
+<repo>/.venv/bin/python -m predictions_cup.external.polymarket.recorder \
+  --runtime-env-only --require-explicit-universe
+```
+
+Until LIVE-MAPPING-GATE-001 supplies an accepted crosswalk, the production-intended supervised
+Polymarket universe is not available and the Polymarket service should remain stopped rather than
+fall back to the 3,160-market heuristic. The SIG supervised collector can run independently.
+Before BUILD-007 merges, a deliberately bounded explicit public test universe may be used only for
+the required ARM64 EC2 PyArrow/Parquet smoke/soak; that temporary test set is not production
+mapping evidence.
+
+Gamma failures also fail at the correct boundary: startup without a valid universe fails closed;
+after startup, a failed scheduled metadata discovery/selection keeps the last-good universe and
+research capture alive. Local persistence failures still surface.
+
+See `OPERATIONS.md` and
+`docs/implementation/BUILD_007_EC2_RUNTIME_SUPERVISION.md` for deployment and acceptance gates.
 
 ## Polymarket research recorder
 
@@ -187,11 +239,12 @@ See `DATA_CONTRACTS.md` for contract ownership and meanings.
 ruff check .
 mypy
 pytest
+bash -n scripts/install_runtime_services.sh
 python -m predictions_cup.app
 python -m predictions_cup.app --smoke-test
 ```
 
-CI runs lint, strict type checking, tests, and both app invocations on Python 3.12.
+CI runs lint, shell validation (including shellcheck when available), strict type checking, tests, and both app invocations on Python 3.12.
 
 ## Repository orientation
 

@@ -14,7 +14,7 @@ def test_polymarket_capture_defaults_are_safe_and_research_oriented() -> None:
     assert settings.polymarket_capture_enabled is False
     assert settings.polymarket_snapshot_interval_seconds == 1.0
     assert settings.polymarket_book_depth == 20
-    assert settings.polymarket_storage_path == Path("data/polymarket_capture.sqlite3")
+    assert settings.polymarket_storage_path == Path("data/polymarket_operational.sqlite3")
     assert str(settings.polymarket_ws_url).startswith("wss://")
 
 

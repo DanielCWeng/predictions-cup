@@ -12,6 +12,7 @@ import pytest
 from predictions_cup.external.polymarket.health import IngestionHealth
 from predictions_cup.external.polymarket.models import BookChangeEvent, BookSnapshot, TradeEvent
 from predictions_cup.external.polymarket.models import BookLevel as PolymarketBookLevel
+from predictions_cup.external.polymarket.parquet_storage import PolymarketResearchStorage
 from predictions_cup.external.polymarket.storage import PolymarketStorage
 from predictions_cup.learning.evaluation import summarize
 from predictions_cup.learning.experiments import (
@@ -463,7 +464,7 @@ def test_chronological_split_never_shuffles_time() -> None:
     assert summarize(observations).count == 3
 
 
-def _write_real_capture_fixtures(tmp_path: Path) -> tuple[Path, Path]:
+def _write_real_capture_fixtures(tmp_path: Path) -> tuple[Path, Path, Path]:
     at = datetime(2026, 9, 25, 12, tzinfo=UTC)
     sig_path = tmp_path / "sig.sqlite3"
     sig = SigRealtimeRecorder(sig_path)
@@ -508,9 +509,9 @@ def _write_real_capture_fixtures(tmp_path: Path) -> tuple[Path, Path]:
     )
     sig.close()
 
-    poly_path = tmp_path / "polymarket.sqlite3"
-    storage = PolymarketStorage(poly_path)
-    storage.initialize()
+    poly_path = tmp_path / "polymarket_research"
+    research = PolymarketResearchStorage(poly_path)
+    research.initialize()
     poly_book = BookSnapshot(
         market_id="poly-market",
         token_id="poly-1",
@@ -520,9 +521,9 @@ def _write_real_capture_fixtures(tmp_path: Path) -> tuple[Path, Path]:
         asks=(PolymarketBookLevel(Decimal("0.46"), Decimal("12")),),
         last_trade_price=Decimal("0.455"),
     )
-    storage.append_observations((poly_book,), at.isoformat())
-    storage.append_snapshots((poly_book,), at.isoformat())
-    storage.append_book_changes(
+    research.append_observations((poly_book,), at.isoformat())
+    research.append_snapshots((poly_book,), at.isoformat())
+    research.append_book_changes(
         (
             BookChangeEvent(
                 market_id="poly-market",
@@ -538,7 +539,7 @@ def _write_real_capture_fixtures(tmp_path: Path) -> tuple[Path, Path]:
             ),
         )
     )
-    storage.append_trade(
+    research.append_trade(
         TradeEvent(
             market_id="poly-market",
             token_id="poly-1",
@@ -551,17 +552,27 @@ def _write_real_capture_fixtures(tmp_path: Path) -> tuple[Path, Path]:
             fee_rate_bps=None,
         )
     )
-    storage.append_health(
+    research.flush_all()
+
+    operational_path = tmp_path / "polymarket_operational.sqlite3"
+    operational = PolymarketStorage(operational_path)
+    operational.initialize()
+    operational.append_health(
         IngestionHealth(websocket_connected=True),
         (at + timedelta(milliseconds=40)).isoformat(),
     )
-    return sig_path, poly_path
+    return sig_path, poly_path, operational_path
 
 
-def test_actual_accepted_sqlite_loaders_and_offline_summary(tmp_path: Path) -> None:
-    sig_path, poly_path = _write_real_capture_fixtures(tmp_path)
+def test_actual_sig_sqlite_and_polymarket_parquet_loaders_and_summary(
+    tmp_path: Path,
+) -> None:
+    sig_path, poly_path, operational_path = _write_real_capture_fixtures(tmp_path)
     sig_events = load_sig_capture(sig_path)
-    poly_events = load_polymarket_capture(poly_path)
+    poly_events = load_polymarket_capture(
+        poly_path,
+        operational_path=operational_path,
+    )
 
     assert {event.event_type for event in sig_events} >= {
         ReplayEventType.BOOK_OBSERVATION,
@@ -575,11 +586,69 @@ def test_actual_accepted_sqlite_loaders_and_offline_summary(tmp_path: Path) -> N
         ReplayEventType.TRADE,
         ReplayEventType.HEALTH,
     }
-    summary = summarize_captures(sig_path=sig_path, polymarket_path=poly_path)
+    summary = summarize_captures(
+        sig_path=sig_path,
+        polymarket_path=poly_path,
+        polymarket_operational_path=operational_path,
+    )
     assert summary.records_loaded == len(sig_events) + len(poly_events)
     assert summary.instruments == ("polymarket:poly-1", "sig:sig-1")
     assert summary.trusted_sig_observations == 1
     assert summary.external_observations == 3
+
+
+def test_parquet_replay_deduplicates_hashed_trades_within_and_across_shards(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "polymarket_research"
+    first_storage = PolymarketResearchStorage(root, shard_seconds=60)
+    first_storage.initialize()
+    first_at = datetime(2026, 9, 25, 12, 0, 1, tzinfo=UTC)
+
+    duplicate = TradeEvent(
+        market_id="poly-market",
+        token_id="poly-1",
+        price=Decimal("0.455"),
+        size=Decimal("1"),
+        side="BUY",
+        source_timestamp=first_at,
+        observed_at=first_at,
+        transaction_hash="tx-duplicate",
+        fee_rate_bps=None,
+    )
+    first_storage.append_trade(duplicate)
+    first_storage.append_trade(duplicate)
+    first_storage.flush_all()
+
+    second_storage = PolymarketResearchStorage(root, shard_seconds=60)
+    second_storage.initialize()
+    second_storage.append_trade(
+        replace(
+            duplicate,
+            observed_at=first_at + timedelta(minutes=1),
+            source_timestamp=first_at + timedelta(minutes=1),
+        )
+    )
+    second_storage.flush_all()
+
+    events = load_polymarket_capture(root)
+    trades = [event for event in events if event.event_type is ReplayEventType.TRADE]
+
+    assert len(trades) == 1
+    assert trades[0].observed_at == first_at
+    assert trades[0].instrument_id == "poly-1"
+
+    windowed = load_polymarket_capture(
+        root,
+        selection=CaptureSelection(
+            start_at=first_at + timedelta(seconds=30),
+            end_at=first_at + timedelta(minutes=2),
+            polymarket_token_ids=("poly-1",),
+        ),
+    )
+    assert [
+        event for event in windowed if event.event_type is ReplayEventType.TRADE
+    ] == []
 
 
 def test_malformed_capture_schema_fails_clearly(tmp_path: Path) -> None:
@@ -593,8 +662,8 @@ def test_malformed_capture_schema_fails_clearly(tmp_path: Path) -> None:
         load_polymarket_capture(malformed)
 
 
-def test_sql_selection_filters_before_materialization(tmp_path: Path) -> None:
-    sig_path, poly_path = _write_real_capture_fixtures(tmp_path)
+def test_capture_selection_filters_before_materialization(tmp_path: Path) -> None:
+    sig_path, poly_path, operational_path = _write_real_capture_fixtures(tmp_path)
     base = datetime(2026, 9, 25, 12, tzinfo=UTC)
     inside = (base + timedelta(seconds=30)).isoformat()
     outside = (base + timedelta(hours=1)).isoformat()
@@ -639,52 +708,6 @@ def test_sql_selection_filters_before_materialization(tmp_path: Path) -> None:
             ),
         )
 
-    with sqlite3.connect(poly_path) as connection:
-        connection.execute(
-            """
-            INSERT INTO polymarket_book_observations (
-                token_id, market_id, source_timestamp, state_observed_at,
-                observed_at, best_bid, best_ask, midpoint, spread,
-                last_trade_price, book_valid
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "poly-noise",
-                "noise-market",
-                None,
-                inside,
-                inside,
-                "bad-decimal",
-                "0.2",
-                None,
-                None,
-                None,
-                1,
-            ),
-        )
-        connection.execute(
-            """
-            INSERT INTO polymarket_book_observations (
-                token_id, market_id, source_timestamp, state_observed_at,
-                observed_at, best_bid, best_ask, midpoint, spread,
-                last_trade_price, book_valid
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "poly-1",
-                "poly-market",
-                None,
-                outside,
-                outside,
-                "bad-decimal",
-                "0.2",
-                None,
-                None,
-                None,
-                1,
-            ),
-        )
-
     start = base - timedelta(seconds=1)
     end = base + timedelta(minutes=1)
     selection = CaptureSelection(
@@ -694,7 +717,11 @@ def test_sql_selection_filters_before_materialization(tmp_path: Path) -> None:
         polymarket_token_ids=("poly-1",),
     )
     sig_events = load_sig_capture(sig_path, selection=selection)
-    poly_events = load_polymarket_capture(poly_path, selection=selection)
+    poly_events = load_polymarket_capture(
+        poly_path,
+        selection=selection,
+        operational_path=operational_path,
+    )
 
     assert {event.instrument_id for event in sig_events} <= {"sig-1", "*"}
     assert {event.instrument_id for event in poly_events} <= {"poly-1", "*"}
@@ -704,6 +731,7 @@ def test_sql_selection_filters_before_materialization(tmp_path: Path) -> None:
     summary = summarize_captures(
         sig_path=sig_path,
         polymarket_path=poly_path,
+        polymarket_operational_path=operational_path,
         selection=selection,
     )
     assert summary.records_loaded == 8

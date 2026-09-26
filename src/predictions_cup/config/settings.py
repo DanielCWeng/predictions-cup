@@ -35,6 +35,7 @@ class AppSettings(BaseSettings):
 
     sig_realtime_storage_path: Path = Path("data/sig_realtime.sqlite3")
     sig_realtime_book_depth: int = Field(default=20, ge=1, le=200)
+    sig_realtime_tracked_exchange_ids: str = ""
     sig_rest_governor_rate_per_second: float = Field(default=2.0, gt=0.0, le=100.0)
     sig_rest_shared_cooldown_max_seconds: float = Field(default=8.0, ge=0.5, le=120.0)
     sig_realtime_open_book_refresh_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
@@ -53,10 +54,14 @@ class AppSettings(BaseSettings):
     polymarket_depth_snapshot_interval_seconds: float = Field(default=60.0, ge=1)
     polymarket_gamma_page_limit: int = Field(default=100, ge=1, le=500)
     polymarket_gamma_refresh_seconds: float = Field(default=300.0, ge=30)
-    polymarket_storage_path: Path = Path("data/polymarket_capture.sqlite3")
+    polymarket_storage_path: Path = Path("data/polymarket_operational.sqlite3")
+    polymarket_research_path: Path = Path("data/polymarket_research")
+    polymarket_parquet_shard_seconds: int = Field(default=60, ge=30, le=300)
+    polymarket_parquet_max_rows_per_shard: int = Field(default=100_000, ge=1_000, le=1_000_000)
     polymarket_universe: PolymarketUniverse = "us_elections_2026"
     polymarket_include_ids: str = ""
     polymarket_exclude_ids: str = ""
+    polymarket_supervised_ids: str = ""
 
     @field_validator("environment", "tournament_id", "tournament_slug")
     @classmethod
@@ -65,7 +70,11 @@ class AppSettings(BaseSettings):
             raise ValueError("configuration string must not be blank")
         return value
 
-    @field_validator("polymarket_storage_path", "sig_realtime_storage_path")
+    @field_validator(
+        "polymarket_storage_path",
+        "polymarket_research_path",
+        "sig_realtime_storage_path",
+    )
     @classmethod
     def reject_blank_storage_path(cls, value: Path) -> Path:
         if not str(value).strip():
@@ -105,6 +114,13 @@ class AppSettings(BaseSettings):
             "sig_trade_credential_configured": self.sig_trade_credential is not None,
             "sig_realtime_storage_path": str(self.sig_realtime_storage_path),
             "sig_realtime_book_depth": self.sig_realtime_book_depth,
+            "sig_realtime_tracked_exchange_count": len(
+                {
+                    value.strip()
+                    for value in self.sig_realtime_tracked_exchange_ids.split(",")
+                    if value.strip()
+                }
+            ),
             "sig_rest_governor_rate_per_second": self.sig_rest_governor_rate_per_second,
             "sig_rest_shared_cooldown_max_seconds": (
                 self.sig_rest_shared_cooldown_max_seconds
@@ -127,9 +143,32 @@ class AppSettings(BaseSettings):
                 self.polymarket_depth_snapshot_interval_seconds
             ),
             "polymarket_storage_path": str(self.polymarket_storage_path),
+            "polymarket_research_path": str(self.polymarket_research_path),
+            "polymarket_supervised_id_count": len(
+                {
+                    value.strip()
+                    for value in self.polymarket_supervised_ids.split(",")
+                    if value.strip()
+                }
+            ),
         }
 
 
-def load_settings() -> AppSettings:
-    """Load settings on demand; configuration is never module-global state."""
+class _RuntimeAppSettings(AppSettings):
+    """System-service settings source: process environment only, never repo .env."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="PREDICTIONS_CUP_",
+        env_file=None,
+        env_file_encoding="utf-8",
+        extra="ignore",
+        frozen=True,
+        validate_default=True,
+    )
+
+
+def load_settings(*, use_dotenv: bool = True) -> AppSettings:
+    """Load settings on demand; runtime services can explicitly disable local dotenv."""
+    if not use_dotenv:
+        return _RuntimeAppSettings()
     return AppSettings()

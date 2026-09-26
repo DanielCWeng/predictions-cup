@@ -27,6 +27,13 @@ jobs:
       - name: Lint
         run: ruff check .
 
+      - name: Shell validation
+        run: |
+          bash -n scripts/install_runtime_services.sh
+          if command -v shellcheck >/dev/null 2>&1; then
+            shellcheck scripts/install_runtime_services.sh
+          fi
+
       - name: Type check
         run: mypy
 

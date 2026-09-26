@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from predictions_cup.config import AppSettings
+from predictions_cup.config import AppSettings, load_settings
 
 
 @pytest.fixture
@@ -23,6 +23,9 @@ def clean_config_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "SIG_REST_GOVERNOR_RATE_PER_SECOND",
         "SIG_REST_SHARED_COOLDOWN_MAX_SECONDS",
         "SIG_REALTIME_BULK_PRICE_REFRESH_SECONDS",
+        "SIG_REALTIME_TRACKED_EXCHANGE_IDS",
+        "POLYMARKET_SUPERVISED_IDS",
+        "POLYMARKET_RESEARCH_PATH",
     )
     for name in names:
         monkeypatch.delenv(f"PREDICTIONS_CUP_{name}", raising=False)
@@ -44,6 +47,64 @@ def test_defaults_load_without_credentials(
     assert str(settings.sig_api_base_url) == "https://www.thesuper.market/api/v1"
     assert settings.sig_rest_governor_rate_per_second == 2.0
     assert settings.sig_realtime_bulk_price_refresh_seconds == 10.0
+    assert settings.sig_realtime_tracked_exchange_ids == ""
+    assert settings.polymarket_supervised_ids == ""
+    assert settings.polymarket_storage_path == Path("data/polymarket_operational.sqlite3")
+    assert settings.polymarket_research_path == Path("data/polymarket_research")
+
+
+def test_tracked_depth_runtime_configuration_is_external_and_nonsecret(
+    clean_config_env: None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    del clean_config_env
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(
+        "PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS",
+        "exchange-a, exchange-b,exchange-a",
+    )
+
+    settings = AppSettings()
+
+    assert settings.sig_realtime_tracked_exchange_ids == "exchange-a, exchange-b,exchange-a"
+    assert settings.diagnostic_fields()["sig_realtime_tracked_exchange_count"] == 2
+
+
+def test_supervised_polymarket_ids_are_external_and_counted(
+    clean_config_env: None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    del clean_config_env
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv(
+        "PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS",
+        "condition-a, token-b,condition-a",
+    )
+
+    settings = AppSettings()
+
+    assert settings.polymarket_supervised_ids == "condition-a, token-b,condition-a"
+    assert settings.diagnostic_fields()["polymarket_supervised_id_count"] == 2
+
+
+def test_runtime_env_only_disables_repo_dotenv(
+    clean_config_env: None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    del clean_config_env
+    (tmp_path / ".env").write_text(
+        "PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL=DOTENV_TRADE_SECRET\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    settings = load_settings(use_dotenv=False)
+
+    assert settings.sig_trade_credential is None
+    assert settings.trading_enabled is False
 
 
 def test_runtime_environment_overrides_local_dotenv(

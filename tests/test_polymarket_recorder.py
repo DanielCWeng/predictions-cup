@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import asyncio
-import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
+import pyarrow.parquet as pq
 import pytest
 
 from predictions_cup.config import AppSettings
 from predictions_cup.external.polymarket.client import ObservedBookBatch
-from predictions_cup.external.polymarket.recorder import PolymarketRecorder
+from predictions_cup.external.polymarket.recorder import (
+    PolymarketRecorder,
+    _run_recorder_until_stopped,
+    main,
+)
 
 
 def _book_payload(token_id: str, market_id: str = "0xmarket") -> dict[str, object]:
@@ -22,12 +27,26 @@ def _book_payload(token_id: str, market_id: str = "0xmarket") -> dict[str, objec
     }
 
 
+def test_supervised_recorder_fails_closed_without_explicit_universe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED", "true")
+    monkeypatch.delenv("PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS", raising=False)
+
+    assert main(["--runtime-env-only", "--require-explicit-universe"]) == 2
+
+
 def test_rest_seed_preserves_batch_level_observation_times(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings = AppSettings.model_validate(
-        {"polymarket_storage_path": tmp_path / "capture.sqlite3"}
+        {
+            "polymarket_storage_path": tmp_path / "capture.sqlite3",
+            "polymarket_research_path": tmp_path / "research",
+        }
     )
     recorder = PolymarketRecorder(settings)
     first_at = datetime(2026, 9, 25, 0, 0, 0, tzinfo=UTC)
@@ -58,11 +77,13 @@ def test_one_second_panel_is_lean_and_depth_uses_slower_cadence(
     settings = AppSettings.model_validate(
         {
             "polymarket_storage_path": tmp_path / "capture.sqlite3",
+            "polymarket_research_path": tmp_path / "research",
             "polymarket_depth_snapshot_interval_seconds": 60,
         }
     )
     recorder = PolymarketRecorder(settings)
     recorder.storage.initialize()
+    recorder.research_storage.initialize()
     start = datetime(2026, 9, 25, 0, 0, 0, tzinfo=UTC)
     recorder.books.apply_full_snapshot(_book_payload("token-1"), start)
     times = iter((start, start + timedelta(seconds=1)))
@@ -73,33 +94,28 @@ def test_one_second_panel_is_lean_and_depth_uses_slower_cadence(
 
     assert asyncio.run(recorder.record_snapshot_once()) == 1
     assert asyncio.run(recorder.record_snapshot_once()) == 1
+    recorder.research_storage.flush_all()
 
-    with sqlite3.connect(settings.polymarket_storage_path) as connection:
-        panel_count = connection.execute(
-            "SELECT COUNT(*) FROM polymarket_book_observations"
-        ).fetchone()[0]
-        depth_count = connection.execute(
-            "SELECT COUNT(*) FROM polymarket_book_snapshots"
-        ).fetchone()[0]
-        panel_columns = {
-            row[1]
-            for row in connection.execute("PRAGMA table_info(polymarket_book_observations)")
-        }
-
-    assert panel_count == 2
-    assert depth_count == 1
-    assert "bids_json" not in panel_columns
-    assert "asks_json" not in panel_columns
+    panel_files = list((settings.polymarket_research_path / "observations").rglob("*.parquet"))
+    depth_files = list(
+        (settings.polymarket_research_path / "depth_snapshots").rglob("*.parquet")
+    )
+    assert sum(pq.ParquetFile(path).metadata.num_rows for path in panel_files) == 2
+    assert sum(pq.ParquetFile(path).metadata.num_rows for path in depth_files) == 1
 
 
 def test_price_changes_are_durably_persisted_with_event_and_observation_time(
     tmp_path: Path,
 ) -> None:
     settings = AppSettings.model_validate(
-        {"polymarket_storage_path": tmp_path / "capture.sqlite3"}
+        {
+            "polymarket_storage_path": tmp_path / "capture.sqlite3",
+            "polymarket_research_path": tmp_path / "research",
+        }
     )
     recorder = PolymarketRecorder(settings)
     recorder.storage.initialize()
+    recorder.research_storage.initialize()
     seeded_at = datetime(2026, 9, 25, 0, 0, 0, tzinfo=UTC)
     observed_at = seeded_at + timedelta(milliseconds=500)
     recorder.books.apply_full_snapshot(_book_payload("token-1"), seeded_at)
@@ -126,20 +142,26 @@ def test_price_changes_are_durably_persisted_with_event_and_observation_time(
         )
     )
 
-    with sqlite3.connect(settings.polymarket_storage_path) as connection:
-        row = connection.execute(
-            """
-            SELECT token_id, market_id, side, price, size, source_timestamp,
-                   observed_at, best_bid, best_ask, book_hash
-            FROM polymarket_book_changes
-            """
-        ).fetchone()
+    recorder.research_storage.flush_all()
+    files = list(
+        (settings.polymarket_research_path / "book_changes").rglob("*.parquet")
+    )
+    row = pq.read_table(files[0]).to_pylist()[0]
 
-    assert row is not None
-    assert row[0:5] == ("token-1", "0xmarket", "BUY", "0.44", "7")
-    assert row[5] != row[6]
-    assert row[6] == observed_at.isoformat()
-    assert row[7:] == ("0.45", "0.46", "hash-after-change")
+    assert (
+        row["token_id"],
+        row["market_id"],
+        row["side"],
+        row["price"],
+        row["size"],
+    ) == ("token-1", "0xmarket", "BUY", "0.44", "7")
+    assert row["source_timestamp"] != row["observed_at"]
+    assert row["observed_at"] == observed_at
+    assert (row["best_bid"], row["best_ask"], row["book_hash"]) == (
+        "0.45",
+        "0.46",
+        "hash-after-change",
+    )
 
 
 def test_reconnect_hook_invalidates_old_state_and_reseeds_from_rest(
@@ -147,7 +169,10 @@ def test_reconnect_hook_invalidates_old_state_and_reseeds_from_rest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings = AppSettings.model_validate(
-        {"polymarket_storage_path": tmp_path / "capture.sqlite3"}
+        {
+            "polymarket_storage_path": tmp_path / "capture.sqlite3",
+            "polymarket_research_path": tmp_path / "research",
+        }
     )
     recorder = PolymarketRecorder(settings)
     old_at = datetime(2026, 9, 25, 0, 0, 0, tzinfo=UTC)
@@ -170,7 +195,10 @@ def test_reconnect_hook_invalidates_old_state_and_reseeds_from_rest(
 
 def test_last_trade_event_updates_snapshot_state_and_trade_storage(tmp_path: Path) -> None:
     settings = AppSettings.model_validate(
-        {"polymarket_storage_path": tmp_path / "capture.sqlite3"}
+        {
+            "polymarket_storage_path": tmp_path / "capture.sqlite3",
+            "polymarket_research_path": tmp_path / "research",
+        }
     )
     recorder = PolymarketRecorder(settings)
     recorder.storage.initialize()
@@ -196,9 +224,9 @@ def test_last_trade_event_updates_snapshot_state_and_trade_storage(tmp_path: Pat
     snapshot = recorder.books.snapshot("token-1", depth=1)
     assert snapshot is not None
     assert str(snapshot.last_trade_price) == "0.455"
-    with sqlite3.connect(settings.polymarket_storage_path) as connection:
-        count = connection.execute("SELECT COUNT(*) FROM polymarket_trades").fetchone()[0]
-    assert count == 1
+    recorder.research_storage.flush_all()
+    files = list((settings.polymarket_research_path / "trades").rglob("*.parquet"))
+    assert sum(pq.ParquetFile(path).metadata.num_rows for path in files) == 1
 
 
 def test_snapshot_storage_failure_is_surfaced(
@@ -206,7 +234,10 @@ def test_snapshot_storage_failure_is_surfaced(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings = AppSettings.model_validate(
-        {"polymarket_storage_path": tmp_path / "capture.sqlite3"}
+        {
+            "polymarket_storage_path": tmp_path / "capture.sqlite3",
+            "polymarket_research_path": tmp_path / "research",
+        }
     )
     recorder = PolymarketRecorder(settings)
     recorder.storage.initialize()
@@ -225,10 +256,166 @@ def test_snapshot_storage_failure_is_surfaced(
         del args, kwargs
         raise RuntimeError("disk full")
 
-    monkeypatch.setattr(recorder.storage, "append_snapshots", fail)
+    monkeypatch.setattr(recorder.research_storage, "append_snapshots", fail)
 
     with pytest.raises(RuntimeError, match="disk full"):
         asyncio.run(recorder.record_snapshot_once())
     assert recorder.health.storage_failures == 1
     assert recorder.health.snapshot_last_status is not None
     assert recorder.health.snapshot_last_status.startswith("ERROR:")
+
+
+def test_initial_gamma_failure_remains_fail_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = AppSettings.model_validate(
+        {
+            "polymarket_storage_path": tmp_path / "capture.sqlite3",
+            "polymarket_research_path": tmp_path / "research",
+        }
+    )
+    recorder = PolymarketRecorder(settings)
+
+    async def fail_discovery() -> object:
+        raise RuntimeError("startup Gamma unavailable")
+
+    monkeypatch.setattr(recorder.gamma, "discover_active_markets", fail_discovery)
+
+    with pytest.raises(RuntimeError, match="startup Gamma unavailable"):
+        asyncio.run(recorder.initialize())
+
+
+def test_periodic_gamma_refresh_fails_soft_and_later_recovers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = AppSettings.model_validate(
+        {
+            "polymarket_storage_path": tmp_path / "capture.sqlite3",
+            "polymarket_research_path": tmp_path / "research",
+        }
+    )
+    recorder = PolymarketRecorder(settings)
+    recorder._token_ids = ("token-existing",)
+    recorder._market_count = 1
+    calls = 0
+    selected_market = object()
+
+    async def fake_discovery() -> object:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("rate limited")
+        return SimpleNamespace(markets=(selected_market,), parse_failures=0)
+
+    def fake_select(markets: object) -> object:
+        del markets
+        return SimpleNamespace(
+            markets=(selected_market,),
+            token_ids=("token-existing",),
+        )
+
+    def fake_upsert(*args: object) -> None:
+        del args
+
+    async def fake_set_tokens(token_ids: tuple[str, ...]) -> None:
+        assert token_ids == ("token-existing",)
+
+    monkeypatch.setattr(recorder.gamma, "discover_active_markets", fake_discovery)
+    monkeypatch.setattr(recorder.selector, "select", fake_select)
+    monkeypatch.setattr(recorder.storage, "upsert_markets", fake_upsert)
+    monkeypatch.setattr(recorder.websocket, "set_tokens", fake_set_tokens)
+
+    async def scenario() -> None:
+        first = await recorder.refresh_universe(fail_soft_if_initialized=True)
+        assert first is False
+        assert recorder._token_ids == ("token-existing",)
+        assert recorder._market_count == 1
+        assert recorder.health.gamma_last_status is not None
+        assert recorder.health.gamma_last_status.startswith("ERROR:")
+
+        second = await recorder.refresh_universe(fail_soft_if_initialized=True)
+        assert second is True
+        assert recorder.health.gamma_last_status == "OK"
+        assert calls == 2
+
+    asyncio.run(scenario())
+
+
+def test_periodic_refresh_does_not_hide_local_storage_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = AppSettings.model_validate(
+        {
+            "polymarket_storage_path": tmp_path / "capture.sqlite3",
+            "polymarket_research_path": tmp_path / "research",
+        }
+    )
+    recorder = PolymarketRecorder(settings)
+    recorder._token_ids = ("token-existing",)
+    selected_market = object()
+
+    async def fake_discovery() -> object:
+        return SimpleNamespace(markets=(selected_market,), parse_failures=0)
+
+    def fake_select(markets: object) -> object:
+        del markets
+        return SimpleNamespace(
+            markets=(selected_market,),
+            token_ids=("token-existing",),
+        )
+
+    def fail_upsert(*args: object) -> None:
+        del args
+        raise RuntimeError("disk unavailable")
+
+    monkeypatch.setattr(recorder.gamma, "discover_active_markets", fake_discovery)
+    monkeypatch.setattr(recorder.selector, "select", fake_select)
+    monkeypatch.setattr(recorder.storage, "upsert_markets", fail_upsert)
+
+    with pytest.raises(RuntimeError, match="disk unavailable"):
+        asyncio.run(recorder.refresh_universe(fail_soft_if_initialized=True))
+
+
+def test_runtime_stop_event_stops_websocket_and_cancels_recorder(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = AppSettings.model_validate(
+        {
+            "polymarket_storage_path": tmp_path / "capture.sqlite3",
+            "polymarket_research_path": tmp_path / "research",
+        }
+    )
+    recorder = PolymarketRecorder(settings)
+
+    async def scenario() -> None:
+        started = asyncio.Event()
+        flags: set[str] = set()
+
+        async def fake_run() -> None:
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                flags.add("cancelled")
+                raise
+
+        def fake_stop() -> None:
+            flags.add("websocket_stopped")
+
+        monkeypatch.setattr(recorder, "run", fake_run)
+        monkeypatch.setattr(recorder.websocket, "stop", fake_stop)
+
+        stop_event = asyncio.Event()
+        task = asyncio.create_task(_run_recorder_until_stopped(recorder, stop_event))
+        await started.wait()
+        stop_event.set()
+        await task
+
+        assert flags == {"websocket_stopped", "cancelled"}
+
+    asyncio.run(scenario())
+

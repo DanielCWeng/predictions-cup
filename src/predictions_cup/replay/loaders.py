@@ -11,6 +11,9 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
+import pyarrow.dataset as pads
+
+from predictions_cup.external.polymarket.models import hashed_trade_event_id
 from predictions_cup.replay.model import (
     BookLevel,
     HealthPayload,
@@ -92,6 +95,10 @@ _POLY_SCHEMA = {
         "source_timestamp",
         "observed_at",
     },
+    "ingestion_health": {"id", "recorded_at", "payload_json"},
+}
+
+_POLY_OPERATIONAL_SCHEMA = {
     "ingestion_health": {"id", "recorded_at", "payload_json"},
 }
 _RECOGNIZED_TRUST_SQL = (
@@ -263,9 +270,18 @@ def load_polymarket_capture(
     path: Path,
     *,
     selection: CaptureSelection | None = None,
+    operational_path: Path | None = None,
 ) -> tuple[ReplayEvent, ...]:
-    """Materialize only the selected Polymarket slice; filtering is performed by SQLite."""
+    """Load Parquet research shards plus optional operational health, or legacy SQLite."""
     selected = selection or CaptureSelection()
+    if path.is_dir():
+        parquet_events = list(_load_polymarket_parquet_capture(path, selected))
+        if operational_path is not None:
+            parquet_events.extend(
+                _load_polymarket_operational_health(operational_path, selected)
+            )
+        return _ordered(parquet_events)
+
     events: list[ReplayEvent] = []
     with closing(_connect(path)) as db:
         _validate_schema(db, _POLY_SCHEMA, "Polymarket")
@@ -429,13 +445,298 @@ def load_polymarket_capture(
     return _ordered(events)
 
 
+def _load_polymarket_operational_health(
+    path: Path,
+    selection: CaptureSelection,
+) -> tuple[ReplayEvent, ...]:
+    events: list[ReplayEvent] = []
+    with closing(_connect(path)) as db:
+        _validate_schema(db, _POLY_OPERATIONAL_SCHEMA, "Polymarket operational")
+        where, params = _where(selection, "recorded_at")
+        for row in db.execute(
+            "SELECT id, recorded_at, payload_json "
+            f"FROM ingestion_health{where} ORDER BY recorded_at, id",
+            params,
+        ):
+            payload = _json_object(row[2], "Polymarket health payload_json")
+            connected = payload.get("websocket_connected")
+            if not isinstance(connected, bool):
+                raise CaptureSchemaError(
+                    "Polymarket health payload websocket_connected must be boolean"
+                )
+            detail = payload.get("last_reconnect_reason")
+            events.append(
+                ReplayEvent(
+                    observed_at=_dt(row[1], "Polymarket health recorded_at"),
+                    source_at=None,
+                    source=ReplaySource.POLYMARKET,
+                    event_type=ReplayEventType.HEALTH,
+                    instrument_id="*",
+                    market_id=None,
+                    sequence=_integer(row[0], "Polymarket health id"),
+                    payload=HealthPayload(
+                        available=connected,
+                        detail=None if detail is None else str(detail),
+                    ),
+                )
+            )
+    return _ordered(events)
+
+
+def _load_polymarket_parquet_capture(
+    root: Path,
+    selection: CaptureSelection,
+) -> tuple[ReplayEvent, ...]:
+    events: list[ReplayEvent] = []
+    sequence = 0
+
+    for row in _parquet_rows(
+        root,
+        "observations",
+        selection,
+        time_field="observed_at",
+    ):
+        sequence += 1
+        events.append(
+            _quote_event(
+                source=ReplaySource.POLYMARKET,
+                event_type=ReplayEventType.BOOK_OBSERVATION,
+                sequence=sequence,
+                instrument=_text(row.get("token_id"), "Polymarket token_id"),
+                market=_text(row.get("market_id"), "Polymarket market_id"),
+                observed=_dt(row.get("observed_at"), "Polymarket observation observed_at"),
+                source_at=_optional_dt(
+                    row.get("source_timestamp"),
+                    "Polymarket observation source_timestamp",
+                ),
+                quote_observed=_dt(
+                    row.get("state_observed_at"),
+                    "Polymarket state_observed_at",
+                ),
+                bid=_optional_decimal(row.get("best_bid"), "Polymarket best_bid"),
+                ask=_optional_decimal(row.get("best_ask"), "Polymarket best_ask"),
+                last_trade=_optional_decimal(
+                    row.get("last_trade_price"),
+                    "Polymarket last_trade_price",
+                ),
+                valid=_bool_value(row.get("book_valid"), "Polymarket book_valid"),
+            )
+        )
+
+    for row in _parquet_rows(
+        root,
+        "book_changes",
+        selection,
+        time_field="observed_at",
+    ):
+        sequence += 1
+        observed = _dt(row.get("observed_at"), "Polymarket change observed_at")
+        events.append(
+            _quote_event(
+                source=ReplaySource.POLYMARKET,
+                event_type=ReplayEventType.BOOK_CHANGE,
+                sequence=sequence,
+                instrument=_text(row.get("token_id"), "Polymarket token_id"),
+                market=_text(row.get("market_id"), "Polymarket market_id"),
+                observed=observed,
+                source_at=_optional_dt(
+                    row.get("source_timestamp"),
+                    "Polymarket change source_timestamp",
+                ),
+                quote_observed=observed,
+                bid=_optional_decimal(row.get("best_bid"), "Polymarket change best_bid"),
+                ask=_optional_decimal(row.get("best_ask"), "Polymarket change best_ask"),
+            )
+        )
+
+    for row in _parquet_rows(
+        root,
+        "depth_snapshots",
+        selection,
+        time_field="recorded_at",
+    ):
+        sequence += 1
+        recorded = _dt(row.get("recorded_at"), "Polymarket snapshot recorded_at")
+        events.append(
+            _quote_event(
+                source=ReplaySource.POLYMARKET,
+                event_type=ReplayEventType.DEPTH_SNAPSHOT,
+                sequence=sequence,
+                instrument=_text(row.get("token_id"), "Polymarket token_id"),
+                market=_text(row.get("market_id"), "Polymarket market_id"),
+                observed=recorded,
+                source_at=_optional_dt(
+                    row.get("source_timestamp"),
+                    "Polymarket snapshot source_timestamp",
+                ),
+                quote_observed=_dt(
+                    row.get("state_observed_at"),
+                    "Polymarket snapshot state_observed_at",
+                ),
+                bid=_optional_decimal(row.get("best_bid"), "Polymarket snapshot best_bid"),
+                ask=_optional_decimal(row.get("best_ask"), "Polymarket snapshot best_ask"),
+                bids=_poly_struct_levels(row.get("bids"), "Polymarket bids"),
+                asks=_poly_struct_levels(row.get("asks"), "Polymarket asks"),
+                last_trade=_optional_decimal(
+                    row.get("last_trade_price"),
+                    "Polymarket snapshot last_trade_price",
+                ),
+            )
+        )
+
+    seen_hashed_trade_ids = _parquet_hashed_trade_ids_before(root, selection)
+    for row in _parquet_rows(
+        root,
+        "trades",
+        selection,
+        time_field="observed_at",
+    ):
+        token_id = _text(row.get("token_id"), "Polymarket token_id")
+        transaction_hash = (
+            None
+            if row.get("transaction_hash") is None
+            else _text(
+                row.get("transaction_hash"),
+                "Polymarket trade transaction_hash",
+            )
+        )
+        expected_event_id = hashed_trade_event_id(token_id, transaction_hash)
+        raw_event_id = row.get("event_id")
+        if expected_event_id is None:
+            if raw_event_id is not None:
+                raise CaptureSchemaError(
+                    "unhashed Polymarket trade must not claim an event_id"
+                )
+        else:
+            event_id = _text(raw_event_id, "Polymarket trade event_id")
+            if event_id != expected_event_id:
+                raise CaptureSchemaError(
+                    "Polymarket trade event_id does not match token/hash identity"
+                )
+            if event_id in seen_hashed_trade_ids:
+                continue
+            seen_hashed_trade_ids.add(event_id)
+
+        sequence += 1
+        events.append(
+            ReplayEvent(
+                observed_at=_dt(row.get("observed_at"), "Polymarket trade observed_at"),
+                source_at=_optional_dt(
+                    row.get("source_timestamp"),
+                    "Polymarket trade source_timestamp",
+                ),
+                source=ReplaySource.POLYMARKET,
+                event_type=ReplayEventType.TRADE,
+                instrument_id=token_id,
+                market_id=_text(row.get("market_id"), "Polymarket market_id"),
+                sequence=sequence,
+                payload=TradePayload(
+                    price=_decimal(row.get("price"), "Polymarket trade price"),
+                    quantity=_optional_decimal(
+                        row.get("size"),
+                        "Polymarket trade size",
+                    ),
+                    side=(
+                        None
+                        if row.get("side") is None
+                        else _text(row.get("side"), "Polymarket trade side")
+                    ),
+                ),
+            )
+        )
+
+    return _ordered(events)
+
+
+def _parquet_hashed_trade_ids_before(
+    root: Path,
+    selection: CaptureSelection,
+) -> set[str]:
+    if selection.start_at is None:
+        return set()
+    stream_root = root / "trades"
+    files = sorted(stream_root.rglob("*.parquet")) if stream_root.is_dir() else []
+    if not files:
+        return set()
+
+    dataset = pads.dataset([str(path) for path in files], format="parquet")
+    expression: Any = pads.field("observed_at") < selection.start_at
+    if selection.polymarket_token_ids is not None:
+        expression &= pads.field("token_id").isin(list(selection.polymarket_token_ids))
+
+    table = dataset.to_table(
+        columns=["event_id", "token_id", "transaction_hash"],
+        filter=expression,
+    )
+    seen: set[str] = set()
+    for row in table.to_pylist():
+        transaction_hash = row.get("transaction_hash")
+        if transaction_hash is None:
+            if row.get("event_id") is not None:
+                raise CaptureSchemaError(
+                    "unhashed Polymarket trade must not claim an event_id"
+                )
+            continue
+        token_id = _text(row.get("token_id"), "Polymarket token_id")
+        transaction_hash = _text(
+            transaction_hash,
+            "Polymarket trade transaction_hash",
+        )
+        expected_event_id = hashed_trade_event_id(token_id, transaction_hash)
+        assert expected_event_id is not None
+        event_id = _text(row.get("event_id"), "Polymarket trade event_id")
+        if event_id != expected_event_id:
+            raise CaptureSchemaError(
+                "Polymarket trade event_id does not match token/hash identity"
+            )
+        seen.add(event_id)
+    return seen
+
+
+def _parquet_rows(
+    root: Path,
+    stream: str,
+    selection: CaptureSelection,
+    *,
+    time_field: str,
+) -> list[dict[str, Any]]:
+    stream_root = root / stream
+    files = sorted(stream_root.rglob("*.parquet")) if stream_root.is_dir() else []
+    if not files:
+        return []
+
+    dataset = pads.dataset([str(path) for path in files], format="parquet")
+    expression: Any | None = None
+    if selection.start_at is not None:
+        clause = pads.field(time_field) >= selection.start_at
+        expression = clause if expression is None else expression & clause
+    if selection.end_at is not None:
+        clause = pads.field(time_field) < selection.end_at
+        expression = clause if expression is None else expression & clause
+    if selection.polymarket_token_ids is not None:
+        clause = pads.field("token_id").isin(list(selection.polymarket_token_ids))
+        expression = clause if expression is None else expression & clause
+
+    table = dataset.to_table(filter=expression)
+    rows = table.to_pylist()
+    rows.sort(
+        key=lambda row: (
+            _dt(row.get(time_field), f"{stream}.{time_field}"),
+            str(row.get("token_id", "")),
+            str(row.get("market_id", "")),
+        )
+    )
+    return [{str(key): value for key, value in row.items()} for row in rows]
+
+
 def summarize_captures(
     *,
     sig_path: Path | None = None,
     polymarket_path: Path | None = None,
+    polymarket_operational_path: Path | None = None,
     selection: CaptureSelection | None = None,
 ) -> CaptureSummary:
-    """Inspect selected capture rows using SQL aggregates, not ReplayEvent materialization."""
+    """Summarize selected SIG/Polymarket capture data from accepted storage formats."""
     selected = selection or CaptureSelection()
     records = 0
     external_observations = 0
@@ -457,16 +758,39 @@ def summarize_captures(
             times.extend(sig_times)
 
     if polymarket_path is not None:
-        with closing(_connect(polymarket_path)) as db:
-            _validate_schema(db, _POLY_SCHEMA, "Polymarket")
-            poly_records, poly_quotes, poly_gaps, poly_instruments, poly_times = (
-                _summarize_polymarket(db, selected)
+        if polymarket_path.is_dir():
+            poly_events = load_polymarket_capture(
+                polymarket_path,
+                selection=selected,
+                operational_path=polymarket_operational_path,
             )
-            records += poly_records
-            external_observations += poly_quotes
-            data_gaps += poly_gaps
-            instruments.update(f"polymarket:{value}" for value in poly_instruments)
-            times.extend(poly_times)
+            records += len(poly_events)
+            for event in poly_events:
+                times.append(event.observed_at)
+                if event.instrument_id != "*":
+                    instruments.add(f"polymarket:{event.instrument_id}")
+                if event.event_type in {
+                    ReplayEventType.BOOK_OBSERVATION,
+                    ReplayEventType.BOOK_CHANGE,
+                    ReplayEventType.DEPTH_SNAPSHOT,
+                }:
+                    external_observations += 1
+                if (
+                    isinstance(event.payload, QuotePayload)
+                    and not event.payload.book_valid
+                ):
+                    data_gaps += 1
+        else:
+            with closing(_connect(polymarket_path)) as db:
+                _validate_schema(db, _POLY_SCHEMA, "Polymarket")
+                poly_records, poly_quotes, poly_gaps, poly_instruments, poly_times = (
+                    _summarize_polymarket(db, selected)
+                )
+                records += poly_records
+                external_observations += poly_quotes
+                data_gaps += poly_gaps
+                instruments.update(f"polymarket:{value}" for value in poly_instruments)
+                times.extend(poly_times)
 
     return CaptureSummary(
         records_loaded=records,
@@ -816,6 +1140,22 @@ def _sig_levels(value: object, label: str) -> tuple[BookLevel, ...]:
     return tuple(levels)
 
 
+def _poly_struct_levels(value: object, label: str) -> tuple[BookLevel, ...]:
+    if not isinstance(value, list):
+        raise CaptureSchemaError(f"{label} must be a list")
+    levels: list[BookLevel] = []
+    for raw in value:
+        if not isinstance(raw, dict):
+            raise CaptureSchemaError(f"{label} level must be an object")
+        levels.append(
+            BookLevel(
+                _decimal(raw.get("price"), f"{label} price"),
+                _decimal(raw.get("size"), f"{label} quantity"),
+            )
+        )
+    return tuple(levels)
+
+
 def _poly_levels(value: object, label: str) -> tuple[BookLevel, ...]:
     raw_levels = _json_array(value, label)
     levels: list[BookLevel] = []
@@ -855,12 +1195,19 @@ def _json(value: object, label: str) -> Any:
 
 
 def _dt(value: object, label: str) -> datetime:
-    if not isinstance(value, str):
-        raise CaptureSchemaError(f"{label} must be an ISO-8601 string")
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise CaptureSchemaError(f"{label} is not valid ISO-8601") from exc
+    else:
+        raise CaptureSchemaError(f"{label} must be an ISO-8601 string or datetime")
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError as exc:
-        raise CaptureSchemaError(f"{label} is not valid ISO-8601") from exc
+        parsed.utcoffset()
+    except (OverflowError, ValueError) as exc:
+        raise CaptureSchemaError(f"{label} has invalid timezone data") from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise CaptureSchemaError(f"{label} must be timezone-aware")
     return parsed.astimezone(UTC)
@@ -897,6 +1244,12 @@ def _text(value: object, label: str) -> str:
 def _integer(value: object, label: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise CaptureSchemaError(f"{label} must be an integer")
+    return value
+
+
+def _bool_value(value: object, label: str) -> bool:
+    if not isinstance(value, bool):
+        raise CaptureSchemaError(f"{label} must be boolean")
     return value
 
 
