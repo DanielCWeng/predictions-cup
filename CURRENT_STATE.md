@@ -69,7 +69,7 @@ BUILD-007 validation state:
 
 - implemented on branch: **yes**;
 - CI validated: **yes** (lint, shell validation, strict mypy, pytest and application smoke);
-- live EC2 validation: **partial** — SIG service/env-file side green; corrected Polymarket startup then discovered 3,160 markets / 6,320 tokens, connected the WebSocket, wrote 6,320-row snapshots, recovered from a WebSocket disconnect, and reported zero storage failures. A later scheduled Gamma refresh exhausted 429 retries and killed the TaskGroup; the branch now makes post-startup Gamma discovery/selection failures fail-soft while preserving the resident universe, adds a positive 429 retry-delay floor, and keeps startup/local-storage failures fail-closed. CI/re-review and final live rerun + SSH/reboot remain required.
+- live EC2 validation: **partial** — SIG service/env-file side green; corrected Polymarket startup then discovered 3,160 markets / 6,320 tokens, connected the WebSocket, wrote 6,320-row snapshots, recovered from a WebSocket disconnect, and reported zero storage failures. A later scheduled Gamma refresh exhausted 429 retries and killed the TaskGroup; the branch now makes post-startup Gamma discovery/selection failures fail-soft while preserving the resident universe, adds a positive 429 retry-delay floor, and keeps startup/local-storage failures fail-closed. CI green; independent re-review and final live rerun + SSH/reboot remain required.
 
 EXPERIMENT-002 is in review as PR #16 on `experiment/002-leadlag-rv-loo`. It builds the first
 LEADLAG / response-curve / relative-value / LOO-PRICE / LOO-FAMILY empirical experiment suite on
