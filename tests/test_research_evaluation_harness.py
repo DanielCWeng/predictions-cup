@@ -172,7 +172,7 @@ def test_bh_known_vector_ties_and_invalid_pvalues() -> None:
     )
     results = benjamini_hochberg(tests, Decimal("0.05"))
     rejected = {item.hypothesis_id for item in results if item.rejected}
-    assert rejected == {"h1", "h3", "h4"}
+    assert rejected == {"h1", "h2", "h3", "h4"}
     tied = benjamini_hochberg(
         (HypothesisTest("b", "f", Decimal("0.01")), HypothesisTest("a", "f", Decimal("0.01"))),
         Decimal("0.05"),
