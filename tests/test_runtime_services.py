@@ -39,7 +39,7 @@ def test_systemd_units_are_read_only_and_supervised() -> None:
     for unit in (sig, poly):
         assert "EnvironmentFile=@@RUNTIME_ENV@@" in unit
         assert "trade.env" not in unit
-        assert "PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL" not in unit
+        assert "UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL" in unit
         assert "Restart=on-failure" in unit
         assert "After=network-online.target" in unit
         assert "Wants=network-online.target" in unit
@@ -144,6 +144,8 @@ def test_installer_is_idempotent_and_renders_absolute_runtime_env(tmp_path: Path
         assert f"EnvironmentFile={runtime_env}" in content
         assert "@@" not in content
         assert "trade.env" not in content
+        assert "--runtime-env-only" in content
+        assert "UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL" in content
     assert "--tracked-exchange-id" not in first_units[
         "predictions-cup-sig-capture.service"
     ]
