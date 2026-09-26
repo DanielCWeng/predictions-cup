@@ -597,6 +597,48 @@ def test_actual_sig_sqlite_and_polymarket_parquet_loaders_and_summary(
     assert summary.external_observations == 3
 
 
+def test_parquet_replay_deduplicates_hashed_trades_within_and_across_shards(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "polymarket_research"
+    first_storage = PolymarketResearchStorage(root, shard_seconds=60)
+    first_storage.initialize()
+    first_at = datetime(2026, 9, 25, 12, 0, 1, tzinfo=UTC)
+
+    duplicate = TradeEvent(
+        market_id="poly-market",
+        token_id="poly-1",
+        price=Decimal("0.455"),
+        size=Decimal("1"),
+        side="BUY",
+        source_timestamp=first_at,
+        observed_at=first_at,
+        transaction_hash="tx-duplicate",
+        fee_rate_bps=None,
+    )
+    first_storage.append_trade(duplicate)
+    first_storage.append_trade(duplicate)
+    first_storage.flush_all()
+
+    second_storage = PolymarketResearchStorage(root, shard_seconds=60)
+    second_storage.initialize()
+    second_storage.append_trade(
+        replace(
+            duplicate,
+            observed_at=first_at + timedelta(minutes=1),
+            source_timestamp=first_at + timedelta(minutes=1),
+        )
+    )
+    second_storage.flush_all()
+
+    events = load_polymarket_capture(root)
+    trades = [event for event in events if event.event_type is ReplayEventType.TRADE]
+
+    assert len(trades) == 1
+    assert trades[0].observed_at == first_at
+    assert trades[0].instrument_id == "poly-1"
+
+
 def test_malformed_capture_schema_fails_clearly(tmp_path: Path) -> None:
     malformed = tmp_path / "bad.sqlite3"
     with sqlite3.connect(malformed) as connection:
