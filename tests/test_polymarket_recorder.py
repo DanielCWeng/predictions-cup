@@ -13,6 +13,7 @@ from predictions_cup.external.polymarket.client import ObservedBookBatch
 from predictions_cup.external.polymarket.recorder import (
     PolymarketRecorder,
     _run_recorder_until_stopped,
+    main,
 )
 
 
@@ -24,6 +25,17 @@ def _book_payload(token_id: str, market_id: str = "0xmarket") -> dict[str, objec
         "bids": [{"price": "0.45", "size": "10"}],
         "asks": [{"price": "0.46", "size": "10"}],
     }
+
+
+def test_supervised_recorder_fails_closed_without_explicit_universe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED", "true")
+    monkeypatch.delenv("PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS", raising=False)
+
+    assert main(["--runtime-env-only", "--require-explicit-universe"]) == 2
 
 
 def test_rest_seed_preserves_batch_level_observation_times(
