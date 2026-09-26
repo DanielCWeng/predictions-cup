@@ -13,6 +13,7 @@ from typing import Any
 
 import pyarrow.dataset as pads
 
+from predictions_cup.external.polymarket.models import hashed_trade_event_id
 from predictions_cup.replay.model import (
     BookLevel,
     HealthPayload,
@@ -583,12 +584,39 @@ def _load_polymarket_parquet_capture(
             )
         )
 
+    seen_hashed_trade_ids: set[str] = set()
     for row in _parquet_rows(
         root,
         "trades",
         selection,
         time_field="observed_at",
     ):
+        token_id = _text(row.get("token_id"), "Polymarket token_id")
+        transaction_hash = (
+            None
+            if row.get("transaction_hash") is None
+            else _text(
+                row.get("transaction_hash"),
+                "Polymarket trade transaction_hash",
+            )
+        )
+        expected_event_id = hashed_trade_event_id(token_id, transaction_hash)
+        raw_event_id = row.get("event_id")
+        if expected_event_id is None:
+            if raw_event_id is not None:
+                raise CaptureSchemaError(
+                    "unhashed Polymarket trade must not claim an event_id"
+                )
+        else:
+            event_id = _text(raw_event_id, "Polymarket trade event_id")
+            if event_id != expected_event_id:
+                raise CaptureSchemaError(
+                    "Polymarket trade event_id does not match token/hash identity"
+                )
+            if event_id in seen_hashed_trade_ids:
+                continue
+            seen_hashed_trade_ids.add(event_id)
+
         sequence += 1
         events.append(
             ReplayEvent(
@@ -599,7 +627,7 @@ def _load_polymarket_parquet_capture(
                 ),
                 source=ReplaySource.POLYMARKET,
                 event_type=ReplayEventType.TRADE,
-                instrument_id=_text(row.get("token_id"), "Polymarket token_id"),
+                instrument_id=token_id,
                 market_id=_text(row.get("market_id"), "Polymarket market_id"),
                 sequence=sequence,
                 payload=TradePayload(
