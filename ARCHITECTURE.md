@@ -19,7 +19,7 @@ BUILD-003 provides the accepted **read-only** SIG REST boundary under `predictio
 - typed API errors and bounded retries for documented transient GET failures;
 - explicit `tournament_id` parameters without any automatic context resolver.
 
-EXPERIMENT-001A additionally provides the accepted **public read-only Polymarket research capture** path under `predictions_cup.external.polymarket`: public Gamma/CLOB discovery, authoritative REST book seeding, persistent market WebSocket ingestion, normalized event-time book-change/trade persistence, a lean 1-second top-of-book panel, slower bounded depth snapshots, SQLite/WAL storage, and feed-health/reconnect handling.
+EXPERIMENT-001A additionally provides the accepted **public read-only Polymarket research capture semantics** under `predictions_cup.external.polymarket`: public Gamma/CLOB discovery, authoritative REST book seeding, persistent market WebSocket ingestion, normalized event-time book-change/trade persistence, a lean 1-second top-of-book panel, slower bounded depth snapshots, and feed-health/reconnect handling. Its accepted `main` baseline used SQLite/WAL for research history; BUILD-007 replaces that physical writer globally on its branch with ZSTD Parquet for high-frequency history plus small operational SQLite.
 
 BUILD-004 is accepted on main as the read-only SIG tournament Realtime/state foundation. It subscribes once to the private tournament topic, persists complete market batches, checks topic revision continuity, and uses REST as the authoritative source of financial state. Its first credentialed tournament smoke exposed that the original all-open-exchange full-depth freshness fallback does not scale to the observed 237-exchange universe.
 
@@ -89,6 +89,8 @@ The systemd service passes `--require-explicit-universe` and the installer requi
 `PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS`. Empty or unresolved IDs fail closed. No Cup market
 ID is hard-coded. The intended source is the independently accepted LIVE-MAPPING-GATE-001
 crosswalk; until that crosswalk exists, the supervised Polymarket service is not production-ready.
+A deliberately bounded explicit public test universe may still be used for the required ARM64 EC2
+Parquet smoke/soak; that test set is not production mapping evidence.
 
 High-frequency streams are written to short immutable Parquet shards using temp file -> fsync ->
 atomic rename. Source/event timestamps and local observation timestamps remain distinct. SQLite is
@@ -98,6 +100,12 @@ deleted or migrated automatically.
 Replay remains backward compatible with legacy Polymarket SQLite captures and can also load the
 new Parquet research directory. The new path accepts the operational SQLite separately so health /
 disconnect events remain available to replay without putting research history back into SQLite.
+
+Raw Parquet trade capture is deliberately at-least-once. Hashed trades carry a deterministic
+event identity derived from token ID + transaction hash, and canonical Parquet replay validates
+that identity and keeps only the first observation. This preserves EXPERIMENT-001A's accepted
+hashed-trade de-duplication semantics across duplicate delivery, shard boundaries and process
+restarts without pretending the file writer itself is transactional exactly-once.
 
 Gamma metadata maintenance follows the PolyLeviathan degraded-metadata boundary: initial discovery
 fails closed, but after a valid universe is resident a later Gamma discovery/selection failure
