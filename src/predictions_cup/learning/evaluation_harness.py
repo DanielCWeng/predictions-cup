@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
+from enum import StrEnum
 
 from predictions_cup.learning.research_spec import (
     ResearchEvaluationSpec,
@@ -14,6 +15,41 @@ from predictions_cup.learning.research_spec import (
 )
 from predictions_cup.learning.validation import EvaluationObservation
 
+
+
+class NegativeControlKind(StrEnum):
+    ZERO_SIGNAL = "ZERO_SIGNAL"
+    DELAYED_PAST_ONLY = "DELAYED_PAST_ONLY"
+    FEATURE_EXCLUSION = "FEATURE_EXCLUSION"
+
+
+@dataclass(frozen=True, slots=True)
+class NegativeControl:
+    name: str
+    kind: NegativeControlKind
+    delay: timedelta | None = None
+    excluded_components: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("negative-control name must be non-blank")
+        if self.kind is NegativeControlKind.DELAYED_PAST_ONLY:
+            if self.delay is None or self.delay <= timedelta(0):
+                raise ValueError("delayed past-only control requires a positive delay")
+        elif self.delay is not None:
+            raise ValueError("delay is only valid for DELAYED_PAST_ONLY controls")
+        if self.kind is NegativeControlKind.FEATURE_EXCLUSION and not self.excluded_components:
+            raise ValueError("feature-exclusion control requires excluded components")
+
+
+@dataclass(frozen=True, slots=True)
+class AblationVariant:
+    name: str
+    removed_components: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.name or not self.removed_components:
+            raise ValueError("ablation requires a name and explicit removed components")
 
 @dataclass(frozen=True, slots=True)
 class NamedVariant:
