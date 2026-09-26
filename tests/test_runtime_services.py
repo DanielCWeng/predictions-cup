@@ -52,9 +52,11 @@ def test_systemd_units_are_read_only_and_supervised() -> None:
     assert "RestartSec=5s" in sig
     assert "RestartSec=30s" in poly
     assert "--tracked-exchange-id" not in sig
+    assert "--require-explicit-universe" in poly
     assert (
         "ExecStart=@@PYTHON_BIN@@ -m "
-        "predictions_cup.external.polymarket.recorder --runtime-env-only"
+        "predictions_cup.external.polymarket.recorder --runtime-env-only "
+        "--require-explicit-universe"
         in poly
     )
 
@@ -66,6 +68,7 @@ def _write_runtime_env(path: Path, *, include_trade_credential: bool = False) ->
         "PREDICTIONS_CUP_TOURNAMENT_ID=test-tournament",
         "PREDICTIONS_CUP_TRADING_ENABLED=false",
         "PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true",
+        "PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS=condition-test-a,condition-test-b",
     ]
     if include_trade_credential:
         lines.append("PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL=TEST_TRADE_SECRET_DO_NOT_PRINT")
