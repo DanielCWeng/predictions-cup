@@ -134,6 +134,37 @@ def test_gamma_mid_pagination_429_retries_same_cursor_and_honors_retry_after(
     assert FakeSession.params_seen[2]["after_cursor"] == "cursor-2"
 
 
+def test_gamma_zero_retry_after_uses_positive_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    FakeSession.responses = [
+        FakeResponse(status=429, headers={"Retry-After": "0"}),
+        FakeResponse({"markets": [payload("1")], "next_cursor": ""}),
+    ]
+    FakeSession.params_seen = []
+    delays: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        delays.append(seconds)
+
+    monkeypatch.setattr(
+        "predictions_cup.external.polymarket.gamma.aiohttp.ClientSession",
+        FakeSession,
+    )
+
+    result = asyncio.run(
+        GammaClient(
+            "https://gamma.example",
+            sleep=fake_sleep,
+            random_fraction=lambda: 0.0,
+            rate_limit_min_delay_seconds=1.0,
+        ).discover_active_markets()
+    )
+
+    assert [market.market_id for market in result.markets] == ["1"]
+    assert delays == [1.0]
+
+
 def test_gamma_persistent_429_exhausts_bounded_retry_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
