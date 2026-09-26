@@ -1,9 +1,9 @@
 # BUILD-007 — EC2 Runtime Supervision / Always-On Capture
 
-**Status:** IN REVIEW — PR #20  
+**Status:** MERGED / ACCEPTED — PR #20  
 **Branch:** `build/007-ec2-runtime-supervision`  
 **Base main at creation:** `6340428a1c486c66990853164aecf97c27d4d719`  
-**Live EC2 validated:** partial; broad soak rejected, corrected mapping-bounded lane not yet live-validated
+**Live EC2 validated:** yes for pre-merge ARM64 runtime/storage gate; production mapping-bounded soak remains downstream of LIVE-MAPPING-GATE-001
 
 ## Scope
 
@@ -103,7 +103,7 @@ shutdown it asks the WebSocket transport to stop, cancels the long-running recor
 its context-managed aiohttp/SQLite work unwind. Polymarket storage opens short-lived SQLite
 connections per operation, so there is no persistent writer handle to invent or manage here.
 
-Live EC2 validation exposed HTTP 429 rate limiting during Gamma keyset discovery. The candidate
+Live EC2 validation exposed HTTP 429 rate limiting during Gamma keyset discovery. The accepted implementation
 now retries the current page/cursor in place with a bounded attempt budget, honors Retry-After,
 uses exponential fallback delay plus jitter when the header is absent, and fails visibly after
 exhaustion. Successful earlier pages are retained within the same discovery pass. Retry-After
@@ -210,8 +210,7 @@ Python, systemd destination and systemctl executable. It never deletes runtime d
 
 ## Automated validation
 
-Final correctness/documentation revision is green in CI #679 for lint, shell validation, strict
-mypy, pytest and the application smoke.
+Final head CI #685 is green for lint, shell validation, strict mypy, pytest and the application smoke.
 
 BUILD-007 adds tests proving:
 
@@ -248,28 +247,32 @@ CI also runs `bash -n` and runs `shellcheck` when it is available on the runner.
 
 ## Live acceptance boundary
 
-EC2 validation is partial and has produced two classes of useful evidence.
+BUILD-007's pre-merge ARM64 EC2 runtime/storage gate is **accepted** at exact reviewed head
+`1fc3383ac2471466ef440b5f050559ba0a37deed`. The branch merged as PR #20 with merge commit
+`153116bb84bc64f202b4cd6dc7748e11d1a84e8b`.
 
-The SIG service/environment side is healthy. The broad Polymarket soak also proved the core public
-capture machinery: 3,160 markets / 6,320 tokens discovered, WebSocket connected, 6,320-row
-snapshots written, WebSocket reconnect recovered and zero storage failures. It exposed and drove
-the Gamma startup/periodic-refresh corrections.
+The accepted live evidence includes:
 
-That same soak then falsified the storage/universe architecture for always-on use. The broad
-heuristic plus SQLite growth cannot be accepted on the ~30 GiB host. It is explicitly **not** the
-production-intended Cup lane.
+- actual host architecture `aarch64` with PyArrow 25.0.1 importable;
+- deliberately bounded strict test universe of 3 markets / 6 tokens;
+- service remained active through the bounded soak;
+- all four intended research streams exercised: observations, book changes, depth snapshots and
+  trades;
+- ZSTD Parquet files published and read back successfully;
+- small operational SQLite footprint rather than high-frequency row history;
+- scheduled Gamma refresh completed successfully while capture remained healthy;
+- observed HTTP 429 retries used the corrected positive `retry_in_seconds=1.000` floor;
+- manual service restart succeeded;
+- post-restart WebSocket capture returned healthy with 3 markets / 6 tokens,
+  `gamma_last_status=OK` and `storage_failures=0`;
+- Parquet file count continued advancing after restart and previously published shards remained
+  readable.
 
-The next **pre-merge** live gate is an ARM64 EC2 Parquet smoke/soak on this corrected branch using
-a deliberately bounded explicit public test universe. Its purpose is to validate PyArrow/Parquet
-runtime compatibility, shard publication, restart behavior and bounded storage shape on the actual
-host; it is not production mapping evidence.
+The temporary 3-market / 6-token universe was a compatibility test only. It is not production
+mapping evidence and must not be promoted into runtime production configuration.
 
-The later production-intended Polymarket acceptance run must use the accepted live crosswalk.
-Because production IDs must come from LIVE-MAPPING-GATE-001, no guessed IDs should be substituted
-for that production gate.
-
-The ARM64 pre-merge smoke/soak should first prove the same storage/runtime mechanics on a bounded
-explicit test set. Once the accepted production IDs exist, the mapping-bounded production gate
+The later production-intended Polymarket gate remains separate and depends on the accepted live
+crosswalk from LIVE-MAPPING-GATE-001. Once those production IDs exist, the mapping-bounded gate
 must prove:
 
 1. installed Polymarket unit contains `--require-explicit-universe`;
