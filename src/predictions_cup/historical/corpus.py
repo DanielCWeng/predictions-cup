@@ -175,7 +175,7 @@ def load_candidates(fills_root: Path, family: str) -> tuple[list[Candidate], lis
             candidates.append(
                 Candidate(
                     family=family,
-                    market_id=str(row["market_id"]),
+                    market_id=str(row.get("market_id") or ""),
                     condition_id=cid,
                     token_id=str(token),
                     outcome=labels[index] if len(labels) > index else token_field[:-9].upper(),
@@ -184,7 +184,7 @@ def load_candidates(fills_root: Path, family: str) -> tuple[list[Candidate], lis
                     market_family=str(row["market_family"]),
                 )
             )
-    candidates.sort(key=lambda c: (c.market_id, c.token_id))
+    candidates.sort(key=lambda c: (c.condition_id, c.token_id))
     return candidates, excluded
 
 
@@ -327,9 +327,10 @@ def build_corpus(
             {
                 "window_start": regime.window_start.isoformat(),
                 "window_end_exclusive": regime.window_end.isoformat(),
-                "candidate_markets": len({c.market_id for c in candidates}),
+                # Condition ID is the market key: some identity rows carry no numeric market_id.
+                "candidate_markets": len({c.condition_id for c in candidates}),
                 "candidate_tokens": len(candidates),
-                "markets_with_book_evidence": len({r["market_id"] for r in observed}),
+                "markets_with_book_evidence": len({r["condition_id"] for r in observed}),
                 "tokens_with_book_evidence": len(observed),
                 "tokens_with_fills": sum(1 for r in regime_identities if r["fills_available"]),
                 "missing_source_hours": missing_hours,
@@ -417,7 +418,7 @@ def render_identity_csv(rows: list[dict[str, Any]]) -> bytes:
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=IDENTITY_FIELDS, lineterminator="\n")
     writer.writeheader()
-    for row in sorted(rows, key=lambda r: (r["regime_id"], r["market_id"], r["token_id"])):
+    for row in sorted(rows, key=lambda r: (r["regime_id"], r["condition_id"], r["token_id"])):
         writer.writerow({k: _csv_value(row[k]) for k in IDENTITY_FIELDS})
     return buffer.getvalue().encode("utf-8")
 

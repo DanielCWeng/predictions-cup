@@ -63,7 +63,9 @@ _V1 = pa.schema(
 )
 
 
-def _v2_row(offset_ms: int, event_type: str, token: str = YES, **values: object) -> dict[str, object]:
+def _v2_row(
+    offset_ms: int, event_type: str, token: str = YES, **values: object
+) -> dict[str, object]:
     received = T0 + timedelta(milliseconds=offset_ms)
     row: dict[str, object] = {name: None for name in _V2.names}
     row.update(
@@ -74,8 +76,9 @@ def _v2_row(offset_ms: int, event_type: str, token: str = YES, **values: object)
         asset_id=token,
     )
     for key, value in values.items():
-        row[key] = Decimal(value) if key in {"price", "size", "best_bid", "best_ask",
-                                              "old_tick_size", "new_tick_size"} else value
+        decimal_fields = {"price", "size", "best_bid", "best_ask", "old_tick_size",
+                          "new_tick_size"}
+        row[key] = Decimal(str(value)) if key in decimal_fields else value
     return row
 
 
@@ -276,9 +279,9 @@ def _write_inputs(tmp_path: Path) -> tuple[Path, Path, Regime]:
 def test_build_is_deterministic_validated_and_loadable_by_build005(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from predictions_cup.historical import corpus as corpus_module
+    from predictions_cup.historical import regimes
 
-    monkeypatch.setitem(corpus_module.FAMILY_MARKET_FAMILIES, "TST_2026", frozenset({"TST"}))
+    monkeypatch.setitem(regimes.FAMILY_MARKET_FAMILIES, "TST_2026", frozenset({"TST"}))
     orderbooks, fills, regime = _write_inputs(tmp_path)
     first = build_corpus(orderbooks_root=orderbooks, fills_root=fills,
                          output_root=tmp_path / "a", regimes=(regime,))
@@ -310,9 +313,9 @@ def test_build_is_deterministic_validated_and_loadable_by_build005(
 
 
 def test_validation_detects_tampering(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from predictions_cup.historical import corpus as corpus_module
+    from predictions_cup.historical import regimes
 
-    monkeypatch.setitem(corpus_module.FAMILY_MARKET_FAMILIES, "TST_2026", frozenset({"TST"}))
+    monkeypatch.setitem(regimes.FAMILY_MARKET_FAMILIES, "TST_2026", frozenset({"TST"}))
     orderbooks, fills, regime = _write_inputs(tmp_path)
     build_corpus(orderbooks_root=orderbooks, fills_root=fills, output_root=tmp_path / "c",
                  regimes=(regime,))
@@ -338,3 +341,36 @@ def test_float_prices_in_book_stream_fail_visibly(tmp_path: Path) -> None:
     pq.write_table(bad, stream / "part-0.parquet")
     with pytest.raises(CaptureSchemaError):
         load_polymarket_capture(tmp_path / "books")
+
+
+def test_quality_reports_gaps_intervals_and_anomalies_without_repair() -> None:
+    from predictions_cup.historical.quality import RegimeQuality
+
+    quality = RegimeQuality(regime_id="q", material_gap=timedelta(minutes=5))
+    first = pmxt.normalize_extract(
+        _v2_sample(), source_version="PMXT_V2", token_ids=TOKENS,
+        window_start=START, window_end=END,
+    )
+    later = _v2_table(
+        [_v2_row(10 * 60_000, "price_change", side="BUY", price="0.43", size="2",
+                 best_bid="0.43", best_ask="0.55")]
+    )
+    second = pmxt.normalize_extract(
+        later, source_version="PMXT_V2", token_ids=TOKENS, window_start=START, window_end=END
+    )
+    for out in (first, second):
+        tables = {s: pmxt.sort_and_dedupe(s, t)[0] for s, t in out.tables.items()}
+        quality.add_book_hour(tables, {})
+    report = quality.token_report(YES)
+    assert report["book_evidence_rows"] == 5
+    # instants: 0 ms, 5 ms (two rows), 20 ms, 10 min
+    assert report["unique_timestamps"] == 4
+    assert report["median_observation_interval_ms"] == 15
+    assert report["material_gap_count"] == 1
+    assert report["max_observation_gap_seconds"] == 599.98
+    assert report["crossed_bbo_changes"] == 1
+    assert report["ambiguous_same_timestamp_bbo_groups"] == 1
+    assert report["rejected_malformed_rows"] == {"invalid_price": 1, "malformed_bid_levels": 1}
+    assert report["median_bid_levels"] == 2.0
+    assert report["evidence_grades"] == ["BOOK_SNAPSHOT", "PRICE_ONLY", "TRADE_FILL"]
+    assert quality.regime_report()["regime_wide_material_silences"] == 1
