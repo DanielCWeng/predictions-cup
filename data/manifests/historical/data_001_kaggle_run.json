@@ -1,0 +1,27 @@
+{
+  "command": "python scripts/kaggle/data_001_build.py (kernel code_file; see scripts/kaggle/kernel-metadata.json)",
+  "inputs": [
+    "polyleviathan/sig-cup-pmxt-orderbook-extracts",
+    "polyleviathan/sig-cup-polyleviathan-fills",
+    "polyleviathan/sig-cup-predictions-cup-code"
+  ],
+  "kaggle_summary_sha256": "b6c1d67267ac6416ed51f631063fa2137acd747ad3604b65463cc6c581a93b0f",
+  "kernel": "polyleviathan/sig-cup-data-001-build (private), version 1",
+  "kernel_code_commit": "658def419aca012b12f8ef5d213bac5120a26a02",
+  "local_build_pipeline_commit": "5925892ddfdae22df7dc870c5fe08d0ce95b9825",
+  "note": "658def4 differs from 5925892 only by docs, manifests and the test fixture; pipeline code is identical",
+  "output_files_compared": 115,
+  "output_files_sha256_identical": 115,
+  "totals": {
+    "corpus_bytes": 1187321736,
+    "rows_by_stream": {
+      "book_changes": 126550132,
+      "depth_snapshots": 459566,
+      "fills": 743015,
+      "tick_size_changes": 60,
+      "trades": 112467
+    }
+  },
+  "totals_equal_local": true,
+  "validate_exit_code": 0
+}
