@@ -19,8 +19,8 @@ The two service templates are:
 The default rendered ExecStart values are:
 
 ```text
-<repo-root>/.venv/bin/python -m predictions_cup.sig.capture
-<repo-root>/.venv/bin/python -m predictions_cup.external.polymarket.recorder
+<repo-root>/.venv/bin/python -m predictions_cup.sig.capture --runtime-env-only
+<repo-root>/.venv/bin/python -m predictions_cup.external.polymarket.recorder --runtime-env-only
 ```
 
 The installer may use an explicitly supplied `PREDICTIONS_CUP_PYTHON` instead of the default
@@ -35,7 +35,7 @@ runtime user's absolute:
 /home/<runtime-user>/.config/predictions-cup/runtime.env
 ```
 
-No unit references `trade.env`. The installer refuses `runtime.env` if it contains
+Both ExecStart commands pass `--runtime-env-only`, so the collectors disable their normal repo-local `.env` source while supervised. No unit references `trade.env`; both units also use `UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL` as a final process-environment guard. The installer refuses `runtime.env` if it contains
 `PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL` or explicitly enables trading. It also checks the existing
 secret-layout policy: config directory mode `700`, runtime file mode `600`, and runtime-user
 ownership.
@@ -118,7 +118,7 @@ Python, systemd destination and systemctl executable. It never deletes runtime d
 
 BUILD-007 adds tests proving:
 
-- both templates point at the single runtime environment placeholder;
+- both templates point at the single runtime environment placeholder and force `--runtime-env-only`;
 - neither unit references `trade.env` or the SIG trade credential;
 - the SIG unit contains no tracked-exchange CLI argument;
 - network-online ordering and `Restart=on-failure` are present;
