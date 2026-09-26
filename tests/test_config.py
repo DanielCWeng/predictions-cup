@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from predictions_cup.config import AppSettings
+from predictions_cup.config import AppSettings, load_settings
 
 
 @pytest.fixture
@@ -64,6 +64,24 @@ def test_tracked_depth_runtime_configuration_is_external_and_nonsecret(
 
     assert settings.sig_realtime_tracked_exchange_ids == "exchange-a, exchange-b,exchange-a"
     assert settings.diagnostic_fields()["sig_realtime_tracked_exchange_count"] == 2
+
+
+def test_runtime_env_only_disables_repo_dotenv(
+    clean_config_env: None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    del clean_config_env
+    (tmp_path / ".env").write_text(
+        "PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL=DOTENV_TRADE_SECRET\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    settings = load_settings(use_dotenv=False)
+
+    assert settings.sig_trade_credential is None
+    assert settings.trading_enabled is False
 
 
 def test_runtime_environment_overrides_local_dotenv(
