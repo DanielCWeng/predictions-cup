@@ -223,10 +223,8 @@ async def _run_recorder_until_stopped(
     _LOG.info("Polymarket recorder received shutdown signal")
     recorder.websocket.stop()
     recorder_task.cancel()
-    try:
+    with suppress(asyncio.CancelledError):
         await recorder_task
-    except asyncio.CancelledError:
-        pass
 
 
 def _install_signal_handlers(stop_event: asyncio.Event) -> None:
