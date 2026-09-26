@@ -6,7 +6,8 @@
 - No production trading daemon exists.
 - Normal application startup remains finite, network-free and non-trading.
 - The accepted repository includes a separate, explicitly invoked public read-only Polymarket research recorder.
-- BUILD-004 SIG Realtime capture is accepted on `main`. Its first credentialed tournament smoke exposed a scaling defect in the all-exchange full-depth fallback; BUILD-006 / PR #19 is the corrective candidate.
+- BUILD-006 SIG live REST governance/tracked-depth correction is accepted on `main`; its post-merge conservative credentialed smoke remains operationally outstanding.
+- BUILD-007 / PR #20 is an in-review read-only systemd supervision layer; it is not accepted or live-EC2 validated yet.
 
 The recorder uses local SQLite/WAL append storage, idempotent market metadata upserts, invalidation plus authoritative REST reseeding after reconnect, and explicit feed/book/trade/storage health clocks. These are experimental capture properties, not production trading/recovery guarantees.
 
@@ -23,7 +24,7 @@ The recorder writes a lean 1-second scalar panel, normalized event-time book cha
 
 The database path defaults to `data/polymarket_capture.sqlite3`, which is ignored by Git. Storage failures surface instead of being silently ignored.
 
-## SIG Realtime capture — BUILD-004 baseline / BUILD-006 corrective candidate
+## SIG Realtime capture — BUILD-006 accepted runtime
 
 The SIG capture process is explicit; normal application startup does not launch it. A read credential and an explicit tournament UUID are required.
 
@@ -52,7 +53,7 @@ SIG documents that order expiry emits no Realtime event. Because the documented 
 
 The default recorder path is data/sig_realtime.sqlite3. SQLite/WAL persistence includes Realtime deliveries/trades/invalidations, authoritative market/full-book observations, compact broad price/BBO observations and depth/trust transitions.
 
-See docs/implementation/BUILD_004_SIG_REALTIME.md for the accepted historical baseline and docs/implementation/BUILD_006_SIG_REST_GOVERNOR.md for the corrective candidate.
+See docs/implementation/BUILD_004_SIG_REALTIME.md for the accepted historical baseline and docs/implementation/BUILD_006_SIG_REST_GOVERNOR.md for the accepted corrective runtime contract.
 
 
 ## AWS EC2 runtime secret layout
@@ -76,18 +77,150 @@ Read-only capture, replay and research processes must load `runtime.env` only. T
 file must remain unsourced unless a separately approved execution path explicitly requires it.
 Code, logs, CI, GitHub and operator documentation must never contain the credential values.
 
+## EC2 collector runbook — BUILD-007 candidate
+
+BUILD-007 installs two read-only system services:
+
+- `predictions-cup-sig-capture.service`;
+- `predictions-cup-polymarket-capture.service`.
+
+Both templates are stored under `deploy/systemd/`. The installer resolves the runtime user,
+repository root, Python executable and runtime home to absolute values before copying units to
+`/etc/systemd/system/`. The installed `EnvironmentFile` therefore resolves to:
+
+```text
+/home/<runtime-user>/.config/predictions-cup/runtime.env
+```
+
+rather than a literal `~`. Neither unit loads `trade.env`. The installer refuses a
+`runtime.env` containing `PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL` or an enabled trading flag,
+and requires the existing secret-layout permissions: directory mode `700`, file mode `600`.
+
+The default rendered commands are:
+
+```text
+<repo-root>/.venv/bin/python -m predictions_cup.sig.capture
+<repo-root>/.venv/bin/python -m predictions_cup.external.polymarket.recorder
+```
+
+Set `PREDICTIONS_CUP_PYTHON` only if the EC2 runtime intentionally uses a different Python.
+The SIG command does not contain any tracked exchange ID. Tracked depth remains external runtime
+configuration through:
+
+```text
+PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS=
+```
+
+in `runtime.env`. Empty/unset means no tracked full depth. When explicitly needed, supply a
+comma-separated set of exchange IDs in that external file; the installed unit remains unchanged.
+
+The runtime environment must also provide a non-empty
+`PREDICTIONS_CUP_SIG_READ_CREDENTIAL` and `PREDICTIONS_CUP_TOURNAMENT_ID`, keep
+`PREDICTIONS_CUP_TRADING_ENABLED=false` (or omit it), and set
+`PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true`.
+
+### Install / update
+
+From the repository checkout:
+
+```bash
+git pull --ff-only
+python -m pip install -e '.[dev]'
+sudo bash scripts/install_runtime_services.sh
+```
+
+The installer is idempotent: it re-renders/copies the same two units, runs `daemon-reload`,
+enables both services, restarts both, verifies they are active and returns non-zero if restart or
+active-state verification fails. It never overwrites `runtime.env`, never deletes capture data,
+and never prints credential values.
+
+### Status
+
+```bash
+sudo systemctl status predictions-cup-sig-capture
+sudo systemctl status predictions-cup-polymarket-capture
+sudo systemctl is-enabled predictions-cup-sig-capture predictions-cup-polymarket-capture
+sudo systemctl is-active predictions-cup-sig-capture predictions-cup-polymarket-capture
+```
+
+### Follow logs
+
+```bash
+sudo journalctl -u predictions-cup-sig-capture -f
+sudo journalctl -u predictions-cup-polymarket-capture -f
+```
+
+### Restart / stop / start
+
+```bash
+sudo systemctl restart predictions-cup-sig-capture predictions-cup-polymarket-capture
+sudo systemctl stop predictions-cup-sig-capture predictions-cup-polymarket-capture
+sudo systemctl start predictions-cup-sig-capture predictions-cup-polymarket-capture
+```
+
+Both units use `Restart=on-failure`, wait for `network-online.target`, write stdout/stderr to
+journald, and send normal `SIGTERM` with a 30-second stop timeout. SIG capture already closes its
+state engine/recorder on shutdown. BUILD-007 adds equivalent SIGTERM handling to the Polymarket
+process: stop the WebSocket loop, cancel long-running tasks and let short SQLite context-managed
+writes/connections unwind normally.
+
+The services are enabled for `multi-user.target`, so an accepted/live-installed BUILD-007
+deployment should restart them after an EC2 reboot once systemd reaches the network-online
+dependency. Relative capture paths are deliberately preserved by `WorkingDirectory=<repo-root>`:
+
+```text
+data/sig_realtime.sqlite3
+data/polymarket_capture.sqlite3
+```
+
+### Troubleshooting
+
+```bash
+sudo systemctl cat predictions-cup-sig-capture
+sudo systemctl cat predictions-cup-polymarket-capture
+sudo journalctl -u predictions-cup-sig-capture -n 100 --no-pager
+sudo journalctl -u predictions-cup-polymarket-capture -n 100 --no-pager
+```
+
+If installation fails before restart, check the runtime user/home, `.venv/bin/python`, the
+`700/600` permissions, required runtime variables and collector entrypoints. If a service fails
+after restart, the installer exits non-zero and the journal commands above are the first
+diagnostic step.
+
+### Conservative live EC2 validation — not yet run
+
+After CI/review, an operator can validate without any trading action:
+
+```bash
+cd <repo-root>
+sudo bash scripts/install_runtime_services.sh
+
+sudo systemctl is-enabled predictions-cup-sig-capture predictions-cup-polymarket-capture
+sudo systemctl is-active predictions-cup-sig-capture predictions-cup-polymarket-capture
+sudo systemctl show -p EnvironmentFiles predictions-cup-sig-capture
+sudo systemctl show -p EnvironmentFiles predictions-cup-polymarket-capture
+
+sudo journalctl -u predictions-cup-sig-capture -n 100 --no-pager
+sudo journalctl -u predictions-cup-polymarket-capture -n 100 --no-pager
+ls -lh data/sig_realtime.sqlite3 data/polymarket_capture.sqlite3
+
+sudo systemctl restart predictions-cup-sig-capture predictions-cup-polymarket-capture
+sudo systemctl is-active predictions-cup-sig-capture predictions-cup-polymarket-capture
+```
+
+Disconnect SSH, reconnect, and repeat the active/log checks to confirm the collectors are
+independent of the shell session. For reboot validation, use an operator-controlled
+`sudo reboot`, reconnect after the host returns, then repeat `is-enabled`, `is-active`,
+journal and data-file checks. `EnvironmentFiles` must show only the resolved `runtime.env`
+path; neither unit should show or source `trade.env`.
+
 ## Eventual operating expectations
 
-Future production operation is expected to provide, at minimum:
-
-- a supervised process;
-- automatic restart;
-- reconciliation on restart;
-- health visibility;
-- log rotation;
-- no dependency on a developer laptop.
-
-These mechanisms are expectations only and are not implemented by BUILD-001.
+BUILD-007 / PR #20 implements the supervised-process, automatic-restart and SSH-independent
+collector layer on its branch. Until it is accepted and the EC2 smoke/reboot sequence is actually
+run, those properties remain candidate deployment capability rather than a live-validated claim.
+Collector-native reconciliation and journald visibility remain authoritative; BUILD-007 does not
+introduce a separate logging daemon or trading service.
 
 ## Repository state discipline
 
