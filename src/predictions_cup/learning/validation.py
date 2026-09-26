@@ -215,7 +215,7 @@ def purge_roles(
             kept.append(item)
             continue
         row = item.observation
-        if row.label_end_time > evaluation_start:
+        if row.label_end_time >= evaluation_start:
             purged += 1
             continue
         if embargo and row.decision_time >= embargo_start:
