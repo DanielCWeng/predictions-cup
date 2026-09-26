@@ -84,6 +84,7 @@ class FakeRest:
         self.market_calls: list[str] = []
         self.bulk_calls: list[tuple[str, ...]] = []
         self.bulk_priorities: list[RestPriority] = []
+        self.bulk_missing: set[str] = set()
         self.fail: set[str] = set()
         self.empty_books: set[str] = set()
         self.market_status = {market_id: "open" for market_id, _ in pairs}
@@ -153,8 +154,13 @@ class FakeRest:
                         "spread": 0.2,
                     }
                     for exchange_id in requested
+                    if exchange_id not in self.bulk_missing
                 ],
-                "missingIds": [],
+                "missingIds": [
+                    exchange_id
+                    for exchange_id in requested
+                    if exchange_id in self.bulk_missing
+                ],
             }
         )
 
@@ -317,6 +323,41 @@ def test_237_exchange_startup_uses_three_bulk_calls_and_only_tracked_books(
         assert all(priority == RestPriority.BACKGROUND for priority in rest.bulk_priorities)
         assert engine.states["e-1"].depth_state == DepthState.UNTRACKED_DEPTH
         assert engine.states["e-0"].depth_state == DepthState.TRACKED_TRUSTED
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_bulk_missing_id_clears_stale_scalar_bbo_fail_closed(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        rest = FakeRest()
+        engine, recorder = _engine(tmp_path, rest)
+        await engine.initialize()
+
+        state = engine.states["36"]
+        assert state.latest_price == Decimal("0.5")
+        assert state.scalar_best_bid == Decimal("0.4")
+        assert state.scalar_best_ask == Decimal("0.6")
+        assert state.scalar_spread == Decimal("0.2")
+        assert state.last_scalar_observed_at is not None
+        assert state.best_bid == Decimal("0.4")
+        assert state.best_ask == Decimal("0.6")
+
+        rest.bulk_missing.add("36")
+        await engine.refresh_bulk_prices(reason="test_missing_id")
+
+        assert state.latest_price is None
+        assert state.scalar_best_bid is None
+        assert state.scalar_best_ask is None
+        assert state.scalar_spread is None
+        assert state.last_scalar_observed_at is None
+        assert state.best_bid is None
+        assert state.best_ask is None
+        assert engine.health.bulk_price_missing_count == 1
+
         await engine.aclose()
         recorder.close()
 
