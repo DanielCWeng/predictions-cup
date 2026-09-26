@@ -189,7 +189,21 @@ class PolymarketRecorder:
     async def _refresh_loop(self) -> None:
         while True:
             await asyncio.sleep(self.settings.polymarket_gamma_refresh_seconds)
+            await self._refresh_universe_fail_soft()
+
+    async def _refresh_universe_fail_soft(self) -> bool:
+        try:
             await self.refresh_universe()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            _LOG.warning(
+                "Polymarket periodic Gamma refresh failed; keeping existing universe: %s: %s",
+                type(exc).__name__,
+                exc,
+            )
+            return False
+        return True
 
     async def _health_loop(self) -> None:
         while True:
