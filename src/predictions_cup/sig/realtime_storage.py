@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from predictions_cup.models import OrderBook
-from predictions_cup.sig.dto import MarketDto
+from predictions_cup.sig.dto import MarketDto, PriceSnapshotDto
 from predictions_cup.sig.realtime_models import (
     BookDirtyDto,
     MarketSettledDto,
@@ -90,6 +90,21 @@ class SigRealtimeRecorder:
             );
             CREATE INDEX IF NOT EXISTS ix_market_observations_market_time
                 ON market_observations(market_id, rest_observed_at);
+
+            CREATE TABLE IF NOT EXISTS price_observations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exchange_id TEXT NOT NULL,
+                market_id TEXT NOT NULL,
+                tournament_id TEXT NOT NULL,
+                latest_price TEXT,
+                best_bid TEXT,
+                best_ask TEXT,
+                spread TEXT,
+                rest_observed_at TEXT NOT NULL,
+                reason TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ix_price_observations_exchange_time
+                ON price_observations(exchange_id, rest_observed_at);
 
             CREATE TABLE IF NOT EXISTS book_observations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -262,6 +277,41 @@ class SigRealtimeRecorder:
         )
         self._connection.commit()
 
+    def record_prices(
+        self,
+        *,
+        tournament_id: str,
+        prices: tuple[PriceSnapshotDto, ...],
+        observed_at: datetime,
+        reason: str,
+    ) -> None:
+        rows = [
+            (
+                item.exchange_id,
+                item.market_id,
+                tournament_id,
+                str(item.latest_price) if item.latest_price is not None else None,
+                str(item.best_bid) if item.best_bid is not None else None,
+                str(item.best_ask) if item.best_ask is not None else None,
+                str(item.spread) if item.spread is not None else None,
+                _iso(observed_at),
+                reason,
+            )
+            for item in prices
+        ]
+        if not rows:
+            return
+        with self._connection:
+            self._connection.executemany(
+                """
+                INSERT INTO price_observations (
+                    exchange_id, market_id, tournament_id, latest_price,
+                    best_bid, best_ask, spread, rest_observed_at, reason
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                rows,
+            )
+
     def record_book(
         self,
         *,
@@ -332,6 +382,9 @@ class SigRealtimeRecorder:
             )
             self._connection.execute(
                 "DELETE FROM market_observations WHERE rest_observed_at < ?", (cutoff_iso,)
+            )
+            self._connection.execute(
+                "DELETE FROM price_observations WHERE rest_observed_at < ?", (cutoff_iso,)
             )
             self._connection.execute(
                 "DELETE FROM book_observations WHERE rest_observed_at < ?", (cutoff_iso,)
