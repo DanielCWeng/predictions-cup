@@ -794,6 +794,7 @@ class SigRealtimeStateEngine:
 
         if response.missing_ids:
             self.health.bulk_price_missing_count += len(response.missing_ids)
+            missing_exchanges: list[tuple[str, str]] = []
             for exchange_id in response.missing_ids:
                 state = self.states[exchange_id]
                 state.latest_price = None
@@ -801,6 +802,13 @@ class SigRealtimeStateEngine:
                 state.scalar_best_ask = None
                 state.scalar_spread = None
                 state.last_scalar_observed_at = None
+                missing_exchanges.append((state.exchange_id, state.market_id))
+            self._recorder.record_missing_prices(
+                tournament_id=self.tournament_id,
+                exchanges=tuple(missing_exchanges),
+                observed_at=observed_at,
+                reason=f"{reason}:missing",
+            )
             logger.warning(
                 "SIG bulk price response missing exchanges count=%s",
                 len(response.missing_ids),
