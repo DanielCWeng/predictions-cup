@@ -499,6 +499,29 @@ def test_harness_validates_identity_and_report_is_byte_deterministic() -> None:
     assert report.serialize() == report.serialize()
     assert b'"net_executable_metrics":null' in report.serialize()
 
+    with pytest.raises(ValueError, match="duplicate evaluation observation"):
+        harness.validate_rows((row, row))
+    with pytest.raises(ValueError, match="hypothesis_family"):
+        harness.validate_rows((replace(row, hypothesis_family="RV"),))
+    with pytest.raises(ValueError, match="horizon"):
+        harness.validate_rows(
+            (
+                replace(
+                    row,
+                    horizon=timedelta(seconds=2),
+                    label_end_time=row.decision_time + timedelta(seconds=2),
+                ),
+            )
+        )
+    with pytest.raises(ValueError, match="market_id"):
+        harness.validate_rows((replace(row, market_id="outside"),))
+    with pytest.raises(ValueError, match="event_id"):
+        harness.validate_rows((replace(row, event_id="outside"),))
+    with pytest.raises(ValueError, match="event_family_id"):
+        harness.validate_rows((replace(row, event_family_id="outside"),))
+    with pytest.raises(ValueError, match="label_end_time"):
+        replace(row, label_end_time=row.label_end_time + timedelta(seconds=1))
+
 
 @pytest.mark.parametrize(
     "disposition",
@@ -568,3 +591,87 @@ def test_negative_controls_and_ablations_are_explicit_and_past_safe() -> None:
     assert ablation.removed_components == ("flow",)
     with pytest.raises(ValueError, match="positive delay"):
         NegativeControl("bad-delay", NegativeControlKind.DELAYED_PAST_ONLY)
+
+
+def test_walk_forward_purges_development_labels_that_overlap_holdout() -> None:
+    rows = (
+        _row(0, horizon=5),
+        _row(5, horizon=5),
+        _row(10, horizon=2),
+        _row(12, horizon=8),
+        _row(15, horizon=5),
+        _row(20, horizon=5),
+    )
+    folds = walk_forward_folds(
+        rows,
+        WalkForwardConfig(
+            training_window=timedelta(seconds=10),
+            development_window=timedelta(seconds=5),
+            holdout_window=timedelta(seconds=5),
+            step=timedelta(seconds=10),
+        ),
+    )
+    first = folds[0]
+    assert first.development_purge_evidence.rows_removed_by_purge == 1
+    assert all(item.observation.decision_time != BASE + timedelta(seconds=12) for item in first.assignments)
+
+
+def test_promoted_report_is_forced_inconclusive_when_required_evidence_is_missing() -> None:
+    spec = _spec()
+    harness = ResearchEvaluationHarness(spec, "abc123")
+    report = ResearchReport(
+        schema_version="1",
+        run_id=harness.identity.run_id,
+        experiment_id=spec.experiment_id,
+        hypothesis_family=spec.hypothesis_family,
+        economic_mechanism=spec.economic_mechanism,
+        code_revision="abc123",
+        dataset_id=spec.dataset.dataset_id,
+        dataset_version=spec.dataset.schema_version,
+        dataset_hash=spec.dataset.manifest_sha256,
+        config_hash=harness.identity.config_hash,
+        universe={"markets": ("m1",), "events": ("e1",), "families": ("f1",)},
+        folds=({"id": "fold-1", "role": "HOLDOUT"},),
+        purge_embargo={"purged": 0, "embargoed": 0},
+        sample_counts={"observations": 1, "markets": 1, "events": 1, "families": 1},
+        horizon_results=({"horizon": "5", "valid": 1},),
+        predictive_metrics={"mean": "0.02"},
+        gross_executable_metrics={"mean": "0.03"},
+        net_executable_metrics={"mean": "0.02"},
+        bootstrap_results=(),
+        raw_statistical_tests=(),
+        fdr_results=(),
+        parameter_stability=None,
+        negative_controls=(),
+        ablations=(),
+        execution_stresses=(),
+        invalidity_counts={},
+        known_limitations=(),
+        disposition=ResearchDisposition.PROMOTED,
+        evidence_policy=spec.disposition_policy,
+    )
+    assert report.requested_disposition is ResearchDisposition.PROMOTED
+    assert report.disposition is ResearchDisposition.INCONCLUSIVE
+    assert set(report.disposition_evidence_missing) == {
+        "statistical_tests",
+        "fdr",
+        "bootstrap",
+        "parameter_stability",
+        "negative_controls",
+        "ablations",
+        "execution_stresses",
+    }
+
+    complete = replace(
+        report,
+        disposition=ResearchDisposition.PROMOTED,
+        raw_statistical_tests=({"test_name": "declared-test"},),
+        fdr_results=({"hypothesis_id": "h1", "rejected": True},),
+        bootstrap_results=({"method": "moving_block"},),
+        parameter_stability={"peak_is_isolated": False},
+        negative_controls=({"name": "zero"},),
+        ablations=({"name": "minus-flow"},),
+        execution_stresses=({"name": "fee"},),
+    )
+    assert complete.disposition is ResearchDisposition.PROMOTED
+    assert complete.disposition_evidence_missing == ()
