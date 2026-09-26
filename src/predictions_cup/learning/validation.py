@@ -191,6 +191,90 @@ def purge_training(
     return tuple(kept), evidence
 
 
+
+@dataclass(frozen=True, slots=True)
+class WalkForwardConfig:
+    training_window: timedelta
+    development_window: timedelta
+    holdout_window: timedelta
+    step: timedelta
+    expanding_training: bool = False
+    embargo: timedelta = timedelta(0)
+
+    def __post_init__(self) -> None:
+        windows = (
+            self.training_window,
+            self.development_window,
+            self.holdout_window,
+            self.step,
+        )
+        if any(value <= timedelta(0) for value in windows):
+            raise ValueError("walk-forward windows and step must be positive")
+        if self.embargo < timedelta(0):
+            raise ValueError("walk-forward embargo must not be negative")
+
+
+@dataclass(frozen=True, slots=True)
+class WalkForwardFold:
+    fold_id: str
+    train_start: datetime
+    train_end: datetime
+    development_end: datetime
+    holdout_end: datetime
+    assignments: tuple[FoldAssignment, ...]
+    purge_evidence: PurgeEvidence
+
+
+def walk_forward_folds(
+    rows: Iterable[EvaluationObservation],
+    config: WalkForwardConfig,
+) -> tuple[WalkForwardFold, ...]:
+    ordered = tuple(sorted(rows, key=lambda row: row.decision_time))
+    if not ordered:
+        return ()
+    first = ordered[0].decision_time
+    last = ordered[-1].decision_time
+    anchor = first + config.training_window
+    output: list[WalkForwardFold] = []
+    fold_number = 1
+    while True:
+        train_end = anchor
+        development_end = train_end + config.development_window
+        holdout_end = development_end + config.holdout_window
+        if development_end > last:
+            break
+        train_start = first if config.expanding_training else train_end - config.training_window
+        fold_rows = tuple(
+            row
+            for row in ordered
+            if train_start <= row.decision_time < holdout_end
+        )
+        assignments = chronological_split(
+            fold_rows,
+            ChronologicalBoundaries(train_end, development_end),
+        )
+        assignments, evidence = purge_training(
+            assignments,
+            train_end,
+            embargo=config.embargo,
+        )
+        output.append(
+            WalkForwardFold(
+                fold_id=f"fold-{fold_number:03d}",
+                train_start=train_start,
+                train_end=train_end,
+                development_end=development_end,
+                holdout_end=holdout_end,
+                assignments=assignments,
+                purge_evidence=evidence,
+            )
+        )
+        fold_number += 1
+        anchor += config.step
+        if anchor > last:
+            break
+    return tuple(output)
+
 def chronological_group_holdout(
     rows: Iterable[EvaluationObservation],
     *,
