@@ -6,7 +6,7 @@
 - No production trading daemon exists.
 - Normal application startup remains finite, network-free and non-trading.
 - The accepted repository includes a separate, explicitly invoked public read-only Polymarket research recorder.
-- BUILD-006 SIG live REST governance/tracked-depth correction is accepted on `main`; its post-merge conservative credentialed smoke remains operationally outstanding.
+- BUILD-006 SIG live REST governance/tracked-depth correction is accepted on `main`; its accepted 60-second credentialed smoke passed at the merged head.
 - BUILD-007 / PR #20 is an in-review read-only systemd supervision layer; it is not accepted or live-EC2 validated yet.
 
 The recorder uses local SQLite/WAL append storage, idempotent market metadata upserts, invalidation plus authoritative REST reseeding after reconnect, and explicit feed/book/trade/storage health clocks. These are experimental capture properties, not production trading/recovery guarantees.
@@ -42,6 +42,8 @@ BUILD-006 keeps tournament-wide Realtime and broad scalar/BBO capture while maki
       --print-health
 
 With no --tracked-exchange-id arguments, the process deliberately maintains no resident trusted full depth and logs that fact. It still records the full tournament Realtime tape and broad bulk-price observations.
+
+The accepted BUILD-006 credentialed smoke ran for 60 seconds at the exact head later merged in PR #19. It observed 237 known exchanges with 1 tracked and 236 untracked, produced 0 HTTP 429s and 0 reconciliation failures, made 2 full-book reads, and kept the tracked book inside the 30-second freshness bound. That BUILD-006 live gate is complete; it is separate from BUILD-007's still-outstanding live systemd/SSH/reboot validation.
 
 The BUILD-006 live path uses one governed REST client. The default is 2 requests/second. The earlier blocking curl + sleep probe only demonstrated roughly 2.0–2.4 request starts/second, so 3 requests/second remains unvalidated until a fixed-cadence live probe is run. SIG does not publish a numeric REST limit in the supplied contract. HIGH tracked dirty/recovery work can overtake BACKGROUND bulk-price work, and a 429 creates shared cooldown for callers using the same governed client.
 
