@@ -1,6 +1,7 @@
 # ruff: noqa: I001
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -22,10 +23,16 @@ from predictions_cup.learning.reporting import (
     ResearchReport,
 )
 from predictions_cup.learning.research_spec import (
+    BootstrapProtocol,
     DatasetVersion,
+    EventBootstrapWeighting,
+    EvidencePolicy,
+    FDRProtocol,
     ResearchEvaluationSpec,
     STANDARD_HORIZONS,
     SplitMethod,
+    StabilityProtocol,
+    WalkForwardProtocol,
     make_run_identity,
 )
 from predictions_cup.learning.stability import ParameterCell, parameter_surface
@@ -40,9 +47,10 @@ from predictions_cup.learning.validation import (
     FoldRole,
     adapt_experiment_observation,
     adapt_relationship_observation,
-    chronological_group_holdout,
-    chronological_split,
     WalkForwardConfig,
+    chronological_group_holdout,
+    chronological_group_holdout_result,
+    chronological_split,
     leave_group_out_diagnostic,
     purge_training,
     walk_forward_folds,
@@ -69,7 +77,32 @@ def _spec(**overrides: object) -> ResearchEvaluationSpec:
         "event_universe": ("e1", "e2"),
         "event_family_universe": ("f1",),
         "split_method": SplitMethod.WALK_FORWARD,
-        "multiple_testing_family": "cross-venue",
+        "walk_forward": WalkForwardProtocol(
+            training_window=timedelta(seconds=10),
+            development_window=timedelta(seconds=5),
+            holdout_window=timedelta(seconds=5),
+            step=timedelta(seconds=5),
+        ),
+        "fdr": FDRProtocol(
+            family_id="cross-venue",
+            alpha=Decimal("0.05"),
+            hypothesis_ids=("h1", "h2", "h3", "h4"),
+        ),
+        "bootstrap": BootstrapProtocol(
+            method="moving_block",
+            draws=100,
+            block_size=3,
+            event_weighting=EventBootstrapWeighting.OBSERVATION_WEIGHTED_CLUSTER,
+        ),
+        "stability": StabilityProtocol(tolerance=Decimal("0.10")),
+        "disposition_policy": EvidencePolicy(),
+        "negative_controls": (
+            NegativeControl("zero", NegativeControlKind.ZERO_SIGNAL),
+        ),
+        "ablations": (AblationVariant("minus-flow", ("flow",)),),
+        "execution_stresses": (
+            ExecutionStress("fee", extra_cost_per_share=Decimal("0.01")),
+        ),
     }
     values.update(overrides)
     return ResearchEvaluationSpec(**values)  # type: ignore[arg-type]
