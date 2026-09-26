@@ -204,8 +204,9 @@ class ResearchEvaluationHarness:
             raise ValueError(
                 "latency stress requires replay re-evaluation at the delayed observable time"
             )
+        materialized = self.validate_rows(rows)
         results: list[Decimal | None] = []
-        for row in rows:
+        for row in materialized:
             if row.gross_executable_markout is None or stress.extra_cost_per_share is None:
                 results.append(None)
             else:
