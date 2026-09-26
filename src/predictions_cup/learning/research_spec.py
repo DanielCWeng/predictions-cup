@@ -1,4 +1,5 @@
 """Canonical, serializable research-evaluation contracts."""
+# ruff: noqa: I001
 
 from __future__ import annotations
 
