@@ -25,6 +25,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run read-only SIG Realtime capture.")
     parser.add_argument("--tournament-id", help="Explicit tournament UUID.")
     parser.add_argument(
+        "--runtime-env-only",
+        action="store_true",
+        help="Disable local .env loading; intended for supervised runtime services.",
+    )
+    parser.add_argument(
         "--list-tournaments",
         action="store_true",
         help="List accessible tournaments and exit without subscribing.",
@@ -214,7 +219,7 @@ def _install_signal_handlers(stop_event: asyncio.Event) -> None:
 
 def main() -> int:
     args = parse_args()
-    settings = load_settings()
+    settings = load_settings(use_dotenv=not args.runtime_env_only)
     logging.basicConfig(
         level=getattr(logging, settings.log_level),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
