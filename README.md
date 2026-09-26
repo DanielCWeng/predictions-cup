@@ -10,10 +10,12 @@ BUILD-003 provides authenticated, read-only SIG REST access for market discovery
 
 BUILD-002 remains the owner of typed configuration and canonical domain objects. BUILD-003 validates SIG wire payloads separately and converts into those canonical contracts only where the conversion is lossless.
 
-BUILD-004 is currently **IN REVIEW in PR #12** and is not part of the accepted `main` baseline.
-Its candidate implementation adds read-only SIG Realtime invalidation, authoritative REST
-reconciliation, trusted/untrusted exchange state and replayable normalized capture. It adds no
-strategy or execution capability.
+BUILD-004 is accepted on `main` as the read-only SIG Realtime/state foundation. Its first live
+credentialed tournament smoke exposed a scalability defect in the original all-exchange
+full-depth freshness fallback. BUILD-006 / PR #19 is the in-review corrective branch: it keeps
+full-tournament Realtime capture, makes resident authoritative depth explicitly tracked-only,
+uses the bulk price/BBO endpoint for broad state, and places live SIG REST behind one priority
+governor with shared 429 cooldown. It adds no strategy or execution capability.
 
 ## Requirements
 
@@ -58,7 +60,10 @@ PREDICTIONS_CUP_TOURNAMENT_SLUG
 PREDICTIONS_CUP_TRADING_ENABLED
 PREDICTIONS_CUP_SIG_REALTIME_STORAGE_PATH
 PREDICTIONS_CUP_SIG_REALTIME_BOOK_DEPTH
+PREDICTIONS_CUP_SIG_REST_GOVERNOR_RATE_PER_SECOND
+PREDICTIONS_CUP_SIG_REST_SHARED_COOLDOWN_MAX_SECONDS
 PREDICTIONS_CUP_SIG_REALTIME_OPEN_BOOK_REFRESH_SECONDS
+PREDICTIONS_CUP_SIG_REALTIME_BULK_PRICE_REFRESH_SECONDS
 PREDICTIONS_CUP_SIG_REALTIME_TOKEN_REFRESH_MARGIN_SECONDS
 PREDICTIONS_CUP_SIG_REALTIME_RETENTION_DAYS
 ```
@@ -107,26 +112,39 @@ SIG JSON numbers used for prices and quantities are decoded through `Decimal` be
 The accepted `main` SIG surface is read-only REST. There is no order placement, cancellation,
 automatic tournament resolver, or portfolio accounting on `main`.
 
-### SIG Realtime candidate — BUILD-004 IN REVIEW
+### SIG Realtime — accepted BUILD-004 baseline / BUILD-006 corrective candidate
 
-PR #12 adds a separate explicit read-only capture command:
+BUILD-004 provides the explicit read-only SIG capture command:
 
-```bash
-python -m predictions_cup.sig.capture --list-tournaments
-python -m predictions_cup.sig.capture --tournament-id <TOURNAMENT_UUID>
-```
+    python -m predictions_cup.sig.capture --list-tournaments
+    python -m predictions_cup.sig.capture --tournament-id <TOURNAMENT_UUID>
 
-It mints the short-lived token, performs one authoritative market/open-book REST seed, then
-subscribes once to `tournament:{tournament_id}`. It records local batch receive time, checks
-topic `revision/previousRevision`, treats `bookDirty` as an orderbook invalidation, and
-refetches authoritative market state on settlement. Because SIG documents that order expiry
-emits no Realtime event and the aggregated orderbook carries no expiry metadata, trusted open
-books also receive a bounded authoritative REST refresh (30 seconds by default). Reconnect,
-token refresh, socket error or revision gap requires another authoritative REST reconciliation.
-A REST failure leaves state untrusted.
+BUILD-006 / PR #19 changes live depth maintenance so tournament-wide Realtime no longer implies
+tournament-wide resident full depth. Full depth is opt-in with repeatable --tracked-exchange-id
+arguments; the safe default is no tracked depth. The broad universe is maintained through
+GET /exchanges/prices in batches of at most 100 IDs, while tracked bookDirty/recovery work is
+HIGH priority behind one governed REST budget.
 
-This path is never started by `python -m predictions_cup.app` and contains no write/order path.
-See `docs/implementation/BUILD_004_SIG_REALTIME.md` for the candidate contract.
+A finite conservative smoke can report governor/depth health explicitly:
+
+    python -m predictions_cup.sig.capture \
+      --tournament-id <TOURNAMENT_UUID> \
+      --tracked-exchange-id <EXCHANGE_ID_1> \
+      --tracked-exchange-id <EXCHANGE_ID_2> \
+      --run-seconds 60 \
+      --print-health
+
+The default governed rate is 3 requests/second. That is an operational setting informed by live
+observation, not a published SIG rate limit. Likewise, the default 30-second tracked-book refresh
+is our expiry-safety policy because SIG documents silent order expiry while the aggregate
+orderbook carries no per-order expirationDate; it is not a SIG-required interval.
+
+Realtime remains best-effort invalidation/event capture. REST remains authoritative. Scalar/BBO
+bulk observations never make full depth trusted, and failed tracked reconciliation remains
+fail-closed. Normal application startup remains network-free and no write/order path exists.
+
+See docs/implementation/BUILD_004_SIG_REALTIME.md for the historical accepted baseline and
+docs/implementation/BUILD_006_SIG_REST_GOVERNOR.md for the corrective candidate contract.
 
 ## Polymarket research recorder
 
