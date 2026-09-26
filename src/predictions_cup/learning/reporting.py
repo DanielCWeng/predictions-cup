@@ -53,7 +53,11 @@ class ResearchReport:
     disposition_evidence_missing: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        requested = self.disposition if self.requested_disposition is None else self.requested_disposition
+        requested = (
+            self.disposition
+            if self.requested_disposition is None
+            else self.requested_disposition
+        )
         missing = _missing_required_evidence(self, self.evidence_policy)
         object.__setattr__(self, "requested_disposition", requested)
         object.__setattr__(self, "disposition_evidence_missing", missing)
