@@ -584,7 +584,7 @@ def _load_polymarket_parquet_capture(
             )
         )
 
-    seen_hashed_trade_ids: set[str] = set()
+    seen_hashed_trade_ids = _parquet_hashed_trade_ids_before(root, selection)
     for row in _parquet_rows(
         root,
         "trades",
@@ -646,6 +646,51 @@ def _load_polymarket_parquet_capture(
         )
 
     return _ordered(events)
+
+
+def _parquet_hashed_trade_ids_before(
+    root: Path,
+    selection: CaptureSelection,
+) -> set[str]:
+    if selection.start_at is None:
+        return set()
+    stream_root = root / "trades"
+    files = sorted(stream_root.rglob("*.parquet")) if stream_root.is_dir() else []
+    if not files:
+        return set()
+
+    dataset = pads.dataset([str(path) for path in files], format="parquet")
+    expression: Any = pads.field("observed_at") < selection.start_at
+    if selection.polymarket_token_ids is not None:
+        expression &= pads.field("token_id").isin(list(selection.polymarket_token_ids))
+
+    table = dataset.to_table(
+        columns=["event_id", "token_id", "transaction_hash"],
+        filter=expression,
+    )
+    seen: set[str] = set()
+    for row in table.to_pylist():
+        transaction_hash = row.get("transaction_hash")
+        if transaction_hash is None:
+            if row.get("event_id") is not None:
+                raise CaptureSchemaError(
+                    "unhashed Polymarket trade must not claim an event_id"
+                )
+            continue
+        token_id = _text(row.get("token_id"), "Polymarket token_id")
+        transaction_hash = _text(
+            transaction_hash,
+            "Polymarket trade transaction_hash",
+        )
+        expected_event_id = hashed_trade_event_id(token_id, transaction_hash)
+        assert expected_event_id is not None
+        event_id = _text(row.get("event_id"), "Polymarket trade event_id")
+        if event_id != expected_event_id:
+            raise CaptureSchemaError(
+                "Polymarket trade event_id does not match token/hash identity"
+            )
+        seen.add(event_id)
+    return seen
 
 
 def _parquet_rows(
