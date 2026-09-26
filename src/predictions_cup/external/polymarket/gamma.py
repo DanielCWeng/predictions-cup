@@ -189,9 +189,12 @@ def _parse_retry_after_seconds(value: str | None) -> float | None:
         return seconds
 
     try:
-        retry_at = parsedate_to_datetime(candidate)
+        parsed_retry_at = parsedate_to_datetime(candidate)
     except (TypeError, ValueError, OverflowError):
         return None
+    if not isinstance(parsed_retry_at, datetime):
+        return None
+    retry_at = parsed_retry_at
     if retry_at.tzinfo is None:
         retry_at = retry_at.replace(tzinfo=UTC)
     return max(0.0, (retry_at - datetime.now(UTC)).total_seconds())
