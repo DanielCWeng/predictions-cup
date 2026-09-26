@@ -4,11 +4,15 @@ Foundation for a quantitative prediction-market trading system being developed f
 
 ## Current status
 
-The accepted `main` baseline includes BUILD-006 and EXPERIMENT-001A. It has **no trading capability**. BUILD-007 / PR #20 is an in-review read-only EC2 supervision layer and is not yet accepted/live validated.
+The accepted `main` baseline includes BUILD-007, EXPERIMENT-001A and EXPERIMENT-002. It has **no trading capability**. BUILD-007 / PR #20 is merged and live-accepted as the read-only EC2 supervision / strict-universe / Parquet capture layer.
 
 BUILD-003 provides authenticated, read-only SIG REST access for market discovery, prices, orderbooks, trades/history, market nodes, exchanges, and account health. EXPERIMENT-001A provides a separate public read-only Polymarket research recorder for external market capture. Neither path submits or cancels orders, calculates fair value, or runs strategies.
 
 BUILD-002 remains the owner of typed configuration and canonical domain objects. BUILD-003 validates SIG wire payloads separately and converts into those canonical contracts only where the conversion is lossless.
+
+## Canonical project-control read order
+
+New orchestrators/reviewers should start with `ORCHESTRATOR.md`, then `CURRENT_STATE.md`, `BUILD_LEDGER.md`, `ARCHITECTURE.md`, `DATA_CONTRACTS.md` and `OPERATIONS.md`. Chat history is working context; merged repository state is canonical.
 
 BUILD-004 is accepted on `main` as the read-only SIG Realtime/state foundation. BUILD-006 /
 PR #19 is also accepted: it keeps full-tournament Realtime capture, makes resident authoritative
@@ -155,9 +159,9 @@ fail-closed. Normal application startup remains network-free and no write/order 
 See docs/implementation/BUILD_004_SIG_REALTIME.md for the historical accepted baseline and
 docs/implementation/BUILD_006_SIG_REST_GOVERNOR.md for the accepted corrective contract.
 
-## EC2 systemd supervision — BUILD-007 candidate
+## EC2 systemd supervision — BUILD-007 accepted
 
-PR #20 adds two read-only systemd services and `scripts/install_runtime_services.sh`. Both use
+BUILD-007 / PR #20 adds two read-only systemd services and `scripts/install_runtime_services.sh`. Both use
 only `~/.config/predictions-cup/runtime.env`, disable repo-local dotenv loading, strip the SIG
 trade credential from the process environment and remain non-trading.
 
@@ -190,16 +194,17 @@ The service command is:
 Until LIVE-MAPPING-GATE-001 supplies an accepted crosswalk, the production-intended supervised
 Polymarket universe is not available and the Polymarket service should remain stopped rather than
 fall back to the 3,160-market heuristic. The SIG supervised collector can run independently.
-Before BUILD-007 merges, a deliberately bounded explicit public test universe may be used only for
-the required ARM64 EC2 PyArrow/Parquet smoke/soak; that temporary test set is not production
-mapping evidence.
+The required ARM64 EC2 PyArrow/Parquet smoke/soak passed before merge on a deliberately bounded
+3-market / 6-token public test universe. PyArrow 25.0.1, ZSTD shard production/readback, scheduled
+Gamma refresh, the positive 1-second 429 retry floor and manual restart continuation were all
+validated. That temporary test set is not production mapping evidence and must not be promoted.
 
 Gamma failures also fail at the correct boundary: startup without a valid universe fails closed;
 after startup, a failed scheduled metadata discovery/selection keeps the last-good universe and
 research capture alive. Local persistence failures still surface.
 
 See `OPERATIONS.md` and
-`docs/implementation/BUILD_007_EC2_RUNTIME_SUPERVISION.md` for deployment and acceptance gates.
+`docs/implementation/BUILD_007_EC2_RUNTIME_SUPERVISION.md` for the accepted deployment contract and remaining production mapping-bounded gates.
 
 ## Polymarket research recorder
 
