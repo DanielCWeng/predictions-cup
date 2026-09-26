@@ -747,10 +747,11 @@ def test_harness_rejects_runtime_protocol_mismatches() -> None:
 
     bad_fdr = replace(spec.fdr, alpha=Decimal("0.10"))
     with pytest.raises(ValueError, match="FDR protocol"):
-        harness.apply_fdr(
-            tuple(_test_result(hypothesis_id, "cross-venue", "0.01") for hypothesis_id in spec.fdr.hypothesis_ids),
-            protocol=bad_fdr,
+        tests = tuple(
+            _test_result(hypothesis_id, "cross-venue", "0.01")
+            for hypothesis_id in spec.fdr.hypothesis_ids
         )
+        harness.apply_fdr(tests, protocol=bad_fdr)
 
     with pytest.raises(ValueError, match="bootstrap draws"):
         harness.moving_block_bootstrap(
