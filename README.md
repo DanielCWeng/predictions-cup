@@ -27,6 +27,7 @@ Runtime dependencies are intentionally limited to:
 - `pydantic-settings` for deterministic environment-driven configuration;
 - `httpx` for pooled asynchronous read-only SIG HTTP;
 - `aiohttp` for public Polymarket Gamma/CLOB HTTP and market WebSocket capture;
+- `pyarrow` for immutable ZSTD Parquet research shards and replay reads;
 - `supabase` for the accepted BUILD-004 private SIG Realtime subscription.
 
 The project uses a `src/` package layout with `pytest`, `ruff`, and strict `mypy`.
@@ -81,9 +82,13 @@ PREDICTIONS_CUP_POLYMARKET_DEPTH_SNAPSHOT_INTERVAL_SECONDS
 PREDICTIONS_CUP_POLYMARKET_GAMMA_PAGE_LIMIT
 PREDICTIONS_CUP_POLYMARKET_GAMMA_REFRESH_SECONDS
 PREDICTIONS_CUP_POLYMARKET_STORAGE_PATH
+PREDICTIONS_CUP_POLYMARKET_RESEARCH_PATH
+PREDICTIONS_CUP_POLYMARKET_PARQUET_SHARD_SECONDS
+PREDICTIONS_CUP_POLYMARKET_PARQUET_MAX_ROWS_PER_SHARD
 PREDICTIONS_CUP_POLYMARKET_UNIVERSE
 PREDICTIONS_CUP_POLYMARKET_INCLUDE_IDS
 PREDICTIONS_CUP_POLYMARKET_EXCLUDE_IDS
+PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS
 ```
 
 The default SIG API base is `https://www.thesuper.market/api/v1`.
@@ -152,14 +157,42 @@ docs/implementation/BUILD_006_SIG_REST_GOVERNOR.md for the accepted corrective c
 
 ## EC2 systemd supervision — BUILD-007 candidate
 
-PR #20 adds two read-only systemd services and `scripts/install_runtime_services.sh`. The
-installer resolves the runtime user's absolute home/repository/Python paths, installs the units,
-reloads systemd, enables/restarts the collectors and verifies they are active. Both services use only `~/.config/predictions-cup/runtime.env`; their ExecStart commands pass `--runtime-env-only` so repo-local `.env` is disabled, and the units strip the SIG trade credential from the process environment. The installer refuses a runtime file containing a SIG trade credential or enabled trading flag. No tracked exchange IDs are embedded in the SIG
-unit: tracked depth is supplied externally through
-`PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS` and defaults to none.
+PR #20 adds two read-only systemd services and `scripts/install_runtime_services.sh`. Both use
+only `~/.config/predictions-cup/runtime.env`, disable repo-local dotenv loading, strip the SIG
+trade credential from the process environment and remain non-trading.
 
-This capability remains branch-level until PR #20 is accepted. Live EC2 install/reboot validation
-must be recorded separately from CI validation. See `OPERATIONS.md` for the exact runbook.
+The supervised Polymarket path is now deliberately different from the accepted broad
+EXPERIMENT-001A research baseline. A live broad-universe soak selected 3,160 markets / 6,320
+tokens and demonstrated that 1 Hz SQLite research history is not operationally sustainable on the
+EC2 host. BUILD-007 therefore preserves the 1-second research cadence while changing **scope and
+storage**:
+
+- systemd requires non-empty `PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS`;
+- those IDs are a strict include-only market/condition/token universe with no heuristic fallback;
+- the intended production source is the accepted SIG ↔ Polymarket live crosswalk;
+- unresolved IDs fail closed;
+- 1-second scalar/BBO, book changes, public trades and depth snapshots write to immutable ZSTD
+  Parquet shards below `data/polymarket_research/`;
+- fresh `data/polymarket_operational.sqlite3` stores only metadata/tokens/health;
+- legacy `data/polymarket_capture.sqlite3` captures remain readable and are not deleted.
+
+The service command is:
+
+```text
+<repo>/.venv/bin/python -m predictions_cup.external.polymarket.recorder \
+  --runtime-env-only --require-explicit-universe
+```
+
+Until LIVE-MAPPING-GATE-001 supplies an accepted crosswalk, the production-intended supervised
+Polymarket universe is not available and the Polymarket service should remain stopped rather than
+fall back to the 3,160-market heuristic. The SIG supervised collector can run independently.
+
+Gamma failures also fail at the correct boundary: startup without a valid universe fails closed;
+after startup, a failed scheduled metadata discovery/selection keeps the last-good universe and
+research capture alive. Local persistence failures still surface.
+
+See `OPERATIONS.md` and
+`docs/implementation/BUILD_007_EC2_RUNTIME_SUPERVISION.md` for deployment and acceptance gates.
 
 ## Polymarket research recorder
 
