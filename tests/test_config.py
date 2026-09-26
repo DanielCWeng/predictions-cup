@@ -23,6 +23,7 @@ def clean_config_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "SIG_REST_GOVERNOR_RATE_PER_SECOND",
         "SIG_REST_SHARED_COOLDOWN_MAX_SECONDS",
         "SIG_REALTIME_BULK_PRICE_REFRESH_SECONDS",
+        "SIG_REALTIME_TRACKED_EXCHANGE_IDS",
     )
     for name in names:
         monkeypatch.delenv(f"PREDICTIONS_CUP_{name}", raising=False)
@@ -44,6 +45,22 @@ def test_defaults_load_without_credentials(
     assert str(settings.sig_api_base_url) == "https://www.thesuper.market/api/v1"
     assert settings.sig_rest_governor_rate_per_second == 2.0
     assert settings.sig_realtime_bulk_price_refresh_seconds == 10.0
+    assert settings.sig_realtime_tracked_exchange_ids == ""
+
+
+def test_tracked_depth_runtime_configuration_is_external_and_nonsecret(
+    clean_config_env: None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    del clean_config_env
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS", "843, 844,843")
+
+    settings = AppSettings()
+
+    assert settings.sig_realtime_tracked_exchange_ids == "843, 844,843"
+    assert settings.diagnostic_fields()["sig_realtime_tracked_exchange_count"] == 2
 
 
 def test_runtime_environment_overrides_local_dotenv(
