@@ -19,7 +19,7 @@ BUILD-003 provides the accepted **read-only** SIG REST boundary under `predictio
 - typed API errors and bounded retries for documented transient GET failures;
 - explicit `tournament_id` parameters without any automatic context resolver.
 
-EXPERIMENT-001A additionally provides the accepted **public read-only Polymarket research capture semantics** under `predictions_cup.external.polymarket`: public Gamma/CLOB discovery, authoritative REST book seeding, persistent market WebSocket ingestion, normalized event-time book-change/trade persistence, a lean 1-second top-of-book panel, slower bounded depth snapshots, and feed-health/reconnect handling. Its accepted `main` baseline used SQLite/WAL for research history; BUILD-007 replaces that physical writer globally on its branch with ZSTD Parquet for high-frequency history plus small operational SQLite.
+EXPERIMENT-001A additionally provides the accepted **public read-only Polymarket research capture semantics** under `predictions_cup.external.polymarket`: public Gamma/CLOB discovery, authoritative REST book seeding, persistent market WebSocket ingestion, normalized event-time book-change/trade persistence, a lean 1-second top-of-book panel, slower bounded depth snapshots, and feed-health/reconnect handling. Its accepted baseline used SQLite/WAL for research history; BUILD-007, now accepted on `main`, replaces that physical writer with ZSTD Parquet for high-frequency history plus small operational SQLite.
 
 BUILD-004 is accepted on main as the read-only SIG tournament Realtime/state foundation. It subscribes once to the private tournament topic, persists complete market batches, checks topic revision continuity, and uses REST as the authoritative source of financial state. Its first credentialed tournament smoke exposed that the original all-open-exchange full-depth freshness fallback does not scale to the observed 237-exchange universe.
 
@@ -56,7 +56,7 @@ The 30-second tracked-depth freshness default is similarly project policy. SIG d
 
 BUILD-006 adds no strategy, fair value, mapping selection, risk decision, order placement/cancellation or portfolio path.
 
-### BUILD-007 supervised capture correction — IN REVIEW, PR #20
+### BUILD-007 supervised capture correction — ACCEPTED, PR #20
 
 The accepted EXPERIMENT-001A broad election selector and SQLite/WAL capture remain historical
 baseline capability on `main`, but the live EC2 soak demonstrated that shape is not suitable as
@@ -177,4 +177,4 @@ learning/attribution
 - BUILD-003, BUILD-004 and BUILD-006 remain read-only; BUILD-006 is accepted and adds no order placement/cancellation path.
 - EXPERIMENT-001A is public/read-only and isolated from normal application startup.
 - Polymarket disconnect or receive/PONG liveness failure invalidates local book trust; reconnect performs an authoritative REST reseed before subsequent deltas are trusted.
-- The 1-second Polymarket research panel remains high cadence; BUILD-007's supervised candidate narrows the universe instead of reducing cadence and routes the panel/deltas/trades/depth to ZSTD Parquet rather than unbounded SQLite.
+- The 1-second Polymarket research panel remains high cadence; BUILD-007's accepted supervised runtime narrows the universe instead of reducing cadence and routes the panel/deltas/trades/depth to ZSTD Parquet rather than unbounded SQLite.

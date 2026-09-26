@@ -1,115 +1,130 @@
 # Current State
 
-**Phase:** READ-ONLY LIVE-DATA FOUNDATION.
+**Phase:** READ-ONLY LIVE-DATA + REPLAY/RESEARCH FOUNDATION.
 
-## Operating posture — 25 September 2026
+## Operating posture — 26 September 2026
 
-- Broad strategy/mathematical research is frozen by default; new work should answer a failed test, implementation ambiguity, live venue observation or specific architectural decision.
-- Initial empirical strategy work is limited to direct external lead/lag, simple residual/relative value and simple selective market making.
-- **Monday 28 September gate:** those initial hypotheses must be runnable through replay using data captured by our own infrastructure; otherwise priority collapses entirely onto data → replay → experiment.
-- Competition-history findings and the six-day launch plan are canonical documentation; they add no runtime or trading capability.
+- Broad strategy/mathematical research is frozen by default unless it answers a failed test,
+  implementation ambiguity, live venue observation or specific architectural decision.
+- Initial empirical strategy work is limited to direct external lead/lag, response/half-life,
+  simple residual/relative value, LOO structure where mapping supports it, and selective market
+  making only after evidence justifies it.
+- **Monday 28 September gate:** those hypotheses should be runnable through replay using data
+  captured by our own infrastructure; otherwise priority collapses back onto data -> replay ->
+  experiment.
+- GitHub merge state and the actual contents of `main` outrank stale documentation or chat memory.
 
-This document describes the accepted repository state on `main`.
+This document describes the accepted repository state on `main`. For project intent/dependency
+order, read `ORCHESTRATOR.md` first.
 
 ## Implemented on main
 
-- repository foundation;
-- Python tooling and CI;
-- typed application configuration;
-- environment-driven loading with optional local `.env` support;
-- secret-safe read/trade credential representation;
-- fail-closed trading configuration;
-- canonical core domain models;
-- Decimal-based financial/probability values;
-- timezone-aware canonical timestamps;
-- opaque external identifiers;
-- validation invariants;
-- runnable non-trading application shell;
-- canonical maths ledger;
-- competition strategy/execution playbook;
-- competition-history research and six-day launch plan;
-- authenticated read-only SIG REST client for account health, market/exchange discovery, market-node transport data, prices, orderbooks, price history and trades;
-- public read-only Polymarket research recorder with Gamma/CLOB discovery, authoritative REST book seeding, normalized event-time book changes/trades, a lean 1-second top-of-book panel, slower bounded depth snapshots, SQLite/WAL persistence and feed-liveness/reconnect handling;
-- explicit SIG tournament handling and private tournament-level Realtime ingestion;
-- topic revision continuity, duplicate suppression and authoritative REST reconciliation after gaps/reconnects/token refresh/socket errors;
-- trusted/untrusted per-exchange SIG state with authoritative recovery before state is trusted again;
-- bounded authoritative refresh of trusted open books so silent order expiry cannot leave stale depth trusted indefinitely;
-- normalized replayable SIG persistence with source/revision provenance and runtime health state;
-- BUILD-006 full-universe Realtime / broad bulk scalar state / explicit tracked-depth state behind one governed REST budget;
-- typed SIG ↔ Polymarket mapping contracts;
-- EXACT / NEAR / DERIVED / MODEL_ONLY mapping semantics where applicable;
-- SAME / COMPLEMENT direction semantics;
-- deterministic mapping artifact generation;
-- reviewer-owned override validation path;
-- deterministic live acceptance-evidence machinery;
-- deterministic observable-time SIG + Polymarket replay with bounded capture selection;
-- trusted/fresh reconstructed replay state and standardized executable crossing markouts;
-- generic experiment/evaluation contracts, chronological splits and deterministic synthetic replay proof.
+- repository foundation, Python tooling and CI;
+- typed configuration, secret-safe credential representation and canonical domain models;
+- authenticated read-only SIG REST client;
+- public read-only Polymarket research recorder;
+- SIG tournament Realtime ingestion, authoritative REST reconciliation and replayable persistence;
+- BUILD-006 full-universe Realtime / bulk scalar state / explicit tracked-depth state behind one
+  governed REST budget;
+- MAPPING-001 typed SIG ↔ Polymarket mapping framework with EXACT / NEAR / DERIVED / MODEL_ONLY
+  and SAME / COMPLEMENT semantics;
+- BUILD-005 deterministic observable-time replay and experiment/evaluation foundation;
+- EXPERIMENT-002 lead/lag, response-curve, relative-value and LOO-PRICE / LOO-FAMILY experiment
+  machinery;
+- BUILD-007 read-only EC2 systemd supervision for SIG + Polymarket collectors;
+- strict externally supplied supervised Polymarket universe with no hard-coded Cup IDs;
+- high-frequency Polymarket research history in immutable ZSTD Parquet shards;
+- small operational Polymarket SQLite for markets/tokens/ingestion health;
+- canonical Parquet replay support including deterministic hashed-trade de-duplication;
+- Gamma rate-limit resilience and fail-soft periodic metadata refresh after valid startup.
 
 ## Live validation evidence
 
-- BUILD-006 / PR #19 is accepted on `main` and its accepted 60-second credentialed smoke passed at the merged head: 237 known exchanges, 1 tracked / 236 untracked, 0 429s, 0 reconciliation failures, 2 full-book reads, with the tracked book inside the 30-second freshness bound.
+### BUILD-006 / PR #19
+
+Accepted 60-second credentialed smoke at the merged head: 237 known exchanges, 1 tracked / 236
+untracked, 0 HTTP 429s, 0 reconciliation failures, 2 full-book reads, with the tracked book
+inside the 30-second freshness bound.
+
+### BUILD-007 / PR #20
+
+Merged/accepted at head `1fc3383ac2471466ef440b5f050559ba0a37deed`; merge commit
+`153116bb84bc64f202b4cd6dc7748e11d1a84e8b`. The ARM64 EC2 pre-merge gate passed on the
+actual host:
+
+- PyArrow 25.0.1 imported successfully on `aarch64`;
+- strict smoke universe held at 3 markets / 6 tokens;
+- service remained active through the bounded soak;
+- observations, book changes, depth snapshots and trades all produced ZSTD Parquet shards;
+- published Parquet files read back successfully;
+- scheduled Gamma refresh remained healthy;
+- 429 retries showed the corrected positive 1-second floor rather than the prior zero-delay burst;
+- manual service restart succeeded;
+- post-restart capture returned healthy with `websocket_connected=True`,
+  `markets_subscribed=3`, `tokens_subscribed=6`, `gamma_last_status=OK` and
+  `storage_failures=0`;
+- Parquet file count advanced after restart and prior shards remained readable.
+
+The three-market/six-token universe was a temporary compatibility test only. It is not production
+mapping evidence and must not be promoted into production configuration.
 
 ## Outstanding operational / acceptance gates
 
-- The MAPPING-001 framework is accepted on `main`, but the live credentialed 2026 SIG ↔ Polymarket crosswalk has **not** been generated or accepted.
-- LIVE-MAPPING-GATE-001 / GitHub issue #13 tracks live SIG exchange enumeration, reviewer promotion/overrides, mapped-token CLOB smoke, acceptance evidence and independent acceptance before mappings are treated as production-ready.
+- MAPPING-001 is an accepted framework, but the live credentialed 2026 SIG ↔ Polymarket
+  crosswalk has **not** been generated or accepted.
+- LIVE-MAPPING-GATE-001 / issue #13 remains the primary production gating task.
+- After mapping acceptance, populate `PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS` only from the
+  accepted crosswalk and run the mapping-bounded paired capture soak.
+- Production runtime acceptance still needs the final mapping-bounded SSH disconnect/reconnect and
+  reboot recovery checks.
+- Until the production mapping is accepted, Polymarket may remain disabled/stopped; temporary smoke
+  IDs are test-only.
 
-## In review — not implemented on main
+## Research / experiment state
 
-BUILD-007 / PR #20 is in review on `build/007-ec2-runtime-supervision`. On that branch, the
-accepted SIG and Polymarket read-only collectors are supervised by systemd, survive SSH session
-loss by running independently of the shell, and are enabled to start after reboot/network-online.
-Both services load only the resolved `~/.config/predictions-cup/runtime.env`; `trade.env` and
-trade credentials are excluded. SIG tracked depth is externally configured by
-`PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS` and defaults to none. BUILD-007 adds no
-trading capability.
-
-BUILD-007 validation state:
-
-- implemented on branch: **yes**;
-- CI validated: **yes** — final correction CI #679 passes lint, shell validation, strict mypy, pytest and application smoke;
-- code/documentation review state: the strict-universe/Parquet architecture now also preserves hashed-trade de-duplication in canonical replay, stops/disables an old broad Polymarket service before failing an unmapped upgrade, and reconciles EXPERIMENT-001A's historical SQLite baseline with the current writer;
-- live EC2 validation: **partial** — SIG service/env-file side is green and the historical broad Polymarket soak proved core capture/Gamma behavior but falsified broad SQLite storage. Before BUILD-007 merges, the corrected PyArrow/ZSTD path still requires an ARM64 EC2 smoke/soak on a deliberately bounded explicit public test universe, including shard advancement/readability and restart behavior. The later production mapping-bounded soak remains dependent on LIVE-MAPPING-GATE-001 and is separate from this pre-merge runtime compatibility gate.
-
-EXPERIMENT-002 is in review as PR #16 on `experiment/002-leadlag-rv-loo`. It builds the first
-LEADLAG / response-curve / relative-value / LOO-PRICE / LOO-FAMILY empirical experiment suite on
-the accepted BUILD-005 replay foundation. The branch remains non-trading and does not claim any
-empirical edge before verified historical/live data are run.
+- EXPERIMENT-002 / PR #16 is merged/accepted as experiment machinery. It does **not** establish
+  empirical alpha by itself; accepted real data still needs to be run through it.
+- HIST-DATA-001 / PR #17 was closed unmerged. It must not be described as accepted repository
+  capability. Historical research remains a useful parallel workstream and should reuse accepted
+  data/replay contracts.
 
 ## Not implemented on main
 
-- accepted/live-validated EC2 systemd supervision for the collectors (BUILD-007 remains in review);
 - validated production live 2026 SIG ↔ Polymarket crosswalk;
-- fair value;
-- relationship/constraint engine;
-- opportunity scanning;
-- risk decisions/calculations;
+- accepted empirical trading edge;
+- production fair-value model;
+- relationship/constraint engine used for live decisions;
+- opportunity scanning used for live orders;
+- risk decisions/calculations for trading;
 - execution;
 - order submission/cancellation;
 - portfolio accounting;
-- shadow trading;
+- shadow/paper trading engine;
 - live trading.
 
 ## Trading capability
 
 **NONE**
 
-`trading_enabled` defaults to `False`. Setting it to `True` is only configuration intent and requires a separately supplied trade credential; no execution path or order-submission path exists on `main`.
+`trading_enabled` defaults to `False`. Setting it to `True` remains configuration intent only and
+requires a separately supplied trade credential; no accepted execution or order-submission path
+exists on `main`.
 
-## Next implementation target
+## Next implementation / acceptance target
 
-The active implementation target is:
+The primary gating target is:
 
-> executable lead/lag, response-curve, relative-value and LOO-family experiments over accepted replay.
+> LIVE-MAPPING-GATE-001 — generate and independently accept the live 2026 SIG ↔ Polymarket
+> crosswalk, then use it to start the mapping-bounded paired capture lane.
 
-EXPERIMENT-002 / PR #16 is the current in-review branch for that target. This status does not imply
-acceptance or availability on `main`.
+In parallel, historical/live accepted data should be pushed through EXPERIMENT-002 rather than
+adding new strategy machinery without evidence.
 
 ## Repository state discipline
 
 - Every implementation branch starts from current `main`.
-- Every accepted merge updates canonical project state.
-- Builders do not merge their own PRs.
+- Every accepted merge reconciles canonical project state.
+- Builders do not merge/accept their own implementation work.
+- Code acceptance and live/runtime acceptance are distinct when relevant.
 - Active branch state must not be described as merged functionality.
 - GitHub merge state and actual `main` contents outrank stale documentation.

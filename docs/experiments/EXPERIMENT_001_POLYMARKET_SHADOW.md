@@ -9,12 +9,12 @@ market data.
 This experiment is **not** part of the production trading path. It has no wallet, private key,
 signing, order placement, paper fills, PnL, fair-value model or execution logic.
 
-> **BUILD-007 storage reconciliation:** EXPERIMENT-001A was accepted on `main` with a
-> SQLite/WAL research writer. The BUILD-007 branch keeps its capture semantics/cadence but replaces
+> **BUILD-007 storage reconciliation:** EXPERIMENT-001A was accepted with a SQLite/WAL research
+> writer. BUILD-007 is now accepted on `main` and keeps the capture semantics/cadence while replacing
 > the live recorder's storage implementation globally: high-frequency research streams now write
 > immutable ZSTD Parquet shards, while a fresh small SQLite database holds only metadata/tokens/
 > health. Legacy EXPERIMENT-001A SQLite captures remain readable by replay but are no longer the
-> current writer on this branch.
+> current writer on `main`.
 
 ## Public documentation checked
 
@@ -156,8 +156,8 @@ book state's `state_observed_at`.
 The **historical accepted EXPERIMENT-001A baseline** used one local SQLite/WAL database at
 `data/polymarket_capture.sqlite3` for both operational state and high-frequency history.
 
-BUILD-007 replaces that writer on its branch after the live broad-universe soak falsified the
-SQLite deployment shape. Current recorder storage is split:
+BUILD-007 replaces that writer on `main` after the live broad-universe soak falsified the SQLite
+deployment shape. Current recorder storage is split:
 
 ```text
 data/polymarket_operational.sqlite3
