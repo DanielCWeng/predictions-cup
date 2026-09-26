@@ -638,6 +638,18 @@ def test_parquet_replay_deduplicates_hashed_trades_within_and_across_shards(
     assert trades[0].observed_at == first_at
     assert trades[0].instrument_id == "poly-1"
 
+    windowed = load_polymarket_capture(
+        root,
+        selection=CaptureSelection(
+            start_at=first_at + timedelta(seconds=30),
+            end_at=first_at + timedelta(minutes=2),
+            polymarket_token_ids=("poly-1",),
+        ),
+    )
+    assert [
+        event for event in windowed if event.event_type is ReplayEventType.TRADE
+    ] == []
+
 
 def test_malformed_capture_schema_fails_clearly(tmp_path: Path) -> None:
     malformed = tmp_path / "bad.sqlite3"
