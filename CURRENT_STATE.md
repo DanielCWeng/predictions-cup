@@ -65,7 +65,7 @@ trading capability.
 BUILD-007 validation state:
 
 - implemented on branch: **yes**;
-- CI validated: **pending at document update**;
+- CI validated: **yes** (lint, shell validation, strict mypy, pytest and application smoke);
 - live EC2 service/reboot validated: **no**.
 
 EXPERIMENT-002 is in review as PR #16 on `experiment/002-leadlag-rv-loo`. It builds the first
