@@ -83,12 +83,19 @@
 
 ## DECISION 018 — Live SIG REST shares one priority governor
 
-**Decision:** All REST attempts made by the explicit live SIG capture path share one per-client governor with HIGH, NORMAL and BACKGROUND priority, pacing, shared 429 cooldown and observable counters. The initial configured rate is 3 requests/second.
+**Decision:** All REST attempts made by the explicit live SIG capture path share one per-client governor with HIGH, NORMAL and BACKGROUND priority, pacing, shared 429 cooldown and observable counters. The initial configured rate is 2 requests/second.
 
-**Reason:** Rate limiting is documented per API key, so independently paced workers can collectively overload the same key. The numeric deployment rate is an operational setting informed by live observation, not a published SIG venue limit.
+**Reason:** Rate limiting is documented per API key, so independently paced workers can collectively overload the same key. The original blocking curl + sleep probe only demonstrated roughly 2.0–2.4 request starts/second; it did not validate 3 requests/second. The 2 requests/second default is therefore deliberately conservative until a fixed-cadence live probe establishes a higher sustainable rate. It remains project deployment configuration, not a published SIG venue limit.
 
 ## DECISION 019 — Thirty-second depth freshness is a project expiry-safety policy
 
 **Decision:** Apply the configurable full-depth freshness fallback only to tracked open books. When a tracked book crosses the bound, remove trust before awaiting its authoritative refresh.
 
 **Reason:** SIG documents that order expiry emits no Realtime event, while the documented aggregate exchange orderbook does not expose per-order expirationDate. The 30-second default is therefore our conservative fallback, not a SIG contractual requirement. The Realtime prose's reference to GET /markets/{id}/orders is also inconsistent with the participant OpenAPI paths, so no undocumented endpoint is invented.
+
+
+## DECISION 020 — Bulk missing IDs invalidate resident scalar state
+
+**Decision:** When GET /exchanges/prices reports an exchange in missingIds, clear that exchange's resident scalar latest-price, best-bid, best-ask, spread and scalar observation timestamp.
+
+**Reason:** Retaining the previous scalar values would let an untracked or depth-untrusted exchange expose stale BBO through the runtime fallback path. Missing authoritative scalar coverage therefore fails closed rather than preserving stale state.
