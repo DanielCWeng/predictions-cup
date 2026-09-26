@@ -95,13 +95,13 @@ env_owner="$(stat -c '%U' "${runtime_env}")"
 if grep -Eq '^[[:space:]]*PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL[[:space:]]*=' "${runtime_env}"; then
   fail "runtime.env must not contain PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL"
 fi
-if grep -Eiq '^[[:space:]]*PREDICTIONS_CUP_TRADING_ENABLED[[:space:]]*=[[:space:]]*(1|true|yes|on)([[:space:]]*(#.*)?)?$' "${runtime_env}"; then
+if grep -Eiq "^[[:space:]]*PREDICTIONS_CUP_TRADING_ENABLED[[:space:]]*=[[:space:]]*['\"]?(1|true|yes|on)['\"]?([[:space:]]*(#.*)?)?$" "${runtime_env}"; then
   fail "runtime.env must not enable trading"
 fi
 
 require_env_assignment "PREDICTIONS_CUP_SIG_READ_CREDENTIAL" "${runtime_env}"
 require_env_assignment "PREDICTIONS_CUP_TOURNAMENT_ID" "${runtime_env}"
-if ! grep -Eiq '^[[:space:]]*PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED[[:space:]]*=[[:space:]]*(1|true|yes|on)([[:space:]]*(#.*)?)?$' "${runtime_env}"; then
+if ! grep -Eiq "^[[:space:]]*PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED[[:space:]]*=[[:space:]]*['\"]?(1|true|yes|on)['\"]?([[:space:]]*(#.*)?)?$" "${runtime_env}"; then
   fail "runtime.env must set PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true"
 fi
 
@@ -176,4 +176,4 @@ if [[ "${restart_failed}" -ne 0 || "${active_failed}" -ne 0 ]]; then
 fi
 
 printf 'Installed read-only collector services. EnvironmentFile=%s\n' "${runtime_env}"
-printf 'Tracked SIG depth remains disabled unless the SIG ExecStart is explicitly overridden with --tracked-exchange-id.\n'
+printf 'Tracked SIG depth defaults to none; configure PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS only in runtime.env when explicitly required.\n'
