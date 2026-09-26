@@ -134,13 +134,16 @@ A finite conservative smoke can report governor/depth health explicitly:
       --run-seconds 60 \
       --print-health
 
-The default governed rate is 3 requests/second. That is an operational setting informed by live
-observation, not a published SIG rate limit. Likewise, the default 30-second tracked-book refresh
+The default governed rate is 2 requests/second. The prior blocking curl + sleep probe only
+demonstrated roughly 2.0–2.4 request starts/second; 3 requests/second has not yet been directly
+validated with fixed-cadence starts. The configured rate is project policy, not a published SIG
+rate limit. Likewise, the default 30-second tracked-book refresh
 is our expiry-safety policy because SIG documents silent order expiry while the aggregate
 orderbook carries no per-order expirationDate; it is not a SIG-required interval.
 
 Realtime remains best-effort invalidation/event capture. REST remains authoritative. Scalar/BBO
-bulk observations never make full depth trusted, and failed tracked reconciliation remains
+bulk observations never make full depth trusted; a bulk missingIds result clears prior resident
+scalar/BBO state rather than leaving a stale fallback. Failed tracked reconciliation remains
 fail-closed. Normal application startup remains network-free and no write/order path exists.
 
 See docs/implementation/BUILD_004_SIG_REALTIME.md for the historical accepted baseline and
