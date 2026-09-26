@@ -56,10 +56,16 @@ validate_render_value() {
   fi
 }
 
+has_env_assignment() {
+  local name="$1"
+  local env_file="$2"
+  grep -Eq "^[[:space:]]*${name}[[:space:]]*=[[:space:]]*[^#[:space:]].*$" "${env_file}"
+}
+
 require_env_assignment() {
   local name="$1"
   local env_file="$2"
-  if ! grep -Eq "^[[:space:]]*${name}[[:space:]]*=[[:space:]]*[^#[:space:]].*$" "${env_file}"; then
+  if ! has_env_assignment "${name}" "${env_file}"; then
     fail "${env_file} must define non-empty ${name}"
   fi
 }
@@ -110,10 +116,17 @@ fi
 require_env_assignment "PREDICTIONS_CUP_SIG_READ_CREDENTIAL" "${runtime_env}"
 require_env_assignment "PREDICTIONS_CUP_TOURNAMENT_ID" "${runtime_env}"
 
+command -v "${SYSTEMCTL_BIN}" >/dev/null 2>&1 || [[ -x "${SYSTEMCTL_BIN}" ]] || fail "systemctl command not found: ${SYSTEMCTL_BIN}"
+
 ACTIVE_SERVICES=("${SIG_SERVICE}")
 polymarket_enabled=0
 if env_flag_is_true "PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED" "${runtime_env}"; then
-  require_env_assignment "PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS" "${runtime_env}"
+  if ! has_env_assignment "PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS" "${runtime_env}"; then
+    if ! "${SYSTEMCTL_BIN}" disable --now "${POLYMARKET_SERVICE}"; then
+      fail "PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS is missing and the existing Polymarket service could not be disabled/stopped"
+    fi
+    fail "${runtime_env} must define non-empty PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS; existing Polymarket service was disabled/stopped"
+  fi
   ACTIVE_SERVICES+=("${POLYMARKET_SERVICE}")
   polymarket_enabled=1
 fi
@@ -130,8 +143,6 @@ fi
 if [[ "${SYSTEMD_DIR}" != "/etc/systemd/system" ]]; then
   mkdir -p "${SYSTEMD_DIR}"
 fi
-
-command -v "${SYSTEMCTL_BIN}" >/dev/null 2>&1 || [[ -x "${SYSTEMCTL_BIN}" ]] || fail "systemctl command not found: ${SYSTEMCTL_BIN}"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
