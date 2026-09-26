@@ -86,7 +86,7 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                 raise ValueError("--run-seconds must be positive")
             asyncio.create_task(_stop_after(args.run_seconds, stop_event))
 
-        tracked_exchange_ids = tuple(dict.fromkeys(args.tracked_exchange_id))
+        tracked_exchange_ids = _tracked_exchange_ids(args, settings)
         if tracked_exchange_ids:
             logger.info(
                 "SIG full-depth maintenance enabled tracked_exchange_count=%s",
@@ -171,6 +171,23 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                 )
             recorder.close()
     return 0
+
+
+def _tracked_exchange_ids(
+    args: argparse.Namespace,
+    settings: AppSettings,
+) -> tuple[str, ...]:
+    configured = (
+        value.strip()
+        for value in settings.sig_realtime_tracked_exchange_ids.split(",")
+        if value.strip()
+    )
+    cli_values = (
+        value.strip()
+        for value in args.tracked_exchange_id
+        if isinstance(value, str) and value.strip()
+    )
+    return tuple(dict.fromkeys((*configured, *cli_values)))
 
 
 def _json_health_snapshot(snapshot: dict[str, object]) -> dict[str, object]:
