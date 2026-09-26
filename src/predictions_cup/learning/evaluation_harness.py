@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
-from typing import Iterable
 
-from predictions_cup.learning.research_spec import ResearchEvaluationSpec, RunIdentity, make_run_identity
+from predictions_cup.learning.research_spec import (
+    ResearchEvaluationSpec,
+    RunIdentity,
+    make_run_identity,
+)
 from predictions_cup.learning.validation import EvaluationObservation
 
 
