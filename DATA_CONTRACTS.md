@@ -11,7 +11,7 @@ Canonical models are domain objects, not direct mirrors of remote JSON. Adapters
 | OrderBook | DEFINED | Immutable timestamped bid/ask snapshot for one Exchange. | BUILD-002 |
 | Trade | DEFINED | Observed economic trade with Decimal price/quantity and aware timestamp. | BUILD-002 |
 | ExternalReference | DEFINED | Venue-agnostic identity for an external contract; no mapping semantics. | BUILD-002 |
-| MarketMapping | DEFINED / IN REVIEW | One SIG exchange mapped to explicit Polymarket identity/token semantics, or failed closed as unresolved/NO_TRADE. | MAPPING-001 |
+| MarketMapping | DEFINED / ACCEPTED FRAMEWORK | One SIG exchange mapped to explicit Polymarket identity/token semantics, or failed closed as unresolved/NO_TRADE. | MAPPING-001 |
 | FairValue | UNDEFINED / PLACEHOLDER | Later fair-value contract. | later fair-value ticket |
 | Opportunity | UNDEFINED / PLACEHOLDER | Later opportunity-scanning contract. | later opportunity-scanning ticket |
 | RiskDecision | UNDEFINED / PLACEHOLDER | Later risk contract. | later risk ticket |
@@ -53,7 +53,7 @@ The OpenAPI `Exchange.option` field is nullable while canonical `Exchange.outcom
 
 ## Mapping contracts — MAPPING-001
 
-The MAPPING-001 branch defines mapping semantics separately from `ExternalReference`.
+MAPPING-001 defines accepted mapping semantics separately from `ExternalReference`.
 
 Key rules:
 
@@ -66,7 +66,7 @@ Key rules:
 - duplicate SIG exchange mappings and stale override identities fail validation;
 - canonical JSON ordering/content is deterministic; CSV and summary are derived artifacts.
 
-These contracts remain branch-level / in-review capability until MAPPING-001 is independently accepted and merged.
+These contracts are accepted on `main`. The live 2026 crosswalk itself remains a separate outstanding acceptance gate under LIVE-MAPPING-GATE-001 / issue #13.
 
 
 ## SIG live runtime state — BUILD-006 accepted
@@ -83,7 +83,7 @@ BUILD-006 does not redefine the canonical OrderBook contract. It adds venue-runt
 Compact bulk-price observations are persisted separately from full book observations so replay cannot confuse BBO/scalar coverage with authoritative depth.
 
 
-## Polymarket supervised research storage — BUILD-007 candidate
+## Polymarket supervised research storage — BUILD-007 accepted
 
 BUILD-007 separates low-volume operational state from durable high-frequency research history.
 
@@ -126,7 +126,7 @@ bounded in-memory shard, never mutate a previously published shard.
 
 Operational SQLite contains only market metadata, token metadata and ingestion-health history for
 fresh BUILD-007 deployments. The prior high-frequency SQLite tables remain readable as a legacy
-capture format but are no longer created or written by the supervised candidate.
+capture format but are no longer created or written by the accepted supervised runtime.
 
 Replay accepts either the legacy Polymarket SQLite capture or the new Parquet research directory.
 For the Parquet path, operational SQLite can be supplied separately so WebSocket health/data-gap
