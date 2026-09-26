@@ -98,6 +98,70 @@ def test_gamma_keyset_pagination_uses_next_cursor(
     assert FakeSession.params_seen[1]["after_cursor"] == "cursor-2"
 
 
+def test_gamma_discovery_filters_are_preserved_across_keyset_pages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    FakeSession.responses = [
+        FakeResponse({"markets": [payload("1")], "next_cursor": "cursor-2"}),
+        FakeResponse({"markets": [payload("2")], "next_cursor": ""}),
+    ]
+    FakeSession.params_seen = []
+    monkeypatch.setattr(
+        "predictions_cup.external.polymarket.gamma.aiohttp.ClientSession",
+        FakeSession,
+    )
+
+    result = asyncio.run(
+        GammaClient("https://gamma.example", page_limit=20).discover_active_markets(
+            filters={
+                "active": "true",
+                "tag_id": "2",
+                "related_tags": "true",
+                "end_date_min": "2026-01-01",
+                "end_date_max": "2027-12-31",
+            }
+        )
+    )
+
+    assert [market.market_id for market in result.markets] == ["1", "2"]
+    for params in FakeSession.params_seen:
+        assert params["active"] == "true"
+        assert params["tag_id"] == "2"
+        assert params["related_tags"] == "true"
+        assert params["end_date_min"] == "2026-01-01"
+        assert params["end_date_max"] == "2027-12-31"
+
+
+def test_gamma_discovery_filters_cannot_override_control_parameters() -> None:
+    with pytest.raises(ValueError, match="cannot override"):
+        asyncio.run(
+            GammaClient("https://gamma.example").discover_active_markets(
+                filters={"closed": "true"}
+            )
+        )
+
+
+def test_gamma_fetch_markets_by_ids_dedupes_and_orders(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    FakeSession.responses = [
+        FakeResponse(payload("1")),
+        FakeResponse(payload("2")),
+    ]
+    FakeSession.params_seen = []
+    monkeypatch.setattr(
+        "predictions_cup.external.polymarket.gamma.aiohttp.ClientSession",
+        FakeSession,
+    )
+
+    result = asyncio.run(
+        GammaClient("https://gamma.example").fetch_markets_by_ids(("2", "1", "2"))
+    )
+
+    assert [market.market_id for market in result] == ["1", "2"]
+    assert FakeSession.params_seen == [{}, {}]
+
+
 def test_gamma_mid_pagination_429_retries_same_cursor_and_honors_retry_after(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

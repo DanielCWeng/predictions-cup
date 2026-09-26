@@ -476,12 +476,26 @@ def test_market_nodes_reject_missing_node_type() -> None:
     _assert_market_nodes_rejected(payload)
 
 
-def test_market_nodes_reject_missing_position() -> None:
+def test_market_nodes_accept_live_contract_identity_without_position() -> None:
     payload = _market_nodes_payload()
     root = payload["root"]
     assert isinstance(root, dict)
     root.pop("position")
-    _assert_market_nodes_rejected(payload)
+    root["node_id"] = "152"
+    root["contract_id"] = "152"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(200, json=payload)
+
+    async def scenario() -> None:
+        async with SigRestClient(_settings(), transport=httpx.MockTransport(handler)) as client:
+            nodes = await client.get_market_nodes("26")
+        assert nodes.root.position is None
+        assert nodes.root.node_id == "152"
+        assert nodes.root.contract_id == "152"
+
+    asyncio.run(scenario())
 
 
 def test_market_nodes_reject_invalid_operator() -> None:

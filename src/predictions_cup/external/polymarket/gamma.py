@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import random
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -68,18 +68,30 @@ class GammaClient:
         self._sleep = sleep
         self._random_fraction = random_fraction
 
-    async def discover_active_markets(self) -> GammaDiscovery:
+    async def discover_active_markets(
+        self,
+        *,
+        filters: dict[str, str] | None = None,
+    ) -> GammaDiscovery:
         markets: list[PolymarketMarket] = []
         parse_failures = 0
         cursor: str | None = None
         seen_cursors: set[str] = set()
         seen_market_ids: set[str] = set()
+        discovery_filters = dict(filters or {})
+        reserved = {"closed", "limit", "after_cursor"} & discovery_filters.keys()
+        if reserved:
+            raise ValueError(
+                "Gamma discovery filters cannot override pagination/control parameters: "
+                f"{sorted(reserved)!r}"
+            )
 
         async with aiohttp.ClientSession(timeout=self.timeout) as session:
             while True:
                 params: dict[str, str] = {
                     "closed": "false",
                     "limit": str(self.page_limit),
+                    **discovery_filters,
                 }
                 if cursor is not None:
                     params["after_cursor"] = cursor
@@ -115,6 +127,61 @@ class GammaClient:
                 cursor = next_cursor
 
         return GammaDiscovery(tuple(markets), parse_failures)
+
+    async def fetch_markets_by_ids(
+        self,
+        market_ids: Iterable[str],
+    ) -> tuple[PolymarketMarket, ...]:
+        """Fetch explicit market identities omitted from a filtered discovery slice."""
+        requested = tuple(
+            sorted({market_id.strip() for market_id in market_ids if market_id.strip()})
+        )
+        if not requested:
+            return ()
+
+        markets: list[PolymarketMarket] = []
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+            for market_id in requested:
+                raw = await self._fetch_market_by_id(session, market_id)
+                if not isinstance(raw, dict):
+                    raise PayloadError(
+                        f"Gamma market {market_id!r} response must be an object"
+                    )
+                market = PolymarketMarket.from_gamma(raw)
+                if market.market_id != market_id:
+                    raise PayloadError(
+                        f"Gamma market lookup {market_id!r} returned {market.market_id!r}"
+                    )
+                markets.append(market)
+        return tuple(markets)
+
+    async def _fetch_market_by_id(
+        self,
+        session: aiohttp.ClientSession,
+        market_id: str,
+    ) -> Any:
+        for attempt in range(1, self.max_rate_limit_attempts + 1):
+            async with session.get(
+                f"{self.base_url}/markets/{market_id}",
+                params={},
+            ) as response:
+                if response.status != 429:
+                    response.raise_for_status()
+                    return json.loads(await response.text(), parse_float=Decimal)
+
+                if attempt >= self.max_rate_limit_attempts:
+                    raise GammaRateLimitError(
+                        "Gamma explicit market lookup remained rate limited after "
+                        f"{attempt} attempts for market_id={market_id!r}"
+                    )
+
+                delay_seconds = self._rate_limit_delay_seconds(
+                    response.headers.get("Retry-After"),
+                    attempt,
+                )
+            await self._sleep(delay_seconds)
+
+        raise RuntimeError("unreachable Gamma explicit-market retry state")
 
     async def _fetch_keyset_page(
         self,
