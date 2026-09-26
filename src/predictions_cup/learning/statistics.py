@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import random
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -152,7 +152,7 @@ def moving_block_bootstrap_mean(
 
 
 def event_bootstrap_mean(
-    event_values: dict[str, Sequence[Decimal]],
+    event_values: Mapping[str, Sequence[Decimal]],
     *,
     draws: int,
     run_id: str,
