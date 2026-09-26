@@ -104,12 +104,19 @@ High-frequency research streams are Parquet + ZSTD:
 
 - `observations`: 1-second scalar/BBO samples;
 - `book_changes`: normalized price/book changes;
-- `trades`: public trade ticks;
+- `trades`: raw at-least-once public trade deliveries; hashed rows carry deterministic
+  `event_id = f(token_id, transaction_hash)`;
 - `depth_snapshots`: periodic bounded-depth snapshots.
 
 Every stream preserves exchange/source time when supplied and local process observation/sample
 time separately. Price/size values remain exact decimal text in Parquet rather than binary floats.
 Depth levels are nested typed structures rather than JSON text.
+
+For public trades, the raw Parquet lane may contain reconnect/redelivery duplicates. When a
+transaction hash is present, canonical replay recomputes and validates the deterministic event
+identity and emits only the first `(token_id, transaction_hash)` observation across all selected
+shards. Unhashed trades remain at-least-once, matching the historical SQLite partial-uniqueness
+contract which de-duplicated only non-null transaction hashes.
 
 Shards are immutable after publication. Writers stage a temporary file, write ZSTD Parquet, fsync
 the file, atomically replace to the final `.parquet` name, and fsync the containing directory.
