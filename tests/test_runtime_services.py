@@ -66,13 +66,14 @@ def _write_runtime_env(
     *,
     include_trade_credential: bool = False,
     include_supervised_ids: bool = True,
+    polymarket_enabled: bool = True,
 ) -> str:
     secret = "TEST_READ_SECRET_DO_NOT_PRINT"
     lines = [
         f"PREDICTIONS_CUP_SIG_READ_CREDENTIAL={secret}",
         "PREDICTIONS_CUP_TOURNAMENT_ID=test-tournament",
         "PREDICTIONS_CUP_TRADING_ENABLED=false",
-        "PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true",
+        f"PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED={'true' if polymarket_enabled else 'false'}",
     ]
     if include_supervised_ids:
         lines.append(
@@ -179,6 +180,37 @@ def test_installer_is_idempotent_and_renders_absolute_runtime_env(tmp_path: Path
     assert calls.count("restart predictions-cup-polymarket-capture.service") == 2
     assert "TEST_READ_SECRET_DO_NOT_PRINT" not in first.stdout + first.stderr
     assert "TEST_READ_SECRET_DO_NOT_PRINT" not in second.stdout + second.stderr
+
+
+def test_installer_leaves_polymarket_disabled_without_mapping_when_capture_off(
+    tmp_path: Path,
+) -> None:
+    env, runtime_env, call_log = _installer_env(tmp_path)
+    _write_runtime_env(
+        runtime_env,
+        include_supervised_ids=False,
+        polymarket_enabled=False,
+    )
+
+    result = subprocess.run(
+        ["bash", str(INSTALLER)],
+        cwd=PROJECT_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    calls = call_log.read_text(encoding="utf-8").splitlines()
+    assert "enable predictions-cup-sig-capture.service" in calls
+    assert "restart predictions-cup-sig-capture.service" in calls
+    assert "enable predictions-cup-polymarket-capture.service" not in calls
+    assert "restart predictions-cup-polymarket-capture.service" not in calls
+    assert (
+        "disable --now predictions-cup-polymarket-capture.service"
+        in calls
+    )
 
 
 def test_installer_rejects_missing_supervised_polymarket_universe(
