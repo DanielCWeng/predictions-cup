@@ -132,7 +132,10 @@ class PolymarketRecorder:
             self.health.book_uninitialized_delta_count += result.uninitialized_deltas
             if result.changes:
                 try:
-                    await asyncio.to_thread(self.research_storage.append_book_changes, result.changes)
+                    await asyncio.to_thread(
+                        self.research_storage.append_book_changes,
+                        result.changes,
+                    )
                 except Exception:
                     self.health.storage_failures += 1
                     raise
