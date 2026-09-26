@@ -53,7 +53,7 @@ def hashed_trade_event_id(token_id: str, transaction_hash: str | None) -> str | 
     """Stable identity for hashed public trades; unhashed trades remain at-least-once."""
     if transaction_hash is None:
         return None
-    payload = f"{len(token_id)}:{token_id}:{transaction_hash}".encode("utf-8")
+    payload = f"{len(token_id)}:{token_id}:{transaction_hash}".encode()
     return "polymarket-trade:" + hashlib.sha256(payload).hexdigest()
 
 
