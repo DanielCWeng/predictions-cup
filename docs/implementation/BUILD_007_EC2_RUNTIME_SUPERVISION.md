@@ -64,7 +64,7 @@ Both units use:
 Wants=network-online.target
 After=network-online.target
 Restart=on-failure
-RestartSec=5s
+RestartSec=5s (SIG) / 30s (Polymarket)
 KillSignal=SIGTERM
 TimeoutStopSec=30s
 StandardOutput=journal
@@ -83,6 +83,13 @@ BUILD-007 adds equivalent process-level SIGINT/SIGTERM handling to the Polymarke
 shutdown it asks the WebSocket transport to stop, cancels the long-running recorder task, and lets
 its context-managed aiohttp/SQLite work unwind. Polymarket storage opens short-lived SQLite
 connections per operation, so there is no persistent writer handle to invent or manage here.
+
+Live EC2 validation exposed HTTP 429 rate limiting during Gamma keyset discovery. The candidate
+now retries the current page/cursor in place with a bounded attempt budget, honors Retry-After,
+uses exponential fallback delay plus jitter when the header is absent, and fails visibly after
+exhaustion. Successful earlier pages are retained within the same discovery pass. The Polymarket
+unit uses a 30-second RestartSec so an ultimately unavailable Gamma API cannot create a tight
+systemd restart loop.
 
 ## Storage
 
@@ -130,14 +137,19 @@ BUILD-007 adds tests proving:
 - the rendered EnvironmentFile is absolute;
 - secret values are not emitted;
 - an accidental trade credential in `runtime.env` is rejected without printing its value;
-- Polymarket shutdown stops the WebSocket transport and cancels its long-running task.
+- Polymarket shutdown stops the WebSocket transport and cancels its long-running task;
+- Gamma mid-pagination 429 recovery retries the same cursor and honors Retry-After;
+- persistent Gamma 429s exhaust a bounded retry budget and fail visibly;
+- the Polymarket unit has a slower 30-second restart cadence after unrecoverable startup failure.
 
 CI also runs `bash -n` and runs `shellcheck` when it is available on the runner.
 
 ## Live acceptance boundary
 
-No EC2 service installation, SSH-disconnect test or reboot validation has been performed by this
-branch yet. Those steps are intentionally separate from implementation/CI acceptance.
+The first EC2 service validation partially ran: the SIG service/env-file side was healthy, while
+Polymarket startup exposed a real Gamma 429 failure before the SSH/reboot portion. That failure is
+now addressed on the branch, but the Polymarket service/output check and the remaining
+SSH-disconnect/reboot validation must be rerun before merge.
 
 The exact conservative operator procedure is in `OPERATIONS.md`. It verifies enabled/active
 state, resolved EnvironmentFiles, journals, capture output, manual restart, SSH disconnect
