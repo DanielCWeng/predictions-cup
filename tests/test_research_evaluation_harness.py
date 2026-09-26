@@ -557,7 +557,10 @@ def test_all_research_dispositions_are_preserved(disposition: ResearchDispositio
 
 
 def test_walk_forward_builds_multiple_chronological_folds_with_auditable_roles() -> None:
-    rows = tuple(_row(seconds) for seconds in (0, 5, 10, 15, 20, 25, 30, 35, 40))
+    rows = tuple(
+        _row(seconds, horizon=1)
+        for seconds in (0, 5, 10, 15, 20, 25, 30, 35, 40)
+    )
     folds = walk_forward_folds(
         rows,
         WalkForwardConfig(
