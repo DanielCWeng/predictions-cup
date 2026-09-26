@@ -7,6 +7,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
@@ -37,7 +38,7 @@ def fetch_remote_footer(url: str, *, timeout: float = 60) -> dict[str, Any]:
         raise ValueError(f"{url}: not a Parquet file")
     footer_len = int.from_bytes(tail[:4], "little")
     footer = _range(url, size - _FOOTER_TAIL - footer_len, size - 1, timeout)
-    metadata = pq.read_metadata(pq.BufferReader(_pad_footer(footer)))
+    metadata = pq.read_metadata(pa.BufferReader(_pad_footer(footer)))
     return {
         "url": url,
         "bytes": size,

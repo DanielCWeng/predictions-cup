@@ -99,7 +99,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "build":
         from datetime import timedelta
 
+        import pyarrow as pa
+
         from predictions_cup.historical.corpus import build_corpus
+
+        # Return freed buffers to the OS between hours (bounded peak on small machines).
+        pa.set_memory_pool(pa.system_memory_pool())
 
         manifest = build_corpus(
             orderbooks_root=args.orderbooks,

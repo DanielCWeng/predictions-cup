@@ -2,8 +2,9 @@
 
 Statistics are accumulated one normalized archive hour at a time so a regime never has to be
 materialized in memory. Observation intervals are measured between distinct observation
-instants (rows sharing a millisecond count once) and are exact at the source's millisecond
-resolution (integer counters, not sketches).
+instants (rows sharing a millisecond count once). Interval quantiles are exact below 1 s and
+use 100 ms buckets below 60 s and 1 s buckets above (lower bucket edge reported); the maximum
+gap and every material gap are exact.
 
 "Book evidence" for coverage means depth snapshots plus BBO change rows for a token. A gap is
 silence in that stream; it can be a genuinely quiet market or a recorder outage, and the two
@@ -32,6 +33,7 @@ class _TokenStats:
     last_at: int | None = None
     unique_timestamps: int = 0
     intervals_ms: Counter[int] = field(default_factory=Counter)
+    max_interval_us: int = 0
     material_gaps: list[tuple[int, int]] = field(default_factory=list)
     first_snapshot_at: int | None = None
     changes_before_first_snapshot: int = 0
@@ -201,12 +203,20 @@ class RegimeQuality:
             delta = pc.subtract(nxt, prv)
             owner = tok.slice(1).filter(same)
             grouped = (
-                pa.table({"token_id": owner, "ms": pc.divide(delta, 1000)})
+                pa.table({"token_id": owner, "ms": _bucket_ms(pc.divide(delta, 1000))})
                 .group_by(["token_id", "ms"])
                 .aggregate([("ms", "count")])
             )
             for row in grouped.to_pylist():
                 self._token(row["token_id"]).intervals_ms[row["ms"]] += row["ms_count"]
+            widest = (
+                pa.table({"token_id": owner, "d": delta})
+                .group_by("token_id")
+                .aggregate([("d", "max")])
+            )
+            for row in widest.to_pylist():
+                stats = self._token(row["token_id"])
+                stats.max_interval_us = max(stats.max_interval_us, row["d_max"])
             gap = pc.greater(delta, self.material_gap_us)
             for token, a, b in zip(
                 owner.filter(gap).to_pylist(),
@@ -221,7 +231,8 @@ class RegimeQuality:
 
     def _record_interval(self, stats: _TokenStats, prev: int, t: int) -> None:
         delta = t - prev
-        stats.intervals_ms[delta // 1000] += 1
+        stats.intervals_ms[_bucket_ms_value(delta // 1000)] += 1
+        stats.max_interval_us = max(stats.max_interval_us, delta)
         if delta > self.material_gap_us:
             stats.material_gaps.append((prev, t))
 
@@ -277,7 +288,9 @@ class RegimeQuality:
             "unique_timestamps": s.unique_timestamps,
             "median_observation_interval_ms": _quantile(s.intervals_ms, 0.5),
             "p95_observation_interval_ms": _quantile(s.intervals_ms, 0.95),
-            "max_observation_gap_seconds": _max_gap_seconds(s.intervals_ms),
+            "max_observation_gap_seconds": (
+                None if not s.intervals_ms else round(s.max_interval_us / _US, 3)
+            ),
             "material_gap_count": len(s.material_gaps),
             "material_gap_total_seconds": round(
                 sum(b - a for a, b in s.material_gaps) / _US, 3
@@ -370,8 +383,22 @@ def _quantile(counter: Counter[int], q: float) -> int | None:
     return max(counter)
 
 
-def _max_gap_seconds(counter: Counter[int]) -> float | None:
-    return None if not counter else round(max(counter) / 1000, 3)
+def _bucket_ms_value(ms: int) -> int:
+    """Exact below 1 s, 100 ms buckets below 60 s, 1 s buckets above (bounded memory)."""
+    if ms < 1_000:
+        return ms
+    if ms < 60_000:
+        return ms - ms % 100
+    return ms - ms % 1_000
+
+
+def _bucket_ms(ms: Any) -> Any:
+    coarse = pc.if_else(
+        pc.less(ms, 60_000),
+        pc.multiply(pc.divide(ms, 100), 100),
+        pc.multiply(pc.divide(ms, 1_000), 1_000),
+    )
+    return pc.if_else(pc.less(ms, 1_000), ms, coarse)
 
 
 def _median_int(values: list[int]) -> float | None:
