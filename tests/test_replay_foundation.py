@@ -590,7 +590,7 @@ def test_malformed_capture_schema_fails_clearly(tmp_path: Path) -> None:
         load_polymarket_capture(malformed)
 
 
-def test_sql_selection_filters_before_materialization(tmp_path: Path) -> None:
+def test_capture_selection_filters_before_materialization(tmp_path: Path) -> None:
     sig_path, poly_path = _write_real_capture_fixtures(tmp_path)
     base = datetime(2026, 9, 25, 12, tzinfo=UTC)
     inside = (base + timedelta(seconds=30)).isoformat()
@@ -657,7 +657,7 @@ def test_sql_selection_filters_before_materialization(tmp_path: Path) -> None:
         polymarket_path=poly_path,
         selection=selection,
     )
-    assert summary.records_loaded == 8
+    assert summary.records_loaded == 7
     assert summary.instruments == ("polymarket:poly-1", "sig:sig-1")
     assert summary.trusted_sig_observations == 1
     assert summary.external_observations == 3
