@@ -361,6 +361,18 @@ def test_bulk_missing_id_clears_stale_scalar_bbo_fail_closed(
         await engine.aclose()
         recorder.close()
 
+        connection = sqlite3.connect(tmp_path / "sig.sqlite3")
+        row = connection.execute(
+            """
+            SELECT latest_price, best_bid, best_ask, spread, reason
+            FROM price_observations
+            WHERE exchange_id = '36'
+            ORDER BY id DESC LIMIT 1
+            """
+        ).fetchone()
+        connection.close()
+        assert row == (None, None, None, None, "test_missing_id:missing")
+
     asyncio.run(scenario())
 
 
