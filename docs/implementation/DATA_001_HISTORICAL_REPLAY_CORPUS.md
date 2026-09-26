@@ -316,10 +316,12 @@ hour's size, ETag and row count is recorded next to it.
 ## Kaggle reproduction
 
 Private kernel `polyleviathan/sig-cup-data-001-build` (`scripts/kaggle/`) mounted three private
-datasets: `sig-cup-pmxt-orderbook-extracts`, `sig-cup-polyleviathan-fills` and
-`sig-cup-predictions-cup-code` (wheel of commit `658def4`). It rebuilt and validated the corpus.
-**All 115 output files were SHA-256 identical to the local build** and the totals matched
-(`data/manifests/historical/data_001_kaggle_run.json`).
+datasets: `sig-cup-pmxt-orderbook-extracts` (version with the V1 `2026-04-13T19` extracts),
+`sig-cup-polyleviathan-fills` and `sig-cup-predictions-cup-code` (wheel of commit `0b1f5b3`).
+Kernel version 3 rebuilt and validated the corpus. **All 115 output files were SHA-256 identical to
+the local build** and the totals matched (`data/manifests/historical/data_001_kaggle_run.json`).
+Version 2 had mounted the previous extracts version and stopped at the build's extract
+`source_version` check, as intended.
 
 ## Determinism
 
