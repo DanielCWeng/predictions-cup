@@ -68,8 +68,9 @@ trading capability.
 BUILD-007 validation state:
 
 - implemented on branch: **yes**;
-- CI validated: **yes** (lint, shell validation, strict mypy, pytest and application smoke);
-- live EC2 validation: **partial / blocked on corrected bounded lane** — SIG service/env-file side is green. The broad Polymarket soak proved startup, WebSocket capture/recovery and storage writes, but selected 3,160 markets / 6,320 tokens and measured SQLite growth incompatible with the ~30 GiB host. That broad heuristic is now explicitly rejected for supervised use. BUILD-007 requires a strict external mapping-driven Polymarket universe and routes high-frequency panel/delta/trade/depth history to immutable ZSTD Parquet while keeping metadata/health in a fresh small operational SQLite. Periodic Gamma discovery/selection is fail-soft only after a valid universe exists; startup and local persistence remain fail-closed. Final Polymarket systemd validation now depends on an explicit accepted mapping universe from LIVE-MAPPING-GATE-001, followed by bounded-storage soak + SSH/reboot checks.
+- CI validated: **yes** — final correction CI #679 passes lint, shell validation, strict mypy, pytest and application smoke;
+- code/documentation review state: the strict-universe/Parquet architecture now also preserves hashed-trade de-duplication in canonical replay, stops/disables an old broad Polymarket service before failing an unmapped upgrade, and reconciles EXPERIMENT-001A's historical SQLite baseline with the current writer;
+- live EC2 validation: **partial** — SIG service/env-file side is green and the historical broad Polymarket soak proved core capture/Gamma behavior but falsified broad SQLite storage. Before BUILD-007 merges, the corrected PyArrow/ZSTD path still requires an ARM64 EC2 smoke/soak on a deliberately bounded explicit public test universe, including shard advancement/readability and restart behavior. The later production mapping-bounded soak remains dependent on LIVE-MAPPING-GATE-001 and is separate from this pre-merge runtime compatibility gate.
 
 EXPERIMENT-002 is in review as PR #16 on `experiment/002-leadlag-rv-loo`. It builds the first
 LEADLAG / response-curve / relative-value / LOO-PRICE / LOO-FAMILY empirical experiment suite on
