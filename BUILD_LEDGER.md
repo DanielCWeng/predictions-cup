@@ -20,6 +20,6 @@ Status semantics:
 | BUILD-005 — Deterministic replay & experiment foundation | MERGED / ACCEPTED | `build/005-deterministic-replay` | #15 | merge `2e73241400cd8bcf5cb0df3f06652f9bad9a0b96` | observable-time replay, accepted-schema loaders, executable markouts, experiment/evaluation contract and synthetic acceptance fixture accepted | merged 25 Sep 2026 |
 
 | BUILD-006 — SIG live REST governor and tracked-depth universe | MERGED / ACCEPTED | `build/006-sig-rest-governor` | #19 | head `168bf4e5d002d6df9707d0424eae3bba280402f1`; merge `7f3ba788739083e2653cd5e712628e0e63e96201` | tracked-depth/governor revisions accepted; final CI green; conservative credentialed smoke still operationally outstanding | merged 26 Sep 2026 |
-| BUILD-007 — EC2 runtime supervision / always-on capture | IN REVIEW | `build/007-ec2-runtime-supervision` | #20 | current PR head | systemd units, idempotent installer, runtime-only environment boundary and graceful shutdown validation; CI/review pending; live EC2 smoke/reboot not run | not accepted on `main` |
+| BUILD-007 — EC2 runtime supervision / always-on capture | IN REVIEW | `build/007-ec2-runtime-supervision` | #20 | current PR head | systemd units, idempotent installer, runtime-only environment boundary and graceful shutdown validation; CI green; independent review pending; live EC2 smoke/reboot not run | not accepted on `main` |
 
 GitHub merge state and the actual contents of `main` are authoritative when documentation drifts.
