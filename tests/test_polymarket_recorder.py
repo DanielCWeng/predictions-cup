@@ -4,6 +4,7 @@ import asyncio
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -246,10 +247,10 @@ def test_initial_gamma_failure_remains_fail_closed(
     )
     recorder = PolymarketRecorder(settings)
 
-    async def fail_refresh_universe() -> None:
+    async def fail_discovery() -> object:
         raise RuntimeError("startup Gamma unavailable")
 
-    monkeypatch.setattr(recorder, "refresh_universe", fail_refresh_universe)
+    monkeypatch.setattr(recorder.gamma, "discover_active_markets", fail_discovery)
 
     with pytest.raises(RuntimeError, match="startup Gamma unavailable"):
         asyncio.run(recorder.initialize())
@@ -266,25 +267,41 @@ def test_periodic_gamma_refresh_fails_soft_and_later_recovers(
     recorder._token_ids = ("token-existing",)
     recorder._market_count = 1
     calls = 0
+    selected_market = object()
 
-    async def fake_refresh_universe() -> None:
+    async def fake_discovery() -> object:
         nonlocal calls
         calls += 1
         if calls == 1:
-            recorder.health.gamma_last_status = "ERROR: GammaRateLimitError: rate limited"
             raise RuntimeError("rate limited")
-        recorder.health.gamma_last_status = "OK"
+        return SimpleNamespace(markets=(selected_market,), parse_failures=0)
 
-    monkeypatch.setattr(recorder, "refresh_universe", fake_refresh_universe)
+    def fake_select(markets: object) -> object:
+        del markets
+        return SimpleNamespace(
+            markets=(selected_market,),
+            token_ids=("token-existing",),
+        )
+
+    def fake_upsert(*args: object) -> None:
+        del args
+
+    async def fake_set_tokens(token_ids: tuple[str, ...]) -> None:
+        assert token_ids == ("token-existing",)
+
+    monkeypatch.setattr(recorder.gamma, "discover_active_markets", fake_discovery)
+    monkeypatch.setattr(recorder.selector, "select", fake_select)
+    monkeypatch.setattr(recorder.storage, "upsert_markets", fake_upsert)
+    monkeypatch.setattr(recorder.websocket, "set_tokens", fake_set_tokens)
 
     async def scenario() -> None:
-        first = await recorder._refresh_universe_fail_soft()
+        first = await recorder.refresh_universe(fail_soft_if_initialized=True)
         assert first is False
         assert recorder._token_ids == ("token-existing",)
         assert recorder._market_count == 1
         assert recorder.health.gamma_last_status.startswith("ERROR:")
 
-        second = await recorder._refresh_universe_fail_soft()
+        second = await recorder.refresh_universe(fail_soft_if_initialized=True)
         assert second is True
         assert recorder.health.gamma_last_status == "OK"
         assert calls == 2
