@@ -107,6 +107,7 @@ fi
 
 require_env_assignment "PREDICTIONS_CUP_SIG_READ_CREDENTIAL" "${runtime_env}"
 require_env_assignment "PREDICTIONS_CUP_TOURNAMENT_ID" "${runtime_env}"
+require_env_assignment "PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS" "${runtime_env}"
 if ! env_flag_is_true "PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED" "${runtime_env}"; then
   fail "runtime.env must set PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true (unquoted)"
 fi
@@ -150,6 +151,9 @@ for service in "${SERVICES[@]}"; do
   fi
   if ! grep -q -- '--runtime-env-only' "${rendered_unit}"; then
     fail "unit must disable repo-local dotenv loading"
+  fi
+  if [[ "${service}" == "predictions-cup-polymarket-capture.service" ]] && ! grep -q -- '--require-explicit-universe' "${rendered_unit}"; then
+    fail "Polymarket service must require a strict external supervised universe"
   fi
   if [[ "${service}" == "predictions-cup-sig-capture.service" ]] && grep -q -- '--tracked-exchange-id' "${rendered_unit}"; then
     fail "SIG service must not hard-code tracked exchange IDs"
