@@ -24,6 +24,11 @@ The recorder writes a lean 1-second scalar panel, normalized event-time book cha
 
 The database path defaults to `data/polymarket_capture.sqlite3`, which is ignored by Git. Storage failures surface instead of being silently ignored.
 
+Gamma discovery is rate-limit aware. HTTP 429 retries stay on the current keyset cursor, honor
+`Retry-After` when present, otherwise use bounded exponential backoff with jitter, and stop after
+a bounded attempt budget with a visible error. A successful earlier page is not discarded and
+pagination is not restarted from page 1 after a transient 429.
+
 ## SIG Realtime capture — BUILD-006 accepted runtime
 
 The SIG capture process is explicit; normal application startup does not launch it. A read credential and an explicit tournament UUID are required.
@@ -161,7 +166,9 @@ sudo systemctl start predictions-cup-sig-capture predictions-cup-polymarket-capt
 ```
 
 Both units use `Restart=on-failure`, wait for `network-online.target`, write stdout/stderr to
-journald, and send normal `SIGTERM` with a 30-second stop timeout. SIG capture already closes its
+journald, and send normal `SIGTERM` with a 30-second stop timeout. SIG uses a 5-second restart
+delay. Polymarket uses a 30-second restart delay so persistent upstream Gamma failure cannot create
+a tight discovery/restart loop. SIG capture already closes its
 state engine/recorder on shutdown. BUILD-007 adds equivalent SIGTERM handling to the Polymarket
 process: stop the WebSocket loop, cancel long-running tasks and let short SQLite context-managed
 writes/connections unwind normally.
@@ -189,9 +196,14 @@ If installation fails before restart, check the runtime user/home, `.venv/bin/py
 after restart, the installer exits non-zero and the journal commands above are the first
 diagnostic step.
 
-### Conservative live EC2 validation — not yet run
+### Conservative live EC2 validation — rerun required
 
-After CI/review, an operator can validate without any trading action:
+The first live attempt proved the SIG service/environment side healthy but exposed Gamma HTTP 429
+failure during Polymarket startup discovery. After the retry/backoff correction is reviewed and CI
+is green, rerun the Polymarket service and confirm its SQLite output is advancing before continuing
+with SSH-disconnect and reboot checks.
+
+An operator can validate without any trading action:
 
 ```bash
 cd <repo-root>
