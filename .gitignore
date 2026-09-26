@@ -24,6 +24,16 @@ coverage.xml
 # Local data / databases
 /data/*
 !/data/.gitkeep
+!/data/research/
+!/data/manifests/
+/data/manifests/*
+!/data/manifests/historical/
+
+# DATA-001 historical corpus / extracts live outside Git (local disk or Kaggle)
+historical_replay_corpus/
+historical_orderbooks/
+_download_tmp/
+*.parquet.unsorted
 *.db
 *.sqlite
 *.sqlite3

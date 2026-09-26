@@ -1,0 +1,418 @@
+# DATA-001 — Historical Replay Corpus
+
+**Status:** READY FOR INDEPENDENT RE-REVIEW (2026-04-13T19 splice) — not accepted  
+**Branch:** `data/001-historical-replay-corpus`  
+**Replaces:** HIST-DATA-001 / PR #17 (closed unmerged; lessons reused, branch not revived)
+
+## Purpose
+
+DATA-001 produces trusted, evidence-graded historical Polymarket observations for five preselected
+2026 election regimes, in a form the accepted BUILD-005 replay and EXPERIMENT-002 machinery consume
+without a parallel replay path. It does not test whether any strategy makes money.
+
+GitHub holds code, manifests, checksums, quality evidence and a tiny fixture. The corpus itself
+lives outside Git (local disk or Kaggle).
+
+## Regimes
+
+Windows are half-open `[start, end)` in UTC (`end` = the day after the ticket's `23:59:59Z`).
+
+| Regime | Family | Window | Election |
+|---|---|---|---|
+| `colombia_first_round` | COL_2026 | 2026-05-29 → 2026-06-03 | 2026-05-31 |
+| `colombia_runoff` | COL_2026 | 2026-06-19 → 2026-06-24 | 2026-06-21 |
+| `peru_first_round` | PER_2026 | 2026-04-10 → 2026-04-15 | 2026-04-12 |
+| `peru_runoff` | PER_2026 | 2026-06-05 → 2026-06-10 | 2026-06-07 |
+| `hungary_election` | HUN_2026 | 2026-04-05 → 2026-04-15 | 2026-04-12 |
+
+No initialization data before a window is included. BUILD-005 slices are fail-closed at their
+start, and the corpus follows the same rule: the first depth snapshot for each token arrives
+inside the window, and BBO changes before it are counted in the quality report.
+
+## Sources and what the bytes actually show
+
+`data/manifests/historical/data_001_sources.json` is the machine-readable inventory. It includes
+every raw archive hour's URL, size, ETag, row count and row-group count, read from the remote
+Parquet footer by HTTP range request, plus the SHA-256 of every extract and PolyLeviathan file.
+
+### PendulumFlow PMXT order-book archive
+
+Hourly Parquet at `https://archive.pendulumflow.com/pmxt/{v1,v2}/polymarket_orderbook_<hour>.parquet`.
+Routing: V1 before `2026-04-13T19`, V2 from `2026-04-13T20:00Z` on (`PMXT_V2_FIRST_HOUR`).
+`2026-04-13T19` uses deterministic V1-preferred / V2-only supplementation: V1 supplies shared
+book evidence; V2 supplies genuinely V2-only market state and evidence types unavailable from V1,
+always from their actual observable time and with explicit provenance (`PMXT_SPLICE_HOURS`,
+`corpus.splice_primary_with_supplement`).
+
+History: the ticket originally routed V2 from 19:00, but the raw V2 19:00 file only starts
+receiving at 19:42:26.6 while V1 covers the whole hour, which left a ~42.5-minute regime-wide
+blind spot. Following the earlier review decision, the whole 19:00 hour was moved to V1. The
+V1/V2 overlap audit then showed that V2 also subscribed to markets V1 never recorded, whose only
+subscription snapshots are in the V2 19:00 file, so the rule became the splice below.
+
+Splice rule for `2026-04-13T19` (PER_2026 and HUN_2026; applied to normalized rows):
+
+- A token is **V1-covered** when the token or its condition has a depth snapshot or book change
+  in the V1 extract. Coverage is read from identifiers in the source bytes only, never from
+  prices, sizes or any build result.
+- V1-covered tokens: V1 depth snapshots and book changes for the whole hour; the V2 depth
+  snapshots and book changes of those tokens are dropped (counted as
+  `splice_superseded_by_primary:<stream>`).
+- Tokens absent from V1: their V2 rows are kept from their real first observation (19:42:26.6),
+  including the subscription depth snapshots. Nothing is backfilled before it.
+- V2 trade prints and tick-size changes, which V1 cannot carry, are kept for every token,
+  including V1-covered ones.
+- Each row keeps its own `source_version`. Only rows identical in every column are removed, as
+  in every other hour; by construction no token has book rows from both versions.
+- Every other hour has exactly one source. The V2 supplement is
+  `<FAMILY>/date=2026-04-13/hour=19/events_v2.parquet`; its hash and V2 archive footer are in
+  `data_001_sources.json` (`hours[].splice_supplement`), and the per-regime splice counts are in
+  the corpus manifest and quality report (`source_splices`).
+
+| | PMXT V1 | PMXT V2 |
+|---|---|---|
+| Recorder | mirror of a third-party capture | PendulumFlow's own capture |
+| Rows | `market_id`, `update_type`, JSON `data` | 16 typed columns |
+| Book messages | `book_snapshot` with `[[price,size]]` levels | `book` with JSON levels (asks listed high→low) |
+| Deltas | `price_change`: `change_price/size/side` + post-change BBO | `price_change`: `price/size/side` + post-change BBO |
+| Trades | none | `last_trade_price` with transaction hash |
+| `timestamp_received` | recorder receive time (ms) | archive receive time (ms) |
+| Venue event time | **none** | `timestamp` (ms) |
+
+The V1 finding matters. The payload `timestamp` equals `timestamp_received` to the millisecond
+(verified on real rows), so it is the recorder's receive time, not a venue time.
+`timestamp_created_at` lags by 4 ms to 7 s and is an archive write time. V1 rows therefore have a
+null `source_timestamp`.
+
+### Exact-token extracts
+
+`python -m predictions_cup.historical acquire` downloads each unique archive hour once, keeps only
+raw rows for candidate tokens (V2 by `asset_id`, V1 by condition `market_id`; V1 token filtering
+is exact in the normalization stage), preserves the raw columns and writes
+`<FAMILY>/date=/hour=/events.parquet`; a splice hour also gets `events_v2.parquet` from the V2
+archive file of the same hour. The checkpoint is per `(hour, extract, family)` and records the raw
+file's SHA-256 and row count. `--hour YYYY-MM-DDTHH` (repeatable) re-acquires single hours.
+
+### PolyLeviathan fills
+
+`fills_<FAMILY>.parquet` / `markets_<FAMILY>.parquet` from the `sisterreq_fills_20260926`
+export. There is one row per `(tx_hash, log_index, token_id)`; the exporter reports 0 duplicate
+keys. `price` / `size_shares` / `value_usd` are **binary float64 at the source**. Timestamps are
+block time at 1-second resolution. `side` comes from the upstream fills table and its aggressor
+semantics are not established. `is_exchange_taker` only says the taker address is an exchange
+contract.
+
+## Evidence grades
+
+Grades reflect the strongest claim the bytes justify, not the dataset description.
+
+| Stream | Grade | Why |
+|---|---|---|
+| `books/depth_snapshots` | `BOOK_SNAPSHOT` | full L2 depth from a venue book message: exact state at that observable time |
+| `books/book_changes` | `PRICE_ONLY` | per-level deltas carrying post-change best bid/ask (L1). Same-millisecond ties are unordered, so this is not exact event replay |
+| `books/trades` | `TRADE_FILL` | venue trade prints (V2 only) |
+| `fills` | `TRADE_FILL` | on-chain fills, a separate evidence family |
+
+Nothing is graded `FULL_EVENT_REPLAY`. PendulumFlow classifies PMXT as snapshot grade:
+millisecond receive times tie, the original order within a tie is unrecoverable, and export order
+is not stable. The corpus therefore makes **no** claim to queue reconstruction, cancellation
+timing, maker fill probability, passive quote survival or exact sub-millisecond sequencing.
+
+## Corpus layout and contract
+
+```text
+<corpus>/schema_version=1/
+  <regime>/books/depth_snapshots/date=YYYY-MM-DD/part-0.parquet
+  <regime>/books/book_changes/date=YYYY-MM-DD/part-0.parquet
+  <regime>/books/trades/date=YYYY-MM-DD/part-0.parquet
+  <regime>/books/tick_size_changes/date=YYYY-MM-DD/part-0.parquet   (metadata; not replayed)
+  <regime>/books/rejects/date=YYYY-MM-DD/part-0.parquet             (malformed rows, visible)
+  <regime>/fills/date=YYYY-MM-DD/part-0.parquet
+  corpus_manifest.json  corpus_quality.json  market_identity.csv
+```
+
+The book streams **are the accepted BUILD-007 Polymarket research schemas**, with two provenance
+columns appended (`source_version`, `evidence_grade`). `<regime>/books` is passed straight to
+BUILD-005 `load_polymarket_capture`. No adapter or forked loader is needed. Following BUILD-007,
+`market_id` holds the condition ID. The numeric Polymarket market ID is in the identity manifest
+and the fill stream.
+
+Mappings:
+
+- PMXT `book` / V1 `book_snapshot` → `depth_snapshots`. Levels are re-ordered bids-descending /
+  asks-ascending by exact decimal price. `best_bid/ask`, `midpoint` and `spread` are derived
+  exactly. `recorded_at = state_observed_at = observed_at` proxy.
+- `price_change` → `book_changes` (`side`, `price`, `size`, post-change `best_bid/ask`).
+- V2 `last_trade_price` → `trades`, with `event_id = hashed_trade_event_id(token, tx_hash)`.
+- Fills use their own schema (`fill_id = tx_hash:log_index:token_id`), not BUILD-007 `trades`.
+  BUILD-005 de-duplicates trades on `(token_id, transaction_hash)`, which would silently collapse
+  distinct on-chain fills sharing a transaction.
+
+All prices and sizes are decimal text. Book prices never pass through binary float; fill
+floats are rendered with Arrow's shortest round-trip text and not otherwise computed on.
+
+## Timestamps and no-lookahead
+
+| Field | Meaning |
+|---|---|
+| `observed_at` / `recorded_at` (books) | `HISTORICAL_PROXY_ARCHIVE_RECEIVE_TIME`: when the archive's recorder received the message. It is **not** a time this project possessed the data, and recorder latency is unknown |
+| `source_timestamp` (V2 books) | venue event time; retained, never used for ordering |
+| `source_timestamp` (V1 books) | null (no venue time exists) |
+| `source_timestamp` (fills) | on-chain block time |
+| `observed_at` (fills) | `BLOCK_TIME_PROXY`, equal to block time |
+
+Rules enforced:
+
+- Every row lies inside its regime window; `validate` re-checks this per output file.
+- Files are ordered by observable time. Ties are ordered by row content, never by archive export
+  order. Only rows identical in every column are dropped (idempotent redundant deliveries).
+- No interpolation, no fabricated quiet-period snapshots, no backward fill, no centered windows
+  and no nearest-timestamp joins. The only cross-stream statistic (book/fill overlap) compares a
+  fill time against the book's observed span and never feeds replay.
+- Replay ordering remains BUILD-005's: `observed_at` only, same-time events applied as one batch.
+
+## Quality evidence
+
+`corpus_quality.json` has, per regime and per token: first/last timestamp, row counts, distinct
+observation instants, median/p95 observation interval, maximum gap, material gaps (> 300 s: count,
+total and largest three), duplicates removed, malformed rejects by reason, crossed snapshots and
+crossed BBO changes, empty-side incidence, ambiguous same-millisecond BBO groups, changes before
+the first snapshot, venue-time-after-receive-time rows, median/p95 depth levels, fill counts and
+book/fill overlap. Regime-level entries add regime-wide silences (no token observed at all), the
+stronger outage signal, plus the pipeline row counts: raw extract rows, rows matching tokens,
+outside/inside window, duplicates removed, rejects and final rows, separately for books and fills.
+
+Intervals are measured between distinct observation instants. Quantiles are exact below 1 s and
+bucketed above (100 ms to 60 s, then 1 s). Maximum and material gaps are exact.
+
+## Results (build at pipeline commit `159873f`)
+
+The corpus manifest is `data/manifests/historical/data_001_corpus_manifest.json`, with identity
+in `data_001_market_identity.csv` and quality in `data_001_corpus_quality.json`.
+`validate` re-checked all 115 output files: hashes, row counts, schemas, window containment and
+ordering. There were 0 problems and 0 rejected malformed rows.
+
+| Regime | Markets candidate / with book / tokens with book | Depth snapshots | BBO changes | Trade prints | Fills | Regime-wide max silence | Book coverage | Fill coverage |
+|---|---|---|---|---|---|---|---|---|
+| `colombia_first_round` | 236 / 130 / 260 | 62,410 | 64,046,576 | 21,663 | 58,990 | 263 s | 05-29T00:00 → 06-02T23:59 | 05-29T00:00 → 06-02T23:58 |
+| `colombia_runoff` | 236 / 42 / 84 | 29,534 | 12,576,636 | 13,699 | 34,671 | 590 s | 06-19T00:00 → 06-23T23:59 | 06-19T00:00 → 06-23T23:57 |
+| `peru_first_round` | 327 / 133 / 266 | 102,970 | 21,752,096 | 32,980 | 265,128 | 145 s | 04-10T00:00 → 04-14T23:59 | 04-10T00:00 → 04-14T23:59 |
+| `peru_runoff` | 327 / 45 / 90 | 112,277 | 21,324,303 | 41,908 | 122,149 | 243 s | 06-05T00:00 → 06-09T23:59 | 06-05T00:00 → 06-09T23:59 |
+| `hungary_election` | 174 / 48 / 96 | 154,135 | 6,970,076 | 2,217 | 262,077 | 204 s | 04-05T00:00 → 04-14T23:59 | 04-05T00:00 → 04-14T23:57 |
+
+Totals: 319 conditions / 638 tokens with book evidence, 126,669,687 BBO change rows, 461,326 depth
+snapshots, 112,467 trade prints, 743,015 fills, 1.19 GB of ZSTD Parquet. There are no missing
+source hours and no missing splice supplements.
+
+"Candidate" markets are the PolyLeviathan market families selected per research family. The
+remainder had no rows in the archive during the window. They are placeholders ("Candidate J",
+"Party B"), markets resolved before the window, or markets the archive never recorded.
+
+### Known holes (read before using a regime)
+
+1. **V2-only markets start at 2026-04-13T19:42:26.6.** V1 recorded a fixed subset (Peru 40
+   conditions / 80 tokens, Hungary 6 / 12) every hour. V2 subscribed to 93 more Peru and 32 more
+   Hungary conditions (186 and 64 tokens) at 19:42:26.6. The splice keeps their V2 rows from that
+   real first observation, including the subscription depth snapshots, so every token with book
+   evidence in both regimes has a depth snapshot (Peru 266 / 266, Hungary 96 / 96; 0 snapshot-less
+   Hungary tokens). Nothing is recorded for these markets before 19:42:26.6, and nothing is
+   backfilled. See the splice section below.
+2. **Hungary seat-count coverage.** Only 48 of 174 candidate markets (96 tokens) have book
+   evidence, and all 96 of those tokens have a depth snapshot. PMXT V1 did not record most seat-bin/seat-count markets. 45 tokens have fills
+   (15,037 fills) but no book rows; a direct check of the raw election-night V1 file found none of
+   their condition or token IDs among its 24,542 markets. They are listed with
+   `book_available=false, fills_available=true`.
+3. **Same-millisecond ambiguity.** 1,385,451 (token, millisecond) groups across the regimes hold
+   BBO change rows with differing post-change best bid/ask (Colombia first round alone: 785,649).
+   Their true order is unknowable, and replay applies each group as one BUILD-005 same-time batch.
+4. **Sparse full snapshots.** Median depth snapshots per token over the whole window: Colombia
+   first round 81, Colombia runoff 26, Peru first round 10, Peru runoff 334.5, Hungary 9. BBO
+   changes before a token's first snapshot are counted per token and total 994,015 across regimes
+   (5,204,028 in the intermediate V1-only 19:00 build, where V2-only markets lost their
+   subscription snapshots).
+5. **Quiet-market silences.** Almost every token has at least one > 300 s silence. The largest
+   single-token silence is 5,920 s (Colombia first round). These cannot be told apart from
+   recorder outages except where the whole regime goes silent. Colombia runoff shows three
+   6–10 minute regime-wide silences on 2026-06-19 around 04:00–05:00 UTC; no other regime has a
+   regime-wide silence over 300 s.
+6. **Anomalies surfaced, not repaired.** 7 crossed depth snapshots, 584 crossed BBO rows,
+   47,727 empty-side snapshots, 2,195 Peru-runoff rows whose venue time is after the archive
+   receive time, and 96,442 exact duplicate rows removed (mostly PMXT V1 redundant deliveries).
+7. **Fills outside the book's observed span.** Hungary's median book/fill overlap is low because
+   fills continue on tokens whose book evidence is thin or absent.
+
+
+## 2026-04-13T19 splice (V1-preferred / V2-only supplementation)
+
+**History.** The first build (`5925892`) routed the whole 19:00 hour to V2. The V2 19:00 file only
+starts at 19:42:26.6, so both regimes had a ~42.5-minute regime-wide blind spot. The next build
+(`0b1f5b3`) routed 19:00 to V1 only. That closed the blind spot, but it dropped the V2-only markets'
+19:42 subscription snapshots: their first snapshot came 1.5–26 h later, and 36 Hungary tokens had
+none left in the window. The splice keeps V1's continuity and V2's coverage.
+
+**Rule** (PER_2026 and HUN_2026, hour `2026-04-13T19` only; applied to normalized rows,
+`corpus.splice_primary_with_supplement`):
+
+- a token or condition with any V1 book rows in the hour takes V1 depth snapshots and book changes
+  for the whole hour, and V2 book rows for those tokens are dropped;
+- a token absent from V1 keeps its V2 rows from their real first observation (19:42:26.6),
+  including the subscription snapshots;
+- V2 trade prints and tick-size changes are kept for all tokens with V2 provenance, because V1 has
+  no trade prints;
+- coverage is decided from identifiers only, never from prices or sizes; every row keeps its
+  `source_version`; nothing is backfilled before a row's observable time;
+- 20:00 onward stays V2, and every other hour has exactly one source.
+
+**V1 19:00 source (primary).**
+`https://archive.pendulumflow.com/pmxt/v1/polymarket_orderbook_2026-04-13T19.parquet`,
+939,842,152 bytes, ETag `"f06c20c4469ae096d5ab7cf9883b6191-10"`, Last-Modified
+`Wed, 19 Aug 2026 15:23:54 GMT`, 45,814,371 rows in 46 row groups (remote footer). The raw downloaded
+file's SHA-256 is `2b972538b320fbf1ffaf5000e55923fa6806890f988884ff30b02287b251587c`. Extracts
+(`hour=19/events.parquet`): PER_2026 158,080 rows
+(`a41369859ab01c73d8a2ccb3046f3d1c7e649804d006e96d80bda55c4d574472`), HUN_2026 2,708 rows
+(`3a0925f4890747ee3aaaa5ab0ae3be1f84e88a7bd4a5d2d665cf4ab62635c6e7`), spanning 19:00:00.3 →
+19:59:59.8 (PER) and 19:00:02.9 → 19:59:58.7 (HUN).
+
+**V2 19:00 source (supplement).**
+`https://archive.pendulumflow.com/pmxt/v2/polymarket_orderbook_2026-04-13T19.parquet`,
+133,193,857 bytes, ETag `"2bd8f13d782c02bd292ca5c238b30dfe"`, Last-Modified
+`Wed, 19 Aug 2026 15:32:52 GMT`, 19,356,105 rows in 19 row groups (remote footer). Extracts
+(`hour=19/events_v2.parquet`): PER_2026 183,832 rows
+(`cf1b76466faaad8214d05445421b841e4caa5780a26387a63cf6f9275235823d`), HUN_2026 6,978 rows
+(`4bd9d372b1f76bc26098822bf33b61b2fc1d3e2b33244fe89c1884224a96166c`); both are byte-identical to
+the extracts the first build used. They are in `data_001_sources.json` under
+`hours[].splice_supplement`.
+
+**Splice counts** (`source_splices` in the corpus manifest and quality report):
+
+| | Peru first round | Hungary |
+|---|---|---|
+| V1 book conditions / tokens (covered) | 40 / 80 | 6 / 12 |
+| V2-only conditions / tokens | 93 / 186 | 32 / 64 |
+| V1 rows: snapshots / BBO changes | 1,592 / 156,488 | 260 / 2,448 |
+| V2 rows kept: snapshots / BBO changes / trade prints | 186 / 145,010 / 350 | 64 / 6,041 / 51 |
+| … of which trade prints on covered tokens | 183 | 40 |
+| V2 book rows superseded by V1: snapshots / BBO changes | 80 / 38,206 | 12 / 810 |
+| Tokens with book rows from both versions in the hour | 0 | 0 |
+
+**Three-way comparison** (final rows; `5925892` = V2 from 19:00, `0b1f5b3` = V1-only 19:00,
+`159873f` = splice):
+
+| | Peru `5925892` → `0b1f5b3` → `159873f` | Hungary `5925892` → `0b1f5b3` → `159873f` |
+|---|---|---|
+| Depth snapshots | 101,458 → 102,784 → 102,970 | 153,887 → 154,071 → 154,135 |
+| BBO changes | 21,634,169 → 21,607,086 → 21,752,096 | 6,968,448 → 6,964,035 → 6,970,076 |
+| Trade prints | 32,980 → 32,630 → 32,980 | 2,217 → 2,166 → 2,217 |
+| Conditions / tokens with book evidence | 133 / 266 (all) | 48 / 96 (all) |
+| Tokens with any depth snapshot | 266 → 266 → 266 | 96 → 60 → 96 |
+| Tokens with book rows but no snapshot | 0 → 0 → 0 | 0 → 36 → 0 |
+| BBO changes before first snapshot | 9,463 → 4,118,372 → 9,463 | 123,238 → 224,342 → 123,238 |
+| Regime-wide max silence | 2,546.7 s → 144.9 s → 144.9 s | 2,550.2 s → 203.6 s → 203.6 s |
+| Regime-wide material (> 300 s) silences | 1 → 0 → 0 | 1 → 0 → 0 |
+| Largest regime-wide gap on 2026-04-13 | 2,547 s (18:59:59.9–19:42:26.6) → 54 s (03:05:12–03:06:07) → same | 2,550 s (18:59:56.4–19:42:26.6) → 89 s (16:59:15–17:00:45) → same |
+| Largest regime-wide gap 18:00–21:00 | 2,547 s → 47 s (18:05:12–18:05:58) → same | 2,550 s → 68 s (18:43:17–18:44:26) → same |
+| Crossed snapshots / crossed BBO rows | 2 / 248 (all) | 4 / 136 (all) |
+| Empty-side snapshots | 6,722 → 6,604 → 6,732 | 4,590 → 4,542 → 4,590 |
+| Ambiguous same-ms BBO groups | 409,019 → 402,467 → 409,761 | 11,511 → 11,508 → 11,508 |
+| Rejects | 0 | 0 |
+
+The 19:00 hour now holds V1 book rows on the 80 Peru / 12 Hungary shared tokens from 19:00:00.3 /
+19:00:02.9, and V2 book rows on the 186 / 64 V2-only tokens from 19:42:26.6 (first V2 BBO change
+19:42:26.8), with no token taking book rows from both. V2 trade prints start at 19:42:30.5 (Peru)
+and 19:42:54.7 (Hungary). Relative to the V1-only build, only the two regimes' `date=2026-04-13`
+book partitions changed (107 of 115 files SHA-256 identical); relative to the first build, the
+`trades` partitions are also identical (109 of 115). `corpus_quality.json` and
+`market_identity.csv` changed as expected (19:42 first observations for the V2-only tokens).
+
+**V1/V2 overlap audit** (diagnostic only; `scripts/data_001_overlap_audit.py`, window 19:42:26.6 →
+20:00, both versions through `pmxt.normalize_extract`):
+
+| | PER_2026 | HUN_2026 |
+|---|---|---|
+| Conditions V1 only / V2 only / both | 0 / 93 / 40 | 0 / 32 / 6 |
+| Tokens V1 only / V2 only / both | 0 / 186 / 80 | 0 / 64 / 12 |
+| Tokens with a depth snapshot V1 / V2 | 16 / 266 | 4 / 76 |
+| Snapshots V1 / V2 | 366 / 266 | 80 / 76 |
+| BBO changes V1 / V2 | 40,712 / 183,216 | 864 / 6,851 |
+| Trade prints V1 / V2 | 0 / 350 | 0 / 51 |
+| Median distinct instants per token-minute, shared tokens V1 / V2 | 16.1 / 10.0 | 2.9 / 2.0 |
+| As-of BBO at minute marks, shared tokens: compared / disagree | 1,426 / 0 | 190 / 0 |
+| Marks with a same-ms ambiguous state / V2-only state | 8 / 6 | 0 / 26 |
+
+On markets both recorded, V1 and V2 agree on every aligned best bid/ask, and V1 is denser; this is
+why V1 is preferred for shared tokens. V1 never subscribed to the extra V2 markets, which is why
+V2 supplies them.
+
+## Commands
+
+Local run (the one used to produce the committed manifests):
+
+```bash
+python -m predictions_cup.historical acquire --fills <polyleviathan-dir> --output <extracts-dir> --scratch <tmp>
+python -m predictions_cup.historical sources --orderbooks <extracts-dir> --fills <polyleviathan-dir> --output data/manifests/historical/data_001_sources.json --remote-footers
+python -m predictions_cup.historical build --orderbooks <extracts-dir> --fills <polyleviathan-dir> --output <corpus-dir>
+python -m predictions_cup.historical validate --corpus <corpus-dir>
+python -m predictions_cup.historical smoke --corpus <corpus-dir> --regime <regime> --target-token <token> --reference-token <token> --start-at <ISO> --end-at <ISO> --output data/manifests/historical/data_001_experiment002_smoke.json
+python -m predictions_cup.replay --polymarket-db <corpus-dir>/schema_version=1/<regime>/books
+```
+
+`acquire` accepts `--worker K --workers N` for parallel downloads. The archive caps each connection
+at about 20 MB/s, and each worker's memory is bounded by 25k-row batches.
+
+Kaggle uses the same entrypoint with mounted inputs. The repository is private, so the kernel
+installs a wheel built from the reviewed commit (`python -m pip wheel --no-deps .`) and attached
+as a Kaggle dataset, rather than cloning GitHub with a token:
+
+```bash
+pip install /kaggle/input/<predictions-cup-wheel-dataset>/predictions_cup-0.1.0-py3-none-any.whl
+python -m predictions_cup.historical build \
+  --orderbooks /kaggle/input/<pmxt-extracts-dataset> \
+  --fills /kaggle/input/<polyleviathan-fills-dataset> \
+  --output /kaggle/working/historical_replay_corpus
+python -m predictions_cup.historical validate --corpus /kaggle/working/historical_replay_corpus
+```
+
+## Provenance of the extracts used for this build
+
+The extracts used for the recorded build were produced before this branch by a standalone script
+with the same filter semantics. Re-running this repository's `acquire` stage on two archive hours
+reproduced them exactly: same schema, same rows, same row order. The hours were
+`2026-04-05T00` (PMXT V1, Hungary, 25,576 rows) and `2026-06-19T00` (PMXT V2, Colombia,
+112,542 rows). The two V1 `2026-04-13T19` extracts were produced by this repository's
+`acquire --hour`; the two V2 `2026-04-13T19` supplement extracts are the original V2 extracts. Every extract's SHA-256 is in `data_001_sources.json`, and every raw archive
+hour's size, ETag and row count is recorded next to it.
+
+## Kaggle reproduction
+
+Private kernel `polyleviathan/sig-cup-data-001-build` (`scripts/kaggle/`) mounted three private
+datasets: `sig-cup-pmxt-orderbook-extracts` (version with the V1 `hour=19/events.parquet` and V2
+`hour=19/events_v2.parquet` extracts), `sig-cup-polyleviathan-fills` and
+`sig-cup-predictions-cup-code` (wheel of commit `159873f`). Kernel version 4 rebuilt and validated
+the corpus. **All 115 output files were SHA-256 identical to the local build** and the totals
+matched (`data/manifests/historical/data_001_kaggle_run.json`). Version 3
+reproduced the V1-only build (`0b1f5b3`); version 2 had mounted an older extracts version and
+stopped at the build's extract `source_version` check, as intended.
+
+## Determinism
+
+Given identical input bytes and configuration, `build` produces identical canonical output. The
+manifests contain no wall-clock build time, rows are content-ordered, one row group is written per
+source hour, and the synthetic regression builds twice and compares manifests. Output SHA-256
+hashes depend on the PyArrow writer version; logical equality does not.
+
+## Tests
+
+`tests/test_historical_corpus.py` (synthetic) covers V1/V2 normalization, level ordering, exact
+decimals, malformed/crossed handling, window and token filtering, content-deterministic ordering,
+fill separation, determinism, tamper detection and fail-visible float prices. The splice tests
+cover V1 preference for shared tokens and conditions, V2-only rows kept at their real times with
+nothing earlier, surviving V2-only subscription snapshots, V2 trades and tick-size rows with V2
+provenance, no double counting, value-independent selection, determinism under input
+reordering, and an end-to-end build loaded by BUILD-005.
+`tests/test_historical_fixture.py` loads the committed real-data fixture through unmodified
+BUILD-005 and runs EXPERIMENT-002 on it.
+
+## Non-goals
+
+No strategy, tuning, alpha claims, SIG fill modelling, queue simulation, execution or trading. No
+expansion beyond the five regimes. No fabricated book states.

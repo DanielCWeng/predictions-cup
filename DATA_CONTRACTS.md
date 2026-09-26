@@ -136,3 +136,29 @@ Periodic Gamma refresh is last-good-state preserving: after successful startup, 
 selection failure records a degraded Gamma status and does not replace the resident universe.
 Initial discovery remains fail-closed, and post-discovery local persistence failures are not
 suppressed.
+
+
+## Historical replay corpus — DATA-001 (PROPOSED, under review; not accepted)
+
+DATA-001 reuses the accepted BUILD-007 Polymarket research Parquet streams rather than defining a
+parallel replay format:
+
+- `<regime>/books/{depth_snapshots,book_changes,trades}` use the BUILD-007 schemas unchanged, with
+  `source_version` and `evidence_grade` appended, and load through BUILD-005
+  `load_polymarket_capture` without an adapter;
+- historical `observed_at` is an explicit archive-receive-time proxy
+  (`HISTORICAL_PROXY_ARCHIVE_RECEIVE_TIME`), never a claim that the project possessed the data at
+  that instant; PMXT V1 rows carry no venue event time (`source_timestamp` is null);
+- evidence grades are per stream: depth snapshots `BOOK_SNAPSHOT`, BBO change rows `PRICE_ONLY`,
+  venue trade prints and on-chain fills `TRADE_FILL`; nothing is graded `FULL_EVENT_REPLAY`;
+- on-chain fills are a separate stream keyed on `(transaction_hash, log_index, token_id)` and are
+  not written as BUILD-007 `trades`, whose `(token_id, transaction_hash)` identity would collapse
+  distinct fills;
+- PMXT routing: V1 before `2026-04-13T19`, V2 from `2026-04-13T20:00Z`. `2026-04-13T19` uses
+  deterministic V1-preferred / V2-only supplementation: V1 supplies shared book evidence; V2
+  supplies genuinely V2-only market state and evidence types unavailable from V1, always from
+  their actual observable time and with explicit provenance (per-row `source_version`);
+- the corpus lives outside Git; its manifests, hashes, identity and quality evidence live under
+  `data/manifests/historical/`.
+
+See `docs/implementation/DATA_001_HISTORICAL_REPLAY_CORPUS.md`.
