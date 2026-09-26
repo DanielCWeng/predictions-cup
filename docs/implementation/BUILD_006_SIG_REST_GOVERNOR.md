@@ -57,7 +57,7 @@ Recovery after reconnect, token refresh, socket error or revision gap similarly 
 
 An untracked bookDirty is still persisted with revision/source provenance but does not trigger a full-book REST request.
 
-A tracked bookDirty immediately transitions the exchange to TRACKED_UNTRUSTED, queues HIGH-priority authoritative reconciliation, and restores TRACKED_TRUSTED only after a successful identity-checked response.
+A tracked bookDirty immediately transitions the exchange to TRACKED_UNTRUSTED, queues HIGH-priority authoritative reconciliation, and restores TRACKED_TRUSTED only after a successful identity-checked response. When depth is TRACKED_TRUSTED, authoritative depth owns BBO semantics completely: an empty bid/ask side resolves to None, and a settled tracked market whose authoritative book has been cleared also resolves to None rather than falling back to an older scalar quote. Scalar BBO fallback is only for UNTRACKED_DEPTH or TRACKED_UNTRUSTED broad-monitoring state.
 
 ## Silent expiry fallback
 
@@ -134,7 +134,7 @@ The branch tests:
 - 237 known exchanges => exactly three broad price batches;
 - initialization does not fetch 237 full books;
 - only configured tracked exchanges receive depth seeds;
-- scalar state never upgrades depth trust, and missingIds clears previously resident scalar/BBO state;
+- scalar state never upgrades depth trust, missingIds clears previously resident scalar/BBO state, and trusted empty/settled depth never resurrects older scalar quotes;
 - tracked/untracked bookDirty behavior;
 - tracked stale-book fail-closed refresh and failed recovery;
 - revision-gap/reconnect recovery without a full-universe book storm;
