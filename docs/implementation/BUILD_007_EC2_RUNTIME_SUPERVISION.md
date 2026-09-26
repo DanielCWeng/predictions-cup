@@ -116,6 +116,8 @@ Python, systemd destination and systemctl executable. It never deletes runtime d
 
 ## Automated validation
 
+CI validation is green for lint, shell validation, strict mypy, pytest and the application smoke.
+
 BUILD-007 adds tests proving:
 
 - both templates point at the single runtime environment placeholder and force `--runtime-env-only`;
