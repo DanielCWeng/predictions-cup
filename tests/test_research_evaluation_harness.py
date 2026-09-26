@@ -12,7 +12,11 @@ from predictions_cup.learning.evaluation_harness import (
 )
 from predictions_cup.learning.experiments import ExperimentObservation
 from predictions_cup.learning.relationships import FeatureVector, Regime, RelationshipObservation
-from predictions_cup.learning.reporting import ResearchDisposition, ResearchLedgerEntry, ResearchReport
+from predictions_cup.learning.reporting import (
+    ResearchDisposition,
+    ResearchLedgerEntry,
+    ResearchReport,
+)
 from predictions_cup.learning.research_spec import (
     DatasetVersion,
     ResearchEvaluationSpec,
@@ -38,7 +42,6 @@ from predictions_cup.learning.validation import (
     purge_training,
 )
 from predictions_cup.replay.markouts import Direction
-from predictions_cup.replay.model import InvalidReason
 from predictions_cup.replay.splits import ChronologicalBoundaries
 
 
@@ -245,13 +248,14 @@ def test_controls_and_ablations_cannot_change_dataset_or_folds() -> None:
 
 
 def test_standard_horizons_are_canonical_five() -> None:
-    assert STANDARD_HORIZONS == (
+    expected = (
         timedelta(seconds=1),
         timedelta(seconds=5),
         timedelta(seconds=30),
         timedelta(minutes=1),
         timedelta(minutes=5),
     )
+    assert expected == STANDARD_HORIZONS
 
 
 def test_build005_adapter_preserves_underlying_and_asof_semantics() -> None:
