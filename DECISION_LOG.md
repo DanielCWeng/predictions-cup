@@ -67,3 +67,28 @@
 **Decision:** Read-only transport retries are bounded with exponential backoff and jitter. Response retries are limited to `429 RATE_LIMITED`, `503 TX_CONFLICT`, and `503 SERVICE_UNAVAILABLE`; transport failures/timeouts are also bounded because GET is non-mutating.
 
 **Reason:** Retrying permanent client/auth/not-found errors or arbitrary server failures hides defects and can amplify incidents.
+
+
+## DECISION 016 — Tournament-wide Realtime does not imply tournament-wide resident depth
+
+**Decision:** Continue tournament-level Realtime capture for every known exchange, but maintain authoritative resident full depth only for an explicitly tracked subset. Untracked exchanges remain visible and retain Realtime/scalar observations without claiming full-depth trust.
+
+**Reason:** The live tournament exposed 237 open exchanges. Maintaining every full book inside the prior 30-second fallback is incompatible with a conservative observed REST operating envelope and would consume capacity needed for recovery and future trading-critical reads.
+
+## DECISION 017 — Broad SIG state uses bulk scalar observations
+
+**Decision:** Use the existing GET /exchanges/prices transport in batches of at most 100 IDs for broad latest-price/BBO state. Bulk scalar observations never create or upgrade full-depth trust.
+
+**Reason:** The supplied contract exposes a compact authoritative scalar surface for broad monitoring. At the observed 237-exchange universe it requires three requests rather than 237 full-book requests.
+
+## DECISION 018 — Live SIG REST shares one priority governor
+
+**Decision:** All REST attempts made by the explicit live SIG capture path share one per-client governor with HIGH, NORMAL and BACKGROUND priority, pacing, shared 429 cooldown and observable counters. The initial configured rate is 3 requests/second.
+
+**Reason:** Rate limiting is documented per API key, so independently paced workers can collectively overload the same key. The numeric deployment rate is an operational setting informed by live observation, not a published SIG venue limit.
+
+## DECISION 019 — Thirty-second depth freshness is a project expiry-safety policy
+
+**Decision:** Apply the configurable full-depth freshness fallback only to tracked open books. When a tracked book crosses the bound, remove trust before awaiting its authoritative refresh.
+
+**Reason:** SIG documents that order expiry emits no Realtime event, while the documented aggregate exchange orderbook does not expose per-order expirationDate. The 30-second default is therefore our conservative fallback, not a SIG contractual requirement. The Realtime prose's reference to GET /markets/{id}/orders is also inconsistent with the participant OpenAPI paths, so no undocumented endpoint is invented.
