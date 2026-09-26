@@ -138,8 +138,21 @@ class AppSettings(BaseSettings):
         }
 
 
+class _RuntimeAppSettings(AppSettings):
+    """System-service settings source: process environment only, never repo .env."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="PREDICTIONS_CUP_",
+        env_file=None,
+        env_file_encoding="utf-8",
+        extra="ignore",
+        frozen=True,
+        validate_default=True,
+    )
+
+
 def load_settings(*, use_dotenv: bool = True) -> AppSettings:
     """Load settings on demand; runtime services can explicitly disable local dotenv."""
     if not use_dotenv:
-        return AppSettings(_env_file=None)
+        return _RuntimeAppSettings()
     return AppSettings()
