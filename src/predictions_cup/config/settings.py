@@ -138,6 +138,8 @@ class AppSettings(BaseSettings):
         }
 
 
-def load_settings() -> AppSettings:
-    """Load settings on demand; configuration is never module-global state."""
+def load_settings(*, use_dotenv: bool = True) -> AppSettings:
+    """Load settings on demand; runtime services can explicitly disable local dotenv."""
+    if not use_dotenv:
+        return AppSettings(_env_file=None)
     return AppSettings()
