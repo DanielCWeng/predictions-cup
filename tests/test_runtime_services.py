@@ -61,15 +61,24 @@ def test_systemd_units_are_read_only_and_supervised() -> None:
     )
 
 
-def _write_runtime_env(path: Path, *, include_trade_credential: bool = False) -> str:
+def _write_runtime_env(
+    path: Path,
+    *,
+    include_trade_credential: bool = False,
+    include_supervised_ids: bool = True,
+) -> str:
     secret = "TEST_READ_SECRET_DO_NOT_PRINT"
     lines = [
         f"PREDICTIONS_CUP_SIG_READ_CREDENTIAL={secret}",
         "PREDICTIONS_CUP_TOURNAMENT_ID=test-tournament",
         "PREDICTIONS_CUP_TRADING_ENABLED=false",
         "PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true",
-        "PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS=condition-test-a,condition-test-b",
     ]
+    if include_supervised_ids:
+        lines.append(
+            "PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS="
+            "condition-test-a,condition-test-b"
+        )
     if include_trade_credential:
         lines.append("PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL=TEST_TRADE_SECRET_DO_NOT_PRINT")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -170,6 +179,25 @@ def test_installer_is_idempotent_and_renders_absolute_runtime_env(tmp_path: Path
     assert calls.count("restart predictions-cup-polymarket-capture.service") == 2
     assert "TEST_READ_SECRET_DO_NOT_PRINT" not in first.stdout + first.stderr
     assert "TEST_READ_SECRET_DO_NOT_PRINT" not in second.stdout + second.stderr
+
+
+def test_installer_rejects_missing_supervised_polymarket_universe(
+    tmp_path: Path,
+) -> None:
+    env, runtime_env, _ = _installer_env(tmp_path)
+    _write_runtime_env(runtime_env, include_supervised_ids=False)
+
+    result = subprocess.run(
+        ["bash", str(INSTALLER)],
+        cwd=PROJECT_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS" in result.stderr
 
 
 def test_installer_propagates_restart_failure(tmp_path: Path) -> None:
