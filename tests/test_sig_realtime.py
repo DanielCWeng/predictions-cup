@@ -442,6 +442,11 @@ def test_tracked_silent_expiry_marks_untrusted_before_refresh_and_recovers(
         assert state.trusted
         assert state.orderbook is not None
         assert state.orderbook.bids == ()
+        assert state.orderbook.asks == ()
+        assert state.scalar_best_bid == Decimal("0.4")
+        assert state.scalar_best_ask == Decimal("0.6")
+        assert state.best_bid is None
+        assert state.best_ask is None
         assert engine.health.bounded_book_refresh_count == 1
         await engine.aclose()
         recorder.close()
@@ -691,8 +696,13 @@ def test_market_settlement_refetches_market_and_avoids_closed_book_read(
         assert rest.market_calls == ["26"]
         assert len(rest.calls) == initial_book_calls
         assert engine.market_states["26"].status == "settled"
-        assert engine.states["36"].trusted
-        assert engine.states["36"].orderbook is None
+        state = engine.states["36"]
+        assert state.trusted
+        assert state.orderbook is None
+        assert state.scalar_best_bid == Decimal("0.4")
+        assert state.scalar_best_ask == Decimal("0.6")
+        assert state.best_bid is None
+        assert state.best_ask is None
         await engine.aclose()
         recorder.close()
 
