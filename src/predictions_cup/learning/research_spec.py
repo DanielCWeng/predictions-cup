@@ -168,6 +168,16 @@ class EvidencePolicy:
     require_negative_controls: bool = True
     require_ablations: bool = True
     require_execution_stress: bool = True
+    min_fdr_rejections: int = 1
+    bootstrap_min_lower_bound: Decimal | None = None
+    require_nonisolated_stability: bool = True
+    require_negative_controls_pass: bool = True
+    require_ablations_pass: bool = True
+    require_execution_stresses_pass: bool = True
+
+    def __post_init__(self) -> None:
+        if self.min_fdr_rejections < 0:
+            raise ValueError("min_fdr_rejections must not be negative")
 
 
 @dataclass(frozen=True, slots=True)
