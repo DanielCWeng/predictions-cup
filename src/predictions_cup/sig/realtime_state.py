@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Callable, Iterable
+from collections.abc import AsyncIterator, Callable, Iterable, Sequence
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -78,7 +78,7 @@ class SigStateRest(Protocol):
 
     async def get_bulk_prices(
         self,
-        exchange_ids: Iterable[str],
+        exchange_ids: Sequence[str],
         *,
         tournament_id: str | None = None,
     ) -> BulkPricesDto: ...
@@ -749,8 +749,20 @@ class SigRealtimeStateEngine:
     ) -> None:
         requested_set = set(requested)
         response_ids = [item.exchange_id for item in response.data]
+        missing_ids = list(response.missing_ids)
         if any(exchange_id not in requested_set for exchange_id in response_ids):
             raise ValueError("bulk price response contained an unrequested exchange")
+        if any(exchange_id not in requested_set for exchange_id in missing_ids):
+            raise ValueError("bulk price response reported an unrequested missing exchange")
+        if len(response_ids) != len(set(response_ids)):
+            raise ValueError("bulk price response duplicated an exchange")
+        if len(missing_ids) != len(set(missing_ids)):
+            raise ValueError("bulk price response duplicated a missing exchange")
+        expected_ids = [
+            exchange_id for exchange_id in requested if exchange_id not in set(missing_ids)
+        ]
+        if response_ids != expected_ids:
+            raise ValueError("bulk price response did not preserve requested exchange order")
 
         for item in response.data:
             state = self.states.get(item.exchange_id)
@@ -1052,6 +1064,20 @@ class SigRealtimeStateEngine:
                 f"periodic demand {periodic_demand:.3f} rps exceeds "
                 f"reserved capacity {reserved_background_rate:.3f} rps"
             )
+
+    async def aclose(self) -> None:
+        """Cancel engine-owned maintenance/reconciliation work without deadlock."""
+        tasks = {
+            task
+            for task in (*self._background_tasks, *self._reconcile_tasks.values())
+            if not task.done()
+        }
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._background_tasks.clear()
+        self._reconcile_tasks.clear()
 
     def _track_background_task(self, task: asyncio.Task[None]) -> None:
         self._background_tasks.add(task)
