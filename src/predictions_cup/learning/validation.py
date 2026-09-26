@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -10,6 +11,7 @@ from enum import StrEnum
 
 from predictions_cup.learning.experiments import ExperimentObservation
 from predictions_cup.learning.relationships import RelationshipObservation
+from predictions_cup.learning.research_spec import canonical_json_bytes
 from predictions_cup.replay.splits import ChronologicalBoundaries
 
 
@@ -50,6 +52,30 @@ class EvaluationObservation:
                 raise ValueError(f"{name} must be timezone-aware")
         if self.horizon <= timedelta(0):
             raise ValueError("horizon must be positive")
+        if self.label_end_time != self.decision_time + self.horizon:
+            raise ValueError("label_end_time must equal decision_time + horizon")
+
+    @property
+    def observation_id(self) -> str:
+        payload = {
+            "experiment_id": self.experiment_id,
+            "run_id": self.run_id,
+            "decision_time": self.decision_time.isoformat(),
+            "feature_available_at": self.feature_available_at.isoformat(),
+            "label_end_time": self.label_end_time.isoformat(),
+            "market_id": self.market_id,
+            "instrument_id": self.instrument_id,
+            "event_id": self.event_id,
+            "event_family_id": self.event_family_id,
+            "horizon_seconds": str(self.horizon.total_seconds()),
+            "signal": self.signal,
+            "predictive_result": self.predictive_result,
+            "gross_executable_markout": self.gross_executable_markout,
+            "net_executable_markout": self.net_executable_markout,
+            "valid": self.valid,
+            "invalid_reason": self.invalid_reason,
+        }
+        return hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
 
     def assert_asof_safe(self) -> None:
         if self.feature_available_at > self.decision_time:
@@ -99,6 +125,7 @@ def adapt_relationship_observation(
     hypothesis_family: str,
     run_id: str,
     feature_available_at: datetime | None = None,
+    market_id: str | None = None,
     event_id: str | None = None,
     event_family_id: str | None = None,
     predictive_result: Decimal | None = None,
@@ -110,7 +137,7 @@ def adapt_relationship_observation(
         decision_time=row.decision_time,
         feature_available_at=feature_available_at or row.decision_time,
         label_end_time=row.decision_time + row.horizon,
-        market_id=None,
+        market_id=market_id,
         instrument_id=row.target,
         event_id=event_id,
         event_family_id=event_family_id,
@@ -147,7 +174,12 @@ def chronological_split(
     out: list[FoldAssignment] = []
     ordered = sorted(
         rows,
-        key=lambda item: (item.decision_time, item.instrument_id, item.horizon),
+        key=lambda item: (
+            item.decision_time,
+            item.instrument_id,
+            item.horizon,
+            item.observation_id,
+        ),
     )
     for row in ordered:
         row.assert_asof_safe()
@@ -161,22 +193,25 @@ def chronological_split(
     return tuple(out)
 
 
-def purge_training(
+def purge_roles(
     assignments: Iterable[FoldAssignment],
     evaluation_start: datetime,
     *,
+    roles: tuple[FoldRole, ...],
     embargo: timedelta = timedelta(0),
 ) -> tuple[tuple[FoldAssignment, ...], PurgeEvidence]:
     if evaluation_start.tzinfo is None or evaluation_start.utcoffset() is None:
         raise ValueError("evaluation_start must be timezone-aware")
     if embargo < timedelta(0):
         raise ValueError("embargo must not be negative")
-    assignments = tuple(assignments)
+    if not roles:
+        raise ValueError("at least one fold role must be supplied for purge")
+    materialized = tuple(assignments)
     kept: list[FoldAssignment] = []
     purged = embargoed = 0
     embargo_start = evaluation_start - embargo
-    for item in assignments:
-        if item.role is not FoldRole.TRAIN:
+    for item in materialized:
+        if item.role not in roles:
             kept.append(item)
             continue
         row = item.observation
@@ -187,9 +222,36 @@ def purge_training(
             embargoed += 1
             continue
         kept.append(item)
-    evidence = PurgeEvidence(len(assignments), purged, embargoed, len(kept))
+    evidence = PurgeEvidence(len(materialized), purged, embargoed, len(kept))
     return tuple(kept), evidence
 
+
+def purge_training(
+    assignments: Iterable[FoldAssignment],
+    evaluation_start: datetime,
+    *,
+    embargo: timedelta = timedelta(0),
+) -> tuple[tuple[FoldAssignment, ...], PurgeEvidence]:
+    return purge_roles(
+        assignments,
+        evaluation_start,
+        roles=(FoldRole.TRAIN,),
+        embargo=embargo,
+    )
+
+
+def purge_development(
+    assignments: Iterable[FoldAssignment],
+    holdout_start: datetime,
+    *,
+    embargo: timedelta = timedelta(0),
+) -> tuple[tuple[FoldAssignment, ...], PurgeEvidence]:
+    return purge_roles(
+        assignments,
+        holdout_start,
+        roles=(FoldRole.DEVELOPMENT,),
+        embargo=embargo,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,14 +284,15 @@ class WalkForwardFold:
     development_end: datetime
     holdout_end: datetime
     assignments: tuple[FoldAssignment, ...]
-    purge_evidence: PurgeEvidence
+    training_purge_evidence: PurgeEvidence
+    development_purge_evidence: PurgeEvidence
 
 
 def walk_forward_folds(
     rows: Iterable[EvaluationObservation],
     config: WalkForwardConfig,
 ) -> tuple[WalkForwardFold, ...]:
-    ordered = tuple(sorted(rows, key=lambda row: row.decision_time))
+    ordered = tuple(sorted(rows, key=lambda row: (row.decision_time, row.observation_id)))
     if not ordered:
         return ()
     first = ordered[0].decision_time
@@ -245,17 +308,20 @@ def walk_forward_folds(
             break
         train_start = first if config.expanding_training else train_end - config.training_window
         fold_rows = tuple(
-            row
-            for row in ordered
-            if train_start <= row.decision_time < holdout_end
+            row for row in ordered if train_start <= row.decision_time < holdout_end
         )
         assignments = chronological_split(
             fold_rows,
             ChronologicalBoundaries(train_end, development_end),
         )
-        assignments, evidence = purge_training(
+        assignments, train_evidence = purge_training(
             assignments,
             train_end,
+            embargo=config.embargo,
+        )
+        assignments, development_evidence = purge_development(
+            assignments,
+            development_end,
             embargo=config.embargo,
         )
         output.append(
@@ -266,7 +332,8 @@ def walk_forward_folds(
                 development_end=development_end,
                 holdout_end=holdout_end,
                 assignments=assignments,
-                purge_evidence=evidence,
+                training_purge_evidence=train_evidence,
+                development_purge_evidence=development_evidence,
             )
         )
         fold_number += 1
@@ -275,27 +342,56 @@ def walk_forward_folds(
             break
     return tuple(output)
 
+
+@dataclass(frozen=True, slots=True)
+class GroupHoldoutResult:
+    assignments: tuple[FoldAssignment, ...]
+    purge_evidence: PurgeEvidence
+    holdout_start: datetime
+
+
+def chronological_group_holdout_result(
+    rows: Iterable[EvaluationObservation],
+    *,
+    holdout_id: str,
+    level: str,
+    embargo: timedelta = timedelta(0),
+) -> GroupHoldoutResult:
+    if level not in {"event", "family"}:
+        raise ValueError("level must be 'event' or 'family'")
+    materialized = tuple(rows)
+    held = [row for row in materialized if _group_id(row, level) == holdout_id]
+    if not held:
+        raise ValueError(f"no rows for held-out {level} {holdout_id}")
+    first_holdout = min(row.decision_time for row in held)
+    assignments: list[FoldAssignment] = []
+    for row in sorted(materialized, key=lambda item: (item.decision_time, item.observation_id)):
+        group_id = _group_id(row, level)
+        if group_id == holdout_id:
+            assignments.append(FoldAssignment(row, FoldRole.HOLDOUT))
+        elif row.decision_time < first_holdout:
+            assignments.append(FoldAssignment(row, FoldRole.TRAIN))
+    purged, evidence = purge_training(
+        assignments,
+        first_holdout,
+        embargo=embargo,
+    )
+    return GroupHoldoutResult(purged, evidence, first_holdout)
+
+
 def chronological_group_holdout(
     rows: Iterable[EvaluationObservation],
     *,
     holdout_id: str,
     level: str,
+    embargo: timedelta = timedelta(0),
 ) -> tuple[FoldAssignment, ...]:
-    if level not in {"event", "family"}:
-        raise ValueError("level must be 'event' or 'family'")
-    rows = tuple(rows)
-    held = [row for row in rows if _group_id(row, level) == holdout_id]
-    if not held:
-        raise ValueError(f"no rows for held-out {level} {holdout_id}")
-    first_holdout = min(row.decision_time for row in held)
-    out: list[FoldAssignment] = []
-    for row in sorted(rows, key=lambda item: item.decision_time):
-        group_id = _group_id(row, level)
-        if group_id == holdout_id:
-            out.append(FoldAssignment(row, FoldRole.HOLDOUT))
-        elif row.decision_time < first_holdout:
-            out.append(FoldAssignment(row, FoldRole.TRAIN))
-    return tuple(out)
+    return chronological_group_holdout_result(
+        rows,
+        holdout_id=holdout_id,
+        level=level,
+        embargo=embargo,
+    ).assignments
 
 
 def leave_group_out_diagnostic(
@@ -311,7 +407,7 @@ def leave_group_out_diagnostic(
             row,
             FoldRole.HOLDOUT if _group_id(row, level) == holdout_id else FoldRole.TRAIN,
         )
-        for row in sorted(rows, key=lambda item: item.decision_time)
+        for row in sorted(rows, key=lambda item: (item.decision_time, item.observation_id))
     )
 
 
