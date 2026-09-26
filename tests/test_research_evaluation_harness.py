@@ -613,7 +613,10 @@ def test_walk_forward_purges_development_labels_that_overlap_holdout() -> None:
     )
     first = folds[0]
     assert first.development_purge_evidence.rows_removed_by_purge == 1
-    assert all(item.observation.decision_time != BASE + timedelta(seconds=12) for item in first.assignments)
+    assert all(
+        item.observation.decision_time != BASE + timedelta(seconds=12)
+        for item in first.assignments
+    )
 
 
 def test_promoted_report_is_forced_inconclusive_when_required_evidence_is_missing() -> None:
