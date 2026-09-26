@@ -299,6 +299,7 @@ def test_periodic_gamma_refresh_fails_soft_and_later_recovers(
         assert first is False
         assert recorder._token_ids == ("token-existing",)
         assert recorder._market_count == 1
+        assert recorder.health.gamma_last_status is not None
         assert recorder.health.gamma_last_status.startswith("ERROR:")
 
         second = await recorder.refresh_universe(fail_soft_if_initialized=True)
