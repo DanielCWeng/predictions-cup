@@ -19,4 +19,6 @@ Status semantics:
 | MAPPING-001 — Canonical SIG ↔ Polymarket identity crosswalk | MERGED / ACCEPTED FRAMEWORK | `mapping/001-sig-polymarket-crosswalk` | #9 | head `6ffdcd4a00f435a1be651142440fc7d18f17dd61`; merge `8aba24e967ba981acabbf50d60cb52d8abc1463a` | mapping framework accepted; live 2026 crosswalk has not been generated or accepted; tracked by LIVE-MAPPING-GATE-001 / issue #13 | merged 25 Sep 2026; framework only |
 | BUILD-005 — Deterministic replay & experiment foundation | MERGED / ACCEPTED | `build/005-deterministic-replay` | #15 | merge `2e73241400cd8bcf5cb0df3f06652f9bad9a0b96` | observable-time replay, accepted-schema loaders, executable markouts, experiment/evaluation contract and synthetic acceptance fixture accepted | merged 25 Sep 2026 |
 
+| BUILD-006 — SIG live REST governor and tracked-depth universe | IN REVIEW | `build/006-sig-rest-governor` | #19 | current PR head | corrective live-runtime implementation; independent review/CI/live smoke required | not accepted on `main` |
+
 GitHub merge state and the actual contents of `main` are authoritative when documentation drifts.
