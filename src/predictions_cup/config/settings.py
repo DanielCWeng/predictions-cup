@@ -55,9 +55,13 @@ class AppSettings(BaseSettings):
     polymarket_gamma_page_limit: int = Field(default=100, ge=1, le=500)
     polymarket_gamma_refresh_seconds: float = Field(default=300.0, ge=30)
     polymarket_storage_path: Path = Path("data/polymarket_capture.sqlite3")
+    polymarket_research_path: Path = Path("data/polymarket_research")
+    polymarket_parquet_shard_seconds: int = Field(default=60, ge=30, le=300)
+    polymarket_parquet_max_rows_per_shard: int = Field(default=100_000, ge=1_000, le=1_000_000)
     polymarket_universe: PolymarketUniverse = "us_elections_2026"
     polymarket_include_ids: str = ""
     polymarket_exclude_ids: str = ""
+    polymarket_supervised_ids: str = ""
 
     @field_validator("environment", "tournament_id", "tournament_slug")
     @classmethod
@@ -66,7 +70,11 @@ class AppSettings(BaseSettings):
             raise ValueError("configuration string must not be blank")
         return value
 
-    @field_validator("polymarket_storage_path", "sig_realtime_storage_path")
+    @field_validator(
+        "polymarket_storage_path",
+        "polymarket_research_path",
+        "sig_realtime_storage_path",
+    )
     @classmethod
     def reject_blank_storage_path(cls, value: Path) -> Path:
         if not str(value).strip():
@@ -135,6 +143,14 @@ class AppSettings(BaseSettings):
                 self.polymarket_depth_snapshot_interval_seconds
             ),
             "polymarket_storage_path": str(self.polymarket_storage_path),
+            "polymarket_research_path": str(self.polymarket_research_path),
+            "polymarket_supervised_id_count": len(
+                {
+                    value.strip()
+                    for value in self.polymarket_supervised_ids.split(",")
+                    if value.strip()
+                }
+            ),
         }
 
 
