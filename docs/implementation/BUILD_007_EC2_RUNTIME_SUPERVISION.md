@@ -210,8 +210,8 @@ Python, systemd destination and systemctl executable. It never deletes runtime d
 
 ## Automated validation
 
-Corrected mapping-bounded/Parquet architecture validation is green in CI #641 for lint, shell
-validation, strict mypy, pytest and the application smoke.
+Final correctness/documentation revision is green in CI #679 for lint, shell validation, strict
+mypy, pytest and the application smoke.
 
 BUILD-007 adds tests proving:
 
