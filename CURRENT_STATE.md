@@ -47,11 +47,13 @@ This document describes the accepted repository state on `main`.
 
 ## Outstanding operational / acceptance gates
 
-- BUILD-004 live credentialed tournament smoke remains operationally outstanding; the accepted implementation is on `main`.
+- BUILD-004 is accepted on `main`, but its first credentialed tournament smoke exposed a live scalability defect in tournament-wide full-depth maintenance. BUILD-006 / PR #19 is the in-review corrective runtime ticket; its post-CI conservative credentialed smoke remains outstanding.
 - The MAPPING-001 framework is accepted on `main`, but the live credentialed 2026 SIG ↔ Polymarket crosswalk has **not** been generated or accepted.
 - LIVE-MAPPING-GATE-001 / GitHub issue #13 tracks live SIG exchange enumeration, reviewer promotion/overrides, mapped-token CLOB smoke, acceptance evidence and independent acceptance before mappings are treated as production-ready.
 
 ## In review — not implemented on main
+
+BUILD-006 / PR #19 is in review on `build/006-sig-rest-governor`. It keeps full-tournament Realtime capture, makes resident authoritative depth explicit and tracked-only, uses bulk scalar/BBO refresh for the broad universe, and routes live SIG REST through one priority governor with shared 429 cooldown. It adds no trading capability.
 
 EXPERIMENT-002 is in review as PR #16 on `experiment/002-leadlag-rv-loo`. It builds the first
 LEADLAG / response-curve / relative-value / LOO-PRICE / LOO-FAMILY empirical experiment suite on

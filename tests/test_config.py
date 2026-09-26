@@ -20,6 +20,9 @@ def clean_config_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "TOURNAMENT_ID",
         "TOURNAMENT_SLUG",
         "TRADING_ENABLED",
+        "SIG_REST_GOVERNOR_RATE_PER_SECOND",
+        "SIG_REST_SHARED_COOLDOWN_MAX_SECONDS",
+        "SIG_REALTIME_BULK_PRICE_REFRESH_SECONDS",
     )
     for name in names:
         monkeypatch.delenv(f"PREDICTIONS_CUP_{name}", raising=False)
@@ -39,6 +42,8 @@ def test_defaults_load_without_credentials(
     assert settings.sig_trade_credential is None
     assert settings.trading_enabled is False
     assert str(settings.sig_api_base_url) == "https://www.thesuper.market/api/v1"
+    assert settings.sig_rest_governor_rate_per_second == 2.0
+    assert settings.sig_realtime_bulk_price_refresh_seconds == 10.0
 
 
 def test_runtime_environment_overrides_local_dotenv(
@@ -102,6 +107,9 @@ def test_secrets_are_redacted_from_normal_representations(
         ("sig_read_credential", "   "),
         ("sig_trade_credential", ""),
         ("environment", " "),
+        ("sig_rest_governor_rate_per_second", "0"),
+        ("sig_rest_shared_cooldown_max_seconds", "0"),
+        ("sig_realtime_bulk_price_refresh_seconds", "0"),
     ],
 )
 def test_materially_invalid_configuration_is_rejected(

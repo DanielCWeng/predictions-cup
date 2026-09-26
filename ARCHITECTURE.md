@@ -21,42 +21,40 @@ BUILD-003 provides the accepted **read-only** SIG REST boundary under `predictio
 
 EXPERIMENT-001A additionally provides the accepted **public read-only Polymarket research capture** path under `predictions_cup.external.polymarket`: public Gamma/CLOB discovery, authoritative REST book seeding, persistent market WebSocket ingestion, normalized event-time book-change/trade persistence, a lean 1-second top-of-book panel, slower bounded depth snapshots, SQLite/WAL storage, and feed-health/reconnect handling.
 
-There is still no **accepted-on-main** SIG realtime subsystem, production market-state/reconciliation engine, mapping, fair value, strategy logic, risk-decision engine, write/execution path, portfolio accounting, or trading capability.
+BUILD-004 is accepted on main as the read-only SIG tournament Realtime/state foundation. It subscribes once to the private tournament topic, persists complete market batches, checks topic revision continuity, and uses REST as the authoritative source of financial state. Its first credentialed tournament smoke exposed that the original all-open-exchange full-depth freshness fallback does not scale to the observed 237-exchange universe.
 
-### BUILD-004 candidate architecture — IN REVIEW, PR #12
+### BUILD-006 corrective architecture — IN REVIEW, PR #19
 
-The unmerged BUILD-004 branch proposes a read-only venue-specific state subsystem under
-`predictions_cup.sig`:
+BUILD-006 preserves full-tournament Realtime capture but separates three concepts that BUILD-004 conflated:
 
-```text
-explicit tournament UUID
-        ↓
-authoritative REST market catalogue + open-market orderbook seed
-        ↓
-POST /realtime/token
-        ↓
-one private tournament:{tournament_id} broadcast subscription
-        ↓
-market_batch + local observed_at
-        ↓
-delivery revision continuity check
-        ↓
-bookDirty / settlement / lifecycle invalidation
-        ↓
-authoritative REST market + orderbook reconciliation
-        ↓
-trusted per-exchange runtime state + normalized SQLite/WAL capture
-```
+    known exchange
+        !=
+    depth-tracked exchange
+        !=
+    currently trusted full-depth exchange
 
-The design deliberately does not reconstruct authoritative depth from Realtime. Realtime says
-that something changed; REST determines what the trusted current book is. Topic
-`revision/previousRevision` is the delivery-continuity mechanism. Engine
-`sourceSequenceFrom/sourceSequenceThrough` is retained only as provenance.
+The candidate runtime is:
 
-The branch keeps event/source timestamps, local Realtime `observed_at`, and REST response
-observation timestamps separate. A failed reconciliation leaves the affected state untrusted.
-No strategy, fair-value, mapping, order, cancellation or portfolio path is introduced by this
-candidate architecture.
+    authoritative tournament catalogue
+            |
+            +-- all known exchanges -> bulk price/BBO snapshots (<=100 IDs/request)
+            |
+            +-- explicit tracked subset -> authoritative full orderbooks
+            |
+            +-- tournament Realtime -> trades/bookDirty/settlement/revision for all
+            |
+            +-- one shared governed REST budget
+                    HIGH: tracked invalidation/recovery
+                    NORMAL: tracked seed/expiry-safety
+                    BACKGROUND: broad scalar/metadata work
+
+Untracked exchanges use the explicit UNTRACKED_DEPTH state. Tracked depth is usable only in TRACKED_TRUSTED; invalidation/freshness expiry moves it to TRACKED_UNTRUSTED before an awaited REST recovery. Broad scalar/BBO state is independently fail-closed: a bulk missingIds result clears any prior scalar latest-price/BBO/spread values and observation timestamp so stale fallback state cannot remain resident.
+
+The live governed client wraps the accepted BUILD-003 transport rather than replacing it. Every live HTTP attempt shares configurable pacing and a per-key 429 cooldown. The branch default is 2 requests/second. The prior blocking curl + sleep probe demonstrated only roughly 2.0–2.4 request starts/second, so a 3 requests/second default is not treated as validated until a fixed-cadence live probe schedules request starts independently of response time. No numeric SIG venue limit is published in the supplied contract.
+
+The 30-second tracked-depth freshness default is similarly project policy. SIG documents silent order expiry, while the aggregate exchange orderbook has no expirationDate metadata. BUILD-006 therefore retains a bounded fallback only for tracked books instead of polling the entire tournament.
+
+BUILD-006 adds no strategy, fair value, mapping selection, risk decision, order placement/cancellation or portfolio path.
 
 ## Transport / canonical boundary
 
@@ -120,7 +118,7 @@ learning/attribution
 - Canonical order kinds are limited to MARKET and LIMIT, with matching price-shape validation.
 - Configuration is loaded on demand; no settings singleton/module-global state is created.
 - `trading_enabled` alone can never submit an order.
-- BUILD-003 remains read-only. BUILD-004 PR #12 adds a candidate read-only Realtime token/subscription path but no order placement/cancellation path; it is not accepted on `main` while unmerged.
+- BUILD-003 and BUILD-004 remain read-only. BUILD-006 / PR #19 corrects live REST/depth scaling on an unmerged branch and adds no order placement/cancellation path.
 - EXPERIMENT-001A is public/read-only and isolated from normal application startup.
 - Polymarket disconnect or receive/PONG liveness failure invalidates local book trust; reconnect performs an authoritative REST reseed before subsequent deltas are trusted.
 - The 1-second research panel stores scalar top-of-book state only; top-20 depth defaults to a separate 60-second cadence, while normalized price-change deltas are durable at event observation time.

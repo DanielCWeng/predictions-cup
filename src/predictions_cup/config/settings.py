@@ -35,7 +35,10 @@ class AppSettings(BaseSettings):
 
     sig_realtime_storage_path: Path = Path("data/sig_realtime.sqlite3")
     sig_realtime_book_depth: int = Field(default=20, ge=1, le=200)
+    sig_rest_governor_rate_per_second: float = Field(default=2.0, gt=0.0, le=100.0)
+    sig_rest_shared_cooldown_max_seconds: float = Field(default=8.0, ge=0.5, le=120.0)
     sig_realtime_open_book_refresh_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
+    sig_realtime_bulk_price_refresh_seconds: float = Field(default=10.0, ge=1.0, le=300.0)
     sig_realtime_token_refresh_margin_seconds: float = Field(default=300.0, ge=30, le=1800)
     sig_realtime_retention_days: int = Field(default=14, ge=1, le=90)
 
@@ -102,8 +105,15 @@ class AppSettings(BaseSettings):
             "sig_trade_credential_configured": self.sig_trade_credential is not None,
             "sig_realtime_storage_path": str(self.sig_realtime_storage_path),
             "sig_realtime_book_depth": self.sig_realtime_book_depth,
+            "sig_rest_governor_rate_per_second": self.sig_rest_governor_rate_per_second,
+            "sig_rest_shared_cooldown_max_seconds": (
+                self.sig_rest_shared_cooldown_max_seconds
+            ),
             "sig_realtime_open_book_refresh_seconds": (
                 self.sig_realtime_open_book_refresh_seconds
+            ),
+            "sig_realtime_bulk_price_refresh_seconds": (
+                self.sig_realtime_bulk_price_refresh_seconds
             ),
             "sig_realtime_token_refresh_margin_seconds": (
                 self.sig_realtime_token_refresh_margin_seconds

@@ -6,7 +6,7 @@
 - No production trading daemon exists.
 - Normal application startup remains finite, network-free and non-trading.
 - The accepted repository includes a separate, explicitly invoked public read-only Polymarket research recorder.
-- BUILD-004 SIG Realtime capture is **IN REVIEW in PR #12** and is not an accepted `main` capability.
+- BUILD-004 SIG Realtime capture is accepted on `main`. Its first credentialed tournament smoke exposed a scaling defect in the all-exchange full-depth fallback; BUILD-006 / PR #19 is the corrective candidate.
 
 The recorder uses local SQLite/WAL append storage, idempotent market metadata upserts, invalidation plus authoritative REST reseeding after reconnect, and explicit feed/book/trade/storage health clocks. These are experimental capture properties, not production trading/recovery guarantees.
 
@@ -23,47 +23,36 @@ The recorder writes a lean 1-second scalar panel, normalized event-time book cha
 
 The database path defaults to `data/polymarket_capture.sqlite3`, which is ignored by Git. Storage failures surface instead of being silently ignored.
 
-## BUILD-004 SIG Realtime capture — IN REVIEW
+## SIG Realtime capture — BUILD-004 baseline / BUILD-006 corrective candidate
 
-The candidate SIG capture process is explicit; normal application startup does not launch it.
-A read credential and an explicit tournament UUID are required.
+The SIG capture process is explicit; normal application startup does not launch it. A read credential and an explicit tournament UUID are required.
 
 Enumerate accessible tournaments for operator selection:
 
-```bash
-python -m predictions_cup.sig.capture --list-tournaments
-```
+    python -m predictions_cup.sig.capture --list-tournaments
 
-Run capture for the selected tournament:
+BUILD-006 keeps tournament-wide Realtime and broad scalar/BBO capture while making full-depth maintenance opt-in. A conservative smoke with a small explicit tracked set is:
 
-```bash
-python -m predictions_cup.sig.capture --tournament-id <TOURNAMENT_UUID>
-```
+    python -m predictions_cup.sig.capture \
+      --tournament-id <TOURNAMENT_UUID> \
+      --tracked-exchange-id <EXCHANGE_ID_1> \
+      --tracked-exchange-id <EXCHANGE_ID_2> \
+      --run-seconds 60 \
+      --print-health
 
-Finite manual credentialed smoke:
+With no --tracked-exchange-id arguments, the process deliberately maintains no resident trusted full depth and logs that fact. It still records the full tournament Realtime tape and broad bulk-price observations.
 
-```bash
-python -m predictions_cup.sig.capture \
-  --tournament-id <TOURNAMENT_UUID> \
-  --run-seconds 30
-```
+The BUILD-006 live path uses one governed REST client. The default is 2 requests/second. The earlier blocking curl + sleep probe only demonstrated roughly 2.0–2.4 request starts/second, so 3 requests/second remains unvalidated until a fixed-cadence live probe is run. SIG does not publish a numeric REST limit in the supplied contract. HIGH tracked dirty/recovery work can overtake BACKGROUND bulk-price work, and a 429 creates shared cooldown for callers using the same governed client.
 
-The default recorder path is `data/sig_realtime.sqlite3`. The candidate recorder uses
-SQLite/WAL and normalized tables for Realtime deliveries, trades, book/settlement
-invalidation events, authoritative REST book observations, and trust/reconciliation transitions. Retention defaults to 14 days.
+The broad universe uses GET /exchanges/prices in batches of at most 100. At 237 exchanges one complete scalar/BBO sweep is three requests. Those observations are stored separately from authoritative full books and can never make depth trusted. A missingIds result clears any prior scalar latest-price/BBO/spread values for that exchange rather than leaving stale fallback state resident.
 
-Operational trust rules are fail-closed: the process mints/refreshes its token, performs the
-required authoritative REST seed/resync, then subscribes. Reconnect, token refresh, socket error,
-malformed payload or topic revision gap triggers authoritative REST reconciliation. A failed
-reconciliation leaves the affected exchange untrusted. `bookDirty` entries are coalesced by
-exchange within the batch before REST refresh; settlement refetches authoritative market state.
-SIG order expiry emits no Realtime event, so trusted open books are invalidated and
-authoritatively refreshed once their last successful REST observation reaches the configurable
-freshness bound (30 seconds by default). The maintenance loop checks once per second; books are
-marked untrusted before any refresh request is awaited.
+Tracked books remain fail-closed. A tracked bookDirty removes trust before HIGH-priority authoritative reconciliation. An untracked bookDirty is persisted but does not trigger a full-book request. Reconnect, token refresh, socket error and revision-gap recovery reseed only tracked full depth and refresh broad scalar state through the bulk endpoint.
 
-See `docs/implementation/BUILD_004_SIG_REALTIME.md` for exact timestamp, revision, health and
-storage semantics. This section describes an unmerged candidate until PR #12 is accepted.
+SIG documents that order expiry emits no Realtime event. Because the documented aggregate exchange-orderbook response has no per-order expirationDate, the 30-second tracked-book refresh default remains a project expiry-safety fallback rather than a SIG requirement. It applies only to tracked open books and removes trust before waiting for the refresh.
+
+The default recorder path is data/sig_realtime.sqlite3. SQLite/WAL persistence includes Realtime deliveries/trades/invalidations, authoritative market/full-book observations, compact broad price/BBO observations and depth/trust transitions.
+
+See docs/implementation/BUILD_004_SIG_REALTIME.md for the accepted historical baseline and docs/implementation/BUILD_006_SIG_REST_GOVERNOR.md for the corrective candidate.
 
 ## Eventual operating expectations
 

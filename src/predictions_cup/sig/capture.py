@@ -12,8 +12,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from predictions_cup.config import AppSettings, load_settings
-from predictions_cup.sig.client import SigRestClient
 from predictions_cup.sig.errors import SigApiError
+from predictions_cup.sig.governed_client import GovernedSigRestClient
 from predictions_cup.sig.realtime_state import SigRealtimeStateEngine, SubscriptionReason
 from predictions_cup.sig.realtime_storage import SigRealtimeRecorder
 from predictions_cup.sig.realtime_subscriber import SubscriberExit, SupabaseTournamentSubscriber
@@ -32,6 +32,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--storage-path", type=Path, help="Override SQLite recorder path.")
     parser.add_argument("--book-depth", type=int, help="Override authoritative REST depth.")
     parser.add_argument(
+        "--tracked-exchange-id",
+        action="append",
+        default=[],
+        help=(
+            "Exchange ID whose authoritative full depth should be maintained. "
+            "Repeat for multiple exchanges. Defaults to none."
+        ),
+    )
+    parser.add_argument(
+        "--print-health",
+        action="store_true",
+        help="Print a final JSON health snapshot for credentialed smoke tests.",
+    )
+    parser.add_argument(
         "--run-seconds",
         type=float,
         help="Optional finite runtime for a manual credentialed smoke test.",
@@ -40,7 +54,7 @@ def parse_args() -> argparse.Namespace:
 
 
 async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
-    async with SigRestClient(settings) as rest:
+    async with GovernedSigRestClient(settings) as rest:
         if args.list_tournaments:
             page = await rest.list_tournaments(status="any", limit=100, offset=0)
             for tournament in page.data:
@@ -72,14 +86,33 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                 raise ValueError("--run-seconds must be positive")
             asyncio.create_task(_stop_after(args.run_seconds, stop_event))
 
+        tracked_exchange_ids = tuple(dict.fromkeys(args.tracked_exchange_id))
+        if tracked_exchange_ids:
+            logger.info(
+                "SIG full-depth maintenance enabled tracked_exchange_count=%s",
+                len(tracked_exchange_ids),
+            )
+        else:
+            logger.warning(
+                "SIG capture has no tracked exchange IDs; tournament-wide Realtime "
+                "and scalar/BBO capture remain enabled, but no resident full depth "
+                "will be trusted"
+            )
+
         engine = SigRealtimeStateEngine(
             rest=rest,
             recorder=recorder,
             tournament_id=tournament_id,
+            tracked_depth_exchange_ids=tracked_exchange_ids,
             book_depth=book_depth,
             open_book_max_trusted_age_seconds=(
                 settings.sig_realtime_open_book_refresh_seconds
             ),
+            bulk_price_refresh_seconds=(
+                settings.sig_realtime_bulk_price_refresh_seconds
+            ),
+            governed_rate_per_second=settings.sig_rest_governor_rate_per_second,
+            governor_snapshot=rest.governor_snapshot,
         )
         try:
             cutoff = datetime.now(UTC) - timedelta(days=settings.sig_realtime_retention_days)
@@ -105,7 +138,7 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                         on_batch=engine.handle_raw_batch,
                         on_connected=engine.mark_connected,
                         stop_event=stop_event,
-                        on_maintenance=engine.refresh_stale_open_books,
+                        on_maintenance=engine.maintenance,
                     )
                 except SigApiError as exc:
                     engine.mark_disconnected()
@@ -128,8 +161,26 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                     reason = SubscriptionReason.RECONNECT
                 await asyncio.sleep(1.0)
         finally:
+            await engine.aclose()
+            if args.print_health:
+                print(
+                    json.dumps(
+                        _json_health_snapshot(engine.health_snapshot()),
+                        sort_keys=True,
+                    )
+                )
             recorder.close()
     return 0
+
+
+def _json_health_snapshot(snapshot: dict[str, object]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in snapshot.items():
+        if isinstance(value, datetime):
+            result[key] = value.isoformat()
+        else:
+            result[key] = value
+    return result
 
 
 async def _stop_after(seconds: float, stop_event: asyncio.Event) -> None:
