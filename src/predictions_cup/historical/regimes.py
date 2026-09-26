@@ -16,8 +16,10 @@ SCHEMA_VERSION = 1
 PMXT_ARCHIVE_BASE_URL = "https://archive.pendulumflow.com/pmxt"
 PMXT_V1_FIRST_HOUR = datetime(2026, 2, 21, 18, tzinfo=UTC)
 PMXT_V1_LAST_HOUR = datetime(2026, 4, 16, 5, tzinfo=UTC)
-# Ticket routing rule: before this hour -> PMXT V1, from this hour -> PMXT V2.
-PMXT_V2_FIRST_HOUR = datetime(2026, 4, 13, 19, tzinfo=UTC)
+# Routing rule: before this hour -> PMXT V1, from this hour -> PMXT V2. The raw V2 file for
+# 2026-04-13T19 only starts receiving at 19:42:26.6 while V1 covers the whole hour, so the
+# 19:00 partition comes from V1 and V2 starts at 20:00 (independent-review decision).
+PMXT_V2_FIRST_HOUR = datetime(2026, 4, 13, 20, tzinfo=UTC)
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,5 +129,5 @@ def regime_by_id(regime_id: str) -> Regime:
 
 
 def pmxt_version_for_hour(hour: datetime) -> str:
-    """Ticket routing: V1 before 2026-04-13T19:00Z, V2 from then on."""
+    """Routing: V1 through the 2026-04-13T19 hour, V2 from 2026-04-13T20:00Z on."""
     return "PMXT_V2" if hour >= PMXT_V2_FIRST_HOUR else "PMXT_V1"

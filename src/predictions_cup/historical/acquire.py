@@ -33,12 +33,21 @@ from predictions_cup.historical.sources import pmxt_archive_url
 _BATCH_ROWS = 25_000
 
 
-def plan_hours() -> list[dict[str, Any]]:
-    """Unique source hours -> families whose regime window needs them."""
+def plan_hours(only: frozenset[str] | None = None) -> list[dict[str, Any]]:
+    """Unique source hours -> families whose regime window needs them.
+
+    ``only`` narrows the plan to the given ``YYYY-MM-DDTHH`` hour keys (re-acquiring single
+    hours without re-running the whole plan); an hour outside every regime window is an error.
+    """
     needed: dict[datetime, set[str]] = {}
     for regime in REGIMES:
         for hour in _hours(regime.window_start, regime.window_end):
             needed.setdefault(hour, set()).add(regime.family)
+    if only is not None:
+        unknown = only - {f"{hour:%Y-%m-%dT%H}" for hour in needed}
+        if unknown:
+            raise ValueError(f"hours outside every regime window: {sorted(unknown)}")
+        needed = {h: f for h, f in needed.items() if f"{h:%Y-%m-%dT%H}" in only}
     return [
         {
             "hour": f"{hour:%Y-%m-%dT%H}",
@@ -56,6 +65,7 @@ def acquire(
     scratch: Path,
     worker: int = 0,
     workers: int = 1,
+    only_hours: frozenset[str] | None = None,
 ) -> None:
     pa.set_memory_pool(pa.system_memory_pool())
     output_root.mkdir(parents=True, exist_ok=True)
@@ -70,7 +80,7 @@ def acquire(
             "conditions": pa.array(sorted({c.condition_id for c in candidates}), pa.string()),
         }
     todo = []
-    for item in plan_hours():
+    for item in plan_hours(only_hours):
         families = [f for f in item["families"] if (item["hour"], f) not in done]
         if families:
             todo.append({**item, "families": families})
@@ -86,8 +96,13 @@ def acquire(
             _append(progress_path, record)
             continue
         try:
+            source_sha256 = _sha256(local)
+            source_rows = pq.read_metadata(local).num_rows
             per_family = _filter_hour(local, item, filters, output_root)
-            record.update(status="DONE", source_bytes=size, per_family=per_family)
+            record.update(
+                status="DONE", source_bytes=size, source_sha256=source_sha256,
+                source_rows=source_rows, per_family=per_family,
+            )
         finally:
             local.unlink(missing_ok=True)
         _append(progress_path, record)

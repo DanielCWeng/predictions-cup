@@ -206,7 +206,7 @@ def build_corpus(
         "configuration": {
             "material_gap_seconds": material_gap.total_seconds(),
             "family_market_families": {k: sorted(v) for k, v in FAMILY_MARKET_FAMILIES.items()},
-            "pmxt_routing": "PMXT_V1 before 2026-04-13T19:00:00Z, PMXT_V2 from then",
+            "pmxt_routing": "PMXT_V1 before 2026-04-13T20:00:00Z, PMXT_V2 from then",
         },
         "timestamp_semantics": TIMESTAMP_SEMANTICS,
         "evidence_grades": EVIDENCE_GRADES,

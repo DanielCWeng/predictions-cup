@@ -47,6 +47,8 @@ def main(argv: list[str] | None = None) -> int:
     acquire.add_argument("--scratch", type=Path, required=True)
     acquire.add_argument("--worker", type=int, default=0)
     acquire.add_argument("--workers", type=int, default=1)
+    acquire.add_argument("--hour", action="append", dest="hours", metavar="YYYY-MM-DDTHH",
+                         help="only (re-)acquire this archive hour; repeatable")
 
     sources = sub.add_parser("sources", help="write the source inventory manifest")
     sources.add_argument("--orderbooks", type=Path, required=True)
@@ -84,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
             scratch=args.scratch,
             worker=args.worker,
             workers=args.workers,
+            only_hours=frozenset(args.hours) if args.hours else None,
         )
         return 0
     if args.command == "sources":

@@ -147,7 +147,9 @@ def build_source_manifest(
                 "order_book_representation": "full L2 book messages (snapshots) interleaved "
                 "with per-level price_change deltas carrying post-change best bid/ask",
                 "timestamp_resolution": "milliseconds; ties unordered",
-                "coverage_note": "V1 2026-02-21T18..2026-04-16T05, V2 from 2026-04-13T19",
+                "coverage_note": "archive: V1 2026-02-21T18..2026-04-16T05, V2 file from "
+                "2026-04-13T19 (first row 19:42:26.6); corpus routes V1 through "
+                "2026-04-13T19 and V2 from 2026-04-13T20",
                 "hours": archive_hours,
             },
             {

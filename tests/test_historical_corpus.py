@@ -12,6 +12,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from predictions_cup.historical import pmxt
+from predictions_cup.historical.acquire import plan_hours
 from predictions_cup.historical.corpus import build_corpus, validate_corpus
 from predictions_cup.historical.fills import normalize_fills
 from predictions_cup.historical.regimes import Regime, pmxt_version_for_hour
@@ -188,7 +189,21 @@ def test_v1_has_no_venue_event_time_and_filters_tokens_exactly() -> None:
 
 def test_routing_rule_matches_ticket() -> None:
     assert pmxt_version_for_hour(datetime(2026, 4, 13, 18, tzinfo=UTC)) == "PMXT_V1"
-    assert pmxt_version_for_hour(datetime(2026, 4, 13, 19, tzinfo=UTC)) == "PMXT_V2"
+    # The whole 19:00 partition is V1: the raw V2 19:00 file only starts at 19:42:26.6.
+    assert pmxt_version_for_hour(datetime(2026, 4, 13, 19, tzinfo=UTC)) == "PMXT_V1"
+    assert pmxt_version_for_hour(datetime(2026, 4, 13, 20, tzinfo=UTC)) == "PMXT_V2"
+    assert pmxt_version_for_hour(datetime(2026, 4, 14, 0, tzinfo=UTC)) == "PMXT_V2"
+
+
+def test_acquire_plan_can_be_narrowed_to_one_hour() -> None:
+    assert plan_hours(frozenset({"2026-04-13T19"})) == [
+        {"hour": "2026-04-13T19", "source_version": "PMXT_V1",
+         "families": ["HUN_2026", "PER_2026"]}
+    ]
+    assert plan_hours(frozenset({"2026-04-13T20"}))[0]["source_version"] == "PMXT_V2"
+    assert len(plan_hours()) > len(plan_hours(frozenset({"2026-04-13T19", "2026-06-01T00"})))
+    with pytest.raises(ValueError, match="outside every regime window"):
+        plan_hours(frozenset({"2025-01-01T00"}))
 
 
 def test_ordering_is_content_deterministic_and_exact_duplicates_drop() -> None:
