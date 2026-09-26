@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
-from typing import Iterable
 
 from predictions_cup.learning.experiments import ExperimentObservation
 from predictions_cup.learning.relationships import RelationshipObservation
@@ -145,7 +145,11 @@ def chronological_split(
     rows: Iterable[EvaluationObservation], boundaries: ChronologicalBoundaries
 ) -> tuple[FoldAssignment, ...]:
     out: list[FoldAssignment] = []
-    for row in sorted(rows, key=lambda item: (item.decision_time, item.instrument_id, item.horizon)):
+    ordered = sorted(
+        rows,
+        key=lambda item: (item.decision_time, item.instrument_id, item.horizon),
+    )
+    for row in ordered:
         row.assert_asof_safe()
         if row.decision_time < boundaries.train_end:
             role = FoldRole.TRAIN
