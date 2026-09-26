@@ -7,9 +7,11 @@ UNIT_SOURCE_DIR="${REPO_ROOT}/deploy/systemd"
 SYSTEMD_DIR="${PREDICTIONS_CUP_SYSTEMD_DIR:-/etc/systemd/system}"
 SYSTEMCTL_BIN="${PREDICTIONS_CUP_SYSTEMCTL:-systemctl}"
 
+SIG_SERVICE="predictions-cup-sig-capture.service"
+POLYMARKET_SERVICE="predictions-cup-polymarket-capture.service"
 SERVICES=(
-  "predictions-cup-sig-capture.service"
-  "predictions-cup-polymarket-capture.service"
+  "${SIG_SERVICE}"
+  "${POLYMARKET_SERVICE}"
 )
 
 fail() {
@@ -107,9 +109,13 @@ fi
 
 require_env_assignment "PREDICTIONS_CUP_SIG_READ_CREDENTIAL" "${runtime_env}"
 require_env_assignment "PREDICTIONS_CUP_TOURNAMENT_ID" "${runtime_env}"
-require_env_assignment "PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS" "${runtime_env}"
-if ! env_flag_is_true "PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED" "${runtime_env}"; then
-  fail "runtime.env must set PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true (unquoted)"
+
+ACTIVE_SERVICES=("${SIG_SERVICE}")
+polymarket_enabled=0
+if env_flag_is_true "PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED" "${runtime_env}"; then
+  require_env_assignment "PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS" "${runtime_env}"
+  ACTIVE_SERVICES+=("${POLYMARKET_SERVICE}")
+  polymarket_enabled=1
 fi
 
 for service in "${SERVICES[@]}"; do
@@ -163,12 +169,16 @@ for service in "${SERVICES[@]}"; do
 done
 
 "${SYSTEMCTL_BIN}" daemon-reload
-for service in "${SERVICES[@]}"; do
+for service in "${ACTIVE_SERVICES[@]}"; do
   "${SYSTEMCTL_BIN}" enable "${service}"
 done
+if [[ "${polymarket_enabled}" -eq 0 ]]; then
+  "${SYSTEMCTL_BIN}" disable --now "${POLYMARKET_SERVICE}" || true
+  printf 'INFO: Polymarket capture disabled; installed unit left disabled/stopped.\n'
+fi
 
 restart_failed=0
-for service in "${SERVICES[@]}"; do
+for service in "${ACTIVE_SERVICES[@]}"; do
   if ! "${SYSTEMCTL_BIN}" restart "${service}"; then
     printf 'ERROR: restart failed for %s\n' "${service}" >&2
     restart_failed=1
@@ -176,7 +186,7 @@ for service in "${SERVICES[@]}"; do
 done
 
 active_failed=0
-for service in "${SERVICES[@]}"; do
+for service in "${ACTIVE_SERVICES[@]}"; do
   if "${SYSTEMCTL_BIN}" is-active --quiet "${service}"; then
     printf 'OK: %s is active\n' "${service}"
   else
