@@ -113,17 +113,16 @@ class SigRestGovernor:
         self._rate_limit_count += 1
         self._consecutive_429 += 1
         if retry_after_seconds is not None:
-            base_delay = max(0.0, retry_after_seconds)
+            delay = max(0.0, retry_after_seconds)
         else:
             base_delay = min(
                 self._max_shared_cooldown_seconds,
                 0.5 * (2.0 ** (self._consecutive_429 - 1)),
             )
-            base_delay += min(
+            delay = base_delay + min(
                 self._max_shared_cooldown_seconds - base_delay,
                 base_delay * 0.2 * self._random(),
             )
-        delay = min(self._max_shared_cooldown_seconds, base_delay)
         now = self._monotonic()
         candidate = now + delay
         if candidate > self._cooldown_until:
@@ -170,12 +169,15 @@ class SigRestGovernor:
                 await self._queue_event.wait()
                 self._queue_event.clear()
                 while not self._queue.empty() and not self._closed:
-                    delay = max(
-                        0.0,
-                        self._next_request_at - self._monotonic(),
-                        self._cooldown_until - self._monotonic(),
-                    )
-                    if delay > 0:
+                    while True:
+                        now = self._monotonic()
+                        delay = max(
+                            0.0,
+                            self._next_request_at - now,
+                            self._cooldown_until - now,
+                        )
+                        if delay <= 0:
+                            break
                         await self._sleep(delay)
 
                     try:
