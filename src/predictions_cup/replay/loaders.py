@@ -274,10 +274,12 @@ def load_polymarket_capture(
     """Load Parquet research shards plus optional operational health, or legacy SQLite."""
     selected = selection or CaptureSelection()
     if path.is_dir():
-        events = list(_load_polymarket_parquet_capture(path, selected))
+        parquet_events = list(_load_polymarket_parquet_capture(path, selected))
         if operational_path is not None:
-            events.extend(_load_polymarket_operational_health(operational_path, selected))
-        return _ordered(events)
+            parquet_events.extend(
+                _load_polymarket_operational_health(operational_path, selected)
+            )
+        return _ordered(parquet_events)
 
     events: list[ReplayEvent] = []
     with closing(_connect(path)) as db:
