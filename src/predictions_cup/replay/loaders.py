@@ -96,6 +96,10 @@ _POLY_SCHEMA = {
     },
     "ingestion_health": {"id", "recorded_at", "payload_json"},
 }
+
+_POLY_OPERATIONAL_SCHEMA = {
+    "ingestion_health": {"id", "recorded_at", "payload_json"},
+}
 _RECOGNIZED_TRUST_SQL = (
     "(transition LIKE 'TRUSTED%' OR transition LIKE 'UNTRUSTED%' "
     "OR transition = 'RECONCILING')"
@@ -265,11 +269,15 @@ def load_polymarket_capture(
     path: Path,
     *,
     selection: CaptureSelection | None = None,
+    operational_path: Path | None = None,
 ) -> tuple[ReplayEvent, ...]:
-    """Load a Polymarket capture from new Parquet research shards or legacy SQLite."""
+    """Load Parquet research shards plus optional operational health, or legacy SQLite."""
     selected = selection or CaptureSelection()
     if path.is_dir():
-        return _load_polymarket_parquet_capture(path, selected)
+        events = list(_load_polymarket_parquet_capture(path, selected))
+        if operational_path is not None:
+            events.extend(_load_polymarket_operational_health(operational_path, selected))
+        return _ordered(events)
 
     events: list[ReplayEvent] = []
     with closing(_connect(path)) as db:
@@ -404,6 +412,44 @@ def load_polymarket_capture(
             )
 
         where, params = _where(selected, "recorded_at")
+        for row in db.execute(
+            "SELECT id, recorded_at, payload_json "
+            f"FROM ingestion_health{where} ORDER BY recorded_at, id",
+            params,
+        ):
+            payload = _json_object(row[2], "Polymarket health payload_json")
+            connected = payload.get("websocket_connected")
+            if not isinstance(connected, bool):
+                raise CaptureSchemaError(
+                    "Polymarket health payload websocket_connected must be boolean"
+                )
+            detail = payload.get("last_reconnect_reason")
+            events.append(
+                ReplayEvent(
+                    observed_at=_dt(row[1], "Polymarket health recorded_at"),
+                    source_at=None,
+                    source=ReplaySource.POLYMARKET,
+                    event_type=ReplayEventType.HEALTH,
+                    instrument_id="*",
+                    market_id=None,
+                    sequence=_integer(row[0], "Polymarket health id"),
+                    payload=HealthPayload(
+                        available=connected,
+                        detail=None if detail is None else str(detail),
+                    ),
+                )
+            )
+    return _ordered(events)
+
+
+def _load_polymarket_operational_health(
+    path: Path,
+    selection: CaptureSelection,
+) -> tuple[ReplayEvent, ...]:
+    events: list[ReplayEvent] = []
+    with closing(_connect(path)) as db:
+        _validate_schema(db, _POLY_OPERATIONAL_SCHEMA, "Polymarket operational")
+        where, params = _where(selection, "recorded_at")
         for row in db.execute(
             "SELECT id, recorded_at, payload_json "
             f"FROM ingestion_health{where} ORDER BY recorded_at, id",
@@ -612,9 +658,10 @@ def summarize_captures(
     *,
     sig_path: Path | None = None,
     polymarket_path: Path | None = None,
+    polymarket_operational_path: Path | None = None,
     selection: CaptureSelection | None = None,
 ) -> CaptureSummary:
-    """Inspect selected capture rows using SQL aggregates, not ReplayEvent materialization."""
+    """Summarize selected SIG/Polymarket capture data from accepted storage formats."""
     selected = selection or CaptureSelection()
     records = 0
     external_observations = 0
@@ -637,7 +684,11 @@ def summarize_captures(
 
     if polymarket_path is not None:
         if polymarket_path.is_dir():
-            poly_events = load_polymarket_capture(polymarket_path, selection=selected)
+            poly_events = load_polymarket_capture(
+                polymarket_path,
+                selection=selected,
+                operational_path=polymarket_operational_path,
+            )
             records += len(poly_events)
             for event in poly_events:
                 times.append(event.observed_at)
