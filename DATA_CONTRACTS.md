@@ -69,7 +69,7 @@ Key rules:
 These contracts remain branch-level / in-review capability until MAPPING-001 is independently accepted and merged.
 
 
-## SIG live runtime state — BUILD-006 candidate
+## SIG live runtime state — BUILD-006 accepted
 
 BUILD-006 does not redefine the canonical OrderBook contract. It adds venue-runtime state around it:
 
@@ -81,3 +81,51 @@ BUILD-006 does not redefine the canonical OrderBook contract. It adds venue-runt
 - REST response observation time remains distinct from Realtime receive time and SIG event/source time.
 
 Compact bulk-price observations are persisted separately from full book observations so replay cannot confuse BBO/scalar coverage with authoritative depth.
+
+
+## Polymarket supervised research storage — BUILD-007 candidate
+
+BUILD-007 separates low-volume operational state from durable high-frequency research history.
+
+Supervised universe rules:
+
+- the systemd path requires a non-empty externally supplied
+  `PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS`;
+- identifiers may be Polymarket market IDs, condition IDs or token IDs;
+- market/condition identity selects the market's aligned tokens; a token identity selects only that
+  token;
+- every supplied identifier must resolve against an active/non-closed Gamma market or startup
+  fails closed;
+- the supervised selector does not fall back to the broad election heuristic and does not silently
+  add heuristic markets;
+- no production mapping IDs are hard-coded in repository configuration.
+
+High-frequency research streams are Parquet + ZSTD:
+
+- `observations`: 1-second scalar/BBO samples;
+- `book_changes`: normalized price/book changes;
+- `trades`: public trade ticks;
+- `depth_snapshots`: periodic bounded-depth snapshots.
+
+Every stream preserves exchange/source time when supplied and local process observation/sample
+time separately. Price/size values remain exact decimal text in Parquet rather than binary floats.
+Depth levels are nested typed structures rather than JSON text.
+
+Shards are immutable after publication. Writers stage a temporary file, write ZSTD Parquet, fsync
+the file, atomically replace to the final `.parquet` name, and fsync the containing directory.
+The default shard time bucket is 60 seconds with an independent row-count cap. Graceful process
+shutdown flushes resident buffers; a hard process/host failure can lose only the not-yet-published
+bounded in-memory shard, never mutate a previously published shard.
+
+Operational SQLite contains only market metadata, token metadata and ingestion-health history for
+fresh BUILD-007 deployments. The prior high-frequency SQLite tables remain readable as a legacy
+capture format but are no longer created or written by the supervised candidate.
+
+Replay accepts either the legacy Polymarket SQLite capture or the new Parquet research directory.
+For the Parquet path, operational SQLite can be supplied separately so WebSocket health/data-gap
+events remain part of observable-time replay.
+
+Periodic Gamma refresh is last-good-state preserving: after successful startup, discovery or
+selection failure records a degraded Gamma status and does not replace the resident universe.
+Initial discovery remains fail-closed, and post-discovery local persistence failures are not
+suppressed.
