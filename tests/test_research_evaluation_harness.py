@@ -7,7 +7,10 @@ from decimal import Decimal
 import pytest
 
 from predictions_cup.learning.evaluation_harness import (
+    AblationVariant,
     ExecutionStress,
+    NegativeControl,
+    NegativeControlKind,
     ResearchEvaluationHarness,
     assert_variant_comparability,
 )
@@ -39,8 +42,10 @@ from predictions_cup.learning.validation import (
     adapt_relationship_observation,
     chronological_group_holdout,
     chronological_split,
+    WalkForwardConfig,
     leave_group_out_diagnostic,
     purge_training,
+    walk_forward_folds,
 )
 from predictions_cup.replay.markouts import Direction
 from predictions_cup.replay.splits import ChronologicalBoundaries
@@ -396,3 +401,44 @@ def test_all_research_dispositions_are_preserved(disposition: ResearchDispositio
         report_path="reports/fixture.json",
     )
     assert disposition.value in entry.markdown_row()
+
+
+def test_walk_forward_builds_multiple_chronological_folds_with_auditable_roles() -> None:
+    rows = tuple(_row(seconds) for seconds in (0, 5, 10, 15, 20, 25, 30, 35, 40))
+    folds = walk_forward_folds(
+        rows,
+        WalkForwardConfig(
+            training_window=timedelta(seconds=10),
+            development_window=timedelta(seconds=5),
+            holdout_window=timedelta(seconds=5),
+            step=timedelta(seconds=10),
+            expanding_training=True,
+        ),
+    )
+    assert len(folds) >= 2
+    for fold in folds:
+        assert fold.train_start < fold.train_end < fold.development_end < fold.holdout_end
+        assert any(item.role is FoldRole.TRAIN for item in fold.assignments)
+        assert any(item.role is FoldRole.DEVELOPMENT for item in fold.assignments)
+        assert fold.purge_evidence.rows_before >= fold.purge_evidence.rows_remaining
+
+
+def test_negative_controls_and_ablations_are_explicit_and_past_safe() -> None:
+    zero = NegativeControl("zero", NegativeControlKind.ZERO_SIGNAL)
+    delayed = NegativeControl(
+        "delay",
+        NegativeControlKind.DELAYED_PAST_ONLY,
+        delay=timedelta(seconds=1),
+    )
+    exclusion = NegativeControl(
+        "exclude-book",
+        NegativeControlKind.FEATURE_EXCLUSION,
+        excluded_components=("book",),
+    )
+    ablation = AblationVariant("minus-flow", ("flow",))
+    assert zero.delay is None
+    assert delayed.delay == timedelta(seconds=1)
+    assert exclusion.excluded_components == ("book",)
+    assert ablation.removed_components == ("flow",)
+    with pytest.raises(ValueError, match="positive delay"):
+        NegativeControl("bad-delay", NegativeControlKind.DELAYED_PAST_ONLY)
