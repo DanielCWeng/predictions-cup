@@ -2,8 +2,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
+
 from predictions_cup.external.polymarket.models import PolymarketMarket
-from predictions_cup.external.polymarket.universe import ElectionUniverseSelector
+from predictions_cup.external.polymarket.universe import (
+    ElectionUniverseSelector,
+    UniverseSelectionError,
+)
 
 
 def market(market_id: str, question: str, *, active: bool = True) -> PolymarketMarket:
@@ -49,3 +54,23 @@ def test_election_only_selection_and_manual_overrides_are_stable() -> None:
 
     assert [m.market_id for m in first.markets] == ["3"]
     assert first.token_ids == second.token_ids == ("3-no", "3-yes")
+
+
+def test_strict_supervised_universe_is_include_only_and_token_precise() -> None:
+    first = market("1", "Who wins the 2026 U.S. Senate race in Example?")
+    second = market("2", "Who wins the 2026 U.S. House race in Example?")
+    selector = ElectionUniverseSelector(
+        strict_ids=frozenset({"condition-1", "2-yes"})
+    )
+
+    selection = selector.select((first, second))
+
+    assert [m.market_id for m in selection.markets] == ["1", "2"]
+    assert selection.token_ids == ("1-no", "1-yes", "2-yes")
+
+
+def test_strict_supervised_universe_rejects_unresolved_ids() -> None:
+    selector = ElectionUniverseSelector(strict_ids=frozenset({"missing-id"}))
+
+    with pytest.raises(UniverseSelectionError, match="missing-id"):
+        selector.select((market("1", "2026 U.S. Senate market"),))
