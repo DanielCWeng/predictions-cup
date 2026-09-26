@@ -312,6 +312,41 @@ class SigRealtimeRecorder:
                 rows,
             )
 
+    def record_missing_prices(
+        self,
+        *,
+        tournament_id: str,
+        exchanges: tuple[tuple[str, str], ...],
+        observed_at: datetime,
+        reason: str,
+    ) -> None:
+        rows = [
+            (
+                exchange_id,
+                market_id,
+                tournament_id,
+                None,
+                None,
+                None,
+                None,
+                _iso(observed_at),
+                reason,
+            )
+            for exchange_id, market_id in exchanges
+        ]
+        if not rows:
+            return
+        with self._connection:
+            self._connection.executemany(
+                """
+                INSERT INTO price_observations (
+                    exchange_id, market_id, tournament_id, latest_price,
+                    best_bid, best_ask, spread, rest_observed_at, reason
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                rows,
+            )
+
     def record_book(
         self,
         *,
