@@ -21,7 +21,10 @@
       ]
     },
     "material_gap_seconds": 300.0,
-    "pmxt_routing": "PMXT_V1 before 2026-04-13T20:00:00Z, PMXT_V2 from then"
+    "pmxt_routing": "PMXT_V1 before 2026-04-13T20:00:00Z, PMXT_V2 from then; 2026-04-13T19 is spliced: V1-preferred / V2-only supplementation (V1 supplies book evidence for every token or condition it recorded; V2 supplies V2-only tokens and conditions from their real first observation, plus trade prints and tick-size changes)",
+    "pmxt_splice_hours": [
+      "2026-04-13T19"
+    ]
   },
   "dataset_id": "DATA-001-historical-replay-corpus",
   "evidence_grades": {
@@ -47,7 +50,8 @@
     "Coverage gaps are silence in the recorded stream and cannot be distinguished from genuinely quiet markets except by regime-wide silence statistics.",
     "No state before a regime window is carried in; the first depth snapshot for each token arrives inside the window and BBO changes before it are counted.",
     "BUILD-005 de-duplicates hashed trades on (token_id, transaction_hash); multiple venue trade prints sharing a transaction collapse to the first when replayed.",
-    "Fill price/size are source-supplied binary floats rendered as shortest round-trip text; fill side is exporter text and is not aggressor direction."
+    "Fill price/size are source-supplied binary floats rendered as shortest round-trip text; fill side is exporter text and is not aggressor direction.",
+    "Splice hour 2026-04-13T19 (V1-preferred / V2-only): V1 supplies the book evidence of every token or condition it recorded; tokens only V2 recorded start at their first V2 observation (19:42:26.6) and have no state earlier in that hour. V2 trade prints and tick-size changes are kept for all tokens. Each row keeps its own source_version."
   ],
   "output_files": [
     {
@@ -415,11 +419,11 @@
       "sha256": "a4541f57df4ea5036a7b454c994f3e9992c6b9759501fc88e38896859b6b170b"
     },
     {
-      "bytes": 1477681,
+      "bytes": 1537559,
       "kind": "corpus",
       "path": "hungary_election/books/book_changes/date=2026-04-13/part-0.parquet",
-      "rows": 192805,
-      "sha256": "684e6438c182906040bf9c2c66cc24e1b5a8e61b1d92cdb51d37a9e0c8e5aed0"
+      "rows": 198846,
+      "sha256": "e811cf27202e6bfd9f2711a865ed098065ee8fcd4f6c181d91cf8026798bd492"
     },
     {
       "bytes": 2624149,
@@ -485,11 +489,11 @@
       "sha256": "027979caaf9f9d8376572b7155deec11c829dade9b993802d2d4be440dd301b9"
     },
     {
-      "bytes": 742049,
+      "bytes": 767371,
       "kind": "corpus",
       "path": "hungary_election/books/depth_snapshots/date=2026-04-13/part-0.parquet",
-      "rows": 9459,
-      "sha256": "424e439e4f34bea98334c9833683343c3a0e1093d3704a7d168275acdb89eb8f"
+      "rows": 9523,
+      "sha256": "d24a68da71a4c98e77c309f3d5aae3885b5ced632e2f18146395f14e94df86d9"
     },
     {
       "bytes": 190427,
@@ -499,11 +503,11 @@
       "sha256": "453df318a89542dd2c1c8866fad29731718bff8dd119fa6cb6c0a7b31c5309bd"
     },
     {
-      "bytes": 51381,
+      "bytes": 60004,
       "kind": "corpus",
       "path": "hungary_election/books/trades/date=2026-04-13/part-0.parquet",
-      "rows": 371,
-      "sha256": "e817bd9bba03f19b0bfddf7fd2792eb0f5a0faa870bc545e4e8f2c57c4732f37"
+      "rows": 422,
+      "sha256": "a7f914c377510e7b7fd79882681782487e48dedeb9cc4c1bdaf94fc20d779365"
     },
     {
       "bytes": 259815,
@@ -604,11 +608,11 @@
       "sha256": "a87dec3a1e0e56b8a5e30932b666befe8b3f116db24aac8336f0d3e4c82cf4a7"
     },
     {
-      "bytes": 38402682,
+      "bytes": 39710816,
       "kind": "corpus",
       "path": "peru_first_round/books/book_changes/date=2026-04-13/part-0.parquet",
-      "rows": 4821397,
-      "sha256": "8b214ce506b12a8bf7b6112d84f33ba0a173ed1be11711d9d9c53f76892a3b91"
+      "rows": 4966407,
+      "sha256": "04f4d1f61899d6103578d4dd028d77d160452e898d4bfc773903c3073ef61218"
     },
     {
       "bytes": 70242892,
@@ -639,11 +643,11 @@
       "sha256": "714f1f38678cf4533ef3302304fb1891f344584a1fd64031b35eb14705fd2239"
     },
     {
-      "bytes": 4503059,
+      "bytes": 4583175,
       "kind": "corpus",
       "path": "peru_first_round/books/depth_snapshots/date=2026-04-13/part-0.parquet",
-      "rows": 36567,
-      "sha256": "99690dde43d5b6841c802f7dca7891015e39e9416370e4fb0078fded41f32f8c"
+      "rows": 36753,
+      "sha256": "d212f1a1948b245a9e192d695968a717e85620d5e1ffaa3133c71a19573f6df7"
     },
     {
       "bytes": 499894,
@@ -653,11 +657,11 @@
       "sha256": "b692727c8d267313b1384a09ab070553cea975dc1f29b1bbdbb633e3b87c2af1"
     },
     {
-      "bytes": 317496,
+      "bytes": 352665,
       "kind": "corpus",
       "path": "peru_first_round/books/trades/date=2026-04-13/part-0.parquet",
-      "rows": 3372,
-      "sha256": "305f2c08061d98a5697556c209ebf7c331690b407531bbf02f00d39ef1000256"
+      "rows": 3722,
+      "sha256": "62fb3b8b7d0942aa90d3b3d9e6f36f594966dd184e737e825c0545df704f49f0"
     },
     {
       "bytes": 2598736,
@@ -845,16 +849,16 @@
       "bytes": 901019,
       "kind": "corpus_metadata",
       "path": "market_identity.csv",
-      "sha256": "f83598819fd9e98cba75cd97b787413b0ffc96baff4be3b8d8d40479f8c0787f"
+      "sha256": "e89fe8e25dcc494dad3ed96fe6672ab9f247c01eb70d4c0270a913f18a200a72"
     },
     {
-      "bytes": 4384252,
+      "bytes": 4391970,
       "kind": "corpus_metadata",
       "path": "corpus_quality.json",
-      "sha256": "ae3a3de69002ddd6ba0a437b6cfdec2340e0611fddf8d9b58beaa06a4bb0bbec"
+      "sha256": "354801b67b9c32ae82d419f8a6198b7fd814923e8c424ac8716862b47907ccb5"
     }
   ],
-  "pipeline_commit": "0b1f5b3fe05a7f1bc35d1bbdca9bedf1b921037a",
+  "pipeline_commit": "159873f1797eee93832a98172a8f0117d24fb468",
   "regimes": [
     {
       "country": "Colombia",
@@ -1149,6 +1153,7 @@
         "99879601252998909183137750993174425421009374698128579208175526311440515004551",
         "99913635931667522899500823881252137954914409253514892824010266246173173870853"
       ],
+      "source_splices": [],
       "source_versions": [
         "PMXT_V2"
       ],
@@ -1272,6 +1277,7 @@
         "95397713339867671620267750294638973576062800721731079271432384499852407789018",
         "96773893512589764869155803687774017846749249748001852862755144389935842815761"
       ],
+      "source_splices": [],
       "source_versions": [
         "PMXT_V2"
       ],
@@ -1286,17 +1292,20 @@
       "missing_source_hours": [],
       "pipeline_counts": {
         "books": {
-          "book_changes_rows": 21658120,
-          "depth_snapshots_rows": 102785,
+          "book_changes_rows": 21803130,
+          "depth_snapshots_rows": 102971,
           "duplicates_removed:book_changes": 51034,
           "duplicates_removed:depth_snapshots": 1,
-          "raw_rows": 21793535,
+          "raw_rows": 21977367,
           "rejects_rows": 0,
-          "rows_inside_window": 21793535,
-          "rows_matching_tokens": 21793535,
+          "rows_inside_window": 21977367,
+          "rows_matching_tokens": 21977367,
           "rows_outside_window": 0,
+          "splice_superseded_by_primary:book_changes": 38206,
+          "splice_superseded_by_primary:depth_snapshots": 80,
+          "splice_superseded_by_primary:rejects": 0,
           "tick_size_changes_rows": 0,
-          "trades_rows": 32630
+          "trades_rows": 32980
         },
         "fills": {
           "duplicates_removed": 0,
@@ -1578,6 +1587,42 @@
         "98961969927651322882437980864806922516677051950709245896233047388110416610749",
         "99832617644461320335763406620957162140896488614945366985839515766941160697420"
       ],
+      "source_splices": [
+        {
+          "covered_tokens": 80,
+          "hour": "2026-04-13T19",
+          "primary_book_conditions": 40,
+          "primary_book_tokens": 80,
+          "primary_rows": {
+            "book_changes": 156488,
+            "depth_snapshots": 1592,
+            "rejects": 0,
+            "tick_size_changes": 0,
+            "trades": 0
+          },
+          "primary_version": "PMXT_V1",
+          "supplement_only_conditions": 93,
+          "supplement_only_first_observed_at": "2026-04-13T19:42:26.600000+00:00",
+          "supplement_only_tokens": 186,
+          "supplement_rows_kept": {
+            "book_changes": 145010,
+            "depth_snapshots": 186,
+            "rejects": 0,
+            "tick_size_changes": 0,
+            "trades": 350
+          },
+          "supplement_rows_kept_for_covered_tokens": {
+            "tick_size_changes": 0,
+            "trades": 183
+          },
+          "supplement_rows_superseded": {
+            "book_changes": 38206,
+            "depth_snapshots": 80,
+            "rejects": 0
+          },
+          "supplement_version": "PMXT_V2"
+        }
+      ],
       "source_versions": [
         "PMXT_V1",
         "PMXT_V2"
@@ -1708,6 +1753,7 @@
         "96778993542273611384637311499081700062825144626170214374801025348770797572532",
         "9682518067153576122489405729520126083014940106724522567955145436832495666332"
       ],
+      "source_splices": [],
       "source_versions": [
         "PMXT_V2"
       ],
@@ -1722,17 +1768,20 @@
       "missing_source_hours": [],
       "pipeline_counts": {
         "books": {
-          "book_changes_rows": 7009103,
-          "depth_snapshots_rows": 154072,
+          "book_changes_rows": 7015144,
+          "depth_snapshots_rows": 154136,
           "duplicates_removed:book_changes": 45068,
           "duplicates_removed:depth_snapshots": 1,
-          "raw_rows": 7165341,
+          "raw_rows": 7172319,
           "rejects_rows": 0,
-          "rows_inside_window": 7165341,
-          "rows_matching_tokens": 7165341,
+          "rows_inside_window": 7172319,
+          "rows_matching_tokens": 7172319,
           "rows_outside_window": 0,
+          "splice_superseded_by_primary:book_changes": 810,
+          "splice_superseded_by_primary:depth_snapshots": 12,
+          "splice_superseded_by_primary:rejects": 0,
           "tick_size_changes_rows": 0,
-          "trades_rows": 2166
+          "trades_rows": 2217
         },
         "fills": {
           "duplicates_removed": 0,
@@ -1843,6 +1892,42 @@
         "96489893487535432267593538684681657860387225264335539862236462381557065400303",
         "97664784370807841142707964737081665627344934031049263962508132420739217665692",
         "9769739137616425702145383342253945344514131626307605267586577941632735221909"
+      ],
+      "source_splices": [
+        {
+          "covered_tokens": 12,
+          "hour": "2026-04-13T19",
+          "primary_book_conditions": 6,
+          "primary_book_tokens": 12,
+          "primary_rows": {
+            "book_changes": 2448,
+            "depth_snapshots": 260,
+            "rejects": 0,
+            "tick_size_changes": 0,
+            "trades": 0
+          },
+          "primary_version": "PMXT_V1",
+          "supplement_only_conditions": 32,
+          "supplement_only_first_observed_at": "2026-04-13T19:42:26.600000+00:00",
+          "supplement_only_tokens": 64,
+          "supplement_rows_kept": {
+            "book_changes": 6041,
+            "depth_snapshots": 64,
+            "rejects": 0,
+            "tick_size_changes": 0,
+            "trades": 51
+          },
+          "supplement_rows_kept_for_covered_tokens": {
+            "tick_size_changes": 0,
+            "trades": 40
+          },
+          "supplement_rows_superseded": {
+            "book_changes": 810,
+            "depth_snapshots": 12,
+            "rejects": 0
+          },
+          "supplement_version": "PMXT_V2"
+        }
       ],
       "source_versions": [
         "PMXT_V1",
@@ -5920,7 +6005,18 @@
       "path": "HUN_2026/date=2026-04-13/hour=19/events.parquet",
       "rows": 2708,
       "sha256": "3a0925f4890747ee3aaaa5ab0ae3be1f84e88a7bd4a5d2d665cf4ab62635c6e7",
-      "source_version": "PMXT_V1"
+      "source_version": "PMXT_V1",
+      "splice_role": "primary"
+    },
+    {
+      "bytes": 89928,
+      "hour": "2026-04-13T19",
+      "kind": "pmxt_extract",
+      "path": "HUN_2026/date=2026-04-13/hour=19/events_v2.parquet",
+      "rows": 6978,
+      "sha256": "4bd9d372b1f76bc26098822bf33b61b2fc1d3e2b33244fe89c1884224a96166c",
+      "source_version": "PMXT_V2",
+      "splice_role": "supplement"
     },
     {
       "bytes": 222882,
@@ -7000,7 +7096,18 @@
       "path": "PER_2026/date=2026-04-13/hour=19/events.parquet",
       "rows": 158080,
       "sha256": "a41369859ab01c73d8a2ccb3046f3d1c7e649804d006e96d80bda55c4d574472",
-      "source_version": "PMXT_V1"
+      "source_version": "PMXT_V1",
+      "splice_role": "primary"
+    },
+    {
+      "bytes": 1569878,
+      "hour": "2026-04-13T19",
+      "kind": "pmxt_extract",
+      "path": "PER_2026/date=2026-04-13/hour=19/events_v2.parquet",
+      "rows": 183832,
+      "sha256": "cf1b76466faaad8214d05445421b841e4caa5780a26387a63cf6f9275235823d",
+      "source_version": "PMXT_V2",
+      "splice_role": "supplement"
     },
     {
       "bytes": 4158198,
@@ -8392,13 +8499,13 @@
     }
   },
   "totals": {
-    "corpus_bytes": 1186863238,
+    "corpus_bytes": 1188388198,
     "rows_by_stream": {
-      "book_changes": 126518636,
-      "depth_snapshots": 461076,
+      "book_changes": 126669687,
+      "depth_snapshots": 461326,
       "fills": 743015,
       "tick_size_changes": 60,
-      "trades": 112066
+      "trades": 112467
     }
   }
 }

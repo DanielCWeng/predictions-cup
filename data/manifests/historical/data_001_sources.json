@@ -3,7 +3,7 @@
   "sources": [
     {
       "compression": "Parquet internal (ZSTD/Snappy per column chunk)",
-      "coverage_note": "archive: V1 2026-02-21T18..2026-04-16T05, V2 file from 2026-04-13T19 (first row 19:42:26.6); corpus routes V1 through 2026-04-13T19 and V2 from 2026-04-13T20",
+      "coverage_note": "archive: V1 2026-02-21T18..2026-04-16T05, V2 file from 2026-04-13T19 (first row 19:42:26.6); corpus routes V1 before 2026-04-13T19 and V2 from 2026-04-13T20. 2026-04-13T19 uses deterministic V1-preferred / V2-only supplementation: V1 supplies shared book evidence; V2 supplies genuinely V2-only market state and evidence types unavailable from V1, always from their actual observable time and with explicit provenance (hours[].splice_supplement)",
       "format": "Parquet, one file per UTC hour",
       "hours": [
         {
@@ -14848,7 +14848,43 @@
           },
           "family": "HUN_2026",
           "hour": "2026-04-13T19",
-          "source_version": "PMXT_V1"
+          "source_version": "PMXT_V1",
+          "splice_supplement": {
+            "archive": {
+              "bytes": 133193857,
+              "columns": [
+                "timestamp_received",
+                "timestamp",
+                "market",
+                "event_type",
+                "asset_id",
+                "bids",
+                "asks",
+                "price",
+                "size",
+                "side",
+                "best_bid",
+                "best_ask",
+                "fee_rate_bps",
+                "transaction_hash",
+                "old_tick_size",
+                "new_tick_size"
+              ],
+              "etag": "\"2bd8f13d782c02bd292ca5c238b30dfe\"",
+              "last_modified": "Wed, 19 Aug 2026 15:32:52 GMT",
+              "row_groups": 19,
+              "rows": 19356105,
+              "url": "https://archive.pendulumflow.com/pmxt/v2/polymarket_orderbook_2026-04-13T19.parquet"
+            },
+            "extract": {
+              "bytes": 89928,
+              "kind": "pmxt_extract",
+              "path": "HUN_2026/date=2026-04-13/hour=19/events_v2.parquet",
+              "rows": 6978,
+              "sha256": "4bd9d372b1f76bc26098822bf33b61b2fc1d3e2b33244fe89c1884224a96166c"
+            },
+            "source_version": "PMXT_V2"
+          }
         },
         {
           "archive": {
@@ -18396,7 +18432,43 @@
           },
           "family": "PER_2026",
           "hour": "2026-04-13T19",
-          "source_version": "PMXT_V1"
+          "source_version": "PMXT_V1",
+          "splice_supplement": {
+            "archive": {
+              "bytes": 133193857,
+              "columns": [
+                "timestamp_received",
+                "timestamp",
+                "market",
+                "event_type",
+                "asset_id",
+                "bids",
+                "asks",
+                "price",
+                "size",
+                "side",
+                "best_bid",
+                "best_ask",
+                "fee_rate_bps",
+                "transaction_hash",
+                "old_tick_size",
+                "new_tick_size"
+              ],
+              "etag": "\"2bd8f13d782c02bd292ca5c238b30dfe\"",
+              "last_modified": "Wed, 19 Aug 2026 15:32:52 GMT",
+              "row_groups": 19,
+              "rows": 19356105,
+              "url": "https://archive.pendulumflow.com/pmxt/v2/polymarket_orderbook_2026-04-13T19.parquet"
+            },
+            "extract": {
+              "bytes": 1569878,
+              "kind": "pmxt_extract",
+              "path": "PER_2026/date=2026-04-13/hour=19/events_v2.parquet",
+              "rows": 183832,
+              "sha256": "cf1b76466faaad8214d05445421b841e4caa5780a26387a63cf6f9275235823d"
+            },
+            "source_version": "PMXT_V2"
+          }
         },
         {
           "archive": {
@@ -24052,7 +24124,7 @@
     },
     {
       "format": "Parquet (ZSTD); raw archive rows for candidate tokens only, raw columns preserved plus research_family/source_version",
-      "physical_location": "local/Kaggle directory <FAMILY>/date=/hour=/events.parquet",
+      "physical_location": "local/Kaggle directory <FAMILY>/date=/hour=/events.parquet (plus events_v2.parquet, the V2 supplement, in splice hours)",
       "provider": "DATA-001 acquire stage (this repository)",
       "source_id": "pmxt_exact_token_extracts"
     },

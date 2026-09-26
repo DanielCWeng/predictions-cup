@@ -1,6 +1,6 @@
 # DATA-001 — Historical Replay Corpus
 
-**Status:** READY FOR INDEPENDENT RE-REVIEW (routing fix) — not accepted  
+**Status:** READY FOR INDEPENDENT RE-REVIEW (2026-04-13T19 splice) — not accepted  
 **Branch:** `data/001-historical-replay-corpus`  
 **Replaces:** HIST-DATA-001 / PR #17 (closed unmerged; lessons reused, branch not revived)
 
@@ -185,7 +185,7 @@ outside/inside window, duplicates removed, rejects and final rows, separately fo
 Intervals are measured between distinct observation instants. Quantiles are exact below 1 s and
 bucketed above (100 ms to 60 s, then 1 s). Maximum and material gaps are exact.
 
-## Results (build at pipeline commit `0b1f5b3`)
+## Results (build at pipeline commit `159873f`)
 
 The corpus manifest is `data/manifests/historical/data_001_corpus_manifest.json`, with identity
 in `data_001_market_identity.csv` and quality in `data_001_corpus_quality.json`.
@@ -196,13 +196,13 @@ ordering. There were 0 problems and 0 rejected malformed rows.
 |---|---|---|---|---|---|---|---|---|
 | `colombia_first_round` | 236 / 130 / 260 | 62,410 | 64,046,576 | 21,663 | 58,990 | 263 s | 05-29T00:00 → 06-02T23:59 | 05-29T00:00 → 06-02T23:58 |
 | `colombia_runoff` | 236 / 42 / 84 | 29,534 | 12,576,636 | 13,699 | 34,671 | 590 s | 06-19T00:00 → 06-23T23:59 | 06-19T00:00 → 06-23T23:57 |
-| `peru_first_round` | 327 / 133 / 266 | 102,784 | 21,607,086 | 32,630 | 265,128 | 145 s | 04-10T00:00 → 04-14T23:59 | 04-10T00:00 → 04-14T23:59 |
+| `peru_first_round` | 327 / 133 / 266 | 102,970 | 21,752,096 | 32,980 | 265,128 | 145 s | 04-10T00:00 → 04-14T23:59 | 04-10T00:00 → 04-14T23:59 |
 | `peru_runoff` | 327 / 45 / 90 | 112,277 | 21,324,303 | 41,908 | 122,149 | 243 s | 06-05T00:00 → 06-09T23:59 | 06-05T00:00 → 06-09T23:59 |
-| `hungary_election` | 174 / 48 / 96 | 154,071 | 6,964,035 | 2,166 | 262,077 | 204 s | 04-05T00:00 → 04-14T23:59 | 04-05T00:00 → 04-14T23:57 |
+| `hungary_election` | 174 / 48 / 96 | 154,135 | 6,970,076 | 2,217 | 262,077 | 204 s | 04-05T00:00 → 04-14T23:59 | 04-05T00:00 → 04-14T23:57 |
 
-Totals: 319 conditions / 638 tokens with book evidence, 126,518,636 BBO change rows, 461,076 depth
-snapshots, 112,066 trade prints, 743,015 fills, 1.19 GB of ZSTD Parquet. There are no missing
-source hours.
+Totals: 319 conditions / 638 tokens with book evidence, 126,669,687 BBO change rows, 461,326 depth
+snapshots, 112,467 trade prints, 743,015 fills, 1.19 GB of ZSTD Parquet. There are no missing
+source hours and no missing splice supplements.
 
 "Candidate" markets are the PolyLeviathan market families selected per research family. The
 remainder had no rows in the archive during the window. They are placeholders ("Candidate J",
@@ -210,77 +210,119 @@ remainder had no rows in the archive during the window. They are placeholders ("
 
 ### Known holes (read before using a regime)
 
-1. **V2-only markets start at 2026-04-13T20:00 and lose their initial depth snapshot (routing
-   fix side effect).** V1 recorded a fixed subset (Peru 40 conditions / 80 tokens, Hungary 6 / 12)
-   every hour. V2 subscribed to 93 more Peru and 32 more Hungary conditions at 19:42:26, and its
-   19:00 file holds their only subscription snapshots. With 19:00 routed to V1, those 186 Peru and
-   64 Hungary tokens first appear at 20:00 as BBO changes. Their first depth snapshot now comes
-   1.5–26 h later (Peru median 9.1 h, 4,108,909 changes before it). 36 Hungary tokens have **no**
-   depth snapshot left in the window (`PRICE_ONLY` evidence only). BUILD-005 slices on these tokens
-   fail closed until a snapshot arrives. This is recorded, not repaired; see the routing-fix section
-   below.
+1. **V2-only markets start at 2026-04-13T19:42:26.6.** V1 recorded a fixed subset (Peru 40
+   conditions / 80 tokens, Hungary 6 / 12) every hour. V2 subscribed to 93 more Peru and 32 more
+   Hungary conditions (186 and 64 tokens) at 19:42:26.6. The splice keeps their V2 rows from that
+   real first observation, including the subscription depth snapshots, so every token with book
+   evidence in both regimes has a depth snapshot (Peru 266 / 266, Hungary 96 / 96; 0 snapshot-less
+   Hungary tokens). Nothing is recorded for these markets before 19:42:26.6, and nothing is
+   backfilled. See the splice section below.
 2. **Hungary seat-count coverage.** Only 48 of 174 candidate markets (96 tokens) have book
-   evidence, and 60 of those tokens have a depth snapshot. PMXT V1 did not record most seat-bin/seat-count markets. 45 tokens have fills
+   evidence, and all 96 of those tokens have a depth snapshot. PMXT V1 did not record most seat-bin/seat-count markets. 45 tokens have fills
    (15,037 fills) but no book rows; a direct check of the raw election-night V1 file found none of
    their condition or token IDs among its 24,542 markets. They are listed with
    `book_available=false, fills_available=true`.
-3. **Same-millisecond ambiguity.** 1,378,157 (token, millisecond) groups across the regimes hold
+3. **Same-millisecond ambiguity.** 1,385,451 (token, millisecond) groups across the regimes hold
    BBO change rows with differing post-change best bid/ask (Colombia first round alone: 785,649).
    Their true order is unknowable, and replay applies each group as one BUILD-005 same-time batch.
 4. **Sparse full snapshots.** Median depth snapshots per token over the whole window: Colombia
-   first round 81, Colombia runoff 26, Peru first round 9, Peru runoff 334.5, Hungary 8. BBO
-   changes before a token's first snapshot are counted per token and total 5,204,028 across regimes
-   (994,015 before the routing fix; the increase is hole 1).
+   first round 81, Colombia runoff 26, Peru first round 10, Peru runoff 334.5, Hungary 9. BBO
+   changes before a token's first snapshot are counted per token and total 994,015 across regimes
+   (5,204,028 in the intermediate V1-only 19:00 build, where V2-only markets lost their
+   subscription snapshots).
 5. **Quiet-market silences.** Almost every token has at least one > 300 s silence. The largest
    single-token silence is 5,920 s (Colombia first round). These cannot be told apart from
    recorder outages except where the whole regime goes silent. Colombia runoff shows three
    6–10 minute regime-wide silences on 2026-06-19 around 04:00–05:00 UTC; no other regime has a
    regime-wide silence over 300 s.
 6. **Anomalies surfaced, not repaired.** 7 crossed depth snapshots, 584 crossed BBO rows,
-   47,551 empty-side snapshots, 2,195 Peru-runoff rows whose venue time is after the archive
+   47,727 empty-side snapshots, 2,195 Peru-runoff rows whose venue time is after the archive
    receive time, and 96,442 exact duplicate rows removed (mostly PMXT V1 redundant deliveries).
 7. **Fills outside the book's observed span.** Hungary's median book/fill overlap is low because
    fills continue on tokens whose book evidence is thin or absent.
 
 
-## Routing fix (2026-04-13T19 → PMXT V1)
+## 2026-04-13T19 splice (V1-preferred / V2-only supplementation)
 
-**V1 19:00 source.** `https://archive.pendulumflow.com/pmxt/v1/polymarket_orderbook_2026-04-13T19.parquet`,
+**History.** The first build (`5925892`) routed the whole 19:00 hour to V2. The V2 19:00 file only
+starts at 19:42:26.6, so both regimes had a ~42.5-minute regime-wide blind spot. The next build
+(`0b1f5b3`) routed 19:00 to V1 only. That closed the blind spot, but it dropped the V2-only markets'
+19:42 subscription snapshots: their first snapshot came 1.5–26 h later, and 36 Hungary tokens had
+none left in the window. The splice keeps V1's continuity and V2's coverage.
+
+**Rule** (PER_2026 and HUN_2026, hour `2026-04-13T19` only; applied to normalized rows,
+`corpus.splice_primary_with_supplement`):
+
+- a token or condition with any V1 book rows in the hour takes V1 depth snapshots and book changes
+  for the whole hour, and V2 book rows for those tokens are dropped;
+- a token absent from V1 keeps its V2 rows from their real first observation (19:42:26.6),
+  including the subscription snapshots;
+- V2 trade prints and tick-size changes are kept for all tokens with V2 provenance, because V1 has
+  no trade prints;
+- coverage is decided from identifiers only, never from prices or sizes; every row keeps its
+  `source_version`; nothing is backfilled before a row's observable time;
+- 20:00 onward stays V2, and every other hour has exactly one source.
+
+**V1 19:00 source (primary).**
+`https://archive.pendulumflow.com/pmxt/v1/polymarket_orderbook_2026-04-13T19.parquet`,
 939,842,152 bytes, ETag `"f06c20c4469ae096d5ab7cf9883b6191-10"`, Last-Modified
 `Wed, 19 Aug 2026 15:23:54 GMT`, 45,814,371 rows in 46 row groups (remote footer). The raw downloaded
-file's SHA-256 is `2b972538b320fbf1ffaf5000e55923fa6806890f988884ff30b02287b251587c`. It was
-re-acquired with `acquire --hour 2026-04-13T19`. Extracts: PER_2026 158,080 rows
+file's SHA-256 is `2b972538b320fbf1ffaf5000e55923fa6806890f988884ff30b02287b251587c`. Extracts
+(`hour=19/events.parquet`): PER_2026 158,080 rows
 (`a41369859ab01c73d8a2ccb3046f3d1c7e649804d006e96d80bda55c4d574472`), HUN_2026 2,708 rows
-(`3a0925f4890747ee3aaaa5ab0ae3be1f84e88a7bd4a5d2d665cf4ab62635c6e7`). They span 19:00:00.3 →
-19:59:59.8 (PER) and 19:00:02.9 → 19:59:58.7 (HUN); the largest receive gap inside the hour is 46 s
-(PER) and 65 s (HUN). The replaced V2 extracts (PER `cf1b7646…`, HUN `4bd9d372…`) are kept outside
-the extracts tree for audit only.
+(`3a0925f4890747ee3aaaa5ab0ae3be1f84e88a7bd4a5d2d665cf4ab62635c6e7`), spanning 19:00:00.3 →
+19:59:59.8 (PER) and 19:00:02.9 → 19:59:58.7 (HUN).
 
-**Before/after** (final rows; "before" = build at `5925892`, routing V2 from 19:00):
+**V2 19:00 source (supplement).**
+`https://archive.pendulumflow.com/pmxt/v2/polymarket_orderbook_2026-04-13T19.parquet`,
+133,193,857 bytes, ETag `"2bd8f13d782c02bd292ca5c238b30dfe"`, Last-Modified
+`Wed, 19 Aug 2026 15:32:52 GMT`, 19,356,105 rows in 19 row groups (remote footer). Extracts
+(`hour=19/events_v2.parquet`): PER_2026 183,832 rows
+(`cf1b76466faaad8214d05445421b841e4caa5780a26387a63cf6f9275235823d`), HUN_2026 6,978 rows
+(`4bd9d372b1f76bc26098822bf33b61b2fc1d3e2b33244fe89c1884224a96166c`); both are byte-identical to
+the extracts the first build used. They are in `data_001_sources.json` under
+`hours[].splice_supplement`.
 
-| | Peru first round before → after | Hungary before → after |
+**Splice counts** (`source_splices` in the corpus manifest and quality report):
+
+| | Peru first round | Hungary |
 |---|---|---|
-| Depth snapshots | 101,458 → 102,784 | 153,887 → 154,071 |
-| BBO changes | 21,634,169 → 21,607,086 | 6,968,448 → 6,964,035 |
-| Trade prints | 32,980 → 32,630 | 2,217 → 2,166 |
-| Conditions / tokens with book evidence | 133 / 266 → 133 / 266 | 48 / 96 → 48 / 96 |
-| Tokens with any depth snapshot | 266 → 266 | 96 → 60 |
-| Regime-wide max silence | 2,546.7 s → 144.9 s | 2,550.2 s → 203.6 s |
-| Regime-wide material (> 300 s) silences | 1 → 0 | 1 → 0 |
-| Largest regime-wide gap on 2026-04-13 | 2,547 s (18:59:59.9–19:42:26.6) → 54 s (03:05:12–03:06:07) | 2,550 s (18:59:56.4–19:42:26.6) → 89 s (16:59:15–17:00:45) |
-| BBO changes before first snapshot | 9,463 → 4,118,372 | 123,238 → 224,342 |
-| Crossed snapshots / crossed BBO rows | 2 / 248 → 2 / 248 | 4 / 136 → 4 / 136 |
-| Empty-side snapshots | 6,722 → 6,604 | 4,590 → 4,542 |
-| Ambiguous same-ms BBO groups | 409,019 → 402,467 | 11,511 → 11,508 |
-| Rejects | 0 → 0 | 0 → 0 |
+| V1 book conditions / tokens (covered) | 40 / 80 | 6 / 12 |
+| V2-only conditions / tokens | 93 / 186 | 32 / 64 |
+| V1 rows: snapshots / BBO changes | 1,592 / 156,488 | 260 / 2,448 |
+| V2 rows kept: snapshots / BBO changes / trade prints | 186 / 145,010 / 350 | 64 / 6,041 / 51 |
+| … of which trade prints on covered tokens | 183 | 40 |
+| V2 book rows superseded by V1: snapshots / BBO changes | 80 / 38,206 | 12 / 810 |
+| Tokens with book rows from both versions in the hour | 0 | 0 |
 
-The 19:00 hour now holds V1 rows only: Peru 1,592 snapshots + 156,133 changes on 40 conditions /
-80 tokens from 19:00:00.3; Hungary 260 snapshots + 2,438 changes on 6 / 12 from 19:00:02.9. The
-~42.5-minute blind spot is gone, not just smaller. Across 18:00–21:00 the largest regime-wide gap is
-now 47 s (Peru) and 68 s (Hungary), and the 20:00 V1→V2 handover leaves no gap (Peru: last V1 row
-19:59:59.8, first V2 row 20:00:00.1; Hungary: 19:59:58.7 and 20:00:01.2). Every output outside the two regimes'
-`date=2026-04-13` partitions (107 of 115 files, all Colombia and Peru runoff) is SHA-256 identical
-to the before build; `corpus_quality.json` and `market_identity.csv` changed as expected.
+**Three-way comparison** (final rows; `5925892` = V2 from 19:00, `0b1f5b3` = V1-only 19:00,
+`159873f` = splice):
+
+| | Peru `5925892` → `0b1f5b3` → `159873f` | Hungary `5925892` → `0b1f5b3` → `159873f` |
+|---|---|---|
+| Depth snapshots | 101,458 → 102,784 → 102,970 | 153,887 → 154,071 → 154,135 |
+| BBO changes | 21,634,169 → 21,607,086 → 21,752,096 | 6,968,448 → 6,964,035 → 6,970,076 |
+| Trade prints | 32,980 → 32,630 → 32,980 | 2,217 → 2,166 → 2,217 |
+| Conditions / tokens with book evidence | 133 / 266 (all) | 48 / 96 (all) |
+| Tokens with any depth snapshot | 266 → 266 → 266 | 96 → 60 → 96 |
+| Tokens with book rows but no snapshot | 0 → 0 → 0 | 0 → 36 → 0 |
+| BBO changes before first snapshot | 9,463 → 4,118,372 → 9,463 | 123,238 → 224,342 → 123,238 |
+| Regime-wide max silence | 2,546.7 s → 144.9 s → 144.9 s | 2,550.2 s → 203.6 s → 203.6 s |
+| Regime-wide material (> 300 s) silences | 1 → 0 → 0 | 1 → 0 → 0 |
+| Largest regime-wide gap on 2026-04-13 | 2,547 s (18:59:59.9–19:42:26.6) → 54 s (03:05:12–03:06:07) → same | 2,550 s (18:59:56.4–19:42:26.6) → 89 s (16:59:15–17:00:45) → same |
+| Largest regime-wide gap 18:00–21:00 | 2,547 s → 47 s (18:05:12–18:05:58) → same | 2,550 s → 68 s (18:43:17–18:44:26) → same |
+| Crossed snapshots / crossed BBO rows | 2 / 248 (all) | 4 / 136 (all) |
+| Empty-side snapshots | 6,722 → 6,604 → 6,732 | 4,590 → 4,542 → 4,590 |
+| Ambiguous same-ms BBO groups | 409,019 → 402,467 → 409,761 | 11,511 → 11,508 → 11,508 |
+| Rejects | 0 | 0 |
+
+The 19:00 hour now holds V1 book rows on the 80 Peru / 12 Hungary shared tokens from 19:00:00.3 /
+19:00:02.9, and V2 book rows on the 186 / 64 V2-only tokens from 19:42:26.6 (first V2 BBO change
+19:42:26.8), with no token taking book rows from both. V2 trade prints start at 19:42:30.5 (Peru)
+and 19:42:54.7 (Hungary). Relative to the V1-only build, only the two regimes' `date=2026-04-13`
+book partitions changed (107 of 115 files SHA-256 identical); relative to the first build, the
+`trades` partitions are also identical (109 of 115). `corpus_quality.json` and
+`market_identity.csv` changed as expected (19:42 first observations for the V2-only tokens).
 
 **V1/V2 overlap audit** (diagnostic only; `scripts/data_001_overlap_audit.py`, window 19:42:26.6 →
 20:00, both versions through `pmxt.normalize_extract`):
@@ -297,8 +339,9 @@ to the before build; `corpus_quality.json` and `market_identity.csv` changed as 
 | As-of BBO at minute marks, shared tokens: compared / disagree | 1,426 / 0 | 190 / 0 |
 | Marks with a same-ms ambiguous state / V2-only state | 8 / 6 | 0 / 26 |
 
-On markets both recorded, V1 and V2 agree on every aligned best bid/ask, and V1 is denser. The
-difference is coverage: V1 never subscribed to the extra V2 markets. That is the cost in known hole 1.
+On markets both recorded, V1 and V2 agree on every aligned best bid/ask, and V1 is denser; this is
+why V1 is preferred for shared tokens. V1 never subscribed to the extra V2 markets, which is why
+V2 supplies them.
 
 ## Commands
 
@@ -336,18 +379,19 @@ with the same filter semantics. Re-running this repository's `acquire` stage on 
 reproduced them exactly: same schema, same rows, same row order. The hours were
 `2026-04-05T00` (PMXT V1, Hungary, 25,576 rows) and `2026-06-19T00` (PMXT V2, Colombia,
 112,542 rows). The two V1 `2026-04-13T19` extracts were produced by this repository's
-`acquire --hour`. Every extract's SHA-256 is in `data_001_sources.json`, and every raw archive
+`acquire --hour`; the two V2 `2026-04-13T19` supplement extracts are the original V2 extracts. Every extract's SHA-256 is in `data_001_sources.json`, and every raw archive
 hour's size, ETag and row count is recorded next to it.
 
 ## Kaggle reproduction
 
 Private kernel `polyleviathan/sig-cup-data-001-build` (`scripts/kaggle/`) mounted three private
-datasets: `sig-cup-pmxt-orderbook-extracts` (version with the V1 `2026-04-13T19` extracts),
-`sig-cup-polyleviathan-fills` and `sig-cup-predictions-cup-code` (wheel of commit `0b1f5b3`).
-Kernel version 3 rebuilt and validated the corpus. **All 115 output files were SHA-256 identical to
-the local build** and the totals matched (`data/manifests/historical/data_001_kaggle_run.json`).
-Version 2 had mounted the previous extracts version and stopped at the build's extract
-`source_version` check, as intended.
+datasets: `sig-cup-pmxt-orderbook-extracts` (version with the V1 `hour=19/events.parquet` and V2
+`hour=19/events_v2.parquet` extracts), `sig-cup-polyleviathan-fills` and
+`sig-cup-predictions-cup-code` (wheel of commit `159873f`). Kernel version 4 rebuilt and validated
+the corpus. **All 115 output files were SHA-256 identical to the local build** and the totals
+matched (`data/manifests/historical/data_001_kaggle_run.json`). Version 3
+reproduced the V1-only build (`0b1f5b3`); version 2 had mounted an older extracts version and
+stopped at the build's extract `source_version` check, as intended.
 
 ## Determinism
 
