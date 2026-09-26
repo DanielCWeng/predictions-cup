@@ -163,7 +163,7 @@ class SigRealtimeStateEngine:
         book_depth: int = 20,
         open_book_max_trusted_age_seconds: float = 30.0,
         bulk_price_refresh_seconds: float = 10.0,
-        governed_rate_per_second: float = 3.0,
+        governed_rate_per_second: float = 2.0,
         governor_snapshot: GovernorSnapshotFn | None = None,
         clock: Clock = lambda: datetime.now(UTC),
     ) -> None:
@@ -794,6 +794,13 @@ class SigRealtimeStateEngine:
 
         if response.missing_ids:
             self.health.bulk_price_missing_count += len(response.missing_ids)
+            for exchange_id in response.missing_ids:
+                state = self.states[exchange_id]
+                state.latest_price = None
+                state.scalar_best_bid = None
+                state.scalar_best_ask = None
+                state.scalar_spread = None
+                state.last_scalar_observed_at = None
             logger.warning(
                 "SIG bulk price response missing exchanges count=%s",
                 len(response.missing_ids),
