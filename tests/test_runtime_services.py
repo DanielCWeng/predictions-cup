@@ -51,7 +51,8 @@ def test_systemd_units_are_read_only_and_supervised() -> None:
     assert "ExecStart=@@PYTHON_BIN@@ -m predictions_cup.sig.capture --runtime-env-only" in sig
     assert "--tracked-exchange-id" not in sig
     assert (
-        "ExecStart=@@PYTHON_BIN@@ -m predictions_cup.external.polymarket.recorder --runtime-env-only"
+        "ExecStart=@@PYTHON_BIN@@ -m "
+        "predictions_cup.external.polymarket.recorder --runtime-env-only"
         in poly
     )
 
