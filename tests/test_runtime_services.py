@@ -84,6 +84,12 @@ def _installer_env(tmp_path: Path) -> tuple[dict[str, str], Path, Path]:
     fake_systemctl.write_text(
         "#!/usr/bin/env bash\n"
         "printf '%s\\n' \"$*\" >> \"$CALL_LOG\"\n"
+        "if [[ \"$1\" == \"restart\" && \"${FAIL_RESTART_SERVICE:-}\" == \"${2:-}\" ]]; then\n"
+        "  exit 1\n"
+        "fi\n"
+        "if [[ \"$1\" == \"is-active\" && \"${FAIL_ACTIVE_SERVICE:-}\" == \"${3:-}\" ]]; then\n"
+        "  exit 3\n"
+        "fi\n"
         "exit 0\n",
         encoding="utf-8",
     )
@@ -159,6 +165,39 @@ def test_installer_is_idempotent_and_renders_absolute_runtime_env(tmp_path: Path
     assert "TEST_READ_SECRET_DO_NOT_PRINT" not in first.stdout + first.stderr
     assert "TEST_READ_SECRET_DO_NOT_PRINT" not in second.stdout + second.stderr
 
+
+def test_installer_propagates_restart_failure(tmp_path: Path) -> None:
+    env, _, _ = _installer_env(tmp_path)
+    env["FAIL_RESTART_SERVICE"] = "predictions-cup-sig-capture.service"
+
+    result = subprocess.run(
+        ["bash", str(INSTALLER)],
+        cwd=PROJECT_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "restart failed for predictions-cup-sig-capture.service" in result.stderr
+
+
+def test_installer_propagates_inactive_service(tmp_path: Path) -> None:
+    env, _, _ = _installer_env(tmp_path)
+    env["FAIL_ACTIVE_SERVICE"] = "predictions-cup-polymarket-capture.service"
+
+    result = subprocess.run(
+        ["bash", str(INSTALLER)],
+        cwd=PROJECT_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "predictions-cup-polymarket-capture.service is not active" in result.stderr
 
 def test_installer_rejects_trade_credential_without_printing_secret(tmp_path: Path) -> None:
     env, runtime_env, _ = _installer_env(tmp_path)
