@@ -9,6 +9,13 @@ market data.
 This experiment is **not** part of the production trading path. It has no wallet, private key,
 signing, order placement, paper fills, PnL, fair-value model or execution logic.
 
+> **BUILD-007 storage reconciliation:** EXPERIMENT-001A was accepted on `main` with a
+> SQLite/WAL research writer. The BUILD-007 branch keeps its capture semantics/cadence but replaces
+> the live recorder's storage implementation globally: high-frequency research streams now write
+> immutable ZSTD Parquet shards, while a fresh small SQLite database holds only metadata/tokens/
+> health. Legacy EXPERIMENT-001A SQLite captures remain readable by replay but are no longer the
+> current writer on this branch.
+
 ## Public documentation checked
 
 Checked against current Polymarket documentation on 2026-09-25:
@@ -79,7 +86,9 @@ normalized event-time book changes + public trade events
         ↓
 lean 1-second top-of-book panel + slower depth snapshots
         ↓
-SQLite/WAL local research store
+ZSTD Parquet research shards
+        +
+small operational SQLite (metadata / tokens / health)
 ```
 
 ## Market universe
@@ -144,25 +153,43 @@ book state's `state_observed_at`.
 
 ## Storage
 
-Storage is a local SQLite database in WAL mode. Default path:
+The **historical accepted EXPERIMENT-001A baseline** used one local SQLite/WAL database at
+`data/polymarket_capture.sqlite3` for both operational state and high-frequency history.
+
+BUILD-007 replaces that writer on its branch after the live broad-universe soak falsified the
+SQLite deployment shape. Current recorder storage is split:
 
 ```text
-data/polymarket_capture.sqlite3
+data/polymarket_operational.sqlite3
+    polymarket_markets
+    polymarket_tokens
+    ingestion_health
+
+data/polymarket_research/
+    observations/
+    book_changes/
+    trades/
+    depth_snapshots/
 ```
 
-Tables:
+The research directories contain immutable PyArrow Parquet shards compressed with ZSTD. Default
+shard time buckets are 60 seconds with a separate 100,000-row cap. Publication uses temporary
+file -> fsync -> atomic replace -> directory fsync, and completed sparse-stream buckets are flushed
+by the recorder clock. Graceful shutdown flushes remaining in-memory rows.
 
-- `polymarket_markets`
-- `polymarket_tokens`
-- `polymarket_book_observations` — lean 1-second scalar panel;
-- `polymarket_book_changes` — normalized event-time price changes;
-- `polymarket_book_snapshots` — slower top-N depth snapshots;
-- `polymarket_trades`
-- `ingestion_health`
+Source/event timestamps and local process observation/sample timestamps remain separate. Financial
+price/size fields are exact decimal text; depth levels are typed nested Parquet data rather than
+repeated JSON blobs.
 
-Market/token metadata upserts idempotently. Observation, delta, depth and trade history append
-across ordinary process restarts. Trade rows with a transaction hash are de-duplicated by token +
-transaction hash.
+The raw Parquet trade lane is intentionally **at-least-once** across WebSocket reconnect/redelivery.
+When Polymarket supplies a transaction hash, each row carries a deterministic identity derived from
+`(token_id, transaction_hash)`. Canonical replay validates that identity and de-duplicates hashed
+trades, preserving the accepted EXPERIMENT-001A logical contract across duplicates within one
+shard and across later shards/process restarts. Unhashed trades are not de-duplicated, matching the
+old partial SQLite uniqueness rule.
+
+Legacy SQLite research captures remain a supported replay input; BUILD-007 does not delete or
+migrate them automatically.
 
 ### One-second panel and depth policy
 
@@ -171,8 +198,8 @@ The dominant 1-second path stores only scalar research fields: token/market iden
 spread, current valid `last_trade_price`, and book-valid state. It does **not** repeat bid/ask JSON
 every second.
 
-Top **20** levels per side remain available as compact JSON depth snapshots, but the default depth
-cadence is **60 seconds** and is independently configurable. Normalized `price_change` records are
+Top **20** levels per side remain available as typed nested Parquet depth snapshots, but the
+default depth cadence is **60 seconds** and is independently configurable. Normalized `price_change` records are
 also persisted at event observation time, preserving side, price, size, source/observation time,
 post-change best bid/ask and hash where supplied.
 
@@ -193,36 +220,29 @@ unsubscribed and invalidated.
 
 ### Storage projection
 
-The selected token count `N` is determined from live Gamma metadata, so the recorder must report
-and budget storage from the actual selected universe rather than pretend a fixed token count.
-
-Default row-count formulas are:
+The selected token count `N` still determines fixed-cadence row volume:
 
 ```text
 lean panel rows/day       = N × 86,400
 depth snapshot rows/day   = N × 1,440        # 60-second default
 event delta rows/day      = D                # actual accepted price_change entries
-trade rows/day            = T                # actual public last_trade_price events
+raw trade rows/day        = T                # actual public last_trade_price deliveries
 ```
 
-For an illustrative **100-token** selected universe:
+The first EC2 broad-universe soak selected 3,160 markets / 6,320 tokens. That would imply
+546,048,000 scalar panel rows/day and 9,100,800 depth rows/day before deltas/trades. The historical
+SQLite writer was observed growing at roughly 53 GB/day at one measured point with a multi-GB WAL,
+so that architecture was rejected for always-on use.
 
-```text
-lean panel                = 8,640,000 rows/day
-depth snapshots           =   144,000 rows/day
-event deltas              = D
-trades                    = T
-```
+BUILD-007 deliberately preserves the 1-second synchronized research cadence while correcting both
+scope and physical format:
 
-A planning range—not a storage guarantee—is roughly **150–250 bytes per scalar/delta row** and
-**1.5–3 KB per top-20 depth row** before SQLite page/index overhead. At 100 tokens this puts the
-fixed-cadence portion at approximately **1.5–2.6 GB/day** before event deltas, trades and SQLite
-overhead. One million event-delta rows would add roughly **0.15–0.25 GB** before overhead.
+- supervised production capture is strict/mapping-bounded rather than the 6,320-token heuristic;
+- high-frequency history is ZSTD Parquet rather than SQLite row append.
 
-The important operational property is bounded linear growth: deep-book rows are reduced by about
-60× versus the rejected every-second depth design, while the 1-second panel remains available.
-Actual database bytes/day must be measured during the first live soak and disk budget scaled with
-the observed `N`, `D` and `T`; the estimates above deliberately avoid false precision.
+Parquet materially improves storage shape but does not make retention infinite. Actual bytes/day
+must still be measured on the accepted mapping-bounded universe during the ARM64 EC2 soak, and no
+automatic retention/compaction policy is claimed by this ticket.
 
 ## Reconnect behavior
 
@@ -284,9 +304,13 @@ PREDICTIONS_CUP_POLYMARKET_DEPTH_SNAPSHOT_INTERVAL_SECONDS
 PREDICTIONS_CUP_POLYMARKET_GAMMA_PAGE_LIMIT
 PREDICTIONS_CUP_POLYMARKET_GAMMA_REFRESH_SECONDS
 PREDICTIONS_CUP_POLYMARKET_STORAGE_PATH
+PREDICTIONS_CUP_POLYMARKET_RESEARCH_PATH
+PREDICTIONS_CUP_POLYMARKET_PARQUET_SHARD_SECONDS
+PREDICTIONS_CUP_POLYMARKET_PARQUET_MAX_ROWS_PER_SHARD
 PREDICTIONS_CUP_POLYMARKET_UNIVERSE
 PREDICTIONS_CUP_POLYMARKET_INCLUDE_IDS
 PREDICTIONS_CUP_POLYMARKET_EXCLUDE_IDS
+PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS
 ```
 
 No Polymarket credential exists or is required.
@@ -323,10 +347,11 @@ submits no order and modifies no external state.
   trade tape.
 - No exchange sequence/checksum recovery is implemented because the current raw market-stream
   contract does not document one.
-- SQLite is deliberately local research storage, not a production server database.
-- No retention/compaction job is implemented yet. Growth is now bounded by explicit panel/depth
-  cadences plus observed event volume, but actual bytes/day still must be measured during the first
-  multi-day capture.
+- Raw Parquet trade capture is at-least-once; hashed redeliveries are collapsed by canonical
+  replay using deterministic token + transaction-hash identity.
+- No automatic retention/compaction job is implemented yet. Growth is bounded by selected universe,
+  explicit panel/depth cadences and observed event volume, but actual Parquet bytes/day must be
+  measured on the intended mapping-bounded universe.
 
 ## Intentionally not implemented
 
