@@ -10,6 +10,7 @@ User=@@RUNTIME_USER@@
 WorkingDirectory=@@REPO_ROOT@@
 EnvironmentFile=@@RUNTIME_ENV@@
 Environment=PYTHONUNBUFFERED=1
+UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL
 ExecStart=@@PYTHON_BIN@@ -m predictions_cup.external.polymarket.recorder --runtime-env-only
 Restart=on-failure
 RestartSec=5s
