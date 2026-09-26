@@ -55,11 +55,11 @@ def test_tracked_depth_runtime_configuration_is_external_and_nonsecret(
 ) -> None:
     del clean_config_env
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS", "843, 844,843")
+    monkeypatch.setenv("PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS", "exchange-a, exchange-b,exchange-a")
 
     settings = AppSettings()
 
-    assert settings.sig_realtime_tracked_exchange_ids == "843, 844,843"
+    assert settings.sig_realtime_tracked_exchange_ids == "exchange-a, exchange-b,exchange-a"
     assert settings.diagnostic_fields()["sig_realtime_tracked_exchange_count"] == 2
 
 
