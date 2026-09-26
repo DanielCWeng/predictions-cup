@@ -147,12 +147,45 @@ def test_run_identity_is_deterministic_and_binds_material_inputs() -> None:
     left = make_run_identity(spec, "abc123")
     right = make_run_identity(spec, "abc123")
     assert left == right
-    assert left.run_id == right.run_id
     assert make_run_identity(spec, "def456").run_id != left.run_id
-    changed = _spec(dataset=DatasetVersion("synthetic", "v1", "b" * 64))
-    assert make_run_identity(changed, "abc123").run_id != left.run_id
-    changed_cfg = _spec(feature_set_id="features-v2")
-    assert make_run_identity(changed_cfg, "abc123").run_id != left.run_id
+
+    changed_specs = (
+        _spec(dataset=DatasetVersion("synthetic", "v1", "b" * 64)),
+        _spec(feature_set_id="features-v2"),
+        _spec(
+            walk_forward=WalkForwardProtocol(
+                training_window=timedelta(seconds=10),
+                development_window=timedelta(seconds=5),
+                holdout_window=timedelta(seconds=5),
+                step=timedelta(seconds=10),
+            )
+        ),
+        _spec(
+            fdr=FDRProtocol(
+                family_id="cross-venue",
+                alpha=Decimal("0.10"),
+                hypothesis_ids=("h1", "h2", "h3", "h4"),
+            )
+        ),
+        _spec(stability=StabilityProtocol(tolerance=Decimal("0.20"))),
+        _spec(
+            negative_controls=(
+                NegativeControl(
+                    "delayed",
+                    NegativeControlKind.DELAYED_PAST_ONLY,
+                    delay=timedelta(seconds=2),
+                ),
+            )
+        ),
+        _spec(ablations=(AblationVariant("minus-book", ("book",)),)),
+        _spec(
+            execution_stresses=(
+                ExecutionStress("fee", extra_cost_per_share=Decimal("0.02")),
+            )
+        ),
+    )
+    for changed in changed_specs:
+        assert make_run_identity(changed, "abc123").run_id != left.run_id
 
 
 def test_asof_gate_rejects_future_feature() -> None:
@@ -181,19 +214,33 @@ def test_chronological_split_and_purge_embargo_reconcile() -> None:
     assert all(item.role is not FoldRole.TRAIN for item in kept)
 
 
-def test_chronological_group_holdout_never_trains_on_later_events() -> None:
+def test_chronological_group_holdout_purges_overlap_and_never_trains_on_future() -> None:
     rows = (
-        _row(0, event="old", family="old-family"),
+        _row(0, horizon=12, event="overlap", family="old-family"),
+        _row(5, horizon=2, event="embargoed", family="old-family"),
         _row(10, event="held", family="held-family"),
         _row(20, event="future", family="future-family"),
     )
-    event_fold = chronological_group_holdout(rows, holdout_id="held", level="event")
-    assert [(item.observation.event_id, item.role) for item in event_fold] == [
-        ("old", FoldRole.TRAIN),
+    result = chronological_group_holdout_result(
+        rows,
+        holdout_id="held",
+        level="event",
+        embargo=timedelta(seconds=6),
+    )
+    assert [(item.observation.event_id, item.role) for item in result.assignments] == [
         ("held", FoldRole.HOLDOUT),
     ]
-    family_fold = chronological_group_holdout(rows, holdout_id="held-family", level="family")
+    assert result.purge_evidence.rows_removed_by_purge == 1
+    assert result.purge_evidence.rows_removed_by_embargo == 1
+
+    family_fold = chronological_group_holdout(
+        rows,
+        holdout_id="held-family",
+        level="family",
+    )
     assert all(item.observation.event_family_id != "future-family" for item in family_fold)
+    assert all(item.observation.event_id != "overlap" for item in family_fold)
+
     diagnostic = leave_group_out_diagnostic(rows, holdout_id="held", level="event")
     assert any(
         item.observation.event_id == "future" and item.role is FoldRole.TRAIN
@@ -201,24 +248,45 @@ def test_chronological_group_holdout_never_trains_on_later_events() -> None:
     )
 
 
-def test_bh_known_vector_ties_and_invalid_pvalues() -> None:
-    tests = (
-        HypothesisTest("h1", "f", Decimal("0.01")),
-        HypothesisTest("h2", "f", Decimal("0.04")),
-        HypothesisTest("h3", "f", Decimal("0.03")),
-        HypothesisTest("h4", "f", Decimal("0.002")),
+def _test_result(hypothesis_id: str, family: str, p_value: str) -> HypothesisTest:
+    return HypothesisTest(
+        hypothesis_id=hypothesis_id,
+        family_id=family,
+        p_value=Decimal(p_value),
+        test_name="block-bootstrap-sign-test",
+        null_hypothesis="mean predictive result is zero",
+        test_statistic="mean",
+        dependence_assumption="event-cluster dependence",
     )
-    results = benjamini_hochberg(tests, Decimal("0.05"))
+
+
+def test_bh_known_vector_binds_metadata_and_predeclared_search_space() -> None:
+    protocol = FDRProtocol(
+        family_id="f",
+        alpha=Decimal("0.05"),
+        hypothesis_ids=("h1", "h2", "h3", "h4"),
+    )
+    tests = (
+        _test_result("h1", "f", "0.01"),
+        _test_result("h2", "f", "0.04"),
+        _test_result("h3", "f", "0.03"),
+        _test_result("h4", "f", "0.002"),
+    )
+    results = benjamini_hochberg(tests, protocol)
     rejected = {item.hypothesis_id for item in results if item.rejected}
     assert rejected == {"h1", "h2", "h3", "h4"}
+
+    tie_protocol = FDRProtocol("f", Decimal("0.05"), ("a", "b"))
     tied = benjamini_hochberg(
-        (HypothesisTest("b", "f", Decimal("0.01")), HypothesisTest("a", "f", Decimal("0.01"))),
-        Decimal("0.05"),
+        (_test_result("b", "f", "0.01"), _test_result("a", "f", "0.01")),
+        tie_protocol,
     )
-    ranks = {item.hypothesis_id: item.rank for item in tied}
-    assert ranks == {"a": 1, "b": 2}
+    assert {item.hypothesis_id: item.rank for item in tied} == {"a": 1, "b": 2}
+
+    with pytest.raises(ValueError, match="predeclared FDR search space"):
+        benjamini_hochberg(tests[:-1], protocol)
     with pytest.raises(ValueError, match="p-values"):
-        benjamini_hochberg((HypothesisTest("bad", "f", Decimal("1.1")),), Decimal("0.05"))
+        _test_result("bad", "f", "1.1")
 
 
 def test_bootstrap_is_deterministic_and_uses_declared_units() -> None:
@@ -232,14 +300,31 @@ def test_bootstrap_is_deterministic_and_uses_declared_units() -> None:
     assert left == right
     assert left.method == "moving_block"
     assert left.units == 8
-    event = event_bootstrap_mean(
-        {"e1": (Decimal("1"), Decimal("2")), "e2": (Decimal("4"),)},
+    imbalanced = {
+        "e1": (Decimal("1"), Decimal("1"), Decimal("1"), Decimal("1")),
+        "e2": (Decimal("5"),),
+    }
+    observation_weighted = event_bootstrap_mean(
+        imbalanced,
         draws=100,
         run_id="r",
-        component_id="event",
+        component_id="event-observation-weighted",
+        weighting=EventBootstrapWeighting.OBSERVATION_WEIGHTED_CLUSTER,
     )
-    assert event.method == "event"
-    assert event.units == 2
+    equal_event = event_bootstrap_mean(
+        imbalanced,
+        draws=100,
+        run_id="r",
+        component_id="event-equal",
+        weighting=EventBootstrapWeighting.EQUAL_EVENT,
+    )
+    assert observation_weighted.method == "event_cluster"
+    assert observation_weighted.weighting == "OBSERVATION_WEIGHTED_CLUSTER"
+    assert observation_weighted.point_estimate == Decimal("1.8")
+    assert equal_event.method == "event_equal_weight"
+    assert equal_event.weighting == "EQUAL_EVENT"
+    assert equal_event.point_estimate == Decimal("3")
+    assert equal_event.units == 2
 
 
 def test_parameter_surface_distinguishes_plateau_and_knife_edge() -> None:
@@ -409,6 +494,7 @@ def test_harness_validates_identity_and_report_is_byte_deterministic() -> None:
         invalidity_counts={},
         known_limitations=("synthetic fixture only",),
         disposition=ResearchDisposition.INCONCLUSIVE,
+        evidence_policy=spec.disposition_policy,
     )
     assert report.serialize() == report.serialize()
     assert b'"net_executable_metrics":null' in report.serialize()
@@ -453,7 +539,14 @@ def test_walk_forward_builds_multiple_chronological_folds_with_auditable_roles()
         assert fold.train_start < fold.train_end < fold.development_end < fold.holdout_end
         assert any(item.role is FoldRole.TRAIN for item in fold.assignments)
         assert any(item.role is FoldRole.DEVELOPMENT for item in fold.assignments)
-        assert fold.purge_evidence.rows_before >= fold.purge_evidence.rows_remaining
+        assert (
+            fold.training_purge_evidence.rows_before
+            >= fold.training_purge_evidence.rows_remaining
+        )
+        assert (
+            fold.development_purge_evidence.rows_before
+            >= fold.development_purge_evidence.rows_remaining
+        )
 
 
 def test_negative_controls_and_ablations_are_explicit_and_past_safe() -> None:
