@@ -200,14 +200,13 @@ def chronological_group_holdout(
     if level not in {"event", "family"}:
         raise ValueError("level must be 'event' or 'family'")
     rows = tuple(rows)
-    getter = (lambda row: row.event_id) if level == "event" else (lambda row: row.event_family_id)
-    held = [row for row in rows if getter(row) == holdout_id]
+    held = [row for row in rows if _group_id(row, level) == holdout_id]
     if not held:
         raise ValueError(f"no rows for held-out {level} {holdout_id}")
     first_holdout = min(row.decision_time for row in held)
     out: list[FoldAssignment] = []
     for row in sorted(rows, key=lambda item: item.decision_time):
-        group_id = getter(row)
+        group_id = _group_id(row, level)
         if group_id == holdout_id:
             out.append(FoldAssignment(row, FoldRole.HOLDOUT))
         elif row.decision_time < first_holdout:
@@ -223,8 +222,14 @@ def leave_group_out_diagnostic(
 ) -> tuple[FoldAssignment, ...]:
     if level not in {"event", "family"}:
         raise ValueError("level must be 'event' or 'family'")
-    getter = (lambda row: row.event_id) if level == "event" else (lambda row: row.event_family_id)
     return tuple(
-        FoldAssignment(row, FoldRole.HOLDOUT if getter(row) == holdout_id else FoldRole.TRAIN)
+        FoldAssignment(
+            row,
+            FoldRole.HOLDOUT if _group_id(row, level) == holdout_id else FoldRole.TRAIN,
+        )
         for row in sorted(rows, key=lambda item: item.decision_time)
     )
+
+
+def _group_id(row: EvaluationObservation, level: str) -> str | None:
+    return row.event_id if level == "event" else row.event_family_id
