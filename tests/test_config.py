@@ -42,7 +42,7 @@ def test_defaults_load_without_credentials(
     assert settings.sig_trade_credential is None
     assert settings.trading_enabled is False
     assert str(settings.sig_api_base_url) == "https://www.thesuper.market/api/v1"
-    assert settings.sig_rest_governor_rate_per_second == 3.0
+    assert settings.sig_rest_governor_rate_per_second == 2.0
     assert settings.sig_realtime_bulk_price_refresh_seconds == 10.0
 
 
