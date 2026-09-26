@@ -16,6 +16,7 @@ from predictions_cup.external.polymarket.gamma import GammaClient
 from predictions_cup.external.polymarket.health import IngestionHealth
 from predictions_cup.external.polymarket.models import JsonObject, TradeEvent, utc_now
 from predictions_cup.external.polymarket.orderbook import OrderBookStore, event_type
+from predictions_cup.external.polymarket.parquet_storage import PolymarketResearchStorage
 from predictions_cup.external.polymarket.storage import PolymarketStorage
 from predictions_cup.external.polymarket.universe import ElectionUniverseSelector, parse_id_csv
 from predictions_cup.external.polymarket.websocket import MarketWebSocket
@@ -35,10 +36,16 @@ class PolymarketRecorder:
         )
         self.clob = ClobMarketDataClient(str(settings.polymarket_clob_base_url))
         self.storage = PolymarketStorage(settings.polymarket_storage_path)
+        self.research_storage = PolymarketResearchStorage(
+            settings.polymarket_research_path,
+            shard_seconds=settings.polymarket_parquet_shard_seconds,
+            max_rows_per_shard=settings.polymarket_parquet_max_rows_per_shard,
+        )
         self.books = OrderBookStore()
         self.selector = ElectionUniverseSelector(
             include_ids=parse_id_csv(settings.polymarket_include_ids),
             exclude_ids=parse_id_csv(settings.polymarket_exclude_ids),
+            strict_ids=parse_id_csv(settings.polymarket_supervised_ids),
         )
         self.websocket = MarketWebSocket(str(settings.polymarket_ws_url), self.health)
         self._token_ids: tuple[str, ...] = ()
@@ -47,6 +54,7 @@ class PolymarketRecorder:
 
     async def initialize(self) -> None:
         await asyncio.to_thread(self.storage.initialize)
+        await asyncio.to_thread(self.research_storage.initialize)
         await self.refresh_universe()
 
     async def refresh_universe(self, *, fail_soft_if_initialized: bool = False) -> bool:
@@ -124,7 +132,7 @@ class PolymarketRecorder:
             self.health.book_uninitialized_delta_count += result.uninitialized_deltas
             if result.changes:
                 try:
-                    await asyncio.to_thread(self.storage.append_book_changes, result.changes)
+                    await asyncio.to_thread(self.research_storage.append_book_changes, result.changes)
                 except Exception:
                     self.health.storage_failures += 1
                     raise
@@ -137,7 +145,7 @@ class PolymarketRecorder:
             trade = TradeEvent.from_ws(event, observed_at)
             self.books.apply_last_trade_price(payload, observed_at)
             try:
-                await asyncio.to_thread(self.storage.append_trade, trade)
+                await asyncio.to_thread(self.research_storage.append_trade, trade)
             except Exception:
                 self.health.storage_failures += 1
                 raise
@@ -159,7 +167,7 @@ class PolymarketRecorder:
         depth_rows = 0
         try:
             panel_rows = await asyncio.to_thread(
-                self.storage.append_observations, snapshots, recorded_at.isoformat()
+                self.research_storage.append_observations, snapshots, recorded_at.isoformat()
             )
             depth_due = (
                 self._last_depth_snapshot_at is None
@@ -168,7 +176,7 @@ class PolymarketRecorder:
             )
             if depth_due:
                 depth_rows = await asyncio.to_thread(
-                    self.storage.append_snapshots, snapshots, recorded_at.isoformat()
+                    self.research_storage.append_snapshots, snapshots, recorded_at.isoformat()
                 )
                 self._last_depth_snapshot_at = recorded_at
         except Exception as exc:
@@ -184,13 +192,16 @@ class PolymarketRecorder:
 
     async def run(self) -> None:
         await self.initialize()
-        async with asyncio.TaskGroup() as tasks:
-            tasks.create_task(
-                self.websocket.run(self.handle_message, self._before_websocket_connect)
-            )
-            tasks.create_task(self._snapshot_loop())
-            tasks.create_task(self._refresh_loop())
-            tasks.create_task(self._health_loop())
+        try:
+            async with asyncio.TaskGroup() as tasks:
+                tasks.create_task(
+                    self.websocket.run(self.handle_message, self._before_websocket_connect)
+                )
+                tasks.create_task(self._snapshot_loop())
+                tasks.create_task(self._refresh_loop())
+                tasks.create_task(self._health_loop())
+        finally:
+            await asyncio.to_thread(self.research_storage.flush_all)
 
     async def _snapshot_loop(self) -> None:
         while True:
@@ -286,6 +297,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Disable local .env loading; intended for supervised runtime services.",
     )
     parser.add_argument(
+        "--require-explicit-universe",
+        action="store_true",
+        help=(
+            "Fail closed unless PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS supplies "
+            "a strict external market/condition/token universe."
+        ),
+    )
+    parser.add_argument(
         "--smoke-test",
         action="store_true",
         help="perform explicit read-only public Gamma/CLOB checks and exit",
@@ -298,6 +317,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     if args.smoke_test:
         return asyncio.run(_public_smoke_test(settings))
+    if args.require_explicit_universe and not parse_id_csv(settings.polymarket_supervised_ids):
+        _LOG.error(
+            "Supervised Polymarket capture requires non-empty "
+            "PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS"
+        )
+        return 2
     if not settings.polymarket_capture_enabled:
         _LOG.error(
             "Polymarket capture is disabled; set PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true "
