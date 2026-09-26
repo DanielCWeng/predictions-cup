@@ -171,9 +171,13 @@ storage**:
 - those IDs are a strict include-only market/condition/token universe with no heuristic fallback;
 - the intended production source is the accepted SIG ↔ Polymarket live crosswalk;
 - unresolved IDs fail closed;
+- an upgrade that still requests Polymarket capture but lacks the new strict IDs first disables/
+  stops any existing Polymarket service before failing;
 - 1-second scalar/BBO, book changes, public trades and depth snapshots write to immutable ZSTD
   Parquet shards below `data/polymarket_research/`;
 - fresh `data/polymarket_operational.sqlite3` stores only metadata/tokens/health;
+- raw Parquet trade capture is at-least-once, but hashed trades carry deterministic token+hash
+  event identity and canonical replay de-duplicates them;
 - legacy `data/polymarket_capture.sqlite3` captures remain readable and are not deleted.
 
 The service command is:
@@ -186,6 +190,9 @@ The service command is:
 Until LIVE-MAPPING-GATE-001 supplies an accepted crosswalk, the production-intended supervised
 Polymarket universe is not available and the Polymarket service should remain stopped rather than
 fall back to the 3,160-market heuristic. The SIG supervised collector can run independently.
+Before BUILD-007 merges, a deliberately bounded explicit public test universe may be used only for
+the required ARM64 EC2 PyArrow/Parquet smoke/soak; that temporary test set is not production
+mapping evidence.
 
 Gamma failures also fail at the correct boundary: startup without a valid universe fails closed;
 after startup, a failed scheduled metadata discovery/selection keeps the last-good universe and
