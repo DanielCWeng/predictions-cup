@@ -170,7 +170,7 @@ class GammaClient:
             self.rate_limit_backoff_base_seconds,
             backoff,
         )
-        return backoff + jitter
+        return float(backoff + jitter)
 
 
 def _parse_retry_after_seconds(value: str | None) -> float | None:
