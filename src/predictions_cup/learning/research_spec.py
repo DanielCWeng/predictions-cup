@@ -1,5 +1,4 @@
 """Canonical, serializable research-evaluation contracts."""
-# ruff: noqa: I001
 
 from __future__ import annotations
 
@@ -28,6 +27,17 @@ class SplitMethod(StrEnum):
     CHRONOLOGICAL_EVENT_HOLDOUT = "CHRONOLOGICAL_EVENT_HOLDOUT"
 
 
+class NegativeControlKind(StrEnum):
+    ZERO_SIGNAL = "ZERO_SIGNAL"
+    DELAYED_PAST_ONLY = "DELAYED_PAST_ONLY"
+    FEATURE_EXCLUSION = "FEATURE_EXCLUSION"
+
+
+class EventBootstrapWeighting(StrEnum):
+    OBSERVATION_WEIGHTED_CLUSTER = "OBSERVATION_WEIGHTED_CLUSTER"
+    EQUAL_EVENT = "EQUAL_EVENT"
+
+
 @dataclass(frozen=True, slots=True)
 class DatasetVersion:
     dataset_id: str
@@ -44,6 +54,122 @@ class DatasetVersion:
 
 
 @dataclass(frozen=True, slots=True)
+class WalkForwardProtocol:
+    training_window: timedelta
+    development_window: timedelta
+    holdout_window: timedelta
+    step: timedelta
+    expanding_training: bool = False
+
+    def __post_init__(self) -> None:
+        values = (
+            self.training_window,
+            self.development_window,
+            self.holdout_window,
+            self.step,
+        )
+        if any(value <= timedelta(0) for value in values):
+            raise ValueError("walk-forward windows and step must be positive")
+
+
+@dataclass(frozen=True, slots=True)
+class FDRProtocol:
+    family_id: str
+    alpha: Decimal
+    hypothesis_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.family_id:
+            raise ValueError("FDR family_id must be non-blank")
+        if not (Decimal("0") < self.alpha <= Decimal("1")):
+            raise ValueError("FDR alpha must be in (0, 1]")
+        if not self.hypothesis_ids or any(not value for value in self.hypothesis_ids):
+            raise ValueError("FDR search space requires explicit hypothesis IDs")
+        if len(self.hypothesis_ids) != len(set(self.hypothesis_ids)):
+            raise ValueError("FDR hypothesis IDs must be unique")
+
+
+@dataclass(frozen=True, slots=True)
+class BootstrapProtocol:
+    method: str = "moving_block"
+    draws: int = 1000
+    block_size: int = 10
+    event_weighting: EventBootstrapWeighting = (
+        EventBootstrapWeighting.OBSERVATION_WEIGHTED_CLUSTER
+    )
+
+    def __post_init__(self) -> None:
+        if not self.method:
+            raise ValueError("bootstrap method must be non-blank")
+        if self.draws < 1 or self.block_size < 1:
+            raise ValueError("bootstrap draws and block size must be positive")
+
+
+@dataclass(frozen=True, slots=True)
+class StabilityProtocol:
+    tolerance: Decimal
+
+    def __post_init__(self) -> None:
+        if self.tolerance < Decimal("0"):
+            raise ValueError("stability tolerance must be non-negative")
+
+
+@dataclass(frozen=True, slots=True)
+class NegativeControlSpec:
+    name: str
+    kind: NegativeControlKind
+    delay: timedelta | None = None
+    excluded_components: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("negative-control name must be non-blank")
+        if self.kind is NegativeControlKind.DELAYED_PAST_ONLY:
+            if self.delay is None or self.delay <= timedelta(0):
+                raise ValueError("delayed past-only control requires a positive delay")
+        elif self.delay is not None:
+            raise ValueError("delay is only valid for DELAYED_PAST_ONLY controls")
+        if self.kind is NegativeControlKind.FEATURE_EXCLUSION and not self.excluded_components:
+            raise ValueError("feature-exclusion control requires excluded components")
+
+
+@dataclass(frozen=True, slots=True)
+class AblationSpec:
+    name: str
+    removed_components: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.name or not self.removed_components:
+            raise ValueError("ablation requires a name and explicit removed components")
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionStressSpec:
+    name: str
+    extra_cost_per_share: Decimal | None = None
+    execution_delay: timedelta | None = None
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("stress name must be non-blank")
+        if self.extra_cost_per_share is not None and self.extra_cost_per_share < 0:
+            raise ValueError("extra execution cost must not be negative")
+        if self.execution_delay is not None and self.execution_delay < timedelta(0):
+            raise ValueError("execution delay must not be negative")
+
+
+@dataclass(frozen=True, slots=True)
+class EvidencePolicy:
+    require_statistical_tests: bool = True
+    require_fdr: bool = True
+    require_bootstrap: bool = True
+    require_stability: bool = True
+    require_negative_controls: bool = True
+    require_ablations: bool = True
+    require_execution_stress: bool = True
+
+
+@dataclass(frozen=True, slots=True)
 class ResearchEvaluationSpec:
     experiment_id: str
     hypothesis_family: str
@@ -57,17 +183,18 @@ class ResearchEvaluationSpec:
     event_universe: tuple[str, ...]
     event_family_universe: tuple[str, ...]
     split_method: SplitMethod
+    walk_forward: WalkForwardProtocol | None
+    fdr: FDRProtocol
+    bootstrap: BootstrapProtocol
+    stability: StabilityProtocol
+    disposition_policy: EvidencePolicy
     purge: bool = True
     embargo: timedelta = timedelta(0)
     parameter_grid: tuple[tuple[str, tuple[str, ...]], ...] = ()
-    negative_controls: tuple[str, ...] = ()
-    ablations: tuple[str, ...] = ()
+    negative_controls: tuple[NegativeControlSpec, ...] = ()
+    ablations: tuple[AblationSpec, ...] = ()
     execution_assumptions: tuple[str, ...] = ()
-    execution_stresses: tuple[str, ...] = ()
-    multiple_testing_family: str = "default"
-    bootstrap_method: str = "moving_block"
-    bootstrap_draws: int = 1000
-    bootstrap_block_size: int = 10
+    execution_stresses: tuple[ExecutionStressSpec, ...] = ()
     expected_failure_condition: str = ""
 
     def __post_init__(self) -> None:
@@ -78,19 +205,38 @@ class ResearchEvaluationSpec:
             self.feature_set_id,
             self.feature_availability_rule,
             self.target,
-            self.multiple_testing_family,
         )
         if any(not value for value in required):
             raise ValueError("canonical research identifiers must be non-blank")
         if not self.target_horizons or any(h <= timedelta(0) for h in self.target_horizons):
             raise ValueError("target_horizons must be positive")
+        if len(self.target_horizons) != len(set(self.target_horizons)):
+            raise ValueError("target_horizons must be unique")
         if self.embargo < timedelta(0):
             raise ValueError("embargo must not be negative")
-        if self.bootstrap_draws < 1 or self.bootstrap_block_size < 1:
-            raise ValueError("bootstrap draws and block size must be positive")
+        if self.split_method is SplitMethod.WALK_FORWARD and self.walk_forward is None:
+            raise ValueError("WALK_FORWARD requires an explicit walk_forward protocol")
+        if self.split_method is not SplitMethod.WALK_FORWARD and self.walk_forward is not None:
+            raise ValueError("walk_forward protocol is only valid for WALK_FORWARD")
         names = [name for name, _ in self.parameter_grid]
         if len(names) != len(set(names)):
             raise ValueError("parameter_grid names must be unique")
+        _require_unique_names(self.negative_controls, "negative controls")
+        _require_unique_names(self.ablations, "ablations")
+        _require_unique_names(self.execution_stresses, "execution stresses")
+        for label, values in (
+            ("market universe", self.market_universe),
+            ("event universe", self.event_universe),
+            ("event-family universe", self.event_family_universe),
+        ):
+            if len(values) != len(set(values)):
+                raise ValueError(f"{label} must not contain duplicates")
+
+
+def _require_unique_names(values: tuple[Any, ...], label: str) -> None:
+    names = [value.name for value in values]
+    if len(names) != len(set(names)):
+        raise ValueError(f"{label} names must be unique")
 
 
 def canonical_data(value: Any) -> Any:
