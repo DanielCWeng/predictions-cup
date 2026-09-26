@@ -30,32 +30,49 @@ result -> FDR -> bootstrap -> stability -> execution stress -> ablation/control 
 
 The research specification is serializable and contains no Python callable identity. Dataset
 identity includes dataset ID, schema/version, manifest SHA-256 and optional source version. The
-caller supplies the exact code revision. The run ID is SHA-256 over canonical config hash, dataset
-hash and code revision; time, UUIDs, object identity and file mtimes are excluded.
+caller supplies the exact code revision. The canonical config binds the complete evaluation
+protocol, including walk-forward windows/step, purge/embargo, predeclared FDR family/search space
+and alpha, bootstrap method/weighting, stability tolerance, parameter grid, control parameters,
+ablation definitions, execution-stress parameters and disposition evidence policy. The run ID is
+SHA-256 over that canonical config hash, dataset hash and code revision; time, UUIDs, object
+identity and file mtimes are excluded.
 
 ## Split and leakage semantics
 
 All timestamps are timezone-aware. The hard feature invariant is
 `feature_available_at <= decision_time`; future-dated features raise rather than being clipped.
 
-Chronological train/development/holdout assignment is deterministic. `purge_training()` removes
-training labels whose label interval extends across the evaluation boundary, then applies an
-explicit pre-boundary embargo and reports before/purge/embargo/remaining counts.
+Chronological train/development/holdout assignment is deterministic. Training labels are purged
+against the development boundary and development labels are independently purged against the
+holdout boundary. Both stages support an explicit pre-boundary embargo and report
+before/purge/embargo/remaining counts.
 
-`chronological_group_holdout()` holds out an event or family and only trains on rows strictly
-earlier than that held-out unit's first observation. `leave_group_out_diagnostic()` is available
-for a pure group diagnostic but is intentionally separate because it can include future groups and
-must not be described as chronological OOS evidence.
+Chronological event/family holdout only trains on rows strictly earlier than the held-out unit's
+first observation, purges earlier label intervals that cross into the held-out event/family and
+supports the same embargo rule. `leave_group_out_diagnostic()` remains separate because a pure
+group diagnostic can include future groups and must not be described as chronological OOS
+evidence.
+
+Every common observation also enforces `label_end_time == decision_time + horizon`. Harness
+validation checks the declared hypothesis family, horizon, market/event/family universes and a
+deterministic observation fingerprint. Duplicate fingerprints fail before statistics so repeated
+fills/rows cannot inflate evidence counts.
 
 ## Statistical semantics
 
-Benjamini-Hochberg operates within declared family IDs over supplied valid p-values. Ties break by
-hypothesis ID. It reports raw p, rank, threshold, monotone adjusted q-value, family size and reject
-decision. It never synthesizes p-values from confidence intervals.
+Benjamini-Hochberg operates only against the predeclared FDR family and complete predeclared
+hypothesis-ID search space. Supplied p-values carry explicit test metadata: test name, null
+hypothesis, test statistic and dependence assumption. Missing or silently narrowed hypotheses fail
+the FDR call. Ties break by hypothesis ID. Results report raw p, rank, threshold, monotone adjusted
+q-value, family size and reject decision. BUILD-008 never synthesizes p-values from confidence
+intervals.
 
-Moving-block bootstrap samples contiguous blocks; event bootstrap resamples event units. Default
-seeds derive deterministically from run ID plus component ID. Intervals are uncertainty diagnostics,
-not proof of independence.
+Moving-block bootstrap samples contiguous blocks. Event bootstrap exposes two distinct estimands:
+`OBSERVATION_WEIGHTED_CLUSTER` resamples event clusters and then pools their observations, while
+`EQUAL_EVENT` resamples event-level means so each event has equal weight regardless of tick count.
+The selected weighting is recorded in the result and canonical bootstrap protocol. Default seeds
+derive deterministically from run ID plus component ID. Intervals are uncertainty diagnostics, not
+proof of independence.
 
 ## Parameter stability
 
@@ -82,7 +99,10 @@ net economics remains `null`; gross is not relabelled as zero-cost net profit.
 `ResearchReport` binds schema/run/config/data/code identity, universe, fold and purge evidence,
 observation/market/event/family counts, horizon results, predictive/gross/net metrics, bootstrap,
 raw tests, FDR, stability, controls, ablations, stresses, invalidities, limitations and explicit
-disposition. Canonical JSON serialization is stable.
+disposition. A hash-bound `EvidencePolicy` specifies which evidence classes are mandatory for
+promotion. If a report requests `PROMOTED` while any required evidence class is absent, the
+serialized report records the requested disposition and missing evidence but mechanically forces
+the effective disposition to `INCONCLUSIVE`. Canonical JSON serialization is stable.
 
 `RESEARCH_LEDGER.md` is the durable decision record. PROMOTED, REJECTED and INCONCLUSIVE are all
 first-class. Synthetic BUILD-008 machinery fixtures are never recorded as empirical alpha.
@@ -107,7 +127,8 @@ explicit manual event/market identities are sufficient for harness validation.
 
 ## Limitations
 
-- BUILD-008 does not define experiment-specific predictive tests or invent p-values.
+- BUILD-008 does not define experiment-specific predictive tests or invent p-values; it does
+  require supplied tests to declare their statistical metadata and predeclared FDR search space.
 - It does not fit models or select alpha parameters.
 - Event IDs/family IDs must be supplied by experiment/data adapters.
 - The parameter-neighbour topology is a simple integer-grid Manhattan adjacency contract.
