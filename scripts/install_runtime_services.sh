@@ -62,6 +62,12 @@ require_env_assignment() {
   fi
 }
 
+env_flag_is_true() {
+  local name="$1"
+  local env_file="$2"
+  grep -Eiq "^[[:space:]]*${name}[[:space:]]*=[[:space:]]*(1|true|yes|on)([[:space:]]*(#.*)?)?$" "${env_file}"
+}
+
 runtime_user="$(resolve_runtime_user)"
 runtime_home="$(resolve_runtime_home "${runtime_user}")"
 runtime_config_dir="${runtime_home}/.config/predictions-cup"
@@ -95,14 +101,14 @@ env_owner="$(stat -c '%U' "${runtime_env}")"
 if grep -Eq '^[[:space:]]*PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL[[:space:]]*=' "${runtime_env}"; then
   fail "runtime.env must not contain PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL"
 fi
-if grep -Eiq "^[[:space:]]*PREDICTIONS_CUP_TRADING_ENABLED[[:space:]]*=[[:space:]]*['\"]?(1|true|yes|on)['\"]?([[:space:]]*(#.*)?)?$" "${runtime_env}"; then
+if env_flag_is_true "PREDICTIONS_CUP_TRADING_ENABLED" "${runtime_env}"; then
   fail "runtime.env must not enable trading"
 fi
 
 require_env_assignment "PREDICTIONS_CUP_SIG_READ_CREDENTIAL" "${runtime_env}"
 require_env_assignment "PREDICTIONS_CUP_TOURNAMENT_ID" "${runtime_env}"
-if ! grep -Eiq "^[[:space:]]*PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED[[:space:]]*=[[:space:]]*['\"]?(1|true|yes|on)['\"]?([[:space:]]*(#.*)?)?$" "${runtime_env}"; then
-  fail "runtime.env must set PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true"
+if ! env_flag_is_true "PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED" "${runtime_env}"; then
+  fail "runtime.env must set PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true (unquoted)"
 fi
 
 for service in "${SERVICES[@]}"; do
@@ -139,44 +145,7 @@ for service in "${SERVICES[@]}"; do
   if grep -Eq 'trade\.env' "${rendered_unit}"; then
     fail "refusing to install a unit that references trade.env"
   fi
-  if ! grep -q '^UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL    fail "SIG service must not hard-code tracked exchange IDs"
-  fi
-
-  install -m 0644 "${rendered_unit}" "${SYSTEMD_DIR}/${service}"
-done
-
-"${SYSTEMCTL_BIN}" daemon-reload
-for service in "${SERVICES[@]}"; do
-  "${SYSTEMCTL_BIN}" enable "${service}"
-done
-
-restart_failed=0
-for service in "${SERVICES[@]}"; do
-  if ! "${SYSTEMCTL_BIN}" restart "${service}"; then
-    printf 'ERROR: restart failed for %s\n' "${service}" >&2
-    restart_failed=1
-  fi
-done
-
-active_failed=0
-for service in "${SERVICES[@]}"; do
-  if "${SYSTEMCTL_BIN}" is-active --quiet "${service}"; then
-    printf 'OK: %s is active\n' "${service}"
-  else
-    printf 'ERROR: %s is not active\n' "${service}" >&2
-    active_failed=1
-  fi
-  "${SYSTEMCTL_BIN}" --no-pager --full status "${service}" || true
-done
-
-if [[ "${restart_failed}" -ne 0 || "${active_failed}" -ne 0 ]]; then
-  printf 'Inspect logs with: journalctl -u <service> -n 100 --no-pager\n' >&2
-  exit 1
-fi
-
-printf 'Installed read-only collector services. EnvironmentFile=%s\n' "${runtime_env}"
-printf 'Tracked SIG depth defaults to none; configure PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS only in runtime.env when explicitly required.\n'
- "${rendered_unit}"; then
+  if ! grep -q '^UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL$' "${rendered_unit}"; then
     fail "unit must strip PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL from its process environment"
   fi
   if ! grep -q -- '--runtime-env-only' "${rendered_unit}"; then
