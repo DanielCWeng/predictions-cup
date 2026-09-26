@@ -52,6 +52,7 @@ from predictions_cup.learning.validation import (
     chronological_group_holdout_result,
     chronological_split,
     leave_group_out_diagnostic,
+    purge_development,
     purge_training,
     walk_forward_folds,
 )
@@ -181,6 +182,12 @@ def test_run_identity_is_deterministic_and_binds_material_inputs() -> None:
         _spec(
             execution_stresses=(
                 ExecutionStress("fee", extra_cost_per_share=Decimal("0.02")),
+            )
+        ),
+        _spec(
+            disposition_policy=replace(
+                EvidencePolicy(),
+                min_fdr_rejections=2,
             )
         ),
     )
@@ -349,17 +356,21 @@ def test_parameter_surface_distinguishes_plateau_and_knife_edge() -> None:
 
 
 def test_economics_remain_separate_and_latency_is_not_faked() -> None:
-    row = _row(0, gross="0.03", net=None)
+    fee = ExecutionStress("fee", extra_cost_per_share=Decimal("0.01"))
+    latency = ExecutionStress("latency", execution_delay=timedelta(milliseconds=100))
+    spec = _spec(execution_stresses=(fee, latency))
+    harness = ResearchEvaluationHarness(spec, "abc123")
+    row = _row(0, gross="0.03", net=None, run_id=harness.identity.run_id)
     assert row.predictive_result == Decimal("0.02")
     assert row.gross_executable_markout == Decimal("0.03")
     assert row.net_executable_markout is None
-    stressed = ResearchEvaluationHarness.apply_cost_stress(
-        (row,), ExecutionStress("fee+slippage", extra_cost_per_share=Decimal("0.01"))
-    )
-    assert stressed == (Decimal("0.02"),)
+    assert harness.apply_cost_stress((row,), fee) == (Decimal("0.02"),)
     with pytest.raises(ValueError, match="re-evaluation"):
-        ResearchEvaluationHarness.apply_cost_stress(
-            (row,), ExecutionStress("latency", execution_delay=timedelta(milliseconds=100))
+        harness.apply_cost_stress((row,), latency)
+    with pytest.raises(ValueError, match="not declared"):
+        harness.apply_cost_stress(
+            (row,),
+            ExecutionStress("other", extra_cost_per_share=Decimal("0.02")),
         )
 
 
@@ -672,9 +683,205 @@ def test_promoted_report_is_forced_inconclusive_when_required_evidence_is_missin
         fdr_results=({"hypothesis_id": "h1", "rejected": True},),
         bootstrap_results=({"method": "moving_block"},),
         parameter_stability={"peak_is_isolated": False},
-        negative_controls=({"name": "zero"},),
-        ablations=({"name": "minus-flow"},),
-        execution_stresses=({"name": "fee"},),
+        negative_controls=({"name": "zero", "passed": True},),
+        ablations=({"name": "minus-flow", "passed": True},),
+        execution_stresses=({"name": "fee", "passed": True},),
     )
     assert complete.disposition is ResearchDisposition.PROMOTED
     assert complete.disposition_evidence_missing == ()
+
+
+def test_exact_boundary_labels_are_purged_at_every_evaluation_boundary() -> None:
+    train_row = _row(0, horizon=10)
+    dev_row = _row(10, horizon=5)
+    holdout_row = _row(15, horizon=5)
+    assignments = chronological_split(
+        (train_row, dev_row, holdout_row),
+        ChronologicalBoundaries(
+            BASE + timedelta(seconds=10),
+            BASE + timedelta(seconds=15),
+        ),
+    )
+    after_train, train_evidence = purge_training(
+        assignments,
+        BASE + timedelta(seconds=10),
+    )
+    assert train_evidence.rows_removed_by_purge == 1
+    assert all(item.observation is not train_row for item in after_train)
+
+    after_dev, dev_evidence = purge_development(
+        after_train,
+        BASE + timedelta(seconds=15),
+    )
+    assert dev_evidence.rows_removed_by_purge == 1
+    assert all(item.observation is not dev_row for item in after_dev)
+
+    group = chronological_group_holdout_result(
+        (
+            _row(0, horizon=10, event="prior", family="f1"),
+            _row(10, horizon=5, event="held", family="f1"),
+        ),
+        holdout_id="held",
+        level="event",
+    )
+    assert group.purge_evidence.rows_removed_by_purge == 1
+    assert [item.observation.event_id for item in group.assignments] == ["held"]
+
+
+def test_harness_rejects_runtime_protocol_mismatches() -> None:
+    spec = _spec()
+    harness = ResearchEvaluationHarness(spec, "abc123")
+    rows = tuple(
+        _row(seconds, run_id=harness.identity.run_id)
+        for seconds in (0, 5, 10, 15, 20, 25, 30)
+    )
+
+    bad_walk = WalkForwardConfig(
+        training_window=timedelta(seconds=10),
+        development_window=timedelta(seconds=5),
+        holdout_window=timedelta(seconds=5),
+        step=timedelta(seconds=10),
+    )
+    with pytest.raises(ValueError, match="walk-forward config"):
+        harness.walk_forward(rows, config=bad_walk)
+
+    bad_fdr = replace(spec.fdr, alpha=Decimal("0.10"))
+    with pytest.raises(ValueError, match="FDR protocol"):
+        harness.apply_fdr(
+            tuple(_test_result(hypothesis_id, "cross-venue", "0.01") for hypothesis_id in spec.fdr.hypothesis_ids),
+            protocol=bad_fdr,
+        )
+
+    with pytest.raises(ValueError, match="bootstrap draws"):
+        harness.moving_block_bootstrap(
+            (Decimal("1"), Decimal("2"), Decimal("3")),
+            component_id="block",
+            draws=999,
+        )
+
+    with pytest.raises(ValueError, match="event weighting"):
+        harness.event_bootstrap(
+            {"e1": (Decimal("1"),), "e2": (Decimal("2"),)},
+            component_id="event",
+            weighting=EventBootstrapWeighting.EQUAL_EVENT,
+        )
+
+    with pytest.raises(ValueError, match="stability tolerance"):
+        harness.parameter_surface(
+            (
+                ParameterCell((0,), (("x", "0"),), Decimal("1")),
+                ParameterCell((1,), (("x", "1"),), Decimal("0.9")),
+            ),
+            tolerance=Decimal("0.20"),
+        )
+
+    with pytest.raises(ValueError, match="negative control"):
+        harness.validate_negative_control(
+            NegativeControl(
+                "delayed",
+                NegativeControlKind.DELAYED_PAST_ONLY,
+                delay=timedelta(seconds=1),
+            )
+        )
+    with pytest.raises(ValueError, match="ablation"):
+        harness.validate_ablation(AblationVariant("minus-book", ("book",)))
+
+
+def test_harness_validates_report_identity_and_policy() -> None:
+    spec = _spec()
+    harness = ResearchEvaluationHarness(spec, "abc123")
+    report = ResearchReport(
+        schema_version="1",
+        run_id=harness.identity.run_id,
+        experiment_id=spec.experiment_id,
+        hypothesis_family=spec.hypothesis_family,
+        economic_mechanism=spec.economic_mechanism,
+        code_revision="abc123",
+        dataset_id=spec.dataset.dataset_id,
+        dataset_version=spec.dataset.schema_version,
+        dataset_hash=spec.dataset.manifest_sha256,
+        config_hash=harness.identity.config_hash,
+        universe={"markets": ("m1",), "events": ("e1",), "families": ("f1",)},
+        folds=(),
+        purge_embargo={},
+        sample_counts={},
+        horizon_results=(),
+        predictive_metrics={},
+        gross_executable_metrics={},
+        net_executable_metrics=None,
+        bootstrap_results=(),
+        raw_statistical_tests=(),
+        fdr_results=(),
+        parameter_stability=None,
+        negative_controls=(),
+        ablations=(),
+        execution_stresses=(),
+        invalidity_counts={},
+        known_limitations=(),
+        disposition=ResearchDisposition.INCONCLUSIVE,
+        evidence_policy=spec.disposition_policy,
+    )
+    assert harness.validate_report(report) is report
+    with pytest.raises(ValueError, match="evidence policy"):
+        harness.validate_report(
+            replace(
+                report,
+                evidence_policy=replace(spec.disposition_policy, min_fdr_rejections=2),
+            )
+        )
+
+
+def test_promotion_requires_declared_evidence_to_pass_not_just_exist() -> None:
+    spec = _spec()
+    harness = ResearchEvaluationHarness(spec, "abc123")
+    failing = ResearchReport(
+        schema_version="1",
+        run_id=harness.identity.run_id,
+        experiment_id=spec.experiment_id,
+        hypothesis_family=spec.hypothesis_family,
+        economic_mechanism=spec.economic_mechanism,
+        code_revision="abc123",
+        dataset_id=spec.dataset.dataset_id,
+        dataset_version=spec.dataset.schema_version,
+        dataset_hash=spec.dataset.manifest_sha256,
+        config_hash=harness.identity.config_hash,
+        universe={"markets": ("m1",), "events": ("e1",), "families": ("f1",)},
+        folds=(),
+        purge_embargo={},
+        sample_counts={},
+        horizon_results=(),
+        predictive_metrics={},
+        gross_executable_metrics={},
+        net_executable_metrics=None,
+        bootstrap_results=({"method": "moving_block", "lower": "0.01"},),
+        raw_statistical_tests=({"test_name": "declared"},),
+        fdr_results=({"hypothesis_id": "h1", "rejected": False},),
+        parameter_stability={"peak_is_isolated": True},
+        negative_controls=({"name": "zero", "passed": False},),
+        ablations=({"name": "minus-flow", "passed": False},),
+        execution_stresses=({"name": "fee", "passed": False},),
+        invalidity_counts={},
+        known_limitations=(),
+        disposition=ResearchDisposition.PROMOTED,
+        evidence_policy=spec.disposition_policy,
+    )
+    assert failing.disposition is ResearchDisposition.INCONCLUSIVE
+    assert set(failing.disposition_evidence_missing) >= {
+        "fdr_threshold",
+        "stability_threshold",
+        "negative_controls_threshold",
+        "ablations_threshold",
+        "execution_stresses_threshold",
+    }
+
+    passing = replace(
+        failing,
+        disposition=ResearchDisposition.PROMOTED,
+        fdr_results=({"hypothesis_id": "h1", "rejected": True},),
+        parameter_stability={"peak_is_isolated": False},
+        negative_controls=({"name": "zero", "passed": True},),
+        ablations=({"name": "minus-flow", "passed": True},),
+        execution_stresses=({"name": "fee", "passed": True},),
+    )
+    assert passing.disposition is ResearchDisposition.PROMOTED
+    assert passing.disposition_evidence_missing == ()
