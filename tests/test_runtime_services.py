@@ -200,6 +200,7 @@ def test_installer_propagates_inactive_service(tmp_path: Path) -> None:
     assert result.returncode != 0
     assert "predictions-cup-polymarket-capture.service is not active" in result.stderr
 
+
 def test_installer_rejects_trade_credential_without_printing_secret(tmp_path: Path) -> None:
     env, runtime_env, _ = _installer_env(tmp_path)
     _write_runtime_env(runtime_env, include_trade_credential=True)
