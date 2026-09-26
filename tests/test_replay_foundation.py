@@ -9,10 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from predictions_cup.external.polymarket.health import IngestionHealth
 from predictions_cup.external.polymarket.models import BookChangeEvent, BookSnapshot, TradeEvent
 from predictions_cup.external.polymarket.models import BookLevel as PolymarketBookLevel
-from predictions_cup.external.polymarket.storage import PolymarketStorage
+from predictions_cup.external.polymarket.parquet_storage import PolymarketResearchStorage
 from predictions_cup.learning.evaluation import summarize
 from predictions_cup.learning.experiments import (
     ExperimentObservation,
@@ -508,9 +507,9 @@ def _write_real_capture_fixtures(tmp_path: Path) -> tuple[Path, Path]:
     )
     sig.close()
 
-    poly_path = tmp_path / "polymarket.sqlite3"
-    storage = PolymarketStorage(poly_path)
-    storage.initialize()
+    poly_path = tmp_path / "polymarket_research"
+    research = PolymarketResearchStorage(poly_path)
+    research.initialize()
     poly_book = BookSnapshot(
         market_id="poly-market",
         token_id="poly-1",
@@ -520,9 +519,9 @@ def _write_real_capture_fixtures(tmp_path: Path) -> tuple[Path, Path]:
         asks=(PolymarketBookLevel(Decimal("0.46"), Decimal("12")),),
         last_trade_price=Decimal("0.455"),
     )
-    storage.append_observations((poly_book,), at.isoformat())
-    storage.append_snapshots((poly_book,), at.isoformat())
-    storage.append_book_changes(
+    research.append_observations((poly_book,), at.isoformat())
+    research.append_snapshots((poly_book,), at.isoformat())
+    research.append_book_changes(
         (
             BookChangeEvent(
                 market_id="poly-market",
@@ -538,7 +537,7 @@ def _write_real_capture_fixtures(tmp_path: Path) -> tuple[Path, Path]:
             ),
         )
     )
-    storage.append_trade(
+    research.append_trade(
         TradeEvent(
             market_id="poly-market",
             token_id="poly-1",
@@ -551,14 +550,13 @@ def _write_real_capture_fixtures(tmp_path: Path) -> tuple[Path, Path]:
             fee_rate_bps=None,
         )
     )
-    storage.append_health(
-        IngestionHealth(websocket_connected=True),
-        (at + timedelta(milliseconds=40)).isoformat(),
-    )
+    research.flush_all()
     return sig_path, poly_path
 
 
-def test_actual_accepted_sqlite_loaders_and_offline_summary(tmp_path: Path) -> None:
+def test_actual_sig_sqlite_and_polymarket_parquet_loaders_and_summary(
+    tmp_path: Path,
+) -> None:
     sig_path, poly_path = _write_real_capture_fixtures(tmp_path)
     sig_events = load_sig_capture(sig_path)
     poly_events = load_polymarket_capture(poly_path)
@@ -573,7 +571,6 @@ def test_actual_accepted_sqlite_loaders_and_offline_summary(tmp_path: Path) -> N
         ReplayEventType.BOOK_CHANGE,
         ReplayEventType.DEPTH_SNAPSHOT,
         ReplayEventType.TRADE,
-        ReplayEventType.HEALTH,
     }
     summary = summarize_captures(sig_path=sig_path, polymarket_path=poly_path)
     assert summary.records_loaded == len(sig_events) + len(poly_events)
@@ -636,52 +633,6 @@ def test_sql_selection_filters_before_materialization(tmp_path: Path) -> None:
                 outside,
                 "late-noise",
                 None,
-            ),
-        )
-
-    with sqlite3.connect(poly_path) as connection:
-        connection.execute(
-            """
-            INSERT INTO polymarket_book_observations (
-                token_id, market_id, source_timestamp, state_observed_at,
-                observed_at, best_bid, best_ask, midpoint, spread,
-                last_trade_price, book_valid
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "poly-noise",
-                "noise-market",
-                None,
-                inside,
-                inside,
-                "bad-decimal",
-                "0.2",
-                None,
-                None,
-                None,
-                1,
-            ),
-        )
-        connection.execute(
-            """
-            INSERT INTO polymarket_book_observations (
-                token_id, market_id, source_timestamp, state_observed_at,
-                observed_at, best_bid, best_ask, midpoint, spread,
-                last_trade_price, book_valid
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "poly-1",
-                "poly-market",
-                None,
-                outside,
-                outside,
-                "bad-decimal",
-                "0.2",
-                None,
-                None,
-                None,
-                1,
             ),
         )
 
