@@ -154,9 +154,7 @@ docs/implementation/BUILD_006_SIG_REST_GOVERNOR.md for the accepted corrective c
 
 PR #20 adds two read-only systemd services and `scripts/install_runtime_services.sh`. The
 installer resolves the runtime user's absolute home/repository/Python paths, installs the units,
-reloads systemd, enables/restarts the collectors and verifies they are active. Both services use
-only `~/.config/predictions-cup/runtime.env`; the installer refuses a runtime file containing a
-SIG trade credential or enabled trading flag. No tracked exchange IDs are embedded in the SIG
+reloads systemd, enables/restarts the collectors and verifies they are active. Both services use only `~/.config/predictions-cup/runtime.env`; their ExecStart commands pass `--runtime-env-only` so repo-local `.env` is disabled, and the units strip the SIG trade credential from the process environment. The installer refuses a runtime file containing a SIG trade credential or enabled trading flag. No tracked exchange IDs are embedded in the SIG
 unit: tracked depth is supplied externally through
 `PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS` and defaults to none.
 
