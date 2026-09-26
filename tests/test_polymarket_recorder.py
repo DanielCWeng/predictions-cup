@@ -237,6 +237,43 @@ def test_snapshot_storage_failure_is_surfaced(
     assert recorder.health.snapshot_last_status.startswith("ERROR:")
 
 
+def test_periodic_gamma_refresh_fails_soft_and_later_recovers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = AppSettings.model_validate(
+        {"polymarket_storage_path": tmp_path / "capture.sqlite3"}
+    )
+    recorder = PolymarketRecorder(settings)
+    recorder._token_ids = ("token-existing",)
+    recorder._market_count = 1
+    calls = 0
+
+    async def fake_refresh_universe() -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            recorder.health.gamma_last_status = "ERROR: GammaRateLimitError: rate limited"
+            raise RuntimeError("rate limited")
+        recorder.health.gamma_last_status = "OK"
+
+    monkeypatch.setattr(recorder, "refresh_universe", fake_refresh_universe)
+
+    async def scenario() -> None:
+        first = await recorder._refresh_universe_fail_soft()
+        assert first is False
+        assert recorder._token_ids == ("token-existing",)
+        assert recorder._market_count == 1
+        assert recorder.health.gamma_last_status.startswith("ERROR:")
+
+        second = await recorder._refresh_universe_fail_soft()
+        assert second is True
+        assert recorder.health.gamma_last_status == "OK"
+        assert calls == 2
+
+    asyncio.run(scenario())
+
+
 def test_runtime_stop_event_stops_websocket_and_cancels_recorder(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
