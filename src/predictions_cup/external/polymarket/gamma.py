@@ -42,6 +42,7 @@ class GammaClient:
         max_rate_limit_attempts: int = 4,
         rate_limit_backoff_base_seconds: float = 2.0,
         rate_limit_backoff_max_seconds: float = 30.0,
+        rate_limit_min_delay_seconds: float = 1.0,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         random_fraction: Callable[[], float] = random.random,
     ):
@@ -55,12 +56,15 @@ class GammaClient:
             raise ValueError(
                 "rate_limit_backoff_max_seconds must be >= rate_limit_backoff_base_seconds"
             )
+        if rate_limit_min_delay_seconds <= 0:
+            raise ValueError("rate_limit_min_delay_seconds must be positive")
         self.base_url = base_url.rstrip("/")
         self.page_limit = page_limit
         self.timeout = aiohttp.ClientTimeout(total=timeout_seconds)
         self.max_rate_limit_attempts = max_rate_limit_attempts
         self.rate_limit_backoff_base_seconds = rate_limit_backoff_base_seconds
         self.rate_limit_backoff_max_seconds = rate_limit_backoff_max_seconds
+        self.rate_limit_min_delay_seconds = rate_limit_min_delay_seconds
         self._sleep = sleep
         self._random_fraction = random_fraction
 
@@ -160,7 +164,7 @@ class GammaClient:
     ) -> float:
         parsed_retry_after = _parse_retry_after_seconds(retry_after)
         if parsed_retry_after is not None:
-            return parsed_retry_after
+            return max(self.rate_limit_min_delay_seconds, parsed_retry_after)
 
         backoff = min(
             self.rate_limit_backoff_base_seconds * (2 ** (attempt - 1)),
