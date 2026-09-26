@@ -11,6 +11,7 @@ from predictions_cup.external.polymarket.models import (
     BookLevel,
     BookSnapshot,
     TradeEvent,
+    hashed_trade_event_id,
 )
 from predictions_cup.external.polymarket.parquet_storage import PolymarketResearchStorage
 
@@ -149,3 +150,4 @@ def test_parquet_event_streams_preserve_source_and_observed_time(tmp_path: Path)
     assert change["observed_at"] == observed
     assert trade["source_timestamp"] == source
     assert trade["observed_at"] == observed
+    assert trade["event_id"] == hashed_trade_event_id("token-1", "tx-1")
