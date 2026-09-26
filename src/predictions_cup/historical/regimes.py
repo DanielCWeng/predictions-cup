@@ -18,8 +18,16 @@ PMXT_V1_FIRST_HOUR = datetime(2026, 2, 21, 18, tzinfo=UTC)
 PMXT_V1_LAST_HOUR = datetime(2026, 4, 16, 5, tzinfo=UTC)
 # Routing rule: before this hour -> PMXT V1, from this hour -> PMXT V2. The raw V2 file for
 # 2026-04-13T19 only starts receiving at 19:42:26.6 while V1 covers the whole hour, so the
-# 19:00 partition comes from V1 and V2 starts at 20:00 (independent-review decision).
+# 19:00 partition's primary source is V1 and V2 is primary from 20:00.
 PMXT_V2_FIRST_HOUR = datetime(2026, 4, 13, 20, tzinfo=UTC)
+# Splice hours: the primary (V1) extract is supplemented by the V2 extract of the same hour,
+# read from ``<FAMILY>/date=/hour=/events_v2.parquet``. V1 supplies all book evidence for every
+# token or condition it covers; V2 supplies only market state V1 never recorded (V2-only tokens
+# and conditions, from their real first observation) and evidence types V1 cannot carry
+# (trade prints, tick-size changes). See ``corpus.splice_primary_with_supplement``.
+PMXT_SPLICE_HOURS: frozenset[datetime] = frozenset({datetime(2026, 4, 13, 19, tzinfo=UTC)})
+PMXT_SPLICE_SUPPLEMENT_VERSION = "PMXT_V2"
+PMXT_SPLICE_SUPPLEMENT_EXTRACT = "events_v2.parquet"
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,5 +137,10 @@ def regime_by_id(regime_id: str) -> Regime:
 
 
 def pmxt_version_for_hour(hour: datetime) -> str:
-    """Routing: V1 through the 2026-04-13T19 hour, V2 from 2026-04-13T20:00Z on."""
+    """Primary source: V1 through the 2026-04-13T19 hour, V2 from 2026-04-13T20:00Z on."""
     return "PMXT_V2" if hour >= PMXT_V2_FIRST_HOUR else "PMXT_V1"
+
+
+def pmxt_supplement_for_hour(hour: datetime) -> str | None:
+    """Supplementary source version for a splice hour (V1-preferred / V2-only), else None."""
+    return PMXT_SPLICE_SUPPLEMENT_VERSION if hour in PMXT_SPLICE_HOURS else None

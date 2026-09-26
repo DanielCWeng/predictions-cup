@@ -14,7 +14,9 @@ import pyarrow.parquet as pq
 from predictions_cup.historical.corpus import _file_record, _hours
 from predictions_cup.historical.regimes import (
     PMXT_ARCHIVE_BASE_URL,
+    PMXT_SPLICE_SUPPLEMENT_EXTRACT,
     REGIMES,
+    pmxt_supplement_for_hour,
     pmxt_version_for_hour,
 )
 
@@ -77,25 +79,29 @@ def build_source_manifest(
             key = f"{hour:%Y-%m-%dT%H}"
             version = pmxt_version_for_hour(hour)
             record: dict[str, Any] = {"family": family, "hour": key, "source_version": version}
-            extract = (
-                orderbooks_root / family / f"date={hour:%Y-%m-%d}" / f"hour={hour:%H}"
-                / "events.parquet"
-            )
-            if extract.is_file():
-                record["extract"] = _file_record(
-                    extract, extract.relative_to(orderbooks_root).as_posix(), kind="pmxt_extract"
-                )
-            else:
-                record["extract"] = None
+            hour_dir = orderbooks_root / family / f"date={hour:%Y-%m-%d}" / f"hour={hour:%H}"
+            record["extract"] = _extract_record(orderbooks_root, hour_dir / "events.parquet")
+            supplement = pmxt_supplement_for_hour(hour)
+            if supplement is not None:
+                record["splice_supplement"] = {
+                    "source_version": supplement,
+                    "extract": _extract_record(
+                        orderbooks_root, hour_dir / PMXT_SPLICE_SUPPLEMENT_EXTRACT
+                    ),
+                }
             archive_hours.append(record)
 
     footers: dict[tuple[str, str], dict[str, Any]] = {}
     if remote_footers:
         for record in archive_hours:
-            footer_key = (record["hour"], record["source_version"])
-            if footer_key not in footers:
-                footers[footer_key] = fetch_remote_footer(pmxt_archive_url(*footer_key))
-            record["archive"] = footers[footer_key]
+            targets = [record]
+            if "splice_supplement" in record:
+                targets.append(record["splice_supplement"])
+            for target in targets:
+                footer_key = (record["hour"], target["source_version"])
+                if footer_key not in footers:
+                    footers[footer_key] = fetch_remote_footer(pmxt_archive_url(*footer_key))
+                target["archive"] = footers[footer_key]
 
     fills: list[dict[str, Any]] = []
     for path in sorted(fills_root.glob("*.parquet")):
@@ -148,14 +154,19 @@ def build_source_manifest(
                 "with per-level price_change deltas carrying post-change best bid/ask",
                 "timestamp_resolution": "milliseconds; ties unordered",
                 "coverage_note": "archive: V1 2026-02-21T18..2026-04-16T05, V2 file from "
-                "2026-04-13T19 (first row 19:42:26.6); corpus routes V1 through "
-                "2026-04-13T19 and V2 from 2026-04-13T20",
+                "2026-04-13T19 (first row 19:42:26.6); corpus routes V1 before "
+                "2026-04-13T19 and V2 from 2026-04-13T20. 2026-04-13T19 uses deterministic "
+                "V1-preferred / V2-only supplementation: V1 supplies shared book evidence; "
+                "V2 supplies genuinely V2-only market state and evidence types unavailable "
+                "from V1, always from their actual observable time and with explicit "
+                "provenance (hours[].splice_supplement)",
                 "hours": archive_hours,
             },
             {
                 "source_id": "pmxt_exact_token_extracts",
                 "provider": "DATA-001 acquire stage (this repository)",
-                "physical_location": "local/Kaggle directory <FAMILY>/date=/hour=/events.parquet",
+                "physical_location": "local/Kaggle directory <FAMILY>/date=/hour=/events.parquet "
+                "(plus events_v2.parquet, the V2 supplement, in splice hours)",
                 "format": "Parquet (ZSTD); raw archive rows for candidate tokens only, raw "
                 "columns preserved plus research_family/source_version",
             },
@@ -172,6 +183,12 @@ def build_source_manifest(
             },
         ],
     }
+
+
+def _extract_record(root: Path, path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    return _file_record(path, path.relative_to(root).as_posix(), kind="pmxt_extract")
 
 
 def write_json(path: Path, value: Any) -> None:

@@ -27,15 +27,23 @@ import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from predictions_cup.historical.corpus import _hours, load_candidates
-from predictions_cup.historical.regimes import REGIMES, pmxt_version_for_hour
+from predictions_cup.historical.regimes import (
+    PMXT_SPLICE_SUPPLEMENT_EXTRACT,
+    REGIMES,
+    pmxt_supplement_for_hour,
+    pmxt_version_for_hour,
+)
 from predictions_cup.historical.sources import pmxt_archive_url
 
 _BATCH_ROWS = 25_000
+_PRIMARY_EXTRACT = "events.parquet"
 
 
 def plan_hours(only: frozenset[str] | None = None) -> list[dict[str, Any]]:
     """Unique source hours -> families whose regime window needs them.
 
+    A splice hour yields two items: the primary extract (``events.parquet``) and the
+    supplement (``events_v2.parquet``) from the supplementary archive version.
     ``only`` narrows the plan to the given ``YYYY-MM-DDTHH`` hour keys (re-acquiring single
     hours without re-running the whole plan); an hour outside every regime window is an error.
     """
@@ -48,14 +56,22 @@ def plan_hours(only: frozenset[str] | None = None) -> list[dict[str, Any]]:
         if unknown:
             raise ValueError(f"hours outside every regime window: {sorted(unknown)}")
         needed = {h: f for h, f in needed.items() if f"{h:%Y-%m-%dT%H}" in only}
-    return [
-        {
-            "hour": f"{hour:%Y-%m-%dT%H}",
-            "source_version": pmxt_version_for_hour(hour),
-            "families": sorted(families),
-        }
-        for hour, families in sorted(needed.items())
-    ]
+    plan: list[dict[str, Any]] = []
+    for hour, families in sorted(needed.items()):
+        sources = [(pmxt_version_for_hour(hour), _PRIMARY_EXTRACT)]
+        supplement = pmxt_supplement_for_hour(hour)
+        if supplement is not None:
+            sources.append((supplement, PMXT_SPLICE_SUPPLEMENT_EXTRACT))
+        for version, extract in sources:
+            plan.append(
+                {
+                    "hour": f"{hour:%Y-%m-%dT%H}",
+                    "source_version": version,
+                    "extract": extract,
+                    "families": sorted(families),
+                }
+            )
+    return plan
 
 
 def acquire(
@@ -81,14 +97,16 @@ def acquire(
         }
     todo = []
     for item in plan_hours(only_hours):
-        families = [f for f in item["families"] if (item["hour"], f) not in done]
+        families = [
+            f for f in item["families"] if (item["hour"], item["extract"], f) not in done
+        ]
         if families:
             todo.append({**item, "families": families})
     for index, item in enumerate(todo):
         if index % workers != worker:
             continue
         url = pmxt_archive_url(item["hour"], item["source_version"])
-        record: dict[str, Any] = {"hour": item["hour"], "url": url}
+        record: dict[str, Any] = {"hour": item["hour"], "extract": item["extract"], "url": url}
         try:
             local, size = _download(url, scratch)
         except FileNotFoundError:
@@ -119,7 +137,7 @@ def _filter_hour(
     writers: dict[str, pq.ParquetWriter] = {}
     paths = {
         fam: output_root / fam / f"date={item['hour'][:10]}" / f"hour={item['hour'][11:]}"
-        / "events.parquet"
+        / item["extract"]
         for fam in item["families"]
     }
     try:
@@ -197,13 +215,15 @@ def _download(url: str, scratch: Path, attempts: int = 4) -> tuple[Path, int]:
     raise OSError(f"download failed after {attempts} attempts: {error}")
 
 
-def _load_done(output_root: Path) -> set[tuple[str, str]]:
-    done: set[tuple[str, str]] = set()
+def _load_done(output_root: Path) -> set[tuple[str, str, str]]:
+    done: set[tuple[str, str, str]] = set()
     for path in output_root.glob("_acquire_progress_w*.jsonl"):
         for line in path.read_text(encoding="utf-8").splitlines():
             record = json.loads(line)
             if record.get("status") == "DONE":
-                done.update((record["hour"], fam) for fam in record["per_family"])
+                # Records written before splice support always wrote the primary extract.
+                extract = record.get("extract", _PRIMARY_EXTRACT)
+                done.update((record["hour"], extract, fam) for fam in record["per_family"])
     return done
 
 

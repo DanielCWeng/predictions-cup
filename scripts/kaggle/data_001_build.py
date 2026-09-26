@@ -1,7 +1,8 @@
 """Kaggle kernel entrypoint for DATA-001: rebuild and validate the corpus from mounted inputs.
 
 Attached datasets (private, owner polyleviathan):
-  sig-cup-pmxt-orderbook-extracts   <FAMILY>/date=/hour=/events.parquet (zipped per family)
+  sig-cup-pmxt-orderbook-extracts   <FAMILY>/date=/hour=/events.parquet, plus events_v2.parquet
+                                    in splice hours (zipped per family)
   sig-cup-polyleviathan-fills       fills_<FAMILY>.parquet, markets_<FAMILY>.parquet
   sig-cup-predictions-cup-code      predictions_cup wheel + COMMIT.txt
 

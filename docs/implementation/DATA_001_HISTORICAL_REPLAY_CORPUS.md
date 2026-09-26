@@ -38,11 +38,36 @@ Parquet footer by HTTP range request, plus the SHA-256 of every extract and Poly
 ### PendulumFlow PMXT order-book archive
 
 Hourly Parquet at `https://archive.pendulumflow.com/pmxt/{v1,v2}/polymarket_orderbook_<hour>.parquet`.
-Routing: V1 through the `2026-04-13T19` hourly partition, V2 from `2026-04-13T20:00Z` on
-(`PMXT_V2_FIRST_HOUR`). The ticket originally routed V2 from 19:00, but the raw V2 19:00 file only
-starts receiving at 19:42:26.6 while V1 covers the whole hour, which left a ~42.5-minute
-regime-wide blind spot. The independent review moved the whole 19:00 hour to V1. No partition
-mixes V1 and V2 rows.
+Routing: V1 before `2026-04-13T19`, V2 from `2026-04-13T20:00Z` on (`PMXT_V2_FIRST_HOUR`).
+`2026-04-13T19` uses deterministic V1-preferred / V2-only supplementation: V1 supplies shared
+book evidence; V2 supplies genuinely V2-only market state and evidence types unavailable from V1,
+always from their actual observable time and with explicit provenance (`PMXT_SPLICE_HOURS`,
+`corpus.splice_primary_with_supplement`).
+
+History: the ticket originally routed V2 from 19:00, but the raw V2 19:00 file only starts
+receiving at 19:42:26.6 while V1 covers the whole hour, which left a ~42.5-minute regime-wide
+blind spot. Following the earlier review decision, the whole 19:00 hour was moved to V1. The
+V1/V2 overlap audit then showed that V2 also subscribed to markets V1 never recorded, whose only
+subscription snapshots are in the V2 19:00 file, so the rule became the splice below.
+
+Splice rule for `2026-04-13T19` (PER_2026 and HUN_2026; applied to normalized rows):
+
+- A token is **V1-covered** when the token or its condition has a depth snapshot or book change
+  in the V1 extract. Coverage is read from identifiers in the source bytes only, never from
+  prices, sizes or any build result.
+- V1-covered tokens: V1 depth snapshots and book changes for the whole hour; the V2 depth
+  snapshots and book changes of those tokens are dropped (counted as
+  `splice_superseded_by_primary:<stream>`).
+- Tokens absent from V1: their V2 rows are kept from their real first observation (19:42:26.6),
+  including the subscription depth snapshots. Nothing is backfilled before it.
+- V2 trade prints and tick-size changes, which V1 cannot carry, are kept for every token,
+  including V1-covered ones.
+- Each row keeps its own `source_version`. Only rows identical in every column are removed, as
+  in every other hour; by construction no token has book rows from both versions.
+- Every other hour has exactly one source. The V2 supplement is
+  `<FAMILY>/date=2026-04-13/hour=19/events_v2.parquet`; its hash and V2 archive footer are in
+  `data_001_sources.json` (`hours[].splice_supplement`), and the per-regime splice counts are in
+  the corpus manifest and quality report (`source_splices`).
 
 | | PMXT V1 | PMXT V2 |
 |---|---|---|
@@ -64,7 +89,8 @@ null `source_timestamp`.
 `python -m predictions_cup.historical acquire` downloads each unique archive hour once, keeps only
 raw rows for candidate tokens (V2 by `asset_id`, V1 by condition `market_id`; V1 token filtering
 is exact in the normalization stage), preserves the raw columns and writes
-`<FAMILY>/date=/hour=/events.parquet`. The checkpoint is per `(hour, family)` and records the raw
+`<FAMILY>/date=/hour=/events.parquet`; a splice hour also gets `events_v2.parquet` from the V2
+archive file of the same hour. The checkpoint is per `(hour, extract, family)` and records the raw
 file's SHA-256 and row count. `--hour YYYY-MM-DDTHH` (repeatable) re-acquires single hours.
 
 ### PolyLeviathan fills
@@ -334,7 +360,11 @@ hashes depend on the PyArrow writer version; logical equality does not.
 
 `tests/test_historical_corpus.py` (synthetic) covers V1/V2 normalization, level ordering, exact
 decimals, malformed/crossed handling, window and token filtering, content-deterministic ordering,
-fill separation, determinism, tamper detection and fail-visible float prices.
+fill separation, determinism, tamper detection and fail-visible float prices. The splice tests
+cover V1 preference for shared tokens and conditions, V2-only rows kept at their real times with
+nothing earlier, surviving V2-only subscription snapshots, V2 trades and tick-size rows with V2
+provenance, no double counting, value-independent selection, determinism under input
+reordering, and an end-to-end build loaded by BUILD-005.
 `tests/test_historical_fixture.py` loads the committed real-data fixture through unmodified
 BUILD-005 and runs EXPERIMENT-002 on it.
 
