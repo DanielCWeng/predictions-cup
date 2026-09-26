@@ -1,76 +1,25 @@
 """BUILD-008 orchestration helpers above accepted experiment implementations."""
-# ruff: noqa: I001
 
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
-from enum import StrEnum
 
 from predictions_cup.learning.research_spec import (
+    AblationSpec,
+    ExecutionStressSpec,
+    NegativeControlKind,
+    NegativeControlSpec,
     ResearchEvaluationSpec,
     RunIdentity,
     make_run_identity,
 )
 from predictions_cup.learning.validation import EvaluationObservation
 
-
-
-class NegativeControlKind(StrEnum):
-    ZERO_SIGNAL = "ZERO_SIGNAL"
-    DELAYED_PAST_ONLY = "DELAYED_PAST_ONLY"
-    FEATURE_EXCLUSION = "FEATURE_EXCLUSION"
-
-
-@dataclass(frozen=True, slots=True)
-class NegativeControl:
-    name: str
-    kind: NegativeControlKind
-    delay: timedelta | None = None
-    excluded_components: tuple[str, ...] = ()
-
-    def __post_init__(self) -> None:
-        if not self.name:
-            raise ValueError("negative-control name must be non-blank")
-        if self.kind is NegativeControlKind.DELAYED_PAST_ONLY:
-            if self.delay is None or self.delay <= timedelta(0):
-                raise ValueError("delayed past-only control requires a positive delay")
-        elif self.delay is not None:
-            raise ValueError("delay is only valid for DELAYED_PAST_ONLY controls")
-        if self.kind is NegativeControlKind.FEATURE_EXCLUSION and not self.excluded_components:
-            raise ValueError("feature-exclusion control requires excluded components")
-
-
-@dataclass(frozen=True, slots=True)
-class AblationVariant:
-    name: str
-    removed_components: tuple[str, ...]
-
-    def __post_init__(self) -> None:
-        if not self.name or not self.removed_components:
-            raise ValueError("ablation requires a name and explicit removed components")
-
-@dataclass(frozen=True, slots=True)
-class NamedVariant:
-    name: str
-    removed_components: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class ExecutionStress:
-    name: str
-    extra_cost_per_share: Decimal | None = None
-    execution_delay: timedelta | None = None
-
-    def __post_init__(self) -> None:
-        if not self.name:
-            raise ValueError("stress name must be non-blank")
-        if self.extra_cost_per_share is not None and self.extra_cost_per_share < 0:
-            raise ValueError("extra execution cost must not be negative")
-        if self.execution_delay is not None and self.execution_delay < timedelta(0):
-            raise ValueError("execution delay must not be negative")
+NegativeControl = NegativeControlSpec
+AblationVariant = AblationSpec
+ExecutionStress = ExecutionStressSpec
 
 
 class ResearchEvaluationHarness:
@@ -82,12 +31,35 @@ class ResearchEvaluationHarness:
         self, rows: Iterable[EvaluationObservation]
     ) -> tuple[EvaluationObservation, ...]:
         materialized = tuple(rows)
+        seen: set[str] = set()
+        allowed_horizons = set(self.spec.target_horizons)
+        market_universe = set(self.spec.market_universe)
+        event_universe = set(self.spec.event_universe)
+        family_universe = set(self.spec.event_family_universe)
+
         for row in materialized:
             if row.run_id != self.identity.run_id:
                 raise ValueError("observation run_id does not match harness identity")
             if row.experiment_id != self.spec.experiment_id:
                 raise ValueError("observation experiment_id does not match research spec")
+            if row.hypothesis_family != self.spec.hypothesis_family:
+                raise ValueError("observation hypothesis_family does not match research spec")
+            if row.horizon not in allowed_horizons:
+                raise ValueError("observation horizon is not declared by the research spec")
+            if market_universe and row.market_id not in market_universe:
+                raise ValueError("observation market_id is outside the declared market universe")
+            if event_universe and row.event_id not in event_universe:
+                raise ValueError("observation event_id is outside the declared event universe")
+            if family_universe and row.event_family_id not in family_universe:
+                raise ValueError(
+                    "observation event_family_id is outside the declared family universe"
+                )
             row.assert_asof_safe()
+            observation_id = row.observation_id
+            if observation_id in seen:
+                raise ValueError(f"duplicate evaluation observation: {observation_id}")
+            seen.add(observation_id)
+
         return tuple(
             sorted(
                 materialized,
@@ -96,13 +68,14 @@ class ResearchEvaluationHarness:
                     row.instrument_id,
                     row.horizon,
                     row.event_id or "",
+                    row.observation_id,
                 ),
             )
         )
 
     @staticmethod
     def apply_cost_stress(
-        rows: Iterable[EvaluationObservation], stress: ExecutionStress
+        rows: Iterable[EvaluationObservation], stress: ExecutionStressSpec
     ) -> tuple[Decimal | None, ...]:
         if stress.execution_delay not in (None, timedelta(0)):
             raise ValueError(
