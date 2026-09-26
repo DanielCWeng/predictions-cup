@@ -124,13 +124,17 @@ class ExchangeRuntimeState:
 
     @property
     def best_bid(self) -> Decimal | None:
-        if self.trusted and self.orderbook and self.orderbook.bids:
+        if self.trusted:
+            if self.orderbook is None or not self.orderbook.bids:
+                return None
             return self.orderbook.bids[0].price
         return self.scalar_best_bid
 
     @property
     def best_ask(self) -> Decimal | None:
-        if self.trusted and self.orderbook and self.orderbook.asks:
+        if self.trusted:
+            if self.orderbook is None or not self.orderbook.asks:
+                return None
             return self.orderbook.asks[0].price
         return self.scalar_best_ask
 
