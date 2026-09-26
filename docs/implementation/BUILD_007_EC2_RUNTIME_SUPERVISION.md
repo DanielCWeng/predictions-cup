@@ -3,7 +3,7 @@
 **Status:** IN REVIEW — PR #20  
 **Branch:** `build/007-ec2-runtime-supervision`  
 **Base main at creation:** `6340428a1c486c66990853164aecf97c27d4d719`  
-**Live EC2 validated:** no
+**Live EC2 validated:** partial; broad soak rejected, corrected mapping-bounded lane not yet live-validated
 
 ## Scope
 
@@ -202,7 +202,8 @@ Python, systemd destination and systemctl executable. It never deletes runtime d
 
 ## Automated validation
 
-CI validation is green for lint, shell validation, strict mypy, pytest and the application smoke.
+Corrected mapping-bounded/Parquet architecture validation is green in CI #641 for lint, shell
+validation, strict mypy, pytest and the application smoke.
 
 BUILD-007 adds tests proving:
 
