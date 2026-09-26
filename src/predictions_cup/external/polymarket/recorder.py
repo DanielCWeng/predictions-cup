@@ -49,38 +49,49 @@ class PolymarketRecorder:
         await asyncio.to_thread(self.storage.initialize)
         await self.refresh_universe()
 
-    async def refresh_universe(self) -> None:
+    async def refresh_universe(self, *, fail_soft_if_initialized: bool = False) -> bool:
         try:
             discovery = await self.gamma.discover_active_markets()
             selection = self.selector.select(discovery.markets)
             if not selection.markets:
                 raise RuntimeError("Polymarket universe selector returned no markets")
-            refreshed_at = utc_now()
-            await asyncio.to_thread(
-                self.storage.upsert_markets, selection.markets, refreshed_at.isoformat()
-            )
-
-            old_tokens = frozenset(self._token_ids)
-            new_tokens = frozenset(selection.token_ids)
-            additions = tuple(sorted(new_tokens - old_tokens))
-            removals = old_tokens - new_tokens
-            if additions and old_tokens:
-                await self._seed_books(additions, invalidate=False)
-            if removals:
-                self.books.invalidate(removals)
-
-            self._token_ids = selection.token_ids
-            self._market_count = len(selection.markets)
-            self.health.markets_subscribed = self._market_count
-            self.health.tokens_subscribed = len(self._token_ids)
-            self.health.parse_failures += discovery.parse_failures
-            self.health.gamma_last_refresh_at = refreshed_at
-            self.health.gamma_last_status = "OK"
-            await self.websocket.set_tokens(self._token_ids)
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
             self.health.gamma_last_refresh_at = utc_now()
             self.health.gamma_last_status = f"ERROR: {type(exc).__name__}: {exc}"
+            if fail_soft_if_initialized and self._token_ids:
+                _LOG.warning(
+                    "Polymarket periodic Gamma refresh failed; keeping existing universe: %s: %s",
+                    type(exc).__name__,
+                    exc,
+                )
+                return False
             raise
+
+        refreshed_at = utc_now()
+        await asyncio.to_thread(
+            self.storage.upsert_markets, selection.markets, refreshed_at.isoformat()
+        )
+
+        old_tokens = frozenset(self._token_ids)
+        new_tokens = frozenset(selection.token_ids)
+        additions = tuple(sorted(new_tokens - old_tokens))
+        removals = old_tokens - new_tokens
+        if additions and old_tokens:
+            await self._seed_books(additions, invalidate=False)
+        if removals:
+            self.books.invalidate(removals)
+
+        self._token_ids = selection.token_ids
+        self._market_count = len(selection.markets)
+        self.health.markets_subscribed = self._market_count
+        self.health.tokens_subscribed = len(self._token_ids)
+        self.health.parse_failures += discovery.parse_failures
+        self.health.gamma_last_refresh_at = refreshed_at
+        self.health.gamma_last_status = "OK"
+        await self.websocket.set_tokens(self._token_ids)
+        return True
 
     async def _before_websocket_connect(self) -> None:
         self.books.invalidate_all()
@@ -189,21 +200,7 @@ class PolymarketRecorder:
     async def _refresh_loop(self) -> None:
         while True:
             await asyncio.sleep(self.settings.polymarket_gamma_refresh_seconds)
-            await self._refresh_universe_fail_soft()
-
-    async def _refresh_universe_fail_soft(self) -> bool:
-        try:
-            await self.refresh_universe()
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            _LOG.warning(
-                "Polymarket periodic Gamma refresh failed; keeping existing universe: %s: %s",
-                type(exc).__name__,
-                exc,
-            )
-            return False
-        return True
+            await self.refresh_universe(fail_soft_if_initialized=True)
 
     async def _health_loop(self) -> None:
         while True:
