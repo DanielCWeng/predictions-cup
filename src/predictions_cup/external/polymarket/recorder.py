@@ -179,9 +179,12 @@ class PolymarketRecorder:
             )
             if depth_due:
                 depth_rows = await asyncio.to_thread(
-                    self.research_storage.append_snapshots, snapshots, recorded_at.isoformat()
+                    self.research_storage.append_snapshots,
+                    snapshots,
+                    recorded_at.isoformat(),
                 )
                 self._last_depth_snapshot_at = recorded_at
+            await asyncio.to_thread(self.research_storage.flush_due, recorded_at)
         except Exception as exc:
             self.health.storage_failures += 1
             self.health.snapshot_last_at = recorded_at
