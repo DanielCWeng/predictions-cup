@@ -429,6 +429,7 @@ class SigRealtimeStateEngine:
                 transition=TrustTransition.UNTRUSTED_MALFORMED_PAYLOAD,
                 reason="malformed_payload",
                 triggering_revision=None,
+                refresh_bulk_prices=True,
             )
             return
 
@@ -441,6 +442,7 @@ class SigRealtimeStateEngine:
         if self.last_accepted_revision == delivery.revision:
             return
 
+        revision_gap_recovered = False
         if (
             self.last_accepted_revision is not None
             and delivery.previous_revision != self.last_accepted_revision
@@ -450,7 +452,9 @@ class SigRealtimeStateEngine:
                 transition=TrustTransition.UNTRUSTED_REVISION_GAP,
                 reason="revision_gap",
                 triggering_revision=delivery.revision,
+                refresh_bulk_prices=False,
             )
+            revision_gap_recovered = True
 
         self.last_accepted_revision = delivery.revision
         await self._ensure_known_exchanges(batch)
@@ -540,6 +544,12 @@ class SigRealtimeStateEngine:
                 priority=RestPriority.HIGH,
             )
 
+        if revision_gap_recovered:
+            await self.refresh_bulk_prices(
+                reason="revision_gap",
+                priority=RestPriority.BACKGROUND,
+            )
+
     def health_snapshot(self) -> dict[str, object]:
         tracked_trusted = sum(
             1 for state in self.states.values() if state.depth_state == DepthState.TRACKED_TRUSTED
@@ -611,6 +621,7 @@ class SigRealtimeStateEngine:
         transition: TrustTransition,
         reason: str,
         triggering_revision: int | None,
+        refresh_bulk_prices: bool,
     ) -> None:
         self._mark_untrusted(
             self.tracked_depth_exchange_ids,
@@ -630,7 +641,11 @@ class SigRealtimeStateEngine:
             triggering_revision=triggering_revision,
             priority=RestPriority.HIGH,
         )
-        await self.refresh_bulk_prices(reason=reason, priority=RestPriority.BACKGROUND)
+        if refresh_bulk_prices:
+            await self.refresh_bulk_prices(
+                reason=reason,
+                priority=RestPriority.BACKGROUND,
+            )
 
     async def _ensure_known_exchanges(self, batch: MarketBatchDto) -> None:
         referenced = {trade.exchange_id for trade in batch.trades} | {
