@@ -1,15 +1,35 @@
 from __future__ import annotations
 
+import argparse
 import os
 import subprocess
 import sys
 from pathlib import Path
+
+from predictions_cup.config import AppSettings
+from predictions_cup.sig.capture import _tracked_exchange_ids
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SYSTEMD_DIR = PROJECT_ROOT / "deploy" / "systemd"
 INSTALLER = PROJECT_ROOT / "scripts" / "install_runtime_services.sh"
 SIG_UNIT = SYSTEMD_DIR / "predictions-cup-sig-capture.service"
 POLY_UNIT = SYSTEMD_DIR / "predictions-cup-polymarket-capture.service"
+
+
+def test_tracked_depth_defaults_empty_and_can_be_supplied_externally() -> None:
+    default_settings = AppSettings()
+    empty_args = argparse.Namespace(tracked_exchange_id=[])
+    assert _tracked_exchange_ids(empty_args, default_settings) == ()
+
+    configured = AppSettings(
+        sig_realtime_tracked_exchange_ids="exchange-a, exchange-b,exchange-a"
+    )
+    cli_args = argparse.Namespace(tracked_exchange_id=["exchange-b", "exchange-c"])
+    assert _tracked_exchange_ids(cli_args, configured) == (
+        "exchange-a",
+        "exchange-b",
+        "exchange-c",
+    )
 
 
 def test_systemd_units_are_read_only_and_supervised() -> None:
