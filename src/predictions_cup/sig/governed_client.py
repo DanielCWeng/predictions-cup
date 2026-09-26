@@ -58,6 +58,9 @@ class GovernedSigRestClient(SigRestClient):
             "sig_rest_priority", default=RestPriority.NORMAL
         )
 
+    async def __aenter__(self) -> GovernedSigRestClient:
+        return self
+
     @asynccontextmanager
     async def priority(self, priority: RestPriority) -> AsyncIterator[None]:
         token = self._priority.set(priority)
