@@ -1243,6 +1243,11 @@ def run_lowrank_oos(
             refs=tuple(token for token in available if token != target_token)
             if len(refs) < minimum_reference_markets:
                 continue
+            # The preregistered universe is coverage-ordered.  Use the declared minimum number
+            # of leave-target-out references rather than silently requiring every listed market
+            # to overlap at every timestamp.  Requiring all references made the v2 low-rank lane
+            # ineligible despite the explicit minimum_reference_markets=3 contract.
+            refs = refs[:minimum_reference_markets]
             ref_matrix=np.column_stack([moves[token] for token in refs])
             if factor_delay_seconds:
                 steps = factor_delay_seconds // grid_seconds

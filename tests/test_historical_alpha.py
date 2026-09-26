@@ -228,3 +228,64 @@ def test_build008_family_run_ids_bind_preregistration_and_family() -> None:
         preregistration_sha256="b" * 64,
     )
     assert changed["leadlag"].identity.run_id != harnesses["leadlag"].identity.run_id
+
+
+def test_lowrank_uses_preregistered_minimum_reference_count() -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from predictions_cup.learning.historical_alpha import run_lowrank_oos
+
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    seconds = np.arange(0, 360, dtype=np.int64)
+    times = int(start.timestamp() * 1_000_000_000) + seconds * 1_000_000_000
+
+    def series(phase: float, *, short: bool = False) -> QuoteSeries:
+        usable = 10 if short else len(times)
+        t = times[:usable]
+        x = seconds[:usable].astype(float)
+        mid = 0.5 + 0.05 * np.sin(x / 11.0 + phase) + 0.00005 * x
+        bid = mid - 0.01
+        ask = mid + 0.01
+        return QuoteSeries(
+            times_ns=t,
+            bid=bid,
+            ask=ask,
+            midpoint=mid,
+            logit_mid=np.log(mid / (1.0 - mid)),
+        )
+
+    quotes = {
+        "target": series(0.0),
+        "r1": series(0.3),
+        "r2": series(0.6),
+        "r3": series(0.9),
+        # This fourth reference has no overlap with the folds.  It must not make the lane
+        # ineligible when the preregistered minimum is three references.
+        "r4": series(1.2, short=True),
+    }
+    validation = {
+        "walk_forward": {
+            "training_seconds": 120,
+            "development_seconds": 60,
+            "holdout_seconds": 60,
+            "step_seconds": 60,
+        },
+        "embargo_seconds": 0,
+    }
+    result = run_lowrank_oos(
+        regime_id="synthetic",
+        event_family_id="SYN",
+        quote_by_token=quotes,
+        token_ids=("target", "r1", "r2", "r3", "r4"),
+        start=start,
+        end=start + timedelta(seconds=360),
+        grid_seconds=1,
+        horizon_seconds=5,
+        lookback_seconds=5,
+        rank=1,
+        freshness_seconds=5,
+        validation=validation,
+        minimum_reference_markets=3,
+    )
+    assert len(result.y) > 0
+    assert "target" in set(result.market_ids.tolist())
