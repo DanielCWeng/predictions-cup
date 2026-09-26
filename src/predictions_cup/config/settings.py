@@ -54,7 +54,7 @@ class AppSettings(BaseSettings):
     polymarket_depth_snapshot_interval_seconds: float = Field(default=60.0, ge=1)
     polymarket_gamma_page_limit: int = Field(default=100, ge=1, le=500)
     polymarket_gamma_refresh_seconds: float = Field(default=300.0, ge=30)
-    polymarket_storage_path: Path = Path("data/polymarket_capture.sqlite3")
+    polymarket_storage_path: Path = Path("data/polymarket_operational.sqlite3")
     polymarket_research_path: Path = Path("data/polymarket_research")
     polymarket_parquet_shard_seconds: int = Field(default=60, ge=30, le=300)
     polymarket_parquet_max_rows_per_shard: int = Field(default=100_000, ge=1_000, le=1_000_000)
