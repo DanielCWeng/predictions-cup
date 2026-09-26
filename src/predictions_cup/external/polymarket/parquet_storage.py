@@ -18,6 +18,7 @@ from predictions_cup.external.polymarket.models import (
     BookChangeEvent,
     BookSnapshot,
     TradeEvent,
+    hashed_trade_event_id,
 )
 
 _UTC_TIMESTAMP = pa.timestamp("us", tz="UTC")
@@ -62,6 +63,7 @@ _SCHEMAS: dict[str, pa.Schema] = {
     ),
     "trades": pa.schema(
         [
+            ("event_id", pa.string()),
             ("token_id", pa.string()),
             ("market_id", pa.string()),
             ("price", pa.string()),
@@ -186,6 +188,10 @@ class PolymarketResearchStorage:
 
     def append_trade(self, trade: TradeEvent) -> None:
         row = {
+            "event_id": hashed_trade_event_id(
+                trade.token_id,
+                trade.transaction_hash,
+            ),
             "token_id": trade.token_id,
             "market_id": trade.market_id,
             "price": str(trade.price),
