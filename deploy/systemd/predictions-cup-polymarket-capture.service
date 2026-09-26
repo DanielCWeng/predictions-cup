@@ -10,7 +10,7 @@ User=@@RUNTIME_USER@@
 WorkingDirectory=@@REPO_ROOT@@
 EnvironmentFile=@@RUNTIME_ENV@@
 Environment=PYTHONUNBUFFERED=1
-ExecStart=@@PYTHON_BIN@@ -m predictions_cup.external.polymarket.recorder
+ExecStart=@@PYTHON_BIN@@ -m predictions_cup.external.polymarket.recorder --runtime-env-only
 Restart=on-failure
 RestartSec=5s
 KillSignal=SIGTERM
