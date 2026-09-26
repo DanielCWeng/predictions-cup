@@ -46,9 +46,12 @@ This document describes the accepted repository state on `main`.
 - trusted/fresh reconstructed replay state and standardized executable crossing markouts;
 - generic experiment/evaluation contracts, chronological splits and deterministic synthetic replay proof.
 
+## Live validation evidence
+
+- BUILD-006 / PR #19 is accepted on `main` and its accepted 60-second credentialed smoke passed at the merged head: 237 known exchanges, 1 tracked / 236 untracked, 0 429s, 0 reconciliation failures, 2 full-book reads, with the tracked book inside the 30-second freshness bound.
+
 ## Outstanding operational / acceptance gates
 
-- BUILD-006 / PR #19 is accepted on `main`; its conservative post-merge credentialed runtime smoke remains operationally outstanding.
 - The MAPPING-001 framework is accepted on `main`, but the live credentialed 2026 SIG ↔ Polymarket crosswalk has **not** been generated or accepted.
 - LIVE-MAPPING-GATE-001 / GitHub issue #13 tracks live SIG exchange enumeration, reviewer promotion/overrides, mapped-token CLOB smoke, acceptance evidence and independent acceptance before mappings are treated as production-ready.
 
