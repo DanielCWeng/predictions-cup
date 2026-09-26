@@ -92,15 +92,15 @@ repository root, Python executable and runtime home to absolute values before co
 /home/<runtime-user>/.config/predictions-cup/runtime.env
 ```
 
-rather than a literal `~`. Neither unit loads `trade.env`. The installer refuses a
+rather than a literal `~`. Both ExecStart commands use `--runtime-env-only`, which disables the application's normal repo-local `.env` support for these supervised processes. Neither unit loads `trade.env`. The units also strip `PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL` from the final process environment, and the installer refuses a
 `runtime.env` containing `PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL` or an enabled trading flag,
 and requires the existing secret-layout permissions: directory mode `700`, file mode `600`.
 
 The default rendered commands are:
 
 ```text
-<repo-root>/.venv/bin/python -m predictions_cup.sig.capture
-<repo-root>/.venv/bin/python -m predictions_cup.external.polymarket.recorder
+<repo-root>/.venv/bin/python -m predictions_cup.sig.capture --runtime-env-only
+<repo-root>/.venv/bin/python -m predictions_cup.external.polymarket.recorder --runtime-env-only
 ```
 
 Set `PREDICTIONS_CUP_PYTHON` only if the EC2 runtime intentionally uses a different Python.
