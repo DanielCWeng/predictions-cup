@@ -233,6 +233,18 @@ class PolymarketResearchStorage:
         ]
         return self._append("depth_snapshots", rows, "recorded_at")
 
+    def flush_due(self, now: datetime) -> int:
+        normalized = _utc(now)
+        assert normalized is not None
+        current_epoch = int(normalized.timestamp())
+        with self._lock:
+            written = 0
+            for stream in _SCHEMAS:
+                for bucket in sorted(tuple(self._buffers[stream])):
+                    if bucket + self.shard_seconds <= current_epoch:
+                        written += self._flush_bucket(stream, bucket, force=True)
+            return written
+
     def flush_all(self) -> int:
         with self._lock:
             written = 0
