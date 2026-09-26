@@ -44,8 +44,10 @@ All timestamps are timezone-aware. The hard feature invariant is
 
 Chronological train/development/holdout assignment is deterministic. Training labels are purged
 against the development boundary and development labels are independently purged against the
-holdout boundary. Both stages support an explicit pre-boundary embargo and report
-before/purge/embargo/remaining counts.
+holdout boundary. BUILD-005 consumes target state at the horizon itself, so the label interval is
+treated as closed: labels ending exactly at the next evaluation boundary are purged
+(`label_end_time >= evaluation_start`). Both stages support an explicit pre-boundary embargo and
+report before/purge/embargo/remaining counts.
 
 Chronological event/family holdout only trains on rows strictly earlier than the held-out unit's
 first observation, purges earlier label intervals that cross into the held-out event/family and
@@ -99,10 +101,12 @@ net economics remains `null`; gross is not relabelled as zero-cost net profit.
 `ResearchReport` binds schema/run/config/data/code identity, universe, fold and purge evidence,
 observation/market/event/family counts, horizon results, predictive/gross/net metrics, bootstrap,
 raw tests, FDR, stability, controls, ablations, stresses, invalidities, limitations and explicit
-disposition. A hash-bound `EvidencePolicy` specifies which evidence classes are mandatory for
-promotion. If a report requests `PROMOTED` while any required evidence class is absent, the
-serialized report records the requested disposition and missing evidence but mechanically forces
-the effective disposition to `INCONCLUSIVE`. Canonical JSON serialization is stable.
+disposition. A hash-bound `EvidencePolicy` specifies both required evidence classes and promotion criteria,
+including minimum FDR discoveries, optional bootstrap lower-bound threshold, non-isolated
+parameter stability, and required pass states for controls, ablations and execution stresses.
+If a report requests `PROMOTED` while required evidence is absent or declared criteria fail, the
+serialized report records the requested disposition and failed/missing gate but mechanically
+forces the effective disposition to `INCONCLUSIVE`. Canonical JSON serialization is stable.
 
 `RESEARCH_LEDGER.md` is the durable decision record. PROMOTED, REJECTED and INCONCLUSIVE are all
 first-class. Synthetic BUILD-008 machinery fixtures are never recorded as empirical alpha.
