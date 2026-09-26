@@ -197,217 +197,249 @@ If stale-price windows are measured in seconds or hundreds of milliseconds, Pyth
 
 # Six-Day Launch Plan — 25 September to 1 October 2026
 
-**Status:** project operating decision. This schedule is not a historical research finding.
+**Status:** canonical project operating decision, revised 26 September 2026 after the winner/pipeline research review.
 
-## Friday 25 September — CLOSE THE FOUNDATION
+## Operating principle for the week
 
-**Primary objective:** end broad research and close the remaining foundational plumbing.
+> **Build the research machine before the model zoo.**
 
-- [ ] BUILD-003 receives its requested review corrections.
-- [ ] BUILD-003 is independently re-reviewed.
-- [ ] Merge BUILD-003 only when clean.
-- [ ] Review EXPERIMENT-001A as soon as it lands.
-- [ ] Begin the research freeze.
+The launch target is not to guess one winning strategy before 1 October. It is to have a trustworthy system that can generate, reject, compare, execute and replace hypotheses faster than the field without leakage, overfit or imaginary fills.
 
-### Research freeze
+The required sequence is:
 
-No new broad mathematical or strategy research unless it answers:
+```
+MARKET IDENTITY + DATA TRUTH
+→ DETERMINISTIC REPLAY
+→ STANDARD RESEARCH HARNESS
+→ INDEPENDENT ALPHA FAMILIES
+→ OOS / FDR / STABILITY / ABLATION
+→ EXECUTION STRESS
+→ SHADOW CHALLENGERS
+→ ONE CHAMPION
+→ LIVE ATTRIBUTION + CONTINUOUS RESEARCH
+```
 
-~~~
-a failed test
-an implementation ambiguity
-a live venue observation
-a specific architectural decision
-~~~
+Historical data is primarily a laboratory for discovering statistical structure. A conventional P&L backtest is a late-stage test, not the first question.
 
-Interesting ideas alone are no longer sufficient reason to open a workstream.
+## Friday 25 September — FOUNDATION CLOSED
 
-## Saturday 26 September — START COLLECTING REAL DATA
+**Primary objective:** finish the minimum plumbing required to obtain and replay trustworthy data.
 
-**Primary objective:** begin accumulating data that can actually falsify our ideas.
+This day is now historical. The accepted repository foundation, SIG read-only stack, Polymarket capture foundation, replay foundation, initial experiment machinery and EC2 supervision mean the project has moved beyond “can we collect anything?”
 
-- [ ] Polymarket recorder running continuously.
-- [ ] Polymarket market metadata stored.
-- [ ] Polymarket live books stored.
-- [ ] Polymarket trades stored where available.
-- [ ] source_timestamp and observed_at are distinguished.
-- [ ] SIG tournament/context selection functioning.
-- [ ] SIG REST snapshots recordable.
-- [ ] Recording is persistent and restart-safe.
+**Carry-forward rule:** no new broad mathematical workstream merely because an idea is interesting. A new model must answer a failed baseline, a measured phenomenon, a live venue observation or a specific research question.
 
-**End-of-day standard:** we own real replayable data.
+## Saturday 26 September — DATA TRUTH + MARKET IDENTITY
 
-## Sunday 27 September — TRUSTWORTHY LIVE STATE
+**Primary objective:** make the inputs to every later experiment trustworthy.
 
-**Primary objective:** build confidence that our state is correct before strategies depend on it.
+### Gate A — LIVE-MAPPING-GATE-001
 
-- [ ] SIG realtime ingestion.
-- [ ] REST-authoritative reconciliation.
-- [ ] Reconnect/recovery path.
-- [ ] Realtime state invalidated correctly on disconnect.
-- [ ] Freshness/heartbeat monitoring.
-- [ ] Persistent SIG market-state recording.
-- [ ] Observable timing instrumentation.
+- [~] Enumerate the fresh live SIG universe.
+- [~] Retrieve the live Polymarket candidate universe.
+- [ ] Produce an explicit reviewed decision for every live SIG exchange.
+- [ ] Assign EXACT / NEAR / DERIVED / MODEL_ONLY / NO_TRADE.
+- [ ] Verify exact market / condition / outcome / token semantics.
+- [ ] CLOB-smoke every accepted mapped token.
+- [ ] Generate canonical mapping + acceptance artefacts.
+- [ ] Independent review before production token IDs change.
+- [ ] Start mapping-bounded paired SIG + Polymarket capture only after acceptance.
 
-Run soak tests. Intentionally disconnect and restart components and prove recovery.
+### Gate B — DATA-001
 
-## Monday 28 September — FIRST REAL EXPERIMENTS
+- [~] Historical corpus built reproducibly from archived books + PolyLeviathan fills.
+- [~] BUILD-005 compatibility and real-data experiment smoke demonstrated.
+- [ ] Resolve the reviewer-blocked PMXT V1/V2 13-Apr-2026 source cutover.
+- [ ] Rebuild affected Peru/Hungary corpus material.
+- [ ] Regenerate manifests, quality evidence and Kaggle reproduction hashes.
+- [ ] Independently accept the resulting corpus and exact manifest SHA.
 
-**Primary objective:** run strategies through replay against data captured by our own infrastructure by Monday night.
+**End-of-day standard:** live market identity is reviewable and historical data truth has no knowingly avoidable source hole.
 
-### Strategy 1 — Direct external lead/lag
+## Sunday 27 September — AUTHORITATIVE REPLAY + RESEARCH HARNESS
 
-Test external move → future SIG executable repricing at:
+**Primary objective:** make every hypothesis testable under one scientific contract.
 
-~~~
+### BUILD-008 — Research Evaluation Harness
+
+Create one canonical experiment interface specifying at minimum:
+
+```
+hypothesis / economic mechanism
+dataset + data version
+predictor / feature availability time
+target + horizon
+market/event universe
+train / validation / holdout split
+execution mode
+risk / sizing assumptions
+expected failure condition
+```
+
+The harness must provide:
+
+- [ ] chronological walk-forward testing;
+- [ ] event-aware / family-aware holdouts;
+- [ ] purge / embargo where labels overlap;
+- [ ] Benjamini-Hochberg or equivalent false-discovery control for screened families;
+- [ ] event/session or contiguous-block bootstrap;
+- [ ] parameter-surface stability reports;
+- [ ] simple baselines / negative controls;
+- [ ] ablation support;
+- [ ] standard executable markouts;
+- [ ] standardized report schema;
+- [ ] complete experiment ledger including rejected/inconclusive hypotheses.
+
+**Critical rule:** a million ticks inside one election are not a million independent confirmations. Evidence must be reported at tick, market, event and event-family levels.
+
+**Exit gate:** the same hypothesis/config/data version produces the same report every run and cannot consume future information.
+
+## Monday 28 September — FIRST ALPHA BATTERY
+
+**Primary objective:** discover which forms of prediction-market information actually replicate.
+
+Run baseline versions of independent families through the same harness:
+
+### A. Cross-venue information
+
+Polymarket / external move or order flow → future executable target repricing at:
+
+```
 1s
 5s
 30s
 1m
 5m
-~~~
+```
 
-using observable timestamps.
+Do not assume Polymarket leads. Estimate when, where and under what liquidity/event conditions either venue leads.
 
-### Strategy 2 — Simple residual / relative value
+### B. Event-relative / structural residual
 
-Test target minus the simplest direct / related-market reference before building a large structural probability model.
+Test the simplest direct residual first, then event-surface / related-contract residuals where identity supports them.
 
-### Strategy 3 — Selective simple market making
+### C. Microstructure information
 
-Do not deploy live yet. Start evaluating:
+Test simple book imbalance, microprice, spread/depth, depletion/refill, trade intensity and adverse-selection predictors before elaborate flow models.
 
-~~~
-spread capture
-future markouts
-depth
-quote age
-inventory
-~~~
+### D. Participant-conditioned information
 
-under simple, explicit assumptions.
+Where PolyLeviathan identity/history is reliable, test whether participant-conditioned flow adds future information after controlling for contemporaneous price/book moves.
 
-### Standard research outputs
+### E. SIG-style low-rank / cross-market benchmark
 
-Standardize markouts, executable depth, VWAP, signal timestamps, future price movement and strategy attribution.
+Implement only as a disciplined benchmark derived from the winners' research process. Do not assume equity-style cointegration economics transfer unchanged to bounded probabilities.
 
-> **MONDAY-NIGHT GATE — By the end of Monday 28 September, the project must be capable of running at least the first simple strategy hypotheses through replay using data captured by our own infrastructure.**
+**Monday-night gate:**
 
-If that is not true:
+> At least four research families must be runnable at baseline level through the same authoritative harness. There is **no requirement that four survive**.
 
-~~~
-stop commissioning research
-stop adding mathematics
-stop adding strategy families
-~~~
+A hypothesis survives only if the effect is plausible, as-of safe, replicated beyond one market/event, and not merely a sharp historical optimum.
 
-and focus exclusively on fixing the data → replay → experiment pipeline.
+If the harness is not trustworthy, stop alpha expansion and fix the research pipeline.
 
-## Tuesday 29 September — EXECUTION SIMULATION
+## Tuesday 29 September — ROBUSTNESS + EXECUTION ECONOMICS
 
-**Primary objective:** stop evaluating strategies using imaginary fills.
+**Primary objective:** separate genuine prediction from monetisable edge.
 
-Build conservative paper execution with at least:
+For every surviving predictive effect:
 
-- [ ] maker simulation;
-- [ ] taker simulation;
-- [ ] optimistic / normal / conservative fill assumptions;
-- [ ] queue context;
-- [ ] executable-depth VWAP;
-- [ ] order lifecycle state machine;
-- [ ] cancellation state;
-- [ ] idempotency model;
-- [ ] uncertain-order handling;
-- [ ] capital usage;
-- [ ] strategy attribution.
+1. measure the scientific result without hiding it inside trading rules;
+2. then charge it for spread, depth, latency, fill uncertainty, partial fills, inventory and operational complexity.
 
-Replay previously captured data through it. Aggressively reject strategies whose paper economics disappear under realistic execution.
+Build / standardize:
 
-## Wednesday 30 September — LAUNCH REHEARSAL
+- [ ] taker execution at executable depth/VWAP;
+- [ ] maker scenarios: conservative / base / optimistic;
+- [ ] quote-age and stale-quote handling;
+- [ ] queue-context approximation;
+- [ ] partial fills;
+- [ ] maker/taker attribution;
+- [ ] capital usage / holding time;
+- [ ] adverse-selection markouts;
+- [ ] order lifecycle: PENDING / ACKED / PARTIALLY_FILLED / CANCEL_PENDING / CANCELLED / UNCERTAIN / RECONCILED.
 
-**Primary objective:** prove that the system can fail safely before the Cup begins.
+Run:
 
-Target **minimal live-capable execution plumbing**, not every research feature.
+- [ ] event-aware OOS;
+- [ ] FDR-controlled family comparisons;
+- [ ] block bootstrap confidence intervals;
+- [ ] parameter-neighbourhood / plateau tests;
+- [ ] ablations;
+- [ ] paired comparison against the simplest relevant baseline.
 
-Test:
+**Promotion principle:** robust plateau > historical optimum.
 
-- [ ] place-order lifecycle;
-- [ ] cancellation;
-- [ ] reconciliation;
-- [ ] retries;
-- [ ] idempotency;
-- [ ] 429 handling;
-- [ ] 503 handling;
-- [ ] stale-data trading blocks;
-- [ ] exposure limits;
-- [ ] kill switch;
-- [ ] restart during operation;
-- [ ] reconnect during operation;
-- [ ] state rebuild.
+A strategy that only works with optimistic passive fills is not a live candidate.
 
-Run deployment-region latency comparison where practical:
+## Wednesday 30 September — RISK + SHADOW + LAUNCH REHEARSAL
 
-~~~
-Northern California / us-west-1
-Northern Virginia / us-east-1
-London as control
-~~~
+**Primary objective:** turn the strongest evidence into a reversible production process.
 
-Do not choose the final server location from Vercel headers alone.
+- [ ] Select one provisional champion from the evidence available.
+- [ ] Run surviving alternatives as shadow challengers.
+- [ ] Aggregate risk by contract, event and portfolio.
+- [ ] Add edge/uncertainty/liquidity-aware sizing.
+- [ ] Add position, loss, stale-data and feed-health limits.
+- [ ] Implement safe maker/taker/cancel lifecycle.
+- [ ] Reconcile uncertain orders authoritatively.
+- [ ] Verify 429/503 behaviour, retries and idempotency.
+- [ ] Prove kill switch and rollback.
+- [ ] Rehearse restart, reconnect, missed data and mapping failure.
+- [ ] Benchmark end-to-end latency from candidate regions where practical.
 
-## Thursday 1 October — OBSERVE FIRST, THEN TRADE
+**Exit gate:** the system can run unattended, fail visibly, recover safely and explain every shadow/live decision after the fact.
+
+## Thursday 1 October — OBSERVE, SHADOW, THEN TRADE
 
 Competition begins.
 
-**Initial objective:** measure the actual SIG ecology.
+The initial champion is **version 1**, not the final strategy.
 
-Verify REST ↔ realtime consistency, spread, depth, trade frequency, external/SIG lag, quote persistence, cancellation latency, fill probability, post-fill markouts, relationship violations, competitor response speed, rate limits and 503 behaviour.
+First establish the actual SIG ecology:
 
-Then enable only the smallest execution path supported by evidence:
+- spread and executable depth;
+- trade/fill frequency;
+- direct SIG ↔ Polymarket divergence;
+- observable lead/lag and response half-life;
+- quote lifetime / replenishment;
+- maker fill probability;
+- passive and active post-fill markouts;
+- cancel/requote latency;
+- stale-fill rate;
+- rate-limit / 503 behaviour;
+- competitor adaptation / crowding;
+- capital utilisation;
+- mapping/settlement anomalies.
 
-~~~
+Use the operating ladder:
+
+```
 OBSERVE
 ↓
 SHADOW
 ↓
-LIMITED LIVE
+BOUNDED EXPLORATORY RISK
 ↓
-SCALE ONLY AFTER EVIDENCE
-~~~
+CHAMPION LIVE
+↓
+SCALE ONLY AFTER ATTRIBUTED EVIDENCE
+```
 
----
+Every live forecast should preserve the feature state, prediction, realised target, market state, model/config version and execution outcome so the Cup becomes an expanding out-of-sample laboratory.
 
-## Initial Strategy Family Freeze
+### During the Cup
 
-Active experimentation begins with only:
+Maintain a champion–challenger loop:
 
-1. **Direct external lead/lag** — fastest and cheapest hypothesis to falsify.
-2. **Simple residual / relative value** — direct or related-market residual before global structural complexity.
-3. **Simple selective market making** — only where spread and post-fill markouts justify it.
+- one version-pinned champion receives normal risk;
+- challengers run in shadow or tightly bounded exploration;
+- promotion requires paired live/shadow evidence plus historical robustness;
+- P&L is decomposed into forecast value, spread capture, slippage, adverse selection, inventory and event/market family;
+- dead hypotheses remain in the research ledger;
+- edge decay and crowding are measured rather than narrated away.
 
-Keep the following preserved in the research backlog / challenger set:
-
-~~~
-LOO-FAMILY structural FV
-hard structural constraints
-global coherent probability surface
-advanced flow / toxicity
-complex election-factor models
-~~~
-
-They may be promoted later. They must **not block the first empirical trading loop**.
-
-## What we are deliberately not doing
-
-Until evidence changes the decision:
-
-- no new broad research by default;
-- no C++ rewrite;
-- no expensive HFT infrastructure;
-- no giant global solver blocking launch;
-- no endless strategy generation;
-- no optimistic paper fills;
-- no assumed SIG matching-engine geography.
+The strategy that starts on 1 October is not assumed to be the strategy that finishes on 4 November.
 
 ---
 
