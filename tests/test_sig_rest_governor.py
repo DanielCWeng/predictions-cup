@@ -145,6 +145,46 @@ def test_429_applies_shared_cooldown_to_next_caller() -> None:
     asyncio.run(scenario())
 
 
+def test_new_429_extends_cooldown_for_already_waiting_caller() -> None:
+    async def scenario() -> None:
+        now = 0.0
+        pacing_wait_started = asyncio.Event()
+        release_pacing_wait = asyncio.Event()
+        sleep_calls: list[float] = []
+
+        def monotonic() -> float:
+            return now
+
+        async def sleep(delay: float) -> None:
+            nonlocal now
+            sleep_calls.append(delay)
+            if len(sleep_calls) == 1:
+                pacing_wait_started.set()
+                await release_pacing_wait.wait()
+            now += delay
+            await asyncio.sleep(0)
+
+        governor = SigRestGovernor(
+            rate_per_second=2.0,
+            sleep=sleep,
+            monotonic=monotonic,
+            random_fn=lambda: 0.0,
+        )
+        await governor.acquire(RestPriority.NORMAL)
+        waiting = asyncio.create_task(governor.acquire(RestPriority.BACKGROUND))
+        await pacing_wait_started.wait()
+
+        governor.record_response(429, retry_after_seconds=2.0)
+        release_pacing_wait.set()
+        await waiting
+
+        assert now == 2.0
+        assert sleep_calls == [0.5, 1.5]
+        await governor.aclose()
+
+    asyncio.run(scenario())
+
+
 def test_governed_client_429_retry_consumes_shared_cooldown() -> None:
     attempts = 0
 
