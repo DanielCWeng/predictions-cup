@@ -97,9 +97,11 @@ def _missing_required_evidence(
 
     if policy.bootstrap_min_lower_bound is not None and report.bootstrap_results:
         lowers = [row.get("lower") for row in report.bootstrap_results]
-        if any(value is None for value in lowers):
-            missing.append("bootstrap_threshold")
-        elif any(Decimal(str(value)) < policy.bootstrap_min_lower_bound for value in lowers):
+        if any(value is None for value in lowers) or any(
+            Decimal(str(value)) < policy.bootstrap_min_lower_bound
+            for value in lowers
+            if value is not None
+        ):
             missing.append("bootstrap_threshold")
 
     if (
