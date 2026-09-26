@@ -78,6 +78,33 @@ def test_parquet_storage_rotates_short_immutable_shards(tmp_path: Path) -> None:
     assert sum(pq.ParquetFile(path).metadata.num_rows for path in files) == 2
 
 
+def test_sparse_stream_bucket_is_published_when_clock_advances(tmp_path: Path) -> None:
+    root = tmp_path / "research"
+    storage = PolymarketResearchStorage(root, shard_seconds=60)
+    storage.initialize()
+    observed = datetime(2026, 9, 25, 12, 0, 1, tzinfo=UTC)
+
+    storage.append_trade(
+        TradeEvent(
+            market_id="0xmarket",
+            token_id="token-1",
+            price=Decimal("0.455"),
+            size=Decimal("1"),
+            side="BUY",
+            source_timestamp=observed,
+            observed_at=observed,
+            transaction_hash="tx-sparse",
+            fee_rate_bps=None,
+        )
+    )
+    assert _files(root, "trades") == []
+
+    assert storage.flush_due(observed + timedelta(seconds=60)) == 1
+    files = _files(root, "trades")
+    assert len(files) == 1
+    assert pq.ParquetFile(files[0]).metadata.num_rows == 1
+
+
 def test_parquet_event_streams_preserve_source_and_observed_time(tmp_path: Path) -> None:
     root = tmp_path / "research"
     storage = PolymarketResearchStorage(root)
