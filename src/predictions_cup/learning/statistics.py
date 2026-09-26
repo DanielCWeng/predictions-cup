@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import random
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Iterable, Sequence
 
 from predictions_cup.learning.research_spec import canonical_json_bytes
 
@@ -85,7 +85,8 @@ class BootstrapResult:
 
 
 def derived_seed(run_id: str, component_id: str) -> int:
-    digest = hashlib.sha256(canonical_json_bytes({"run_id": run_id, "component": component_id})).digest()
+    payload = canonical_json_bytes({"run_id": run_id, "component": component_id})
+    digest = hashlib.sha256(payload).digest()
     return int.from_bytes(digest[:8], "big")
 
 
