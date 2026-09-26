@@ -216,7 +216,7 @@ def test_installer_leaves_polymarket_disabled_without_mapping_when_capture_off(
 def test_installer_rejects_missing_supervised_polymarket_universe(
     tmp_path: Path,
 ) -> None:
-    env, runtime_env, _ = _installer_env(tmp_path)
+    env, runtime_env, call_log = _installer_env(tmp_path)
     _write_runtime_env(runtime_env, include_supervised_ids=False)
 
     result = subprocess.run(
@@ -230,6 +230,9 @@ def test_installer_rejects_missing_supervised_polymarket_universe(
 
     assert result.returncode != 0
     assert "PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS" in result.stderr
+    assert call_log.read_text(encoding="utf-8").splitlines() == [
+        "disable --now predictions-cup-polymarket-capture.service"
+    ]
 
 
 def test_installer_propagates_restart_failure(tmp_path: Path) -> None:
