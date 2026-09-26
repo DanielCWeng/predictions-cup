@@ -1,25 +1,25 @@
 {
   "command": "python scripts/kaggle/data_001_build.py (kernel code_file; see scripts/kaggle/kernel-metadata.json)",
   "inputs": [
-    "polyleviathan/sig-cup-pmxt-orderbook-extracts (version 'V1 2026-04-13T19')",
+    "polyleviathan/sig-cup-pmxt-orderbook-extracts (version 'Add 2026-04-13T19 V2 supplement extracts (events_v2.parquet) for the V1-preferred / V2-only splice')",
     "polyleviathan/sig-cup-polyleviathan-fills",
-    "polyleviathan/sig-cup-predictions-cup-code (wheel of 0b1f5b3fe05a7f1bc35d1bbdca9bedf1b921037a)"
+    "polyleviathan/sig-cup-predictions-cup-code (wheel of 159873f1797eee93832a98172a8f0117d24fb468)"
   ],
-  "kaggle_summary_sha256": "eaca1f81b8c0a4f7b96566bab7b7e61aa21214e00da306190039424395433396",
-  "kernel": "polyleviathan/sig-cup-data-001-build (private), version 3",
-  "kernel_code_commit": "0b1f5b3fe05a7f1bc35d1bbdca9bedf1b921037a",
-  "local_build_pipeline_commit": "0b1f5b3fe05a7f1bc35d1bbdca9bedf1b921037a",
-  "note": "kernel version 2 mounted the previous extracts dataset version (V2 2026-04-13T19 files) and stopped at the build's extract source_version check; version 3 ran on the updated extracts",
+  "kaggle_summary_sha256": "03c51fa494c7753c90cf76f47647e037b0dfbfd142ae116580e11e44cbc2e66a",
+  "kernel": "polyleviathan/sig-cup-data-001-build (private), version 4",
+  "kernel_code_commit": "159873f1797eee93832a98172a8f0117d24fb468",
+  "local_build_pipeline_commit": "159873f1797eee93832a98172a8f0117d24fb468",
+  "note": "version 4 rebuilt the V1-preferred / V2-only 2026-04-13T19 splice; version 3 reproduced the V1-only 19:00 build (0b1f5b3), all 115 files identical; version 2 mounted an older extracts version and stopped at the build's extract source_version check",
   "output_files_compared": 115,
   "output_files_sha256_identical": 115,
   "totals": {
-    "corpus_bytes": 1186863238,
+    "corpus_bytes": 1188388198,
     "rows_by_stream": {
-      "book_changes": 126518636,
-      "depth_snapshots": 461076,
+      "book_changes": 126669687,
+      "depth_snapshots": 461326,
       "fills": 743015,
       "tick_size_changes": 60,
-      "trades": 112066
+      "trades": 112467
     }
   },
   "totals_equal_local": true,
