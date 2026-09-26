@@ -9,7 +9,10 @@ import pytest
 
 from predictions_cup.config import AppSettings
 from predictions_cup.external.polymarket.client import ObservedBookBatch
-from predictions_cup.external.polymarket.recorder import PolymarketRecorder
+from predictions_cup.external.polymarket.recorder import (
+    PolymarketRecorder,
+    _run_recorder_until_stopped,
+)
 
 
 def _book_payload(token_id: str, market_id: str = "0xmarket") -> dict[str, object]:
@@ -232,3 +235,41 @@ def test_snapshot_storage_failure_is_surfaced(
     assert recorder.health.storage_failures == 1
     assert recorder.health.snapshot_last_status is not None
     assert recorder.health.snapshot_last_status.startswith("ERROR:")
+
+def test_runtime_stop_event_stops_websocket_and_cancels_recorder(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = AppSettings.model_validate(
+        {"polymarket_storage_path": tmp_path / "capture.sqlite3"}
+    )
+    recorder = PolymarketRecorder(settings)
+
+    async def scenario() -> None:
+        started = asyncio.Event()
+        flags: set[str] = set()
+
+        async def fake_run() -> None:
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                flags.add("cancelled")
+                raise
+
+        def fake_stop() -> None:
+            flags.add("websocket_stopped")
+
+        monkeypatch.setattr(recorder, "run", fake_run)
+        monkeypatch.setattr(recorder.websocket, "stop", fake_stop)
+
+        stop_event = asyncio.Event()
+        task = asyncio.create_task(_run_recorder_until_stopped(recorder, stop_event))
+        await started.wait()
+        stop_event.set()
+        await task
+
+        assert flags == {"websocket_stopped", "cancelled"}
+
+    asyncio.run(scenario())
+
