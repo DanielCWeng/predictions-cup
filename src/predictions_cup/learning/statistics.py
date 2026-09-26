@@ -8,7 +8,11 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
-from predictions_cup.learning.research_spec import canonical_json_bytes
+from predictions_cup.learning.research_spec import (
+    EventBootstrapWeighting,
+    FDRProtocol,
+    canonical_json_bytes,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +20,24 @@ class HypothesisTest:
     hypothesis_id: str
     family_id: str
     p_value: Decimal
+    test_name: str
+    null_hypothesis: str
+    test_statistic: str
+    dependence_assumption: str
+
+    def __post_init__(self) -> None:
+        required = (
+            self.hypothesis_id,
+            self.family_id,
+            self.test_name,
+            self.null_hypothesis,
+            self.test_statistic,
+            self.dependence_assumption,
+        )
+        if any(not value for value in required):
+            raise ValueError("statistical-test metadata must be non-blank")
+        if not (Decimal("0") <= self.p_value <= Decimal("1")):
+            raise ValueError("p-values must lie in [0, 1]")
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,50 +53,52 @@ class FDRResult:
 
 
 def benjamini_hochberg(
-    tests: Iterable[HypothesisTest], alpha: Decimal
+    tests: Iterable[HypothesisTest],
+    protocol: FDRProtocol,
 ) -> tuple[FDRResult, ...]:
-    if not (Decimal("0") < alpha <= Decimal("1")):
-        raise ValueError("FDR alpha must be in (0, 1]")
-    by_family: dict[str, list[HypothesisTest]] = {}
-    for test in tests:
-        if not test.hypothesis_id or not test.family_id:
-            raise ValueError("hypothesis and family IDs must be non-blank")
-        if not (Decimal("0") <= test.p_value <= Decimal("1")):
-            raise ValueError("p-values must lie in [0, 1]")
-        by_family.setdefault(test.family_id, []).append(test)
-    output: list[FDRResult] = []
-    for family, family_tests in sorted(by_family.items()):
-        ordered = sorted(family_tests, key=lambda item: (item.p_value, item.hypothesis_id))
-        m = len(ordered)
-        cutoff = 0
-        raw_q: list[Decimal] = []
-        for rank, test in enumerate(ordered, 1):
-            threshold = alpha * Decimal(rank) / Decimal(m)
-            if test.p_value <= threshold:
-                cutoff = rank
-            raw_q.append(min(Decimal("1"), test.p_value * Decimal(m) / Decimal(rank)))
-        q_values = raw_q[:]
-        for index in range(m - 2, -1, -1):
-            q_values[index] = min(q_values[index], q_values[index + 1])
-        for rank, (test, q_value) in enumerate(zip(ordered, q_values, strict=True), 1):
-            output.append(
-                FDRResult(
-                    hypothesis_id=test.hypothesis_id,
-                    family_id=family,
-                    raw_p_value=test.p_value,
-                    rank=rank,
-                    threshold=alpha * Decimal(rank) / Decimal(m),
-                    q_value=q_value,
-                    rejected=rank <= cutoff,
-                    family_size=m,
-                )
-            )
-    return tuple(sorted(output, key=lambda item: (item.family_id, item.hypothesis_id)))
+    materialized = tuple(tests)
+    if len({test.hypothesis_id for test in materialized}) != len(materialized):
+        raise ValueError("duplicate hypothesis IDs are not allowed in an FDR family")
+    supplied = {test.hypothesis_id for test in materialized}
+    declared = set(protocol.hypothesis_ids)
+    if supplied != declared:
+        raise ValueError("supplied hypothesis IDs must equal the predeclared FDR search space")
+    if any(test.family_id != protocol.family_id for test in materialized):
+        raise ValueError("statistical-test FDR family must match the declared protocol")
+
+    ordered = sorted(materialized, key=lambda item: (item.p_value, item.hypothesis_id))
+    m = len(ordered)
+    cutoff = 0
+    raw_q: list[Decimal] = []
+    for rank, test in enumerate(ordered, 1):
+        threshold = protocol.alpha * Decimal(rank) / Decimal(m)
+        if test.p_value <= threshold:
+            cutoff = rank
+        raw_q.append(min(Decimal("1"), test.p_value * Decimal(m) / Decimal(rank)))
+    q_values = raw_q[:]
+    for index in range(m - 2, -1, -1):
+        q_values[index] = min(q_values[index], q_values[index + 1])
+
+    output = tuple(
+        FDRResult(
+            hypothesis_id=test.hypothesis_id,
+            family_id=protocol.family_id,
+            raw_p_value=test.p_value,
+            rank=rank,
+            threshold=protocol.alpha * Decimal(rank) / Decimal(m),
+            q_value=q_value,
+            rejected=rank <= cutoff,
+            family_size=m,
+        )
+        for rank, (test, q_value) in enumerate(zip(ordered, q_values, strict=True), 1)
+    )
+    return tuple(sorted(output, key=lambda item: item.hypothesis_id))
 
 
 @dataclass(frozen=True, slots=True)
 class BootstrapResult:
     method: str
+    weighting: str | None
     units: int
     draws: int
     statistic: str
@@ -116,6 +140,7 @@ def moving_block_bootstrap_mean(
     samples.sort()
     return BootstrapResult(
         method="moving_block",
+        weighting=None,
         units=len(starts),
         draws=draws,
         statistic="mean",
@@ -132,6 +157,7 @@ def event_bootstrap_mean(
     draws: int,
     run_id: str,
     component_id: str,
+    weighting: EventBootstrapWeighting,
     seed: int | None = None,
 ) -> BootstrapResult:
     if not event_values or draws < 1 or any(not values for values in event_values.values()):
@@ -139,19 +165,39 @@ def event_bootstrap_mean(
     actual_seed = derived_seed(run_id, component_id) if seed is None else seed
     rng = random.Random(actual_seed)
     ids = sorted(event_values)
+    event_means = {
+        event_id: sum(values, Decimal("0")) / Decimal(len(values))
+        for event_id, values in event_values.items()
+    }
     all_values = [value for event_id in ids for value in event_values[event_id]]
     samples: list[Decimal] = []
     for _ in range(draws):
         picked = [rng.choice(ids) for _ in ids]
-        values = [value for event_id in picked for value in event_values[event_id]]
-        samples.append(sum(values, Decimal("0")) / Decimal(len(values)))
+        if weighting is EventBootstrapWeighting.OBSERVATION_WEIGHTED_CLUSTER:
+            sampled_values = [
+                value for event_id in picked for value in event_values[event_id]
+            ]
+            estimate = sum(sampled_values, Decimal("0")) / Decimal(len(sampled_values))
+        else:
+            sampled_means = [event_means[event_id] for event_id in picked]
+            estimate = sum(sampled_means, Decimal("0")) / Decimal(len(sampled_means))
+        samples.append(estimate)
     samples.sort()
+
+    if weighting is EventBootstrapWeighting.OBSERVATION_WEIGHTED_CLUSTER:
+        point_estimate = sum(all_values, Decimal("0")) / Decimal(len(all_values))
+        method = "event_cluster"
+    else:
+        point_estimate = sum(event_means.values(), Decimal("0")) / Decimal(len(event_means))
+        method = "event_equal_weight"
+
     return BootstrapResult(
-        method="event",
+        method=method,
+        weighting=weighting.value,
         units=len(ids),
         draws=draws,
         statistic="mean",
-        point_estimate=sum(all_values, Decimal("0")) / Decimal(len(all_values)),
+        point_estimate=point_estimate,
         lower=_quantile(samples, Decimal("0.025")),
         upper=_quantile(samples, Decimal("0.975")),
         seed=actual_seed,
