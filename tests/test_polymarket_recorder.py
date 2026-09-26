@@ -309,6 +309,39 @@ def test_periodic_gamma_refresh_fails_soft_and_later_recovers(
     asyncio.run(scenario())
 
 
+def test_periodic_refresh_does_not_hide_local_storage_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = AppSettings.model_validate(
+        {"polymarket_storage_path": tmp_path / "capture.sqlite3"}
+    )
+    recorder = PolymarketRecorder(settings)
+    recorder._token_ids = ("token-existing",)
+    selected_market = object()
+
+    async def fake_discovery() -> object:
+        return SimpleNamespace(markets=(selected_market,), parse_failures=0)
+
+    def fake_select(markets: object) -> object:
+        del markets
+        return SimpleNamespace(
+            markets=(selected_market,),
+            token_ids=("token-existing",),
+        )
+
+    def fail_upsert(*args: object) -> None:
+        del args
+        raise RuntimeError("disk unavailable")
+
+    monkeypatch.setattr(recorder.gamma, "discover_active_markets", fake_discovery)
+    monkeypatch.setattr(recorder.selector, "select", fake_select)
+    monkeypatch.setattr(recorder.storage, "upsert_markets", fail_upsert)
+
+    with pytest.raises(RuntimeError, match="disk unavailable"):
+        asyncio.run(recorder.refresh_universe(fail_soft_if_initialized=True))
+
+
 def test_runtime_stop_event_stops_websocket_and_cancels_recorder(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
