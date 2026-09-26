@@ -140,9 +140,11 @@ The runtime environment must provide a non-empty
 Polymarket is now separately gated. If
 `PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=false` (or unset), the installer still installs its
 unit but explicitly leaves it disabled/stopped while SIG remains enabled. If Polymarket capture is
-enabled, `PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS` is mandatory and must contain the explicit
-accepted mapping-driven market/condition/token IDs. Missing IDs fail installation; unresolved IDs
-fail recorder startup. The service never falls back to the broad election heuristic.
+enabled, `PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS` is mandatory and must contain an explicit
+bounded market/condition/token set. For production this must come from the accepted mapping
+crosswalk. Missing IDs trigger an operational fail-closed migration: the installer first
+`disable --now`s any existing Polymarket service, then exits non-zero. Unresolved IDs fail recorder
+startup. The service never falls back to the broad election heuristic.
 
 ### Install / update
 
@@ -234,7 +236,7 @@ competition universe and Parquet storage.
 
 ### Before the accepted mapping crosswalk exists
 
-Keep SIG running and leave Polymarket disabled:
+For ordinary operation, keep SIG running and leave Polymarket disabled:
 
 ```text
 PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=false
@@ -246,6 +248,32 @@ IDs simply to make the service start.
 
 The legacy broad-soak database/WAL should be preserved unless an operator deliberately archives or
 removes it after extracting any needed evidence. BUILD-007 performs no destructive cleanup.
+
+### Required pre-merge ARM64 Parquet smoke/soak
+
+Before BUILD-007 merges, the actual ARM64 EC2 host must validate the new PyArrow/Parquet path on a
+**deliberately bounded explicit public test universe**. This is a runtime/storage compatibility
+test, not a substitute for the accepted SIG ↔ Polymarket crosswalk.
+
+Temporarily set:
+
+```text
+PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true
+PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS=<small explicit known-public test set>
+```
+
+Then deploy the exact reviewed head and prove:
+
+- the service starts on ARM64 with the pinned PyArrow dependency;
+- only the explicit test set is selected/subscribed;
+- ZSTD Parquet files appear in all exercised streams and published files are readable;
+- `polymarket_operational.sqlite3` remains small/operational-only;
+- shard/file bytes advance for a bounded soak without the previous SQLite/WAL explosion;
+- a manual restart resumes writing without corrupting prior shards;
+- journals show no repeated storage failures.
+
+After this smoke, return Polymarket to disabled unless/until the production mapping gate is ready.
+Do not promote the temporary test set into production configuration.
 
 ### After LIVE-MAPPING-GATE-001 is independently accepted
 
