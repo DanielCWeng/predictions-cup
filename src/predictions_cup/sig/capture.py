@@ -12,8 +12,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from predictions_cup.config import AppSettings, load_settings
-from predictions_cup.sig.governed_client import GovernedSigRestClient
 from predictions_cup.sig.errors import SigApiError
+from predictions_cup.sig.governed_client import GovernedSigRestClient
 from predictions_cup.sig.realtime_state import SigRealtimeStateEngine, SubscriptionReason
 from predictions_cup.sig.realtime_storage import SigRealtimeRecorder
 from predictions_cup.sig.realtime_subscriber import SubscriberExit, SupabaseTournamentSubscriber
