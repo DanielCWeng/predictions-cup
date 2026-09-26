@@ -250,7 +250,9 @@ class MarketNodeDto(TransportModel):
     """Recursive SIG market-node transport shape from the supplied OpenAPI contract."""
 
     node_type: MarketNodeType = Field(alias="nodeType")
-    position: int
+    position: int | None = None
+    node_id: str | None = Field(default=None, alias="nodeId")
+    contract_id: str | None = Field(default=None, alias="contractId")
     operator: MarketNodeOperator | None = None
     title: str | None = None
     settlement_date: WireDateTime | None = Field(default=None, alias="settlementDate")

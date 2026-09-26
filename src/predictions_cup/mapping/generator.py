@@ -39,6 +39,8 @@ from predictions_cup.mapping.models import (
 )
 from predictions_cup.sig.client import SigRestClient
 from predictions_cup.sig.dto import MarketNodeDto
+from predictions_cup.sig.governed_client import GovernedSigRestClient
+from predictions_cup.sig.rest_governor import SigRestGovernor
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 _STOP_TERMS = frozenset(
@@ -269,18 +271,12 @@ async def generate_live_crosswalk(
     if settings.sig_read_credential is None:
         raise ValueError("PREDICTIONS_CUP_SIG_READ_CREDENTIAL is required for live mapping")
 
-    async with SigRestClient(settings) as sig_client:
+    mapping_governor = SigRestGovernor(
+        rate_per_second=min(settings.sig_rest_governor_rate_per_second, 1.25),
+        max_shared_cooldown_seconds=settings.sig_rest_shared_cooldown_max_seconds,
+    )
+    async with GovernedSigRestClient(settings, governor=mapping_governor) as sig_client:
         sig_exchanges = await collect_sig_universe(sig_client, tournament_id)
-
-    discovery = await GammaClient(
-        str(settings.polymarket_gamma_base_url),
-        page_limit=settings.polymarket_gamma_page_limit,
-    ).discover_active_markets()
-    if discovery.parse_failures:
-        raise ValueError(
-            f"Gamma discovery had {discovery.parse_failures} parse failures; "
-            "refusing incomplete identity mapping"
-        )
 
     overrides = load_overrides(overrides_path, tournament_id)
     override_market_ids = frozenset(
@@ -289,12 +285,42 @@ async def generate_live_crosswalk(
     configured_include_ids = frozenset(
         part.strip() for part in settings.polymarket_include_ids.split(",") if part.strip()
     )
+
+    # The one-shot mapping snapshot deliberately uses Gamma's supported 500-row page
+    # size to reduce pagination pressure. The filtered election slice is a discovery aid,
+    # not a completeness guarantee: explicit reviewed IDs are fetched directly when the
+    # slice omits them.
+    gamma_client = GammaClient(
+        str(settings.polymarket_gamma_base_url),
+        page_limit=500,
+    )
+    discovery = await gamma_client.discover_active_markets(
+        filters={
+            "active": "true",
+            "tag_id": "2",
+            "related_tags": "true",
+            "end_date_min": "2026-01-01",
+            "end_date_max": "2027-12-31",
+        }
+    )
+    if discovery.parse_failures:
+        raise ValueError(
+            f"Gamma discovery had {discovery.parse_failures} parse failures; "
+            "refusing incomplete identity mapping"
+        )
+
+    required_explicit_ids = configured_include_ids | override_market_ids
+    discovered_market_ids = frozenset(market.market_id for market in discovery.markets)
+    missing_explicit_ids = required_explicit_ids - discovered_market_ids
+    explicit_markets = await gamma_client.fetch_markets_by_ids(missing_explicit_ids)
+    gamma_markets = discovery.markets + explicit_markets
+
     polymarket_markets = ElectionUniverseSelector(
-        include_ids=configured_include_ids | override_market_ids,
+        include_ids=required_explicit_ids,
         exclude_ids=frozenset(
             part.strip() for part in settings.polymarket_exclude_ids.split(",") if part.strip()
         ),
-    ).select(discovery.markets).markets
+    ).select(gamma_markets).markets
 
     document = build_mapping_document(
         tournament_id,
