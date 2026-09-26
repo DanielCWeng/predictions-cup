@@ -308,23 +308,24 @@ class SigRealtimeStateEngine:
     async def maintenance(self, observed_at: datetime) -> None:
         """Schedule staggered tracked refreshes and cheap broad-universe BBO work."""
         await self.refresh_stale_open_books(observed_at, wait=False)
-        if (
+        bulk_refresh_due = (
             self._last_bulk_price_refresh_at is None
             or observed_at - self._last_bulk_price_refresh_at
             >= self._bulk_price_refresh_interval
-        ):
-            if not any(
-                not task.done() and task.get_name() == "sig-bulk-price-refresh"
-                for task in self._background_tasks
-            ):
-                task = asyncio.create_task(
-                    self.refresh_bulk_prices(
-                        reason="periodic_bulk_prices",
-                        priority=RestPriority.BACKGROUND,
-                    ),
-                    name="sig-bulk-price-refresh",
-                )
-                self._track_background_task(task)
+        )
+        bulk_refresh_running = any(
+            not task.done() and task.get_name() == "sig-bulk-price-refresh"
+            for task in self._background_tasks
+        )
+        if bulk_refresh_due and not bulk_refresh_running:
+            task = asyncio.create_task(
+                self.refresh_bulk_prices(
+                    reason="periodic_bulk_prices",
+                    priority=RestPriority.BACKGROUND,
+                ),
+                name="sig-bulk-price-refresh",
+            )
+            self._track_background_task(task)
 
     async def refresh_stale_open_books(
         self,
