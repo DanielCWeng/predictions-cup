@@ -236,6 +236,7 @@ def test_snapshot_storage_failure_is_surfaced(
     assert recorder.health.snapshot_last_status is not None
     assert recorder.health.snapshot_last_status.startswith("ERROR:")
 
+
 def test_runtime_stop_event_stops_websocket_and_cancels_recorder(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
