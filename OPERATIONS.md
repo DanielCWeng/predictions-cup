@@ -7,9 +7,9 @@
 - Normal application startup remains finite, network-free and non-trading.
 - The accepted repository includes a separate, explicitly invoked public read-only Polymarket research recorder.
 - BUILD-006 SIG live REST governance/tracked-depth correction is accepted on `main`; its accepted 60-second credentialed smoke passed at the merged head.
-- BUILD-007 / PR #20 is an in-review read-only systemd supervision layer; it is not accepted or live-EC2 validated yet.
+- BUILD-007 / PR #20 is merged/accepted. Its ARM64 EC2 PyArrow/Parquet runtime/storage gate passed on 26 September 2026; the later production mapping-bounded SSH/reboot gate remains downstream of LIVE-MAPPING-GATE-001.
 
-The accepted EXPERIMENT-001A baseline on main used local SQLite/WAL research persistence. BUILD-007's branch changes the live/supervised storage shape after the EC2 soak: market/token metadata and health remain in a small operational SQLite, while high-frequency panel/book-change/trade/depth history is written as immutable ZSTD Parquet shards.
+The accepted EXPERIMENT-001A baseline used local SQLite/WAL research persistence. BUILD-007, now accepted on `main`, changes the live/supervised storage shape after the EC2 soak: market/token metadata and health remain in a small operational SQLite, while high-frequency panel/book-change/trade/depth history is written as immutable ZSTD Parquet shards.
 
 ## EXPERIMENT-001A operation
 
@@ -96,7 +96,7 @@ Read-only capture, replay and research processes must load `runtime.env` only. T
 file must remain unsourced unless a separately approved execution path explicitly requires it.
 Code, logs, CI, GitHub and operator documentation must never contain the credential values.
 
-## EC2 collector runbook — BUILD-007 candidate
+## EC2 collector runbook — BUILD-007 accepted
 
 BUILD-007 installs two read-only system services:
 
@@ -249,31 +249,33 @@ IDs simply to make the service start.
 The legacy broad-soak database/WAL should be preserved unless an operator deliberately archives or
 removes it after extracting any needed evidence. BUILD-007 performs no destructive cleanup.
 
-### Required pre-merge ARM64 Parquet smoke/soak
+### Accepted ARM64 Parquet smoke/soak — 26 September 2026
 
-Before BUILD-007 merges, the actual ARM64 EC2 host must validate the new PyArrow/Parquet path on a
-**deliberately bounded explicit public test universe**. This is a runtime/storage compatibility
-test, not a substitute for the accepted SIG ↔ Polymarket crosswalk.
+The required pre-merge runtime/storage compatibility gate passed on the actual ARM64 EC2 host at
+reviewed head `1fc3383ac2471466ef440b5f050559ba0a37deed`.
 
-Temporarily set:
+Temporary test configuration used a deliberately bounded explicit public universe: 3 markets /
+6 tokens. This was **not** mapping acceptance and those IDs must not be reused as production
+configuration.
 
-```text
-PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true
-PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS=<small explicit known-public test set>
-```
+Observed acceptance evidence:
 
-Then deploy the exact reviewed head and prove:
+- host architecture `aarch64`; PyArrow 25.0.1 imported successfully;
+- both supervised collectors were active;
+- strict Polymarket universe remained 3 markets / 6 tokens;
+- ZSTD Parquet shards were produced for observations, book changes, depth snapshots and trades;
+- published Parquet files read back successfully;
+- research storage remained in the hundreds of KB during the bounded test rather than showing the
+  prior SQLite/WAL explosion;
+- scheduled Gamma refresh completed with `gamma_last_status=OK`;
+- live 429 evidence showed `retry_in_seconds=1.000`, validating the positive retry floor;
+- `storage_failures=0` throughout the accepted health samples;
+- manual Polymarket service restart succeeded;
+- the post-restart process returned connected and continued writing new readable shards.
 
-- the service starts on ARM64 with the pinned PyArrow dependency;
-- only the explicit test set is selected/subscribed;
-- ZSTD Parquet files appear in all exercised streams and published files are readable;
-- `polymarket_operational.sqlite3` remains small/operational-only;
-- shard/file bytes advance for a bounded soak without the previous SQLite/WAL explosion;
-- a manual restart resumes writing without corrupting prior shards;
-- journals show no repeated storage failures.
-
-After this smoke, return Polymarket to disabled unless/until the production mapping gate is ready.
-Do not promote the temporary test set into production configuration.
+After acceptance, the temporary test universe should not be treated as a production default.
+Polymarket may remain disabled/stopped until LIVE-MAPPING-GATE-001 provides the accepted production
+crosswalk. The accepted BUILD-007 service/runtime capability remains available on `main`.
 
 ### After LIVE-MAPPING-GATE-001 is independently accepted
 
@@ -323,11 +325,12 @@ may source `trade.env`.
 
 ## Eventual operating expectations
 
-BUILD-007 / PR #20 implements the supervised-process, automatic-restart and SSH-independent
-collector layer on its branch. Until it is accepted and the EC2 smoke/reboot sequence is actually
-run, those properties remain candidate deployment capability rather than a live-validated claim.
-Collector-native reconciliation and journald visibility remain authoritative; BUILD-007 does not
-introduce a separate logging daemon or trading service.
+BUILD-007 / PR #20 is accepted on `main` as the supervised-process and automatic-restart collector
+layer. The ARM64 runtime/storage gate is live-validated. The remaining production claim is narrower:
+after LIVE-MAPPING-GATE-001, the mapping-bounded deployment still needs the final SSH
+independence/reboot recovery run with accepted production IDs. Collector-native reconciliation and
+journald visibility remain authoritative; BUILD-007 does not introduce a separate logging daemon or
+trading service.
 
 ## Repository state discipline
 
