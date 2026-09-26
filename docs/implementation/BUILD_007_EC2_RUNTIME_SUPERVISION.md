@@ -87,9 +87,18 @@ connections per operation, so there is no persistent writer handle to invent or 
 Live EC2 validation exposed HTTP 429 rate limiting during Gamma keyset discovery. The candidate
 now retries the current page/cursor in place with a bounded attempt budget, honors Retry-After,
 uses exponential fallback delay plus jitter when the header is absent, and fails visibly after
-exhaustion. Successful earlier pages are retained within the same discovery pass. The Polymarket
-unit uses a 30-second RestartSec so an ultimately unavailable Gamma API cannot create a tight
-systemd restart loop.
+exhaustion. Successful earlier pages are retained within the same discovery pass. Retry-After
+values resolving to zero are floored to a positive delay. The Polymarket unit uses a 30-second
+RestartSec so an ultimately unavailable Gamma API cannot create a tight systemd restart loop.
+
+A second live attempt proved the corrected startup/core collector path: 3,160 markets / 6,320
+tokens discovered, WebSocket connected, 6,320-row snapshots written, WebSocket reconnect recovered,
+and zero storage failures. It also exposed that a later scheduled Gamma 429 exhaustion propagated
+through the TaskGroup and killed otherwise healthy capture. Periodic post-startup Gamma
+discovery/selection is therefore now fail-soft when a valid resident universe already exists:
+health/logging records the failure, the current universe/capture remains active, and the next normal
+refresh can recover. Initial discovery and local post-discovery failures such as SQLite persistence
+remain fail-closed.
 
 ## Storage
 
@@ -139,17 +148,23 @@ BUILD-007 adds tests proving:
 - an accidental trade credential in `runtime.env` is rejected without printing its value;
 - Polymarket shutdown stops the WebSocket transport and cancels its long-running task;
 - Gamma mid-pagination 429 recovery retries the same cursor and honors Retry-After;
+- zero/expired Retry-After values use a positive retry-delay floor;
 - persistent Gamma 429s exhaust a bounded retry budget and fail visibly;
+- initial Gamma failure remains fail-closed;
+- periodic Gamma failure after a valid universe is resident is fail-soft and later recovery is covered;
+- local storage failure during refresh still propagates;
 - the Polymarket unit has a slower 30-second restart cadence after unrecoverable startup failure.
 
 CI also runs `bash -n` and runs `shellcheck` when it is available on the runner.
 
 ## Live acceptance boundary
 
-The first EC2 service validation partially ran: the SIG service/env-file side was healthy, while
-Polymarket startup exposed a real Gamma 429 failure before the SSH/reboot portion. That failure is
-now addressed on the branch, but the Polymarket service/output check and the remaining
-SSH-disconnect/reboot validation must be rerun before merge.
+EC2 validation is partial. The SIG service/env-file side is healthy. Polymarket has now proven
+successful startup, 3,160-market / 6,320-token discovery, WebSocket capture/recovery, 6,320-row
+snapshot output and zero storage failures. The second live attempt exposed the periodic-refresh
+TaskGroup failure described above. After this correction passes CI/re-review, the Polymarket
+service must be rerun through a scheduled refresh window and shown to stay active with SQLite
+output advancing; SSH-disconnect and reboot validation still follow before merge.
 
 The exact conservative operator procedure is in `OPERATIONS.md`. It verifies enabled/active
 state, resolved EnvironmentFiles, journals, capture output, manual restart, SSH disconnect
