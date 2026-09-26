@@ -6,11 +6,11 @@
 
 ## Why this corrective ticket exists
 
-The first credentialed tournament smoke observed 237 open markets and 237 open exchanges. A conservative live probe suggested roughly 3–4 REST requests per second was operationally comfortable. At four requests per second, a 237-book full-depth sweep alone requires about 59 seconds before retries, invalidations, settlement reconciliation, metadata, account/trading traffic, or network variance.
+The first credentialed tournament smoke observed 237 open markets and 237 open exchanges. The accompanying shell probe used blocking curl calls followed by sleep 0.25. Because each request itself took roughly 0.17–0.26 seconds, request starts were actually spaced about 0.42–0.51 seconds apart: roughly 2.0–2.4 request starts per second.
 
-That observation invalidates BUILD-004's implementation fallback that every open exchange can maintain an authoritative full-depth book inside one 30-second refresh window.
+That observation is enough to reject BUILD-004's assumption that all 237 full books can safely fit inside one 30-second freshness window, but it does not establish a 3–4 requests/second sustainable rate.
 
-The observed request rate is not a published SIG limit. The live default in this branch is a configurable 3 requests/second to preserve headroom.
+SIG does not publish a numeric REST limit in the supplied contract. Until a fixed-cadence live probe schedules request starts independently of response latency, the deployment default in this branch is a deliberately conservative configurable 2 requests/second.
 
 ## Corrected runtime model
 
@@ -40,7 +40,7 @@ The supplied OpenAPI contract defines GET /exchanges/prices for at most 100 exch
 
 BUILD-006 uses the existing SigRestClient.get_bulk_prices() path. A 237-exchange universe therefore requires exactly three bulk requests (100 + 100 + 37) per broad scalar sweep.
 
-Scalar/BBO observations are persisted separately in price_observations. They never create or upgrade full-depth trust.
+Scalar/BBO observations are persisted separately in price_observations. They never create or upgrade full-depth trust. If an exchange is reported in missingIds, any prior resident scalar latest-price/BBO/spread fields and scalar observation timestamp are cleared immediately so stale scalar state cannot remain usable.
 
 ## Full-depth tracking
 
@@ -73,7 +73,7 @@ Live capture uses GovernedSigRestClient, a thin subclass of the accepted BUILD-0
 
 The governor provides:
 
-- configurable sustainable pacing (default 3 requests/second);
+- configurable sustainable pacing (default 2 requests/second pending fixed-cadence live validation);
 - FIFO ordering inside HIGH / NORMAL / BACKGROUND priority classes;
 - HIGH work can overtake BACKGROUND work waiting for capacity;
 - shared 429 cooldown so concurrent callers do not independently retry into one per-key limit;
@@ -134,7 +134,7 @@ The branch tests:
 - 237 known exchanges => exactly three broad price batches;
 - initialization does not fetch 237 full books;
 - only configured tracked exchanges receive depth seeds;
-- scalar state never upgrades depth trust;
+- scalar state never upgrades depth trust, and missingIds clears previously resident scalar/BBO state;
 - tracked/untracked bookDirty behavior;
 - tracked stale-book fail-closed refresh and failed recovery;
 - revision-gap/reconnect recovery without a full-universe book storm;
