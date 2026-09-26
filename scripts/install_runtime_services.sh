@@ -136,8 +136,51 @@ for service in "${SERVICES[@]}"; do
   if grep -q '@@[A-Z_][A-Z_]*@@' "${rendered_unit}"; then
     fail "unresolved placeholder remains in ${service}"
   fi
-  if grep -Eq 'trade\.env|PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL' "${rendered_unit}"; then
-    fail "refusing to install a unit that references trade credentials"
+  if grep -Eq 'trade\.env' "${rendered_unit}"; then
+    fail "refusing to install a unit that references trade.env"
+  fi
+  if ! grep -q '^UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL    fail "SIG service must not hard-code tracked exchange IDs"
+  fi
+
+  install -m 0644 "${rendered_unit}" "${SYSTEMD_DIR}/${service}"
+done
+
+"${SYSTEMCTL_BIN}" daemon-reload
+for service in "${SERVICES[@]}"; do
+  "${SYSTEMCTL_BIN}" enable "${service}"
+done
+
+restart_failed=0
+for service in "${SERVICES[@]}"; do
+  if ! "${SYSTEMCTL_BIN}" restart "${service}"; then
+    printf 'ERROR: restart failed for %s\n' "${service}" >&2
+    restart_failed=1
+  fi
+done
+
+active_failed=0
+for service in "${SERVICES[@]}"; do
+  if "${SYSTEMCTL_BIN}" is-active --quiet "${service}"; then
+    printf 'OK: %s is active\n' "${service}"
+  else
+    printf 'ERROR: %s is not active\n' "${service}" >&2
+    active_failed=1
+  fi
+  "${SYSTEMCTL_BIN}" --no-pager --full status "${service}" || true
+done
+
+if [[ "${restart_failed}" -ne 0 || "${active_failed}" -ne 0 ]]; then
+  printf 'Inspect logs with: journalctl -u <service> -n 100 --no-pager\n' >&2
+  exit 1
+fi
+
+printf 'Installed read-only collector services. EnvironmentFile=%s\n' "${runtime_env}"
+printf 'Tracked SIG depth defaults to none; configure PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS only in runtime.env when explicitly required.\n'
+ "${rendered_unit}"; then
+    fail "unit must strip PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL from its process environment"
+  fi
+  if ! grep -q -- '--runtime-env-only' "${rendered_unit}"; then
+    fail "unit must disable repo-local dotenv loading"
   fi
   if [[ "${service}" == "predictions-cup-sig-capture.service" ]] && grep -q -- '--tracked-exchange-id' "${rendered_unit}"; then
     fail "SIG service must not hard-code tracked exchange IDs"
