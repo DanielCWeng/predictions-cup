@@ -26,6 +26,10 @@ class GammaDiscovery:
     parse_failures: int
 
 
+class GammaRateLimitError(RuntimeError):
+    """Gamma remained rate limited after the bounded retry budget."""
+
+
 class GammaClient:
     """Minimal keyset-paginated Gamma client for public market metadata."""
 
@@ -128,7 +132,10 @@ class GammaClient:
                         params.get("after_cursor"),
                         attempt,
                     )
-                    response.raise_for_status()
+                    raise GammaRateLimitError(
+                        "Gamma discovery remained rate limited after "
+                        f"{attempt} attempts at cursor={params.get('after_cursor')!r}"
+                    )
 
                 delay_seconds = self._rate_limit_delay_seconds(
                     response.headers.get("Retry-After"),
