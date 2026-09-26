@@ -636,16 +636,35 @@ def summarize_captures(
             times.extend(sig_times)
 
     if polymarket_path is not None:
-        with closing(_connect(polymarket_path)) as db:
-            _validate_schema(db, _POLY_SCHEMA, "Polymarket")
-            poly_records, poly_quotes, poly_gaps, poly_instruments, poly_times = (
-                _summarize_polymarket(db, selected)
-            )
-            records += poly_records
-            external_observations += poly_quotes
-            data_gaps += poly_gaps
-            instruments.update(f"polymarket:{value}" for value in poly_instruments)
-            times.extend(poly_times)
+        if polymarket_path.is_dir():
+            poly_events = load_polymarket_capture(polymarket_path, selection=selected)
+            records += len(poly_events)
+            for event in poly_events:
+                times.append(event.observed_at)
+                if event.instrument_id != "*":
+                    instruments.add(f"polymarket:{event.instrument_id}")
+                if event.event_type in {
+                    ReplayEventType.BOOK_OBSERVATION,
+                    ReplayEventType.BOOK_CHANGE,
+                    ReplayEventType.DEPTH_SNAPSHOT,
+                }:
+                    external_observations += 1
+                if (
+                    isinstance(event.payload, QuotePayload)
+                    and not event.payload.book_valid
+                ):
+                    data_gaps += 1
+        else:
+            with closing(_connect(polymarket_path)) as db:
+                _validate_schema(db, _POLY_SCHEMA, "Polymarket")
+                poly_records, poly_quotes, poly_gaps, poly_instruments, poly_times = (
+                    _summarize_polymarket(db, selected)
+                )
+                records += poly_records
+                external_observations += poly_quotes
+                data_gaps += poly_gaps
+                instruments.update(f"polymarket:{value}" for value in poly_instruments)
+                times.extend(poly_times)
 
     return CaptureSummary(
         records_loaded=records,
