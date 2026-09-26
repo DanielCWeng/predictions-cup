@@ -27,7 +27,15 @@ The database path defaults to `data/polymarket_capture.sqlite3`, which is ignore
 Gamma discovery is rate-limit aware. HTTP 429 retries stay on the current keyset cursor, honor
 `Retry-After` when present, otherwise use bounded exponential backoff with jitter, and stop after
 a bounded attempt budget with a visible error. A successful earlier page is not discarded and
-pagination is not restarted from page 1 after a transient 429.
+pagination is not restarted from page 1 after a transient 429. A parsed `Retry-After` of zero
+or an already-expired HTTP date is floored to a small positive delay so repeated 429 responses
+cannot be retried in a millisecond-scale burst.
+
+Initial startup remains fail-closed: without a valid selected universe the recorder exits visibly.
+After startup has established a resident universe, periodic Gamma discovery/selection failures are
+fail-soft: the recorder logs/records the Gamma failure, keeps the existing universe and active
+WebSocket/book/snapshot capture, and retries at the next normal Gamma refresh interval. Local
+post-discovery failures such as SQLite persistence still propagate rather than being hidden.
 
 ## SIG Realtime capture — BUILD-006 accepted runtime
 
@@ -198,10 +206,14 @@ diagnostic step.
 
 ### Conservative live EC2 validation — rerun required
 
-The first live attempt proved the SIG service/environment side healthy but exposed Gamma HTTP 429
-failure during Polymarket startup discovery. After the retry/backoff correction is reviewed and CI
-is green, rerun the Polymarket service and confirm its SQLite output is advancing before continuing
-with SSH-disconnect and reboot checks.
+Live validation has progressed in two stages. The SIG service/environment side is healthy. After
+the first Gamma retry/backoff correction, Polymarket successfully discovered 3,160 markets / 6,320
+tokens, connected the WebSocket, wrote 6,320-row snapshots, recovered from a WebSocket disconnect,
+and reported zero storage failures. A later scheduled Gamma refresh then exhausted 429 retries and
+tore down the recorder TaskGroup. The branch now keeps an established universe/capture alive across
+that periodic metadata failure and floors zero/expired Retry-After values. Rerun the exact head and
+confirm the service remains active through a scheduled Gamma failure/recovery window and that the
+SQLite output continues advancing before continuing with SSH-disconnect and reboot checks.
 
 An operator can validate without any trading action:
 
