@@ -173,6 +173,11 @@ Source/event timestamps and local observation/sample timestamps remain separate.
 price/size values are represented as exact decimal text rather than binary floats. Depth levels
 use typed nested structures rather than JSON blobs.
 
+Raw Parquet trade delivery is at-least-once. Hashed trades carry a deterministic event identity
+derived from token ID + transaction hash. Canonical replay validates that identity and keeps only
+the first observation across duplicates within one shard or across later shards/process restarts.
+Unhashed trades remain at-least-once, matching the historical partial SQLite uniqueness rule.
+
 The pre-correction broad `data/polymarket_capture.sqlite3*` soak artifacts are legacy evidence.
 BUILD-007 neither deletes nor migrates them automatically, and the supervised service uses a fresh
 operational SQLite path.
@@ -195,7 +200,10 @@ disconnect events are required.
 8. always enables/restarts SIG;
 9. enables/restarts Polymarket only when capture is explicitly enabled with a non-empty strict
    supervised universe; otherwise disables/stops its installed unit;
-10. verifies active configured services and returns non-zero on restart/active failure.
+10. if an upgrade finds capture enabled but the new strict universe missing, it first issues
+   `disable --now` for the existing Polymarket service and only then exits non-zero, so an old
+   broad-universe candidate cannot keep running after a failed migration;
+11. verifies active configured services and returns non-zero on restart/active failure.
 
 The script is idempotent and supports test-only/tooling overrides for the runtime user/home,
 Python, systemd destination and systemctl executable. It never deletes runtime data or secrets.
@@ -227,9 +235,13 @@ BUILD-007 adds tests proving:
 - the Polymarket unit has a slower 30-second restart cadence after unrecoverable startup failure;
 - supervised Polymarket startup requires an explicit universe and unresolved IDs fail closed;
 - disabled Polymarket capture leaves the unit disabled/stopped while SIG remains supervised;
+- an old capture-enabled env missing new supervised IDs is stopped/disabled before installer
+  failure;
 - fresh operational SQLite contains no high-frequency panel/delta/trade/depth tables;
 - ZSTD Parquet shards preserve source/observed timestamps and depth structure;
 - Parquet publication is atomic and leaves no final partial shard;
+- deterministic hashed-trade identity is persisted and canonical replay de-duplicates duplicates
+  within one shard and across shard/restart boundaries;
 - replay reads the new Parquet research format and can combine separate operational health.
 
 CI also runs `bash -n` and runs `shellcheck` when it is available on the runner.
@@ -247,12 +259,18 @@ That same soak then falsified the storage/universe architecture for always-on us
 heuristic plus SQLite growth cannot be accepted on the ~30 GiB host. It is explicitly **not** the
 production-intended Cup lane.
 
-The next live Polymarket acceptance run must therefore use this corrected branch and an explicit
-mapping-bounded universe. Because production IDs must come from the accepted live crosswalk,
-BUILD-007's final Polymarket acceptance is dependent on LIVE-MAPPING-GATE-001. No guessed IDs
-should be substituted merely to clear the gate.
+The next **pre-merge** live gate is an ARM64 EC2 Parquet smoke/soak on this corrected branch using
+a deliberately bounded explicit public test universe. Its purpose is to validate PyArrow/Parquet
+runtime compatibility, shard publication, restart behavior and bounded storage shape on the actual
+host; it is not production mapping evidence.
 
-Once the accepted IDs exist, live acceptance must prove:
+The later production-intended Polymarket acceptance run must use the accepted live crosswalk.
+Because production IDs must come from LIVE-MAPPING-GATE-001, no guessed IDs should be substituted
+for that production gate.
+
+The ARM64 pre-merge smoke/soak should first prove the same storage/runtime mechanics on a bounded
+explicit test set. Once the accepted production IDs exist, the mapping-bounded production gate
+must prove:
 
 1. installed Polymarket unit contains `--require-explicit-universe`;
 2. runtime.env contains the accepted mapped IDs and no trade credential;
