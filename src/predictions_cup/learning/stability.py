@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Mapping
-
 
 @dataclass(frozen=True, slots=True)
 class ParameterCell:
@@ -61,10 +59,19 @@ def parameter_surface(
                 or (candidate.metric == 0 and cell.metric == 0)
             )
             sign_stability = Decimal(same_sign) / Decimal(len(neighbours))
-            mean = sum((candidate.metric for candidate in neighbours), Decimal("0")) / Decimal(len(neighbours))
-            dispersion = sum((abs(candidate.metric - mean) for candidate in neighbours), Decimal("0")) / Decimal(len(neighbours))
+            mean = sum(
+                (candidate.metric for candidate in neighbours), Decimal("0")
+            ) / Decimal(len(neighbours))
+            dispersion = sum(
+                (abs(candidate.metric - mean) for candidate in neighbours),
+                Decimal("0"),
+            ) / Decimal(len(neighbours))
             scale = max(abs(peak.metric), Decimal("0.000000000001"))
-            within = sum(1 for candidate in neighbours if abs(peak.metric - candidate.metric) / scale <= tolerance)
+            within = sum(
+                1
+                for candidate in neighbours
+                if abs(peak.metric - candidate.metric) / scale <= tolerance
+            )
             neighbour_fraction = Decimal(within) / Decimal(len(neighbours))
         else:
             sign_stability = Decimal("0")
