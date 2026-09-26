@@ -42,9 +42,9 @@ BUILD-006 keeps tournament-wide Realtime and broad scalar/BBO capture while maki
 
 With no --tracked-exchange-id arguments, the process deliberately maintains no resident trusted full depth and logs that fact. It still records the full tournament Realtime tape and broad bulk-price observations.
 
-The BUILD-006 live path uses one governed REST client. The default is 3 requests/second, chosen conservatively from live observation; SIG does not publish a numeric REST limit in the supplied contract. HIGH tracked dirty/recovery work can overtake BACKGROUND bulk-price work, and a 429 creates shared cooldown for callers using the same governed client.
+The BUILD-006 live path uses one governed REST client. The default is 2 requests/second. The earlier blocking curl + sleep probe only demonstrated roughly 2.0–2.4 request starts/second, so 3 requests/second remains unvalidated until a fixed-cadence live probe is run. SIG does not publish a numeric REST limit in the supplied contract. HIGH tracked dirty/recovery work can overtake BACKGROUND bulk-price work, and a 429 creates shared cooldown for callers using the same governed client.
 
-The broad universe uses GET /exchanges/prices in batches of at most 100. At 237 exchanges one complete scalar/BBO sweep is three requests. Those observations are stored separately from authoritative full books and can never make depth trusted.
+The broad universe uses GET /exchanges/prices in batches of at most 100. At 237 exchanges one complete scalar/BBO sweep is three requests. Those observations are stored separately from authoritative full books and can never make depth trusted. A missingIds result clears any prior scalar latest-price/BBO/spread values for that exchange rather than leaving stale fallback state resident.
 
 Tracked books remain fail-closed. A tracked bookDirty removes trust before HIGH-priority authoritative reconciliation. An untracked bookDirty is persisted but does not trigger a full-book request. Reconnect, token refresh, socket error and revision-gap recovery reseed only tracked full depth and refresh broad scalar state through the bulk endpoint.
 
