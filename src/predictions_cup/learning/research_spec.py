@@ -96,20 +96,24 @@ def canonical_data(value: Any) -> Any:
     if isinstance(value, Decimal):
         return str(value)
     if isinstance(value, timedelta):
-        return str(Decimal(value.days * 86400 + value.seconds) + Decimal(value.microseconds) / Decimal(1_000_000))
+        seconds = Decimal(value.days * 86400 + value.seconds)
+        micros = Decimal(value.microseconds) / Decimal(1_000_000)
+        return str(seconds + micros)
     if isinstance(value, StrEnum):
         return value.value
     if hasattr(value, "__dataclass_fields__"):
         return {k: canonical_data(v) for k, v in asdict(value).items()}
     if isinstance(value, dict):
-        return {str(k): canonical_data(v) for k, v in sorted(value.items(), key=lambda item: str(item[0]))}
+        ordered = sorted(value.items(), key=lambda item: str(item[0]))
+        return {str(k): canonical_data(v) for k, v in ordered}
     if isinstance(value, (tuple, list)):
         return [canonical_data(v) for v in value]
     return value
 
 
 def canonical_json_bytes(value: Any) -> bytes:
-    return (json.dumps(canonical_data(value), sort_keys=True, separators=(",", ":")) + "\n").encode()
+    payload = json.dumps(canonical_data(value), sort_keys=True, separators=(",", ":"))
+    return (payload + "\n").encode()
 
 
 def config_hash(spec: ResearchEvaluationSpec) -> str:
