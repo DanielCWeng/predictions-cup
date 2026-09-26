@@ -35,6 +35,7 @@ class AppSettings(BaseSettings):
 
     sig_realtime_storage_path: Path = Path("data/sig_realtime.sqlite3")
     sig_realtime_book_depth: int = Field(default=20, ge=1, le=200)
+    sig_realtime_tracked_exchange_ids: str = ""
     sig_rest_governor_rate_per_second: float = Field(default=2.0, gt=0.0, le=100.0)
     sig_rest_shared_cooldown_max_seconds: float = Field(default=8.0, ge=0.5, le=120.0)
     sig_realtime_open_book_refresh_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
@@ -105,6 +106,13 @@ class AppSettings(BaseSettings):
             "sig_trade_credential_configured": self.sig_trade_credential is not None,
             "sig_realtime_storage_path": str(self.sig_realtime_storage_path),
             "sig_realtime_book_depth": self.sig_realtime_book_depth,
+            "sig_realtime_tracked_exchange_count": len(
+                {
+                    value.strip()
+                    for value in self.sig_realtime_tracked_exchange_ids.split(",")
+                    if value.strip()
+                }
+            ),
             "sig_rest_governor_rate_per_second": self.sig_rest_governor_rate_per_second,
             "sig_rest_shared_cooldown_max_seconds": (
                 self.sig_rest_shared_cooldown_max_seconds
