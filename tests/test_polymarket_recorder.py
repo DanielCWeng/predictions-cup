@@ -237,6 +237,24 @@ def test_snapshot_storage_failure_is_surfaced(
     assert recorder.health.snapshot_last_status.startswith("ERROR:")
 
 
+def test_initial_gamma_failure_remains_fail_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = AppSettings.model_validate(
+        {"polymarket_storage_path": tmp_path / "capture.sqlite3"}
+    )
+    recorder = PolymarketRecorder(settings)
+
+    async def fail_refresh_universe() -> None:
+        raise RuntimeError("startup Gamma unavailable")
+
+    monkeypatch.setattr(recorder, "refresh_universe", fail_refresh_universe)
+
+    with pytest.raises(RuntimeError, match="startup Gamma unavailable"):
+        asyncio.run(recorder.initialize())
+
+
 def test_periodic_gamma_refresh_fails_soft_and_later_recovers(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
