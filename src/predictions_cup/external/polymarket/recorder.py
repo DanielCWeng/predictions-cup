@@ -269,12 +269,17 @@ def _event_payload(payload: JsonObject) -> JsonObject:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Polymarket public-data recorder")
     parser.add_argument(
+        "--runtime-env-only",
+        action="store_true",
+        help="Disable local .env loading; intended for supervised runtime services.",
+    )
+    parser.add_argument(
         "--smoke-test",
         action="store_true",
         help="perform explicit read-only public Gamma/CLOB checks and exit",
     )
     args = parser.parse_args(argv)
-    settings = load_settings()
+    settings = load_settings(use_dotenv=not args.runtime_env_only)
     logging.basicConfig(
         level=getattr(logging, settings.log_level),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
