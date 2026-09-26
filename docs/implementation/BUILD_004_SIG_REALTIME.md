@@ -1,12 +1,12 @@
 # BUILD-004 — SIG Realtime State, REST Reconciliation and Replayable Capture
 
-**Status:** IN REVIEW — PR #12  
+**Status:** MERGED / ACCEPTED — PR #12  
 **Branch:** `build/004-sig-realtime-state`  
-**Accepted on main:** no
+**Accepted on main:** yes — 25 September 2026
 
 ## Purpose
 
-BUILD-004 adds the candidate read-only live SIG state foundation required before replay-driven
+BUILD-004 added the accepted read-only live SIG state foundation required before replay-driven
 strategy work. Realtime is used for low-latency events and invalidation. Authoritative financial
 state comes from REST.
 
@@ -105,7 +105,7 @@ with event time.
 
 ## Runtime state
 
-Per exchange, the candidate state keeps:
+Per exchange, the BUILD-004 baseline state keeps:
 
 ```text
 exchange_id
@@ -193,8 +193,7 @@ python -m predictions_cup.sig.capture \
   --run-seconds 30
 ```
 
-No live credentialed smoke was performed by the BUILD-004 implementation environment. CI uses
-mocked/local test doubles and requires no live SIG credential.
+No live credentialed smoke was performed by the BUILD-004 implementation environment. The first later credentialed tournament smoke observed 237 open exchanges and showed that BUILD-004's tournament-wide 30-second full-depth fallback could not scale within the conservative observed REST envelope. BUILD-006 / PR #19 is the corrective tracked-depth/governor ticket. This note remains the historical BUILD-004 contract rather than rewriting that accepted history.
 
 ## Automated validation
 
@@ -215,4 +214,4 @@ python -m predictions_cup.app
 python -m predictions_cup.app --smoke-test
 ```
 
-PR #12 must remain unmerged until independent review accepts the implementation.
+PR #12 was independently accepted and merged on 25 September 2026. BUILD-006 / PR #19 now carries the separate live scalability correction; it must not be treated as accepted until independently reviewed and merged.
