@@ -5,13 +5,16 @@
 ## Operating posture — 26 September 2026
 
 - Broad strategy/mathematical research is frozen by default unless it answers a failed test,
-  implementation ambiguity, live venue observation or specific architectural decision.
-- Initial empirical strategy work is limited to direct external lead/lag, response/half-life,
-  simple residual/relative value, LOO structure where mapping supports it, and selective market
-  making only after evidence justifies it.
-- **Monday 28 September gate:** those hypotheses should be runnable through replay using data
-  captured by our own infrastructure; otherwise priority collapses back onto data -> replay ->
-  experiment.
+  implementation ambiguity, live venue observation or specific architectural/research decision.
+- The immediate research priority is the shared evaluation machine: authoritative replay,
+  standardized experiment contracts, event-aware OOS validation, false-discovery control,
+  block bootstrap, parameter stability, ablation and execution stress.
+- Baseline alpha families may then compete under that same harness: cross-venue information,
+  event-relative/structural residuals, simple microstructure, participant-conditioned flow and a
+  SIG-2026-style low-rank/cross-market benchmark.
+- **Monday 28 September gate:** at least four research families should be runnable at baseline
+  level through the same trustworthy harness. There is no requirement that four survive. If the
+  harness/data path is not trustworthy, priority collapses back onto data -> replay -> experiment.
 - GitHub merge state and the actual contents of `main` outrank stale documentation or chat memory.
 
 This document describes the accepted repository state on `main`. For project intent/dependency
@@ -87,6 +90,9 @@ mapping evidence and must not be promoted into production configuration.
 - HIST-DATA-001 / PR #17 was closed unmerged. It must not be described as accepted repository
   capability. Historical research remains a useful parallel workstream and should reuse accepted
   data/replay contracts.
+- DATA-001 / PR #23 is the current historical replay-corpus candidate and is **not yet accepted**.
+  Independent review found one blocking source-routing decision around the 13-Apr-2026 PMXT V1/V2
+  overlap; the affected corpus evidence must be rebuilt/reproduced before acceptance.
 
 ## Not implemented on main
 
