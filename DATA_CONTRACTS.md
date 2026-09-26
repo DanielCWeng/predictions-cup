@@ -75,8 +75,8 @@ BUILD-006 does not redefine the canonical OrderBook contract. It adds venue-runt
 
 - UNTRACKED_DEPTH means the exchange is known but the process deliberately makes no resident authoritative full-depth claim;
 - TRACKED_UNTRUSTED means the exchange is selected for depth but depth-sensitive logic must fail closed;
-- TRACKED_TRUSTED means the tracked exchange has an accepted authoritative full-depth observation;
-- bulk latest-price / best-bid / best-ask / spread observations are scalar transport/runtime state and never upgrade full-depth trust;
+- TRACKED_TRUSTED means the tracked exchange has an accepted authoritative full-depth observation; while in this state, authoritative depth owns best-bid/best-ask semantics even when a side is empty or the settled book has been cleared, so scalar fallback is forbidden;
+- bulk latest-price / best-bid / best-ask / spread observations are scalar transport/runtime state and never upgrade full-depth trust; scalar BBO fallback is only for UNTRACKED_DEPTH or TRACKED_UNTRUSTED broad-monitoring state;
 - Realtime trades, bookDirty, marketSettled and delivery revision metadata remain full-universe event/provenance records regardless of depth tracking;
 - REST response observation time remains distinct from Realtime receive time and SIG event/source time.
 
