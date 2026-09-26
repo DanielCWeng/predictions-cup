@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
+from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
@@ -88,6 +89,47 @@ def _missing_required_evidence(
         missing.append("ablations")
     if policy.require_execution_stress and not report.execution_stresses:
         missing.append("execution_stresses")
+
+    if report.fdr_results:
+        rejections = sum(1 for row in report.fdr_results if row.get("rejected") is True)
+        if rejections < policy.min_fdr_rejections:
+            missing.append("fdr_threshold")
+
+    if policy.bootstrap_min_lower_bound is not None and report.bootstrap_results:
+        lowers = [row.get("lower") for row in report.bootstrap_results]
+        if any(value is None for value in lowers):
+            missing.append("bootstrap_threshold")
+        elif any(Decimal(str(value)) < policy.bootstrap_min_lower_bound for value in lowers):
+            missing.append("bootstrap_threshold")
+
+    if (
+        policy.require_nonisolated_stability
+        and report.parameter_stability is not None
+        and report.parameter_stability.get("peak_is_isolated") is not False
+    ):
+        missing.append("stability_threshold")
+
+    if (
+        policy.require_negative_controls_pass
+        and report.negative_controls
+        and any(row.get("passed") is not True for row in report.negative_controls)
+    ):
+        missing.append("negative_controls_threshold")
+
+    if (
+        policy.require_ablations_pass
+        and report.ablations
+        and any(row.get("passed") is not True for row in report.ablations)
+    ):
+        missing.append("ablations_threshold")
+
+    if (
+        policy.require_execution_stresses_pass
+        and report.execution_stresses
+        and any(row.get("passed") is not True for row in report.execution_stresses)
+    ):
+        missing.append("execution_stresses_threshold")
+
     return tuple(missing)
 
 
