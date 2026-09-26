@@ -20,8 +20,8 @@ from predictions_cup.learning.reporting import (
 from predictions_cup.learning.research_spec import (
     DatasetVersion,
     ResearchEvaluationSpec,
-    SplitMethod,
     STANDARD_HORIZONS,
+    SplitMethod,
     make_run_identity,
 )
 from predictions_cup.learning.stability import ParameterCell, parameter_surface
