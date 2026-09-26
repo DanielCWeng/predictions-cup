@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -46,6 +47,14 @@ def parse_decimal(value: object, field: str, *, optional: bool = False) -> Decim
     if not parsed.is_finite():
         raise PayloadError(f"{field} must be finite")
     return parsed
+
+
+def hashed_trade_event_id(token_id: str, transaction_hash: str | None) -> str | None:
+    """Stable identity for hashed public trades; unhashed trades remain at-least-once."""
+    if transaction_hash is None:
+        return None
+    payload = f"{len(token_id)}:{token_id}:{transaction_hash}".encode("utf-8")
+    return "polymarket-trade:" + hashlib.sha256(payload).hexdigest()
 
 
 def parse_source_timestamp(value: object) -> datetime | None:
