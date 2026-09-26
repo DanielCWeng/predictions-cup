@@ -9,7 +9,7 @@
 - BUILD-006 SIG live REST governance/tracked-depth correction is accepted on `main`; its accepted 60-second credentialed smoke passed at the merged head.
 - BUILD-007 / PR #20 is an in-review read-only systemd supervision layer; it is not accepted or live-EC2 validated yet.
 
-The recorder uses local SQLite/WAL append storage, idempotent market metadata upserts, invalidation plus authoritative REST reseeding after reconnect, and explicit feed/book/trade/storage health clocks. These are experimental capture properties, not production trading/recovery guarantees.
+The accepted EXPERIMENT-001A baseline on main used local SQLite/WAL research persistence. BUILD-007's branch changes the live/supervised storage shape after the EC2 soak: market/token metadata and health remain in a small operational SQLite, while high-frequency panel/book-change/trade/depth history is written as immutable ZSTD Parquet shards.
 
 ## EXPERIMENT-001A operation
 
@@ -22,7 +22,11 @@ python -m predictions_cup.external.polymarket.recorder
 
 The recorder writes a lean 1-second scalar panel, normalized event-time book changes and public trade events. Top-20 depth snapshots default to every 60 seconds rather than every second. Feed receive/PONG liveness is bounded; an unhealthy connection is closed and the existing reconnect path invalidates books and REST-reseeds them before accepting new deltas.
 
-The database path defaults to `data/polymarket_capture.sqlite3`, which is ignored by Git. Storage failures surface instead of being silently ignored.
+On BUILD-007 the low-volume operational database defaults to
+`data/polymarket_operational.sqlite3`; high-frequency research history defaults to
+`data/polymarket_research/`. The old broad-soak `data/polymarket_capture.sqlite3*` files are
+legacy evidence and are not deleted or reused automatically. Storage failures surface rather than
+being silently ignored.
 
 Gamma discovery is rate-limit aware. HTTP 429 retries stay on the current keyset cursor, honor
 `Retry-After` when present, otherwise use bounded exponential backoff with jitter, and stop after
@@ -115,7 +119,7 @@ The default rendered commands are:
 
 ```text
 <repo-root>/.venv/bin/python -m predictions_cup.sig.capture --runtime-env-only
-<repo-root>/.venv/bin/python -m predictions_cup.external.polymarket.recorder --runtime-env-only
+<repo-root>/.venv/bin/python -m predictions_cup.external.polymarket.recorder --runtime-env-only --require-explicit-universe
 ```
 
 Set `PREDICTIONS_CUP_PYTHON` only if the EC2 runtime intentionally uses a different Python.
@@ -129,10 +133,16 @@ PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS=
 in `runtime.env`. Empty/unset means no tracked full depth. When explicitly needed, supply a
 comma-separated set of exchange IDs in that external file; the installed unit remains unchanged.
 
-The runtime environment must also provide a non-empty
-`PREDICTIONS_CUP_SIG_READ_CREDENTIAL` and `PREDICTIONS_CUP_TOURNAMENT_ID`, keep
-`PREDICTIONS_CUP_TRADING_ENABLED=false` (or omit it), and set
-`PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true`.
+The runtime environment must provide a non-empty
+`PREDICTIONS_CUP_SIG_READ_CREDENTIAL` and `PREDICTIONS_CUP_TOURNAMENT_ID`, and must keep
+`PREDICTIONS_CUP_TRADING_ENABLED=false` (or omit it).
+
+Polymarket is now separately gated. If
+`PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=false` (or unset), the installer still installs its
+unit but explicitly leaves it disabled/stopped while SIG remains enabled. If Polymarket capture is
+enabled, `PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS` is mandatory and must contain the explicit
+accepted mapping-driven market/condition/token IDs. Missing IDs fail installation; unresolved IDs
+fail recorder startup. The service never falls back to the broad election heuristic.
 
 ### Install / update
 
@@ -145,8 +155,9 @@ sudo bash scripts/install_runtime_services.sh
 ```
 
 The installer is idempotent: it re-renders/copies the same two units, runs `daemon-reload`,
-enables both services, restarts both, verifies they are active and returns non-zero if restart or
-active-state verification fails. It never overwrites `runtime.env`, never deletes capture data,
+enables/restarts SIG and, only when explicitly configured with a supervised Polymarket universe,
+enables/restarts Polymarket. Otherwise Polymarket is disabled/stopped. Active configured services
+are verified and restart/active-state failure returns non-zero. It never overwrites `runtime.env`, never deletes capture data,
 and never prints credential values.
 
 ### Status
@@ -187,8 +198,13 @@ dependency. Relative capture paths are deliberately preserved by `WorkingDirecto
 
 ```text
 data/sig_realtime.sqlite3
-data/polymarket_capture.sqlite3
+data/polymarket_operational.sqlite3
+data/polymarket_research/
 ```
+
+The Polymarket research directory contains per-stream immutable ZSTD Parquet shards for the
+1-second scalar/BBO panel, normalized book changes, public trades and periodic depth snapshots.
+Fresh operational SQLite contains only markets, tokens and health.
 
 ### Troubleshooting
 
@@ -204,18 +220,43 @@ If installation fails before restart, check the runtime user/home, `.venv/bin/py
 after restart, the installer exits non-zero and the journal commands above are the first
 diagnostic step.
 
-### Conservative live EC2 validation — rerun required
+### Conservative live EC2 validation — corrected bounded lane required
 
-Live validation has progressed in two stages. The SIG service/environment side is healthy. After
-the first Gamma retry/backoff correction, Polymarket successfully discovered 3,160 markets / 6,320
-tokens, connected the WebSocket, wrote 6,320-row snapshots, recovered from a WebSocket disconnect,
-and reported zero storage failures. A later scheduled Gamma refresh then exhausted 429 retries and
-tore down the recorder TaskGroup. The branch now keeps an established universe/capture alive across
-that periodic metadata failure and floors zero/expired Retry-After values. Rerun the exact head and
-confirm the service remains active through a scheduled Gamma failure/recovery window and that the
-SQLite output continues advancing before continuing with SSH-disconnect and reboot checks.
+The broad soak is useful evidence but is **not** an acceptable production lane. It selected 3,160
+markets / 6,320 tokens. At that size, the 1-second panel implies 546,048,000 scalar rows/day and
+the 60-second depth schedule implies 9,100,800 depth rows/day before deltas/trades. During the soak,
+the main SQLite file grew from 1,145,905,152 to 1,159,487,488 bytes in about 22.15 seconds, roughly
+a 53 GB/day point estimate, while the WAL was already about 2.61 GB. That falsified broad
+high-frequency SQLite as an always-on design for the roughly 30 GiB EC2 root volume.
 
-An operator can validate without any trading action:
+Do not reduce the 1-second cadence to accommodate SQLite. BUILD-007 instead requires the intended
+competition universe and Parquet storage.
+
+### Before the accepted mapping crosswalk exists
+
+Keep SIG running and leave Polymarket disabled:
+
+```text
+PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=false
+```
+
+Then rerun the installer. It will install but disable/stop the Polymarket unit and keep SIG
+enabled. Do not populate `PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS` with guessed or heuristic
+IDs simply to make the service start.
+
+The legacy broad-soak database/WAL should be preserved unless an operator deliberately archives or
+removes it after extracting any needed evidence. BUILD-007 performs no destructive cleanup.
+
+### After LIVE-MAPPING-GATE-001 is independently accepted
+
+Populate `runtime.env` from the accepted crosswalk:
+
+```text
+PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true
+PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS=<accepted market/condition/token IDs, comma-separated>
+```
+
+Then install/restart the exact reviewed head:
 
 ```bash
 cd <repo-root>
@@ -228,17 +269,29 @@ sudo systemctl show -p EnvironmentFiles predictions-cup-polymarket-capture
 
 sudo journalctl -u predictions-cup-sig-capture -n 100 --no-pager
 sudo journalctl -u predictions-cup-polymarket-capture -n 100 --no-pager
-ls -lh data/sig_realtime.sqlite3 data/polymarket_capture.sqlite3
+ls -lh data/sig_realtime.sqlite3 data/polymarket_operational.sqlite3
+find data/polymarket_research -type f -name '*.parquet' -printf '%TY-%Tm-%Td %TH:%TM:%TS %s %p\n' | tail -20
+du -sh data/polymarket_research
 
 sudo systemctl restart predictions-cup-sig-capture predictions-cup-polymarket-capture
 sudo systemctl is-active predictions-cup-sig-capture predictions-cup-polymarket-capture
 ```
 
-Disconnect SSH, reconnect, and repeat the active/log checks to confirm the collectors are
-independent of the shell session. For reboot validation, use an operator-controlled
-`sudo reboot`, reconnect after the host returns, then repeat `is-enabled`, `is-active`,
-journal and data-file checks. `EnvironmentFiles` must show only the resolved `runtime.env`
-path; neither unit should show or source `trade.env`.
+For Polymarket acceptance, verify all of the following rather than process liveness alone:
+
+- the logged/subscribed universe corresponds to the accepted mapping scope, not the 3,160-market
+  heuristic;
+- new Parquet shards continue appearing and total research bytes advance;
+- `polymarket_operational.sqlite3` stays small and contains operational metadata/health rather
+  than high-frequency research tables;
+- a scheduled Gamma failure, if encountered, leaves the existing capture alive and a later refresh
+  can recover;
+- no rapid 429 retry burst occurs when `Retry-After` is zero/expired.
+
+After that bounded soak is green, disconnect SSH, reconnect and repeat active/log/shard checks.
+Then perform the operator-controlled reboot, reconnect, and verify both configured services return
+and resume writing. `EnvironmentFiles` must show only the resolved `runtime.env`; neither unit
+may source `trade.env`.
 
 ## Eventual operating expectations
 
