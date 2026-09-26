@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import signal
+from contextlib import suppress
 from datetime import datetime
 from typing import Any
 
@@ -201,6 +203,36 @@ class PolymarketRecorder:
             _LOG.info("Polymarket capture health=%s", self.health.as_record())
 
 
+async def _run_recorder_until_stopped(
+    recorder: PolymarketRecorder,
+    stop_event: asyncio.Event,
+) -> None:
+    recorder_task = asyncio.create_task(recorder.run(), name="polymarket-recorder")
+    stop_task = asyncio.create_task(stop_event.wait(), name="polymarket-stop-waiter")
+    done, _ = await asyncio.wait(
+        {recorder_task, stop_task},
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+
+    if recorder_task in done:
+        stop_task.cancel()
+        await asyncio.gather(stop_task, return_exceptions=True)
+        await recorder_task
+        return
+
+    _LOG.info("Polymarket recorder received shutdown signal")
+    recorder.websocket.stop()
+    recorder_task.cancel()
+    await asyncio.gather(recorder_task, return_exceptions=True)
+
+
+def _install_signal_handlers(stop_event: asyncio.Event) -> None:
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        with suppress(NotImplementedError):
+            loop.add_signal_handler(sig, stop_event.set)
+
+
 async def _public_smoke_test(settings: AppSettings) -> int:
     gamma = GammaClient(
         str(settings.polymarket_gamma_base_url),
@@ -256,8 +288,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     recorder = PolymarketRecorder(settings)
+
+    async def run_until_stopped() -> None:
+        stop_event = asyncio.Event()
+        _install_signal_handlers(stop_event)
+        await _run_recorder_until_stopped(recorder, stop_event)
+
     try:
-        asyncio.run(recorder.run())
+        asyncio.run(run_until_stopped())
     except KeyboardInterrupt:
         _LOG.info("Polymarket recorder stopped by operator")
     return 0
