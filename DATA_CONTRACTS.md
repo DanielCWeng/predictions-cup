@@ -154,6 +154,8 @@ parallel replay format:
 - on-chain fills are a separate stream keyed on `(transaction_hash, log_index, token_id)` and are
   not written as BUILD-007 `trades`, whose `(token_id, transaction_hash)` identity would collapse
   distinct fills;
+- PMXT routing: V1 through the `2026-04-13T19` hourly partition, V2 from `2026-04-13T20:00Z`; no
+  partition mixes V1 and V2 rows;
 - the corpus lives outside Git; its manifests, hashes, identity and quality evidence live under
   `data/manifests/historical/`.
 

@@ -21,7 +21,7 @@
       ]
     },
     "material_gap_seconds": 300.0,
-    "pmxt_routing": "PMXT_V1 before 2026-04-13T19:00:00Z, PMXT_V2 from then"
+    "pmxt_routing": "PMXT_V1 before 2026-04-13T20:00:00Z, PMXT_V2 from then"
   },
   "dataset_id": "DATA-001-historical-replay-corpus",
   "evidence_grades": {
@@ -415,11 +415,11 @@
       "sha256": "a4541f57df4ea5036a7b454c994f3e9992c6b9759501fc88e38896859b6b170b"
     },
     {
-      "bytes": 1525806,
+      "bytes": 1477681,
       "kind": "corpus",
       "path": "hungary_election/books/book_changes/date=2026-04-13/part-0.parquet",
-      "rows": 197218,
-      "sha256": "054595293d720e623c0e8c733a1715ffec9b78593753190dfdc166af5e1bc9c1"
+      "rows": 192805,
+      "sha256": "684e6438c182906040bf9c2c66cc24e1b5a8e61b1d92cdb51d37a9e0c8e5aed0"
     },
     {
       "bytes": 2624149,
@@ -485,11 +485,11 @@
       "sha256": "027979caaf9f9d8376572b7155deec11c829dade9b993802d2d4be440dd301b9"
     },
     {
-      "bytes": 746604,
+      "bytes": 742049,
       "kind": "corpus",
       "path": "hungary_election/books/depth_snapshots/date=2026-04-13/part-0.parquet",
-      "rows": 9275,
-      "sha256": "c76228ba6cb05966f54d3978f0e7aa900fe09716771bff54b581cc5ed4d84866"
+      "rows": 9459,
+      "sha256": "424e439e4f34bea98334c9833683343c3a0e1093d3704a7d168275acdb89eb8f"
     },
     {
       "bytes": 190427,
@@ -499,11 +499,11 @@
       "sha256": "453df318a89542dd2c1c8866fad29731718bff8dd119fa6cb6c0a7b31c5309bd"
     },
     {
-      "bytes": 60004,
+      "bytes": 51381,
       "kind": "corpus",
       "path": "hungary_election/books/trades/date=2026-04-13/part-0.parquet",
-      "rows": 422,
-      "sha256": "a7f914c377510e7b7fd79882681782487e48dedeb9cc4c1bdaf94fc20d779365"
+      "rows": 371,
+      "sha256": "e817bd9bba03f19b0bfddf7fd2792eb0f5a0faa870bc545e4e8f2c57c4732f37"
     },
     {
       "bytes": 259815,
@@ -604,11 +604,11 @@
       "sha256": "a87dec3a1e0e56b8a5e30932b666befe8b3f116db24aac8336f0d3e4c82cf4a7"
     },
     {
-      "bytes": 38854968,
+      "bytes": 38402682,
       "kind": "corpus",
       "path": "peru_first_round/books/book_changes/date=2026-04-13/part-0.parquet",
-      "rows": 4848480,
-      "sha256": "0d42244b8908fa73710a788c053643c95dbf5bbf7afb79793e796eabf3ef9344"
+      "rows": 4821397,
+      "sha256": "8b214ce506b12a8bf7b6112d84f33ba0a173ed1be11711d9d9c53f76892a3b91"
     },
     {
       "bytes": 70242892,
@@ -639,11 +639,11 @@
       "sha256": "714f1f38678cf4533ef3302304fb1891f344584a1fd64031b35eb14705fd2239"
     },
     {
-      "bytes": 4403513,
+      "bytes": 4503059,
       "kind": "corpus",
       "path": "peru_first_round/books/depth_snapshots/date=2026-04-13/part-0.parquet",
-      "rows": 35241,
-      "sha256": "b3e57d77decaa480aba4458fa8214d7f0f07d9864a514232dc1f0d4d32736ab7"
+      "rows": 36567,
+      "sha256": "99690dde43d5b6841c802f7dca7891015e39e9416370e4fb0078fded41f32f8c"
     },
     {
       "bytes": 499894,
@@ -653,11 +653,11 @@
       "sha256": "b692727c8d267313b1384a09ab070553cea975dc1f29b1bbdbb633e3b87c2af1"
     },
     {
-      "bytes": 352665,
+      "bytes": 317496,
       "kind": "corpus",
       "path": "peru_first_round/books/trades/date=2026-04-13/part-0.parquet",
-      "rows": 3722,
-      "sha256": "62fb3b8b7d0942aa90d3b3d9e6f36f594966dd184e737e825c0545df704f49f0"
+      "rows": 3372,
+      "sha256": "305f2c08061d98a5697556c209ebf7c331690b407531bbf02f00d39ef1000256"
     },
     {
       "bytes": 2598736,
@@ -845,16 +845,16 @@
       "bytes": 901019,
       "kind": "corpus_metadata",
       "path": "market_identity.csv",
-      "sha256": "ef0a69076e93b1e775e69c81a40fd434476358828dd4fc2311e443e754e2deaa"
+      "sha256": "f83598819fd9e98cba75cd97b787413b0ffc96baff4be3b8d8d40479f8c0787f"
     },
     {
-      "bytes": 4393538,
+      "bytes": 4384252,
       "kind": "corpus_metadata",
       "path": "corpus_quality.json",
-      "sha256": "f7ccf110aa3c7851d33b95fd56d99792db1e12a7a950954a3b4ec5b5946aee28"
+      "sha256": "ae3a3de69002ddd6ba0a437b6cfdec2340e0611fddf8d9b58beaa06a4bb0bbec"
     }
   ],
-  "pipeline_commit": "5925892ddfdae22df7dc870c5fe08d0ce95b9825",
+  "pipeline_commit": "0b1f5b3fe05a7f1bc35d1bbdca9bedf1b921037a",
   "regimes": [
     {
       "country": "Colombia",
@@ -1286,17 +1286,17 @@
       "missing_source_hours": [],
       "pipeline_counts": {
         "books": {
-          "book_changes_rows": 21684848,
-          "depth_snapshots_rows": 101459,
-          "duplicates_removed:book_changes": 50679,
+          "book_changes_rows": 21658120,
+          "depth_snapshots_rows": 102785,
+          "duplicates_removed:book_changes": 51034,
           "duplicates_removed:depth_snapshots": 1,
-          "raw_rows": 21819287,
+          "raw_rows": 21793535,
           "rejects_rows": 0,
-          "rows_inside_window": 21819287,
-          "rows_matching_tokens": 21819287,
+          "rows_inside_window": 21793535,
+          "rows_matching_tokens": 21793535,
           "rows_outside_window": 0,
           "tick_size_changes_rows": 0,
-          "trades_rows": 32980
+          "trades_rows": 32630
         },
         "fills": {
           "duplicates_removed": 0,
@@ -1722,17 +1722,17 @@
       "missing_source_hours": [],
       "pipeline_counts": {
         "books": {
-          "book_changes_rows": 7013506,
-          "depth_snapshots_rows": 153888,
-          "duplicates_removed:book_changes": 45058,
+          "book_changes_rows": 7009103,
+          "depth_snapshots_rows": 154072,
+          "duplicates_removed:book_changes": 45068,
           "duplicates_removed:depth_snapshots": 1,
-          "raw_rows": 7169611,
+          "raw_rows": 7165341,
           "rejects_rows": 0,
-          "rows_inside_window": 7169611,
-          "rows_matching_tokens": 7169611,
+          "rows_inside_window": 7165341,
+          "rows_matching_tokens": 7165341,
           "rows_outside_window": 0,
           "tick_size_changes_rows": 0,
-          "trades_rows": 2217
+          "trades_rows": 2166
         },
         "fills": {
           "duplicates_removed": 0,
@@ -5914,13 +5914,13 @@
       "source_version": "PMXT_V1"
     },
     {
-      "bytes": 89928,
+      "bytes": 83027,
       "hour": "2026-04-13T19",
       "kind": "pmxt_extract",
       "path": "HUN_2026/date=2026-04-13/hour=19/events.parquet",
-      "rows": 6978,
-      "sha256": "4bd9d372b1f76bc26098822bf33b61b2fc1d3e2b33244fe89c1884224a96166c",
-      "source_version": "PMXT_V2"
+      "rows": 2708,
+      "sha256": "3a0925f4890747ee3aaaa5ab0ae3be1f84e88a7bd4a5d2d665cf4ab62635c6e7",
+      "source_version": "PMXT_V1"
     },
     {
       "bytes": 222882,
@@ -6994,13 +6994,13 @@
       "source_version": "PMXT_V1"
     },
     {
-      "bytes": 1569878,
+      "bytes": 3951197,
       "hour": "2026-04-13T19",
       "kind": "pmxt_extract",
       "path": "PER_2026/date=2026-04-13/hour=19/events.parquet",
-      "rows": 183832,
-      "sha256": "cf1b76466faaad8214d05445421b841e4caa5780a26387a63cf6f9275235823d",
-      "source_version": "PMXT_V2"
+      "rows": 158080,
+      "sha256": "a41369859ab01c73d8a2ccb3046f3d1c7e649804d006e96d80bda55c4d574472",
+      "source_version": "PMXT_V1"
     },
     {
       "bytes": 4158198,
@@ -8392,13 +8392,13 @@
     }
   },
   "totals": {
-    "corpus_bytes": 1187321736,
+    "corpus_bytes": 1186863238,
     "rows_by_stream": {
-      "book_changes": 126550132,
-      "depth_snapshots": 459566,
+      "book_changes": 126518636,
+      "depth_snapshots": 461076,
       "fills": 743015,
       "tick_size_changes": 60,
-      "trades": 112467
+      "trades": 112066
     }
   }
 }

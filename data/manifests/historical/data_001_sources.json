@@ -3,7 +3,7 @@
   "sources": [
     {
       "compression": "Parquet internal (ZSTD/Snappy per column chunk)",
-      "coverage_note": "V1 2026-02-21T18..2026-04-16T05, V2 from 2026-04-13T19",
+      "coverage_note": "archive: V1 2026-02-21T18..2026-04-16T05, V2 file from 2026-04-13T19 (first row 19:42:26.6); corpus routes V1 through 2026-04-13T19 and V2 from 2026-04-13T20",
       "format": "Parquet, one file per UTC hour",
       "hours": [
         {
@@ -14825,41 +14825,30 @@
         },
         {
           "archive": {
-            "bytes": 133193857,
+            "bytes": 939842152,
             "columns": [
               "timestamp_received",
-              "timestamp",
-              "market",
-              "event_type",
-              "asset_id",
-              "bids",
-              "asks",
-              "price",
-              "size",
-              "side",
-              "best_bid",
-              "best_ask",
-              "fee_rate_bps",
-              "transaction_hash",
-              "old_tick_size",
-              "new_tick_size"
+              "timestamp_created_at",
+              "market_id",
+              "update_type",
+              "data"
             ],
-            "etag": "\"2bd8f13d782c02bd292ca5c238b30dfe\"",
-            "last_modified": "Wed, 19 Aug 2026 15:32:52 GMT",
-            "row_groups": 19,
-            "rows": 19356105,
-            "url": "https://archive.pendulumflow.com/pmxt/v2/polymarket_orderbook_2026-04-13T19.parquet"
+            "etag": "\"f06c20c4469ae096d5ab7cf9883b6191-10\"",
+            "last_modified": "Wed, 19 Aug 2026 15:23:54 GMT",
+            "row_groups": 46,
+            "rows": 45814371,
+            "url": "https://archive.pendulumflow.com/pmxt/v1/polymarket_orderbook_2026-04-13T19.parquet"
           },
           "extract": {
-            "bytes": 89928,
+            "bytes": 83027,
             "kind": "pmxt_extract",
             "path": "HUN_2026/date=2026-04-13/hour=19/events.parquet",
-            "rows": 6978,
-            "sha256": "4bd9d372b1f76bc26098822bf33b61b2fc1d3e2b33244fe89c1884224a96166c"
+            "rows": 2708,
+            "sha256": "3a0925f4890747ee3aaaa5ab0ae3be1f84e88a7bd4a5d2d665cf4ab62635c6e7"
           },
           "family": "HUN_2026",
           "hour": "2026-04-13T19",
-          "source_version": "PMXT_V2"
+          "source_version": "PMXT_V1"
         },
         {
           "archive": {
@@ -18384,41 +18373,30 @@
         },
         {
           "archive": {
-            "bytes": 133193857,
+            "bytes": 939842152,
             "columns": [
               "timestamp_received",
-              "timestamp",
-              "market",
-              "event_type",
-              "asset_id",
-              "bids",
-              "asks",
-              "price",
-              "size",
-              "side",
-              "best_bid",
-              "best_ask",
-              "fee_rate_bps",
-              "transaction_hash",
-              "old_tick_size",
-              "new_tick_size"
+              "timestamp_created_at",
+              "market_id",
+              "update_type",
+              "data"
             ],
-            "etag": "\"2bd8f13d782c02bd292ca5c238b30dfe\"",
-            "last_modified": "Wed, 19 Aug 2026 15:32:52 GMT",
-            "row_groups": 19,
-            "rows": 19356105,
-            "url": "https://archive.pendulumflow.com/pmxt/v2/polymarket_orderbook_2026-04-13T19.parquet"
+            "etag": "\"f06c20c4469ae096d5ab7cf9883b6191-10\"",
+            "last_modified": "Wed, 19 Aug 2026 15:23:54 GMT",
+            "row_groups": 46,
+            "rows": 45814371,
+            "url": "https://archive.pendulumflow.com/pmxt/v1/polymarket_orderbook_2026-04-13T19.parquet"
           },
           "extract": {
-            "bytes": 1569878,
+            "bytes": 3951197,
             "kind": "pmxt_extract",
             "path": "PER_2026/date=2026-04-13/hour=19/events.parquet",
-            "rows": 183832,
-            "sha256": "cf1b76466faaad8214d05445421b841e4caa5780a26387a63cf6f9275235823d"
+            "rows": 158080,
+            "sha256": "a41369859ab01c73d8a2ccb3046f3d1c7e649804d006e96d80bda55c4d574472"
           },
           "family": "PER_2026",
           "hour": "2026-04-13T19",
-          "source_version": "PMXT_V2"
+          "source_version": "PMXT_V1"
         },
         {
           "archive": {
@@ -24081,34 +24059,6 @@
     {
       "files": [
         {
-          "bytes": 37819175,
-          "first_timestamp_unix": 1735572390,
-          "kind": "polyleviathan",
-          "last_timestamp_unix": 1755784557,
-          "path": "fills_CAN_2025.parquet",
-          "rows": 854625,
-          "schema": {
-            "condition_id": "string",
-            "event_id": "string",
-            "family": "string",
-            "is_exchange_taker": "bool",
-            "log_index": "int64",
-            "maker_address": "string",
-            "market_id": "string",
-            "outcome_side": "string",
-            "price": "double",
-            "side": "string",
-            "size_shares": "double",
-            "taker_address": "string",
-            "timestamp": "int64",
-            "token_id": "string",
-            "ts_utc": "timestamp[us, tz=UTC]",
-            "tx_hash": "string",
-            "value_usd": "double"
-          },
-          "sha256": "30f541c0c8b5d4bf7a87d1232011e3176fde739409a6dc55cad9fe0b7778ec6c"
-        },
-        {
           "bytes": 27733692,
           "first_timestamp_unix": 1753821749,
           "kind": "polyleviathan",
@@ -24191,79 +24141,6 @@
             "value_usd": "double"
           },
           "sha256": "d75d7ebf8ee1d90ebd6e8891a5a48fea0973df62958562da887f3c15ae6ef303"
-        },
-        {
-          "bytes": 669575020,
-          "first_timestamp_unix": 1673727470,
-          "kind": "polyleviathan",
-          "last_timestamp_unix": 1734495831,
-          "path": "fills_US_2024.parquet",
-          "rows": 14716540,
-          "schema": {
-            "condition_id": "string",
-            "event_id": "string",
-            "family": "string",
-            "is_exchange_taker": "bool",
-            "log_index": "int64",
-            "maker_address": "string",
-            "market_id": "string",
-            "outcome_side": "string",
-            "price": "double",
-            "side": "string",
-            "size_shares": "double",
-            "taker_address": "string",
-            "timestamp": "int64",
-            "token_id": "string",
-            "ts_utc": "timestamp[us, tz=UTC]",
-            "tx_hash": "string",
-            "value_usd": "double"
-          },
-          "sha256": "5209d1050687d93d465d9780a59c5d939ac9aee62bc9dcbb7c0c28f1f468971d"
-        },
-        {
-          "bytes": 94212,
-          "kind": "polyleviathan",
-          "path": "markets_CAN_2025.parquet",
-          "rows": 221,
-          "schema": {
-            "condition_id": "large_string",
-            "country": "large_string",
-            "dates_mentioned": "large_string",
-            "distinct_fill_days": "large_string",
-            "election_date": "large_string",
-            "election_name": "large_string",
-            "event_id": "large_string",
-            "event_name": "large_string",
-            "event_slug": "large_string",
-            "fill_available": "large_string",
-            "fill_count": "large_string",
-            "fill_source": "large_string",
-            "first_fill_timestamp": "large_string",
-            "identity_confidence": "large_string",
-            "identity_source": "large_string",
-            "is_resolved": "large_string",
-            "last_fill_timestamp": "large_string",
-            "market_end": "large_string",
-            "market_family": "large_string",
-            "market_id": "large_string",
-            "market_slug": "large_string",
-            "market_start": "large_string",
-            "market_status": "large_string",
-            "negrisk_market_id": "large_string",
-            "no_token_id": "large_string",
-            "notes": "large_string",
-            "other_token_ids": "large_string",
-            "outcome_labels": "large_string",
-            "question": "large_string",
-            "research_family": "large_string",
-            "resolution_time": "large_string",
-            "resolution_time_source": "large_string",
-            "token_fill_stats_json": "large_string",
-            "traded_notional_usd": "large_string",
-            "winner_outcome": "large_string",
-            "yes_token_id": "large_string"
-          },
-          "sha256": "05895302cfc9cfa82831203bc7c5fb572cdec576326c24e21e17053e2c2e8504"
         },
         {
           "bytes": 131930,
@@ -24399,51 +24276,6 @@
             "yes_token_id": "large_string"
           },
           "sha256": "477a5ef66f0dcf542a5845e80009886a29dce281d1ab9818de3575d665a64d26"
-        },
-        {
-          "bytes": 192664,
-          "kind": "polyleviathan",
-          "path": "markets_US_2024.parquet",
-          "rows": 553,
-          "schema": {
-            "condition_id": "large_string",
-            "country": "large_string",
-            "dates_mentioned": "large_string",
-            "distinct_fill_days": "large_string",
-            "election_date": "large_string",
-            "election_name": "large_string",
-            "event_id": "large_string",
-            "event_name": "large_string",
-            "event_slug": "large_string",
-            "fill_available": "large_string",
-            "fill_count": "large_string",
-            "fill_source": "large_string",
-            "first_fill_timestamp": "large_string",
-            "identity_confidence": "large_string",
-            "identity_source": "large_string",
-            "is_resolved": "large_string",
-            "last_fill_timestamp": "large_string",
-            "market_end": "large_string",
-            "market_family": "large_string",
-            "market_id": "large_string",
-            "market_slug": "large_string",
-            "market_start": "large_string",
-            "market_status": "large_string",
-            "negrisk_market_id": "large_string",
-            "no_token_id": "large_string",
-            "notes": "large_string",
-            "other_token_ids": "large_string",
-            "outcome_labels": "large_string",
-            "question": "large_string",
-            "research_family": "large_string",
-            "resolution_time": "large_string",
-            "resolution_time_source": "large_string",
-            "token_fill_stats_json": "large_string",
-            "traded_notional_usd": "large_string",
-            "winner_outcome": "large_string",
-            "yes_token_id": "large_string"
-          },
-          "sha256": "3508799a40e155f3b1a218d082cba4a50e7ded6cddc3ecb53068630e3a637dc1"
         }
       ],
       "fill_representation": "one row per (tx_hash, log_index, token_id); price/size binary float64; side/maker/taker as exported",

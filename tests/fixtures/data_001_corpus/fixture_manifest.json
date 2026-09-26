@@ -20,7 +20,7 @@
     }
   },
   "regime_id": "colombia_first_round",
-  "source_corpus_manifest_sha256": "dc5565634206bf749a1e0371aef48fb46d30c6329894fc094fc265cc54c045af",
+  "source_corpus_manifest_sha256": "805ee88a9714f0a5cfbed836d522f2f20d9b8fe088a1c7802c4f2b610e9b1bbe",
   "start_at": "2026-05-31T23:00:00+00:00",
   "tokens": [
     "33232052119491652564300969744259903933559547696830742958153653325470669042304",
