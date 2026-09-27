@@ -199,3 +199,15 @@ minimum for the first 45/15/15 chronological walk-forward fold. The checkpoint i
 
 The persisted Kaggle artifacts live under
 `data/experiments/experiment_004c/crossvenue/kaggle/phase0_forward_002/`.
+
+### DERIVED construction checkpoint
+
+Kaggle kernel version 7 also exercised the frozen DERIVED execution path against the same snapshot.
+All 87 DERIVED SIG contracts were observable. Forty-nine had at least one fully executable synthetic
+state after requiring every reviewed PM component, top-of-book size at least q=1, and the frozen
+90-second component-age limit. This produced 518 evaluable synthetic decisions.
+
+The runner now also contains the frozen delayed-PM placebo, equal-contract moving-block bootstrap,
+separate 140-name EXACT and 87-name DERIVED FDR families, and the PM circular-shift null. These
+statistical paths remain dormant until the 75-minute walk-forward gate is satisfied; no predictive
+or profitability result has been inspected from the current snapshot.
