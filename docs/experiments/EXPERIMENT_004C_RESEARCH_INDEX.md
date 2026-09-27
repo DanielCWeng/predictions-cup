@@ -10,7 +10,19 @@ This index canonicalizes the independent research artifacts prepared for EXPERIM
 - Frozen 004B implementation HEAD: `e9a95fb2092c7e7385ecf27f6972b8d8921c1f72`
 - Frozen discovery-spec SHA-256: `409512367f59fefa861df89c57b96586d30e28d205f60e306b20a5e64935b504`
 
-PR #30 remains the canonical 004B integration review surface. This cleanup does not replace, modify, or merge it.
+PR #30 remains the canonical 004B evidence/provenance source and integration review surface. It is still an open review PR and must not be described as scientific acceptance. MASTER still has an unresolved disposition item for the Hungary ACTIVE circular-shift null: 1,000 deterministic attempts produced only 648 valid contemporaneous statistics and 833 valid directed-30s statistics for the two affected aggregate statistics. This cleanup does not replace, modify, merge, or scientifically accept PR #30.
+
+## Historical challenge-set prior exposure
+
+The following events were sealed from EXPERIMENT-004B empirical inspection but had previously been touched by EXPERIMENT-003:
+
+- Colombia first round
+- Peru runoff
+- Colombia runoff
+
+Their canonical 004C status is `004B_SEALED_PRIOR_EXPERIMENT_EXPOSED`.
+
+They remain usable as locked 004C replication/challenge data after preregistration, but they are **not globally pristine holdouts** and must not be described that way.
 
 ## Research lanes
 
@@ -77,6 +89,13 @@ The source PRs and branches remain intact as provenance. This cleanup does not d
 - EC2-local Sol commit `00a210029387665edbf5a8776a87461f1dcc887d` contains an older provenance wording and 004B ancestry. It is not used here. Remote PR #32 commit `94974da5b8ef9ecd84056c1372ff327df7e7b45c` is the canonical Sol source for this cleanup.
 
 No useful provenance is deleted. MASTER should consume the canonical paths in this index for 004C preregistration work.
+
+## Validation
+
+- CI: PASS — GitHub Actions run #915 completed successfully.
+- Lane checksum manifests: PASS.
+- Canonical path/index validation: PASS.
+- `git diff --check`: PASS.
 
 ## Byte-preservation note
 
