@@ -1,8 +1,0 @@
-{
-  "amendment_id": "EXPERIMENT-003-AMENDMENT-001",
-  "invalidated_run_id": "c559b0d0bb52a9dd531941588528e47d90e41f3efc22022b82dda129d13d8657",
-  "invalidated_code_revision": "7e94bb7125998a97937140c5e1a4d6006365f9c8",
-  "reason": "The v2 low-rank implementation required all listed leave-target-out references to be simultaneously finite, producing zero eligible observations in every regime. This contradicted the frozen preregistration contract minimum_reference_markets=3.",
-  "allowed_change": "Mechanical implementation correction only: use the first three references from the already-frozen coverage-ordered low-rank universe for each leave-target-out target. No hypothesis, universe ordering, horizon, threshold, validation split, FDR family, control, or other family implementation is changed.",
-  "canonicality": "The invalidated run remains audit evidence only. A complete all-family rerun on the corrected code revision is required; results from different code revisions must not be mixed."
-}

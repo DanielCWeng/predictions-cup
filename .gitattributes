@@ -1,4 +1,0 @@
-*.parquet binary
-
-# Preserve byte-identical imported research Markdown (including intentional hard-break spaces)
-data/experiments/experiment_004c/research/**/*.md whitespace=-blank-at-eol

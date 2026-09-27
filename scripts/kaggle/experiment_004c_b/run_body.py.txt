@@ -1,0 +1,415 @@
+[Reading 411 lines from start (total: 411 lines, 0 remaining)]
+
+from __future__ import annotations
+import csv, hashlib, json, math
+from collections import Counter, defaultdict
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+import numpy as np
+import pyarrow as pa
+import pyarrow.compute as pc
+import pyarrow.dataset as pads
+
+INPUT=Path('/kaggle/input'); WORK=Path('/kaggle/working')
+EXPECTED_MANIFEST='e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4'
+EXPECTED_IDENTITY='e89fe8e25dcc494dad3ed96fe6672ab9f247c01eb70d4c0270a913f18a200a72'
+EXPECTED_QUALITY='354801b67b9c32ae82d419f8a6198b7fd814923e8c424ac8716862b47907ccb5'
+DISCOVERY_SPEC_SHA='409512367f59fefa861df89c57b96586d30e28d205f60e306b20a5e64935b504'
+ALL_EVENTS=('hungary_election','peru_first_round','colombia_first_round','peru_runoff','colombia_runoff')
+DISCOVERY_EVENTS={'hungary_election','peru_first_round'}
+CHALLENGE_EVENTS={'colombia_first_round','peru_runoff','colombia_runoff'}
+RES=30; HORIZONS=(30,60,120,300)
+FRESHNESS=300; MIN_OVERLAP=30; NULL_DRAWS=1000; BLOCK_BINS=20; MASTER_SEED=20260927042
+UTC_US=pa.timestamp('us',tz='UTC')
+
+def sha(path:Path)->str:
+ h=hashlib.sha256()
+ with path.open('rb') as f:
+  for chunk in iter(lambda:f.read(1<<20),b''): h.update(chunk)
+ return h.hexdigest()
+def one(name:str)->Path:
+ matches=sorted(INPUT.rglob(name))
+ if len(matches)!=1: raise SystemExit(f'expected one {name}, got {matches}')
+ return matches[0]
+def dt(value:str)->datetime: return datetime.fromisoformat(value.replace('Z','+00:00'))
+def ns(value:datetime)->int: return int(value.timestamp()*1_000_000_000)
+def seed(component:str)->int:
+ return int.from_bytes(hashlib.sha256(f'{MASTER_SEED}|{component}'.encode()).digest()[:8],'big')
+def require_event(event:str)->None:
+ if event not in ALL_EVENTS: raise RuntimeError(f'UNKNOWN_EVENT:{event}')
+def event_root(corpus:Path,event:str)->Path:
+ require_event(event); return corpus/'schema_version=1'/event
+def files(root:Path)->list[str]: return [str(p) for p in sorted(root.rglob('*.parquet'))]
+def verify_discovery_files(corpus:Path,manifest:dict[str,Any])->dict[str,int]:
+ records={r['path']:r for r in manifest['output_files']}; checked=0; rows=0
+ for event in DISCOVERY_EVENTS:
+  root=event_root(corpus,event)
+  for path in sorted(root.rglob('*.parquet')):
+   rel=str(path.relative_to(corpus/'schema_version=1'))
+   rec=records.get(rel)
+   if rec is None or sha(path)!=rec['sha256']: raise RuntimeError(f'manifest mismatch:{rel}')
+   checked+=1; rows+=int(rec['rows'])
+ return {'files_checked':checked,'manifest_rows_checked':rows}
+
+def table_for(root:Path,columns:list[str],tokens:list[str],time_col:str,start:datetime,end:datetime)->pa.Table:
+ fs=files(root)
+ if not fs: return pa.table({name:[] for name in columns})
+ ds=pads.dataset(fs,format='parquet')
+ expr=pads.field('token_id').isin(tokens)
+ expr=expr & (pads.field(time_col)>=pa.scalar(start,UTC_US)) & (pads.field(time_col)<pa.scalar(end,UTC_US))
+ return ds.to_table(columns=columns,filter=expr)
+
+def quote_series(corpus:Path,event:str,tokens:list[str],start:datetime,end:datetime)->dict[str,dict[str,np.ndarray]]:
+ root=event_root(corpus,event)/'books'/'book_changes'
+ tbl=table_for(root,['token_id','observed_at','best_bid','best_ask'],tokens,'observed_at',start,end)
+ if tbl.num_rows==0:return {}
+ tbl=pa.table({'token_id':tbl['token_id'],'observed_at':tbl['observed_at'],'best_bid':pc.cast(tbl['best_bid'],pa.float64()),'best_ask':pc.cast(tbl['best_ask'],pa.float64())})
+ order=pc.sort_indices(tbl,sort_keys=[('token_id','ascending'),('observed_at','ascending'),('best_bid','ascending'),('best_ask','ascending')]); tbl=pc.take(tbl,order)
+ rows=tbl.to_pylist(); grouped=defaultdict(list)
+ for row in rows: grouped[str(row['token_id'])].append(row)
+ out={}
+ for token,vals in grouped.items():
+  tt=[]; bb=[]; aa=[]; i=0
+  while i<len(vals):
+   j=i+1
+   while j<len(vals) and vals[j]['observed_at']==vals[i]['observed_at']: j+=1
+   states={(float(v['best_bid']),float(v['best_ask'])) for v in vals[i:j] if v['best_bid'] is not None and v['best_ask'] is not None}
+   tt.append(ns(vals[i]['observed_at']))
+   if len(states)==1:
+    b,a=next(iter(states))
+    if 0<b<=a<1: bb.append(b); aa.append(a)
+    else: bb.append(np.nan); aa.append(np.nan)
+   else: bb.append(np.nan); aa.append(np.nan)
+   i=j
+  b=np.asarray(bb,float); a=np.asarray(aa,float); mid=(b+a)/2
+  logit=np.full(len(mid),np.nan); valid=np.isfinite(mid)&(mid>0)&(mid<1); logit[valid]=np.log(mid[valid]/(1-mid[valid]))
+  out[token]={'t':np.asarray(tt,np.int64),'bid':b,'ask':a,'mid':mid,'logit':logit}
+ return out
+
+def sample(series:dict[str,np.ndarray],q:np.ndarray)->tuple[np.ndarray,np.ndarray,np.ndarray,np.ndarray,np.ndarray]:
+ t=series['t']; idx=np.searchsorted(t,q,side='right')-1; valid=idx>=0; safe=np.maximum(idx,0); age=(q-t[safe])/1e9
+ valid &= age>=0; valid &= age<=FRESHNESS
+ arrays=[]
+ for key in ('mid','logit','bid','ask'):
+  x=series[key][safe].copy(); x[~valid]=np.nan; arrays.append(x)
+ age_out=age.copy(); age_out[~valid]=np.nan
+ return arrays[0],arrays[1],arrays[2],arrays[3],age_out
+
+def binned_activity(corpus:Path,event:str,tokens:list[str],start:datetime,end:datetime,res:int,n:int)->dict[str,dict[str,np.ndarray]]:
+ base=ns(start); step=res*1_000_000_000; out={t:{'bbo':np.zeros(n),'trade_count':np.zeros(n),'trade_notional':np.zeros(n),'fill_count':np.zeros(n),'fill_notional':np.zeros(n)} for t in tokens}
+ change=table_for(event_root(corpus,event)/'books'/'book_changes',['token_id','observed_at'],tokens,'observed_at',start,end)
+ for row in change.to_pylist():
+  k=(ns(row['observed_at'])-base)//step
+  if 0<=k<n: out[str(row['token_id'])]['bbo'][int(k)]+=1
+ trades=table_for(event_root(corpus,event)/'books'/'trades',['token_id','observed_at','price','size'],tokens,'observed_at',start,end)
+ for row in trades.to_pylist():
+  k=(ns(row['observed_at'])-base)//step
+  if 0<=k<n:
+   d=out[str(row['token_id'])]; d['trade_count'][int(k)]+=1
+   try:d['trade_notional'][int(k)]+=float(row['price'])*float(row['size'])
+   except (TypeError,ValueError):pass
+ fills=table_for(event_root(corpus,event)/'fills',['token_id','observed_at','value_usd'],tokens,'observed_at',start,end)
+ for row in fills.to_pylist():
+  k=(ns(row['observed_at'])-base)//step
+  if 0<=k<n:
+   d=out[str(row['token_id'])]; d['fill_count'][int(k)]+=1
+   try:d['fill_notional'][int(k)]+=float(row['value_usd'])
+   except (TypeError,ValueError):pass
+ return out
+
+def build_panel_b(corpus:Path,event:str,regime:str,markets:list[dict[str,str]],start:datetime,end:datetime)->dict[str,Any]:
+ tokens=[m['canonical_token_id'] for m in markets]; cond=[m['condition_id'] for m in markets]
+ step=RES*1_000_000_000; right=np.arange(ns(start)+step,ns(end)+1,step,dtype=np.int64); q=right-1
+ n=len(q); m=len(tokens); quotes=quote_series(corpus,event,tokens,start,end); activity=binned_activity(corpus,event,tokens,start,end,RES,n)
+ mid=np.full((n,m),np.nan); bid=np.full((n,m),np.nan); ask=np.full((n,m),np.nan); age=np.full((n,m),np.nan)
+ spread=np.full((n,m),np.nan); move30=np.full((n,m),np.nan); updates=np.zeros((n,m))
+ for j,token in enumerate(tokens):
+  s=quotes.get(token)
+  if s is not None:
+   mm,_,bb,aa,ag=sample(s,q); mid[:,j]=mm;bid[:,j]=bb;ask[:,j]=aa;age[:,j]=ag;spread[:,j]=aa-bb
+   good=np.isfinite(mm[1:])&np.isfinite(mm[:-1]); move30[1:,j][good]=mm[1:][good]-mm[:-1][good]
+  updates[:,j]=activity[token]['bbo']
+ return {'event':event,'regime':regime,'phase':'DISCOVERY' if event in DISCOVERY_EVENTS else 'CHALLENGE','times_ns':q,'conditions':cond,'tokens':tokens,'markets':markets,'mid':mid,'bid':bid,'ask':ask,'age':age,'spread':spread,'move30':move30,'activity':updates}
+
+def project_simplex(v:np.ndarray)->np.ndarray:
+ x=np.asarray(v,float);u=np.sort(x)[::-1];cssv=np.cumsum(u)-1;rho=np.nonzero(u-cssv/(np.arange(len(u))+1)>0)[0]
+ if len(rho)==0:return np.full_like(x,1/len(x))
+ theta=cssv[rho[-1]]/(rho[-1]+1);return np.clip(x-theta,0,1)
+def project_capped(v:np.ndarray)->np.ndarray:
+ x=np.clip(np.asarray(v,float),0,1);return x if float(np.sum(x))<=1+1e-12 else project_simplex(x)
+def project_nonincreasing(v:np.ndarray)->np.ndarray:
+ y=-np.asarray(v,float);means=[];weights=[]
+ for val in y:
+  means.append(float(val));weights.append(1)
+  while len(means)>=2 and means[-2]>means[-1]:
+   w=weights[-2]+weights[-1];mean=(means[-2]*weights[-2]+means[-1]*weights[-1])/w
+   means[-2:]=[mean];weights[-2:]=[w]
+ out=np.empty(len(y),float);pos=0
+ for mean,w in zip(means,weights):out[pos:pos+w]=-mean;pos+=w
+ return np.clip(out,0,1)
+def residual_matrix(values:np.ndarray,relation:str)->np.ndarray:
+ out=np.full_like(values,np.nan)
+ for i,row in enumerate(values):
+  if not np.all(np.isfinite(row)):continue
+  if relation=='EXHAUSTIVE_PARTITION':p=project_simplex(row)
+  elif relation=='MUTUALLY_EXCLUSIVE_NONEXHAUSTIVE':p=project_capped(row)
+  elif relation=='CONDITIONAL_STAGED':p=project_nonincreasing(row)
+  else:raise ValueError(relation)
+  out[i]=row-p
+ return out
+
+def broad_event_move(panel:dict[str,Any],exclude:list[int])->np.ndarray:
+ outside=[j for j in range(len(panel['conditions'])) if j not in set(exclude)]
+ if len(outside)<2:return np.full(len(panel['times_ns']),np.nan)
+ a=panel['move30'][:,outside];n=np.sum(np.isfinite(a),axis=1);z=np.nansum(a,axis=1)
+ out=np.full(len(a),np.nan);ok=n>=2;out[ok]=z[ok]/n[ok];return out
+def rows_for(panel:dict[str,Any],idx:list[int],horizon:int)->dict[str,np.ndarray]:
+ steps=horizon//RES;T=len(panel['times_ns']);broad=broad_event_move(panel,idx);cut1=int(T*.60);cut2=int(T*.80)
+ b={k:[] for k in ('et','ej','ey','ec','tt','tj','ty','tc')}
+ for local,target in enumerate(idx):
+  for t in range(1,T-steps):
+   y=panel['mid'][t+steps,target]-panel['mid'][t,target]
+   c=[panel['move30'][t,target],panel['mid'][t,target],broad[t],panel['spread'][t,target],panel['age'][t,target]/FRESHNESS]
+   if not np.isfinite(y) or not np.all(np.isfinite(c)):continue
+   if panel['phase']=='DISCOVERY' and t<cut1 and t+steps<cut1:
+    b['tt'].append(t);b['tj'].append(local);b['ty'].append(y);b['tc'].append(c)
+   if panel['phase']=='CHALLENGE' or t>=cut2:
+    b['et'].append(t);b['ej'].append(local);b['ey'].append(y);b['ec'].append(c)
+ def a(k,d=float):return np.asarray(b[k],dtype=d)
+ return {'eval_t':a('et',int),'eval_j':a('ej',int),'eval_y':a('ey'),'eval_c':np.asarray(b['ec'],float).reshape((-1,5)),
+         'train_t':a('tt',int),'train_j':a('tj',int),'train_y':a('ty'),'train_c':np.asarray(b['tc'],float).reshape((-1,5))}
+def controlled_beta(rows:dict[str,np.ndarray],signal:np.ndarray)->tuple[float|None,int]:
+ t=rows['eval_t'];j=rows['eval_j'];y=rows['eval_y'];c=rows['eval_c']
+ if len(t)<MIN_OVERLAP:return None,len(t)
+ x=signal[t,j];mask=np.isfinite(x)&np.isfinite(y)&np.all(np.isfinite(c),axis=1);n=int(mask.sum())
+ if n<MIN_OVERLAP:return None,n
+ x=x[mask];y=y[mask];c=c[mask];C=np.column_stack([np.ones(n),c])
+ yr=y-C@np.linalg.lstsq(C,y,rcond=None)[0];xr=x-C@np.linalg.lstsq(C,x,rcond=None)[0];den=float(xr@xr)
+ return (None,n) if den<=1e-18 else (float((xr@yr)/den),n)
+def raw_beta(rows:dict[str,np.ndarray],signal:np.ndarray)->float|None:
+ if len(rows['eval_t'])<MIN_OVERLAP:return None
+ x=signal[rows['eval_t'],rows['eval_j']];y=rows['eval_y'];m=np.isfinite(x)&np.isfinite(y)
+ den=float(x[m]@x[m]) if np.any(m) else 0
+ return None if int(m.sum())<MIN_OVERLAP or den<=1e-18 else float((x[m]@y[m])/den)
+def alignment(rows:dict[str,np.ndarray],signal:np.ndarray)->float|None:
+ if len(rows['eval_t'])<MIN_OVERLAP:return None
+ x=signal[rows['eval_t'],rows['eval_j']];y=rows['eval_y'];m=np.isfinite(x)&np.isfinite(y)
+ return None if int(m.sum())<MIN_OVERLAP else float(np.mean(x[m]*y[m]))
+def soft_signal(panel:dict[str,Any],idx:list[int])->np.ndarray:
+ a=panel['move30'][:,idx];out=np.full_like(a,np.nan)
+ for j in range(len(idx)):
+  s=[k for k in range(len(idx)) if k!=j];z=a[:,s];n=np.sum(np.isfinite(z),axis=1);v=np.nansum(z,axis=1);ok=n>=2
+  out[ok,j]=-v[ok]/n[ok]
+ return out
+
+def shift_signal(x:np.ndarray,rng:np.random.Generator,kind:str)->np.ndarray:
+ T=len(x)
+ if kind=='CIRCULAR_SHIFT':
+  lo=min(20,max(1,T//4));hi=max(lo+1,T-lo);k=int(rng.integers(lo,hi));return np.roll(x,k,axis=0)
+ blocks=[x[s:min(T,s+BLOCK_BINS)] for s in range(0,T,BLOCK_BINS)]
+ order=rng.permutation(len(blocks));return np.concatenate([blocks[k] for k in order],axis=0)[:T]
+def empirical_p(obs:float|None,draws:list[float])->float|None:
+ if obs is None or len(draws)!=NULL_DRAWS:return None
+ a=np.asarray(draws,float);return float((1+np.sum(a>=obs))/(len(a)+1))
+def time_nulls(rows:dict[str,np.ndarray],signal:np.ndarray,key:str)->tuple[dict[str,Any],list[dict[str,Any]]]:
+ obs=alignment(rows,signal);summary={};allrows=[]
+ for kind in ('CIRCULAR_SHIFT','BLOCK_PERMUTATION'):
+  rng=np.random.default_rng(seed(key+'|'+kind));draws=[]
+  for d in range(NULL_DRAWS):
+   v=alignment(rows,shift_signal(signal,rng,kind))
+   if v is not None:draws.append(v);allrows.append({'test_key':key,'null_model':kind,'draw':d,'statistic':v})
+  summary[kind]={'valid_draws':len(draws),'p_value':empirical_p(obs,draws),'mean':float(np.mean(draws)) if draws else None,'std':float(np.std(draws)) if draws else None}
+ ps=[summary[k]['p_value'] for k in summary]
+ summary['combined_p_value']=max(ps) if all(p is not None for p in ps) else None;summary['observed_alignment']=obs
+ return summary,allrows
+def activity_quartiles(panel:dict[str,Any])->np.ndarray:
+ v=np.mean(panel['activity'],axis=0)
+ return np.zeros(len(v),int) if len(v)<4 else np.digitize(v,np.quantile(v,[.25,.5,.75]),right=True)
+def matched_group(panel:dict[str,Any],true_idx:list[int],rng:np.random.Generator)->list[int]|None:
+ q=activity_quartiles(panel);sel=[];ban=set(true_idx)
+ for j in true_idx:
+  c=[k for k in range(len(q)) if k not in ban and k not in sel and q[k]==q[j]]
+  if not c:return None
+  sel.append(int(rng.choice(c)))
+ return sel
+def membership_null(panel:dict[str,Any],true_idx:list[int],relation:str|None,horizon:int,key:str,soft:bool):
+ rows=rows_for(panel,true_idx,horizon);sig=soft_signal(panel,true_idx) if soft else -residual_matrix(panel['mid'][:,true_idx],relation)
+ obs=alignment(rows,sig);rng=np.random.default_rng(seed(key+'|MEMBERSHIP'));draws=[];out=[];wrong=None
+ for d in range(NULL_DRAWS):
+  idx=matched_group(panel,true_idx,rng)
+  if idx is None:break
+  rr=rows_for(panel,idx,horizon);ss=soft_signal(panel,idx) if soft else -residual_matrix(panel['mid'][:,idx],relation);v=alignment(rr,ss)
+  if wrong is None:wrong=v
+  if v is not None:draws.append(v);out.append({'test_key':key,'null_model':'MEMBERSHIP_MATCHED','draw':d,'statistic':v})
+ return {'observed_alignment':obs,'valid_draws':len(draws),'p_value':empirical_p(obs,draws),'wrong_family_control_alignment':wrong,'null_mean':float(np.mean(draws)) if draws else None},out
+def member_betas(rows,signal,conditions):
+ out=[]
+ for j,cid in enumerate(conditions):
+  m=rows['eval_j']==j
+  rr={'eval_t':rows['eval_t'][m],'eval_j':rows['eval_j'][m],'eval_y':rows['eval_y'][m],'eval_c':rows['eval_c'][m]}
+  b,n=controlled_beta(rr,signal)
+  out.append({'condition_id':cid,'beta':b,'rows':n})
+ return out
+def fdr_family(lane,regime,horizon):
+ return (lane+'__'+regime+'__30S') if horizon==30 else ('ROBUSTNESS__'+lane+'__'+regime+'__'+str(horizon)+'S')
+def bh(rows):
+ by=defaultdict(list)
+ for i,r in enumerate(rows):by[r['fdr_family']].append(i)
+ for fam,idxs in by.items():
+  m=len(idxs)
+  valid=sorted([(float(rows[i]['p_value']),i) for i in idxs if rows[i].get('p_value') is not None])
+  prev=1.0
+  for rank in range(len(valid),0,-1):
+   p,i=valid[rank-1]
+   q=min(prev,p*m/rank,1.0)
+   rows[i]['q_value']=q
+   prev=q
+  for i in idxs:
+   if 'q_value' not in rows[i]:rows[i]['q_value']=None
+
+def evaluate_family(panel,family,scope,horizon):
+ soft=family['relation_type']=='SEMANTIC_COMPETITION_ONLY'
+ lane='SOFT_COMPETITIVE' if soft else ('CONDITIONAL_STAGED' if family['relation_type']=='CONDITIONAL_STAGED' else 'HARD_MECHANICAL')
+ ids=scope.get('usable_condition_ids',[])
+ index={c:i for i,c in enumerate(panel['conditions'])}
+ idx=[index[c] for c in ids if c in index]
+ ids=[panel['conditions'][j] for j in idx]
+ rel=None if soft else scope.get('empirical_relation_type',family['relation_type'])
+ key=family['family_id']+'|'+panel['event']+'|'+panel['regime']+'|'+str(horizon)
+ result={'test_key':key,'family_id':family['family_id'],'event':panel['event'],'regime':panel['regime'],'phase':panel['phase'],
+         'lane':lane,'horizon_seconds':horizon,'member_count':len(idx),'relation_type':rel or family['relation_type'],
+         'fdr_family':fdr_family(lane,panel['regime'],horizon),'p_value':None,'q_value':None,'status':'UNAVAILABLE'}
+ members=[];nullrows=[]
+ diag={'test_key':key,'family_id':family['family_id'],'event':panel['event'],'regime':panel['regime'],
+       'horizon_seconds':horizon,'relation_type':rel or family['relation_type']}
+ if len(idx)<(3 if soft else 2):
+  result['reason']='INSUFFICIENT_FROZEN_MEMBERS'
+  return result,members,nullrows,diag
+ rows=rows_for(panel,idx,horizon)
+ sig=soft_signal(panel,idx) if soft else -residual_matrix(panel['mid'][:,idx],rel)
+ beta,n=controlled_beta(rows,sig);rb=raw_beta(rows,sig);obs=alignment(rows,sig)
+ diag.update({'complete_signal_bins':int(np.sum(np.all(np.isfinite(sig),axis=1))),
+              'nonzero_signal_cells':int(np.sum(np.isfinite(sig)&(np.abs(sig)>1e-15))),
+              'mean_signal_abs':float(np.nanmean(np.abs(sig))) if np.any(np.isfinite(sig)) else None})
+ if not soft:
+  rawres=-sig;norm=np.sqrt(np.nansum(rawres*rawres,axis=1))
+  diag.update({'violation_bins':int(np.sum(np.isfinite(norm)&(norm>1e-15))),
+               'mean_residual_l2':float(np.nanmean(norm)) if np.any(np.isfinite(norm)) else None,
+               'max_residual_l2':float(np.nanmax(norm)) if np.any(np.isfinite(norm)) else None})
+ if beta is None or obs is None:
+  result.update(reason='NO_IDENTIFIABLE_SIGNAL_OR_INSUFFICIENT_ROWS',rows=n,beta_structural=beta,raw_beta=rb)
+  return result,members,nullrows,diag
+ tn,tr=time_nulls(rows,sig,key)
+ mn,mr=membership_null(panel,idx,rel,horizon,key,soft)
+ nullrows.extend(tr);nullrows.extend(mr)
+ p=tn['combined_p_value']
+ result.update(status='OK',reason='',rows=n,beta_structural=beta,raw_beta=rb,observed_alignment=obs,
+               time_null_p=p,circular_p=tn['CIRCULAR_SHIFT']['p_value'],block_p=tn['BLOCK_PERMUTATION']['p_value'],
+               membership_p=mn['p_value'],membership_valid_draws=mn['valid_draws'],
+               wrong_family_control_alignment=mn['wrong_family_control_alignment'],
+               direction_toward_alignment=obs,direction_away_alignment=-obs,p_value=p)
+ for m in member_betas(rows,sig,ids):
+  members.append({**{k:result[k] for k in ('test_key','family_id','event','regime','phase','lane','horizon_seconds')},**m})
+ return result,members,nullrows,diag
+
+def write_csv(path,rows):
+ if not rows:
+  path.write_text('')
+  return
+ keys=[]
+ for r in rows:
+  for k in r:
+   if k not in keys:keys.append(k)
+ with path.open('w',newline='',encoding='utf-8') as h:
+  w=csv.DictWriter(h,fieldnames=keys);w.writeheader();w.writerows(rows)
+def main():
+ manifest_path=one('corpus_manifest.json');identity_path=one('market_identity.csv');quality_path=one('corpus_quality.json')
+ if sha(manifest_path)!=EXPECTED_MANIFEST or sha(identity_path)!=EXPECTED_IDENTITY or sha(quality_path)!=EXPECTED_QUALITY:
+  raise SystemExit('accepted DATA-001 identity mismatch')
+ manifest=json.loads(manifest_path.read_text());corpus=manifest_path.parent.parent
+ marker=EMBEDDED['freeze_marker'];registry=EMBEDDED['registry'];prereg=EMBEDDED['preregistration']
+ if prereg['family_registry_sha256']!=marker['family_registry_sha256']:
+  raise SystemExit('embedded freeze hash mismatch')
+ panel_cache={};family_results=[];member_results=[];null_rows=[];diagnostics=[];panel_rows=[];exec_rows=[]
+ for event in ALL_EVENTS:
+  for regime in ('PRE_ELECTION','ACTIVE_RESULTS'):
+   markets=EMBEDDED['universe'][event][regime]
+   window=EMBEDDED['windows'].get(event,{}).get(regime)
+   if not markets or not window:continue
+   p=build_panel_b(corpus,event,regime,markets,dt(window[0]),dt(window[1]))
+   panel_cache[(event,regime)]=p
+   panel_rows.append({'event':event,'regime':regime,'phase':p['phase'],'eligible_markets':len(markets),
+                      'bins':len(p['times_ns']),'valid_midpoint_cells':int(np.isfinite(p['mid']).sum()),
+                      'midpoint_fraction':float(np.isfinite(p['mid']).mean()) if p['mid'].size else 0,
+                      'bbo_updates':int(np.sum(p['activity']))})
+ for family in registry['families']:
+  for scope in family.get('evidence_scopes',[]):
+   event=scope['event'];regime=scope['regime'];p=panel_cache.get((event,regime))
+   soft=family['relation_type']=='SEMANTIC_COMPETITION_ONLY'
+   eligible=scope.get('eligible_for_soft_test',False) if soft else scope.get('eligible_for_hard_test',False)
+   for horizon in HORIZONS:
+    if p is None or not eligible:
+     lane='SOFT_COMPETITIVE' if soft else ('CONDITIONAL_STAGED' if family['relation_type']=='CONDITIONAL_STAGED' else 'HARD_MECHANICAL')
+     family_results.append({'test_key':family['family_id']+'|'+event+'|'+regime+'|'+str(horizon),
+       'family_id':family['family_id'],'event':event,'regime':regime,
+       'phase':'DISCOVERY' if event in DISCOVERY_EVENTS else 'CHALLENGE','lane':lane,'horizon_seconds':horizon,
+       'member_count':scope.get('usable_member_count',0),'relation_type':scope.get('empirical_relation_type',family['relation_type']),
+       'fdr_family':fdr_family(lane,regime,horizon),'p_value':None,'q_value':None,
+       'status':'UNAVAILABLE','reason':'FROZEN_SCOPE_INELIGIBLE'})
+     continue
+    rr,mm,nn,dd=evaluate_family(p,family,scope,horizon)
+    family_results.append(rr);member_results.extend(mm);null_rows.extend(nn);diagnostics.append(dd)
+  if family.get('relation_type')=='EXHAUSTIVE_PARTITION':
+   for scope in family.get('evidence_scopes',[]):
+    complete=scope.get('empirically_complete',False)
+    exec_rows.append({'family_id':family['family_id'],'event':scope['event'],'regime':scope['regime'],
+      'full_member_count':family['member_count'],'usable_member_count':scope.get('usable_member_count',0),
+      'status':'REQUIRES_ALL_LEG_DEPTH_CHECK' if complete else 'UNAVAILABLE_INCOMPLETE_FAMILY',
+      'basket_arbitrage_claim':False,
+      'reason':'all-leg depth analysis required' if complete else 'full proven family not entirely frozen usable; no all-leg executable basket can be certified'})
+ bh(family_results)
+ write_csv(WORK/'family_results.csv',family_results)
+ write_csv(WORK/'member_results.csv',member_results)
+ write_csv(WORK/'null_results.csv',null_rows)
+ write_csv(WORK/'constraint_projection_diagnostics.csv',diagnostics)
+ write_csv(WORK/'executable_basket_diagnostics.csv',exec_rows)
+ write_csv(WORK/'panel_summary.csv',panel_rows)
+ fdr=[{k:r.get(k) for k in ('test_key','family_id','event','regime','phase','lane','horizon_seconds',
+                             'fdr_family','p_value','q_value','status')} for r in family_results]
+ write_csv(WORK/'fdr_results.csv',fdr)
+ primary=[r for r in family_results if r['horizon_seconds']==30 and r['status']=='OK']
+ hard=[r for r in primary if r['lane'] in ('HARD_MECHANICAL','CONDITIONAL_STAGED')]
+ soft=[r for r in primary if r['lane']=='SOFT_COMPETITIVE']
+ hard_hits=[r for r in hard if r.get('q_value') is not None and r['q_value']<=.01 and
+            (r.get('beta_structural') if r.get('beta_structural') is not None else -1)>=.10 and
+            (r.get('direction_toward_alignment') or 0)>0]
+ soft_hits=[r for r in soft if r.get('q_value') is not None and r['q_value']<=.01 and
+            (r.get('beta_structural') or 0)>0]
+ disposition='STRUCTURAL_REDISTRIBUTION_SUPPORTED' if hard_hits else (
+  'SOFT_COMPETITIVE_EFFECT_ONLY' if soft_hits else ('NO_STRUCTURAL_EDGE' if primary else 'INCONCLUSIVE'))
+ summary={'experiment_id':'EXPERIMENT-004C-B','disposition':disposition,'freeze_marker':marker,
+          'primary_30s_valid_tests':len(primary),'primary_hard_valid_tests':len(hard),
+          'primary_soft_valid_tests':len(soft),'hard_1pct_hits':len(hard_hits),'soft_1pct_hits':len(soft_hits),
+          'hard_hits':[r['test_key'] for r in hard_hits],'soft_hits':[r['test_key'] for r in soft_hits],
+          'full_executable_basket_certificates':0,'challenge_label':'004B_SEALED_PRIOR_EXPERIMENT_EXPOSED',
+          'limitations':['only three independent election families',
+                         'no proven exhaustive parent family is fully 004A.2-usable in a primary historical scope',
+                         'partial hard families use sum(p)<=1 and usually have zero residual unless subset sum exceeds one',
+                         'semantic competition is not probability conservation',
+                         'historical executable basket certification unavailable when any required family member is absent']}
+ (WORK/'results_summary.json').write_text(json.dumps(summary,indent=2,sort_keys=True)+'\n')
+ provenance={'challenge_events':sorted(CHALLENGE_EVENTS),'challenge_label':'004B_SEALED_PRIOR_EXPERIMENT_EXPOSED',
+             'freeze_registry_sha256':marker['family_registry_sha256'],
+             'freeze_preregistration_sha256':marker['preregistration_sha256'],'base_sha':marker['base_sha'],
+             'data001_manifest_sha256':EXPECTED_MANIFEST,'data001_identity_sha256':EXPECTED_IDENTITY,
+             'data001_quality_sha256':EXPECTED_QUALITY,'challenge_opened_only_after_freeze_marker':True}
+ (WORK/'challenge_provenance.json').write_text(json.dumps(provenance,indent=2,sort_keys=True)+'\n')
+ run={'phase':'complete','experiment_id':'EXPERIMENT-004C-B','disposition':disposition,
+      'family_result_rows':len(family_results),'member_result_rows':len(member_results),
+      'null_rows':len(null_rows),'outputs':{p.name:sha(p) for p in sorted(WORK.glob('*')) if p.is_file()}}
+ (WORK/'kaggle_run_summary.json').write_text(json.dumps(run,indent=2,sort_keys=True)+'\n')
+ print(json.dumps(run,sort_keys=True))
+if __name__=='__main__':main()
+
+[executed on device: ip-172-31-73-211.ec2.internal (c5706598-02ec-4925-9d6e-43e31c32d097)]

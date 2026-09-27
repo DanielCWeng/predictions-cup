@@ -1,0 +1,20 @@
+[Reading 16 lines from start (total: 16 lines, 0 remaining)]
+
+{
+  "id": "polyleviathan/sig-cup-exp004c-b-structural-redistribution",
+  "title": "SIG Cup EXP004C-B Structural Redistribution",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [
+    "polyleviathan/sig-cup-data-001-build"
+  ]
+}
+
+[executed on device: ip-172-31-73-211.ec2.internal (c5706598-02ec-4925-9d6e-43e31c32d097)]
