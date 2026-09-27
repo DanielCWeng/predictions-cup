@@ -23,7 +23,7 @@ import pyarrow.parquet as pq
 
 SCHEMA_VERSION = 1
 EXPERIMENT_ID = "EXPERIMENT-004A"
-PACKAGE_VERSION = "004A-event-time-v1"
+PACKAGE_VERSION = "004A-event-time-v2"
 
 ACCEPTED_SHA256 = {
     "corpus_manifest.json": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
@@ -630,7 +630,7 @@ def build_outputs(
         anchors = event["anchors"]
         poll_open = _dt(anchors["poll_open"]["utc_timestamp"])
         poll_close = _dt(anchors["poll_close"]["utc_timestamp"])
-        result_start = _dt(anchors["first_meaning_results"]["utc_timestamp"]) if "first_meaning_results" in anchors else _dt(anchors["first_meaningful_results"]["utc_timestamp"])
+        result_start = _dt(anchors["first_meaningful_results"]["utc_timestamp"])
         corpus_start = _dt(event["corpus_window_start_utc"])
         corpus_end = _dt(event["corpus_window_end_utc"])
         assert poll_open and poll_close and result_start and corpus_start and corpus_end
