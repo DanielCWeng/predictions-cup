@@ -19,11 +19,17 @@ PRE's matched-unrelated A3 control produced a larger MSE improvement (`1.2614e-0
 
 ## Hazard / mark decomposition
 
-In ACTIVE_RESULTS, A1 update hazard and A2 conditional mark response both beat the two stochastic timing nulls after BH correction (A1 q-values `0.0319` and `0.0159`; A2 q-values `0.0239` and `0.0239`).
+A1 and A2 are **observed-record update / timing diagnostics**. Their update timing is defined from observed valid `book_changes` records. The implementation does **not** reconstruct a deduplicated genuine-quote-renewal process that removes repeated observations of an unchanged BBO state.
 
-Those are supporting diagnostics only. They did **not** translate into a positive A3 full-grid forecast: ACTIVE A3 was worse than baseline and did not survive the timing-null family. This is exactly why the preregistration made A3 the headline object.
+In ACTIVE_RESULTS, these observed-record A1 update-timing and A2 conditional-mark diagnostics both beat the two stochastic timing nulls after BH correction (A1 q-values `0.0319` and `0.0159`; A2 q-values `0.0239` and `0.0239`).
+
+This significance is **not evidence of genuine economic quote renewal, source-to-target excitation, or causal cross-market transmission**. Repeated same-state observations and archive/capture timing remain plausible explanations for the observed-record timing result.
+
+These diagnostics did **not** translate into a positive A3 full-grid forecast: ACTIVE A3 was worse than baseline and did not survive the timing-null family. This is exactly why the preregistration made A3 the headline object.
 
 PRE_ELECTION A1/A2 did not survive their timing-null families.
+
+A deduplicated genuine-change renewal process is a separate unresolved mechanism. It should be tested only in a separately preregistered follow-up rather than inferred from EXPERIMENT-004C-A.
 
 ## How much of the 004B-style source association disappeared?
 
