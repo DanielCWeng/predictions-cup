@@ -16,12 +16,21 @@
   },
   "scientific_question": "After controlling for target history, actual quote freshness, update timing, common-event movement and activity/liquidity, does source-market information observable at t improve the target forecast?",
   "primary_horizon_seconds": 30,
-  "secondary_horizons_seconds": [60, 120],
+  "secondary_horizons_seconds": [
+    60,
+    120
+  ],
   "panel_resolution_seconds": 30,
   "quote_freshness_seconds": 300,
-  "regimes": ["PRE_ELECTION", "ACTIVE_RESULTS"],
+  "regimes": [
+    "PRE_ELECTION",
+    "ACTIVE_RESULTS"
+  ],
   "regime_pooling": false,
-  "discovery_events": ["hungary_election", "peru_first_round"],
+  "discovery_events": [
+    "hungary_election",
+    "peru_first_round"
+  ],
   "challenge_events": [
     "colombia_first_round",
     "peru_runoff",
@@ -48,7 +57,9 @@
     "future_window": "(t,t+h]",
     "future_asof_state": "latest valid unambiguous BBO at or before t+h; never borrow a later quote backward",
     "depth_policy": "full-depth values only when a valid full snapshot exists in the immediately preceding 30s feature window; missing remains missing",
-    "common_factor": "equal-weight target-and-source-excluded mean of contemporaneous 30s innovations; no future smoothing or future-fitted loadings"
+    "common_factor": "equal-weight target-and-source-excluded mean of contemporaneous 30s innovations; no future smoothing or future-fitted loadings",
+    "common_factor_min_markets": 2,
+    "common_factor_weighting": "equal weight across currently valid other markets"
   },
   "baseline_features": [
     "target_midpoint",
@@ -80,65 +91,83 @@
     "source_spread",
     "source_log1p_depth_total",
     "source_depth_missing",
-    "source_return_x_relative_staleness"
+    "source_return_30s_x_relative_staleness_scaled"
   ],
   "source_information_in_baseline": false,
   "models": {
     "preprocessing": "training-only median imputation, then training-only mean/std scaling; explicit depth-missing indicators retained",
-    "ridge_penalty": 1.0,
-    "logistic_l2_penalty": 1.0,
+    "ridge_penalty": 1,
+    "logistic_l2_penalty": 1,
     "hyperparameter_search": "NONE",
     "fit_scope": "separate model per regime; pooled across frozen source-target pairs; no pair identity feature",
     "discovery_split": {
-      "train_fraction": 0.60,
-      "development_fraction": 0.20,
-      "holdout_fraction": 0.20,
+      "train_fraction": 0.6,
+      "development_fraction": 0.2,
+      "holdout_fraction": 0.2,
       "purge_seconds": 30,
       "embargo_seconds": 30
     },
-    "challenge_fit": "refit the frozen formula on all valid discovery rows in the same regime, then score challenge events without refitting or threshold changes"
+    "challenge_fit": "refit the frozen formula on all valid discovery rows in the same regime, then score challenge events without refitting or threshold changes",
+    "row_weighting": "within each event/regime, each frozen source-target edge receives equal total model weight regardless of valid row count",
+    "purge_rule": "for each horizon, prior-fold rows with label_end_time >= next-fold start are purged; an additional 30s pre-boundary embargo is applied",
+    "challenge_outcomes_used_for_fit": false
   },
   "decomposition": {
     "A1": {
       "target": "indicator that the target receives at least one valid unambiguous BBO update in (t,t+30s]",
       "model": "ridge-penalized logistic regression",
-      "metrics": ["brier_score", "log_loss"],
+      "metrics": [
+        "brier_score",
+        "log_loss"
+      ],
       "headline": false
     },
     "A2": {
       "target": "signed midpoint change from state at t to the first valid unambiguous target BBO update in (t,t+30s]",
       "conditioning": "target updated within 30s",
       "model": "ridge regression",
-      "metrics": ["mse", "mae"],
+      "metrics": [
+        "mse",
+        "mae"
+      ],
       "headline": false,
       "selection_bias_warning": true
     },
     "A3": {
       "target": "target midpoint at t+30s as-of minus target midpoint at t, including zero movement when no update occurs",
       "model": "ridge regression",
-      "metrics": ["mse", "rmse", "mae"],
+      "metrics": [
+        "mse",
+        "rmse",
+        "mae"
+      ],
       "headline": true
     },
     "event_time_secondary": "A2 first-next-target-update representation plus update latency diagnostics; it cannot replace the 30s full-grid primary"
   },
   "nulls": {
-    "draws_per_null": 250,
+    "stochastic_draws_per_null": 250,
     "minimum_valid_draws": 250,
     "master_seed": 202609270041,
-    "NULL_A_CIRCULAR_SHIFT": "circularly shift the complete source-feature block within event/regime by at least 300s while keeping target/common-event process fixed",
-    "NULL_B_BLOCK_TIME_PERMUTATION": "permute 300s contiguous source-feature blocks within event/regime while preserving within-block order and the target process",
-    "NULL_C_MATCHED_UNRELATED": "replace source with a deterministic unrelated condition from the frozen same-event/regime universe; prefer same source market_family, then lexical condition_id; never use outcome performance for matching",
-    "NULL_D_DELAYED_SOURCE": "replace source features by their own values delayed 300s using past-only as-of joins"
+    "grid_rule": "all source timing transforms operate on the full regular 30s event/regime grid before selecting valid target rows; never shift compressed valid-row positions",
+    "fitted_model_rule": "fit the frozen baseline/challenger once on real discovery data; timing nulls transform only OOS source primitives and recompute relative-staleness/interaction features while target/common baseline and fitted coefficients remain fixed",
+    "valid_draw_rule": "a stochastic draw is valid only if every observed challenge event in that regime retains at least 80% of its observed rows and at least 30 rows after the source transform; otherwise the draw is invalid",
+    "fail_closed_rule": "if fewer than 250 valid draws are produced for a declared stochastic null, its inference is INCONCLUSIVE and the denominator is not reduced",
+    "NULL_A_CIRCULAR_SHIFT": "independently circularly shift each source token's complete primitive feature series within event/regime by at least 10 regular 30s bins (300s), preserving its serial order and missingness",
+    "NULL_B_BLOCK_TIME_PERMUTATION": "independently permute contiguous 10-bin (300s) blocks of each source token's primitive feature series within event/regime, preserving within-block order, missingness and the fixed target process",
+    "CONTROL_C_MATCHED_UNRELATED": "deterministically replace the source with an unrelated condition in the frozen same-event/regime universe; exclude any condition linked to the target in the frozen pair registry, prefer the same source market_family, then lexical condition_id; no performance matching",
+    "CONTROL_D_DELAYED_SOURCE": "replace source primitives by the same source's past-only values exactly 10 regular bins (300s) earlier; no future borrowing"
   },
   "multiple_testing": {
     "alpha": 0.05,
     "method": "Benjamini-Hochberg via BUILD-008",
     "families": {
-      "A3_FULL_GRID_PRIMARY": "2 regimes x 4 null models",
-      "A1_UPDATE_HAZARD_DIAGNOSTIC": "2 regimes x 4 null models",
-      "A2_MARK_RESPONSE_DIAGNOSTIC": "2 regimes x 4 null models"
+      "A3_FULL_GRID_PRIMARY": "2 regimes x 2 stochastic timing nulls = 4 declared tests",
+      "A1_UPDATE_HAZARD_DIAGNOSTIC": "2 regimes x 2 stochastic timing nulls = 4 declared tests",
+      "A2_MARK_RESPONSE_DIAGNOSTIC": "2 regimes x 2 stochastic timing nulls = 4 declared tests"
     },
-    "per_edge_tests": "not performed for headline inference; any edge summaries are descriptive only"
+    "per_edge_tests": "not performed for headline inference; any edge summaries are descriptive only",
+    "deterministic_controls": "matched-unrelated and delayed-source controls are named falsification controls and receive no fabricated p-values"
   },
   "bootstrap": {
     "implementation": "BUILD-008 deterministic moving-block/event bootstrap",
@@ -178,8 +207,35 @@
     "economically_meaningful_means": "predictive improvement clears the frozen smallest-meaningful-effect rule; statistical detectability alone is insufficient"
   },
   "complexity_gate": {
-    "allowed": ["fixed linear ridge", "fixed logistic ridge"],
-    "forbidden_primary": ["Hawkes", "neural networks", "graph neural networks", "transfer entropy search", "leader centrality ranking", "latent-state search"],
+    "allowed": [
+      "fixed linear ridge",
+      "fixed logistic ridge"
+    ],
+    "forbidden_primary": [
+      "Hawkes",
+      "neural networks",
+      "graph neural networks",
+      "transfer entropy search",
+      "leader centrality ranking",
+      "latent-state search"
+    ],
     "reduced_rank_secondary": "only permissible after primary source information survives; not enabled in this preregistration"
+  },
+  "feature_formulae": {
+    "relative_staleness_seconds": "target_quote_age_seconds - source_quote_age_seconds; positive means target is staler",
+    "source_return_x_relative_staleness_scaled": "source_return_30s * relative_staleness_seconds / 300",
+    "log1p_depth_total": "log(1 + top_bid_size + top_ask_size) from the last valid full-depth snapshot inside (t-30s,t]; no carry across feature windows"
+  },
+  "system_aggregation": {
+    "row_to_edge": "metric computed on the common valid row set for that edge",
+    "edge_to_event": "equal weight across frozen source-target edges",
+    "event_to_family": "equal weight across events in the event family",
+    "family_to_system": "equal weight across represented event families",
+    "replication_gate": "TRANSMISSION_SURVIVES requires positive primary challenge evidence in both COL_2026 and PER_2026 in the passing regime; a regime without eligible coverage in both families is INCONCLUSIVE_FOR_REPLICATION, not repaired by adding pairs"
+  },
+  "control_comparability": {
+    "minimum_row_retention_fraction": 0.8,
+    "minimum_rows_per_event": 30,
+    "baseline_rule": "baseline predictions are recomputed on exactly the same retained rows as each source null/control; baseline features themselves are unchanged"
   }
 }
