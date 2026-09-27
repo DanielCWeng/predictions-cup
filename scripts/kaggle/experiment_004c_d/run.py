@@ -103,6 +103,8 @@ def load_code_bundle() -> tuple[Path, dict[str, Any]]:
     manifest_path = one("code_manifest.json")
     root = manifest_path.parent
     manifest = json.loads(manifest_path.read_text())
+    if manifest["runner_sha256"] != sha256(Path(__file__)):
+        raise RuntimeError("Kaggle runner hash mismatch")
     if manifest["freeze_commit"] != FREEZE_SHA:
         raise RuntimeError("code bundle not bound to terminal preregistration freeze")
     if manifest["preregistration_sha256"] != PREREG_SHA:
