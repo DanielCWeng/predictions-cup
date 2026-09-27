@@ -34,7 +34,7 @@ def copy(rel: str, name: str | None = None) -> Path:
 head = subprocess.check_output(
     ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
 ).strip()
-zip_path = OUT / "predictions_cup_004c_a.zip"
+zip_path = OUT / "predictions_cup_004c_a.bundle"
 with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
     for path in sorted((ROOT / "src").rglob("*.py")):
         archive.write(path, path.relative_to(ROOT / "src"))
