@@ -1,0 +1,25 @@
+{
+  "experiment_id": "EXPERIMENT-004C-A",
+  "status": "FROZEN_BEFORE_CHALLENGE_EMPIRICAL_ACCESS",
+  "challenge_events": [
+    {
+      "event": "colombia_first_round",
+      "event_family": "COL_2026",
+      "label": "004B_SEALED_PRIOR_EXPERIMENT_EXPOSED",
+      "reason": "sealed from EXPERIMENT-004B but previously touched by EXPERIMENT-003"
+    },
+    {
+      "event": "peru_runoff",
+      "event_family": "PER_2026",
+      "label": "004B_SEALED_PRIOR_EXPERIMENT_EXPOSED",
+      "reason": "sealed from EXPERIMENT-004B but previously touched by EXPERIMENT-003"
+    },
+    {
+      "event": "colombia_runoff",
+      "event_family": "COL_2026",
+      "label": "004B_SEALED_PRIOR_EXPERIMENT_EXPOSED",
+      "reason": "sealed from EXPERIMENT-004B but previously touched by EXPERIMENT-003"
+    }
+  ],
+  "globally_pristine_holdout_claim": false
+}
