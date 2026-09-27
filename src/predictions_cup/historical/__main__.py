@@ -67,6 +67,19 @@ def main(argv: list[str] | None = None) -> int:
     validate = sub.add_parser("validate", help="re-verify a produced corpus against its manifest")
     validate.add_argument("--corpus", type=Path, required=True)
 
+    event_time = sub.add_parser(
+        "event-time-coverage",
+        help="EXPERIMENT-004A factual event-time coverage and regime validation",
+    )
+    event_time.add_argument("--corpus", type=Path, required=True)
+    event_time.add_argument("--repo-root", type=Path, default=Path.cwd())
+    event_time.add_argument(
+        "--output",
+        type=Path,
+        default=Path("data/experiments/experiment_004a"),
+    )
+    event_time.add_argument("--batch-size", type=int, default=262_144)
+
     smoke = sub.add_parser("smoke", help="EXPERIMENT-002 mechanical smoke on a corpus slice")
     smoke.add_argument("--corpus", type=Path, required=True)
     smoke.add_argument("--regime", required=True)
@@ -124,6 +137,21 @@ def main(argv: list[str] | None = None) -> int:
         report = validate_corpus(args.corpus)
         print(json.dumps(report, indent=2, sort_keys=True))
         return 0 if report["ok"] else 1
+    if args.command == "event-time-coverage":
+        from predictions_cup.historical.event_time import build_outputs
+
+        repo_root = args.repo_root.resolve()
+        output = args.output
+        if not output.is_absolute():
+            output = repo_root / output
+        summary = build_outputs(
+            repo_root=repo_root,
+            corpus_parent=args.corpus.resolve(),
+            output_dir=output,
+            batch_size=args.batch_size,
+        )
+        print(json.dumps(summary, indent=2, sort_keys=True))
+        return 0
     if args.command == "smoke":
         from predictions_cup.historical.regimes import SCHEMA_VERSION
         from predictions_cup.historical.smoke import run_smoke
