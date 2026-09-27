@@ -37,7 +37,7 @@ def test_nonincreasing_isotonic_projection() -> None:
     x = np.array([0.8, 0.5, 0.6, 0.2])
     q = project_nonincreasing(x)
     assert np.all(q[:-1] >= q[1:] - 1e-12)
-    assert np.all((0 <= q) & (q <= 1))
+    assert np.all((q >= 0) & (q <= 1))
     assert np.allclose(project_nonincreasing(np.array([0.9, 0.7, 0.4])), [0.9, 0.7, 0.4])
 
 
@@ -60,7 +60,9 @@ def test_frozen_scientific_artifacts_match_marker() -> None:
         "preregistration_sha256": EXP / "preregistration.json",
         "prior_exposure_manifest_sha256": EXP / "prior_exposure_manifest.json",
         "family_validation_report_sha256": EXP / "family_validation_report.md",
-        "scientific_doc_sha256": ROOT / "docs/experiments/EXPERIMENT_004C_B_STRUCTURAL_REDISTRIBUTION.md",
+        "scientific_doc_sha256": (
+            ROOT / "docs/experiments/EXPERIMENT_004C_B_STRUCTURAL_REDISTRIBUTION.md"
+        ),
     }
     for key, path in expected.items():
         assert _sha(path) == marker[key]

@@ -16,7 +16,13 @@ PRIOR = EXP / "prior_exposure_manifest.json"
 DOC = ROOT / "docs/experiments/EXPERIMENT_004C_B_STRUCTURAL_REDISTRIBUTION.md"
 MATRIX = ROOT / "data/experiments/experiment_004a2/condition_usability_matrix.csv"
 REGIMES = ROOT / "data/experiments/experiment_004a/regime_definitions.json"
-EVENTS = ("hungary_election", "peru_first_round", "colombia_first_round", "peru_runoff", "colombia_runoff")
+EVENTS = (
+    "hungary_election",
+    "peru_first_round",
+    "colombia_first_round",
+    "peru_runoff",
+    "colombia_runoff",
+)
 PRIMARY = ("PRE_ELECTION", "ACTIVE_RESULTS")
 
 
@@ -43,7 +49,8 @@ def main() -> None:
     fields = {"PRE_ELECTION": "pre_election_usable", "ACTIVE_RESULTS": "active_results_usable"}
     for row in rows:
         event = row["regime_id"]
-        if event not in universe or row["canonical_outcome"] != "Yes" or not row["canonical_token_id"]:
+        canonical = row["canonical_outcome"] == "Yes" and bool(row["canonical_token_id"])
+        if event not in universe or not canonical:
             continue
         for regime, field in fields.items():
             if row[field].lower() != "true":

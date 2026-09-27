@@ -6,7 +6,6 @@ immutable 004C-B registry/preregistration; these helpers only implement their de
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Iterable
 
 import numpy as np
 
@@ -83,7 +82,11 @@ def bh_adjust(rows: list[dict], family_key: str = "fdr_family") -> list[dict]:
         grouped[str(row[family_key])].append(i)
     for _, indices in grouped.items():
         m_total = len(indices)
-        available = [(i, float(out[i]["p_value"])) for i in indices if out[i].get("p_value") is not None]
+        available = [
+            (i, float(out[i]["p_value"]))
+            for i in indices
+            if out[i].get("p_value") is not None
+        ]
         available.sort(key=lambda pair: (pair[1], str(out[pair[0]].get("hypothesis_id", ""))))
         running = 1.0
         adjusted = [1.0] * len(available)
