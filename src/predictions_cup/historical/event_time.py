@@ -50,6 +50,46 @@ MAX_CHECKPOINT_DEPTH_AGE_SECONDS = 1800.0
 MAX_CHECKPOINT_STRADDLE_GAP_SECONDS = 3600.0
 ACTIVE_RESULTS_FIXED_HOURS = 6.0
 
+MARKET_COVERAGE_FIELDS = [
+    "coverage_id", "regime_id", "market_id", "token_id", "outcome",
+    "book_source_versions", "fill_source_versions",
+    "poll_open_utc", "poll_close_utc", "first_meaningful_results_utc",
+    "first_book_observation", "last_book_observation",
+    "first_depth_snapshot", "last_depth_snapshot",
+    "first_trade_print", "last_trade_print", "first_fill", "last_fill",
+    "book_available", "fills_available", "depth_snapshot_count", "bbo_change_count",
+    "venue_trade_print_count", "fill_count", "distinct_observation_instants",
+    "hours_book_before_poll_close", "hours_book_after_poll_close",
+    "hours_depth_before_poll_close", "hours_depth_after_poll_close",
+    "regime_wide_source_health_ok", "max_book_observation_gap_seconds",
+    "material_gap_count", "bbo_before_first_snapshot_count",
+    "crossed_snapshot_count", "crossed_bbo_count",
+    "empty_side_snapshot_count", "empty_side_bbo_count",
+    "same_millisecond_ambiguity_count", "book_fill_overlap_ratio",
+    "last_depth_snapshot_at_or_before_poll_open",
+    "depth_snapshot_age_seconds_poll_open",
+    "first_depth_snapshot_at_or_after_poll_open",
+    "depth_snapshot_straddling_gap_seconds_poll_open",
+    "checkpoint_depth_fresh_poll_open",
+    "last_depth_snapshot_at_or_before_poll_close",
+    "depth_snapshot_age_seconds_poll_close",
+    "first_depth_snapshot_at_or_after_poll_close",
+    "depth_snapshot_straddling_gap_seconds_poll_close",
+    "checkpoint_depth_fresh_poll_close",
+    "last_depth_snapshot_at_or_before_first_meaningful_results",
+    "depth_snapshot_age_seconds_first_meaningful_results",
+    "first_depth_snapshot_at_or_after_first_meaningful_results",
+    "depth_snapshot_straddling_gap_seconds_first_meaningful_results",
+    "checkpoint_depth_fresh_first_meaningful_results",
+]
+
+EVENT_WINDOW_COVERAGE_FIELDS = [
+    "coverage_id", "regime", "observed_duration_hours",
+    "dataset_overlap_duration_hours", "observed_span_fraction",
+    "bbo_count", "snapshot_count", "trade_count", "fill_count",
+    "max_gap_seconds", "max_gap_basis", "usable",
+]
+
 
 @dataclass(frozen=True, slots=True)
 class Window:
@@ -635,7 +675,7 @@ def build_outputs(
     window_rows: list[dict[str, Any]] = []
     usability_rows: list[dict[str, Any]] = []
 
-    for row in identity:
+    for coverage_id, row in enumerate(identity):
         regime_id = row["regime_id"]
         token_id = row["token_id"]
         q = quality_tokens[(regime_id, token_id)]
@@ -668,6 +708,7 @@ def build_outputs(
 
         row_counts = q.get("row_counts", {})
         market: dict[str, Any] = {
+            "coverage_id": coverage_id,
             "regime_id": regime_id,
             "event_id": event["event_id"],
             "event_family": event["event_family"],
@@ -771,6 +812,7 @@ def build_outputs(
             )
             window_rows.append(
                 {
+                    "coverage_id": coverage_id,
                     "regime_id": regime_id,
                     "event_family": event["event_family"],
                     "market_id": row["market_id"],
@@ -920,8 +962,14 @@ def build_outputs(
         )
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    _write_csv(output_dir / "market_coverage.csv", market_rows)
-    _write_csv(output_dir / "event_window_coverage.csv", window_rows)
+    _write_csv(
+        output_dir / "market_coverage.csv",
+        [{key: row.get(key) for key in MARKET_COVERAGE_FIELDS} for row in market_rows],
+    )
+    _write_csv(
+        output_dir / "event_window_coverage.csv",
+        [{key: row.get(key) for key in EVENT_WINDOW_COVERAGE_FIELDS} for row in window_rows],
+    )
     _write_csv(output_dir / "usability_matrix.csv", usability_rows)
     _write_csv(output_dir / "reaction_diagnostics.csv", reaction_rows)
     _write_csv(output_dir / "event_sources.csv", _event_source_rows(timeline))
