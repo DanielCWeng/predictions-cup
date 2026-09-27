@@ -1,5 +1,5 @@
 {
-  "id": "polyleviathan/sig-cup-004c-a-freshness",
+  "id": "polyleviathan/sig-cup-exp004c-a-information-freshness",
   "title": "SIG Cup EXP004C-A Information Freshness",
   "code_file": "run.py",
   "language": "python",
@@ -9,9 +9,10 @@
   "enable_tpu": false,
   "enable_internet": false,
   "dataset_sources": [
-    "polyleviathan/sig-cup-data-001-build",
     "polyleviathan/sig-cup-004c-a-code"
   ],
   "competition_sources": [],
-  "kernel_sources": []
+  "kernel_sources": [
+    "polyleviathan/sig-cup-data-001-build"
+  ]
 }
