@@ -11,7 +11,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-FREEZE_SHA = "de57fa5a0fb085f28c1d4ca4457fcf1de932907f"
+FREEZE_SHA = "4aafab4bd77d58fd82a510fa2b95842689f49ba2"
 OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/tmp/004c_a_code_dataset")
 OUT.mkdir(parents=True, exist_ok=True)
 
@@ -45,7 +45,7 @@ files = [
     copy("data/experiments/experiment_004c/a/pair_registry.csv"),
     copy("data/experiments/experiment_004c/a/universe.csv"),
     copy("data/experiments/experiment_004c/a/prior_exposure_manifest.json"),
-    copy("data/experiments/experiment_004c/a/FREEZE_V2.json"),
+    copy("data/experiments/experiment_004c/a/FREEZE_V3.json"),
     copy("data/experiments/experiment_004a/regime_definitions.json"),
 ]
 manifest = {
