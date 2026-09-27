@@ -1,0 +1,129 @@
+{
+  "experiment_id": "EXPERIMENT-004C-B",
+  "title": "Structural / Competitive-Family Redistribution",
+  "status": "FROZEN_BEFORE_CHALLENGE_EMPIRICAL_ACCESS",
+  "base_sha": "4e094d13b06d9e558cbc404cc4d472316d7d5bbb",
+  "family_registry_path": "data/experiments/experiment_004c_b/family_registry.json",
+  "family_registry_sha256": "499b22e760b511d11f81707058ed92ce6218bd11428d7dd319436de22811c4dc",
+  "scientific_question": "Does an economically constrained family state contain structural inconsistency that predicts subsequent correction, beyond target self-movement and broad event movement?",
+  "primary_resolution_seconds": 30,
+  "primary_horizon_seconds": 30,
+  "robustness_horizons_seconds": [60, 120, 300],
+  "secondary_event_time_target": "next_valid_family_update",
+  "regimes": ["PRE_ELECTION", "ACTIVE_RESULTS"],
+  "regime_policy": "never pool PRE_ELECTION and ACTIVE_RESULTS for primary estimation, testing, FDR or promotion",
+  "quote_freshness_seconds": 300,
+  "sampling": "as-of right edge minus 1ns; no interpolation; stale/missing remains missing",
+  "canonical_side": "exact outcome label Yes only, matching accepted 004A.2 policy",
+  "hard_structural_object": {
+    "state": "p(t) = vector of contemporaneous canonical-Yes midpoints for the frozen usable family subset",
+    "projection_norm": "unweighted Euclidean L2",
+    "exhaustive_projection": "Euclidean projection to probability simplex {q in [0,1]^n: sum q = 1}",
+    "nonexhaustive_projection": "Euclidean projection to {q in [0,1]^n: sum q <= 1}; if sum(p)<=1 then p*=p",
+    "nested_projection": "unweighted isotonic projection enforcing nonincreasing probability with increasing seat threshold",
+    "residual": "r(t) = p(t) - p*(t)",
+    "primary_direction": "future delta p should align with -r(t)",
+    "raw_correction_fraction": "beta_raw = sum((-r)*future_delta_p) / sum(r^2)",
+    "economically_meaningful_effect": "beta_structural >= 0.10 at 30s, meaning at least 10% of the contemporaneous inconsistency is corrected per primary horizon"
+  },
+  "hard_controls": [
+    "target own midpoint change over prior 30s",
+    "target midpoint level",
+    "broad event midpoint movement over prior 30s excluding the entire tested family",
+    "target inside spread",
+    "target quote age scaled by the frozen 300s freshness limit"
+  ],
+  "hard_model": "future_target_change = intercept + beta_structural*(-r_i) + controls; beta_structural is the primary coefficient",
+  "hard_family_rule": "A full proven partition may use sum p=1 only when every required member is in the frozen usable scope. Otherwise the frozen subset is only mutually-exclusive nonexhaustive and may use sum p<=1. No renormalization is permitted.",
+  "soft_competitive_object": {
+    "signal": "For target i, S_-i(t) = -mean of sibling midpoint changes over the prior 30s using every other frozen usable sibling with valid as-of data.",
+    "strict_leave_target_out": true,
+    "indirect_target_leakage": "forbidden; event-common control also excludes the entire target family",
+    "target": "target midpoint change over the next 30s",
+    "controls": [
+      "target own midpoint change over prior 30s",
+      "target midpoint level",
+      "broad event midpoint movement excluding the entire target family",
+      "target inside spread",
+      "target quote age"
+    ],
+    "expected_direction": "positive coefficient on the oriented S_-i signal",
+    "minimum_siblings": 2,
+    "interpretation": "semantic competitive redistribution only; never probability conservation"
+  },
+  "nulls": {
+    "draws": 1000,
+    "seed": 20260927042,
+    "time_circular_shift": "shift structural residual/sibling signal relative to future movement within event-regime-family; preserve regular 30s clock and missingness",
+    "time_block_permutation": "permute contiguous 20-bin (10 minute) signal blocks within event-regime-family",
+    "membership_null": "randomize family membership within the same event/regime while preserving frozen family size where possible and matching member quote-update activity quartile; otherwise mark unavailable",
+    "wrong_family_control": "apply the same family statistic to an event/activity-matched group without the proven relationship",
+    "direction_falsification": "test observed correction toward the feasible set against the away-from-set sign",
+    "semantic_only_negative_control": "semantic groups are evaluated in the soft family and never receive hard-identity evidentiary weight"
+  },
+  "multiple_testing": {
+    "method": "Benjamini-Hochberg",
+    "discovery_q": 0.01,
+    "families": [
+      "HARD_MECHANICAL__PRE_ELECTION__30S",
+      "HARD_MECHANICAL__ACTIVE_RESULTS__30S",
+      "SOFT_COMPETITIVE__PRE_ELECTION__30S",
+      "SOFT_COMPETITIVE__ACTIVE_RESULTS__30S",
+      "CONDITIONAL_STAGED__PRE_ELECTION__30S",
+      "CONDITIONAL_STAGED__ACTIVE_RESULTS__30S",
+      "ROBUSTNESS__HARD__BY_REGIME_AND_HORIZON",
+      "ROBUSTNESS__SOFT__BY_REGIME_AND_HORIZON"
+    ],
+    "unavailable_policy": "unavailable preregistered cells remain recorded and count in the planned family size; no p-value is invented"
+  },
+  "evidence_scopes": {
+    "discovery": ["hungary_election", "peru_first_round"],
+    "challenge": ["colombia_first_round", "peru_runoff", "colombia_runoff"],
+    "challenge_label": "004B_SEALED_PRIOR_EXPERIMENT_EXPOSED",
+    "cross_family_warning": "COL_2026, PER_2026 and HUN_2026 are only three independent election families"
+  },
+  "evaluation_folds": {
+    "discovery_within_event": "chronological 60% train / 20% development / 20% holdout inside each event/regime when a fitted control model is required; labels crossing fold boundaries are purged",
+    "challenge": "locked whole event/regime windows; no feature, family, projection, horizon or architecture selection from challenge outcomes",
+    "joint_model_selection": "discovery TRAIN/DEVELOPMENT only; challenge cannot select rank, penalty or architecture"
+  },
+  "promotion_logic": {
+    "STRUCTURAL_REDISTRIBUTION_SUPPORTED": [
+      "at least one preregistered hard-mechanical 30s family/regime has q<=0.01 under the frozen time null",
+      "beta_structural is positive and >=0.10",
+      "direction falsification points toward rather than away from the feasible set",
+      "membership/wrong-family controls do not produce comparable evidence",
+      "effect adds information beyond frozen controls",
+      "eligible evidence scopes show no material sign contradiction and at least two valid event/regime scopes support the same mechanism"
+    ],
+    "SOFT_COMPETITIVE_EFFECT_ONLY": [
+      "hard criteria are not met",
+      "at least one soft competitive 30s family/regime survives q<=0.01 with positive leave-target-out effect",
+      "target leakage checks pass and controls do not remove the effect"
+    ],
+    "NO_STRUCTURAL_EDGE": "valid hard and soft tests have adequate observations/nulls but fail the frozen promotion criteria",
+    "INCONCLUSIVE": "coverage, structural-violation incidence, independent event scope, or valid-null count is insufficient for a reliable disposition"
+  },
+  "executability": {
+    "secondary_only": true,
+    "full_basket_requires": "mechanically exhaustive family, every member present, fresh valid bid/ask, and executable depth on every leg",
+    "partial_family_policy": "no exhaustive basket claim; midpoint incoherence is never called arbitrage",
+    "depth_limit": "minimum executable size across every required leg"
+  },
+  "joint_followup": {
+    "gate": "only after a frozen discovery family survives the 1% FDR gate",
+    "model": "joint linear family correction Delta p = A r + frozen controls",
+    "ridge_penalties": [0.0, 0.0001, 0.001, 0.01, 0.1, 1.0],
+    "selection": "discovery TRAIN/DEVELOPMENT only",
+    "challenge_role": "evaluation only; cannot rescue primary failure"
+  },
+  "forbidden": [
+    "generic pairwise leader selection",
+    "repairing family membership after challenge access",
+    "forcing an incomplete family to sum to one",
+    "using target information inside S_-i directly or indirectly",
+    "pooling PRE_ELECTION with ACTIVE_RESULTS",
+    "using robustness horizons to rescue a failed 30s primary test",
+    "calling midpoint inconsistency arbitrage"
+  ]
+}
