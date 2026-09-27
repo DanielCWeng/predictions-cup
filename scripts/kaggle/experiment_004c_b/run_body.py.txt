@@ -166,19 +166,19 @@ def broad_event_move(panel:dict[str,Any],exclude:list[int])->np.ndarray:
  out=np.full(len(a),np.nan);ok=n>=2;out[ok]=z[ok]/n[ok];return out
 def rows_for(panel:dict[str,Any],idx:list[int],horizon:int)->dict[str,np.ndarray]:
  steps=horizon//RES;T=len(panel['times_ns']);broad=broad_event_move(panel,idx);cut1=int(T*.60);cut2=int(T*.80)
- b={k:[] for k in ('et','ej','ey','ec','tt','tj','ty','tc')}
- for local,target in enumerate(idx):
-  for t in range(1,T-steps):
-   y=panel['mid'][t+steps,target]-panel['mid'][t,target]
-   c=[panel['move30'][t,target],panel['mid'][t,target],broad[t],panel['spread'][t,target],panel['age'][t,target]/FRESHNESS]
-   if not np.isfinite(y) or not np.all(np.isfinite(c)):continue
-   if panel['phase']=='DISCOVERY' and t<cut1 and t+steps<cut1:
-    b['tt'].append(t);b['tj'].append(local);b['ty'].append(y);b['tc'].append(c)
-   if panel['phase']=='CHALLENGE' or t>=cut2:
-    b['et'].append(t);b['ej'].append(local);b['ey'].append(y);b['ec'].append(c)
- def a(k,d=float):return np.asarray(b[k],dtype=d)
- return {'eval_t':a('et',int),'eval_j':a('ej',int),'eval_y':a('ey'),'eval_c':np.asarray(b['ec'],float).reshape((-1,5)),
-         'train_t':a('tt',int),'train_j':a('tj',int),'train_y':a('ty'),'train_c':np.asarray(b['tc'],float).reshape((-1,5))}
+ t=np.arange(1,T-steps,dtype=int);K=len(idx);L=len(t)
+ if K==0 or L==0:
+  empty=np.asarray([],float);return {'eval_t':empty.astype(int),'eval_j':empty.astype(int),'eval_y':empty,'eval_c':np.empty((0,5)),'train_t':empty.astype(int),'train_j':empty.astype(int),'train_y':empty,'train_c':np.empty((0,5))}
+ y=(panel['mid'][t+steps][:,idx]-panel['mid'][t][:,idx]).T
+ own=panel['move30'][t][:,idx].T;level=panel['mid'][t][:,idx].T
+ br=np.broadcast_to(broad[t],(K,L));spr=panel['spread'][t][:,idx].T;age=panel['age'][t][:,idx].T/FRESHNESS
+ c=np.stack([own,level,br,spr,age],axis=2);valid=np.isfinite(y)&np.all(np.isfinite(c),axis=2)
+ train_time=(t<cut1)&((t+steps)<cut1);eval_time=np.ones(L,dtype=bool) if panel['phase']=='CHALLENGE' else (t>=cut2)
+ def pack(tm):
+  jj,pos=np.nonzero(valid&tm[None,:])
+  return t[pos],jj.astype(int),y[jj,pos],c[jj,pos]
+ et,ej,ey,ec=pack(eval_time);tt,tj,ty,tc=pack(train_time)
+ return {'eval_t':et,'eval_j':ej,'eval_y':ey,'eval_c':ec,'train_t':tt,'train_j':tj,'train_y':ty,'train_c':tc}
 def controlled_beta(rows:dict[str,np.ndarray],signal:np.ndarray)->tuple[float|None,int]:
  t=rows['eval_t'];j=rows['eval_j'];y=rows['eval_y'];c=rows['eval_c']
  if len(t)<MIN_OVERLAP:return None,len(t)
