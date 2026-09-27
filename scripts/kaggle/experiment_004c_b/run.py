@@ -148,11 +148,18 @@ def project_nonincreasing(v:np.ndarray)->np.ndarray:
  for mean,w in zip(means,weights):out[pos:pos+w]=-mean;pos+=w
  return np.clip(out,0,1)
 def residual_matrix(values:np.ndarray,relation:str)->np.ndarray:
- out=np.full_like(values,np.nan)
+ out=np.full_like(values,np.nan);finite=np.all(np.isfinite(values),axis=1)
+ if relation=='MUTUALLY_EXCLUSIVE_NONEXHAUSTIVE':
+  x=np.clip(values[finite],0,1);res=np.zeros_like(x);viol=np.sum(x,axis=1)>1+1e-12
+  if np.any(viol):
+   v=x[viol];u=np.sort(v,axis=1)[:,::-1];cssv=np.cumsum(u,axis=1)-1
+   k=np.arange(1,v.shape[1]+1);rho=np.sum(u-cssv/k>0,axis=1)-1
+   theta=cssv[np.arange(len(v)),rho]/(rho+1);proj=np.maximum(v-theta[:,None],0)
+   res[viol]=v-proj
+  out[finite]=res;return out
  for i,row in enumerate(values):
-  if not np.all(np.isfinite(row)):continue
+  if not finite[i]:continue
   if relation=='EXHAUSTIVE_PARTITION':p=project_simplex(row)
-  elif relation=='MUTUALLY_EXCLUSIVE_NONEXHAUSTIVE':p=project_capped(row)
   elif relation=='CONDITIONAL_STAGED':p=project_nonincreasing(row)
   else:raise ValueError(relation)
   out[i]=row-p
