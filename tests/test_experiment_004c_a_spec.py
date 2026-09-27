@@ -19,7 +19,7 @@ def test_004c_a_preregistration_primary_is_frozen_30s() -> None:
     assert spec["panel_resolution_seconds"] == 30
     assert spec["regime_pooling"] is False
     assert spec["source_information_in_baseline"] is False
-    assert spec["nulls"]["draws_per_null"] == 250
+    assert spec["nulls"]["stochastic_draws_per_null"] == 250
     assert spec["nulls"]["minimum_valid_draws"] == 250
     assert spec["models"]["hyperparameter_search"] == "NONE"
 
@@ -65,6 +65,6 @@ def test_004c_a_final_freeze_and_kaggle_namespace() -> None:
             / "kernel-metadata.json"
         ).read_text(encoding="utf-8")
     )
-    assert metadata["id"] == "polyleviathan/sig-cup-004c-a-freshness"
+    assert metadata["id"] == "polyleviathan/sig-cup-exp004c-a-information-freshness"
     assert metadata["enable_internet"] is False
     assert metadata["enable_gpu"] is False
