@@ -369,7 +369,13 @@ def _scan_checkpoint_depth_evidence(
                     before = pc.less_equal(times, pa.scalar(cp_us, pa.int64()))
                     if pc.any(before).as_py():
                         grouped = (
-                            pa.table(\n                                {\n                                    "token_id": token_arr.filter(before),\n                                    "t": times.filter(before),\n                                }\n                            )\n                            .group_by("token_id")
+                            pa.table(
+                                {
+                                    "token_id": token_arr.filter(before),
+                                    "t": times.filter(before),
+                                }
+                            )
+                            .group_by("token_id")
                             .aggregate([("t", "max")])
                         )
                         for row in grouped.to_pylist():
@@ -384,7 +390,13 @@ def _scan_checkpoint_depth_evidence(
                     after = pc.greater_equal(times, pa.scalar(cp_us, pa.int64()))
                     if pc.any(after).as_py():
                         grouped = (
-                            pa.table(\n                                {\n                                    "token_id": token_arr.filter(after),\n                                    "t": times.filter(after),\n                                }\n                            )\n                            .group_by("token_id")
+                            pa.table(
+                                {
+                                    "token_id": token_arr.filter(after),
+                                    "t": times.filter(after),
+                                }
+                            )
+                            .group_by("token_id")
                             .aggregate([("t", "min")])
                         )
                         for row in grouped.to_pylist():
@@ -567,8 +579,14 @@ def _checkpoint_metrics(
         and straddle_gap_seconds <= MAX_CHECKPOINT_STRADDLE_GAP_SECONDS
     )
     return {
-        "last_depth_snapshot_at_or_before": (\n            None if last_before is None else last_before.isoformat()\n        ),\n        "depth_snapshot_age_seconds": None if age_seconds is None else round(age_seconds, 6),
-        "first_depth_snapshot_at_or_after": (\n            None if first_after is None else first_after.isoformat()\n        ),\n        "depth_snapshot_straddling_gap_seconds": (
+        "last_depth_snapshot_at_or_before": (
+            None if last_before is None else last_before.isoformat()
+        ),
+        "depth_snapshot_age_seconds": None if age_seconds is None else round(age_seconds, 6),
+        "first_depth_snapshot_at_or_after": (
+            None if first_after is None else first_after.isoformat()
+        ),
+        "depth_snapshot_straddling_gap_seconds": (
             None if straddle_gap_seconds is None else round(straddle_gap_seconds, 6)
         ),
         "checkpoint_depth_fresh": fresh,
