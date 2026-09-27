@@ -51,7 +51,7 @@ for row in conditions:
     for regime, usable_col in REGIMES:
         if row[usable_col] != "true":
             continue
-        if row["canonical_outcome"] != "Yes" or row["token_pair_disagreement"] == "true":
+        if row["canonical_outcome"] != "Yes" or not row["canonical_token_id"]:
             continue
         if event in DISCOVERY and (event, regime, row["condition_id"]) not in b_admitted:
             continue
