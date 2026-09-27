@@ -1,0 +1,14 @@
+{
+  "id": "polyleviathan/sig-cup-exp004d-role-agnostic-participants",
+  "title": "SIG Cup EXP004D Role Agnostic Participants",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": ["polyleviathan/sig-cup-exp003-code"],
+  "competition_sources": [],
+  "kernel_sources": ["polyleviathan/sig-cup-data-001-build"]
+}

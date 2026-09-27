@@ -6,13 +6,13 @@ data gates support that claim.
 
 | Experiment | Question | Status | Immediate inputs / maths |
 |---|---|---|---|
-| LEADLAG-001 | Does an observable external/related-market price move precede executable target repricing? | `EXPERIMENT-003 COMPLETE / INCONCLUSIVE` | M-087, M-088, M-089, M-127; no global-FDR survivor |
-| RV-001 | Does a simple external/reference fair-value residual predict later executable target repricing? | `EXPERIMENT-003 COMPLETE / INCONCLUSIVE` | M-121; no evidence of positive predictive lift |
+| LEADLAG-001 | Does an observable external/related-market price move precede executable target repricing? | `EXPERIMENT-003 COMPLETE / INCONCLUSIVE` | M-087, M-088, M-089, M-127; no nominal rejection in the computed 25-test BH table |
+| RV-001 | Does a simple external/reference fair-value residual predict later executable target repricing? | `EXPERIMENT-003 COMPLETE / INCONCLUSIVE` | M-121; no primary predictive evidence; stability sensitivity has documented reference-vs-common-freshness caveat |
 | LOO-PRICE-001 | Can related/direct-family markets predict a target when its own quote is removed from the predictor? | `EXPERIMENT-003 COMPLETE / DIAGNOSTIC` | M-027/M-028; mechanical same-event reconstruction diagnostic |
 | LOO-FAMILY-001 | Can non-mechanical related markets predict a target after its direct information family is removed? | `EXPERIMENT-003 COMPLETE / INCONCLUSIVE` | M-027/M-028; explicit INDIRECT inventory with hard leakage separation |
-| MICROSTRUCTURE-001 | Do simple observable book-state features add short-horizon predictive information beyond own-price/state controls? | `EXPERIMENT-003 COMPLETE / INCONCLUSIVE` | stability passed; no global-FDR survivor |
-| PARTICIPANT-001 | Does train-frozen participant identity condition future repricing beyond identity-blind fill activity? | `EXPERIMENT-003 COMPLETE / INCONCLUSIVE` | 300s survives global FDR, but negative-control/stability promotion gates fail; matching-role labels are not passive/aggressive semantics |
-| LOWRANK-001 | Does a restrained leave-target-out common factor improve on own-price plus equal-weight cross-market baselines? | `EXPERIMENT-003 COMPLETE / INCONCLUSIVE` | corrected minimum-reference implementation; no global-FDR survivor |
+| MICROSTRUCTURE-001 | Do simple observable book-state features add short-horizon predictive information beyond own-price/state controls? | `EXPERIMENT-003 COMPLETE / INCONCLUSIVE` | stability passed; no nominal rejection in the computed 25-test BH table |
+| PARTICIPANT-001 | Does train-frozen participant identity condition future repricing beyond identity-blind fill activity? | `EXPERIMENT-003 COMPLETE / CONFIRMATORY INVALIDATED` | material post-result protocol deviation in baseline and placebo; nominal 300s BH rejection is audit/exploratory evidence only |
+| LOWRANK-001 | Does a restrained leave-target-out common factor improve on own-price plus equal-weight cross-market baselines? | `EXPERIMENT-003 COMPLETE / INCONCLUSIVE` | corrected minimum-reference implementation; no nominal rejection in the computed 25-test BH table |
 | MM-001 | Are selective market-making economics positive after spread/fill assumptions? | `PLANNED — REQUIRES FILL MODEL` | executable spread economics; no maker-fill model in BUILD-005 |
 | ECO-001 | Does external impulse plus observable local reaction improve on direct lead/lag? | `DEFER UNTIL LIVE ECOLOGY DATA` | challenger to LEADLAG-001, not a primary build target |
 

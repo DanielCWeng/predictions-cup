@@ -1,6 +1,6 @@
 # EXPERIMENT-003 — Historical Alpha Battery
 
-**Status:** empirical run complete; all five preregistered families INCONCLUSIVE
+**Status:** empirical run complete; no family promoted; PARTICIPANT-001 confirmatory validity invalidated by protocol deviation
 **Branch:** experiment/003-historical-alpha-battery  
 **Base:** accepted main at 63d2a71f8c736752a577ab97b6efb3be5d1e8c6a  
 **Purpose:** predictive discovery and rejection, not strategy optimisation or execution simulation.
@@ -133,18 +133,24 @@ aggressor inference is implemented. A 300-second delayed feature is the negative
 
 ### Participant-conditioned flow
 
-Baseline is identity-blind recent fill activity plus contemporaneous market state. Challenger adds
-a participant-conditioned continuation feature whose source matching-role scores are estimated only
-on that fold's TRAIN data and frozen for evaluation.
+The frozen preregistration specifies an identity-blind baseline of recent fill count/value,
+maker-activity value, taker-activity value, target own logit move and spread. The challenger adds a
+TRAIN-frozen participant-conditioned continuation score at participant × event × source matching-role
+level. The frozen negative control is a deterministic frequency-preserving participant-label
+permutation.
 
-The fill stream's maker/taker fields are matching roles only. They are not interpreted as passive
-versus aggressive order classification, order type, or BUY/SELL direction. source_side is likewise
-never interpreted as aggressor BUY/SELL. Fills from the same block-second as a decision are excluded.
-Unseen participants receive neutral treatment. Minimum TRAIN history is five fills. Primary activity
-window is 60 seconds with 30/60/300-second sensitivity.
+The executed implementation does **not** exactly match that frozen protocol. Its baseline uses recent
+fill count/value, unique maker count, unique taker count, exchange-taker value, target own move and
+spread. Its negative control permutes fitted participant score values across participant identities
+within source matching role instead of permuting raw participant labels. This material mismatch was
+detected after outcome inspection, so PARTICIPANT-001 is retained for audit but its confirmatory
+validity is invalidated. See
+`data/experiments/experiment_003/protocol_deviation_001_participant.json`.
 
-The preregistered placebo deterministically permutes participant scores while preserving source
-matching-role/frequency structure. No wallet de-anonymisation or insider labelling is performed.
+The fill stream's maker/taker fields are source matching roles only. They are not interpreted as
+passive versus aggressive order classification, order type, or BUY/SELL direction. `source_side` is
+likewise never interpreted as aggressor BUY/SELL. Fills from the same block-second as a decision are
+excluded. No wallet de-anonymisation or insider labelling is performed.
 
 ### Low-rank benchmark
 
@@ -202,31 +208,36 @@ The corrected post-amendment run executed on code revision
 implementation of the already-preregistered minimum-reference coverage rule; the original
 `7e94bb7` low-rank output is invalidated and retained only as audit history.
 
-All five preregistered families finish **INCONCLUSIVE** under the BUILD-008 evidence policy:
+The canonical BUILD-008 reports mechanically return `INCONCLUSIVE` for all five executed lanes, but
+the protocol audit adds a stricter validity distinction:
 
-| Family | Disposition | Main result |
-|---|---|---|
-| LEADLAG-001 | INCONCLUSIVE | No horizon survives global FDR; stability fails. |
-| RV-001 / structural residual | INCONCLUSIVE | No evidence of positive predictive lift under the preregistered metric; stability fails. |
-| MICROSTRUCTURE-001 | INCONCLUSIVE | Stability passes, but no horizon survives global FDR. |
-| PARTICIPANT-001 | INCONCLUSIVE | 300s survives global 25-test FDR, but the preregistered negative control and stability gates fail. |
-| LOWRANK-001 | INCONCLUSIVE | No horizon survives global FDR; stability fails. |
+| Family | Report disposition | Confirmatory validity | Main result |
+|---|---|---|---|
+| LEADLAG-001 | INCONCLUSIVE | retained | No horizon is rejected in the computed global BH table; stability fails. |
+| RV-001 / structural residual | INCONCLUSIVE | retained for primary estimates; stability diagnostic caveat | No evidence of positive predictive lift under the primary specification. |
+| MICROSTRUCTURE-001 | INCONCLUSIVE | retained | Stability passes, but no horizon is rejected in the computed global BH table. |
+| PARTICIPANT-001 | INCONCLUSIVE | **INVALIDATED** | Executed baseline and placebo differ materially from the frozen preregistration. |
+| LOWRANK-001 | INCONCLUSIVE | retained after documented pre-result amendment | No horizon is rejected in the computed global BH table; stability fails. |
 
-The only global-FDR rejection is PARTICIPANT-001 at 300 seconds:
-raw p approximately `0.0014`, BH q approximately `0.035`, with positive delta MSE.
-This is **not promotion evidence** because the full preregistered promotion policy is not satisfied.
+Under the executed implementation, PARTICIPANT-001 at 300 seconds is the only nominal rejection in
+the original 25-test BH table (raw p approximately `0.0014`, BH q approximately `0.035`, positive
+delta MSE). Because the participant lane does not exactly implement the frozen baseline and placebo,
+that rejection is retained as audit evidence **only** and is not a valid preregistered discovery
+claim. The 25-test BH table itself is preserved unchanged; it is not post-hoc recomputed to remove
+the invalid lane.
 
 ### Post-hoc participant falsification
 
-Because PARTICIPANT-001@300s was the sole global-FDR survivor, bounded post-hoc diagnostics were
-run without changing EXPERIMENT-003's disposition.
+Because the executed PARTICIPANT-001@300s lane produced the only nominal BH rejection, bounded
+post-hoc diagnostics were run as falsification and hypothesis-generation work. They cannot repair
+the preregistration deviation or change EXPERIMENT-003's confirmatory status.
 
 - Attribution: the effect weakens materially when the highest-volume participants are removed,
   indicating meaningful concentration rather than a uniformly distributed participant effect.
 - Robustness: every leave-one-election-out estimate remains positive, although Peru first round
   contributes a large share of the observed lift.
-- Twenty preregister-style participant-score permutations produce an empirical upper-tail rate of
-  approximately `0.0476` versus the real 300s delta MSE.
+- Twenty post-hoc participant-score assignment permutations produce an empirical upper-tail rate
+  of approximately `0.0476` versus the real 300s delta MSE.
 - A 100-draw raw-identity permutation null preserves fill timing, value, market activity and
   participant-frequency structure while destroying identity-to-time association. The real effect
   exceeds 99 of 100 draws (empirical upper-tail approximately `0.0198`).
@@ -235,12 +246,35 @@ run without changing EXPERIMENT-003's disposition.
   (`delta MSE approximately 1.47e-5`, raw p approximately `0.0139`). It exceeds all 100
   role-agnostic identity permutations (empirical upper-tail approximately `0.0099`).
 
-These diagnostics increase interest in participant identity as a follow-up research family, but
-they are post-hoc and cannot promote EXPERIMENT-003. Historical Polymarket evidence still requires
-fresh validation before any SIG strategy use.
+These diagnostics motivate a separately preregistered participant-identity follow-up, but they are
+post-hoc and cannot promote or repair EXPERIMENT-003. Historical Polymarket evidence still requires
+fresh validation before any SIG strategy use. EXP004A's maker-only/taker-only variants refer only to
+the source matching role and must not be interpreted as passive/aggressive trading behaviour.
 
 Canonical compact reports are under `data/experiments/experiment_003/results/`. Post-hoc diagnostic
-outputs are under `data/experiments/experiment_003/posthoc/`.
+outputs are under `data/experiments/experiment_003/posthoc/`, and the exact Kaggle runner scripts,
+kernel metadata, hashes and kernel versions are preserved under
+`scripts/kaggle/experiment_003_posthoc/` and the post-hoc runner manifest. Exact executed Python
+wrappers are archived with a `.py.txt` suffix so repository lint does not rewrite or reinterpret
+those immutable historical source bytes.
+
+## Protocol deviations and validity
+
+Two deviations were found during the post-result audit:
+
+1. `EXPERIMENT-003-DEVIATION-001` is material and affects PARTICIPANT-001. The executed participant
+   baseline and placebo differ from the frozen preregistration. Because this was detected after
+   outcome inspection, the participant lane's confirmatory validity is invalidated rather than
+   retroactively amended.
+2. `EXPERIMENT-003-DEVIATION-002` affects only the RV-001 stability diagnostic: its 60/120/300-second
+   sensitivity changes target and reference freshness together, while the preregistration labels the
+   surface as reference-freshness sensitivity. Primary RV-001 estimates at the frozen 120-second
+   freshness are unaffected; the stability surface must not be read as reference-only.
+
+The low-rank coverage correction is different: it is recorded in
+`amendment_001_lowrank_coverage.json` as a pre-result eligibility/implementation amendment, the
+invalidated earlier run is not mixed with the corrected run, and the complete battery was rerun on
+the amended code revision.
 
 ## Execution environment
 
@@ -251,7 +285,8 @@ DATA-001 directly and fails closed on its manifest hash.
 Large observation/intermediate matrices remain outside Git. Only deterministic compact reports,
 their hashes, registry/ledger updates and this documentation are committed.
 
-The corrected canonical Kaggle run was independently reproduced twice in separate private kernels.
-Every compact JSON report and the run manifest matched the canonical run byte-for-byte by SHA-256.
-Exact evidence is recorded in
-`data/experiments/experiment_003/results/reproduction_evidence.json`.
+The corrected canonical Kaggle run was rerun twice in separate private kernels using the same
+frozen code package and accepted DATA-001 mount. Every compact JSON report and the run manifest
+matched the canonical run byte-for-byte by SHA-256. This demonstrates deterministic reproducibility
+of the frozen implementation; it is not an independent reimplementation. Exact evidence is recorded
+in `data/experiments/experiment_003/results/reproduction_evidence.json`.

@@ -1,0 +1,18 @@
+{
+  "deviation_id": "EXPERIMENT-003-DEVIATION-001",
+  "detected_after_outcome_inspection": true,
+  "affected_family": "PARTICIPANT-001",
+  "severity": "MATERIAL_CONFIRMATORY_PROTOCOL_DEVIATION",
+  "frozen_preregistration": {
+    "baseline": ["recent_fill_count", "recent_fill_value", "maker_activity_value", "taker_activity_value", "target_own_logit_move", "spread"],
+    "negative_control": "deterministic frequency-preserving participant-label permutation"
+  },
+  "executed_implementation": {
+    "baseline": ["recent_fill_count", "recent_fill_value", "unique_maker_count", "unique_taker_count", "exchange_taker_value", "target_own_logit_move", "spread"],
+    "negative_control": "deterministic within-role permutation of TRAIN-fitted participant score values across participant identities"
+  },
+  "impact": "The executed participant lane does not exactly implement the frozen participant baseline or placebo. Its raw statistics, BH result, controls and BUILD-008 report are retained as audit evidence but cannot be treated as confirmatory evidence for the preregistered PARTICIPANT-001 hypothesis.",
+  "disposition": "CONFIRMATORY_VALIDITY_INVALIDATED",
+  "fdr_note": "The original 25-test BH table is retained unchanged for audit. PARTICIPANT-001@300s is only a nominal rejection under the executed implementation; it is not a valid preregistered discovery claim.",
+  "remediation": "Do not retroactively amend and re-promote EXPERIMENT-003 after outcome exposure. Any corrected participant test must be a new preregistered experiment. Post-hoc participant diagnostics remain exploratory only."
+}

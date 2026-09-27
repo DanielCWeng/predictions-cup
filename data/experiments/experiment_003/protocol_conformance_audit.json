@@ -1,0 +1,15 @@
+{
+  "audit_id": "EXPERIMENT-003-PROTOCOL-CONFORMANCE-AUDIT",
+  "audit_timing": "post-result hostile-review pass",
+  "code_revision_executed": "b2ba5e2c3e63d57bd6e74c0c5861bad67c983e1b",
+  "preregistration_sha256": "64af4c1427afa983a13da6a11d5721b1b6496b0306ce1b07ab6e2f19df9e7e70",
+  "families": {
+    "LEADLAG-001": {"status":"CONFORMANT","notes":"Frozen 5s primary lookback, explicit references, 30s grid and 300s delayed-reference control map to executed implementation."},
+    "RV-001": {"status":"PRIMARY_CONFORMANT_WITH_DIAGNOSTIC_CAVEAT","notes":"Primary 120s-freshness structural-residual estimates map to the frozen specification. Sensitivity code changes target and reference freshness together; see DEVIATION-002."},
+    "MICROSTRUCTURE-001": {"status":"CONFORMANT","notes":"Genuine depth-snapshot times, own-move/spread/depth/age baseline, imbalance/microprice challenger and 300s delayed-feature control map to the frozen specification."},
+    "PARTICIPANT-001": {"status":"MATERIAL_PROTOCOL_DEVIATION_CONFIRMATORY_INVALID","notes":"Executed baseline and placebo differ from the frozen protocol; see DEVIATION-001. Nominal statistics are audit/exploratory evidence only."},
+    "LOWRANK-001": {"status":"CONFORMANT_AFTER_DOCUMENTED_PRE_RESULT_AMENDMENT","notes":"Corrected run uses the frozen coverage-ordered universe and deterministic first-three leave-target-out references under AMENDMENT-001. Invalidated earlier run is not mixed."}
+  },
+  "global_inference": "No family is promoted. The original 25-test BH table is retained for audit and is not post-hoc recomputed after invalidating the participant lane.",
+  "review_rule": "Any future corrected participant test must be a new preregistered experiment because the current outcome has been inspected."
+}

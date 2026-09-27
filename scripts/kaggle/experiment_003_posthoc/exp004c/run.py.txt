@@ -1,0 +1,151 @@
+from __future__ import annotations
+import hashlib, json, subprocess, sys
+from pathlib import Path
+import numpy as np
+
+INPUT=Path("/kaggle/input"); WORK=Path("/kaggle/working")
+COMMIT="b2ba5e2c3e63d57bd6e74c0c5861bad67c983e1b"
+CORPUS_SHA="e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4"
+PREREG_SHA="64af4c1427afa983a13da6a11d5721b1b6496b0306ce1b07ab6e2f19df9e7e70"
+REL_SHA="e93033568ac3d3045399e6b630d37bb30a829c9c2fad3ef5da8ac31a7516732e"
+DRAWS=100
+
+def sha(p:Path):
+    h=hashlib.sha256()
+    with p.open("rb") as f:
+        for c in iter(lambda:f.read(1<<20),b""): h.update(c)
+    return h.hexdigest()
+
+def one(name):
+    m=sorted(INPUT.rglob(name))
+    if len(m)!=1: raise SystemExit(f"expected one {name}, got {m}")
+    return m[0]
+
+wheel=one("predictions_cup-0.1.0-py3-none-any.whl")
+commit=one("COMMIT.txt")
+prereg_p=one("preregistration.json")
+rel_p=one("relationship_inventory.csv")
+manifest=one("corpus_manifest.json")
+assert commit.read_text().strip()==COMMIT
+assert sha(prereg_p)==PREREG_SHA and sha(rel_p)==REL_SHA and sha(manifest)==CORPUS_SHA
+subprocess.check_call([sys.executable,"-m","pip","install","-q","--no-deps",str(wheel)])
+
+from predictions_cup.learning.historical_alpha import (
+    FillSeries, compact_oos, load_fill_series, load_identity_rows,
+    load_quote_series, load_relationships, run_participant_oos, summarize_evidence,
+)
+
+prereg=json.loads(prereg_p.read_text())
+relationships=load_relationships(rel_p,REL_SHA)
+corpus_root=manifest.parent.parent
+identity=load_identity_rows(corpus_root)
+H=300
+session=int(prereg["statistics"]["block_test"]["session_seconds"])
+cfg=prereg["families"]["participant"]
+fresh=int(prereg["target"]["quote_freshness_seconds"])
+
+def window(x):
+    from datetime import datetime
+    return datetime.fromisoformat(x[0]),datetime.fromisoformat(x[1])
+
+def universe(reg):
+    rels=[r for r in relationships if r.regime_id==reg]
+    low={x["token_id"] for x in prereg["families"]["lowrank"]["lowrank_universe"][reg]}
+    all_t={r.target_token_id for r in rels}|{r.reference_token_id for r in rels}|low
+    p=tuple(sorted(
+        r["token_id"] for r in identity
+        if r["regime_id"]==reg and r["outcome"]=="Yes"
+        and r["token_id"] in all_t and int(r["fill_rows"] or 0)>=50
+    ))
+    return p,tuple(sorted(all_t))
+
+cache={}
+for reg,w in prereg["regimes"].items():
+    p_tokens,all_tokens=universe(reg)
+    start,end=window(w)
+    cache[reg]=(
+        start,end,
+        load_quote_series(corpus_root,reg,all_tokens,epsilon=float(prereg["target"]["clamp_epsilon"])),
+        load_fill_series(corpus_root,reg,p_tokens),
+    )
+
+def shuffled_fills(fills_by_token,draw,reg):
+    out={}
+    for token,fs in sorted(fills_by_token.items()):
+        seed=int.from_bytes(hashlib.sha256(f"{COMMIT}|{reg}|{token}|{draw}".encode()).digest()[:8],"big")
+        rng=np.random.default_rng(seed)
+        maker=fs.maker.copy(); taker=fs.taker.copy()
+        rng.shuffle(maker); rng.shuffle(taker)
+        out[token]=FillSeries(fs.times_ns,fs.value_usd,maker,taker,fs.exchange_taker)
+    return out
+
+def run_all(run_id,draw=None):
+    ev=[]
+    for reg,(start,end,quotes,fills) in cache.items():
+        vf=fills if draw is None else shuffled_fills(fills,draw,reg)
+        res=run_participant_oos(
+            regime_id=reg,
+            event_family_id=prereg["event_families"][reg],
+            quote_by_token=quotes,
+            fills_by_token=vf,
+            start=start,end=end,
+            grid_seconds=30,
+            horizon_seconds=H,
+            activity_window_seconds=int(cfg["activity_window_seconds"]),
+            own_lookback_seconds=int(cfg["participant_score_lookback_seconds"]),
+            score_horizon_seconds=int(cfg["participant_score_horizon_seconds"]),
+            score_lookback_seconds=int(cfg["participant_score_lookback_seconds"]),
+            minimum_history=int(cfg["minimum_train_fill_history"]),
+            freshness_seconds=fresh,
+            validation=prereg["validation"],
+            run_id=run_id,
+        )
+        ev.append(compact_oos(res,session))
+    return summarize_evidence(ev,run_id=run_id,component=run_id,statistics_spec=prereg["statistics"])
+
+real=run_all("EXP004C-real")
+null=[]
+for draw in range(DRAWS):
+    rid=f"EXP004C-raw-permutation-{draw:03d}"
+    s=run_all(rid,draw)
+    null.append({
+        "draw":draw,
+        "delta_mse":s.get("delta_mse"),
+        "raw_p_value":s.get("raw_p_value"),
+        "events":s.get("events"),
+        "valid_observations":s.get("valid_observations"),
+    })
+    if (draw+1)%10==0:
+        print(json.dumps({
+            "phase":"progress","completed":draw+1,"draws":DRAWS,
+            "last_delta_mse":s.get("delta_mse"),
+        },sort_keys=True),flush=True)
+
+vals=np.asarray([x["delta_mse"] for x in null if x["delta_mse"] is not None],dtype=float)
+real_delta=float(real["delta_mse"])
+out={
+    "analysis_id":"EXP004C-PARTICIPANT-NULL-MARATHON",
+    "status":"POST_HOC_EXPLORATORY",
+    "source_experiment":"EXPERIMENT-003",
+    "code_revision":COMMIT,
+    "dataset_hash":CORPUS_SHA,
+    "preregistration_hash":PREREG_SHA,
+    "horizon_seconds":H,
+    "null_design":"Within each token and role, independently permute raw participant labels across unchanged fill times and values. This exactly preserves maker/taker label frequencies and market activity while destroying participant-to-outcome association.",
+    "draws_requested":DRAWS,
+    "real":real,
+    "null_results":null,
+    "null_summary":{
+        "draws_completed":int(len(vals)),
+        "delta_mse_mean":float(np.mean(vals)) if len(vals) else None,
+        "delta_mse_std":float(np.std(vals)) if len(vals) else None,
+        "delta_mse_max":float(np.max(vals)) if len(vals) else None,
+        "delta_mse_q95":float(np.quantile(vals,.95)) if len(vals) else None,
+        "delta_mse_q99":float(np.quantile(vals,.99)) if len(vals) else None,
+        "real_delta_mse":real_delta,
+        "empirical_upper_tail":float((1+np.count_nonzero(vals>=real_delta))/(1+len(vals))) if len(vals) else None,
+    },
+    "interpretation":"Post-hoc falsification only; cannot promote EXPERIMENT-003.",
+}
+(WORK/"exp004c_participant_null_marathon.json").write_text(json.dumps(out,indent=2,sort_keys=True)+"\n")
+print(json.dumps({"phase":"complete","real_delta_mse":real_delta,"null":out["null_summary"]},sort_keys=True))
