@@ -13,8 +13,10 @@ import pytest
 
 from predictions_cup.historical import event_time
 from predictions_cup.historical.event_time import (
+    CheckpointEvidence,
     Window,
-    _book_state_covers,
+    _book_observation_span_covers,
+    _checkpoint_metrics,
     _classification,
     _coverage_hours,
     _dt,
@@ -63,12 +65,27 @@ def test_regime_boundaries_are_ordered_contiguous_and_not_midnight_bins() -> Non
                 assert start == previous_end
             previous_end = end
 
-    # Economic boundaries must not collapse into date<election_date / UTC-midnight bins.
     timeline = json.loads((PACKAGE / "event_timeline.json").read_text(encoding="utf-8"))
+    defs = {e["regime_id"]: e for e in payload["events"]}
     for event in timeline["events"]:
-        poll = _dt(event["anchors"]["poll_close"]["utc_timestamp"])
-        assert poll is not None
-        assert poll.time() != datetime.min.time()
+        anchors = event["anchors"]
+        poll_open = _dt(anchors["poll_open"]["utc_timestamp"])
+        poll_close = _dt(anchors["poll_close"]["utc_timestamp"])
+        result_start = _dt(anchors["first_meaningful_results"]["utc_timestamp"])
+        active_end = _dt(anchors["active_results_end"]["utc_timestamp"])
+        assert poll_open and poll_close and result_start and active_end
+        assert poll_open < poll_close <= result_start
+        assert active_end - result_start == timedelta(hours=6)
+        regimes = {r["name"]: r for r in defs[event["regime_id"]]["regimes"]}
+        assert _dt(regimes["PRE_ELECTION"]["end_utc"]) == poll_open
+        assert _dt(regimes["ELECTION_DAY_PRE_RESULTS"]["start_utc"]) == poll_open
+        assert _dt(regimes["ELECTION_DAY_PRE_RESULTS"]["end_utc"]) == result_start
+        assert _dt(regimes["ACTIVE_RESULTS"]["end_utc"]) == active_end
+
+    peru_r1 = next(e for e in timeline["events"] if e["regime_id"] == "peru_first_round")
+    peru_ro = next(e for e in timeline["events"] if e["regime_id"] == "peru_runoff")
+    assert peru_r1["anchors"]["active_results_end"]["utc_timestamp"] == "2026-04-13T05:00:00Z"
+    assert peru_ro["anchors"]["active_results_end"]["utc_timestamp"] == "2026-06-08T05:12:00Z"
 
 
 def test_event_family_grouping_and_market_specific_anchor_are_explicit() -> None:
@@ -88,25 +105,45 @@ def test_coverage_hours_never_reports_negative_duration() -> None:
     assert _coverage_hours(None, T0) is None
 
 
-def test_no_backward_fill_before_first_depth_initialization() -> None:
+def test_observation_span_is_descriptive_not_state_proof() -> None:
     first_depth = T0 + timedelta(minutes=10)
     last_book = T0 + timedelta(hours=2)
-    assert not _book_state_covers(first_depth, last_book, T0)
-    assert _book_state_covers(first_depth, last_book, first_depth)
-    assert _book_state_covers(first_depth, last_book, last_book)
+    assert not _book_observation_span_covers(first_depth, last_book, T0)
+    assert _book_observation_span_covers(first_depth, last_book, first_depth)
+    assert _book_observation_span_covers(first_depth, last_book, last_book)
+
+
+def test_checkpoint_freshness_requires_recent_snapshot_and_bounded_straddling_gap() -> None:
+    when = T0
+    fresh = _checkpoint_metrics(
+        CheckpointEvidence(
+            last_at_or_before_us=int((T0 - timedelta(minutes=10)).timestamp() * 1_000_000),
+            first_at_or_after_us=int((T0 + timedelta(minutes=20)).timestamp() * 1_000_000),
+        ),
+        when,
+    )
+    assert fresh["checkpoint_depth_fresh"] is True
+    stale = _checkpoint_metrics(
+        CheckpointEvidence(
+            last_at_or_before_us=int((T0 - timedelta(minutes=45)).timestamp() * 1_000_000),
+            first_at_or_after_us=int((T0 + timedelta(minutes=30)).timestamp() * 1_000_000),
+        ),
+        when,
+    )
+    assert stale["checkpoint_depth_fresh"] is False
 
 
 def test_fills_only_market_cannot_become_book_usable() -> None:
     usable, reasons = _pre_usable(
         None,
-        None,
         T0 + timedelta(hours=12),
         pre_obs=10_000,
         source_ok=True,
+        checkpoint_fresh=False,
     )
     assert not usable
     assert "NO_INITIALIZED_DEPTH" in reasons
-    assert "NO_PRE_ELECTION_BOOK_THROUGH_POLL_CLOSE" in reasons
+    assert "STALE_OR_UNOBSERVED_BOOK_AT_POLL_OPEN" in reasons
 
 
 @pytest.mark.parametrize(
