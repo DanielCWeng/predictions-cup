@@ -1,0 +1,21 @@
+family_id,event,regime,full_member_count,usable_member_count,status,basket_arbitrage_claim,reason
+PER_PRESIDENTIAL_WINNER_106520,peru_first_round,PRE_ELECTION,49,9,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+PER_PRESIDENTIAL_WINNER_106520,peru_first_round,ACTIVE_RESULTS,49,22,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+PER_PRESIDENTIAL_WINNER_106520,peru_runoff,PRE_ELECTION,49,5,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+PER_PRESIDENTIAL_WINNER_106520,peru_runoff,ACTIVE_RESULTS,49,15,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+COL_PRESIDENTIAL_WINNER_34584,colombia_first_round,PRE_ELECTION,28,4,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+COL_PRESIDENTIAL_WINNER_34584,colombia_first_round,ACTIVE_RESULTS,28,4,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+COL_PRESIDENTIAL_WINNER_34584,colombia_runoff,PRE_ELECTION,28,2,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+COL_PRESIDENTIAL_WINNER_34584,colombia_runoff,ACTIVE_RESULTS,28,2,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+COL_RUNOFF_PAIR_481843,colombia_first_round,PRE_ELECTION,5,0,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+COL_RUNOFF_PAIR_481843,colombia_first_round,ACTIVE_RESULTS,5,2,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+COL_RUNOFF_PAIR_481843,colombia_runoff,PRE_ELECTION,5,0,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+COL_RUNOFF_PAIR_481843,colombia_runoff,ACTIVE_RESULTS,5,0,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+HUN_TISZA_SEAT_BUCKETS_263567,hungary_election,PRE_ELECTION,8,0,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+HUN_TISZA_SEAT_BUCKETS_263567,hungary_election,ACTIVE_RESULTS,8,0,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+HUN_FIDESZ_SEAT_BUCKETS_263762,hungary_election,PRE_ELECTION,6,0,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+HUN_FIDESZ_SEAT_BUCKETS_263762,hungary_election,ACTIVE_RESULTS,6,0,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+HUN_TISZA_VOTE_BUCKETS_266168,hungary_election,PRE_ELECTION,5,0,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+HUN_TISZA_VOTE_BUCKETS_266168,hungary_election,ACTIVE_RESULTS,5,0,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+HUN_FIDESZ_VOTE_BUCKETS_266119,hungary_election,PRE_ELECTION,5,0,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified
+HUN_FIDESZ_VOTE_BUCKETS_266119,hungary_election,ACTIVE_RESULTS,5,0,UNAVAILABLE_INCOMPLETE_FAMILY,False,full proven family not entirely frozen usable; no all-leg executable basket can be certified

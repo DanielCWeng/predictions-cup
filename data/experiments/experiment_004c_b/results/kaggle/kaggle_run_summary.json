@@ -1,0 +1,19 @@
+{
+  "disposition": "SOFT_COMPETITIVE_EFFECT_ONLY",
+  "experiment_id": "EXPERIMENT-004C-B",
+  "family_result_rows": 176,
+  "member_result_rows": 132,
+  "null_rows": 77606,
+  "outputs": {
+    "challenge_provenance.json": "0dcaf2de56cb8474cf4517cfc69e6346d3f3a18804c45d252689355a253abe05",
+    "constraint_projection_diagnostics.csv": "7b75ec01dd2124a201806895b98d7e4fb1cc8411db3e365c4370a81f115729fe",
+    "executable_basket_diagnostics.csv": "50cd24d6534ea36b6f3bb42f045ca47aae138f08bc2bc0f0dbc97134b8d1b855",
+    "family_results.csv": "1b2fb86caadf14911ad7e1a10039691e480688dc96f89b7945329f1236c8f8d5",
+    "fdr_results.csv": "de81b7d32f2f55c2e78bbc97d59bc0bdebcc951679050c38ccc011882eef9fd3",
+    "member_results.csv": "b29cdb8f0ca8e6539d79ec9646776760205632f7c8dbdfc8ae2406c92ce4f02b",
+    "null_results.csv": "97cb22e79eba3efb0181d5f1b05fd8e50d9033c146b8d142ec3ad841cfea37b7",
+    "panel_summary.csv": "ee1579147e60308948911a286986834b6cbd1d3db94efb26bec86f63ca1d7251",
+    "results_summary.json": "2cb3b588097892e15ec81a32898708e17256e842d599a72d219d4817b0dcd32b"
+  },
+  "phase": "complete"
+}
