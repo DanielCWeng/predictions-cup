@@ -1475,6 +1475,7 @@ def coverage_audit(scope: str, frame: pd.DataFrame) -> list[dict[str, Any]]:
 
 
 def main() -> None:
+    code_root, code_manifest = load_code_bundle()
     from predictions_cup.learning.conditional_response import (
         MULTIPLICITY_SLOTS,
         assert_execution_safety,
@@ -1482,7 +1483,6 @@ def main() -> None:
     )
 
     assert_execution_safety()
-    code_root, code_manifest = load_code_bundle()
     prereg_path = code_root / "preregistration.json"
     registry_path = code_root / "market_family_registry.csv"
     astra_path = code_root / "ASTRA_004C_HYPOTHESIS_SET_PINNED.md"
