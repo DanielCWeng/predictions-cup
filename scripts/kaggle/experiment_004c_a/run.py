@@ -531,7 +531,7 @@ def matched_control_registry(
         ]
         pool = same_family or candidates
         chosen = min(pool, key=lambda r: r["condition_id"]) if pool else None
-        mapping[edge] = "" if chosen is None else chosen["canonical_token_id"]
+        mapping[f"{event}|{regime}|{edge}"] = "" if chosen is None else chosen["canonical_token_id"]
         rows.append(
             {
                 "event": event,
@@ -720,7 +720,7 @@ def build_event_data(
             y_by_h[horizon] = y
 
         e = edge_id(pair)
-        control = control_tokens.get(e, "")
+        control = control_tokens.get(f"{event}|{regime}|{e}", "")
         base_parts.append(base[idx])
         prim_parts.append(prim[idx])
         time_parts.append(q[idx])
