@@ -1573,7 +1573,7 @@ def main() -> None:
                             ParameterCell(
                                 coordinates=(position,),
                                 parameters=(("ridge_penalty", str(penalty)),),
-                                score=Decimal(str(score)),
+                                metric=Decimal(str(score)),
                             )
                         )
                         stability_rows.append(
