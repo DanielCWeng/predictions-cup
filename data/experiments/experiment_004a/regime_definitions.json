@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "package_version": "004A-event-time-v1",
+  "invariants": {
+    "half_open_intervals": true,
+    "boundaries_must_not_move_for_alpha": true,
+    "market_price_used_to_choose_boundaries": false,
+    "pre_election_definition": "DATA-001 corpus start to poll_close",
+    "election_day_pre_results_definition": "poll_close to first_meaningful_results; may be zero length",
+    "active_results_definition": "first meaningful public result dissemination to externally evidenced end of the principal result-arrival phase",
+    "late_count_definition": "end of principal result-arrival phase to authoritative completion of the materially relevant count stage",
+    "post_resolution_diagnostic_definition": "optional administrative/settlement tail after meaningful count completion"
+  },
+  "events": [
+    {
+      "regime_id": "colombia_first_round",
+      "event_family": "COL_2026",
+      "regimes": [
+        {
+          "name": "PRE_ELECTION",
+          "start_utc": "2026-05-29T00:00:00Z",
+          "end_utc": "2026-05-31T21:00:00Z",
+          "anchor_type": "CORPUS_START_TO_POLL_CLOSE",
+          "boundary_origin": "FACTUAL"
+        },
+        {
+          "name": "ELECTION_DAY_PRE_RESULTS",
+          "start_utc": "2026-05-31T21:00:00Z",
+          "end_utc": "2026-05-31T21:11:00Z",
+          "anchor_type": "POLL_CLOSE_TO_FIRST_RESULTS",
+          "boundary_origin": "FACTUAL"
+        },
+        {
+          "name": "ACTIVE_RESULTS",
+          "start_utc": "2026-05-31T21:11:00Z",
+          "end_utc": "2026-05-31T22:32:00Z",
+          "anchor_type": "FIRST_RESULTS_TO_RUNOFF_PAIR_CLEAR",
+          "boundary_origin": "FACTUAL_REPORTED"
+        },
+        {
+          "name": "LATE_COUNT",
+          "start_utc": "2026-05-31T22:32:00Z",
+          "end_utc": "2026-06-05T05:00:00Z",
+          "anchor_type": "BULK_RESULTS_TO_CNE_DECLARATION",
+          "boundary_origin": "FACTUAL_DATE_NORMALIZED"
+        },
+        {
+          "name": "POST_RESOLUTION_DIAGNOSTIC",
+          "enabled": false,
+          "start_utc": null,
+          "end_utc": null,
+          "anchor_type": "NOT_DEFINED",
+          "boundary_origin": "NONE"
+        }
+      ]
+    },
+    {
+      "regime_id": "colombia_runoff",
+      "event_family": "COL_2026",
+      "regimes": [
+        {
+          "name": "PRE_ELECTION",
+          "start_utc": "2026-06-19T00:00:00Z",
+          "end_utc": "2026-06-21T21:00:00Z",
+          "anchor_type": "CORPUS_START_TO_POLL_CLOSE",
+          "boundary_origin": "FACTUAL"
+        },
+        {
+          "name": "ELECTION_DAY_PRE_RESULTS",
+          "start_utc": "2026-06-21T21:00:00Z",
+          "end_utc": "2026-06-21T21:11:00Z",
+          "anchor_type": "POLL_CLOSE_TO_FIRST_RESULTS",
+          "boundary_origin": "FACTUAL"
+        },
+        {
+          "name": "ACTIVE_RESULTS",
+          "start_utc": "2026-06-21T21:11:00Z",
+          "end_utc": "2026-06-21T22:27:00Z",
+          "anchor_type": "FIRST_RESULTS_TO_99_PERCENT_PRECOUNT",
+          "boundary_origin": "FACTUAL_REPORTED"
+        },
+        {
+          "name": "LATE_COUNT",
+          "start_utc": "2026-06-21T22:27:00Z",
+          "end_utc": "2026-06-25T05:00:00Z",
+          "anchor_type": "PRECOUNT_TO_CNE_DECLARATION",
+          "boundary_origin": "FACTUAL_DATE_NORMALIZED"
+        },
+        {
+          "name": "POST_RESOLUTION_DIAGNOSTIC",
+          "enabled": false,
+          "start_utc": null,
+          "end_utc": null,
+          "anchor_type": "NOT_DEFINED",
+          "boundary_origin": "NONE"
+        }
+      ]
+    },
+    {
+      "regime_id": "peru_first_round",
+      "event_family": "PER_2026",
+      "regimes": [
+        {
+          "name": "PRE_ELECTION",
+          "start_utc": "2026-04-10T00:00:00Z",
+          "end_utc": "2026-04-12T23:00:00Z",
+          "anchor_type": "CORPUS_START_TO_PRIMARY_NATIONAL_POLL_CLOSE",
+          "boundary_origin": "FACTUAL"
+        },
+        {
+          "name": "ELECTION_DAY_PRE_RESULTS",
+          "start_utc": "2026-04-12T23:00:00Z",
+          "end_utc": "2026-04-12T23:00:00Z",
+          "anchor_type": "ZERO_LENGTH_RESULTS_BEGAN_AT_CLOSE",
+          "boundary_origin": "FACTUAL",
+          "zero_length": true
+        },
+        {
+          "name": "ACTIVE_RESULTS",
+          "start_utc": "2026-04-12T23:00:00Z",
+          "end_utc": "2026-04-23T00:53:00Z",
+          "anchor_type": "ROLLING_RESULTS_TO_100_PERCENT_ACTS_PROCESSED",
+          "boundary_origin": "FACTUAL_OFFICIAL"
+        },
+        {
+          "name": "LATE_COUNT",
+          "start_utc": "2026-04-23T00:53:00Z",
+          "end_utc": "2026-05-15T15:04:00Z",
+          "anchor_type": "PROCESSED_TO_100_PERCENT_COUNTED",
+          "boundary_origin": "FACTUAL_OFFICIAL"
+        },
+        {
+          "name": "POST_RESOLUTION_DIAGNOSTIC",
+          "enabled": true,
+          "start_utc": "2026-05-15T15:04:00Z",
+          "end_utc": "2026-05-17T17:03:00Z",
+          "anchor_type": "COUNT_COMPLETE_TO_JNE_PROCLAMATION",
+          "boundary_origin": "FACTUAL_OFFICIAL"
+        }
+      ],
+      "special_case": "ACTIVE_RESULTS overlaps exceptional residual voting at 187 Lima tables until 2026-04-13T23:00:00Z; see event_timeline additional anchor."
+    },
+    {
+      "regime_id": "peru_runoff",
+      "event_family": "PER_2026",
+      "regimes": [
+        {
+          "name": "PRE_ELECTION",
+          "start_utc": "2026-06-05T00:00:00Z",
+          "end_utc": "2026-06-07T22:00:00Z",
+          "anchor_type": "CORPUS_START_TO_POLL_CLOSE",
+          "boundary_origin": "FACTUAL"
+        },
+        {
+          "name": "ELECTION_DAY_PRE_RESULTS",
+          "start_utc": "2026-06-07T22:00:00Z",
+          "end_utc": "2026-06-07T23:12:00Z",
+          "anchor_type": "POLL_CLOSE_TO_FIRST_OFFICIAL_COUNT_UPDATE",
+          "boundary_origin": "FACTUAL_REPORTED"
+        },
+        {
+          "name": "ACTIVE_RESULTS",
+          "start_utc": "2026-06-07T23:12:00Z",
+          "end_utc": "2026-06-13T00:04:00Z",
+          "anchor_type": "FIRST_OFFICIAL_COUNT_UPDATE_TO_100_PERCENT_ACTS_PROCESSED",
+          "boundary_origin": "FACTUAL_OFFICIAL"
+        },
+        {
+          "name": "LATE_COUNT",
+          "start_utc": "2026-06-13T00:04:00Z",
+          "end_utc": "2026-06-29T19:50:00Z",
+          "anchor_type": "PROCESSED_TO_100_PERCENT_COUNTED",
+          "boundary_origin": "FACTUAL_OFFICIAL"
+        },
+        {
+          "name": "POST_RESOLUTION_DIAGNOSTIC",
+          "enabled": true,
+          "start_utc": "2026-06-29T19:50:00Z",
+          "end_utc": "2026-07-03T21:05:00Z",
+          "anchor_type": "COUNT_COMPLETE_TO_JNE_PROCLAMATION",
+          "boundary_origin": "FACTUAL_OFFICIAL"
+        }
+      ]
+    },
+    {
+      "regime_id": "hungary_election",
+      "event_family": "HUN_2026",
+      "regimes": [
+        {
+          "name": "PRE_ELECTION",
+          "start_utc": "2026-04-05T00:00:00Z",
+          "end_utc": "2026-04-12T17:00:00Z",
+          "anchor_type": "CORPUS_START_TO_POLL_CLOSE",
+          "boundary_origin": "FACTUAL"
+        },
+        {
+          "name": "ELECTION_DAY_PRE_RESULTS",
+          "start_utc": "2026-04-12T17:00:00Z",
+          "end_utc": "2026-04-12T18:18:00Z",
+          "anchor_type": "POLL_CLOSE_TO_FIRST_PARTIAL_RESULTS",
+          "boundary_origin": "FACTUAL_REPORTED"
+        },
+        {
+          "name": "ACTIVE_RESULTS",
+          "start_utc": "2026-04-12T18:18:00Z",
+          "end_utc": "2026-04-12T19:23:00Z",
+          "anchor_type": "FIRST_RESULTS_TO_PUBLIC_CONCESSION",
+          "boundary_origin": "FACTUAL_REPORTED"
+        },
+        {
+          "name": "LATE_COUNT",
+          "start_utc": "2026-04-12T19:23:00Z",
+          "end_utc": "2026-04-18T22:00:00Z",
+          "anchor_type": "CONCESSION_TO_18_APRIL_COUNTING_PRECINCTS_COMPLETE",
+          "boundary_origin": "FACTUAL_DATE_NORMALIZED"
+        },
+        {
+          "name": "POST_RESOLUTION_DIAGNOSTIC",
+          "enabled": true,
+          "start_utc": "2026-04-18T22:00:00Z",
+          "end_utc": "2026-05-07T12:00:00Z",
+          "anchor_type": "LATE_COUNT_TO_OFFICIAL_RESULT_PAGE_UPDATE",
+          "boundary_origin": "FACTUAL_OFFICIAL"
+        }
+      ]
+    }
+  ]
+}
