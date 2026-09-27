@@ -42,14 +42,16 @@ def test_nonincreasing_isotonic_projection() -> None:
 
 
 def test_bh_counts_unavailable_cells_in_family_size() -> None:
-    rows = [
+    rows: list[dict[str, object]] = [
         {"hypothesis_id": "a", "fdr_family": "x", "p_value": 0.001},
         {"hypothesis_id": "b", "fdr_family": "x", "p_value": None},
         {"hypothesis_id": "c", "fdr_family": "x", "p_value": 0.02},
     ]
     out = bh_adjust(rows)
     assert all(row["fdr_family_size"] == 3 for row in out)
-    assert np.isclose(out[0]["q_value"], 0.003)
+    q_value = out[0]["q_value"]
+    assert isinstance(q_value, (int, float))
+    assert np.isclose(q_value, 0.003)
     assert out[1]["q_value"] is None
 
 
