@@ -23,7 +23,7 @@ INPUT = Path("/kaggle/input")
 WORK = Path("/kaggle/working/004c_d_conditional_response")
 WORK.mkdir(parents=True, exist_ok=True)
 
-FREEZE_SHA = "ceecdcae3d6052d7501dadcf8d654c548cf7c5bf"
+FREEZE_SHA = "6adb6c2746fdba1453a5f845a515c9f56b5dab3b"
 PREREG_SHA = "9eafa50476ffa3e3d793081ead48e1536c02bed5a8571ca92c981158773b2688"
 REGISTRY_SHA = "de93ccddafd12729ef7c77875bf8c8bfc6a255cc44efb1bfee5d201c69100e52"
 ASTRA_SHA = "95613edc6acfedd9b614143198366b1b2d62b9f10cbbcb5bd2425588760b6bff"
