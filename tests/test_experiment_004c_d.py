@@ -19,7 +19,7 @@ from predictions_cup.learning.conditional_response import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-FREEZE_SHA = "ceecdcae3d6052d7501dadcf8d654c548cf7c5bf"
+FREEZE_SHA = "6adb6c2746fdba1453a5f845a515c9f56b5dab3b"
 
 
 def row(second: int, bid: float | None, ask: float | None) -> dict[str, object]:
