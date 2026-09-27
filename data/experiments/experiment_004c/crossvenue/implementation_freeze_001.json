@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "freeze_id": "004C-C-IMPLEMENTATION-001",
+  "recorded_at_utc": "2026-09-27T21:29:00Z",
+  "parent_preregistration_commit": "2583576750ad3176923d009d2fb0d3fc282b7e84",
+  "predictive_outcomes_inspected_before_freeze": false,
+  "exact": {
+    "sig_max_quote_age_seconds": 20,
+    "pm_max_quote_age_seconds": 5,
+    "pm_innovation_lookback_seconds": 5,
+    "sig_self_history_seconds": 30,
+    "intensity_window_seconds": 30,
+    "logit_epsilon": 0.000001,
+    "minimum_training_rows_per_fold": 100,
+    "minimum_contract_oos_rows_for_inference": 10,
+    "fixed_horizon_requires_post_decision_sig_observation": true
+  },
+  "derived": {
+    "pm_depth_max_age_seconds": 90,
+    "synthetic_innovation_lookback_seconds": 60,
+    "shadow_trade_size": 1,
+    "minimum_training_rows_per_fold": 100,
+    "minimum_contract_oos_rows_for_inference": 8
+  },
+  "nulls": {
+    "time_shift_primary_statistic": "equal-contract covariance between SIG-only OOS residual and PM innovation",
+    "time_shift_draws": 1000,
+    "minimum_circular_shift_seconds": 300,
+    "delayed_pm_seconds": 30,
+    "wrong_contract_match": "same category, different PM event_id, nearest training-period midpoint/spread/update-intensity profile",
+    "timestamp_delays_ms": [
+      250,
+      1000
+    ]
+  },
+  "reverse_direction": {
+    "horizon_seconds": 30,
+    "pm_max_target_quote_age_seconds": 5,
+    "interpretation": "diagnostic only; no requirement that PM->SIG exceed SIG->PM contract-by-contract"
+  }
+}

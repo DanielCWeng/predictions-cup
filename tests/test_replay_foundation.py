@@ -29,7 +29,9 @@ from predictions_cup.replay.loaders import (
     CaptureSelection,
     load_polymarket_capture,
     load_sig_capture,
+    load_sig_scalar_capture,
     summarize_captures,
+    summarize_sig_scalar_capture,
 )
 from predictions_cup.replay.markouts import Direction, evaluate_markout
 from predictions_cup.replay.model import (
@@ -45,6 +47,7 @@ from predictions_cup.replay.model import (
 )
 from predictions_cup.replay.runner import ReplayFrame, ReplayRunner
 from predictions_cup.replay.splits import ChronologicalBoundaries
+from predictions_cup.sig.dto import PriceSnapshotDto
 from predictions_cup.sig.realtime_models import RealtimeTradeDto
 from predictions_cup.sig.realtime_storage import SigRealtimeRecorder
 
@@ -455,12 +458,8 @@ def test_chronological_split_never_shuffles_time() -> None:
         ),
     )
     assert [item.decision_at for item in split.train] == [base]
-    assert [item.decision_at for item in split.development] == [
-        base + timedelta(hours=1)
-    ]
-    assert [item.decision_at for item in split.holdout] == [
-        base + timedelta(hours=2)
-    ]
+    assert [item.decision_at for item in split.development] == [base + timedelta(hours=1)]
+    assert [item.decision_at for item in split.holdout] == [base + timedelta(hours=2)]
     assert summarize(observations).count == 3
 
 
@@ -564,6 +563,48 @@ def _write_real_capture_fixtures(tmp_path: Path) -> tuple[Path, Path, Path]:
     return sig_path, poly_path, operational_path
 
 
+def test_sig_scalar_price_observation_loads_as_trusted_bbo(tmp_path: Path) -> None:
+    at = datetime(2026, 9, 26, 12, tzinfo=UTC)
+    path = tmp_path / "sig-scalar.sqlite3"
+    recorder = SigRealtimeRecorder(path)
+    price = PriceSnapshotDto.model_validate(
+        {
+            "exchangeId": "sig-scalar",
+            "marketId": "sig-market",
+            "option": "YES",
+            "latestPrice": "0.51",
+            "bestBid": "0.50",
+            "bestAsk": "0.52",
+            "spread": "0.02",
+        }
+    )
+    recorder.record_prices(
+        tournament_id="cup",
+        prices=(price,),
+        observed_at=at,
+        reason="periodic_bulk_prices",
+    )
+    recorder.close()
+
+    events = load_sig_scalar_capture(path)
+    state = ReplayRunner(events).run(lambda frame: None)
+    view, reason = state.quote_status(
+        source=ReplaySource.SIG,
+        instrument_id="sig-scalar",
+        at=at,
+        max_age=timedelta(seconds=30),
+    )
+
+    assert reason is None
+    assert view is not None
+    assert view.best_bid == Decimal("0.50")
+    assert view.best_ask == Decimal("0.52")
+    assert view.bids == ()
+    assert view.asks == ()
+    assert view.trusted
+    assert summarize_sig_scalar_capture(path).trusted_sig_observations == 1
+
+
 def test_actual_sig_sqlite_and_polymarket_parquet_loaders_and_summary(
     tmp_path: Path,
 ) -> None:
@@ -646,9 +687,7 @@ def test_parquet_replay_deduplicates_hashed_trades_within_and_across_shards(
             polymarket_token_ids=("poly-1",),
         ),
     )
-    assert [
-        event for event in windowed if event.event_type is ReplayEventType.TRADE
-    ] == []
+    assert [event for event in windowed if event.event_type is ReplayEventType.TRADE] == []
 
 
 def test_malformed_capture_schema_fails_clearly(tmp_path: Path) -> None:

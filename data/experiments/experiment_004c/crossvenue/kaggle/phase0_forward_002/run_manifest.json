@@ -1,0 +1,15 @@
+{
+  "artifacts": {
+    "coverage_exact.csv": "fd0028f6a9c8a08588650bcfee895bb29f12dbd1530c69a2b3c32cca1b29fb46",
+    "phase0_audit.json": "df651d724df599a110c57109b66cfb5b896cd1241da5202127305e6727a98cdc"
+  },
+  "compute_environment": "Kaggle",
+  "dataset_ref": "polyleviathan/sig-cup-exp004c-c-crossvenue-forward",
+  "dataset_version": 2,
+  "kernel_ref": "polyleviathan/sig-cup-exp004c-c-cross-venue-price-discovery",
+  "kernel_version": 4,
+  "model_fit": false,
+  "namespace": "004c_c_crossvenue",
+  "schema_version": 1,
+  "status": "INCONCLUSIVE_INSUFFICIENT_FORWARD_WINDOW"
+}

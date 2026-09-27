@@ -62,9 +62,15 @@ update actually exists. There is no one-second promotion claim.
 ### Existing overlap
 
 A legacy broad PM capture exists from approximately `2026-09-26T12:41:23.636149Z` through
-`2026-09-26T14:33:51.923862Z`. SIG scalar BBO observations begin before that, so the period is a
-usable retrospective overlap. It is discovery evidence only. True forward evidence begins after
-this preregistration freeze.
+`2026-09-26T14:33:51.923862Z`. The preregistration initially identified this as a candidate
+retrospective overlap. The subsequent source audit found that the historical SIG scalar
+`price_observations` table was not present in the surviving database, while the sparse tracked-book
+history ended at `2026-09-26T10:58:43.015591Z`. No historical SIG scalar copy was recovered.
+
+Therefore the retrospective 004C-C predictive battery is **UNAVAILABLE**, not failed. It will not be
+rescued with sparse tracked books, NEAR mappings or alternate data. Forward/shadow evidence begins
+only once both full mapped PM capture and recovered SIG scalar BBO capture are simultaneously live.
+The correction is frozen in `capture_limitation_001.json`.
 
 The currently supervised PM service before this freeze is still the old 3-market / 6-token ARM64
 smoke universe and touches only two NEAR chamber-control mappings. It is not eligible EXACT
@@ -173,3 +179,23 @@ controls and a positive net crossing markout meeting the frozen economic thresho
 `EXACT INFORMATION / NOT EXECUTABLE` is used when forecasting survives but execution/capacity does
 not. DERIVED is judged separately. A failed primary is not rescued by alternate horizons, NEAR
 mappings or DERIVED results.
+
+## Forward Phase-0 checkpoint
+
+Kaggle kernel version 4 validated the full as-of EXACT join on a frozen forward snapshot ending
+`2026-09-27T22:06:24.854666Z`.
+
+Observed evidence:
+- all 140 frozen EXACT SIG contracts and all 140 mapped PM tokens were jointly observable;
+- all 140 mapped PM tokens produced initialized persisted book changes;
+- 1,463 PM-innovation decisions survived the frozen as-of, staleness, history and target requirements;
+- PM panel cadence was 5.05 s median (5.04/5.29 s p05/p95);
+- SIG scalar BBO cadence was 11.73 s median (11.21/12.20 s p05/p95);
+- SIG quote age at PM innovation was 6.00 s median (0.76/11.25 s p05/p95).
+
+No predictive model was fit. The snapshot covers 26.03 minutes versus the preregistered 75-minute
+minimum for the first 45/15/15 chronological walk-forward fold. The checkpoint is therefore
+`INCONCLUSIVE_INSUFFICIENT_FORWARD_WINDOW`, not a negative alpha result.
+
+The persisted Kaggle artifacts live under
+`data/experiments/experiment_004c/crossvenue/kaggle/phase0_forward_002/`.

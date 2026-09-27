@@ -163,6 +163,142 @@ class CaptureSummary:
         }
 
 
+_SIG_SCALAR_PRICE_SCHEMA = {
+    "price_observations": {
+        "id",
+        "exchange_id",
+        "market_id",
+        "latest_price",
+        "best_bid",
+        "best_ask",
+        "spread",
+        "rest_observed_at",
+        "reason",
+    },
+}
+
+
+def load_sig_scalar_capture(
+    path: Path,
+    *,
+    selection: CaptureSelection | None = None,
+) -> tuple[ReplayEvent, ...]:
+    """Load authoritative tournament-wide SIG REST BBO without tracked-depth semantics.
+
+    Scalar BBO observations are emitted as trusted top-of-book states with empty depth.
+    They are intentionally separate from load_sig_capture so periodic bulk-price
+    samples cannot overwrite tracked-book trust or depth in BUILD-005 replay.
+    """
+    selected = selection or CaptureSelection()
+    events: list[ReplayEvent] = []
+    with closing(_connect(path)) as db:
+        _validate_schema(db, _SIG_SCALAR_PRICE_SCHEMA, "SIG scalar")
+        where, params = _where(
+            selected,
+            "rest_observed_at",
+            "exchange_id",
+            selected.sig_exchange_ids,
+        )
+        for row in db.execute(
+            "SELECT id, exchange_id, market_id, latest_price, best_bid, best_ask, "
+            f"rest_observed_at FROM price_observations{where} "
+            "ORDER BY rest_observed_at, id",
+            params,
+        ):
+            observed = _dt(row[6], "SIG scalar rest_observed_at")
+            bid = _optional_decimal(row[4], "SIG scalar best_bid")
+            ask = _optional_decimal(row[5], "SIG scalar best_ask")
+            instrument = _text(row[1], "SIG scalar exchange_id")
+            market = _text(row[2], "SIG scalar market_id")
+            sequence = _integer(row[0], "SIG scalar price id")
+            events.append(
+                _quote_event(
+                    source=ReplaySource.SIG,
+                    event_type=ReplayEventType.BOOK_OBSERVATION,
+                    sequence=sequence,
+                    instrument=instrument,
+                    market=market,
+                    observed=observed,
+                    source_at=None,
+                    quote_observed=observed,
+                    bid=bid,
+                    ask=ask,
+                    last_trade=_optional_decimal(
+                        row[3], "SIG scalar latest_price"
+                    ),
+                    valid=bid is not None and ask is not None,
+                )
+            )
+            events.append(
+                ReplayEvent(
+                    observed_at=observed,
+                    source_at=None,
+                    source=ReplaySource.SIG,
+                    event_type=ReplayEventType.TRUST,
+                    instrument_id=instrument,
+                    market_id=market,
+                    sequence=sequence,
+                    payload=TrustPayload(
+                        trusted=True,
+                        transition="TRUSTED_SCALAR_REST",
+                    ),
+                )
+            )
+    return tuple(sorted(events, key=lambda event: event.sort_key))
+
+
+def summarize_sig_scalar_capture(
+    path: Path,
+    *,
+    selection: CaptureSelection | None = None,
+) -> CaptureSummary:
+    """Summarize the tournament-wide scalar SIG BBO capture."""
+    selected = selection or CaptureSelection()
+    with closing(_connect(path)) as db:
+        _validate_schema(db, _SIG_SCALAR_PRICE_SCHEMA, "SIG scalar")
+        where, params = _where(
+            selected,
+            "rest_observed_at",
+            "exchange_id",
+            selected.sig_exchange_ids,
+        )
+        records = _count(db, "price_observations", where, params)
+        times = _minmax(db, "price_observations", "rest_observed_at", where, params)
+        instruments = _distinct_text(
+            db,
+            "price_observations",
+            "exchange_id",
+            where,
+            params,
+            "SIG scalar exchange_id",
+        )
+        valid_where, valid_params = _where(
+            selected,
+            "rest_observed_at",
+            "exchange_id",
+            selected.sig_exchange_ids,
+            extra_clause="best_bid IS NOT NULL AND best_ask IS NOT NULL",
+        )
+        trusted = _count(db, "price_observations", valid_where, valid_params)
+        gap_where, gap_params = _where(
+            selected,
+            "rest_observed_at",
+            "exchange_id",
+            selected.sig_exchange_ids,
+            extra_clause="best_bid IS NULL OR best_ask IS NULL",
+        )
+        gaps = _count(db, "price_observations", gap_where, gap_params)
+    return CaptureSummary(
+        records_loaded=records,
+        start_at=min(times) if times else None,
+        end_at=max(times) if times else None,
+        instruments=tuple(sorted(f"sig:{value}" for value in instruments)),
+        trusted_sig_observations=trusted,
+        external_observations=0,
+        data_gaps=gaps,
+    )
+
+
 def load_sig_capture(
     path: Path,
     *,
@@ -862,422 +998,3 @@ def _summarize_sig(
         extra_clause=_UNTRUSTED_SQL,
     )
     gaps += _count(db, "trust_transitions", where, params)
-    trusted = _count_trusted_sig_books_sql(db, selection)
-    return records, gaps, trusted, instruments, times
-
-
-def _summarize_polymarket(
-    db: sqlite3.Connection,
-    selection: CaptureSelection,
-) -> tuple[int, int, int, set[str], list[datetime]]:
-    records = 0
-    external_observations = 0
-    gaps = 0
-    times: list[datetime] = []
-    instruments: set[str] = set()
-
-    token_tables = (
-        ("polymarket_book_observations", "observed_at", True),
-        ("polymarket_book_changes", "observed_at", True),
-        ("polymarket_book_snapshots", "observed_at", True),
-        ("polymarket_trades", "observed_at", False),
-    )
-    for table, time_column, is_quote in token_tables:
-        where, params = _where(
-            selection,
-            time_column,
-            "token_id",
-            selection.polymarket_token_ids,
-        )
-        count = _count(db, table, where, params)
-        records += count
-        if is_quote:
-            external_observations += count
-        times.extend(_minmax(db, table, time_column, where, params))
-        instruments.update(
-            _distinct_text(db, table, "token_id", where, params, "Polymarket token_id")
-        )
-
-    where, params = _where(selection, "recorded_at")
-    health_count = _count(db, "ingestion_health", where, params)
-    records += health_count
-    times.extend(_minmax(db, "ingestion_health", "recorded_at", where, params))
-
-    where, params = _where(
-        selection,
-        "observed_at",
-        "token_id",
-        selection.polymarket_token_ids,
-        extra_clause="book_valid = 0",
-    )
-    gaps += _count(db, "polymarket_book_observations", where, params)
-    gaps += _count_disconnected_health(db, selection)
-    return records, external_observations, gaps, instruments, times
-
-
-def _count_trusted_sig_books_sql(
-    db: sqlite3.Connection,
-    selection: CaptureSelection,
-) -> int:
-    book_where, params = _where(
-        selection,
-        "b.rest_observed_at",
-        "b.exchange_id",
-        selection.sig_exchange_ids,
-    )
-    trust_floor = ""
-    trust_params: list[object] = []
-    if selection.start_at is not None:
-        trust_floor = " AND t.observed_at >= ?"
-        trust_params.append(selection.start_at.isoformat())
-    sql = (
-        "SELECT COUNT(*) FROM book_observations b"
-        f"{book_where}"
-        + (" AND " if book_where else " WHERE ")
-        + "(SELECT t.transition FROM trust_transitions t "
-        "WHERE t.observed_at <= b.rest_observed_at "
-        "AND (t.exchange_id IS NULL OR t.exchange_id = b.exchange_id) "
-        f"AND {_RECOGNIZED_TRUST_SQL}"
-        f"{trust_floor} "
-        "ORDER BY t.observed_at DESC, "
-        "CASE WHEN t.exchange_id IS NULL THEN 0 ELSE 1 END DESC, "
-        "t.id DESC LIMIT 1) LIKE 'TRUSTED%'"
-    )
-    row = db.execute(sql, (*params, *trust_params)).fetchone()
-    return _integer(row[0], "trusted SIG observation count") if row is not None else 0
-
-
-def _count_disconnected_health(
-    db: sqlite3.Connection,
-    selection: CaptureSelection,
-) -> int:
-    where, params = _where(selection, "recorded_at")
-    count = 0
-    for row in db.execute(
-        f"SELECT payload_json FROM ingestion_health{where}",
-        params,
-    ):
-        payload = _json_object(row[0], "Polymarket health payload_json")
-        connected = payload.get("websocket_connected")
-        if not isinstance(connected, bool):
-            raise CaptureSchemaError(
-                "Polymarket health payload websocket_connected must be boolean"
-            )
-        count += int(not connected)
-    return count
-
-
-def _where(
-    selection: CaptureSelection,
-    time_column: str,
-    instrument_column: str | None = None,
-    instrument_ids: tuple[str, ...] | None = None,
-    *,
-    include_null_instrument: bool = False,
-    extra_clause: str | None = None,
-) -> tuple[str, tuple[object, ...]]:
-    clauses: list[str] = []
-    params: list[object] = []
-    if selection.start_at is not None:
-        clauses.append(f"{time_column} >= ?")
-        params.append(selection.start_at.isoformat())
-    if selection.end_at is not None:
-        clauses.append(f"{time_column} < ?")
-        params.append(selection.end_at.isoformat())
-    if instrument_column is not None and instrument_ids is not None:
-        if instrument_ids:
-            placeholders = ", ".join("?" for _ in instrument_ids)
-            instrument_clause = f"{instrument_column} IN ({placeholders})"
-            params.extend(instrument_ids)
-            if include_null_instrument:
-                instrument_clause = (
-                    f"({instrument_column} IS NULL OR {instrument_clause})"
-                )
-            clauses.append(instrument_clause)
-        elif include_null_instrument:
-            clauses.append(f"{instrument_column} IS NULL")
-        else:
-            clauses.append("0")
-    if extra_clause is not None:
-        clauses.append(extra_clause)
-    if not clauses:
-        return "", ()
-    return " WHERE " + " AND ".join(clauses), tuple(params)
-
-
-def _count(
-    db: sqlite3.Connection,
-    table: str,
-    where: str,
-    params: tuple[object, ...],
-) -> int:
-    row = db.execute(f"SELECT COUNT(*) FROM {table}{where}", params).fetchone()
-    return _integer(row[0], f"{table} count") if row is not None else 0
-
-
-def _minmax(
-    db: sqlite3.Connection,
-    table: str,
-    time_column: str,
-    where: str,
-    params: tuple[object, ...],
-) -> list[datetime]:
-    row = db.execute(
-        f"SELECT MIN({time_column}), MAX({time_column}) FROM {table}{where}",
-        params,
-    ).fetchone()
-    if row is None:
-        return []
-    result: list[datetime] = []
-    if row[0] is not None:
-        result.append(_dt(row[0], f"{table} min time"))
-    if row[1] is not None:
-        result.append(_dt(row[1], f"{table} max time"))
-    return result
-
-
-def _distinct_text(
-    db: sqlite3.Connection,
-    table: str,
-    column: str,
-    where: str,
-    params: tuple[object, ...],
-    label: str,
-) -> set[str]:
-    return {
-        _text(row[0], label)
-        for row in db.execute(f"SELECT DISTINCT {column} FROM {table}{where}", params)
-    }
-
-
-def _quote_event(
-    *,
-    source: ReplaySource,
-    event_type: ReplayEventType,
-    sequence: int,
-    instrument: str,
-    market: str,
-    observed: datetime,
-    source_at: datetime | None,
-    quote_observed: datetime,
-    bid: Decimal | None,
-    ask: Decimal | None,
-    bids: tuple[BookLevel, ...] = (),
-    asks: tuple[BookLevel, ...] = (),
-    last_trade: Decimal | None = None,
-    valid: bool = True,
-) -> ReplayEvent:
-    return ReplayEvent(
-        observed_at=observed,
-        source_at=source_at,
-        source=source,
-        event_type=event_type,
-        instrument_id=instrument,
-        market_id=market,
-        sequence=sequence,
-        payload=QuotePayload(
-            best_bid=bid,
-            best_ask=ask,
-            quote_observed_at=quote_observed,
-            bids=bids,
-            asks=asks,
-            last_trade=last_trade,
-            book_valid=valid,
-        ),
-    )
-
-
-def _connect(path: Path) -> sqlite3.Connection:
-    if not path.is_file():
-        raise CaptureSchemaError(f"capture database does not exist: {path}")
-    return sqlite3.connect(f"file:{path.resolve()}?mode=ro", uri=True)
-
-
-def _validate_schema(
-    db: sqlite3.Connection,
-    required: dict[str, set[str]],
-    label: str,
-) -> None:
-    tables = {
-        str(row[0])
-        for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
-    }
-    missing_tables = sorted(set(required) - tables)
-    if missing_tables:
-        raise CaptureSchemaError(
-            f"{label} capture is missing required tables: {', '.join(missing_tables)}"
-        )
-    for table, columns in required.items():
-        actual = {str(row[1]) for row in db.execute(f"PRAGMA table_info({table})")}
-        missing = sorted(columns - actual)
-        if missing:
-            raise CaptureSchemaError(
-                f"{label} table {table} is missing columns: {', '.join(missing)}"
-            )
-
-
-def _transition_trust(transition: str) -> bool | None:
-    if transition.startswith("TRUSTED"):
-        return True
-    if transition.startswith("UNTRUSTED") or transition == "RECONCILING":
-        return False
-    return None
-
-
-def _sig_levels(value: object, label: str) -> tuple[BookLevel, ...]:
-    if not isinstance(value, list):
-        raise CaptureSchemaError(f"SIG {label} must be a JSON list")
-    levels: list[BookLevel] = []
-    for raw in value:
-        if not isinstance(raw, dict):
-            raise CaptureSchemaError(f"SIG {label} level must be an object")
-        levels.append(
-            BookLevel(
-                _decimal(raw.get("price"), f"SIG {label} price"),
-                _decimal(raw.get("quantity"), f"SIG {label} quantity"),
-            )
-        )
-    return tuple(levels)
-
-
-def _poly_struct_levels(value: object, label: str) -> tuple[BookLevel, ...]:
-    if not isinstance(value, list):
-        raise CaptureSchemaError(f"{label} must be a list")
-    levels: list[BookLevel] = []
-    for raw in value:
-        if not isinstance(raw, dict):
-            raise CaptureSchemaError(f"{label} level must be an object")
-        levels.append(
-            BookLevel(
-                _decimal(raw.get("price"), f"{label} price"),
-                _decimal(raw.get("size"), f"{label} quantity"),
-            )
-        )
-    return tuple(levels)
-
-
-def _poly_levels(value: object, label: str) -> tuple[BookLevel, ...]:
-    raw_levels = _json_array(value, label)
-    levels: list[BookLevel] = []
-    for raw in raw_levels:
-        if not isinstance(raw, list) or len(raw) != 2:
-            raise CaptureSchemaError(f"{label} level must be [price, quantity]")
-        levels.append(
-            BookLevel(
-                _decimal(raw[0], f"{label} price"),
-                _decimal(raw[1], f"{label} quantity"),
-            )
-        )
-    return tuple(levels)
-
-
-def _json_object(value: object, label: str) -> dict[str, Any]:
-    parsed = _json(value, label)
-    if not isinstance(parsed, dict) or not all(isinstance(key, str) for key in parsed):
-        raise CaptureSchemaError(f"{label} must contain a JSON object with string keys")
-    return {str(key): item for key, item in parsed.items()}
-
-
-def _json_array(value: object, label: str) -> list[object]:
-    parsed = _json(value, label)
-    if not isinstance(parsed, list):
-        raise CaptureSchemaError(f"{label} must contain a JSON array")
-    return list(parsed)
-
-
-def _json(value: object, label: str) -> Any:
-    if not isinstance(value, str):
-        raise CaptureSchemaError(f"{label} must be text")
-    try:
-        return json.loads(value)
-    except json.JSONDecodeError as exc:
-        raise CaptureSchemaError(f"{label} is not valid JSON") from exc
-
-
-def _dt(value: object, label: str) -> datetime:
-    if isinstance(value, datetime):
-        parsed = value
-    elif isinstance(value, str):
-        try:
-            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError as exc:
-            raise CaptureSchemaError(f"{label} is not valid ISO-8601") from exc
-    else:
-        raise CaptureSchemaError(f"{label} must be an ISO-8601 string or datetime")
-    try:
-        parsed.utcoffset()
-    except (OverflowError, ValueError) as exc:
-        raise CaptureSchemaError(f"{label} has invalid timezone data") from exc
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise CaptureSchemaError(f"{label} must be timezone-aware")
-    return parsed.astimezone(UTC)
-
-
-def _optional_dt(value: object, label: str) -> datetime | None:
-    return None if value is None else _dt(value, label)
-
-
-def _decimal(value: object, label: str) -> Decimal:
-    if isinstance(value, float):
-        raise CaptureSchemaError(f"{label} must not be a binary float")
-    if value is None:
-        raise CaptureSchemaError(f"{label} must not be null")
-    try:
-        parsed = Decimal(str(value))
-    except (InvalidOperation, ValueError) as exc:
-        raise CaptureSchemaError(f"{label} is not a decimal") from exc
-    if not parsed.is_finite():
-        raise CaptureSchemaError(f"{label} must be finite")
-    return parsed
-
-
-def _optional_decimal(value: object, label: str) -> Decimal | None:
-    return None if value is None else _decimal(value, label)
-
-
-def _text(value: object, label: str) -> str:
-    if not isinstance(value, str) or not value:
-        raise CaptureSchemaError(f"{label} must be non-blank text")
-    return value
-
-
-def _integer(value: object, label: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise CaptureSchemaError(f"{label} must be an integer")
-    return value
-
-
-def _bool_value(value: object, label: str) -> bool:
-    if not isinstance(value, bool):
-        raise CaptureSchemaError(f"{label} must be boolean")
-    return value
-
-
-def _book_valid(value: object) -> bool:
-    integer = _integer(value, "Polymarket book_valid")
-    if integer not in {0, 1}:
-        raise CaptureSchemaError("Polymarket book_valid must be 0 or 1")
-    return bool(integer)
-
-
-def _normalize_bound(value: datetime | None, label: str) -> datetime | None:
-    if value is None:
-        return None
-    if value.tzinfo is None or value.utcoffset() is None:
-        raise ValueError(f"{label} must be timezone-aware")
-    return value.astimezone(UTC)
-
-
-def _normalize_ids(
-    values: tuple[str, ...] | None,
-    label: str,
-) -> tuple[str, ...] | None:
-    if values is None:
-        return None
-    if any(not value.strip() for value in values):
-        raise ValueError(f"{label} must not contain blank identifiers")
-    return tuple(sorted(set(values)))
-
-
-def _ordered(events: list[ReplayEvent]) -> tuple[ReplayEvent, ...]:
-    return tuple(sorted(events, key=lambda event: event.sort_key))
