@@ -1,0 +1,62 @@
+{
+  "challenge_prior_exposure": {
+    "challenge_events": [
+      {
+        "event": "colombia_first_round",
+        "event_family": "COL_2026",
+        "label": "004B_SEALED_PRIOR_EXPERIMENT_EXPOSED",
+        "reason": "sealed from EXPERIMENT-004B but previously touched by EXPERIMENT-003"
+      },
+      {
+        "event": "peru_runoff",
+        "event_family": "PER_2026",
+        "label": "004B_SEALED_PRIOR_EXPERIMENT_EXPOSED",
+        "reason": "sealed from EXPERIMENT-004B but previously touched by EXPERIMENT-003"
+      },
+      {
+        "event": "colombia_runoff",
+        "event_family": "COL_2026",
+        "label": "004B_SEALED_PRIOR_EXPERIMENT_EXPOSED",
+        "reason": "sealed from EXPERIMENT-004B but previously touched by EXPERIMENT-003"
+      }
+    ],
+    "experiment_id": "EXPERIMENT-004C-A",
+    "globally_pristine_holdout_claim": false,
+    "status": "FROZEN_BEFORE_CHALLENGE_EMPIRICAL_ACCESS"
+  },
+  "data001_manifest_sha256": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+  "disposition": "INCONCLUSIVE",
+  "disposition_reason": [
+    "PRE_ELECTION: no frozen challenge coverage spanning both COL_2026 and PER_2026",
+    "ACTIVE_RESULTS: no frozen challenge coverage spanning both COL_2026 and PER_2026"
+  ],
+  "experiment_id": "EXPERIMENT-004C-A",
+  "harness_run_ids": {
+    "A1": "9e59050a856526c3367f9c000cecb56cee2ea60d062d20b607cfc5a2f2b03811",
+    "A2": "49e9f5d4c31e64360354432d44b5dbdc381155140e59772fa83627809dc39256",
+    "A3": "f82a97a40b3808150c33b77fcc77343c8de506d92d8eb04e4400cc88a5562f21"
+  },
+  "implementation_commit": "5fb423fa2cc811d2ba58c236254ebe4c54fb5df8",
+  "limitations": [
+    "challenge events were sealed from 004B but were previously exposed to EXPERIMENT-003",
+    "only metadata-frozen indirect semantic pairs are tested; no 004B edge effect was used for selection",
+    "PRE and ACTIVE are fit/evaluated separately",
+    "A2 conditions on a future target update and is diagnostic only",
+    "full-depth features can be missing and snapshot activity can reflect archive cadence",
+    "event/family counts are small; row count is not treated as independent election evidence",
+    "no execution/P&L/order-placement inference is made"
+  ],
+  "mean_discovery_source_coefficient_collapse_fraction": 0.22721347199314773,
+  "passing_regimes": [],
+  "terminal_freeze_commit": "4aafab4bd77d58fd82a510fa2b95842689f49ba2",
+  "verification": {
+    "files_by_event": {
+      "colombia_first_round": 23,
+      "colombia_runoff": 21,
+      "peru_first_round": 17,
+      "peru_runoff": 20
+    },
+    "files_checked": 81,
+    "manifest_rows_checked": 120598050
+  }
+}
