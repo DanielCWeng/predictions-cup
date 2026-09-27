@@ -237,5 +237,26 @@
     "minimum_row_retention_fraction": 0.8,
     "minimum_rows_per_event": 30,
     "baseline_rule": "baseline predictions are recomputed on exactly the same retained rows as each source null/control; baseline features themselves are unchanged"
+  },
+  "data_sufficiency": {
+    "training_min_rows_A3": 200,
+    "training_min_rows_A1": 200,
+    "training_min_rows_A2": 100,
+    "training_min_directed_edges": 2,
+    "hazard_min_positive": 20,
+    "hazard_min_negative": 20,
+    "per_edge_evaluation_min_rows": 30,
+    "event_replication_min_valid_directed_edges": 2,
+    "rule": "insufficient cells are reported as INCONCLUSIVE and are not pooled to manufacture evidence"
+  },
+  "parameter_stability": {
+    "champion_penalty": 1,
+    "diagnostic_penalties": [
+      0.5,
+      1,
+      2
+    ],
+    "tolerance_relative_to_best": 0.1,
+    "selection_rule": "champion remains 1.0 regardless of diagnostic; stability grid is evaluated on discovery OOS only and never selects challenge parameters"
   }
 }
