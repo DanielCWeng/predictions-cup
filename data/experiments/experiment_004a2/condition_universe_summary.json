@@ -9,9 +9,13 @@
     "NEITHER": 1092,
     "PRE_ELECTION_ONLY": 3
   },
-  "condition_universe_sha256": "1f449f394b9a81743632b1f699188e5649769c48af7939f9a52db631712e37cb",
+  "condition_universe_sha256": "f3a8aa611944f16514e1668f9023361c8eab90c336dcf330648d4f502153a892",
   "condition_universe_version": "004A2-condition-universe-v1",
   "conditions_total": 1300,
+  "election_day_pre_results_eligibility_status_counts": {
+    "CANONICAL_YES_FAILED_CLOSED": 113,
+    "ELIGIBILITY_NOT_ASSESSED": 1187
+  },
   "event_families": [
     "COL_2026",
     "PER_2026",

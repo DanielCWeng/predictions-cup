@@ -93,7 +93,8 @@ class ConditionEligibility:
     canonical_outcome: str | None
     counterpart_token_id: str | None
     pre_election_usable: bool
-    election_day_pre_results_usable: bool
+    election_day_pre_results_usable: bool | None
+    election_day_pre_results_eligibility_status: str
     active_results_usable: bool
     late_count_usable: bool
     canonical_token_classification: str | None
@@ -114,8 +115,11 @@ class ConditionEligibility:
             "canonical_outcome": self.canonical_outcome or "",
             "counterpart_token_id": self.counterpart_token_id or "",
             "pre_election_usable": _bool_text(self.pre_election_usable),
-            "election_day_pre_results_usable": _bool_text(
+            "election_day_pre_results_usable": _optional_bool_text(
                 self.election_day_pre_results_usable
+            ),
+            "election_day_pre_results_eligibility_status": (
+                self.election_day_pre_results_eligibility_status
             ),
             "active_results_usable": _bool_text(self.active_results_usable),
             "late_count_usable": _bool_text(self.late_count_usable),
@@ -147,6 +151,8 @@ class ValidationFold:
     data_eligibility_status: str
     eligible_train_conditions: int
     eligible_holdout_conditions: int
+    unassessed_train_conditions: int
+    unassessed_holdout_conditions: int
     status: str
     reason: str
 
@@ -172,6 +178,8 @@ class ValidationFold:
             "data_eligibility_status": self.data_eligibility_status,
             "eligible_train_conditions": str(self.eligible_train_conditions),
             "eligible_holdout_conditions": str(self.eligible_holdout_conditions),
+            "unassessed_train_conditions": str(self.unassessed_train_conditions),
+            "unassessed_holdout_conditions": str(self.unassessed_holdout_conditions),
             "status": self.status,
             "reason": self.reason,
         }
@@ -234,6 +242,10 @@ def canonical_yes_index(outcomes: Sequence[str]) -> int | None:
 
 def _bool_text(value: bool) -> str:
     return "true" if value else "false"
+
+
+def _optional_bool_text(value: bool | None) -> str:
+    return "" if value is None else _bool_text(value)
 
 
 def _parse_bool(value: str) -> bool:
@@ -379,7 +391,10 @@ def project_condition_universe(
                     canonical_outcome=None,
                     counterpart_token_id=None,
                     pre_election_usable=False,
-                    election_day_pre_results_usable=False,
+                    election_day_pre_results_usable=None,
+                    election_day_pre_results_eligibility_status=(
+                        "CANONICAL_YES_FAILED_CLOSED"
+                    ),
                     active_results_usable=False,
                     late_count_usable=False,
                     canonical_token_classification=None,
@@ -415,9 +430,10 @@ def project_condition_universe(
                 canonical_outcome=canonical_identity["outcome"],
                 counterpart_token_id=counterpart["token_id"],
                 pre_election_usable=usable_by_window[(coverage_id, "PRE_ELECTION")],
-                election_day_pre_results_usable=usable_by_window[
-                    (coverage_id, "ELECTION_DAY_PRE_RESULTS")
-                ],
+                election_day_pre_results_usable=None,
+                election_day_pre_results_eligibility_status=(
+                    "ELIGIBILITY_NOT_ASSESSED"
+                ),
                 active_results_usable=usable_by_window[(coverage_id, "ACTIVE_RESULTS")],
                 late_count_usable=usable_by_window[(coverage_id, "LATE_COUNT")],
                 canonical_token_classification=canonical["classification"],
@@ -635,38 +651,50 @@ def _windows_by_claim(
     return grouped
 
 
-def _condition_usable_for_claim(
+def _condition_eligibility_for_claim(
     row: ConditionEligibility, claim_regime: ClaimRegime
-) -> bool:
+) -> str:
     if row.canonical_outcome != "Yes":
-        return False
+        return "INELIGIBLE"
     if claim_regime is ClaimRegime.PRE_ELECTION:
-        return row.pre_election_usable
+        return "ELIGIBLE" if row.pre_election_usable else "INELIGIBLE"
     if claim_regime is ClaimRegime.ELECTION_DAY_PRE_RESULTS:
-        return row.election_day_pre_results_usable
+        if row.election_day_pre_results_eligibility_status != "ELIGIBILITY_NOT_ASSESSED":
+            raise ValueError(
+                "canonical election-day conditions must be explicitly unassessed"
+            )
+        return "ELIGIBILITY_NOT_ASSESSED"
     if claim_regime is ClaimRegime.ACTIVE_RESULTS:
-        return row.active_results_usable
+        return "ELIGIBLE" if row.active_results_usable else "INELIGIBLE"
     if claim_regime is ClaimRegime.LATE_COUNT_DIAGNOSTIC:
-        return row.late_count_usable
+        return "ELIGIBLE" if row.late_count_usable else "INELIGIBLE"
     raise AssertionError(f"unhandled claim regime: {claim_regime}")
 
 
-def _eligible_condition_count(
+def _condition_eligibility_counts(
     conditions: Sequence[ConditionEligibility],
     *,
     event_ids: Iterable[str],
     claim_regime: ClaimRegime,
-) -> int:
+) -> tuple[int, int]:
     events = set(event_ids)
-    return sum(
-        row.regime_id in events and _condition_usable_for_claim(row, claim_regime)
+    states = [
+        _condition_eligibility_for_claim(row, claim_regime)
         for row in conditions
-    )
+        if row.regime_id in events
+    ]
+    return (states.count("ELIGIBLE"), states.count("ELIGIBILITY_NOT_ASSESSED"))
 
 
 def _data_eligibility_status(
-    *, eligible_train_conditions: int, eligible_holdout_conditions: int
+    *,
+    eligible_train_conditions: int,
+    eligible_holdout_conditions: int,
+    unassessed_train_conditions: int,
+    unassessed_holdout_conditions: int,
 ) -> str:
+    if unassessed_train_conditions or unassessed_holdout_conditions:
+        return "ELIGIBILITY_NOT_ASSESSED"
     reasons: list[str] = []
     if eligible_train_conditions == 0:
         reasons.append("NO_ELIGIBLE_TRAIN_CONDITIONS")
@@ -710,12 +738,14 @@ def build_fold_inventory(
         by_regime = {window.regime_id: window for window in claim_windows}
 
         for window in claim_windows:
-            eligible = _eligible_condition_count(
+            eligible, unassessed = _condition_eligibility_counts(
                 conditions, event_ids=(window.regime_id,), claim_regime=claim
             )
             data_status = _data_eligibility_status(
                 eligible_train_conditions=eligible,
                 eligible_holdout_conditions=eligible,
+                unassessed_train_conditions=unassessed,
+                unassessed_holdout_conditions=unassessed,
             )
             chronology_status = "CHRONOLOGY_OK"
             output.append(
@@ -738,6 +768,8 @@ def build_fold_inventory(
                     data_eligibility_status=data_status,
                     eligible_train_conditions=eligible,
                     eligible_holdout_conditions=eligible,
+                    unassessed_train_conditions=unassessed,
+                    unassessed_holdout_conditions=unassessed,
                     status=_fold_status(
                         chronology_status=chronology_status,
                         data_eligibility_status=data_status,
@@ -767,15 +799,17 @@ def build_fold_inventory(
                 "CHRONOLOGY_OK" if prior else "INSUFFICIENT_PRIOR_EVENTS"
             )
             train_events = tuple(item.regime_id for item in prior)
-            eligible_train = _eligible_condition_count(
+            eligible_train, unassessed_train = _condition_eligibility_counts(
                 conditions, event_ids=train_events, claim_regime=claim
             )
-            eligible_holdout = _eligible_condition_count(
+            eligible_holdout, unassessed_holdout = _condition_eligibility_counts(
                 conditions, event_ids=(holdout.regime_id,), claim_regime=claim
             )
             data_status = _data_eligibility_status(
                 eligible_train_conditions=eligible_train,
                 eligible_holdout_conditions=eligible_holdout,
+                unassessed_train_conditions=unassessed_train,
+                unassessed_holdout_conditions=unassessed_holdout,
             )
             base_reason = (
                 "Only observations strictly before the held-out window start may train; "
@@ -803,6 +837,8 @@ def build_fold_inventory(
                     data_eligibility_status=data_status,
                     eligible_train_conditions=eligible_train,
                     eligible_holdout_conditions=eligible_holdout,
+                    unassessed_train_conditions=unassessed_train,
+                    unassessed_holdout_conditions=unassessed_holdout,
                     status=_fold_status(
                         chronology_status=chronology_status,
                         data_eligibility_status=data_status,
@@ -835,15 +871,17 @@ def build_fold_inventory(
             )
             train_events = tuple(item.regime_id for item in prior)
             holdout_events = tuple(item.regime_id for item in family_windows)
-            eligible_train = _eligible_condition_count(
+            eligible_train, unassessed_train = _condition_eligibility_counts(
                 conditions, event_ids=train_events, claim_regime=claim
             )
-            eligible_holdout = _eligible_condition_count(
+            eligible_holdout, unassessed_holdout = _condition_eligibility_counts(
                 conditions, event_ids=holdout_events, claim_regime=claim
             )
             data_status = _data_eligibility_status(
                 eligible_train_conditions=eligible_train,
                 eligible_holdout_conditions=eligible_holdout,
+                unassessed_train_conditions=unassessed_train,
+                unassessed_holdout_conditions=unassessed_holdout,
             )
             base_reason = (
                 f"{len(prior_families)} prior independent family/families; "
@@ -871,6 +909,8 @@ def build_fold_inventory(
                     data_eligibility_status=data_status,
                     eligible_train_conditions=eligible_train,
                     eligible_holdout_conditions=eligible_holdout,
+                    unassessed_train_conditions=unassessed_train,
+                    unassessed_holdout_conditions=unassessed_holdout,
                     status=_fold_status(
                         chronology_status=chronology_status,
                         data_eligibility_status=data_status,
@@ -889,15 +929,17 @@ def build_fold_inventory(
                 if first.start < later.start
                 else "INFEASIBLE_CHRONOLOGY"
             )
-            eligible_train = _eligible_condition_count(
+            eligible_train, unassessed_train = _condition_eligibility_counts(
                 conditions, event_ids=(first_round,), claim_regime=claim
             )
-            eligible_holdout = _eligible_condition_count(
+            eligible_holdout, unassessed_holdout = _condition_eligibility_counts(
                 conditions, event_ids=(runoff,), claim_regime=claim
             )
             data_status = _data_eligibility_status(
                 eligible_train_conditions=eligible_train,
                 eligible_holdout_conditions=eligible_holdout,
+                unassessed_train_conditions=unassessed_train,
+                unassessed_holdout_conditions=unassessed_holdout,
             )
             output.append(
                 ValidationFold(
@@ -919,6 +961,8 @@ def build_fold_inventory(
                     data_eligibility_status=data_status,
                     eligible_train_conditions=eligible_train,
                     eligible_holdout_conditions=eligible_holdout,
+                    unassessed_train_conditions=unassessed_train,
+                    unassessed_holdout_conditions=unassessed_holdout,
                     status=_fold_status(
                         chronology_status=chronology_status,
                         data_eligibility_status=data_status,
@@ -936,15 +980,17 @@ def build_fold_inventory(
             training = [item for item in claim_windows if item.event_family != family]
             train_events = tuple(item.regime_id for item in training)
             holdout_events = tuple(item.regime_id for item in held)
-            eligible_train = _eligible_condition_count(
+            eligible_train, unassessed_train = _condition_eligibility_counts(
                 conditions, event_ids=train_events, claim_regime=claim
             )
-            eligible_holdout = _eligible_condition_count(
+            eligible_holdout, unassessed_holdout = _condition_eligibility_counts(
                 conditions, event_ids=holdout_events, claim_regime=claim
             )
             data_status = _data_eligibility_status(
                 eligible_train_conditions=eligible_train,
                 eligible_holdout_conditions=eligible_holdout,
+                unassessed_train_conditions=unassessed_train,
+                unassessed_holdout_conditions=unassessed_holdout,
             )
             output.append(
                 ValidationFold(
@@ -968,6 +1014,8 @@ def build_fold_inventory(
                     data_eligibility_status=data_status,
                     eligible_train_conditions=eligible_train,
                     eligible_holdout_conditions=eligible_holdout,
+                    unassessed_train_conditions=unassessed_train,
+                    unassessed_holdout_conditions=unassessed_holdout,
                     status="DIAGNOSTIC_ONLY",
                     reason=_reason_with_data(
                         "NON_TEMPORAL_RETROSPECTIVE_DIAGNOSTIC", data_status
@@ -1025,9 +1073,16 @@ def make_validation_protocol(
             "source": "frozen canonical ConditionEligibility universe",
             "feasible_requires_nonempty_train": True,
             "feasible_requires_nonempty_holdout": True,
+            "election_day_pre_results": {
+                "status": "ELIGIBILITY_NOT_ASSESSED",
+                "upstream_004a_usable_consumed": False,
+                "upstream_004a_reason": "NOT_A_PREDICTIVE_REGIME",
+                "interpret_as_empirical_absence": False,
+            },
             "reason_codes": [
                 "NO_ELIGIBLE_TRAIN_CONDITIONS",
                 "NO_ELIGIBLE_HOLDOUT_CONDITIONS",
+                "ELIGIBILITY_NOT_ASSESSED",
             ],
             "chronology_status_preserved_separately": True,
         },

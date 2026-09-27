@@ -37,6 +37,7 @@ CONDITION_FIELDS = (
     "counterpart_token_id",
     "pre_election_usable",
     "election_day_pre_results_usable",
+    "election_day_pre_results_eligibility_status",
     "active_results_usable",
     "late_count_usable",
     "canonical_token_classification",
@@ -65,6 +66,8 @@ FOLD_FIELDS = (
     "data_eligibility_status",
     "eligible_train_conditions",
     "eligible_holdout_conditions",
+    "unassessed_train_conditions",
+    "unassessed_holdout_conditions",
     "status",
     "reason",
 )
@@ -142,6 +145,14 @@ def main() -> None:
         ],
         "classification_counts": dict(sorted(classification_counts.items())),
         "failed_closed_reason_counts": dict(sorted(failed_reasons.items())),
+        "election_day_pre_results_eligibility_status_counts": dict(
+            sorted(
+                Counter(
+                    row.election_day_pre_results_eligibility_status
+                    for row in conditions
+                ).items()
+            )
+        ),
         "event_families": ["COL_2026", "PER_2026", "HUN_2026"],
         "alpha_searched": False,
     }
@@ -189,6 +200,11 @@ def main() -> None:
             "ACTIVE_RESULTS",
             "LATE_COUNT_DIAGNOSTIC",
         ],
+        "claim_lane_eligibility": {
+            "ELECTION_DAY_PRE_RESULTS": "ELIGIBILITY_NOT_ASSESSED",
+            "upstream_004a_usable_consumed": False,
+            "upstream_004a_false_semantics": "NOT_A_PREDICTIVE_REGIME",
+        },
         "folds_total": len(folds),
         "fold_counts_by_method": dict(sorted(method_counts.items())),
         "feasible_fold_counts_by_method": dict(sorted(feasible_by_method.items())),
@@ -222,8 +238,12 @@ def main() -> None:
             "Within-window tick count does not increase the independent election-family count.",
             "Retrospective leave-family-out diagnostics are not prospective OOS evidence.",
             (
-                "Fold FEASIBLE status requires non-empty eligible training and holdout "
-                "condition universes in addition to chronology."
+                "Fold FEASIBLE status requires non-empty assessed eligible training and "
+                "holdout condition universes in addition to chronology."
+            ),
+            (
+                "ELECTION_DAY_PRE_RESULTS eligibility was not assessed by accepted 004A; "
+                "the upstream NOT_A_PREDICTIVE_REGIME false sentinel is not empirical absence."
             ),
         ],
     }

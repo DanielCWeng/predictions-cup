@@ -498,7 +498,7 @@ def test_inventory_feasibility_requires_nonempty_frozen_condition_universe(
     assert all(fold.data_eligibility_status != "DATA_ELIGIBLE" for fold in newly_data_ineligible)
 
 
-def test_election_day_lane_has_zero_eligible_canonical_conditions(
+def test_election_day_lane_is_not_assessed_not_empirically_empty(
     frozen_package: Frozen004APackage,
     conditions: tuple[ConditionEligibility, ...],
 ) -> None:
@@ -508,12 +508,46 @@ def test_election_day_lane_has_zero_eligible_canonical_conditions(
     ]
     assert len(election_day) == 18
     assert not any(fold.status == "FEASIBLE" for fold in election_day)
-    assert all(fold.eligible_holdout_conditions == 0 for fold in election_day)
-    assert sum(
-        fold.chronology_status == "CHRONOLOGY_OK"
-        and fold.status == "NO_ELIGIBLE_TRAIN_OR_HOLDOUT_CONDITIONS"
-        for fold in election_day
-    ) == 13
+    chronology_valid = [
+        fold for fold in election_day if fold.chronology_status == "CHRONOLOGY_OK"
+    ]
+    assert len(chronology_valid) == 13
+    assert all(fold.status == "ELIGIBILITY_NOT_ASSESSED" for fold in chronology_valid)
+    assert all(
+        fold.data_eligibility_status == "ELIGIBILITY_NOT_ASSESSED"
+        for fold in chronology_valid
+    )
+    assert all(fold.unassessed_holdout_conditions > 0 for fold in chronology_valid)
+    assert not any(
+        fold.status.startswith("NO_ELIGIBLE_") for fold in chronology_valid
+    )
+
+
+def test_upstream_election_day_policy_false_is_not_empirical_absence(
+    conditions: tuple[ConditionEligibility, ...],
+) -> None:
+    import csv
+
+    with (PACKAGE / "event_window_coverage.csv").open(
+        newline="", encoding="utf-8"
+    ) as handle:
+        rows = list(csv.DictReader(handle))
+    policy_rows = [
+        row for row in rows if row["regime"] == "ELECTION_DAY_PRE_RESULTS"
+    ]
+    assert policy_rows
+    assert all(row["usable"] == "false" for row in policy_rows)
+    assert any(int(row["bbo_count"]) > 0 for row in policy_rows)
+    assert any(int(row["snapshot_count"]) > 0 for row in policy_rows)
+
+    canonical = [row for row in conditions if row.canonical_outcome == "Yes"]
+    assert canonical
+    assert all(row.election_day_pre_results_usable is None for row in canonical)
+    assert all(
+        row.election_day_pre_results_eligibility_status
+        == "ELIGIBILITY_NOT_ASSESSED"
+        for row in canonical
+    )
 
 
 def test_hungary_late_count_and_peru_r1_forward_training_fail_closed(

@@ -43,8 +43,10 @@ silently normalized. They remain in the matrix with `FAILED_CLOSED` and a determ
 code. This is a source-label limitation, not permission to select the better-covered side.
 
 The 25 accepted token-pair usability disagreements are explicitly retained. A disagreement never
-promotes a condition: condition usability/classification is derived only from the canonical
-exact-`Yes` token.
+promotes a condition: assessed condition usability/classification is derived only from the canonical
+exact-`Yes` token. `ELECTION_DAY_PRE_RESULTS` is the exception in status, not canonicalization:
+accepted 004A did not assess predictive usability for that lane, so 004A.2 records it as
+`ELIGIBILITY_NOT_ASSESSED` rather than consuming 004A's policy-level `usable=false` sentinel.
 
 ## Claimed regimes
 
@@ -57,6 +59,9 @@ Every predictive claim declares one regime:
 
 PRE_ELECTION and ACTIVE_RESULTS are separate primary research lanes. They are never pooled for
 primary effect estimation, hypothesis testing, FDR, bootstrap confidence, or promotion evidence.
+`ELECTION_DAY_PRE_RESULTS` is a distinct potential lane, but its empirical eligibility remains
+`ELIGIBILITY_NOT_ASSESSED` in this package because accepted 004A deliberately did not define it as
+a predictive regime. This package does not reinterpret that policy sentinel as missing data.
 
 A future hypothesis targeting more than one regime must preregister separate claims, for example
 `HYPOTHESIS_X__PRE_ELECTION` and `HYPOTHESIS_X__ACTIVE_RESULTS`. Evidence in one lane cannot
@@ -172,8 +177,11 @@ deterministic; changing the 004A regime hash or condition-universe hash changes 
 `validation_fold_inventory.csv` is outcome-independent with respect to future alpha research, but
 it deliberately consumes the frozen canonical `ConditionEligibility` universe. Chronology and data
 eligibility are recorded separately. A fold is `FEASIBLE` only when chronology permits it and both
-its eligible training and held-out condition universes are non-empty. Explicit reason codes include
-`NO_ELIGIBLE_TRAIN_CONDITIONS` and `NO_ELIGIBLE_HOLDOUT_CONDITIONS`.
+its **assessed** eligible training and held-out condition universes are non-empty. Explicit statuses
+include `NO_ELIGIBLE_TRAIN_CONDITIONS`, `NO_ELIGIBLE_HOLDOUT_CONDITIONS`, and
+`ELIGIBILITY_NOT_ASSESSED`. For ELECTION_DAY_PRE_RESULTS, 004A.2 leaves usability blank and records
+the latter status; it does not consume accepted 004A's `usable=false` value because that value was
+initialized with policy reason `NOT_A_PREDICTIVE_REGIME`.
 
 The committed generator reads only accepted repository artefacts. It does not rescan the 1.19GB
 DATA-001 corpus.
@@ -184,20 +192,20 @@ The deterministic build currently yields:
 
 - condition universe version: `004A2-condition-universe-v1`
 - condition universe SHA-256:
-  `1f449f394b9a81743632b1f699188e5649769c48af7939f9a52db631712e37cb`
+  `f3a8aa611944f16514e1668f9023361c8eab90c336dcf330648d4f502153a892`
 - validation protocol version: `004A2-event-time-validation-v1`
 - validation protocol SHA-256:
-  `43cce700c6c216cb16636ede9ed66bf6d592c43b0db83bde62edbbe81b9853d1`
+  `052eefc3ad242ffe5499956da9e5ff05d7a9a3fcd01da3522be82be2cfc34a41`
 - 1,300 conditions total; 1,187 exact-`Yes` canonical; 113 fail closed
 - 25 token-pair disagreement cases retained explicitly
 - 72 frozen-universe-aware fold-plan rows: 20 within-event, 20 forward-event, 12 forward-family,
   8 same-family transfer, and 12 retrospective family diagnostics
 
-Chronology alone permits 52 prospective folds, but the frozen canonical-condition universe reduces
-that to **36 empirically executable `FEASIBLE` folds**. Sixteen chronology-valid rows fail closed on
-data eligibility: all 13 chronology-valid `ELECTION_DAY_PRE_RESULTS` rows, Hungary late-count
-within-event, Peru first-round late-count forward-event, and the PER_2026 late-count forward-family
-fold. The election-day lane has zero usable canonical conditions in every event; Hungary has zero
+Chronology alone permits 52 prospective folds. Of these, **36 are assessed and empirically
+executable `FEASIBLE` folds**. Thirteen chronology-valid ELECTION_DAY_PRE_RESULTS rows are
+`ELIGIBILITY_NOT_ASSESSED` rather than being labelled empirically empty. The three genuinely
+data-ineligible chronology-valid rows are Hungary late-count within-event, Peru first-round
+late-count forward-event, and the PER_2026 late-count forward-family fold. Hungary has zero
 late-count usable canonical conditions. Chronology insufficiency remains separately recorded as four
 `INSUFFICIENT_PRIOR_EVENTS` and four `INSUFFICIENT_PRIOR_FAMILIES` rows.
 

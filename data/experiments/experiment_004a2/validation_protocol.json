@@ -21,7 +21,7 @@
     "CROSS_ROUND_SAME_FAMILY",
     "CROSS_EVENT_FAMILY"
   ],
-  "condition_universe_sha256": "1f449f394b9a81743632b1f699188e5649769c48af7939f9a52db631712e37cb",
+  "condition_universe_sha256": "f3a8aa611944f16514e1668f9023361c8eab90c336dcf330648d4f502153a892",
   "condition_universe_version": "004A2-condition-universe-v1",
   "cross_boundary_label_rule": {
     "clip_or_reassign": false,
@@ -72,11 +72,18 @@
   },
   "fold_data_eligibility_rule": {
     "chronology_status_preserved_separately": true,
+    "election_day_pre_results": {
+      "interpret_as_empirical_absence": false,
+      "status": "ELIGIBILITY_NOT_ASSESSED",
+      "upstream_004a_reason": "NOT_A_PREDICTIVE_REGIME",
+      "upstream_004a_usable_consumed": false
+    },
     "feasible_requires_nonempty_holdout": true,
     "feasible_requires_nonempty_train": true,
     "reason_codes": [
       "NO_ELIGIBLE_TRAIN_CONDITIONS",
-      "NO_ELIGIBLE_HOLDOUT_CONDITIONS"
+      "NO_ELIGIBLE_HOLDOUT_CONDITIONS",
+      "ELIGIBILITY_NOT_ASSESSED"
     ],
     "source": "frozen canonical ConditionEligibility universe"
   },
@@ -112,6 +119,6 @@
     "small_n_flag": "LOW_INDEPENDENT_FAMILY_COUNT",
     "within_window": "contiguous temporal block"
   },
-  "validation_protocol_sha256": "43cce700c6c216cb16636ede9ed66bf6d592c43b0db83bde62edbbe81b9853d1",
+  "validation_protocol_sha256": "052eefc3ad242ffe5499956da9e5ff05d7a9a3fcd01da3522be82be2cfc34a41",
   "validation_protocol_version": "004A2-event-time-validation-v1"
 }
