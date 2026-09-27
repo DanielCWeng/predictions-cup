@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from predictions_cup.research.structural_redistribution import (
+from predictions_cup.learning.structural_redistribution import (
     bh_adjust,
     project_capped_simplex,
     project_nonincreasing,
