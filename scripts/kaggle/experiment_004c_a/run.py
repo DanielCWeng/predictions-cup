@@ -1250,7 +1250,20 @@ def null_distribution(
 ) -> tuple[list[float], list[dict[str, Any]]]:
     draws: list[float] = []
     audit: list[dict[str, Any]] = []
-    data_regime = [data for data in challenge_data if data["regime"] == regime]
+    def has_observed_rows(data: dict[str, Any]) -> bool:
+        if task == "A3":
+            y = data["y"][30]
+        elif task == "A2":
+            y = data["mark"]
+        else:
+            y = data["hazard"]
+        return int(np.isfinite(y).sum()) > 0
+
+    data_regime = [
+        data
+        for data in challenge_data
+        if data["regime"] == regime and has_observed_rows(data)
+    ]
     for draw in range(NULL_DRAWS):
         event_stats: list[dict[str, Any]] = []
         draw_ok = True
