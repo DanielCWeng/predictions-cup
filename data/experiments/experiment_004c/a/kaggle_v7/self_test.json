@@ -1,0 +1,10 @@
+{
+  "baseline_has_source_features": false,
+  "build008_run_ids": {
+    "A1": "9e59050a856526c3367f9c000cecb56cee2ea60d062d20b607cfc5a2f2b03811",
+    "A2": "49e9f5d4c31e64360354432d44b5dbdc381155140e59772fa83627809dc39256",
+    "A3": "f82a97a40b3808150c33b77fcc77343c8de506d92d8eb04e4400cc88a5562f21"
+  },
+  "challenger_is_strict_superset": true,
+  "terminal_freeze_verified": true
+}
