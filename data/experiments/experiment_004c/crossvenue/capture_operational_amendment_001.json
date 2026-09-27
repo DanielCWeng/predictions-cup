@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "amendment_id": "004C-C-CAPTURE-001",
+  "recorded_at_utc": "2026-09-27T21:23:00Z",
+  "parent_preregistration_commit": "2583576750ad3176923d009d2fb0d3fc282b7e84",
+  "reason": "storage-capacity control on the shared ~30 GiB EC2 host before forward 004C-C capture begins; not based on predictive outcomes",
+  "changes": {
+    "polymarket_panel_snapshot_interval_seconds": {
+      "from": 1,
+      "to": 5
+    },
+    "polymarket_primary_event_stream": "unchanged WebSocket book-change local observed_at",
+    "polymarket_depth_snapshot_interval_seconds": {
+      "from": 60,
+      "to": 60
+    },
+    "primary_fixed_horizon_seconds": {
+      "from": 30,
+      "to": 30
+    },
+    "model_features_targets_nulls_folds_fdr": "unchanged"
+  },
+  "scientific_effect": "none intended; 5-second panel is state checkpointing only. PM innovations remain event-driven from WebSocket changes. Any panel-dependent diagnostic reports the deployed 5-second cadence."
+}
