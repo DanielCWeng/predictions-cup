@@ -1,5 +1,3 @@
-[Reading 411 lines from start (total: 411 lines, 0 remaining)]
-
 from __future__ import annotations
 import csv, hashlib, json, math
 from collections import Counter, defaultdict
@@ -213,15 +211,15 @@ def empirical_p(obs:float|None,draws:list[float])->float|None:
  if obs is None or len(draws)!=NULL_DRAWS:return None
  a=np.asarray(draws,float);return float((1+np.sum(a>=obs))/(len(a)+1))
 def time_nulls(rows:dict[str,np.ndarray],signal:np.ndarray,key:str)->tuple[dict[str,Any],list[dict[str,Any]]]:
- obs=alignment(rows,signal);summary={};allrows=[]
+ obs,_=controlled_beta(rows,signal);summary={};allrows=[]
  for kind in ('CIRCULAR_SHIFT','BLOCK_PERMUTATION'):
   rng=np.random.default_rng(seed(key+'|'+kind));draws=[]
   for d in range(NULL_DRAWS):
-   v=alignment(rows,shift_signal(signal,rng,kind))
+   v,_=controlled_beta(rows,shift_signal(signal,rng,kind))
    if v is not None:draws.append(v);allrows.append({'test_key':key,'null_model':kind,'draw':d,'statistic':v})
   summary[kind]={'valid_draws':len(draws),'p_value':empirical_p(obs,draws),'mean':float(np.mean(draws)) if draws else None,'std':float(np.std(draws)) if draws else None}
  ps=[summary[k]['p_value'] for k in summary]
- summary['combined_p_value']=max(ps) if all(p is not None for p in ps) else None;summary['observed_alignment']=obs
+ summary['combined_p_value']=max(ps) if all(p is not None for p in ps) else None;summary['observed_controlled_beta']=obs
  return summary,allrows
 def activity_quartiles(panel:dict[str,Any])->np.ndarray:
  v=np.mean(panel['activity'],axis=0)
@@ -383,14 +381,25 @@ def main():
  soft=[r for r in primary if r['lane']=='SOFT_COMPETITIVE']
  hard_hits=[r for r in hard if r.get('q_value') is not None and r['q_value']<=.01 and
             (r.get('beta_structural') if r.get('beta_structural') is not None else -1)>=.10 and
-            (r.get('direction_toward_alignment') or 0)>0]
+            (r.get('direction_toward_alignment') or 0)>0 and
+            r.get('membership_valid_draws')==NULL_DRAWS and r.get('membership_p') is not None and
+            r['membership_p']<=.01 and r.get('wrong_family_control_alignment') is not None and
+            r['direction_toward_alignment']>r['wrong_family_control_alignment']]
+ hard_scopes={(r['event'],r['regime']) for r in hard_hits}
+ hard_contradictions=[r for r in hard if r.get('q_value') is not None and r['q_value']<=.01 and
+                      r.get('beta_structural') is not None and r['beta_structural']<=-.10]
  soft_hits=[r for r in soft if r.get('q_value') is not None and r['q_value']<=.01 and
-            (r.get('beta_structural') or 0)>0]
- disposition='STRUCTURAL_REDISTRIBUTION_SUPPORTED' if hard_hits else (
+            (r.get('beta_structural') or 0)>0 and
+            r.get('membership_valid_draws')==NULL_DRAWS and r.get('membership_p') is not None and
+            r['membership_p']<=.01]
+ hard_promoted=len(hard_scopes)>=2 and not hard_contradictions
+ disposition='STRUCTURAL_REDISTRIBUTION_SUPPORTED' if hard_promoted else (
   'SOFT_COMPETITIVE_EFFECT_ONLY' if soft_hits else ('NO_STRUCTURAL_EDGE' if primary else 'INCONCLUSIVE'))
  summary={'experiment_id':'EXPERIMENT-004C-B','disposition':disposition,'freeze_marker':marker,
           'primary_30s_valid_tests':len(primary),'primary_hard_valid_tests':len(hard),
           'primary_soft_valid_tests':len(soft),'hard_1pct_hits':len(hard_hits),'soft_1pct_hits':len(soft_hits),
+          'hard_promoted':hard_promoted,'hard_supporting_scopes':sorted([list(x) for x in hard_scopes]),
+          'hard_contradictions':[r['test_key'] for r in hard_contradictions],
           'hard_hits':[r['test_key'] for r in hard_hits],'soft_hits':[r['test_key'] for r in soft_hits],
           'full_executable_basket_certificates':0,'challenge_label':'004B_SEALED_PRIOR_EXPERIMENT_EXPOSED',
           'limitations':['only three independent election families',
@@ -411,5 +420,3 @@ def main():
  (WORK/'kaggle_run_summary.json').write_text(json.dumps(run,indent=2,sort_keys=True)+'\n')
  print(json.dumps(run,sort_keys=True))
 if __name__=='__main__':main()
-
-[executed on device: ip-172-31-73-211.ec2.internal (c5706598-02ec-4925-9d6e-43e31c32d097)]

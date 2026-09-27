@@ -1,0 +1,13 @@
+{
+  "experiment_id": "EXPERIMENT-004C-B",
+  "freeze_marker": true,
+  "base_sha": "4e094d13b06d9e558cbc404cc4d472316d7d5bbb",
+  "ec2_local_freeze_commit": "f9568d89908f111d1e95997e0b1162d1d953816b",
+  "remote_pre_marker_head": "7a0a942bab51643f6236d607da649e588d9bb38b",
+  "family_registry_sha256": "499b22e760b511d11f81707058ed92ce6218bd11428d7dd319436de22811c4dc",
+  "preregistration_sha256": "d86df188d4f0dfdb0876b2a7b723750d27438f328f5c6a94100df714b5a80009",
+  "prior_exposure_manifest_sha256": "328642619ef09c22e8b257d42ea95f92f98e37e6e276c7613940a42edd2a44b7",
+  "family_validation_report_sha256": "9a51a5f70383cbd86b4465f35db912f1b005bb7d98055bff71365bd78f9cc574",
+  "scientific_doc_sha256": "34f1063e4e47138bc3744f67bfff2aade13be6d7a57ae8b44c346990f1a34d5f",
+  "rule": "All listed scientific-definition artifacts are immutable after this marker. Empirical 004C-B challenge access may begin only from or after this commit."
+}

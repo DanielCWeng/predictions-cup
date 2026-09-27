@@ -1,0 +1,36 @@
+{
+  "audit_id": "EXPERIMENT-003-PROTOCOL-CONFORMANCE-AUDIT",
+  "audit_timing": "post-result hostile-review pass plus MASTER follow-up",
+  "code_revision_executed": "b2ba5e2c3e63d57bd6e74c0c5861bad67c983e1b",
+  "preregistration_sha256": "64af4c1427afa983a13da6a11d5721b1b6496b0306ce1b07ab6e2f19df9e7e70",
+  "supporting_audits": {
+    "inference_limitations": "data/experiments/experiment_003/inference_limitations.json",
+    "participant_protocol_identity": "data/experiments/experiment_003/posthoc/participant_protocol_identity_audit.json",
+    "infrastructure_registry_provenance": "data/reference/polymarket_infrastructure/provenance.json"
+  },
+  "families": {
+    "LEADLAG-001": {
+      "status": "CONFORMANT_WITH_DESIGN_LIMITATIONS",
+      "notes": "Frozen 5s primary lookback, explicit references, 30s grid and 300s delayed-reference control map to executed implementation. The 30s clock grid samples a narrow slice of short impulses, so this is a weak same-venue screen rather than decisive event-time lead/lag evidence."
+    },
+    "RV-001": {
+      "status": "PRIMARY_CONFORMANT_WITH_DIAGNOSTIC_CAVEAT",
+      "notes": "Primary 120s-freshness naive equal-weight logit-level-gap residual maps to the frozen specification. The broader calibrated structural/fair-value hypothesis was not tested. Sensitivity code changes target and reference freshness together; see DEVIATION-002."
+    },
+    "MICROSTRUCTURE-001": {
+      "status": "CONFORMANT_WITH_FEATURE_REDUNDANCY",
+      "notes": "Genuine depth-snapshot times, own-move/spread/depth/age baseline, imbalance/microprice challenger and 300s delayed-feature control map to the frozen specification. microprice_displacement_over_spread equals imbalance/2 under the implemented formula, so the two challenger columns contain one degree of information."
+    },
+    "PARTICIPANT-001": {
+      "status": "MATERIAL_PROTOCOL_DEVIATION_CONFIRMATORY_INVALID",
+      "notes": "Executed baseline and placebo differ from the frozen protocol; see DEVIATION-001. Post-hoc diagnostics are additionally contaminated by known Polymarket protocol exchange identities. Nominal statistics are audit/exploratory evidence only."
+    },
+    "LOWRANK-001": {
+      "status": "CONFORMANT_AFTER_DOCUMENTED_PRE_RESULT_AMENDMENT_BUT_UNDERPOWERED",
+      "notes": "Corrected run uses the frozen coverage ordering and exactly the first three leave-target-out references under AMENDMENT-001. That is a documented label-free design choice, not the unique meaning of at least three. Usable evidence is from one regime/event family and its equal-event interval is degenerate for cross-event inference."
+    }
+  },
+  "global_inference": "No family is promoted. The original 25-test BH table is retained for audit and is not post-hoc recomputed after invalidating the participant lane. Primary p-values are block-level evidence conditional on observed regime windows; the equal-event bootstrap resamples regime windows rather than independent election families.",
+  "holdout_interpretation": "The frozen 15 daily holdout folds are predominantly post-election/count/settlement periods; only one holdout day starts on an election day. EXP003 is not election-night validation.",
+  "review_rule": "Any future corrected participant test must be a new preregistered experiment because the current outcome has been inspected. Future confirmation should use event-family-level holdouts/inference, substantive ablations, feed-health-aware quote validity and dependence-aware model comparison."
+}

@@ -1,0 +1,239 @@
+{
+  "alpha_searched": false,
+  "canonical_token_rule": "exact outcome label == 'Yes'; zero/multiple fail closed",
+  "canonical_yes_conditions": 1187,
+  "classification_counts": {
+    "BOTH": 27,
+    "ELECTION_NIGHT_ONLY": 65,
+    "FAILED_CLOSED": 113,
+    "NEITHER": 1092,
+    "PRE_ELECTION_ONLY": 3
+  },
+  "condition_universe_sha256": "f3a8aa611944f16514e1668f9023361c8eab90c336dcf330648d4f502153a892",
+  "condition_universe_version": "004A2-condition-universe-v1",
+  "conditions_total": 1300,
+  "election_day_pre_results_eligibility_status_counts": {
+    "CANONICAL_YES_FAILED_CLOSED": 113,
+    "ELIGIBILITY_NOT_ASSESSED": 1187
+  },
+  "event_families": [
+    "COL_2026",
+    "PER_2026",
+    "HUN_2026"
+  ],
+  "experiment_id": "EXPERIMENT-004A.2",
+  "failed_closed_conditions": 113,
+  "failed_closed_conditions_by_event": {
+    "hungary_election": 27,
+    "peru_first_round": 43,
+    "peru_runoff": 43
+  },
+  "failed_closed_reason_counts": {
+    "CANONICAL_YES_TOKEN_COUNT_0": 113
+  },
+  "source_004a_package_version": "004A-event-time-v2",
+  "source_004a_regime_sha256": "57a102d64778be7c1460638bb4da63be7eeafe0b9494a4287339674bcad0a741",
+  "token_pair_disagreement_cases": [
+    {
+      "canonical_token_classification": "ELECTION_NIGHT_ONLY",
+      "canonical_token_id": "77801891223987841891474930621248532092123386694399544698997121876709615623565",
+      "condition_id": "0x0800bd687e4028589e13ea87e9d999ae8495baf34b886cad9aeaca166273fa72",
+      "counterpart_token_classification": "NEITHER",
+      "counterpart_token_id": "79774248936917677535786289214612350107249875033447978339913670987747541234371",
+      "regime_id": "colombia_first_round"
+    },
+    {
+      "canonical_token_classification": "NEITHER",
+      "canonical_token_id": "106763230704343183453719408887359082927815236992232473300788515686612692073771",
+      "condition_id": "0x15bac3fab3754ba57ba328d86b93b296778a1b90c12bafa51f07b3ea79996b4f",
+      "counterpart_token_classification": "ELECTION_NIGHT_ONLY",
+      "counterpart_token_id": "11618145140283274060200253187130030476847871423203649938570348046814275016199",
+      "regime_id": "colombia_first_round"
+    },
+    {
+      "canonical_token_classification": "NEITHER",
+      "canonical_token_id": "108974167068494983977501827601085425117902742141321372239296316608755852846077",
+      "condition_id": "0x1df87f7e360bcf2a2df38a2ee1bde8d1bff411780fc7e475a4a09a94a9bd3899",
+      "counterpart_token_classification": "ELECTION_NIGHT_ONLY",
+      "counterpart_token_id": "109435389580424658150493785421168198466327994825138139108960099929552872167974",
+      "regime_id": "colombia_first_round"
+    },
+    {
+      "canonical_token_classification": "ELECTION_NIGHT_ONLY",
+      "canonical_token_id": "25690840019062849976496566794963978141818728224461919092756328830681090169797",
+      "condition_id": "0x26a0f0a0c39f06c80dcfa83ba8b9701973471e097529aadd791b61bada836c20",
+      "counterpart_token_classification": "NEITHER",
+      "counterpart_token_id": "70711342151483937699561861579769525426595720303575710642911618019465212044891",
+      "regime_id": "colombia_first_round"
+    },
+    {
+      "canonical_token_classification": "ELECTION_NIGHT_ONLY",
+      "canonical_token_id": "7707882609877027151419445009151473858946466475327085396299308696610200951375",
+      "condition_id": "0x6aee7a669dd941b514661d64c55e7bd63ef7884d5e455c850f1835a8056e7a55",
+      "counterpart_token_classification": "NEITHER",
+      "counterpart_token_id": "50192917843461008913980030770402312790825197108048084942311427385352595907357",
+      "regime_id": "colombia_first_round"
+    },
+    {
+      "canonical_token_classification": "ELECTION_NIGHT_ONLY",
+      "canonical_token_id": "104997868072009015624222294580678450931025984784809139537795507805369124252261",
+      "condition_id": "0x7385bdc26ff171d5efebeebf1f8e9699a21877e3706c803341eabfb57fa1ee42",
+      "counterpart_token_classification": "NEITHER",
+      "counterpart_token_id": "85852392956929507401323380500070148952293206277203636208052397393223287465901",
+      "regime_id": "colombia_first_round"
+    },
+    {
+      "canonical_token_classification": "ELECTION_NIGHT_ONLY",
+      "canonical_token_id": "23532536587635768634392386965780230467726004893924047653522105374551220178823",
+      "condition_id": "0xb796aa213c72a50adc3eab3e107f05d2500e084f5245529048d25083b5ee58f6",
+      "counterpart_token_classification": "NEITHER",
+      "counterpart_token_id": "34017516793255944315924905866075445469495510046839923057461503811107765793042",
+      "regime_id": "colombia_first_round"
+    },
+    {
+      "canonical_token_classification": "ELECTION_NIGHT_ONLY",
+      "canonical_token_id": "34253026330636554399852514066550450276013246568444914274205167845651811464790",
+      "condition_id": "0x05b3c4a8779f467c490d05894d66634e7ed0bc982eed4463ca90fd1f59b78d1f",
+      "counterpart_token_classification": "NEITHER",
+      "counterpart_token_id": "74626051770002298735291083534596320297633718750143523873443080158440351160675",
+      "regime_id": "peru_runoff"
+    },
+    {
+      "canonical_token_classification": "ELECTION_NIGHT_ONLY",
+      "canonical_token_id": "67856043091363573230826787438476899340717171261331542907088468980307686160535",
+      "condition_id": "0x0a10ea4f5d42ac33a29d73b8562f4414f5ea2219afd9da74ba950f7aefe7c630",
+      "counterpart_token_classification": "NEITHER",
+      "counterpart_token_id": "105584864693626079457859320531036329426880337452305899680113662052236202390504",
+      "regime_id": "peru_runoff"
+    },
+    {
+      "canonical_token_classification": "NEITHER",
+      "canonical_token_id": "76647756421777021750296882729097877947244398058587662047702870166960832653622",
+      "condition_id": "0x0e7f0ffe845b05bdbd172958464fa20bcd9a048781d73e4090e07b03a4da254f",
+      "counterpart_token_classification": "ELECTION_NIGHT_ONLY",
+      "counterpart_token_id": "27366653964774546140102997231724638660416990841421465294477604815259121786658",
+      "regime_id": "peru_runoff"
+    },
+    {
+      "canonical_token_classification": "NEITHER",
+      "canonical_token_id": "34139372490421656658764743748855070175691399946264775613546219286350462486003",
+      "condition_id": "0x12ad7d12be6be9f3822d978dfe51bb1a59d5208422bda6155616a992937a9b9d",
+      "counterpart_token_classification": "ELECTION_NIGHT_ONLY",
+      "counterpart_token_id": "49492947370491747308083712952332405856024111775528103177793583401520316153938",
+      "regime_id": "peru_runoff"
+    },
+    {
+      "canonical_token_classification": "ELECTION_NIGHT_ONLY",
+      "canonical_token_id": "29605412168491604224400515758812221296055736048328687013279325446908697782986",
+      "condition_id": "0x132225a15f2d05b147a54a7096b3a4100f581eaad079fd64ce5df8082d4b6746",
+      "counterpart_token_classification": "NEITHER",
+      "counterpart_token_id": "64730959890689760518221048357055895281768332259862787128909604306702942861965",
+      "regime_id": "peru_runoff"
+    },
+    {
+      "canonical_token_classification": "ELECTION_NIGHT_ONLY",
+      "canonical_token_id": "8379837610125291150489935717882363132642018085406636296823338050741934312045",
+      "condition_id": "0x24a454785cac9984fde7736d0d4b37929b7253d527d359f547c909eec89862b9",
+      "counterpart_token_classification": "NEITHER",
+      "counterpart_token_id": "47515547723528341412543209702937596271927058261167837389261437881238696349436",
+      "regime_id": "peru_runoff"
+    },
+    {
+      "canonical_token_classification": "ELECTION_NIGHT_ONLY",
+      "canonical_token_id": "33676951557383894515546393450532412629166294904696420306881965128761881185587",
+      "condition_id": "0x28d4cee5a4bb01e0a7b1a39f8a23b2af657d9cf06d1e0ed8443c6b09329b9be3",
+      "counterpart_token_classification": "NEITHER",
+      "counterpart_token_id": "30788846969964727903508443161348771288310100447128945399885440063546741603671",
+      "regime_id": "peru_runoff"
+    },
+    {
+      "canonical_token_classification": "ELECTION_NIGHT_ONLY",
+      "canonical_token_id": "16452855558136653776561048576768137577528096989756809438471103880971273573161",
+      "condition_id": "0x3aec41fee9edc59c2b98d439dba86debe339e35f62ac4cdc8de01ab1a5b93f21",
+      "counterpart_token_classification": "NEITHER",
+      "counterpart_token_id": "107331660375502705357117385329474376336418685911490580766538280226777407259357",
+      "regime_id": "peru_runoff"
+    },
+    {
+      "canonical_token_classification": "ELECTION_NIGHT_ONLY",
+      "canonical_token_id": "13489012588233322368311367883402374394605806123068707609937025667605598991327",
+      "condition_id": "0x5e7d3b7cf87325cee6ae6c7417d6e9d7250c4cc2dc912b18ce5cdafba4e6a647",
+      "counterpart_token_classification": "NEITHER",
+      "counterpart_token_id": "90345128748583198863370606568494221504139539681370131445138326065698729118736",
+      "regime_id": "peru_runoff"
+    },
+    {
+      "canonical_token_classification": "NEITHER",
+      "canonical_token_id": "9682518067153576122489405729520126083014940106724522567955145436832495666332",
+      "condition_id": "0x78f5630bafa15147941daa2fd2926b43febe6af1544cd9d8527b226914f3ca11",
+      "counterpart_token_classification": "ELECTION_NIGHT_ONLY",
+      "counterpart_token_id": "39116255474725201116938242776380787894386932760243104501094014247828169063490",
+      "regime_id": "peru_runoff"
+    },
+    {
+      "canonical_token_classification": "PRE_ELECTION_ONLY",
+      "canonical_token_id": "78299862190151688660680397893688466572696604800286917240516494924076147885439",
+      "condition_id": "0x7965575591c9229a2c75c881555403f5e867cd5759545619d8ec061b2b08135f",
+      "counterpart_token_classification": "ELECTION_NIGHT_ONLY",
+      "counterpart_token_id": "41096463624503861532466033221737024440959770389240094367827254704799007044828",
+      "regime_id": "peru_runoff"
+    },
+    {
+      "canonical_token_classification": "ELECTION_NIGHT_ONLY",
+      "canonical_token_id": "8841508247493149090572045971327991291897288425911692193387659098920616934960",
+      "condition_id": "0x79879ec1f3baa9e40ec709b8cf80b2808f6f55920c31a6cd4fa249f6e9d5be36",
+      "counterpart_token_classification": "NEITHER",
+      "counterpart_token_id": "5206236671908770956533322859581263525961893951235820324690244172816002300176",
+      "regime_id": "peru_runoff"
+    },
+    {
+      "canonical_token_classification": "ELECTION_NIGHT_ONLY",
+      "canonical_token_id": "21548267063852344197294411394442203429665465067575113504945752859692538216489",
+      "condition_id": "0x7992be6bdda4f7ab2224831f9bd7cd3192ccb9c02640bcf61ff6c389f7cda056",
+      "counterpart_token_classification": "NEITHER",
+      "counterpart_token_id": "2303465978890391870026436364182166843171422434239795876553072163138980816397",
+      "regime_id": "peru_runoff"
+    },
+    {
+      "canonical_token_classification": "ELECTION_NIGHT_ONLY",
+      "canonical_token_id": "74500083728733584148299358961366660865158287035584890847432809281060790985243",
+      "condition_id": "0x83b661c9e68dde865ac656f20a57572e7168239445bdbde65ea6665b7a4100e4",
+      "counterpart_token_classification": "BOTH",
+      "counterpart_token_id": "25849494491520025004325601421985442513414260041923434930688729800422032150147",
+      "regime_id": "peru_runoff"
+    },
+    {
+      "canonical_token_classification": "NEITHER",
+      "canonical_token_id": "108558721460657856931164500269543846812498772937130524933036124977877392070575",
+      "condition_id": "0x94bd997304da0c9f10bab538756814a3a5ce26bd28cf72343a9a5058f58f4db2",
+      "counterpart_token_classification": "ELECTION_NIGHT_ONLY",
+      "counterpart_token_id": "68984052105422651419562141854742199065969997437126650041092515850170302805067",
+      "regime_id": "peru_runoff"
+    },
+    {
+      "canonical_token_classification": "NEITHER",
+      "canonical_token_id": "71309235606705427471164237240934647738660821324581969500721476070843942340004",
+      "condition_id": "0xb06bd8cd9693172502d649f157283cf4d6b15dc6d595495eed33b70e94b6565e",
+      "counterpart_token_classification": "ELECTION_NIGHT_ONLY",
+      "counterpart_token_id": "27410837348419791135166490910686797212346907507240863707906587999545656096009",
+      "regime_id": "peru_runoff"
+    },
+    {
+      "canonical_token_classification": "ELECTION_NIGHT_ONLY",
+      "canonical_token_id": "50243762671512851167282517271037976718384543563492030616749604530990728402798",
+      "condition_id": "0xef61cec575ac7260343e1f0c11900fee12a1f30b521b649eec7663ec5424242a",
+      "counterpart_token_classification": "NEITHER",
+      "counterpart_token_id": "106437503449869126798318748561947971415320337579430634156444932448976881130687",
+      "regime_id": "peru_runoff"
+    },
+    {
+      "canonical_token_classification": "NEITHER",
+      "canonical_token_id": "6200507252841835595951008504441149768354972632973075259527756928392759138736",
+      "condition_id": "0xf73e2e231d324cb662ad80eefdd90bba5007fc4df45bc2c7bab90d83693cc4ee",
+      "counterpart_token_classification": "ELECTION_NIGHT_ONLY",
+      "counterpart_token_id": "112878248181235577893718476117848068375752867388876637354725020175995521912093",
+      "regime_id": "peru_runoff"
+    }
+  ],
+  "token_pair_disagreements": 25
+}

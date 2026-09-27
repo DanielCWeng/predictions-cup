@@ -1,0 +1,30 @@
+{
+  "allowed_knowledge": [
+    "event identity",
+    "event-family identity",
+    "market/condition metadata",
+    "accepted regime boundaries",
+    "coverage/eligibility metadata",
+    "hashes",
+    "chronology",
+    "semantic market relationships"
+  ],
+  "base_commit": "3601bea0e5df9018377da7b6df5f302f774c89f1",
+  "discovery_events": [
+    "hungary_election",
+    "peru_first_round"
+  ],
+  "discovery_spec_sha256": "409512367f59fefa861df89c57b96586d30e28d205f60e306b20a5e64935b504",
+  "empirical_paths_inspected": false,
+  "experiment_id": "EXPERIMENT-004B",
+  "sealed_event_families": {
+    "colombia_first_round": "COL_2026",
+    "colombia_runoff": "COL_2026",
+    "peru_runoff": "PER_2026"
+  },
+  "sealed_events": [
+    "colombia_first_round",
+    "peru_runoff",
+    "colombia_runoff"
+  ]
+}

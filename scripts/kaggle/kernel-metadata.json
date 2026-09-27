@@ -1,0 +1,18 @@
+{
+  "id": "polyleviathan/sig-cup-data-001-build",
+  "title": "SIG Cup DATA-001 build",
+  "code_file": "data_001_build.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": [
+    "polyleviathan/sig-cup-pmxt-orderbook-extracts",
+    "polyleviathan/sig-cup-polyleviathan-fills",
+    "polyleviathan/sig-cup-predictions-cup-code"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}

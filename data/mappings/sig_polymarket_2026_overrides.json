@@ -1,0 +1,5853 @@
+{
+  "schema_version": 1,
+  "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+  "records": [
+    {
+      "sig_market_id": "151",
+      "sig_exchange_id": "840",
+      "sig_outcome_label": "YES",
+      "mapping_class": "NEAR",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "562802",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed chamber-control equivalence; SIG uses win wording while Polymarket uses control-after-midterms wording.",
+      "resolution_notes": "Same 2026 chamber-control outcome; retained as NEAR because the surface wording differs."
+    },
+    {
+      "sig_market_id": "152",
+      "sig_exchange_id": "841",
+      "sig_outcome_label": "YES",
+      "mapping_class": "NEAR",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "562803",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed chamber-control equivalence; SIG uses win wording while Polymarket uses control-after-midterms wording.",
+      "resolution_notes": "Same 2026 chamber-control outcome; retained as NEAR because the surface wording differs."
+    },
+    {
+      "sig_market_id": "153",
+      "sig_exchange_id": "842",
+      "sig_outcome_label": "YES",
+      "mapping_class": "NEAR",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "562793",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed chamber-control equivalence; SIG uses win wording while Polymarket uses control-after-midterms wording.",
+      "resolution_notes": "Same 2026 chamber-control outcome; retained as NEAR because the surface wording differs."
+    },
+    {
+      "sig_market_id": "154",
+      "sig_exchange_id": "843",
+      "sig_outcome_label": "YES",
+      "mapping_class": "NEAR",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "562794",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed chamber-control equivalence; SIG uses win wording while Polymarket uses control-after-midterms wording.",
+      "resolution_notes": "Same 2026 chamber-control outcome; retained as NEAR because the surface wording differs."
+    },
+    {
+      "sig_market_id": "155",
+      "sig_exchange_id": "844",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3364285",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "156",
+      "sig_exchange_id": "845",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3364278",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364279",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364280",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364281",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364282",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364283",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364284",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "157",
+      "sig_exchange_id": "846",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365538",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "158",
+      "sig_exchange_id": "847",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365530",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365531",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365532",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365533",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365534",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365535",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365536",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365537",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "159",
+      "sig_exchange_id": "848",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3364336",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364339",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364341",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364346",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364353",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364356",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364358",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "160",
+      "sig_exchange_id": "849",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3364330",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364332",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364334",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "161",
+      "sig_exchange_id": "850",
+      "sig_outcome_label": "YES",
+      "mapping_class": "NO_TRADE",
+      "mapping_direction": null,
+      "mapping_confidence": "0",
+      "status": "VERIFIED",
+      "polymarket_legs": [],
+      "semantic_notes": "Re-audited live final-election winner event: active Polymarket markets remain candidate-specific with no reviewed party-level identity; fail closed.",
+      "resolution_notes": "Explicit reviewed NO_TRADE decision; no Polymarket token is claimed."
+    },
+    {
+      "sig_market_id": "162",
+      "sig_exchange_id": "851",
+      "sig_outcome_label": "YES",
+      "mapping_class": "NO_TRADE",
+      "mapping_direction": null,
+      "mapping_confidence": "0",
+      "status": "VERIFIED",
+      "polymarket_legs": [],
+      "semantic_notes": "Re-audited live final-election winner event: active Polymarket markets remain candidate-specific with no reviewed party-level identity; fail closed.",
+      "resolution_notes": "Explicit reviewed NO_TRADE decision; no Polymarket token is claimed."
+    },
+    {
+      "sig_market_id": "163",
+      "sig_exchange_id": "852",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365544",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365545",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365546",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365547",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365548",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365549",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365550",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365551",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365552",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "164",
+      "sig_exchange_id": "853",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365543",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "165",
+      "sig_exchange_id": "854",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365563",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "166",
+      "sig_exchange_id": "855",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365590",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365591",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365592",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365593",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365594",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "167",
+      "sig_exchange_id": "856",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365585",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365586",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365587",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365588",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365589",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "168",
+      "sig_exchange_id": "857",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365706",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365707",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365708",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365709",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365710",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "169",
+      "sig_exchange_id": "858",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365701",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365702",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365703",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365704",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365705",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "170",
+      "sig_exchange_id": "859",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365657",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "171",
+      "sig_exchange_id": "860",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365647",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365648",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365649",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365650",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365651",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365652",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365653",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365654",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365655",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365656",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "172",
+      "sig_exchange_id": "861",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365668",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365669",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365670",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365671",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365672",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365673",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365674",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "173",
+      "sig_exchange_id": "862",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365667",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "174",
+      "sig_exchange_id": "863",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365744",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365745",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365746",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365747",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365748",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365749",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365750",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365751",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365752",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "175",
+      "sig_exchange_id": "864",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365743",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "176",
+      "sig_exchange_id": "865",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365734",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365735",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365736",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365737",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365738",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365739",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "177",
+      "sig_exchange_id": "866",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365732",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365733",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "178",
+      "sig_exchange_id": "867",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369148",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "179",
+      "sig_exchange_id": "868",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369140",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369141",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369142",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369143",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369144",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369145",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369146",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369147",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "180",
+      "sig_exchange_id": "869",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369177",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369178",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369179",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369180",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369181",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369182",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "181",
+      "sig_exchange_id": "870",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369175",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369176",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "182",
+      "sig_exchange_id": "871",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369156",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369157",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369158",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369159",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369160",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "183",
+      "sig_exchange_id": "872",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369151",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369152",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369153",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369154",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369155",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "184",
+      "sig_exchange_id": "873",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369186",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369187",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369188",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369189",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369190",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369191",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369192",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369193",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "185",
+      "sig_exchange_id": "874",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369185",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "186",
+      "sig_exchange_id": "875",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369227",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "187",
+      "sig_exchange_id": "876",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369249",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369250",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369251",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369252",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369253",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369254",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369255",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "188",
+      "sig_exchange_id": "877",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369246",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369247",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369248",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "189",
+      "sig_exchange_id": "878",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369446",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369447",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369448",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369449",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369450",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369451",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369452",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "190",
+      "sig_exchange_id": "879",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369445",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "191",
+      "sig_exchange_id": "880",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "629629",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed direct final-election winner identity against current Polymarket event metadata and public resolution rules.",
+      "resolution_notes": "Same final 2026 election-winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "192",
+      "sig_exchange_id": "881",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369472",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369473",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "193",
+      "sig_exchange_id": "882",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369466",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369467",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369468",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369469",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369470",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369471",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "194",
+      "sig_exchange_id": "883",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369485",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "195",
+      "sig_exchange_id": "884",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369540",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369541",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369542",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "196",
+      "sig_exchange_id": "885",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369533",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369534",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369535",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369536",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369537",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369538",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369539",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "197",
+      "sig_exchange_id": "886",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942084",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "198",
+      "sig_exchange_id": "887",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942082",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "199",
+      "sig_exchange_id": "888",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942162",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "200",
+      "sig_exchange_id": "889",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942159",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "201",
+      "sig_exchange_id": "890",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "703686",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "202",
+      "sig_exchange_id": "891",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "703685",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "203",
+      "sig_exchange_id": "892",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1282825",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "204",
+      "sig_exchange_id": "893",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1282824",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "205",
+      "sig_exchange_id": "894",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942304",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "206",
+      "sig_exchange_id": "895",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942301",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "207",
+      "sig_exchange_id": "896",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1282881",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "208",
+      "sig_exchange_id": "897",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1282880",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "209",
+      "sig_exchange_id": "898",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942325",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "210",
+      "sig_exchange_id": "899",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942324",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "211",
+      "sig_exchange_id": "900",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283017",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "212",
+      "sig_exchange_id": "901",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942400",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "213",
+      "sig_exchange_id": "902",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942433",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "214",
+      "sig_exchange_id": "903",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942432",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "215",
+      "sig_exchange_id": "904",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283289",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "216",
+      "sig_exchange_id": "905",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283288",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "217",
+      "sig_exchange_id": "906",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942445",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "218",
+      "sig_exchange_id": "907",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942444",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "219",
+      "sig_exchange_id": "908",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283569",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "220",
+      "sig_exchange_id": "909",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283568",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "221",
+      "sig_exchange_id": "910",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3006483",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "222",
+      "sig_exchange_id": "911",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3006482",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "223",
+      "sig_exchange_id": "912",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942843",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "224",
+      "sig_exchange_id": "913",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942841",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "225",
+      "sig_exchange_id": "914",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942878",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "226",
+      "sig_exchange_id": "915",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942877",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "227",
+      "sig_exchange_id": "916",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942979",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "228",
+      "sig_exchange_id": "917",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942978",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "229",
+      "sig_exchange_id": "918",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1284299",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "230",
+      "sig_exchange_id": "919",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1284298",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "231",
+      "sig_exchange_id": "920",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "943441",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "232",
+      "sig_exchange_id": "921",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "943440",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "233",
+      "sig_exchange_id": "922",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "943749",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "234",
+      "sig_exchange_id": "923",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "943748",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "235",
+      "sig_exchange_id": "924",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "943797",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "236",
+      "sig_exchange_id": "925",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "943796",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "237",
+      "sig_exchange_id": "926",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "943943",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "238",
+      "sig_exchange_id": "927",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "943942",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "239",
+      "sig_exchange_id": "928",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "943955",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "240",
+      "sig_exchange_id": "929",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "943954",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "241",
+      "sig_exchange_id": "930",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1284672",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "242",
+      "sig_exchange_id": "931",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1284671",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "243",
+      "sig_exchange_id": "932",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "944201",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "244",
+      "sig_exchange_id": "933",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "944199",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "245",
+      "sig_exchange_id": "934",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1284960",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "246",
+      "sig_exchange_id": "935",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1284959",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "247",
+      "sig_exchange_id": "936",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "944222",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "248",
+      "sig_exchange_id": "937",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "944221",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "249",
+      "sig_exchange_id": "938",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "944281",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "250",
+      "sig_exchange_id": "939",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "944289",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "251",
+      "sig_exchange_id": "940",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "944298",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "252",
+      "sig_exchange_id": "941",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343108",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "253",
+      "sig_exchange_id": "942",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343100",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343101",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343102",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343103",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343104",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343105",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343106",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343107",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "254",
+      "sig_exchange_id": "943",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343127",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "255",
+      "sig_exchange_id": "944",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343118",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343119",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343120",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343121",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343122",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343123",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343124",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343125",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343126",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "256",
+      "sig_exchange_id": "945",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343131",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343132",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343133",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343134",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343135",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343136",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343137",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "257",
+      "sig_exchange_id": "946",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343130",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "258",
+      "sig_exchange_id": "947",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "630692",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed direct final-election winner identity against current Polymarket event metadata and public resolution rules.",
+      "resolution_notes": "Same final 2026 election-winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "259",
+      "sig_exchange_id": "948",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "630693",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed direct final-election winner identity against current Polymarket event metadata and public resolution rules.",
+      "resolution_notes": "Same final 2026 election-winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "260",
+      "sig_exchange_id": "949",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343531",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343532",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343533",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343534",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343535",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "261",
+      "sig_exchange_id": "950",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343526",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343527",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343528",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343529",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343530",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "262",
+      "sig_exchange_id": "951",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343316",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "263",
+      "sig_exchange_id": "952",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343307",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343308",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343309",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343310",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343311",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343312",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343313",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343314",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343315",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "264",
+      "sig_exchange_id": "953",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343322",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343323",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343324",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343325",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343326",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343327",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343328",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343329",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "265",
+      "sig_exchange_id": "954",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343321",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "266",
+      "sig_exchange_id": "955",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343566",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "267",
+      "sig_exchange_id": "956",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343557",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343558",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343559",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343560",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343561",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343562",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343563",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343564",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343565",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "268",
+      "sig_exchange_id": "957",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "634878",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "269",
+      "sig_exchange_id": "958",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "634879",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "270",
+      "sig_exchange_id": "959",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "630772",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed direct final-election winner identity against current Polymarket event metadata and public resolution rules.",
+      "resolution_notes": "Same final 2026 election-winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "271",
+      "sig_exchange_id": "960",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "630773",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed direct final-election winner identity against current Polymarket event metadata and public resolution rules.",
+      "resolution_notes": "Same final 2026 election-winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "272",
+      "sig_exchange_id": "961",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343915",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "273",
+      "sig_exchange_id": "962",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343908",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343909",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343910",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343911",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343912",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343913",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343914",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "274",
+      "sig_exchange_id": "963",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3364160",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "275",
+      "sig_exchange_id": "964",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3364135",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364138",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364140",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364143",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364145",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364148",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364150",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364153",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "276",
+      "sig_exchange_id": "965",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3364155",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3364158",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "277",
+      "sig_exchange_id": "966",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344033",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344034",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344035",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344036",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344037",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344038",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344039",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "278",
+      "sig_exchange_id": "967",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344030",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344031",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344032",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "279",
+      "sig_exchange_id": "968",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "634891",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "280",
+      "sig_exchange_id": "969",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "634893",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "281",
+      "sig_exchange_id": "970",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "634892",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "282",
+      "sig_exchange_id": "971",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343949",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343950",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343951",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343952",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343953",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343955",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343958",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343960",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "283",
+      "sig_exchange_id": "972",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343947",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343948",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "284",
+      "sig_exchange_id": "973",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343967",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343968",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343969",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343970",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343971",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343972",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343973",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343974",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "285",
+      "sig_exchange_id": "974",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343965",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343966",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "286",
+      "sig_exchange_id": "975",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344064",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344065",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344066",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344067",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344068",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344069",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344070",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344071",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344072",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "287",
+      "sig_exchange_id": "976",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344086",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344087",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344088",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344089",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344090",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344091",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344092",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344093",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "288",
+      "sig_exchange_id": "977",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344085",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "289",
+      "sig_exchange_id": "978",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344127",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "290",
+      "sig_exchange_id": "979",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344120",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344121",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344122",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344123",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344124",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344125",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344126",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "291",
+      "sig_exchange_id": "980",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "630937",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed direct final-election winner identity against current Polymarket event metadata and public resolution rules.",
+      "resolution_notes": "Same final 2026 election-winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "292",
+      "sig_exchange_id": "981",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3363875",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3363885",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3363893",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3363901",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3363909",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3363910",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3363911",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3363912",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3363913",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "293",
+      "sig_exchange_id": "982",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344141",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344142",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344143",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344144",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344145",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "294",
+      "sig_exchange_id": "983",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344136",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344137",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344138",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344139",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344140",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "295",
+      "sig_exchange_id": "984",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344162",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344163",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344164",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344165",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344166",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344167",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344168",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344169",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "296",
+      "sig_exchange_id": "985",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344182",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "297",
+      "sig_exchange_id": "986",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344172",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344173",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344174",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344175",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344176",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344177",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344178",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344179",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344180",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344181",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "298",
+      "sig_exchange_id": "987",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365564",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365565",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365566",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365567",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365568",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365569",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365570",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "299",
+      "sig_exchange_id": "988",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365580",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365581",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365582",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "300",
+      "sig_exchange_id": "989",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365573",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365574",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365575",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365576",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365577",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365578",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365579",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "301",
+      "sig_exchange_id": "990",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365598",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365599",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365600",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365601",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365602",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365603",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365604",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365605",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365606",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "302",
+      "sig_exchange_id": "991",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365597",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "303",
+      "sig_exchange_id": "992",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365726",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365727",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365728",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "304",
+      "sig_exchange_id": "993",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3365719",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365720",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365721",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365722",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365723",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365724",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3365725",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "305",
+      "sig_exchange_id": "994",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369041",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369042",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369043",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369044",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369045",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369046",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369047",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "306",
+      "sig_exchange_id": "995",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369033",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369036",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369038",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "307",
+      "sig_exchange_id": "996",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369108",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369109",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369110",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369111",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369112",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369113",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369114",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "308",
+      "sig_exchange_id": "997",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369107",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "309",
+      "sig_exchange_id": "998",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369476",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369477",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369478",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369479",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369480",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369481",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369482",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369483",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369484",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "310",
+      "sig_exchange_id": "999",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369512",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "311",
+      "sig_exchange_id": "1000",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369489",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369490",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369491",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369497",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369498",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369501",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369502",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369506",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369509",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "312",
+      "sig_exchange_id": "1001",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369552",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "313",
+      "sig_exchange_id": "1002",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369545",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369546",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369547",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369548",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369549",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369550",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369551",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "314",
+      "sig_exchange_id": "1003",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369573",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369574",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369575",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369576",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369577",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "315",
+      "sig_exchange_id": "1004",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369568",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369569",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369570",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369571",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369572",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "316",
+      "sig_exchange_id": "1005",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369565",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "317",
+      "sig_exchange_id": "1006",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369555",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369556",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369557",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369558",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369559",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369560",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369561",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369562",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369563",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369564",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "318",
+      "sig_exchange_id": "1007",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1280801",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "319",
+      "sig_exchange_id": "1008",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1280800",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "320",
+      "sig_exchange_id": "1009",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283001",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "321",
+      "sig_exchange_id": "1010",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283000",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "322",
+      "sig_exchange_id": "1011",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283016",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "323",
+      "sig_exchange_id": "1012",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942401",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "324",
+      "sig_exchange_id": "1013",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283065",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "325",
+      "sig_exchange_id": "1014",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283064",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "326",
+      "sig_exchange_id": "1015",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283097",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "327",
+      "sig_exchange_id": "1016",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283096",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "328",
+      "sig_exchange_id": "1017",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283113",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "329",
+      "sig_exchange_id": "1018",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283112",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "330",
+      "sig_exchange_id": "1019",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942722",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "331",
+      "sig_exchange_id": "1020",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942721",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "332",
+      "sig_exchange_id": "1021",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942776",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "333",
+      "sig_exchange_id": "1022",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942774",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "334",
+      "sig_exchange_id": "1023",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283849",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "335",
+      "sig_exchange_id": "1024",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283848",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "336",
+      "sig_exchange_id": "1025",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942820",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "337",
+      "sig_exchange_id": "1026",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942819",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "338",
+      "sig_exchange_id": "1027",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283873",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "339",
+      "sig_exchange_id": "1028",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1283872",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "340",
+      "sig_exchange_id": "1029",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1284768",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "341",
+      "sig_exchange_id": "1030",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1284767",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "342",
+      "sig_exchange_id": "1031",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "944282",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "343",
+      "sig_exchange_id": "1032",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "944290",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "344",
+      "sig_exchange_id": "1033",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1285080",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "345",
+      "sig_exchange_id": "1034",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "1285079",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "346",
+      "sig_exchange_id": "1035",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "944297",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "347",
+      "sig_exchange_id": "1036",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "944314",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "348",
+      "sig_exchange_id": "1037",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "944313",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "349",
+      "sig_exchange_id": "1038",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "944334",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "350",
+      "sig_exchange_id": "1039",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "944333",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "351",
+      "sig_exchange_id": "1040",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "944342",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "352",
+      "sig_exchange_id": "1041",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "944341",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "353",
+      "sig_exchange_id": "1042",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343159",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343160",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343161",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343162",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343163",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343164",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343165",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343166",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343167",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "354",
+      "sig_exchange_id": "1043",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343185",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343186",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "355",
+      "sig_exchange_id": "1044",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343177",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343178",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343179",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343180",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343181",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343182",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343183",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343184",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "356",
+      "sig_exchange_id": "1045",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343547",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "357",
+      "sig_exchange_id": "1046",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343540",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343541",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343542",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343543",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343544",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343545",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343546",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "358",
+      "sig_exchange_id": "1047",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343887",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343888",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343889",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343890",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343891",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "359",
+      "sig_exchange_id": "1048",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343882",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343883",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343884",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343885",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343886",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "360",
+      "sig_exchange_id": "1049",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "4162947",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "4162948",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "4162949",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "4162950",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "4162951",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "4162952",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "361",
+      "sig_exchange_id": "1050",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "4162953",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "4162954",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "362",
+      "sig_exchange_id": "1051",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344157",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "363",
+      "sig_exchange_id": "1052",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344148",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344149",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344150",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344151",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344152",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344153",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344154",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344155",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344156",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "364",
+      "sig_exchange_id": "1053",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344160",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344161",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "365",
+      "sig_exchange_id": "1054",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344233",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "366",
+      "sig_exchange_id": "1055",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344221",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344222",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344224",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344226",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344227",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344228",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344229",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344230",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344231",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344232",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "368",
+      "sig_exchange_id": "1057",
+      "sig_outcome_label": "YES",
+      "mapping_class": "NO_TRADE",
+      "mapping_direction": null,
+      "mapping_confidence": "0",
+      "status": "VERIFIED",
+      "polymarket_legs": [],
+      "semantic_notes": "Re-audited live final-election winner event: active Polymarket markets remain candidate-specific with no reviewed party-level identity; fail closed.",
+      "resolution_notes": "Explicit reviewed NO_TRADE decision; no Polymarket token is claimed."
+    },
+    {
+      "sig_market_id": "369",
+      "sig_exchange_id": "1058",
+      "sig_outcome_label": "YES",
+      "mapping_class": "NO_TRADE",
+      "mapping_direction": null,
+      "mapping_confidence": "0",
+      "status": "VERIFIED",
+      "polymarket_legs": [],
+      "semantic_notes": "Re-audited live final-election winner event: active Polymarket markets remain candidate-specific with no reviewed party-level identity; fail closed.",
+      "resolution_notes": "Explicit reviewed NO_TRADE decision; no Polymarket token is claimed."
+    },
+    {
+      "sig_market_id": "370",
+      "sig_exchange_id": "1059",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3367207",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3367208",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3367209",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3367210",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3367211",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3367212",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3367213",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3367214",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3367215",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "371",
+      "sig_exchange_id": "1060",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3367206",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "372",
+      "sig_exchange_id": "1061",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369170",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369171",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369172",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "373",
+      "sig_exchange_id": "1062",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369163",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369164",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369165",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369166",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369167",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369168",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369169",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "374",
+      "sig_exchange_id": "1063",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369219",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369220",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369221",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369222",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369223",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369224",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369225",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369226",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "375",
+      "sig_exchange_id": "1064",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942910",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "376",
+      "sig_exchange_id": "1065",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "942909",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "377",
+      "sig_exchange_id": "1066",
+      "sig_outcome_label": "YES",
+      "mapping_class": "NO_TRADE",
+      "mapping_direction": null,
+      "mapping_confidence": "0",
+      "status": "VERIFIED",
+      "polymarket_legs": [],
+      "semantic_notes": "Re-audited live final-election winner event: active Polymarket markets remain candidate-specific with no reviewed party-level identity; fail closed.",
+      "resolution_notes": "Explicit reviewed NO_TRADE decision; no Polymarket token is claimed."
+    },
+    {
+      "sig_market_id": "378",
+      "sig_exchange_id": "1067",
+      "sig_outcome_label": "YES",
+      "mapping_class": "NO_TRADE",
+      "mapping_direction": null,
+      "mapping_confidence": "0",
+      "status": "VERIFIED",
+      "polymarket_legs": [],
+      "semantic_notes": "Re-audited live final-election winner event: active Polymarket markets remain candidate-specific with no reviewed party-level identity; fail closed.",
+      "resolution_notes": "Explicit reviewed NO_TRADE decision; no Polymarket token is claimed."
+    },
+    {
+      "sig_market_id": "379",
+      "sig_exchange_id": "1068",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343809",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343810",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343811",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343812",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343813",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343814",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343815",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343816",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343817",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "380",
+      "sig_exchange_id": "1069",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343808",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "381",
+      "sig_exchange_id": "1070",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343938",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343939",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343940",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343941",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343942",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343943",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343944",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "382",
+      "sig_exchange_id": "1071",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343935",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343936",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3343937",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "383",
+      "sig_exchange_id": "1072",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344073",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "384",
+      "sig_exchange_id": "1073",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369456",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369457",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369458",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369459",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369460",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369461",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369462",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3369463",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "385",
+      "sig_exchange_id": "1074",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3369455",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "386",
+      "sig_exchange_id": "1075",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3343158",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    },
+    {
+      "sig_market_id": "387",
+      "sig_exchange_id": "1076",
+      "sig_outcome_label": "YES",
+      "mapping_class": "DERIVED",
+      "mapping_direction": "DERIVED",
+      "mapping_confidence": "0.99",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344097",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344098",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344099",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344100",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344101",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344102",
+          "outcome": "Yes"
+        },
+        {
+          "market_id": "3344103",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed final-election victory-margin partition for the same party and race in one Polymarket negative-risk event.",
+      "resolution_notes": "Party-win probability is represented by the union/sum of all mutually exclusive Yes margin buckets for that party."
+    },
+    {
+      "sig_market_id": "388",
+      "sig_exchange_id": "1077",
+      "sig_outcome_label": "YES",
+      "mapping_class": "EXACT",
+      "mapping_direction": "SAME",
+      "mapping_confidence": "1",
+      "status": "VERIFIED",
+      "polymarket_legs": [
+        {
+          "market_id": "3344096",
+          "outcome": "Yes"
+        }
+      ],
+      "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+      "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes."
+    }
+  ]
+}

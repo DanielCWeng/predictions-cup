@@ -1,0 +1,67 @@
+# Runtime configuration and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Coverage / test outputs
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Local data / databases
+/data/*
+!/data/.gitkeep
+!/data/experiments/
+/data/experiments/*
+!/data/experiments/experiment_003/
+!/data/experiments/experiment_004a2/
+!/data/experiments/experiment_004b/
+!/data/reference/
+!/data/research/
+!/data/manifests/
+/data/manifests/*
+!/data/manifests/historical/
+
+# DATA-001 historical corpus / extracts live outside Git (local disk or Kaggle)
+historical_replay_corpus/
+historical_orderbooks/
+_download_tmp/
+*.parquet.unsorted
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Local logs
+*.log
+logs/
+
+# Build outputs
+build/
+dist/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+!/data/experiments/experiment_004c/
