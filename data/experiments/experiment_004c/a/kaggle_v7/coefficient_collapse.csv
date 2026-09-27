@@ -1,0 +1,3 @@
+regime,naive_standardized_source_beta,controlled_standardized_source_beta,coefficient_collapse_fraction,discovery_holdout_raw_source_corr,discovery_holdout_source_vs_baseline_residual_corr,correlation_collapse_fraction
+PRE_ELECTION,-5.158624306260135e-06,2.8150680237088007e-06,0.45429869349224816,-0.00037514067775415113,0.06852478925126326,-181.664246547454
+ACTIVE_RESULTS,5.565687905678752e-05,5.564974103455136e-05,0.0001282504940472995,-0.03631010794896972,-0.02527443205025405,0.3039284794808439
