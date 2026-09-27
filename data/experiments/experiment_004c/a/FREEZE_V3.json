@@ -1,0 +1,18 @@
+{
+  "experiment_id": "EXPERIMENT-004C-A",
+  "freeze_version": 3,
+  "freeze_status": "FINAL_FROZEN_BEFORE_CHALLENGE_EMPIRICAL_ACCESS",
+  "supersedes_freeze_commit": "de57fa5a0fb085f28c1d4ca4457fcf1de932907f",
+  "base_sha": "4e094d13b06d9e558cbc404cc4d472316d7d5bbb",
+  "pair_rows": 38,
+  "universe_rows": 122,
+  "primary_horizon_seconds": 30,
+  "stochastic_null_draws": 250,
+  "parameter_stability_penalties": [
+    0.5,
+    1,
+    2
+  ],
+  "challenge_empirical_outcomes_accessed_before_freeze": false,
+  "note": "This is the terminal preregistration freeze. No further scientific-design changes are permitted after challenge empirical access."
+}
