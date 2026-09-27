@@ -63,3 +63,5 @@ dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+!/data/experiments/experiment_004c/
