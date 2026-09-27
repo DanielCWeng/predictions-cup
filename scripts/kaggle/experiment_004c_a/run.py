@@ -1,3 +1,4 @@
+# ruff: noqa
 from __future__ import annotations
 
 import csv
@@ -1201,7 +1202,7 @@ def null_event_stat(
     p0 = predict(baseline_model, data["base"][mask])
     p1 = predict(challenger_model, challenger_matrix(data["base"][mask], prim[mask]))
     rows = edge_metrics(data["edge"][mask], y[mask], p0, p1, task)
-    if not rows:
+    if len(rows) < 2:
         return None, retained, retention
     return float(np.mean([float(row["delta_primary"]) for row in rows])), retained, retention
 
@@ -1234,7 +1235,8 @@ def challenge_observed(
                 row["task"] = task
                 row["horizon_seconds"] = horizon
             edges.extend(edge_rows)
-    system, families = aggregate_system(events, "delta_primary")
+    eligible_events = [row for row in events if int(row.get("valid_edges", 0)) >= 2]
+    system, families = aggregate_system(eligible_events, "delta_primary")
     return events, edges, system, families
 
 
@@ -1921,10 +1923,16 @@ def main() -> None:
         )
         if observed is None:
             continue
-        if unrelated is not None and unrelated >= observed:
+        if unrelated is None:
+            disposition_reason.append(f"{regime}: unrelated-market control lacked frozen comparable coverage")
+            continue
+        if delayed is None:
+            disposition_reason.append(f"{regime}: delayed-source control lacked frozen comparable coverage")
+            continue
+        if unrelated >= observed:
             disposition_reason.append(f"{regime}: unrelated-market control matched/exceeded A3 lift")
             continue
-        if delayed is not None and delayed >= observed:
+        if delayed >= observed:
             disposition_reason.append(f"{regime}: delayed-source control matched/exceeded A3 lift")
             continue
         passing_regimes.append(regime)
@@ -1942,9 +1950,8 @@ def main() -> None:
             0, "primary A3 gate passed in " + ", ".join(sorted(passing_regimes))
         )
     else:
-        a3_positive = any(
-            row.get("system_delta_primary") is not None
-            and float(row["system_delta_primary"]) > 0
+        a3_meaningful = any(
+            row.get("smallest_meaningful_effect_pass") is True
             for row in a3_system
         )
         timing_rejections = any(
@@ -1953,7 +1960,7 @@ def main() -> None:
             if row["task"] == "A3"
         )
         if (
-            not a3_positive
+            not a3_meaningful
             and not timing_rejections
             and mean_collapse is not None
             and mean_collapse >= 0.50
