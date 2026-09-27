@@ -10,7 +10,7 @@ This index canonicalizes the independent research artifacts prepared for EXPERIM
 - Frozen 004B implementation HEAD: `e9a95fb2092c7e7385ecf27f6972b8d8921c1f72`
 - Frozen discovery-spec SHA-256: `409512367f59fefa861df89c57b96586d30e28d205f60e306b20a5e64935b504`
 
-PR #30 remains the canonical 004B evidence/provenance source and integration review surface. It is still an open review PR and must not be described as scientific acceptance. MASTER still has an unresolved disposition item for the Hungary ACTIVE circular-shift null: 1,000 deterministic attempts produced only 648 valid contemporaneous statistics and 833 valid directed-30s statistics for the two affected aggregate statistics. This cleanup does not replace, modify, merge, or scientifically accept PR #30.
+PR #30 is the canonical 004B evidence/provenance source and was merged to `main` at merge commit `7fd19a1e4259e01a30d172475184d15cf45f8725` following MASTER authorization. The documented Hungary ACTIVE circular-shift deviation remains part of the evidence record: 1,000 deterministic attempts produced only 648 valid contemporaneous statistics and 833 valid directed-30s statistics for the two affected aggregate statistics. The merge does not erase that limitation or change the underlying scientific results.
 
 ## Historical challenge-set prior exposure
 
