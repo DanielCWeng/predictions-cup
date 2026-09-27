@@ -1,15 +1,16 @@
 {
   "schema_version": 1,
-  "package_version": "004A-event-time-v1",
+  "package_version": "004A-event-time-v2",
   "invariants": {
     "half_open_intervals": true,
     "boundaries_must_not_move_for_alpha": true,
     "market_price_used_to_choose_boundaries": false,
-    "pre_election_definition": "DATA-001 corpus start to poll_close",
-    "election_day_pre_results_definition": "poll_close to first_meaningful_results; may be zero length",
-    "active_results_definition": "first meaningful public result dissemination to externally evidenced end of the principal result-arrival phase",
+    "pre_election_definition": "DATA-001 corpus start to factual poll_open",
+    "election_day_pre_results_definition": "poll_open to first_meaningful_results; poll_close remains an internal checkpoint/sub-anchor",
+    "active_results_definition": "fixed six-hour market-independent horizon from first meaningful public results; frozen before reaction diagnostics",
     "late_count_definition": "end of principal result-arrival phase to authoritative completion of the materially relevant count stage",
-    "post_resolution_diagnostic_definition": "optional administrative/settlement tail after meaningful count completion"
+    "post_resolution_diagnostic_definition": "optional administrative/settlement tail after meaningful count completion",
+    "checkpoint_state_definition": "checkpoint state is evidenced from nearest full depth snapshots, with explicit age/straddling-gap policy; first-to-last observation span alone is not state proof"
   },
   "events": [
     {
@@ -19,29 +20,29 @@
         {
           "name": "PRE_ELECTION",
           "start_utc": "2026-05-29T00:00:00Z",
-          "end_utc": "2026-05-31T21:00:00Z",
-          "anchor_type": "CORPUS_START_TO_POLL_CLOSE",
+          "end_utc": "2026-05-31T13:00:00Z",
+          "anchor_type": "CORPUS_START_TO_POLL_OPEN",
           "boundary_origin": "FACTUAL"
         },
         {
           "name": "ELECTION_DAY_PRE_RESULTS",
-          "start_utc": "2026-05-31T21:00:00Z",
+          "start_utc": "2026-05-31T13:00:00Z",
           "end_utc": "2026-05-31T21:11:00Z",
-          "anchor_type": "POLL_CLOSE_TO_FIRST_RESULTS",
-          "boundary_origin": "FACTUAL"
+          "anchor_type": "POLL_OPEN_TO_FIRST_RESULTS",
+          "boundary_origin": "FACTUAL_OR_REPORTED"
         },
         {
           "name": "ACTIVE_RESULTS",
           "start_utc": "2026-05-31T21:11:00Z",
-          "end_utc": "2026-05-31T22:32:00Z",
-          "anchor_type": "FIRST_RESULTS_TO_RUNOFF_PAIR_CLEAR",
-          "boundary_origin": "FACTUAL_REPORTED"
+          "end_utc": "2026-06-01T03:11:00Z",
+          "anchor_type": "FIRST_RESULTS_PLUS_FIXED_6H",
+          "boundary_origin": "PREDECLARED_POLICY"
         },
         {
           "name": "LATE_COUNT",
-          "start_utc": "2026-05-31T22:32:00Z",
+          "start_utc": "2026-06-01T03:11:00Z",
           "end_utc": "2026-06-05T05:00:00Z",
-          "anchor_type": "BULK_RESULTS_TO_CNE_DECLARATION",
+          "anchor_type": "FIXED_ACTIVE_RESULTS_END_TO_AUTHORITATIVE_COUNT_COMPLETION",
           "boundary_origin": "FACTUAL_DATE_NORMALIZED"
         },
         {
@@ -61,29 +62,29 @@
         {
           "name": "PRE_ELECTION",
           "start_utc": "2026-06-19T00:00:00Z",
-          "end_utc": "2026-06-21T21:00:00Z",
-          "anchor_type": "CORPUS_START_TO_POLL_CLOSE",
+          "end_utc": "2026-06-21T13:00:00Z",
+          "anchor_type": "CORPUS_START_TO_POLL_OPEN",
           "boundary_origin": "FACTUAL"
         },
         {
           "name": "ELECTION_DAY_PRE_RESULTS",
-          "start_utc": "2026-06-21T21:00:00Z",
+          "start_utc": "2026-06-21T13:00:00Z",
           "end_utc": "2026-06-21T21:11:00Z",
-          "anchor_type": "POLL_CLOSE_TO_FIRST_RESULTS",
-          "boundary_origin": "FACTUAL"
+          "anchor_type": "POLL_OPEN_TO_FIRST_RESULTS",
+          "boundary_origin": "FACTUAL_OR_REPORTED"
         },
         {
           "name": "ACTIVE_RESULTS",
           "start_utc": "2026-06-21T21:11:00Z",
-          "end_utc": "2026-06-21T22:27:00Z",
-          "anchor_type": "FIRST_RESULTS_TO_99_PERCENT_PRECOUNT",
-          "boundary_origin": "FACTUAL_REPORTED"
+          "end_utc": "2026-06-22T03:11:00Z",
+          "anchor_type": "FIRST_RESULTS_PLUS_FIXED_6H",
+          "boundary_origin": "PREDECLARED_POLICY"
         },
         {
           "name": "LATE_COUNT",
-          "start_utc": "2026-06-21T22:27:00Z",
+          "start_utc": "2026-06-22T03:11:00Z",
           "end_utc": "2026-06-25T05:00:00Z",
-          "anchor_type": "PRECOUNT_TO_CNE_DECLARATION",
+          "anchor_type": "FIXED_ACTIVE_RESULTS_END_TO_AUTHORITATIVE_COUNT_COMPLETION",
           "boundary_origin": "FACTUAL_DATE_NORMALIZED"
         },
         {
@@ -103,30 +104,29 @@
         {
           "name": "PRE_ELECTION",
           "start_utc": "2026-04-10T00:00:00Z",
-          "end_utc": "2026-04-12T23:00:00Z",
-          "anchor_type": "CORPUS_START_TO_PRIMARY_NATIONAL_POLL_CLOSE",
+          "end_utc": "2026-04-12T12:00:00Z",
+          "anchor_type": "CORPUS_START_TO_POLL_OPEN",
           "boundary_origin": "FACTUAL"
         },
         {
           "name": "ELECTION_DAY_PRE_RESULTS",
-          "start_utc": "2026-04-12T23:00:00Z",
+          "start_utc": "2026-04-12T12:00:00Z",
           "end_utc": "2026-04-12T23:00:00Z",
-          "anchor_type": "ZERO_LENGTH_RESULTS_BEGAN_AT_CLOSE",
-          "boundary_origin": "FACTUAL",
-          "zero_length": true
+          "anchor_type": "POLL_OPEN_TO_FIRST_RESULTS",
+          "boundary_origin": "FACTUAL_OR_REPORTED"
         },
         {
           "name": "ACTIVE_RESULTS",
           "start_utc": "2026-04-12T23:00:00Z",
-          "end_utc": "2026-04-23T00:53:00Z",
-          "anchor_type": "ROLLING_RESULTS_TO_100_PERCENT_ACTS_PROCESSED",
-          "boundary_origin": "FACTUAL_OFFICIAL"
+          "end_utc": "2026-04-13T05:00:00Z",
+          "anchor_type": "FIRST_RESULTS_PLUS_FIXED_6H",
+          "boundary_origin": "PREDECLARED_POLICY"
         },
         {
           "name": "LATE_COUNT",
-          "start_utc": "2026-04-23T00:53:00Z",
+          "start_utc": "2026-04-13T05:00:00Z",
           "end_utc": "2026-05-15T15:04:00Z",
-          "anchor_type": "PROCESSED_TO_100_PERCENT_COUNTED",
+          "anchor_type": "FIXED_ACTIVE_RESULTS_END_TO_AUTHORITATIVE_COUNT_COMPLETION",
           "boundary_origin": "FACTUAL_OFFICIAL"
         },
         {
@@ -138,7 +138,7 @@
           "boundary_origin": "FACTUAL_OFFICIAL"
         }
       ],
-      "special_case": "ACTIVE_RESULTS overlaps exceptional residual voting at 187 Lima tables until 2026-04-13T23:00:00Z; see event_timeline additional anchor."
+      "special_case": "Exceptional residual voting at 187 Lima tables continued after the primary national poll close; the supplemental poll-close anchor remains factual metadata. It does not extend ACTIVE_RESULTS beyond the predeclared six-hour horizon."
     },
     {
       "regime_id": "peru_runoff",
@@ -147,29 +147,29 @@
         {
           "name": "PRE_ELECTION",
           "start_utc": "2026-06-05T00:00:00Z",
-          "end_utc": "2026-06-07T22:00:00Z",
-          "anchor_type": "CORPUS_START_TO_POLL_CLOSE",
+          "end_utc": "2026-06-07T12:00:00Z",
+          "anchor_type": "CORPUS_START_TO_POLL_OPEN",
           "boundary_origin": "FACTUAL"
         },
         {
           "name": "ELECTION_DAY_PRE_RESULTS",
-          "start_utc": "2026-06-07T22:00:00Z",
+          "start_utc": "2026-06-07T12:00:00Z",
           "end_utc": "2026-06-07T23:12:00Z",
-          "anchor_type": "POLL_CLOSE_TO_FIRST_OFFICIAL_COUNT_UPDATE",
-          "boundary_origin": "FACTUAL_REPORTED"
+          "anchor_type": "POLL_OPEN_TO_FIRST_RESULTS",
+          "boundary_origin": "FACTUAL_OR_REPORTED"
         },
         {
           "name": "ACTIVE_RESULTS",
           "start_utc": "2026-06-07T23:12:00Z",
-          "end_utc": "2026-06-13T00:04:00Z",
-          "anchor_type": "FIRST_OFFICIAL_COUNT_UPDATE_TO_100_PERCENT_ACTS_PROCESSED",
-          "boundary_origin": "FACTUAL_OFFICIAL"
+          "end_utc": "2026-06-08T05:12:00Z",
+          "anchor_type": "FIRST_RESULTS_PLUS_FIXED_6H",
+          "boundary_origin": "PREDECLARED_POLICY"
         },
         {
           "name": "LATE_COUNT",
-          "start_utc": "2026-06-13T00:04:00Z",
+          "start_utc": "2026-06-08T05:12:00Z",
           "end_utc": "2026-06-29T19:50:00Z",
-          "anchor_type": "PROCESSED_TO_100_PERCENT_COUNTED",
+          "anchor_type": "FIXED_ACTIVE_RESULTS_END_TO_AUTHORITATIVE_COUNT_COMPLETION",
           "boundary_origin": "FACTUAL_OFFICIAL"
         },
         {
@@ -189,29 +189,29 @@
         {
           "name": "PRE_ELECTION",
           "start_utc": "2026-04-05T00:00:00Z",
-          "end_utc": "2026-04-12T17:00:00Z",
-          "anchor_type": "CORPUS_START_TO_POLL_CLOSE",
+          "end_utc": "2026-04-12T04:00:00Z",
+          "anchor_type": "CORPUS_START_TO_POLL_OPEN",
           "boundary_origin": "FACTUAL"
         },
         {
           "name": "ELECTION_DAY_PRE_RESULTS",
-          "start_utc": "2026-04-12T17:00:00Z",
+          "start_utc": "2026-04-12T04:00:00Z",
           "end_utc": "2026-04-12T18:18:00Z",
-          "anchor_type": "POLL_CLOSE_TO_FIRST_PARTIAL_RESULTS",
-          "boundary_origin": "FACTUAL_REPORTED"
+          "anchor_type": "POLL_OPEN_TO_FIRST_RESULTS",
+          "boundary_origin": "FACTUAL_OR_REPORTED"
         },
         {
           "name": "ACTIVE_RESULTS",
           "start_utc": "2026-04-12T18:18:00Z",
-          "end_utc": "2026-04-12T19:23:00Z",
-          "anchor_type": "FIRST_RESULTS_TO_PUBLIC_CONCESSION",
-          "boundary_origin": "FACTUAL_REPORTED"
+          "end_utc": "2026-04-13T00:18:00Z",
+          "anchor_type": "FIRST_RESULTS_PLUS_FIXED_6H",
+          "boundary_origin": "PREDECLARED_POLICY"
         },
         {
           "name": "LATE_COUNT",
-          "start_utc": "2026-04-12T19:23:00Z",
+          "start_utc": "2026-04-13T00:18:00Z",
           "end_utc": "2026-04-18T22:00:00Z",
-          "anchor_type": "CONCESSION_TO_18_APRIL_COUNTING_PRECINCTS_COMPLETE",
+          "anchor_type": "FIXED_ACTIVE_RESULTS_END_TO_AUTHORITATIVE_COUNT_COMPLETION",
           "boundary_origin": "FACTUAL_DATE_NORMALIZED"
         },
         {
