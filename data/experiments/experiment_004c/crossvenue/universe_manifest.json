@@ -1,0 +1,16 @@
+{
+  "acceptance_sha256": "fa59331a45897f7971454835e86f67a65313a2efff8ca387a3b2cf1ea99b19e5",
+  "acceptance_source": "data/mappings/sig_polymarket_2026_acceptance.json",
+  "capture_token_count": 689,
+  "capture_token_ids_sha256": "def5b9b51f5db9a56e24b1c8193e7044b46296637c0bea2a8385234b28008c27",
+  "derived_count": 87,
+  "derived_selector": "mapping_class=DERIVED,status=VERIFIED,reviewed_union_only",
+  "derived_transformation": "SUM_MUTUALLY_EXCLUSIVE_YES_BUCKETS",
+  "derived_universe_sha256": "47afa1e57e2ce386a5c7eec4834b80a885b69f618e4be3eae9f01a992237b617",
+  "exact_count": 140,
+  "exact_selector": "mapping_class=EXACT,status=VERIFIED,mapping_direction=SAME",
+  "exact_universe_sha256": "aa839b8509118e06516cebc64594d984294533ad8991d925d226a37acadeb616",
+  "mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
+  "mapping_source": "data/mappings/sig_polymarket_2026.json",
+  "schema_version": 1
+}
