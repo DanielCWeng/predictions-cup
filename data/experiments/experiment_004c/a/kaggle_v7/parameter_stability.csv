@@ -1,0 +1,9 @@
+regime,ridge_penalty,discovery_oos_delta_mse,selected,peak_is_isolated,note
+PRE_ELECTION,0.5,2.1531049148348505e-09,False,,
+PRE_ELECTION,1.0,2.1531245871096966e-09,True,,
+PRE_ELECTION,2.0,2.153155822171431e-09,False,,
+PRE_ELECTION,SUMMARY,,False,False,champion remains 1.0 regardless of diagnostic
+ACTIVE_RESULTS,0.5,3.051293470040629e-10,False,,
+ACTIVE_RESULTS,1.0,3.049116167966954e-10,True,,
+ACTIVE_RESULTS,2.0,3.0447456782363727e-10,False,,
+ACTIVE_RESULTS,SUMMARY,,False,False,champion remains 1.0 regardless of diagnostic
