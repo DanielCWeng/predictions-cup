@@ -1,0 +1,860 @@
+{
+  "analysis_id": "EXP004B-PARTICIPANT-ROBUSTNESS",
+  "code_revision": "b2ba5e2c3e63d57bd6e74c0c5861bad67c983e1b",
+  "dataset_hash": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+  "horizon_seconds": 300,
+  "interpretation_rules": {
+    "event_generalisation_support": "leave-one-event-out remains positive without a single event",
+    "history_support": "effect remains directionally consistent as minimum history rises",
+    "identity_specific_support": "real delta_mse should materially exceed permutation ensemble",
+    "not_confirmation": "post-hoc diagnostics do not promote EXPERIMENT-003"
+  },
+  "leave_one_event_out": {
+    "colombia_first_round": {
+      "baseline_mse": 0.012922487692821687,
+      "by_event": {
+        "colombia_runoff": {
+          "delta_mse": 1.2913112211875869e-06,
+          "markets": 5,
+          "observations": 24667
+        },
+        "hungary_election": {
+          "delta_mse": 1.9738669636368654e-06,
+          "markets": 4,
+          "observations": 29748
+        },
+        "peru_first_round": {
+          "delta_mse": 3.340716952121503e-05,
+          "markets": 17,
+          "observations": 59750
+        },
+        "peru_runoff": {
+          "delta_mse": 1.5494760996970542e-05,
+          "markets": 3,
+          "observations": 11957
+        }
+      },
+      "challenger_mse": 0.012904474018724698,
+      "delta_mse": 1.8013674096990838e-05,
+      "directional_accuracy": 0.20019504923803935,
+      "equal_event_bootstrap": {
+        "lower": 1.632589092412226e-06,
+        "point": 1.3041777175752506e-05,
+        "upper": 2.554884388182049e-05
+      },
+      "event_families": [
+        "COL_2026",
+        "HUN_2026",
+        "PER_2026"
+      ],
+      "event_ids": [
+        "colombia_runoff",
+        "hungary_election",
+        "peru_first_round",
+        "peru_runoff"
+      ],
+      "events": 4,
+      "folds": [
+        "colombia_runoff:fold-001",
+        "colombia_runoff:fold-002",
+        "hungary_election:fold-001",
+        "hungary_election:fold-002",
+        "hungary_election:fold-003",
+        "hungary_election:fold-004",
+        "hungary_election:fold-005",
+        "hungary_election:fold-006",
+        "hungary_election:fold-007",
+        "peru_first_round:fold-001",
+        "peru_first_round:fold-002",
+        "peru_runoff:fold-001",
+        "peru_runoff:fold-002"
+      ],
+      "gross_executable_markout_mean": -0.010056175766321498,
+      "markets": 26,
+      "observation_weighted_event_bootstrap": {
+        "lower": 1.6644559097179762e-06,
+        "point": 1.8013674096990838e-05,
+        "upper": 3.0420310933847114e-05
+      },
+      "prediction_target_correlation": 0.10094815910459283,
+      "raw_p_value": 0.0018999050047497626,
+      "relative_mse_improvement": 0.0013939788162457,
+      "test_blocks": 578,
+      "test_statistic": 9.370296639225079e-06,
+      "test_status": "MONTE_CARLO",
+      "valid_observations": 126122
+    },
+    "colombia_runoff": {
+      "baseline_mse": 0.012478756495423434,
+      "by_event": {
+        "colombia_first_round": {
+          "delta_mse": 6.358495476972273e-07,
+          "markets": 4,
+          "observations": 22943
+        },
+        "hungary_election": {
+          "delta_mse": 1.9738669636368654e-06,
+          "markets": 4,
+          "observations": 29748
+        },
+        "peru_first_round": {
+          "delta_mse": 3.340716952121503e-05,
+          "markets": 17,
+          "observations": 59750
+        },
+        "peru_runoff": {
+          "delta_mse": 1.5494760996970542e-05,
+          "markets": 3,
+          "observations": 11957
+        }
+      },
+      "challenger_mse": 0.012460631958640363,
+      "delta_mse": 1.8124536783070966e-05,
+      "directional_accuracy": 0.19926365375649127,
+      "equal_event_bootstrap": {
+        "lower": 1.3048582556670464e-06,
+        "point": 1.2877911757379916e-05,
+        "upper": 2.554884388182049e-05
+      },
+      "event_families": [
+        "COL_2026",
+        "HUN_2026",
+        "PER_2026"
+      ],
+      "event_ids": [
+        "colombia_first_round",
+        "hungary_election",
+        "peru_first_round",
+        "peru_runoff"
+      ],
+      "events": 4,
+      "folds": [
+        "colombia_first_round:fold-001",
+        "colombia_first_round:fold-002",
+        "hungary_election:fold-001",
+        "hungary_election:fold-002",
+        "hungary_election:fold-003",
+        "hungary_election:fold-004",
+        "hungary_election:fold-005",
+        "hungary_election:fold-006",
+        "hungary_election:fold-007",
+        "peru_first_round:fold-001",
+        "peru_first_round:fold-002",
+        "peru_runoff:fold-001",
+        "peru_runoff:fold-002"
+      ],
+      "gross_executable_markout_mean": -0.009964894934002155,
+      "markets": 25,
+      "observation_weighted_event_bootstrap": {
+        "lower": 1.391260188781518e-06,
+        "point": 1.8124536783070966e-05,
+        "upper": 3.0420310933847114e-05
+      },
+      "prediction_target_correlation": 0.09284849335211186,
+      "raw_p_value": 0.0019499025048747563,
+      "relative_mse_improvement": 0.001452431321159131,
+      "test_blocks": 578,
+      "test_statistic": 9.26207312071308e-06,
+      "test_status": "MONTE_CARLO",
+      "valid_observations": 124398
+    },
+    "hungary_election": {
+      "baseline_mse": 0.014210702194032553,
+      "by_event": {
+        "colombia_first_round": {
+          "delta_mse": 6.358495476972273e-07,
+          "markets": 4,
+          "observations": 22943
+        },
+        "colombia_runoff": {
+          "delta_mse": 1.2913112211875869e-06,
+          "markets": 5,
+          "observations": 24667
+        },
+        "peru_first_round": {
+          "delta_mse": 3.340716952121503e-05,
+          "markets": 17,
+          "observations": 59750
+        },
+        "peru_runoff": {
+          "delta_mse": 1.5494760996970542e-05,
+          "markets": 3,
+          "observations": 11957
+        }
+      },
+      "challenger_mse": 0.014192031004627867,
+      "delta_mse": 1.8671189404688573e-05,
+      "directional_accuracy": 0.18681327891247684,
+      "equal_event_bootstrap": {
+        "lower": 9.63580384442407e-07,
+        "point": 1.2707272821767597e-05,
+        "upper": 2.537820494620817e-05
+      },
+      "event_families": [
+        "COL_2026",
+        "PER_2026"
+      ],
+      "event_ids": [
+        "colombia_first_round",
+        "colombia_runoff",
+        "peru_first_round",
+        "peru_runoff"
+      ],
+      "events": 4,
+      "folds": [
+        "colombia_first_round:fold-001",
+        "colombia_first_round:fold-002",
+        "colombia_runoff:fold-001",
+        "colombia_runoff:fold-002",
+        "peru_first_round:fold-001",
+        "peru_first_round:fold-002",
+        "peru_runoff:fold-001",
+        "peru_runoff:fold-002"
+      ],
+      "gross_executable_markout_mean": -0.009204388310131836,
+      "markets": 24,
+      "observation_weighted_event_bootstrap": {
+        "lower": 9.75447806466114e-07,
+        "point": 1.8671189404688573e-05,
+        "upper": 3.0420310933847114e-05
+      },
+      "prediction_target_correlation": 0.08848380763818166,
+      "raw_p_value": 0.002199890005499725,
+      "relative_mse_improvement": 0.0013138822522456017,
+      "test_blocks": 384,
+      "test_statistic": 1.2948503017706963e-05,
+      "test_status": "MONTE_CARLO",
+      "valid_observations": 119317
+    },
+    "peru_first_round": {
+      "baseline_mse": 0.006320124595377708,
+      "by_event": {
+        "colombia_first_round": {
+          "delta_mse": 6.358495476972273e-07,
+          "markets": 4,
+          "observations": 22943
+        },
+        "colombia_runoff": {
+          "delta_mse": 1.2913112211875869e-06,
+          "markets": 5,
+          "observations": 24667
+        },
+        "hungary_election": {
+          "delta_mse": 1.9738669636368654e-06,
+          "markets": 4,
+          "observations": 29748
+        },
+        "peru_runoff": {
+          "delta_mse": 1.5494760996970542e-05,
+          "markets": 3,
+          "observations": 11957
+        }
+      },
+      "challenger_mse": 0.006316872840109937,
+      "delta_mse": 3.2517552677702282e-06,
+      "directional_accuracy": 0.12799641717516655,
+      "equal_event_bootstrap": {
+        "lower": 9.63580384442407e-07,
+        "point": 4.848947182373055e-06,
+        "upper": 1.1943898553024803e-05
+      },
+      "event_families": [
+        "COL_2026",
+        "HUN_2026",
+        "PER_2026"
+      ],
+      "event_ids": [
+        "colombia_first_round",
+        "colombia_runoff",
+        "hungary_election",
+        "peru_runoff"
+      ],
+      "events": 4,
+      "folds": [
+        "colombia_first_round:fold-001",
+        "colombia_first_round:fold-002",
+        "colombia_runoff:fold-001",
+        "colombia_runoff:fold-002",
+        "hungary_election:fold-001",
+        "hungary_election:fold-002",
+        "hungary_election:fold-003",
+        "hungary_election:fold-004",
+        "hungary_election:fold-005",
+        "hungary_election:fold-006",
+        "hungary_election:fold-007",
+        "peru_runoff:fold-001",
+        "peru_runoff:fold-002"
+      ],
+      "gross_executable_markout_mean": -0.008326731232155856,
+      "markets": 14,
+      "observation_weighted_event_bootstrap": {
+        "lower": 9.75447806466114e-07,
+        "point": 3.2517552677702282e-06,
+        "upper": 9.698385892732134e-06
+      },
+      "prediction_target_correlation": 0.008835747273269802,
+      "raw_p_value": 0.017349132543372833,
+      "relative_mse_improvement": 0.0005145080953228298,
+      "test_blocks": 578,
+      "test_statistic": 3.966263343327168e-06,
+      "test_status": "MONTE_CARLO",
+      "valid_observations": 89315
+    },
+    "peru_runoff": {
+      "baseline_mse": 0.012306411653071392,
+      "by_event": {
+        "colombia_first_round": {
+          "delta_mse": 6.358495476972273e-07,
+          "markets": 4,
+          "observations": 22943
+        },
+        "colombia_runoff": {
+          "delta_mse": 1.2913112211875869e-06,
+          "markets": 5,
+          "observations": 24667
+        },
+        "hungary_election": {
+          "delta_mse": 1.9738669636368654e-06,
+          "markets": 4,
+          "observations": 29748
+        },
+        "peru_first_round": {
+          "delta_mse": 3.340716952121503e-05,
+          "markets": 17,
+          "observations": 59750
+        }
+      },
+      "challenger_mse": 0.012291086230460073,
+      "delta_mse": 1.5325422611318956e-05,
+      "directional_accuracy": 0.16603699273565364,
+      "equal_event_bootstrap": {
+        "lower": 9.63580384442407e-07,
+        "point": 9.327049313434178e-06,
+        "upper": 2.537820494620817e-05
+      },
+      "event_families": [
+        "COL_2026",
+        "HUN_2026",
+        "PER_2026"
+      ],
+      "event_ids": [
+        "colombia_first_round",
+        "colombia_runoff",
+        "hungary_election",
+        "peru_first_round"
+      ],
+      "events": 4,
+      "folds": [
+        "colombia_first_round:fold-001",
+        "colombia_first_round:fold-002",
+        "colombia_runoff:fold-001",
+        "colombia_runoff:fold-002",
+        "hungary_election:fold-001",
+        "hungary_election:fold-002",
+        "hungary_election:fold-003",
+        "hungary_election:fold-004",
+        "hungary_election:fold-005",
+        "hungary_election:fold-006",
+        "hungary_election:fold-007",
+        "peru_first_round:fold-001",
+        "peru_first_round:fold-002"
+      ],
+      "gross_executable_markout_mean": -0.00962377104180646,
+      "markets": 28,
+      "observation_weighted_event_bootstrap": {
+        "lower": 9.75447806466114e-07,
+        "point": 1.5325422611318956e-05,
+        "upper": 2.9522246357934005e-05
+      },
+      "prediction_target_correlation": 0.10316760013645526,
+      "raw_p_value": 0.0028998550072496373,
+      "relative_mse_improvement": 0.001245320166702979,
+      "test_blocks": 578,
+      "test_statistic": 6.738640956421843e-06,
+      "test_status": "MONTE_CARLO",
+      "valid_observations": 137108
+    }
+  },
+  "minimum_history_sensitivity": {
+    "10": {
+      "baseline_mse": 0.011957049129847038,
+      "by_event": {
+        "colombia_first_round": {
+          "delta_mse": 6.001062023499379e-07,
+          "markets": 4,
+          "observations": 22943
+        },
+        "colombia_runoff": {
+          "delta_mse": -4.191039935200698e-06,
+          "markets": 5,
+          "observations": 24667
+        },
+        "hungary_election": {
+          "delta_mse": 5.900286957497749e-07,
+          "markets": 4,
+          "observations": 29748
+        },
+        "peru_first_round": {
+          "delta_mse": 8.250123632567971e-06,
+          "markets": 17,
+          "observations": 59750
+        },
+        "peru_runoff": {
+          "delta_mse": 1.4404393718289335e-05,
+          "markets": 3,
+          "observations": 11957
+        }
+      },
+      "challenger_mse": 0.011953070206217109,
+      "delta_mse": 3.978923629930601e-06,
+      "directional_accuracy": 0.1783651427229732,
+      "equal_event_bootstrap": {
+        "lower": -1.3203832553103815e-06,
+        "point": 3.930722462751265e-06,
+        "upper": 9.480977649712245e-06
+      },
+      "event_families": [
+        "COL_2026",
+        "HUN_2026",
+        "PER_2026"
+      ],
+      "event_ids": [
+        "colombia_first_round",
+        "colombia_runoff",
+        "hungary_election",
+        "peru_first_round",
+        "peru_runoff"
+      ],
+      "events": 5,
+      "folds": [
+        "colombia_first_round:fold-001",
+        "colombia_first_round:fold-002",
+        "colombia_runoff:fold-001",
+        "colombia_runoff:fold-002",
+        "hungary_election:fold-001",
+        "hungary_election:fold-002",
+        "hungary_election:fold-003",
+        "hungary_election:fold-004",
+        "hungary_election:fold-005",
+        "hungary_election:fold-006",
+        "hungary_election:fold-007",
+        "peru_first_round:fold-001",
+        "peru_first_round:fold-002",
+        "peru_runoff:fold-001",
+        "peru_runoff:fold-002"
+      ],
+      "gross_executable_markout_mean": -0.009512588468117936,
+      "markets": 28,
+      "observation_weighted_event_bootstrap": {
+        "lower": -1.2937081278487106e-06,
+        "point": 3.978923629930601e-06,
+        "upper": 8.079760287042677e-06
+      },
+      "prediction_target_correlation": 0.08193502938783714,
+      "raw_p_value": 0.07849607519624019,
+      "relative_mse_improvement": 0.0003327680255154064,
+      "test_blocks": 674,
+      "test_statistic": 2.7271354685948137e-06,
+      "test_status": "MONTE_CARLO",
+      "valid_observations": 149065
+    },
+    "20": {
+      "baseline_mse": 0.011957049129847038,
+      "by_event": {
+        "colombia_first_round": {
+          "delta_mse": 1.481238872251786e-06,
+          "markets": 4,
+          "observations": 22943
+        },
+        "colombia_runoff": {
+          "delta_mse": -2.5791481717946735e-06,
+          "markets": 5,
+          "observations": 24667
+        },
+        "hungary_election": {
+          "delta_mse": -5.806287436636955e-07,
+          "markets": 4,
+          "observations": 29748
+        },
+        "peru_first_round": {
+          "delta_mse": 1.7298456971341518e-06,
+          "markets": 17,
+          "observations": 59750
+        },
+        "peru_runoff": {
+          "delta_mse": 2.1468339647050944e-05,
+          "markets": 3,
+          "observations": 11957
+        }
+      },
+      "challenger_mse": 0.011954948389303053,
+      "delta_mse": 2.100740543987251e-06,
+      "directional_accuracy": 0.1783450172743434,
+      "equal_event_bootstrap": {
+        "lower": -9.803326292898911e-07,
+        "point": 4.303929460195703e-06,
+        "upper": 1.3061125813948184e-05
+      },
+      "event_families": [
+        "COL_2026",
+        "HUN_2026",
+        "PER_2026"
+      ],
+      "event_ids": [
+        "colombia_first_round",
+        "colombia_runoff",
+        "hungary_election",
+        "peru_first_round",
+        "peru_runoff"
+      ],
+      "events": 5,
+      "folds": [
+        "colombia_first_round:fold-001",
+        "colombia_first_round:fold-002",
+        "colombia_runoff:fold-001",
+        "colombia_runoff:fold-002",
+        "hungary_election:fold-001",
+        "hungary_election:fold-002",
+        "hungary_election:fold-003",
+        "hungary_election:fold-004",
+        "hungary_election:fold-005",
+        "hungary_election:fold-006",
+        "hungary_election:fold-007",
+        "peru_first_round:fold-001",
+        "peru_first_round:fold-002",
+        "peru_runoff:fold-001",
+        "peru_runoff:fold-002"
+      ],
+      "gross_executable_markout_mean": -0.009512856807432999,
+      "markets": 28,
+      "observation_weighted_event_bootstrap": {
+        "lower": -9.69855131128994e-07,
+        "point": 2.100740543987251e-06,
+        "upper": 7.653530205873644e-06
+      },
+      "prediction_target_correlation": 0.08122672999401519,
+      "raw_p_value": 0.0029498525073746312,
+      "relative_mse_improvement": 0.00017569055050059568,
+      "test_blocks": 674,
+      "test_statistic": 3.2290365238042908e-06,
+      "test_status": "MONTE_CARLO",
+      "valid_observations": 149065
+    },
+    "50": {
+      "baseline_mse": 0.011957049129847038,
+      "by_event": {
+        "colombia_first_round": {
+          "delta_mse": 4.5520992580210505e-07,
+          "markets": 4,
+          "observations": 22943
+        },
+        "colombia_runoff": {
+          "delta_mse": 4.388589717678663e-06,
+          "markets": 5,
+          "observations": 24667
+        },
+        "hungary_election": {
+          "delta_mse": -4.2365838788989927e-07,
+          "markets": 4,
+          "observations": 29748
+        },
+        "peru_first_round": {
+          "delta_mse": 1.3383835744814835e-06,
+          "markets": 17,
+          "observations": 59750
+        },
+        "peru_runoff": {
+          "delta_mse": 2.675097338680505e-05,
+          "markets": 3,
+          "observations": 11957
+        }
+      },
+      "challenger_mse": 0.011953655147077564,
+      "delta_mse": 3.393982769476438e-06,
+      "directional_accuracy": 0.1786267735551605,
+      "equal_event_bootstrap": {
+        "lower": 2.80297330061179e-07,
+        "point": 6.501899643375481e-06,
+        "upper": 1.684357029804078e-05
+      },
+      "event_families": [
+        "COL_2026",
+        "HUN_2026",
+        "PER_2026"
+      ],
+      "event_ids": [
+        "colombia_first_round",
+        "colombia_runoff",
+        "hungary_election",
+        "peru_first_round",
+        "peru_runoff"
+      ],
+      "events": 5,
+      "folds": [
+        "colombia_first_round:fold-001",
+        "colombia_first_round:fold-002",
+        "colombia_runoff:fold-001",
+        "colombia_runoff:fold-002",
+        "hungary_election:fold-001",
+        "hungary_election:fold-002",
+        "hungary_election:fold-003",
+        "hungary_election:fold-004",
+        "hungary_election:fold-005",
+        "hungary_election:fold-006",
+        "hungary_election:fold-007",
+        "peru_first_round:fold-001",
+        "peru_first_round:fold-002",
+        "peru_runoff:fold-001",
+        "peru_runoff:fold-002"
+      ],
+      "gross_executable_markout_mean": -0.009509019555227588,
+      "markets": 28,
+      "observation_weighted_event_bootstrap": {
+        "lower": 4.581195757619757e-07,
+        "point": 3.393982769476438e-06,
+        "upper": 1.0810788577073835e-05
+      },
+      "prediction_target_correlation": 0.08182704159216116,
+      "raw_p_value": 0.00014999250037498125,
+      "relative_mse_improvement": 0.00028384785682633584,
+      "test_blocks": 674,
+      "test_statistic": 5.156801057462653e-06,
+      "test_status": "MONTE_CARLO",
+      "valid_observations": 149065
+    }
+  },
+  "original": {
+    "baseline_mse": 0.011957049129847038,
+    "by_event": {
+      "colombia_first_round": {
+        "delta_mse": 6.358495476972273e-07,
+        "markets": 4,
+        "observations": 22943
+      },
+      "colombia_runoff": {
+        "delta_mse": 1.2913112211875869e-06,
+        "markets": 5,
+        "observations": 24667
+      },
+      "hungary_election": {
+        "delta_mse": 1.9738669636368654e-06,
+        "markets": 4,
+        "observations": 29748
+      },
+      "peru_first_round": {
+        "delta_mse": 3.340716952121503e-05,
+        "markets": 17,
+        "observations": 59750
+      },
+      "peru_runoff": {
+        "delta_mse": 1.5494760996970542e-05,
+        "markets": 3,
+        "observations": 11957
+      }
+    },
+    "challenger_mse": 0.011941710124039951,
+    "delta_mse": 1.5339005807087487e-05,
+    "directional_accuracy": 0.1786536074866669,
+    "equal_event_bootstrap": {
+      "lower": 1.1656377002812987e-06,
+      "point": 1.056059165014145e-05,
+      "upper": 2.3270423821662572e-05
+    },
+    "event_families": [
+      "COL_2026",
+      "HUN_2026",
+      "PER_2026"
+    ],
+    "event_ids": [
+      "colombia_first_round",
+      "colombia_runoff",
+      "hungary_election",
+      "peru_first_round",
+      "peru_runoff"
+    ],
+    "events": 5,
+    "folds": [
+      "colombia_first_round:fold-001",
+      "colombia_first_round:fold-002",
+      "colombia_runoff:fold-001",
+      "colombia_runoff:fold-002",
+      "hungary_election:fold-001",
+      "hungary_election:fold-002",
+      "hungary_election:fold-003",
+      "hungary_election:fold-004",
+      "hungary_election:fold-005",
+      "hungary_election:fold-006",
+      "hungary_election:fold-007",
+      "peru_first_round:fold-001",
+      "peru_first_round:fold-002",
+      "peru_runoff:fold-001",
+      "peru_runoff:fold-002"
+    ],
+    "gross_executable_markout_mean": -0.009508194411833764,
+    "markets": 28,
+    "observation_weighted_event_bootstrap": {
+      "lower": 1.2131164343349725e-06,
+      "point": 1.5339005807087487e-05,
+      "upper": 2.8745280894464386e-05
+    },
+    "prediction_target_correlation": 0.0870003994919974,
+    "raw_p_value": 0.0008999550022498875,
+    "relative_mse_improvement": 0.001282842082566793,
+    "test_blocks": 674,
+    "test_statistic": 8.133964972291788e-06,
+    "test_status": "MONTE_CARLO",
+    "valid_observations": 149065
+  },
+  "participant_label_permutation_ensemble": {
+    "delta_mse_max": 4.115242856814078e-06,
+    "delta_mse_mean": 1.9737596255762984e-06,
+    "draws": 20,
+    "empirical_upper_tail": 0.047619047619047616,
+    "real_delta_mse": 1.5339005807087487e-05,
+    "results": [
+      {
+        "delta_mse": 1.6047771303159817e-06,
+        "events": 5,
+        "i": 0,
+        "raw_p_value": 0.025298735063246838,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 2.8890521028183656e-06,
+        "events": 5,
+        "i": 1,
+        "raw_p_value": 4.999750012499375e-05,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 1.3412067788503554e-06,
+        "events": 5,
+        "i": 2,
+        "raw_p_value": 0.10089495525223739,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 1.6085503533929055e-06,
+        "events": 5,
+        "i": 3,
+        "raw_p_value": 0.000599970001499925,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 2.8263791812089126e-06,
+        "events": 5,
+        "i": 4,
+        "raw_p_value": 4.999750012499375e-05,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 3.069809039893916e-06,
+        "events": 5,
+        "i": 5,
+        "raw_p_value": 0.015549222538873057,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 3.5663686404997495e-06,
+        "events": 5,
+        "i": 6,
+        "raw_p_value": 4.999750012499375e-05,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 2.7524050610016946e-06,
+        "events": 5,
+        "i": 7,
+        "raw_p_value": 0.1184440777961102,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 4.115242856814078e-06,
+        "events": 5,
+        "i": 8,
+        "raw_p_value": 0.0002999850007499625,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 1.4757753615830693e-06,
+        "events": 5,
+        "i": 9,
+        "raw_p_value": 0.22823858807059647,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 2.531517076314046e-06,
+        "events": 5,
+        "i": 10,
+        "raw_p_value": 0.004549772511374431,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 2.1419439563676408e-07,
+        "events": 5,
+        "i": 11,
+        "raw_p_value": 0.23773811309434528,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 5.011239014930631e-07,
+        "events": 5,
+        "i": 12,
+        "raw_p_value": 0.037798110094495276,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 1.0552820449117767e-06,
+        "events": 5,
+        "i": 13,
+        "raw_p_value": 0.3049847507624619,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 2.4263818611114534e-06,
+        "events": 5,
+        "i": 14,
+        "raw_p_value": 0.07489625518724063,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 1.2980791760044933e-06,
+        "events": 5,
+        "i": 15,
+        "raw_p_value": 0.08169591520423979,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 3.4934645850575244e-06,
+        "events": 5,
+        "i": 16,
+        "raw_p_value": 0.000599970001499925,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 1.6065927757889033e-07,
+        "events": 5,
+        "i": 17,
+        "raw_p_value": 0.38448077596120195,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": -6.426141824787602e-07,
+        "events": 5,
+        "i": 18,
+        "raw_p_value": 0.2919354032298385,
+        "valid_observations": 149065
+      },
+      {
+        "delta_mse": 3.1875378695176795e-06,
+        "events": 5,
+        "i": 19,
+        "raw_p_value": 0.0013499325033748313,
+        "valid_observations": 149065
+      }
+    ]
+  },
+  "preregistration_hash": "64af4c1427afa983a13da6a11d5721b1b6496b0306ce1b07ab6e2f19df9e7e70",
+  "source_experiment": "EXPERIMENT-003",
+  "status": "POST_HOC_EXPLORATORY"
+}

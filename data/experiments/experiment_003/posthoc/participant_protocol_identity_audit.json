@@ -1,0 +1,74 @@
+{
+  "audit_id": "EXP004-PARTICIPANT-PROTOCOL-IDENTITY-AUDIT",
+  "status": "POST_HOC_EXPLORATORY_INTERPRETATION_CORRECTION",
+  "source_experiment": "EXPERIMENT-003",
+  "infrastructure_registry": {
+    "path": "data/reference/polymarket_infrastructure/infra_registry.json",
+    "provenance_path": "data/reference/polymarket_infrastructure/provenance.json"
+  },
+  "confirmed_protocol_contract_matches": [
+    {
+      "address": "0xc5d563a36ae78145c45a50134d48a1215220f80a",
+      "sha256_prefix_12": "6dd717a425ce",
+      "classification": "NegRisk CTF Exchange V1",
+      "exp004a_top1_regimes": ["hungary_election", "peru_first_round"],
+      "volume_share_examples": {
+        "hungary_election": 0.26206103404219633,
+        "peru_first_round": 0.26069422438218637
+      }
+    },
+    {
+      "address": "0xe2222d279d744050d28e00520010520000310f59",
+      "sha256_prefix_12": "229cefd48266",
+      "classification": "NegRisk CTF Exchange V2",
+      "exp004a_top1_regimes": ["colombia_first_round", "colombia_runoff", "peru_runoff"],
+      "volume_share_examples": {
+        "colombia_first_round": 0.26351416298419206,
+        "colombia_runoff": 0.20643861643442116,
+        "peru_runoff": 0.26696955895750807
+      }
+    }
+  ],
+  "null_calibration": {
+    "EXP004C": {
+      "draws": 100,
+      "draws_raw_p_below_0_05": 29,
+      "draws_positive_delta_mse": 87,
+      "real_empirical_upper_tail": 0.019801980198019802
+    },
+    "EXP004D": {
+      "draws": 100,
+      "draws_raw_p_below_0_05": 30,
+      "draws_positive_delta_mse": 92,
+      "real_empirical_upper_tail": 0.009900990099009901
+    },
+    "interpretation": "The real effect is large relative to these null ensembles, but the challenger-vs-baseline raw p-value is poorly calibrated as an identity-specific skill test under these nulls."
+  },
+  "executed_negative_control": {
+    "30s": {"raw_p_value": 0.02519874006299685, "passed": false},
+    "60s": {"raw_p_value": 0.0006499675016249188, "passed": false},
+    "300s": {"raw_p_value": 0.03329833508324584, "passed": false}
+  },
+  "minimum_history_sensitivity": {
+    "5": {"delta_mse": 0.000015339005807087487, "status": "executed_primary_history_threshold"},
+    "10": {
+      "delta_mse": 0.000003978923629930601,
+      "raw_p_value": 0.07849607519624019,
+      "equal_regime_window_interval_lower": -0.0000013203832553103815,
+      "equal_regime_window_interval_upper": 0.000009480977649712245
+    }
+  },
+  "interpretation": [
+    "The dominant post-hoc identities include Polymarket protocol exchange contracts, so the observed structure must not be described as trader skill evidence.",
+    "EXP004C/D identity permutations also disrupt protocol-contract identity-to-fill-type association; favourable empirical-tail ranks therefore do not isolate trader identity skill.",
+    "The most defensible description is participant/protocol-identity-conditioned exploratory structure.",
+    "Fee-derived economic maker/taker classification is a separate future analysis and does not repair these post-hoc identity-null limitations."
+  ],
+  "next_preregistered_participant_experiment": [
+    "Exclude known protocol/exchange/adapter infrastructure before constructing the trader population, or model infrastructure explicitly as a separate nuisance class.",
+    "Cross-fit participant target encodings within TRAIN.",
+    "Add activity x momentum nuisance structure to the baseline.",
+    "Make real identity assignment versus a nuisance-preserving identity-null distribution the preregistered primary contrast.",
+    "Use true leave-one-event-family-out checks rather than leave-one-regime-window-out diagnostics."
+  ]
+}

@@ -1,0 +1,65 @@
+from __future__ import annotations
+import hashlib, json, subprocess, sys
+from collections import defaultdict
+from pathlib import Path
+import numpy as np
+
+INPUT=Path("/kaggle/input"); WORK=Path("/kaggle/working")
+COMMIT="b2ba5e2c3e63d57bd6e74c0c5861bad67c983e1b"
+CORPUS_SHA="e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4"
+PREREG_SHA="64af4c1427afa983a13da6a11d5721b1b6496b0306ce1b07ab6e2f19df9e7e70"
+REL_SHA="e93033568ac3d3045399e6b630d37bb30a829c9c2fad3ef5da8ac31a7516732e"
+
+def sha(p:Path):
+ h=hashlib.sha256();
+ with p.open("rb") as f:
+  for c in iter(lambda:f.read(1<<20),b""): h.update(c)
+ return h.hexdigest()
+def one(name):
+ m=sorted(INPUT.rglob(name));
+ if len(m)!=1: raise SystemExit(f"expected one {name}, got {m}")
+ return m[0]
+wheel=one("predictions_cup-0.1.0-py3-none-any.whl"); commit=one("COMMIT.txt"); prereg_p=one("preregistration.json"); rel_p=one("relationship_inventory.csv"); manifest=one("corpus_manifest.json")
+assert commit.read_text().strip()==COMMIT and sha(prereg_p)==PREREG_SHA and sha(rel_p)==REL_SHA and sha(manifest)==CORPUS_SHA
+subprocess.check_call([sys.executable,"-m","pip","install","-q","--no-deps",str(wheel)])
+from predictions_cup.learning.historical_alpha import FillSeries, compact_oos, load_fill_series, load_identity_rows, load_quote_series, load_relationships, run_participant_oos, summarize_evidence
+prereg=json.loads(prereg_p.read_text()); relationships=load_relationships(rel_p,REL_SHA); corpus_root=manifest.parent.parent; identity=load_identity_rows(corpus_root)
+H=300; session=int(prereg["statistics"]["block_test"]["session_seconds"]); cfg=prereg["families"]["participant"]; fresh=int(prereg["target"]["quote_freshness_seconds"])
+
+def window(x):
+ from datetime import datetime
+ return datetime.fromisoformat(x[0]),datetime.fromisoformat(x[1])
+def universe(reg):
+ rels=[r for r in relationships if r.regime_id==reg]; low={x["token_id"] for x in prereg["families"]["lowrank"]["lowrank_universe"][reg]}; all_t={r.target_token_id for r in rels}|{r.reference_token_id for r in rels}|low
+ return tuple(sorted(r["token_id"] for r in identity if r["regime_id"]==reg and r["outcome"]=="Yes" and r["token_id"] in all_t and int(r["fill_rows"] or 0)>=50)), tuple(sorted(all_t))
+def rankings(fills):
+ v=defaultdict(float); c=defaultdict(int)
+ for fs in fills.values():
+  for val,m,t in zip(fs.value_usd,fs.maker,fs.taker,strict=True):
+   val=float(val); v[str(m)]+=val; v[str(t)]+=val; c[str(m)]+=1; c[str(t)]+=1
+ ranked=sorted(v,key=lambda a:(-v[a],a)); total=sum(v.values()) or 1.0
+ return ranked,{"participants":len(ranked),"top1_share":sum(v[a] for a in ranked[:1])/total,"top5_share":sum(v[a] for a in ranked[:5])/total,"top10_share":sum(v[a] for a in ranked[:10])/total,"top20_share":sum(v[a] for a in ranked[:20])/total,"largest":[{"id_hash":hashlib.sha256(a.encode()).hexdigest()[:12],"volume_share":v[a]/total,"fills":c[a]} for a in ranked[:20]]}
+def transform(fills,mode,ranked):
+ tops=set()
+ if mode.startswith("drop_top_"): tops=set(ranked[:int(mode.rsplit("_",1)[1])])
+ out={}
+ for token,fs in fills.items():
+  n=len(fs.times_ns); mask=np.ones(n,dtype=bool)
+  if tops: mask=np.asarray([(str(m) not in tops and str(t) not in tops) for m,t in zip(fs.maker,fs.taker,strict=True)],dtype=bool)
+  maker=fs.maker[mask].copy(); taker=fs.taker[mask].copy(); times=fs.times_ns[mask]; values=fs.value_usd[mask]; exch=fs.exchange_taker[mask]
+  if mode=="maker_only": taker=np.asarray([f"neutral-t-{token}-{i}" for i in range(len(times))],dtype=object)
+  if mode=="taker_only": maker=np.asarray([f"neutral-m-{token}-{i}" for i in range(len(times))],dtype=object)
+  out[token]=FillSeries(times,values,maker,taker,exch)
+ return out
+variants=("original","maker_only","taker_only","drop_top_1","drop_top_5","drop_top_10")
+evidence={v:[] for v in variants}; concentration={}; per_event={}
+for reg,w in prereg["regimes"].items():
+ p_tokens,all_tokens=universe(reg); quotes=load_quote_series(corpus_root,reg,all_tokens,epsilon=float(prereg["target"]["clamp_epsilon"])); fills=load_fill_series(corpus_root,reg,p_tokens); ranked,conc=rankings(fills); concentration[reg]=conc; start,end=window(w); per_event[reg]={}
+ for v in variants:
+  vf=fills if v=="original" else transform(fills,v,ranked)
+  res=run_participant_oos(regime_id=reg,event_family_id=prereg["event_families"][reg],quote_by_token=quotes,fills_by_token=vf,start=start,end=end,grid_seconds=30,horizon_seconds=H,activity_window_seconds=int(cfg["activity_window_seconds"]),own_lookback_seconds=int(cfg["participant_score_lookback_seconds"]),score_horizon_seconds=int(cfg["participant_score_horizon_seconds"]),score_lookback_seconds=int(cfg["participant_score_lookback_seconds"]),minimum_history=int(cfg["minimum_train_fill_history"]),freshness_seconds=fresh,validation=prereg["validation"],run_id=f"EXP004A-{v}")
+  ev=compact_oos(res,session); evidence[v].append(ev); per_event[reg][v]={"observations":ev.observations,"delta_mse":ev.delta_mean,"markets":len(ev.markets)}
+summary={v:summarize_evidence(evidence[v],run_id=f"EXP004A-{v}",component=f"attr:{v}:300s",statistics_spec=prereg["statistics"]) for v in variants}
+out={"analysis_id":"EXP004A-PARTICIPANT-ATTRIBUTION","status":"POST_HOC_EXPLORATORY","source_experiment":"EXPERIMENT-003","code_revision":COMMIT,"dataset_hash":CORPUS_SHA,"preregistration_hash":PREREG_SHA,"horizon_seconds":300,"variants":summary,"per_event":per_event,"participant_concentration":concentration,"interpretation_rules":{"identity_concentration_warning":"effect weakens materially after dropping top participants","role_concentration_warning":"effect exists only maker-only or taker-only","not_confirmation":"post-hoc diagnostics do not promote EXPERIMENT-003"}}
+(WORK/"exp004a_participant_attribution.json").write_text(json.dumps(out,indent=2,sort_keys=True)+"\n")
+print(json.dumps({"phase":"complete","analysis_id":out["analysis_id"],"variants":{k:{"delta_mse":v.get("delta_mse"),"p":v.get("raw_p_value"),"events":v.get("events")} for k,v in summary.items()}},sort_keys=True))
