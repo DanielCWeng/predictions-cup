@@ -1,0 +1,270 @@
+{
+  "alpha_searched": false,
+  "classification_counts": {
+    "BOTH": 63,
+    "ELECTION_NIGHT_ONLY": 125,
+    "NEITHER": 2407,
+    "PRE_ELECTION_ONLY": 5
+  },
+  "coverage_policy": {
+    "active_results_fixed_hours": 6.0,
+    "gap_rule": "First-to-last observation span is descriptive only. Predictive usability requires a full-depth snapshot no more than 30 minutes old at the relevant checkpoint and a depth-snapshot straddling gap no wider than 60 minutes, plus the regime-wide source-health threshold.",
+    "late_min_span_hours": 6.0,
+    "max_checkpoint_depth_age_seconds": 1800.0,
+    "max_checkpoint_straddling_gap_seconds": 3600.0,
+    "max_regime_wide_source_silence_seconds": 1800.0,
+    "min_book_observations": 20,
+    "night_min_span_hours": 3.0,
+    "pre_min_lead_hours": 6.0
+  },
+  "data001_verification": {
+    "accepted_core_files": {
+      "corpus_manifest.json": {
+        "corpus_path": "/kaggle/input/notebooks/polyleviathan/sig-cup-data-001-build/historical_replay_corpus/schema_version=1/corpus_manifest.json",
+        "repo_path": "/kaggle/working/repo/data/manifests/historical/data_001_corpus_manifest.json",
+        "sha256": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4"
+      },
+      "corpus_quality.json": {
+        "corpus_path": "/kaggle/input/notebooks/polyleviathan/sig-cup-data-001-build/historical_replay_corpus/schema_version=1/corpus_quality.json",
+        "repo_path": "/kaggle/working/repo/data/manifests/historical/data_001_corpus_quality.json",
+        "sha256": "354801b67b9c32ae82d419f8a6198b7fd814923e8c424ac8716862b47907ccb5"
+      },
+      "market_identity.csv": {
+        "corpus_path": "/kaggle/input/notebooks/polyleviathan/sig-cup-data-001-build/historical_replay_corpus/schema_version=1/market_identity.csv",
+        "repo_path": "/kaggle/working/repo/data/manifests/historical/data_001_market_identity.csv",
+        "sha256": "e89fe8e25dcc494dad3ed96fe6672ab9f247c01eb70d4c0270a913f18a200a72"
+      }
+    },
+    "dataset_id": "DATA-001-historical-replay-corpus",
+    "files_checked": 115,
+    "ok": true,
+    "pipeline_commit": "159873f1797eee93832a98172a8f0117d24fb468",
+    "totals": {
+      "corpus_bytes": 1188388198,
+      "rows_by_stream": {
+        "book_changes": 126669687,
+        "depth_snapshots": 461326,
+        "fills": 743015,
+        "tick_size_changes": 60,
+        "trades": 112467
+      }
+    }
+  },
+  "descriptive_only_count": 648,
+  "event_family_independence_warning": "The five rounds are not five independent election families: Colombia first round/runoff share COL_2026; Peru first round/runoff share PER_2026; Hungary is HUN_2026.",
+  "experiment_id": "EXPERIMENT-004A",
+  "markets_tokens_total": 2600,
+  "markets_with_book": 796,
+  "markets_with_fills": 697,
+  "package_version": "004A-event-time-v2",
+  "reaction_diagnostic_tokens": 418,
+  "regime_package_sha256": "57a102d64778be7c1460638bb4da63be7eeafe0b9494a4287339674bcad0a741",
+  "source_version_limitations": {
+    "colombia_first_round": {
+      "missing_source_hours": [],
+      "regime_wide_largest_silences": [],
+      "regime_wide_material_silences": 0,
+      "regime_wide_max_silence_seconds": 262.998,
+      "source_splices": [],
+      "source_versions": [
+        "PMXT_V2"
+      ]
+    },
+    "colombia_runoff": {
+      "missing_source_hours": [],
+      "regime_wide_largest_silences": [
+        {
+          "end": "2026-06-19T04:28:20.410000+00:00",
+          "seconds": 589.518,
+          "start": "2026-06-19T04:18:30.892000+00:00"
+        },
+        {
+          "end": "2026-06-19T04:11:57.798000+00:00",
+          "seconds": 361.305,
+          "start": "2026-06-19T04:05:56.493000+00:00"
+        },
+        {
+          "end": "2026-06-19T05:04:38.605000+00:00",
+          "seconds": 357.524,
+          "start": "2026-06-19T04:58:41.081000+00:00"
+        }
+      ],
+      "regime_wide_material_silences": 3,
+      "regime_wide_max_silence_seconds": 589.518,
+      "source_splices": [],
+      "source_versions": [
+        "PMXT_V2"
+      ]
+    },
+    "hungary_election": {
+      "missing_source_hours": [],
+      "regime_wide_largest_silences": [],
+      "regime_wide_material_silences": 0,
+      "regime_wide_max_silence_seconds": 203.61,
+      "source_splices": [
+        {
+          "covered_tokens": 12,
+          "hour": "2026-04-13T19",
+          "primary_book_conditions": 6,
+          "primary_book_tokens": 12,
+          "primary_rows": {
+            "book_changes": 2448,
+            "depth_snapshots": 260,
+            "rejects": 0,
+            "tick_size_changes": 0,
+            "trades": 0
+          },
+          "primary_version": "PMXT_V1",
+          "supplement_only_conditions": 32,
+          "supplement_only_first_observed_at": "2026-04-13T19:42:26.600000+00:00",
+          "supplement_only_tokens": 64,
+          "supplement_rows_kept": {
+            "book_changes": 6041,
+            "depth_snapshots": 64,
+            "rejects": 0,
+            "tick_size_changes": 0,
+            "trades": 51
+          },
+          "supplement_rows_kept_for_covered_tokens": {
+            "tick_size_changes": 0,
+            "trades": 40
+          },
+          "supplement_rows_superseded": {
+            "book_changes": 810,
+            "depth_snapshots": 12,
+            "rejects": 0
+          },
+          "supplement_version": "PMXT_V2"
+        }
+      ],
+      "source_versions": [
+        "PMXT_V1",
+        "PMXT_V2"
+      ]
+    },
+    "peru_first_round": {
+      "missing_source_hours": [],
+      "regime_wide_largest_silences": [],
+      "regime_wide_material_silences": 0,
+      "regime_wide_max_silence_seconds": 144.876,
+      "source_splices": [
+        {
+          "covered_tokens": 80,
+          "hour": "2026-04-13T19",
+          "primary_book_conditions": 40,
+          "primary_book_tokens": 80,
+          "primary_rows": {
+            "book_changes": 156488,
+            "depth_snapshots": 1592,
+            "rejects": 0,
+            "tick_size_changes": 0,
+            "trades": 0
+          },
+          "primary_version": "PMXT_V1",
+          "supplement_only_conditions": 93,
+          "supplement_only_first_observed_at": "2026-04-13T19:42:26.600000+00:00",
+          "supplement_only_tokens": 186,
+          "supplement_rows_kept": {
+            "book_changes": 145010,
+            "depth_snapshots": 186,
+            "rejects": 0,
+            "tick_size_changes": 0,
+            "trades": 350
+          },
+          "supplement_rows_kept_for_covered_tokens": {
+            "tick_size_changes": 0,
+            "trades": 183
+          },
+          "supplement_rows_superseded": {
+            "book_changes": 38206,
+            "depth_snapshots": 80,
+            "rejects": 0
+          },
+          "supplement_version": "PMXT_V2"
+        }
+      ],
+      "source_versions": [
+        "PMXT_V1",
+        "PMXT_V2"
+      ]
+    },
+    "peru_runoff": {
+      "missing_source_hours": [],
+      "regime_wide_largest_silences": [],
+      "regime_wide_material_silences": 0,
+      "regime_wide_max_silence_seconds": 242.534,
+      "source_splices": [],
+      "source_versions": [
+        "PMXT_V2"
+      ]
+    }
+  },
+  "usable_by_election": {
+    "colombia_first_round": {
+      "BOTH": 14,
+      "ELECTION_NIGHT_ONLY": 29,
+      "NEITHER": 425,
+      "PRE_ELECTION_ONLY": 4
+    },
+    "colombia_runoff": {
+      "BOTH": 6,
+      "ELECTION_NIGHT_ONLY": 2,
+      "NEITHER": 464
+    },
+    "hungary_election": {
+      "BOTH": 12,
+      "ELECTION_NIGHT_ONLY": 2,
+      "NEITHER": 334
+    },
+    "peru_first_round": {
+      "BOTH": 22,
+      "ELECTION_NIGHT_ONLY": 58,
+      "NEITHER": 574
+    },
+    "peru_runoff": {
+      "BOTH": 9,
+      "ELECTION_NIGHT_ONLY": 34,
+      "NEITHER": 610,
+      "PRE_ELECTION_ONLY": 1
+    }
+  },
+  "usable_by_event_family": {
+    "COL_2026": {
+      "BOTH": 20,
+      "ELECTION_NIGHT_ONLY": 31,
+      "NEITHER": 889,
+      "PRE_ELECTION_ONLY": 4
+    },
+    "HUN_2026": {
+      "BOTH": 12,
+      "ELECTION_NIGHT_ONLY": 2,
+      "NEITHER": 334
+    },
+    "PER_2026": {
+      "BOTH": 31,
+      "ELECTION_NIGHT_ONLY": 92,
+      "NEITHER": 1184,
+      "PRE_ELECTION_ONLY": 1
+    }
+  },
+  "usable_by_source_version": {
+    "<none>": {
+      "NEITHER": 1804
+    },
+    "PMXT_V1": {
+      "BOTH": 4,
+      "NEITHER": 16
+    },
+    "PMXT_V1;PMXT_V2": {
+      "BOTH": 30,
+      "ELECTION_NIGHT_ONLY": 60,
+      "NEITHER": 2
+    },
+    "PMXT_V2": {
+      "BOTH": 29,
+      "ELECTION_NIGHT_ONLY": 65,
+      "NEITHER": 585,
+      "PRE_ELECTION_ONLY": 5
+    }
+  }
+}
