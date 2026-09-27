@@ -46,6 +46,9 @@ NIGHT_MIN_SPAN_HOURS = 3.0
 LATE_MIN_SPAN_HOURS = 6.0
 MIN_BOOK_OBSERVATIONS = 20
 MAX_REGIME_WIDE_SOURCE_SILENCE_SECONDS = 1800.0
+MAX_CHECKPOINT_DEPTH_AGE_SECONDS = 1800.0
+MAX_CHECKPOINT_STRADDLE_GAP_SECONDS = 3600.0
+ACTIVE_RESULTS_FIXED_HOURS = 6.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +93,12 @@ class ScanResult:
     source_versions: dict[tuple[str, ...], set[str]] = field(
         default_factory=lambda: defaultdict(set)
     )
+
+
+@dataclass(slots=True)
+class CheckpointEvidence:
+    last_at_or_before_us: int | None = None
+    first_at_or_after_us: int | None = None
 
 
 def _dt(value: str | None) -> datetime | None:
@@ -331,6 +340,67 @@ def scan_corpus(
     return result
 
 
+def _scan_checkpoint_depth_evidence(
+    corpus_parent: Path,
+    checkpoints_by_regime: dict[str, dict[str, datetime]],
+    *,
+    batch_size: int = 262_144,
+) -> dict[tuple[str, str, str], CheckpointEvidence]:
+    """Nearest full-depth snapshots around frozen checkpoints.
+
+    This intentionally scans only the depth-snapshot stream. A first/last observation
+    span is descriptive metadata, not proof that a fresh observable book existed at a
+    checkpoint.
+    """
+    schema_root = corpus_parent / f"schema_version={SCHEMA_VERSION}"
+    out: dict[tuple[str, str, str], CheckpointEvidence] = {}
+    for regime_id, checkpoints in sorted(checkpoints_by_regime.items()):
+        for path in _stream_files(schema_root, regime_id, "depth_snapshots"):
+            parquet = pq.ParquetFile(path)
+            for batch in parquet.iter_batches(
+                batch_size=batch_size, columns=["token_id", "recorded_at"]
+            ):
+                token_arr = batch.column(0)
+                times = pc.cast(
+                    pc.cast(batch.column(1), pa.timestamp("us", tz="UTC")), pa.int64()
+                )
+                for checkpoint_name, checkpoint in checkpoints.items():
+                    cp_us = _to_us(checkpoint)
+                    before = pc.less_equal(times, pa.scalar(cp_us, pa.int64()))
+                    if pc.any(before).as_py():
+                        grouped = (
+                            pa.table({"token_id": token_arr.filter(before), "t": times.filter(before)})
+                            .group_by("token_id")
+                            .aggregate([("t", "max")])
+                        )
+                        for row in grouped.to_pylist():
+                            key = (regime_id, checkpoint_name, row["token_id"])
+                            ev = out.setdefault(key, CheckpointEvidence())
+                            value = int(row["t_max"])
+                            ev.last_at_or_before_us = (
+                                value
+                                if ev.last_at_or_before_us is None
+                                else max(ev.last_at_or_before_us, value)
+                            )
+                    after = pc.greater_equal(times, pa.scalar(cp_us, pa.int64()))
+                    if pc.any(after).as_py():
+                        grouped = (
+                            pa.table({"token_id": token_arr.filter(after), "t": times.filter(after)})
+                            .group_by("token_id")
+                            .aggregate([("t", "min")])
+                        )
+                        for row in grouped.to_pylist():
+                            key = (regime_id, checkpoint_name, row["token_id"])
+                            ev = out.setdefault(key, CheckpointEvidence())
+                            value = int(row["t_min"])
+                            ev.first_at_or_after_us = (
+                                value
+                                if ev.first_at_or_after_us is None
+                                else min(ev.first_at_or_after_us, value)
+                            )
+    return out
+
+
 def _quality_token_index(
     quality: dict[str, dict[str, Any]],
 ) -> dict[tuple[str, str], dict[str, Any]]:
@@ -375,18 +445,18 @@ def _source_silence_ok(regime_quality: dict[str, Any]) -> bool:
 
 def _pre_usable(
     first_depth: datetime | None,
-    last_book: datetime | None,
-    poll_close: datetime,
+    poll_open: datetime,
     pre_obs: int,
     source_ok: bool,
+    checkpoint_fresh: bool,
 ) -> tuple[bool, list[str]]:
     reasons: list[str] = []
     if first_depth is None:
         reasons.append("NO_INITIALIZED_DEPTH")
-    elif first_depth > poll_close - timedelta(hours=PRE_MIN_LEAD_HOURS):
+    elif first_depth > poll_open - timedelta(hours=PRE_MIN_LEAD_HOURS):
         reasons.append("INSUFFICIENT_PRE_ELECTION_LEAD")
-    if last_book is None or last_book < poll_close:
-        reasons.append("NO_PRE_ELECTION_BOOK_THROUGH_POLL_CLOSE")
+    if not checkpoint_fresh:
+        reasons.append("STALE_OR_UNOBSERVED_BOOK_AT_POLL_OPEN")
     if pre_obs < MIN_BOOK_OBSERVATIONS:
         reasons.append("INSUFFICIENT_PRE_ELECTION_OBSERVATIONS")
     if not source_ok:
@@ -396,11 +466,12 @@ def _pre_usable(
 
 def _night_usable(
     first_depth: datetime | None,
-    last_book: datetime | None,
+    active_last_observation: datetime | None,
     active: Window,
     corpus_end: datetime,
     active_obs: int,
     source_ok: bool,
+    checkpoint_fresh: bool,
 ) -> tuple[bool, list[str]]:
     reasons: list[str] = []
     if active.start is None or active.end is None or active.start >= corpus_end:
@@ -409,8 +480,10 @@ def _night_usable(
         reasons.append("NO_INITIALIZED_DEPTH")
     elif first_depth > active.start:
         reasons.append("FIRST_SNAPSHOT_AFTER_RESULT_ONSET")
+    if not checkpoint_fresh:
+        reasons.append("STALE_OR_UNOBSERVED_BOOK_AT_RESULT_START")
     target_end = min(active.end, active.start + timedelta(hours=NIGHT_MIN_SPAN_HOURS), corpus_end)
-    if last_book is None or last_book < target_end:
+    if active_last_observation is None or active_last_observation < target_end:
         reasons.append("NO_ACTIVE_RESULTS_COVERAGE")
     if active_obs < MIN_BOOK_OBSERVATIONS:
         reasons.append("INSUFFICIENT_ACTIVE_RESULTS_OBSERVATIONS")
@@ -462,16 +535,48 @@ def _checkpoint_name(offset: float) -> str:
     return f"{sign}_{int(value)}h"
 
 
-def _book_state_covers(
+def _book_observation_span_covers(
     first_depth: datetime | None,
     last_book: datetime | None,
     when: datetime,
 ) -> bool:
+    """Descriptive span only; this is not checkpoint-state proof."""
     return (
         first_depth is not None
         and last_book is not None
         and first_depth <= when <= last_book
     )
+
+
+def _checkpoint_metrics(
+    evidence: CheckpointEvidence | None,
+    when: datetime,
+) -> dict[str, Any]:
+    last_before = None if evidence is None else _dt(_iso_us(evidence.last_at_or_before_us))
+    first_after = None if evidence is None else _dt(_iso_us(evidence.first_at_or_after_us))
+    age_seconds = (
+        None if last_before is None else max(0.0, (when - last_before).total_seconds())
+    )
+    straddle_gap_seconds = (
+        None
+        if last_before is None or first_after is None
+        else max(0.0, (first_after - last_before).total_seconds())
+    )
+    fresh = (
+        age_seconds is not None
+        and straddle_gap_seconds is not None
+        and age_seconds <= MAX_CHECKPOINT_DEPTH_AGE_SECONDS
+        and straddle_gap_seconds <= MAX_CHECKPOINT_STRADDLE_GAP_SECONDS
+    )
+    return {
+        "last_depth_snapshot_at_or_before": None if last_before is None else last_before.isoformat(),
+        "depth_snapshot_age_seconds": None if age_seconds is None else round(age_seconds, 6),
+        "first_depth_snapshot_at_or_after": None if first_after is None else first_after.isoformat(),
+        "depth_snapshot_straddling_gap_seconds": (
+            None if straddle_gap_seconds is None else round(straddle_gap_seconds, 6)
+        ),
+        "checkpoint_depth_fresh": fresh,
+    }
 
 
 def build_outputs(
@@ -495,6 +600,22 @@ def build_outputs(
     quality_tokens = _quality_token_index(quality)
 
     scan = scan_corpus(corpus_parent, windows_by_regime, batch_size=batch_size)
+    checkpoints_by_regime: dict[str, dict[str, datetime]] = {}
+    for event in timeline["events"]:
+        poll_close = _dt(event["anchors"]["poll_close"]["utc_timestamp"])
+        poll_open = _dt(event["anchors"]["poll_open"]["utc_timestamp"])
+        result_start = _dt(event["anchors"]["first_meaningful_results"]["utc_timestamp"])
+        assert poll_close and poll_open and result_start
+        points = {
+            _checkpoint_name(offset): poll_close + timedelta(hours=offset)
+            for offset in CHECKPOINT_HOURS
+        }
+        points["poll_open"] = poll_open
+        points["first_meaningful_results"] = result_start
+        checkpoints_by_regime[event["regime_id"]] = points
+    checkpoint_evidence = _scan_checkpoint_depth_evidence(
+        corpus_parent, checkpoints_by_regime, batch_size=batch_size
+    )
 
     market_rows: list[dict[str, Any]] = []
     window_rows: list[dict[str, Any]] = []
@@ -507,11 +628,12 @@ def build_outputs(
         event = timeline_by_regime[regime_id]
         windows = windows_by_regime[regime_id]
         anchors = event["anchors"]
+        poll_open = _dt(anchors["poll_open"]["utc_timestamp"])
         poll_close = _dt(anchors["poll_close"]["utc_timestamp"])
-        result_start = _dt(anchors["first_meaningful_results"]["utc_timestamp"])
+        result_start = _dt(anchors["first_meaning_results"]["utc_timestamp"]) if "first_meaning_results" in anchors else _dt(anchors["first_meaningful_results"]["utc_timestamp"])
         corpus_start = _dt(event["corpus_window_start_utc"])
         corpus_end = _dt(event["corpus_window_end_utc"])
-        assert poll_close and result_start and corpus_start and corpus_end
+        assert poll_open and poll_close and result_start and corpus_start and corpus_end
 
         first_book = _dt(q["first_timestamp"])
         last_book = _dt(q["last_timestamp"])
@@ -543,6 +665,7 @@ def build_outputs(
             "market_family": row["market_family"],
             "source_versions": ";".join(source_versions),
             "book_source_versions": ";".join(sorted(book_sources)),
+            "poll_open_utc": anchors["poll_open"]["utc_timestamp"],
             "poll_close_utc": anchors["poll_close"]["utc_timestamp"],
             "first_meaningful_results_utc": anchors["first_meaningful_results"]["utc_timestamp"],
             "active_results_end_utc": anchors["active_results_end"]["utc_timestamp"],
@@ -570,9 +693,10 @@ def build_outputs(
             "hours_depth_after_poll_close": _coverage_hours(poll_close, last_depth),
             "hours_fills_before_poll_close": _coverage_hours(first_fill, poll_close),
             "hours_fills_after_poll_close": _coverage_hours(poll_close, last_fill),
-            "book_state_at_first_meaningful_results": _book_state_covers(
+            "book_observation_span_covers_first_meaningful_results": _book_observation_span_covers(
                 first_depth, last_book, result_start
             ),
+            "regime_wide_source_health_ok": _source_silence_ok(quality[regime_id]),
             "max_book_observation_gap_seconds": q["max_observation_gap_seconds"],
             "material_gap_count": int(q["material_gap_count"]),
             "bbo_before_first_snapshot_count": int(q["book_changes_before_first_snapshot"]),
@@ -591,11 +715,16 @@ def build_outputs(
                 q.get("largest_material_gaps", []), sort_keys=True, separators=(",", ":")
             ),
         }
-        for offset in CHECKPOINT_HOURS:
-            when = poll_close + timedelta(hours=offset)
-            market[f"book_state_{_checkpoint_name(offset)}"] = _book_state_covers(
-                first_depth, last_book, when
+        checkpoint_points = checkpoints_by_regime[regime_id]
+        for checkpoint_name, when in checkpoint_points.items():
+            market[f"book_observation_span_covers_{checkpoint_name}"] = (
+                _book_observation_span_covers(first_depth, last_book, when)
             )
+            metrics = _checkpoint_metrics(
+                checkpoint_evidence.get((regime_id, checkpoint_name, token_id)), when
+            )
+            for metric_name, metric_value in metrics.items():
+                market[f"{metric_name}_{checkpoint_name}"] = metric_value
         market_rows.append(market)
 
         for window in windows:
@@ -664,16 +793,36 @@ def build_outputs(
         active_bbo, active_depth = _book_window_counts(scan, regime_id, active.name, token_id)
         late_bbo, late_depth = _book_window_counts(scan, regime_id, late.name, token_id)
         source_ok = _source_silence_ok(quality[regime_id])
+        poll_open_metrics = _checkpoint_metrics(
+            checkpoint_evidence.get((regime_id, "poll_open", token_id)), poll_open
+        )
+        result_start_metrics = _checkpoint_metrics(
+            checkpoint_evidence.get((regime_id, "first_meaningful_results", token_id)),
+            result_start,
+        )
+        active_bbo_stats = _stream_stat(scan, regime_id, "book_changes", token_id, active.name)
+        active_depth_stats = _stream_stat(scan, regime_id, "depth_snapshots", token_id, active.name)
+        active_last_us_candidates = [
+            x for x in (active_bbo_stats.last_us, active_depth_stats.last_us) if x is not None
+        ]
+        active_last_observation = _dt(
+            _iso_us(max(active_last_us_candidates) if active_last_us_candidates else None)
+        )
         pre_ok, pre_reasons = _pre_usable(
-            first_depth, last_book, poll_close, pre_bbo + pre_depth, source_ok
+            first_depth,
+            poll_open,
+            pre_bbo + pre_depth,
+            source_ok,
+            bool(poll_open_metrics["checkpoint_depth_fresh"]),
         )
         night_ok, night_reasons = _night_usable(
             first_depth,
-            last_book,
+            active_last_observation,
             active,
             corpus_end,
             active_bbo + active_depth,
             source_ok,
+            bool(result_start_metrics["checkpoint_depth_fresh"]),
         )
         late_ok, late_reasons = _late_usable(
             first_depth,
@@ -784,11 +933,14 @@ def build_outputs(
             "late_min_span_hours": LATE_MIN_SPAN_HOURS,
             "min_book_observations": MIN_BOOK_OBSERVATIONS,
             "max_regime_wide_source_silence_seconds": MAX_REGIME_WIDE_SOURCE_SILENCE_SECONDS,
+            "active_results_fixed_hours": ACTIVE_RESULTS_FIXED_HOURS,
+            "max_checkpoint_depth_age_seconds": MAX_CHECKPOINT_DEPTH_AGE_SECONDS,
+            "max_checkpoint_straddling_gap_seconds": MAX_CHECKPOINT_STRADDLE_GAP_SECONDS,
             "gap_rule": (
-                "Token-level update silence is reported but is not treated as recorder loss "
-                "because unchanged book state can legitimately persist. Only regime-wide source "
-                "silence over "
-                "the threshold hard-fails usability."
+                "First-to-last observation span is descriptive only. Predictive usability requires "
+                "a full-depth snapshot no more than 30 minutes old at the relevant checkpoint and "
+                "a depth-snapshot straddling gap no wider than 60 minutes, plus the regime-wide "
+                "source-health threshold."
             ),
         },
         "markets_tokens_total": len(usability_rows),
@@ -950,9 +1102,12 @@ def _write_report(
         "",
         "## Frozen coverage-sufficiency rule",
         "",
-        f"PRE_ELECTION requires an initialized depth state at least {PRE_MIN_LEAD_HOURS:g}h before "
-        f"poll close, book coverage through poll close, and at least {MIN_BOOK_OBSERVATIONS} book "
-        "observations in the pre-election window. ACTIVE_RESULTS requires initialization no later "
+        f"PRE_ELECTION ends at factual poll open and requires an initialized depth state at least "
+        f"{PRE_MIN_LEAD_HOURS:g}h before poll open, at least {MIN_BOOK_OBSERVATIONS} book observations, "
+        f"and fresh checkpoint evidence (depth age <= {MAX_CHECKPOINT_DEPTH_AGE_SECONDS/60:g}m; "
+        f"straddling gap <= {MAX_CHECKPOINT_STRADDLE_GAP_SECONDS/60:g}m). ACTIVE_RESULTS is the "
+        f"predeclared {ACTIVE_RESULTS_FIXED_HOURS:g}h window after first meaningful results and "
+        "requires initialization no later "
         f"than result onset and coverage for the full active window when it is shorter than "
         f"{NIGHT_MIN_SPAN_HOURS:g}h, otherwise at least the first {NIGHT_MIN_SPAN_HOURS:g}h. "
         "Token-level silence is descriptive because unchanged state can persist; a regime-wide "
@@ -984,6 +1139,8 @@ def _write_report(
             "",
             "| Anchor | Local | UTC | Evidence |",
             "|---|---|---|---|",
+            f"| Poll open | {anchors['poll_open']['local_timestamp']} | "
+            f"{anchors['poll_open']['utc_timestamp']} | {anchors['poll_open']['source_name']} |",
             f"| Poll close | {anchors['poll_close']['local_timestamp']} | "
             f"{anchors['poll_close']['utc_timestamp']} | {anchors['poll_close']['source_name']} |",
             "| First meaningful results | "
