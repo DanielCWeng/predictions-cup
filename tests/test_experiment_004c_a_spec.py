@@ -49,3 +49,22 @@ def test_004c_a_universe_never_duplicates_conditions_within_event_regime() -> No
     keys = [(r["event"], r["regime"], r["condition_id"]) for r in rows]
     assert len(keys) == len(set(keys))
     assert all(r["canonical_token_id"] for r in rows)
+
+
+
+def test_004c_a_final_freeze_and_kaggle_namespace() -> None:
+    freeze = json.loads((A / "FREEZE_V2.json").read_text(encoding="utf-8"))
+    assert freeze["freeze_status"] == "FINAL_FROZEN_BEFORE_CHALLENGE_EMPIRICAL_ACCESS"
+    assert freeze["challenge_empirical_outcomes_accessed_before_freeze"] is False
+    metadata = json.loads(
+        (
+            ROOT
+            / "scripts"
+            / "kaggle"
+            / "experiment_004c_a"
+            / "kernel-metadata.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert metadata["id"] == "polyleviathan/sig-cup-004c-a-freshness"
+    assert metadata["enable_internet"] is False
+    assert metadata["enable_gpu"] is False
