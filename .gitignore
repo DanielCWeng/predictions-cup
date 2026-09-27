@@ -27,6 +27,7 @@ coverage.xml
 !/data/experiments/
 /data/experiments/*
 !/data/experiments/experiment_003/
+!/data/reference/
 !/data/research/
 !/data/manifests/
 /data/manifests/*

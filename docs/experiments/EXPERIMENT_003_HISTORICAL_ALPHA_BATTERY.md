@@ -89,6 +89,10 @@ latency, queue, sizing, portfolio, or P&L simulation.
 The common comparison is BASELINE versus CHALLENGER = BASELINE + family-specific information.
 
 Primary metric: delta MSE = MSE_baseline - MSE_challenger. Positive values favour the challenger.
+This is a predictive-coordinate metric in logit space, not a P&L metric. Equal probability moves
+near 0/1 correspond to larger logit moves than equal-sized moves near 0.5, so tail markets can
+receive disproportionate squared-loss weight. sqrt(delta MSE) must not be converted directly into
+cents.
 
 Models are ordinary least squares with an intercept, TRAIN-only scaling, deterministic
 numpy.linalg.lstsq, no regularisation search, no nonlinear model, and no final-holdout feature
@@ -105,6 +109,12 @@ Preregistered walk-forward geometry:
 
 Coefficients, scalers, participant scores and low-rank loadings are fitted on TRAIN only.
 
+The frozen geometry produces 15 daily HOLDOUT folds. Only one starts on an election day; four of
+five regime windows have exclusively post-election HOLDOUT folds. EXPERIMENT-003 therefore provides
+predominantly post-election/count/settlement-regime evidence and is **not election-night
+validation**. Future election-night claims require event-time/election-time holdouts, preferably at
+whole event-family level.
+
 ## Family definitions
 
 ### Cross-market lead/lag
@@ -116,16 +126,22 @@ delayed-reference signal is the negative control.
 ### Structural residual
 
 Primary reference is an equal-weight logit mean over explicit indirect relationships. Baseline is
-target autoregression; challenger adds the negative target-versus-reference residual. Reference
-freshness 60/120/300 seconds is the fixed sensitivity surface.
+target autoregression; challenger adds the naive level-gap feature
+`-(logit(target level) - mean(logit(reference levels)))`. There are no pair-specific TRAIN-fitted
+offsets/slopes or calibrated structural mappings. Reference freshness 60/120/300 seconds is the
+frozen sensitivity surface.
 
-LOO-PRICE-001 is a same-event mechanical reconstruction diagnostic. LOO-FAMILY-001 is the
-genuinely indirect construction.
+The frozen naive equal-weight logit-level-gap specification was tested and performed weakly. A
+broader calibrated structural/fair-value residual in the stronger pair-specific sense was **not**
+tested. LOO-PRICE-001 is a same-event sibling level-gap diagnostic, not an exact
+exhaustive-partition reconstruction. LOO-FAMILY-001 is the genuinely indirect construction.
 ### Microstructure
 
 Primary information is top-of-book imbalance and microprice displacement divided by spread.
-Baseline includes own lagged move, spread, top-level depth and quote age. Primary lookback is
-5 seconds with 1/5/30-second sensitivity.
+Under the implemented top-level formula, `microprice_displacement_over_spread = imbalance / 2`,
+so these two advertised additions represent one degree of information rather than two independent
+microstructure signals. Baseline includes own lagged move, spread, top-level depth and quote age.
+Primary lookback is 5 seconds with 1/5/30-second sensitivity.
 
 Depth features exist only at genuine depth snapshots. Conflicting same-time snapshots are excluded.
 No queue depletion, cancellation inference, passive-fill probability, VPIN, Kyle lambda, MRR or
@@ -169,10 +185,19 @@ remain unavailable but continue to count in family size; the runner does not inv
 
 The primary paired test is a one-sided sign-flip/randomisation test of baseline-minus-challenger
 squared-error differences aggregated into fixed 30-minute UTC blocks. Exact enumeration is used
-through 18 blocks; otherwise 20,000 deterministic Monte Carlo draws are used.
+through 18 blocks; otherwise 20,000 deterministic Monte Carlo draws are used. These p-values are
+conditional on the observed regime windows; they are not cross-election-family randomisation tests.
 
-Primary uncertainty is a 5,000-draw equal-event bootstrap. Observation-weighted clustered evidence
-is secondary. Tick count is never presented as the independent sample size.
+The object labelled `equal_event_bootstrap` is a 5,000-draw bootstrap over regime-window
+`EventEvidence` rows. The five regime windows belong to only three event families
+(COL_2026, HUN_2026, PER_2026), so it is **not** an independent-election-family bootstrap and must
+not be interpreted as a calibrated cross-election 95% confidence interval. LOWRANK has usable
+evidence from only one regime/event family; its equal-event interval is therefore a degenerate
+one-window resample and non-inferential for cross-event uncertainty.
+
+Observation-weighted clustered evidence is secondary. Tick count is never presented as the
+independent sample size. Future confirmation should aggregate/hold out at event-family level and
+add dependence-aware model-comparison evidence plus block-size robustness.
 
 ## BUILD-008 contract
 
@@ -188,7 +213,10 @@ require_execution_stress is false because this is predictive research, not execu
 
 Promotion requires a positive OOS lift at a preregistered horizon, global-FDR survival,
 non-negative equal-event lower uncertainty, negative-control passage, evidence across more than
-one regime where possible, non-isolated parameter stability, and required ablations.
+one regime where possible, non-isolated parameter stability, and required ablations. The frozen
+`events > 1` gate is only a regime-window count; it is weaker than independent event-family
+replication. No false promotion occurred in EXPERIMENT-003, but this gate must be strengthened
+before reuse.
 
 BUILD-008 can mechanically downgrade a requested promotion to INCONCLUSIVE if required evidence is
 missing. REJECTED is used only for an affirmative falsifier; p > 0.05 alone is not rejection.
@@ -198,8 +226,24 @@ DATA-001 has no FULL_EVENT_REPLAY stream. EXPERIMENT-003 makes no claims about e
 passive fill probability, cancellation timing, same-millisecond causal order, or sub-millisecond
 sequencing.
 
+QuoteSeries is built from `book_changes` only. The 120-second freshness rule therefore requires a
+recent change row at the queried timestamp; a quiet unchanged book can become ineligible even if
+the feed itself remained healthy. This is not equivalent to independent heartbeat/feed-health
+evidence and should be separated in future research.
+
+The frozen ablation layer is also weaker than its labels imply: structural "ablation passed" checks
+only that both LOO lanes contain observations; non-structural ablations are recorded `passed=True`
+by construction; and the RV zero-residual control algebraically collapses to baseline. No false
+promotion occurred, but future BUILD-008 promotion must require substantive ablation evidence.
+
+The 30-second clock grid combined with a 5-second primary lead/lag lookback samples a narrow slice
+of impulses. LEADLAG-001 should therefore be read as a weak same-venue historical screen, not a
+decisive event-time impulse-response test. The frozen REJECTED rule also has no smallest
+economically meaningful effect/futility threshold; future batteries should preregister one.
+
 Historical Polymarket evidence is not proof that the same effect exists on SIG. Any promoted family
-still requires live SIG-relevant replication before production use.
+still requires live SIG-relevant replication before production use. Full limitations are recorded
+in `data/experiments/experiment_003/inference_limitations.json`.
 
 ## Empirical results
 
@@ -232,24 +276,45 @@ Because the executed PARTICIPANT-001@300s lane produced the only nominal BH reje
 post-hoc diagnostics were run as falsification and hypothesis-generation work. They cannot repair
 the preregistration deviation or change EXPERIMENT-003's confirmatory status.
 
-- Attribution: the effect weakens materially when the highest-volume participants are removed,
-  indicating meaningful concentration rather than a uniformly distributed participant effect.
-- Robustness: every leave-one-election-out estimate remains positive, although Peru first round
-  contributes a large share of the observed lift.
+- Attribution initially appeared concentrated in the highest-volume identities. The two dominant
+  hashes are now confirmed as **Polymarket NegRisk exchange contracts, not traders**:
+  `6dd717a425ce` maps to NegRisk CTF Exchange V1
+  (`0xc5d563a36ae78145c45a50134d48a1215220f80a`) and `229cefd48266` maps to NegRisk CTF
+  Exchange V2 (`0xe2222d279d744050d28e00520010520000310f59`). They account for roughly 20–27% of
+  EXP004A volume in the regimes where each is the top identity. The evidence must therefore not be
+  described as trader-skill concentration.
+- Robustness uses **leave-one-regime-window-out**, not leave-one-election-family-out. Every such
+  estimate remains positive, but omitting a first round still leaves the corresponding runoff in
+  sample. It does not establish independent election-family generalisation.
 - Twenty post-hoc participant-score assignment permutations produce an empirical upper-tail rate
   of approximately `0.0476` versus the real 300s delta MSE.
-- A 100-draw raw-identity permutation null preserves fill timing, value, market activity and
-  participant-frequency structure while destroying identity-to-time association. The real effect
-  exceeds 99 of 100 draws (empirical upper-tail approximately `0.0198`).
-- A separate role-agnostic reconstruction discards maker/taker matching-role semantics entirely,
-  uses each address only as a participant identity, and still produces positive 300s lift
-  (`delta MSE approximately 1.47e-5`, raw p approximately `0.0139`). It exceeds all 100
-  role-agnostic identity permutations (empirical upper-tail approximately `0.0099`).
+- EXP004C's 100 raw-identity null draws are themselves poorly calibrated as challenger-vs-baseline
+  p-value tests: 29/100 have raw p < 0.05 and 87/100 have positive delta MSE. The real effect still
+  ranks unusually high (empirical upper tail approximately `0.0198`), but that ranking does not
+  isolate trader identity skill because the permutation also destroys protocol-contract
+  identity-to-fill-type association.
+- EXP004D's role-agnostic null shows the same issue: 30/100 null draws have raw p < 0.05 and 92/100
+  have positive delta MSE. The real role-agnostic effect exceeds all 100 null draws (empirical upper
+  tail approximately `0.0099`), but this remains participant/**protocol**-identity-conditioned
+  exploratory structure, not clean trader-skill evidence.
+- The executed participant negative control is itself nominally significant at 30s, 60s and 300s
+  (approximately p=0.0252, 0.00065 and 0.0333 respectively).
+- Tightening minimum TRAIN history from 5 to 10 cuts the 300s delta MSE from approximately
+  `1.53e-5` to `3.98e-6`; the equal-regime-window bootstrap interval then crosses zero.
 
 These diagnostics motivate a separately preregistered participant-identity follow-up, but they are
-post-hoc and cannot promote or repair EXPERIMENT-003. Historical Polymarket evidence still requires
-fresh validation before any SIG strategy use. EXP004A's maker-only/taker-only variants refer only to
-the source matching role and must not be interpreted as passive/aggressive trading behaviour.
+post-hoc and cannot promote or repair EXPERIMENT-003. The strongest defensible current description
+is **participant/protocol-identity-conditioned exploratory structure**. The next experiment must
+exclude known infrastructure/exchange/adapter contracts (or model them explicitly as a separate
+nuisance class), cross-fit participant encodings within TRAIN, add activity × momentum nuisance
+structure, use a nuisance-preserving identity-null primary contrast, and perform true
+leave-one-event-family-out checks.
+
+A snapshot of PolyLeviathan's canonical infrastructure registry is now vendored under
+`data/reference/polymarket_infrastructure/` with source commit/blob provenance. EXP004A's
+maker-only/taker-only variants refer only to source matching role and must not be interpreted as
+passive/aggressive trading behaviour. Fee-derived economic maker/taker classification is a separate
+future analysis and does not alter this post-hoc validity correction.
 
 Canonical compact reports are under `data/experiments/experiment_003/results/`. Post-hoc diagnostic
 outputs are under `data/experiments/experiment_003/posthoc/`, and the exact Kaggle runner scripts,
@@ -274,7 +339,10 @@ Two deviations were found during the post-result audit:
 The low-rank coverage correction is different: it is recorded in
 `amendment_001_lowrank_coverage.json` as a pre-result eligibility/implementation amendment, the
 invalidated earlier run is not mixed with the corrected run, and the complete battery was rerun on
-the amended code revision.
+the amended code revision. The amendment operationalises "minimum 3 references" as **exactly the
+first three references in the frozen coverage ordering**. That is a documented label-free design
+choice, not the unique meaning of "at least 3"; with usable evidence from only Peru first round,
+LOWRANK remains severely underpowered.
 
 ## Execution environment
 
@@ -285,8 +353,19 @@ DATA-001 directly and fails closed on its manifest hash.
 Large observation/intermediate matrices remain outside Git. Only deterministic compact reports,
 their hashes, registry/ledger updates and this documentation are committed.
 
-The corrected canonical Kaggle run was rerun twice in separate private kernels using the same
-frozen code package and accepted DATA-001 mount. Every compact JSON report and the run manifest
-matched the canonical run byte-for-byte by SHA-256. This demonstrates deterministic reproducibility
-of the frozen implementation; it is not an independent reimplementation. Exact evidence is recorded
-in `data/experiments/experiment_003/results/reproduction_evidence.json`.
+The corrected canonical Kaggle run used frozen Kaggle code dataset
+`polyleviathan/sig-cup-exp003-code`, dataset ID `12219381`, **version 2**, plus the accepted
+DATA-001 mount. Two separate reruns using that package matched every compact JSON report and the run
+manifest byte-for-byte.
+
+A fresh authenticated download of dataset version 2 reproduces the recorded wheel SHA-256
+`b2895b1237ef4331f5ec381037983bf9db251e99f64cff4118f5f7a15a3ac39a`. However, the
+historical canonical launcher asserted `COMMIT.txt`, preregistration, relationship inventory and
+corpus manifest before installation but **did not runtime-assert the wheel SHA itself**. The exact
+launcher is preserved unchanged. The current evidence therefore binds the retained Kaggle v2
+package retrospectively and demonstrates deterministic reproducibility, but it must not be
+described as runtime cryptographic wheel binding or independent reimplementation. Future launchers
+must assert the wheel hash before installation.
+
+Exact evidence is recorded in
+`data/experiments/experiment_003/results/reproduction_evidence.json`.
