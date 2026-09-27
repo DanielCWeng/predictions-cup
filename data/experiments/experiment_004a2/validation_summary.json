@@ -1,0 +1,79 @@
+{
+  "004a_package_version": "004A-event-time-v2",
+  "004a_regime_sha256": "57a102d64778be7c1460638bb4da63be7eeafe0b9494a4287339674bcad0a741",
+  "alpha_searched": false,
+  "canonical_yes_conditions": 1187,
+  "condition_universe_sha256": "1f449f394b9a81743632b1f699188e5649769c48af7939f9a52db631712e37cb",
+  "condition_universe_version": "004A2-condition-universe-v1",
+  "data001_rescanned": false,
+  "experiment_id": "EXPERIMENT-004A.2",
+  "failed_closed_conditions": 113,
+  "failed_closed_conditions_by_event": {
+    "hungary_election": 27,
+    "peru_first_round": 43,
+    "peru_runoff": 43
+  },
+  "feasible_fold_counts_by_method": {
+    "CROSS_ROUND_SAME_FAMILY": 8,
+    "FORWARD_EVENT_HOLDOUT": 16,
+    "FORWARD_FAMILY_HOLDOUT": 8,
+    "WITHIN_EVENT_TEMPORAL_OOS": 20
+  },
+  "fold_counts_by_method": {
+    "CROSS_ROUND_SAME_FAMILY": 8,
+    "FORWARD_EVENT_HOLDOUT": 20,
+    "FORWARD_FAMILY_HOLDOUT": 12,
+    "LEAVE_FAMILY_OUT_RETROSPECTIVE_DIAGNOSTIC": 12,
+    "WITHIN_EVENT_TEMPORAL_OOS": 20
+  },
+  "fold_status_counts": {
+    "DIAGNOSTIC_ONLY": 12,
+    "FEASIBLE": 52,
+    "INSUFFICIENT_PRIOR_EVENTS": 4,
+    "INSUFFICIENT_PRIOR_FAMILIES": 4
+  },
+  "folds_total": 72,
+  "forward_family_holdouts": {
+    "ACTIVE_RESULTS__COL_2026": "FEASIBLE",
+    "ACTIVE_RESULTS__HUN_2026": "INSUFFICIENT_PRIOR_FAMILIES",
+    "ACTIVE_RESULTS__PER_2026": "FEASIBLE",
+    "ELECTION_DAY_PRE_RESULTS__COL_2026": "FEASIBLE",
+    "ELECTION_DAY_PRE_RESULTS__HUN_2026": "INSUFFICIENT_PRIOR_FAMILIES",
+    "ELECTION_DAY_PRE_RESULTS__PER_2026": "FEASIBLE",
+    "LATE_COUNT_DIAGNOSTIC__COL_2026": "FEASIBLE",
+    "LATE_COUNT_DIAGNOSTIC__HUN_2026": "INSUFFICIENT_PRIOR_FAMILIES",
+    "LATE_COUNT_DIAGNOSTIC__PER_2026": "FEASIBLE",
+    "PRE_ELECTION__COL_2026": "FEASIBLE",
+    "PRE_ELECTION__HUN_2026": "INSUFFICIENT_PRIOR_FAMILIES",
+    "PRE_ELECTION__PER_2026": "FEASIBLE"
+  },
+  "independent_event_families": {
+    "COL_2026": [
+      "colombia_first_round",
+      "colombia_runoff"
+    ],
+    "HUN_2026": [
+      "hungary_election"
+    ],
+    "PER_2026": [
+      "peru_first_round",
+      "peru_runoff"
+    ]
+  },
+  "limitations": [
+    "Only three independent election families exist in DATA-001.",
+    "Exact Yes-token selection fails closed where accepted DATA-001 outcome labels are not exactly 'Yes'; no case normalization is permitted.",
+    "Within-window tick count does not increase the independent election-family count.",
+    "Retrospective leave-family-out diagnostics are not prospective OOS evidence."
+  ],
+  "regime_lanes": [
+    "PRE_ELECTION",
+    "ELECTION_DAY_PRE_RESULTS",
+    "ACTIVE_RESULTS",
+    "LATE_COUNT_DIAGNOSTIC"
+  ],
+  "small_n_flag": "LOW_INDEPENDENT_FAMILY_COUNT",
+  "token_pair_disagreements": 25,
+  "validation_protocol_sha256": "e079ba40557b8d5d23d99f2b7834ed9a581f359ec63b3fb120480ca5a171a9d4",
+  "validation_protocol_version": "004A2-event-time-validation-v1"
+}
