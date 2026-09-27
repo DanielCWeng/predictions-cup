@@ -140,7 +140,7 @@ def load_code_bundle() -> tuple[Path, dict[str, Any]]:
         path = code_root / name
         if not path.exists() or sha256(path) != expected:
             raise RuntimeError(f"code dataset hash mismatch: {name}")
-    sys.path.insert(0, str(code_root / "predictions_cup_004c_a.zip"))
+    sys.path.insert(0, str(code_root / "predictions_cup_004c_a.bundle"))
     return code_root, manifest
 
 
