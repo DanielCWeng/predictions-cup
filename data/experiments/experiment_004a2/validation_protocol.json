@@ -1,0 +1,124 @@
+{
+  "004a_regime_package_sha256": "57a102d64778be7c1460638bb4da63be7eeafe0b9494a4287339674bcad0a741",
+  "004a_regime_package_version": "004A-event-time-v2",
+  "as_of_rule": "feature_available_at <= decision_time",
+  "canonical_token_rule": {
+    "complements_are_not_independent": true,
+    "counterpart_may_not_promote_condition": true,
+    "match": "exact_case_sensitive",
+    "outcome_label": "Yes",
+    "required_matches_per_condition": 1,
+    "zero_or_multiple": "FAIL_CLOSED"
+  },
+  "claim_regimes": [
+    "PRE_ELECTION",
+    "ELECTION_DAY_PRE_RESULTS",
+    "ACTIVE_RESULTS",
+    "LATE_COUNT_DIAGNOSTIC"
+  ],
+  "claim_scopes": [
+    "WITHIN_EVENT",
+    "CROSS_ROUND_SAME_FAMILY",
+    "CROSS_EVENT_FAMILY"
+  ],
+  "condition_universe_sha256": "f3a8aa611944f16514e1668f9023361c8eab90c336dcf330648d4f502153a892",
+  "condition_universe_version": "004A2-condition-universe-v1",
+  "cross_boundary_label_rule": {
+    "clip_or_reassign": false,
+    "half_open_intervals": true,
+    "policy": "INVALID_FOR_CLAIMED_REGIME",
+    "reason_code": "LABEL_CROSSES_REGIME_END"
+  },
+  "embargo_semantics": {
+    "hidden_result_dependent_default": false,
+    "must_be_explicit_in_downstream_research_spec": true,
+    "must_be_hash_bound": true,
+    "must_be_non_negative": true
+  },
+  "evidence_scope_policy": {
+    "CROSS_FAMILY_FORWARD_SUPPORTED": "requires genuine forward family holdout",
+    "RETROSPECTIVE_ONLY": "transportability diagnostic; not prospective OOS",
+    "SAME_FAMILY_FORWARD_SUPPORTED": "unseen later round; not independent family",
+    "WITHIN_EVENT_SUPPORTED": "within event/regime only",
+    "cross_family_without_holdout": "INCONCLUSIVE"
+  },
+  "family_grouping": {
+    "COL_2026": [
+      "colombia_first_round",
+      "colombia_runoff"
+    ],
+    "HUN_2026": [
+      "hungary_election"
+    ],
+    "PER_2026": [
+      "peru_first_round",
+      "peru_runoff"
+    ]
+  },
+  "fdr_lane_policy": {
+    "ACTIVE_RESULTS": "separate_primary_family",
+    "ELECTION_DAY_PRE_RESULTS": "separate_if_preregistered",
+    "LATE_COUNT_DIAGNOSTIC": "diagnostic_by_default",
+    "PRE_ELECTION": "separate_primary_family",
+    "pool_primary_regimes": false,
+    "retain_unavailable_cells_in_search_space": true
+  },
+  "fold_construction_rules": {
+    "CROSS_ROUND_SAME_FAMILY": "first round to later runoff only",
+    "FORWARD_EVENT_HOLDOUT": "whole held-out event; training strictly earlier",
+    "FORWARD_FAMILY_HOLDOUT": "whole held-out family; training strictly earlier",
+    "LEAVE_FAMILY_OUT_RETROSPECTIVE_DIAGNOSTIC": "all other families may train; never prospective evidence",
+    "WITHIN_EVENT_TEMPORAL_OOS": "chronological same-event same-regime only"
+  },
+  "fold_data_eligibility_rule": {
+    "chronology_status_preserved_separately": true,
+    "election_day_pre_results": {
+      "interpret_as_empirical_absence": false,
+      "status": "ELIGIBILITY_NOT_ASSESSED",
+      "upstream_004a_reason": "NOT_A_PREDICTIVE_REGIME",
+      "upstream_004a_usable_consumed": false
+    },
+    "feasible_requires_nonempty_holdout": true,
+    "feasible_requires_nonempty_train": true,
+    "reason_codes": [
+      "NO_ELIGIBLE_TRAIN_CONDITIONS",
+      "NO_ELIGIBLE_HOLDOUT_CONDITIONS",
+      "ELIGIBILITY_NOT_ASSESSED"
+    ],
+    "source": "frozen canonical ConditionEligibility universe"
+  },
+  "label_horizon_rule": "label_end_time == decision_time + horizon",
+  "learned_state_policy": {
+    "applies_to": [
+      "normalization",
+      "model_fitting",
+      "participant_scoring",
+      "PCA_SVD_FACTORS",
+      "parameter_selection",
+      "feature_selection",
+      "relationship_discovery"
+    ],
+    "fit_sources": [
+      "TRAIN",
+      "DEVELOPMENT"
+    ],
+    "heldout_observations_may_influence_fit": false
+  },
+  "purge_semantics": {
+    "closed_label_rule": "label_end_time >= evaluation_start is purged",
+    "development_to_holdout": true,
+    "event_holdouts": true,
+    "family_holdouts": true,
+    "regime_boundaries": true,
+    "train_to_development": true
+  },
+  "regime_membership_rule": "regime_start <= decision_time < regime_end AND label_end_time < regime_end",
+  "uncertainty_hierarchy": {
+    "cross_family": "family -> event/round -> contiguous temporal block",
+    "independent_family_unit": "event_family",
+    "small_n_flag": "LOW_INDEPENDENT_FAMILY_COUNT",
+    "within_window": "contiguous temporal block"
+  },
+  "validation_protocol_sha256": "052eefc3ad242ffe5499956da9e5ff05d7a9a3fcd01da3522be82be2cfc34a41",
+  "validation_protocol_version": "004A2-event-time-validation-v1"
+}
