@@ -1,6 +1,6 @@
 # EXPERIMENT-003 — Historical Alpha Battery
 
-**Status:** preregistered implementation complete; empirical run not yet inspected  
+**Status:** empirical run complete; all five preregistered families INCONCLUSIVE
 **Branch:** experiment/003-historical-alpha-battery  
 **Base:** accepted main at 63d2a71f8c736752a577ab97b6efb3be5d1e8c6a  
 **Purpose:** predictive discovery and rejection, not strategy optimisation or execution simulation.
@@ -134,15 +134,17 @@ aggressor inference is implemented. A 300-second delayed feature is the negative
 ### Participant-conditioned flow
 
 Baseline is identity-blind recent fill activity plus contemporaneous market state. Challenger adds
-a participant-conditioned continuation feature whose maker/taker scores are estimated only on that
-fold's TRAIN data and frozen for evaluation.
+a participant-conditioned continuation feature whose source matching-role scores are estimated only
+on that fold's TRAIN data and frozen for evaluation.
 
-Fills from the same block-second as a decision are excluded. source_side is never interpreted as
-aggressor BUY/SELL. Unseen participants receive neutral treatment. Minimum TRAIN history is five
-fills. Primary activity window is 60 seconds with 30/60/300-second sensitivity.
+The fill stream's maker/taker fields are matching roles only. They are not interpreted as passive
+versus aggressive order classification, order type, or BUY/SELL direction. source_side is likewise
+never interpreted as aggressor BUY/SELL. Fills from the same block-second as a decision are excluded.
+Unseen participants receive neutral treatment. Minimum TRAIN history is five fills. Primary activity
+window is 60 seconds with 30/60/300-second sensitivity.
 
-The placebo deterministically permutes participant labels while preserving role/frequency
-structure. No wallet de-anonymisation or insider labelling is performed.
+The preregistered placebo deterministically permutes participant scores while preserving source
+matching-role/frequency structure. No wallet de-anonymisation or insider labelling is performed.
 
 ### Low-rank benchmark
 
@@ -195,8 +197,50 @@ still requires live SIG-relevant replication before production use.
 
 ## Empirical results
 
-Not run at the preregistration/code-freeze stage. This section may only be updated by the
-post-freeze empirical result commit. Negative and inconclusive results must be retained.
+The corrected post-amendment run executed on code revision
+`b2ba5e2c3e63d57bd6e74c0c5861bad67c983e1b`. The low-rank amendment changes only the
+implementation of the already-preregistered minimum-reference coverage rule; the original
+`7e94bb7` low-rank output is invalidated and retained only as audit history.
+
+All five preregistered families finish **INCONCLUSIVE** under the BUILD-008 evidence policy:
+
+| Family | Disposition | Main result |
+|---|---|---|
+| LEADLAG-001 | INCONCLUSIVE | No horizon survives global FDR; stability fails. |
+| RV-001 / structural residual | INCONCLUSIVE | No evidence of positive predictive lift under the preregistered metric; stability fails. |
+| MICROSTRUCTURE-001 | INCONCLUSIVE | Stability passes, but no horizon survives global FDR. |
+| PARTICIPANT-001 | INCONCLUSIVE | 300s survives global 25-test FDR, but the preregistered negative control and stability gates fail. |
+| LOWRANK-001 | INCONCLUSIVE | No horizon survives global FDR; stability fails. |
+
+The only global-FDR rejection is PARTICIPANT-001 at 300 seconds:
+raw p approximately `0.0014`, BH q approximately `0.035`, with positive delta MSE.
+This is **not promotion evidence** because the full preregistered promotion policy is not satisfied.
+
+### Post-hoc participant falsification
+
+Because PARTICIPANT-001@300s was the sole global-FDR survivor, bounded post-hoc diagnostics were
+run without changing EXPERIMENT-003's disposition.
+
+- Attribution: the effect weakens materially when the highest-volume participants are removed,
+  indicating meaningful concentration rather than a uniformly distributed participant effect.
+- Robustness: every leave-one-election-out estimate remains positive, although Peru first round
+  contributes a large share of the observed lift.
+- Twenty preregister-style participant-score permutations produce an empirical upper-tail rate of
+  approximately `0.0476` versus the real 300s delta MSE.
+- A 100-draw raw-identity permutation null preserves fill timing, value, market activity and
+  participant-frequency structure while destroying identity-to-time association. The real effect
+  exceeds 99 of 100 draws (empirical upper-tail approximately `0.0198`).
+- A separate role-agnostic reconstruction discards maker/taker matching-role semantics entirely,
+  uses each address only as a participant identity, and still produces positive 300s lift
+  (`delta MSE approximately 1.47e-5`, raw p approximately `0.0139`). It exceeds all 100
+  role-agnostic identity permutations (empirical upper-tail approximately `0.0099`).
+
+These diagnostics increase interest in participant identity as a follow-up research family, but
+they are post-hoc and cannot promote EXPERIMENT-003. Historical Polymarket evidence still requires
+fresh validation before any SIG strategy use.
+
+Canonical compact reports are under `data/experiments/experiment_003/results/`. Post-hoc diagnostic
+outputs are under `data/experiments/experiment_003/posthoc/`.
 
 ## Execution environment
 
@@ -206,3 +250,8 @@ DATA-001 directly and fails closed on its manifest hash.
 
 Large observation/intermediate matrices remain outside Git. Only deterministic compact reports,
 their hashes, registry/ledger updates and this documentation are committed.
+
+The corrected canonical Kaggle run was independently reproduced twice in separate private kernels.
+Every compact JSON report and the run manifest matched the canonical run byte-for-byte by SHA-256.
+Exact evidence is recorded in
+`data/experiments/experiment_003/results/reproduction_evidence.json`.
