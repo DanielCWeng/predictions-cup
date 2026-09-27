@@ -143,6 +143,10 @@ class ValidationFold:
     chronological: bool
     independent_family_holdout: bool
     same_family_training_present: bool
+    chronology_status: str
+    data_eligibility_status: str
+    eligible_train_conditions: int
+    eligible_holdout_conditions: int
     status: str
     reason: str
 
@@ -164,6 +168,10 @@ class ValidationFold:
             "same_family_training_present": _bool_text(
                 self.same_family_training_present
             ),
+            "chronology_status": self.chronology_status,
+            "data_eligibility_status": self.data_eligibility_status,
+            "eligible_train_conditions": str(self.eligible_train_conditions),
+            "eligible_holdout_conditions": str(self.eligible_holdout_conditions),
             "status": self.status,
             "reason": self.reason,
         }
@@ -627,7 +635,70 @@ def _windows_by_claim(
     return grouped
 
 
-def build_fold_inventory(windows: Sequence[EventTimeWindow]) -> tuple[ValidationFold, ...]:
+def _condition_usable_for_claim(
+    row: ConditionEligibility, claim_regime: ClaimRegime
+) -> bool:
+    if row.canonical_outcome != "Yes":
+        return False
+    if claim_regime is ClaimRegime.PRE_ELECTION:
+        return row.pre_election_usable
+    if claim_regime is ClaimRegime.ELECTION_DAY_PRE_RESULTS:
+        return row.election_day_pre_results_usable
+    if claim_regime is ClaimRegime.ACTIVE_RESULTS:
+        return row.active_results_usable
+    if claim_regime is ClaimRegime.LATE_COUNT_DIAGNOSTIC:
+        return row.late_count_usable
+    raise AssertionError(f"unhandled claim regime: {claim_regime}")
+
+
+def _eligible_condition_count(
+    conditions: Sequence[ConditionEligibility],
+    *,
+    event_ids: Iterable[str],
+    claim_regime: ClaimRegime,
+) -> int:
+    events = set(event_ids)
+    return sum(
+        row.regime_id in events and _condition_usable_for_claim(row, claim_regime)
+        for row in conditions
+    )
+
+
+def _data_eligibility_status(
+    *, eligible_train_conditions: int, eligible_holdout_conditions: int
+) -> str:
+    reasons: list[str] = []
+    if eligible_train_conditions == 0:
+        reasons.append("NO_ELIGIBLE_TRAIN_CONDITIONS")
+    if eligible_holdout_conditions == 0:
+        reasons.append("NO_ELIGIBLE_HOLDOUT_CONDITIONS")
+    return ";".join(reasons) if reasons else "DATA_ELIGIBLE"
+
+
+def _fold_status(*, chronology_status: str, data_eligibility_status: str) -> str:
+    if chronology_status != "CHRONOLOGY_OK":
+        return chronology_status
+    if data_eligibility_status == "DATA_ELIGIBLE":
+        return "FEASIBLE"
+    reasons = set(data_eligibility_status.split(";"))
+    if reasons == {
+        "NO_ELIGIBLE_TRAIN_CONDITIONS",
+        "NO_ELIGIBLE_HOLDOUT_CONDITIONS",
+    }:
+        return "NO_ELIGIBLE_TRAIN_OR_HOLDOUT_CONDITIONS"
+    return data_eligibility_status
+
+
+def _reason_with_data(base_reason: str, data_eligibility_status: str) -> str:
+    if data_eligibility_status == "DATA_ELIGIBLE":
+        return base_reason
+    return f"{base_reason} Data eligibility: {data_eligibility_status}."
+
+
+def build_fold_inventory(
+    windows: Sequence[EventTimeWindow],
+    conditions: Sequence[ConditionEligibility],
+) -> tuple[ValidationFold, ...]:
     output: list[ValidationFold] = []
     grouped = _windows_by_claim(windows)
     same_family_pairs = (
@@ -639,6 +710,14 @@ def build_fold_inventory(windows: Sequence[EventTimeWindow]) -> tuple[Validation
         by_regime = {window.regime_id: window for window in claim_windows}
 
         for window in claim_windows:
+            eligible = _eligible_condition_count(
+                conditions, event_ids=(window.regime_id,), claim_regime=claim
+            )
+            data_status = _data_eligibility_status(
+                eligible_train_conditions=eligible,
+                eligible_holdout_conditions=eligible,
+            )
+            chronology_status = "CHRONOLOGY_OK"
             output.append(
                 ValidationFold(
                     claim_regime=claim,
@@ -655,10 +734,18 @@ def build_fold_inventory(windows: Sequence[EventTimeWindow]) -> tuple[Validation
                     chronological=True,
                     independent_family_holdout=False,
                     same_family_training_present=False,
-                    status="FEASIBLE",
-                    reason=(
+                    chronology_status=chronology_status,
+                    data_eligibility_status=data_status,
+                    eligible_train_conditions=eligible,
+                    eligible_holdout_conditions=eligible,
+                    status=_fold_status(
+                        chronology_status=chronology_status,
+                        data_eligibility_status=data_status,
+                    ),
+                    reason=_reason_with_data(
                         "Downstream preregistration must freeze the within-window temporal "
-                        "split and explicit embargo before outcomes are inspected."
+                        "split and explicit embargo before outcomes are inspected.",
+                        data_status,
                     ),
                 )
             )
@@ -676,7 +763,26 @@ def build_fold_inventory(windows: Sequence[EventTimeWindow]) -> tuple[Validation
                 if same_family
                 else ValidationEvidenceScope.CROSS_FAMILY_FORWARD_SUPPORTED
             )
-            status = "FEASIBLE" if prior else "INSUFFICIENT_PRIOR_EVENTS"
+            chronology_status = (
+                "CHRONOLOGY_OK" if prior else "INSUFFICIENT_PRIOR_EVENTS"
+            )
+            train_events = tuple(item.regime_id for item in prior)
+            eligible_train = _eligible_condition_count(
+                conditions, event_ids=train_events, claim_regime=claim
+            )
+            eligible_holdout = _eligible_condition_count(
+                conditions, event_ids=(holdout.regime_id,), claim_regime=claim
+            )
+            data_status = _data_eligibility_status(
+                eligible_train_conditions=eligible_train,
+                eligible_holdout_conditions=eligible_holdout,
+            )
+            base_reason = (
+                "Only observations strictly before the held-out window start may train; "
+                "purge and explicit embargo apply."
+                if prior
+                else "No earlier same-regime event observations exist."
+            )
             output.append(
                 ValidationFold(
                     claim_regime=claim,
@@ -684,7 +790,7 @@ def build_fold_inventory(windows: Sequence[EventTimeWindow]) -> tuple[Validation
                     validation_method=ValidationMethod.FORWARD_EVENT_HOLDOUT,
                     evidence_scope=evidence_scope,
                     fold_id=f"{claim.value}__forward_event__{holdout.regime_id}",
-                    train_events=tuple(item.regime_id for item in prior),
+                    train_events=train_events,
                     development_events=(),
                     holdout_event=holdout.regime_id,
                     holdout_family=holdout.event_family,
@@ -693,13 +799,15 @@ def build_fold_inventory(windows: Sequence[EventTimeWindow]) -> tuple[Validation
                     chronological=True,
                     independent_family_holdout=not same_family and bool(prior),
                     same_family_training_present=same_family,
-                    status=status,
-                    reason=(
-                        "Only observations strictly before the held-out window start may train; "
-                        "purge and explicit embargo apply."
-                        if prior
-                        else "No earlier same-regime event observations exist."
+                    chronology_status=chronology_status,
+                    data_eligibility_status=data_status,
+                    eligible_train_conditions=eligible_train,
+                    eligible_holdout_conditions=eligible_holdout,
+                    status=_fold_status(
+                        chronology_status=chronology_status,
+                        data_eligibility_status=data_status,
                     ),
+                    reason=_reason_with_data(base_reason, data_status),
                 )
             )
 
@@ -720,8 +828,24 @@ def build_fold_inventory(windows: Sequence[EventTimeWindow]) -> tuple[Validation
                 if item.event_family != family and item.start < boundary
             ]
             prior_families = {item.event_family for item in prior}
-            status = "FEASIBLE" if prior_families else "INSUFFICIENT_PRIOR_FAMILIES"
-            reason = (
+            chronology_status = (
+                "CHRONOLOGY_OK"
+                if prior_families
+                else "INSUFFICIENT_PRIOR_FAMILIES"
+            )
+            train_events = tuple(item.regime_id for item in prior)
+            holdout_events = tuple(item.regime_id for item in family_windows)
+            eligible_train = _eligible_condition_count(
+                conditions, event_ids=train_events, claim_regime=claim
+            )
+            eligible_holdout = _eligible_condition_count(
+                conditions, event_ids=holdout_events, claim_regime=claim
+            )
+            data_status = _data_eligibility_status(
+                eligible_train_conditions=eligible_train,
+                eligible_holdout_conditions=eligible_holdout,
+            )
+            base_reason = (
                 f"{len(prior_families)} prior independent family/families; "
                 f"{LOW_FAMILY_COUNT_FLAG}."
                 if prior_families
@@ -734,17 +858,24 @@ def build_fold_inventory(windows: Sequence[EventTimeWindow]) -> tuple[Validation
                     validation_method=ValidationMethod.FORWARD_FAMILY_HOLDOUT,
                     evidence_scope=ValidationEvidenceScope.CROSS_FAMILY_FORWARD_SUPPORTED,
                     fold_id=f"{claim.value}__forward_family__{family}",
-                    train_events=tuple(item.regime_id for item in prior),
+                    train_events=train_events,
                     development_events=(),
-                    holdout_event=";".join(item.regime_id for item in family_windows),
+                    holdout_event=";".join(holdout_events),
                     holdout_family=family,
                     holdout_window_start=boundary,
                     holdout_window_end=max(item.end for item in family_windows),
                     chronological=True,
                     independent_family_holdout=True,
                     same_family_training_present=False,
-                    status=status,
-                    reason=reason,
+                    chronology_status=chronology_status,
+                    data_eligibility_status=data_status,
+                    eligible_train_conditions=eligible_train,
+                    eligible_holdout_conditions=eligible_holdout,
+                    status=_fold_status(
+                        chronology_status=chronology_status,
+                        data_eligibility_status=data_status,
+                    ),
+                    reason=_reason_with_data(base_reason, data_status),
                 )
             )
 
@@ -753,7 +884,21 @@ def build_fold_inventory(windows: Sequence[EventTimeWindow]) -> tuple[Validation
                 continue
             first = by_regime[first_round]
             later = by_regime[runoff]
-            status = "FEASIBLE" if first.start < later.start else "INFEASIBLE_CHRONOLOGY"
+            chronology_status = (
+                "CHRONOLOGY_OK"
+                if first.start < later.start
+                else "INFEASIBLE_CHRONOLOGY"
+            )
+            eligible_train = _eligible_condition_count(
+                conditions, event_ids=(first_round,), claim_regime=claim
+            )
+            eligible_holdout = _eligible_condition_count(
+                conditions, event_ids=(runoff,), claim_regime=claim
+            )
+            data_status = _data_eligibility_status(
+                eligible_train_conditions=eligible_train,
+                eligible_holdout_conditions=eligible_holdout,
+            )
             output.append(
                 ValidationFold(
                     claim_regime=claim,
@@ -770,10 +915,18 @@ def build_fold_inventory(windows: Sequence[EventTimeWindow]) -> tuple[Validation
                     chronological=True,
                     independent_family_holdout=False,
                     same_family_training_present=True,
-                    status=status,
-                    reason=(
-                        "Later round is genuinely unseen but is not an independent election-family "
-                        "replication."
+                    chronology_status=chronology_status,
+                    data_eligibility_status=data_status,
+                    eligible_train_conditions=eligible_train,
+                    eligible_holdout_conditions=eligible_holdout,
+                    status=_fold_status(
+                        chronology_status=chronology_status,
+                        data_eligibility_status=data_status,
+                    ),
+                    reason=_reason_with_data(
+                        "Later round is genuinely unseen but is not an independent "
+                        "election-family replication.",
+                        data_status,
                     ),
                 )
             )
@@ -781,6 +934,18 @@ def build_fold_inventory(windows: Sequence[EventTimeWindow]) -> tuple[Validation
         for family in families:
             held = [item for item in claim_windows if item.event_family == family]
             training = [item for item in claim_windows if item.event_family != family]
+            train_events = tuple(item.regime_id for item in training)
+            holdout_events = tuple(item.regime_id for item in held)
+            eligible_train = _eligible_condition_count(
+                conditions, event_ids=train_events, claim_regime=claim
+            )
+            eligible_holdout = _eligible_condition_count(
+                conditions, event_ids=holdout_events, claim_regime=claim
+            )
+            data_status = _data_eligibility_status(
+                eligible_train_conditions=eligible_train,
+                eligible_holdout_conditions=eligible_holdout,
+            )
             output.append(
                 ValidationFold(
                     claim_regime=claim,
@@ -790,21 +955,26 @@ def build_fold_inventory(windows: Sequence[EventTimeWindow]) -> tuple[Validation
                     ),
                     evidence_scope=ValidationEvidenceScope.RETROSPECTIVE_ONLY,
                     fold_id=f"{claim.value}__retrospective_lofo__{family}",
-                    train_events=tuple(item.regime_id for item in training),
+                    train_events=train_events,
                     development_events=(),
-                    holdout_event=";".join(item.regime_id for item in held),
+                    holdout_event=";".join(holdout_events),
                     holdout_family=family,
                     holdout_window_start=min(item.start for item in held),
                     holdout_window_end=max(item.end for item in held),
                     chronological=False,
                     independent_family_holdout=True,
                     same_family_training_present=False,
+                    chronology_status="NON_TEMPORAL_DIAGNOSTIC",
+                    data_eligibility_status=data_status,
+                    eligible_train_conditions=eligible_train,
+                    eligible_holdout_conditions=eligible_holdout,
                     status="DIAGNOSTIC_ONLY",
-                    reason="NON_TEMPORAL_RETROSPECTIVE_DIAGNOSTIC",
+                    reason=_reason_with_data(
+                        "NON_TEMPORAL_RETROSPECTIVE_DIAGNOSTIC", data_status
+                    ),
                 )
             )
     return tuple(sorted(output, key=lambda item: item.fold_id))
-
 
 def make_validation_protocol(
     *,
@@ -851,6 +1021,16 @@ def make_validation_protocol(
         },
         "claim_scopes": [value.value for value in ClaimScope],
         "claim_regimes": [value.value for value in ClaimRegime],
+        "fold_data_eligibility_rule": {
+            "source": "frozen canonical ConditionEligibility universe",
+            "feasible_requires_nonempty_train": True,
+            "feasible_requires_nonempty_holdout": True,
+            "reason_codes": [
+                "NO_ELIGIBLE_TRAIN_CONDITIONS",
+                "NO_ELIGIBLE_HOLDOUT_CONDITIONS",
+            ],
+            "chronology_status_preserved_separately": True,
+        },
         "fold_construction_rules": {
             "WITHIN_EVENT_TEMPORAL_OOS": "chronological same-event same-regime only",
             "FORWARD_EVENT_HOLDOUT": "whole held-out event; training strictly earlier",

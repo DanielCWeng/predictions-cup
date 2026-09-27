@@ -70,6 +70,16 @@
     "LEAVE_FAMILY_OUT_RETROSPECTIVE_DIAGNOSTIC": "all other families may train; never prospective evidence",
     "WITHIN_EVENT_TEMPORAL_OOS": "chronological same-event same-regime only"
   },
+  "fold_data_eligibility_rule": {
+    "chronology_status_preserved_separately": true,
+    "feasible_requires_nonempty_holdout": true,
+    "feasible_requires_nonempty_train": true,
+    "reason_codes": [
+      "NO_ELIGIBLE_TRAIN_CONDITIONS",
+      "NO_ELIGIBLE_HOLDOUT_CONDITIONS"
+    ],
+    "source": "frozen canonical ConditionEligibility universe"
+  },
   "label_horizon_rule": "label_end_time == decision_time + horizon",
   "learned_state_policy": {
     "applies_to": [
@@ -102,6 +112,6 @@
     "small_n_flag": "LOW_INDEPENDENT_FAMILY_COUNT",
     "within_window": "contiguous temporal block"
   },
-  "validation_protocol_sha256": "e079ba40557b8d5d23d99f2b7834ed9a581f359ec63b3fb120480ca5a171a9d4",
+  "validation_protocol_sha256": "43cce700c6c216cb16636ede9ed66bf6d592c43b0db83bde62edbbe81b9853d1",
   "validation_protocol_version": "004A2-event-time-validation-v1"
 }

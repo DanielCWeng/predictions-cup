@@ -306,8 +306,9 @@ def test_accepted_rounds_share_only_three_families(
 
 def test_same_family_transfer_is_not_independent_replication(
     frozen_package: Frozen004APackage,
+    conditions: tuple[ConditionEligibility, ...],
 ) -> None:
-    folds = build_fold_inventory(frozen_package.windows)
+    folds = build_fold_inventory(frozen_package.windows, conditions)
     transfers = [
         fold
         for fold in folds
@@ -320,8 +321,9 @@ def test_same_family_transfer_is_not_independent_replication(
 
 def test_retrospective_lofo_is_explicitly_non_temporal(
     frozen_package: Frozen004APackage,
+    conditions: tuple[ConditionEligibility, ...],
 ) -> None:
-    folds = build_fold_inventory(frozen_package.windows)
+    folds = build_fold_inventory(frozen_package.windows, conditions)
     diagnostics = [
         fold
         for fold in folds
@@ -336,7 +338,7 @@ def test_retrospective_lofo_is_explicitly_non_temporal(
         for fold in diagnostics
     )
     assert all(
-        fold.reason == "NON_TEMPORAL_RETROSPECTIVE_DIAGNOSTIC"
+        fold.reason.startswith("NON_TEMPORAL_RETROSPECTIVE_DIAGNOSTIC")
         for fold in diagnostics
     )
 
@@ -467,8 +469,9 @@ def test_protocol_identity_changes_with_universe_or_package_hash(
 
 def test_forward_family_inventory_fails_closed_without_prior_family(
     frozen_package: Frozen004APackage,
+    conditions: tuple[ConditionEligibility, ...],
 ) -> None:
-    folds = build_fold_inventory(frozen_package.windows)
+    folds = build_fold_inventory(frozen_package.windows, conditions)
     family_folds = [
         fold
         for fold in folds
@@ -476,7 +479,67 @@ def test_forward_family_inventory_fails_closed_without_prior_family(
     ]
     assert len(family_folds) == 12
     assert sum(fold.status == "INSUFFICIENT_PRIOR_FAMILIES" for fold in family_folds) == 4
-    assert sum(fold.status == "FEASIBLE" for fold in family_folds) == 8
+    assert sum(fold.status == "FEASIBLE" for fold in family_folds) == 5
+
+
+def test_inventory_feasibility_requires_nonempty_frozen_condition_universe(
+    frozen_package: Frozen004APackage,
+    conditions: tuple[ConditionEligibility, ...],
+) -> None:
+    folds = build_fold_inventory(frozen_package.windows, conditions)
+    assert sum(fold.status == "FEASIBLE" for fold in folds) == 36
+    newly_data_ineligible = [
+        fold
+        for fold in folds
+        if fold.chronology_status == "CHRONOLOGY_OK"
+        and fold.status != "FEASIBLE"
+    ]
+    assert len(newly_data_ineligible) == 16
+    assert all(fold.data_eligibility_status != "DATA_ELIGIBLE" for fold in newly_data_ineligible)
+
+
+def test_election_day_lane_has_zero_eligible_canonical_conditions(
+    frozen_package: Frozen004APackage,
+    conditions: tuple[ConditionEligibility, ...],
+) -> None:
+    folds = build_fold_inventory(frozen_package.windows, conditions)
+    election_day = [
+        fold for fold in folds if fold.claim_regime is ClaimRegime.ELECTION_DAY_PRE_RESULTS
+    ]
+    assert len(election_day) == 18
+    assert not any(fold.status == "FEASIBLE" for fold in election_day)
+    assert all(fold.eligible_holdout_conditions == 0 for fold in election_day)
+    assert sum(
+        fold.chronology_status == "CHRONOLOGY_OK"
+        and fold.status == "NO_ELIGIBLE_TRAIN_OR_HOLDOUT_CONDITIONS"
+        for fold in election_day
+    ) == 13
+
+
+def test_hungary_late_count_and_peru_r1_forward_training_fail_closed(
+    frozen_package: Frozen004APackage,
+    conditions: tuple[ConditionEligibility, ...],
+) -> None:
+    folds = {
+        fold.fold_id: fold
+        for fold in build_fold_inventory(frozen_package.windows, conditions)
+    }
+    hungary_within = folds["LATE_COUNT_DIAGNOSTIC__within__hungary_election"]
+    assert hungary_within.eligible_train_conditions == 0
+    assert hungary_within.eligible_holdout_conditions == 0
+    assert hungary_within.status == "NO_ELIGIBLE_TRAIN_OR_HOLDOUT_CONDITIONS"
+
+    peru_event = folds["LATE_COUNT_DIAGNOSTIC__forward_event__peru_first_round"]
+    assert peru_event.chronology_status == "CHRONOLOGY_OK"
+    assert peru_event.eligible_train_conditions == 0
+    assert peru_event.eligible_holdout_conditions == 40
+    assert peru_event.status == "NO_ELIGIBLE_TRAIN_CONDITIONS"
+
+    peru_family = folds["LATE_COUNT_DIAGNOSTIC__forward_family__PER_2026"]
+    assert peru_family.chronology_status == "CHRONOLOGY_OK"
+    assert peru_family.eligible_train_conditions == 0
+    assert peru_family.eligible_holdout_conditions == 81
+    assert peru_family.status == "NO_ELIGIBLE_TRAIN_CONDITIONS"
 
 
 def test_forward_family_holdout_uses_frozen_window_start_not_first_tick() -> None:

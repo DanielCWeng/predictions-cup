@@ -14,10 +14,16 @@
     "peru_runoff": 43
   },
   "feasible_fold_counts_by_method": {
-    "CROSS_ROUND_SAME_FAMILY": 8,
-    "FORWARD_EVENT_HOLDOUT": 16,
-    "FORWARD_FAMILY_HOLDOUT": 8,
-    "WITHIN_EVENT_TEMPORAL_OOS": 20
+    "CROSS_ROUND_SAME_FAMILY": 6,
+    "FORWARD_EVENT_HOLDOUT": 11,
+    "FORWARD_FAMILY_HOLDOUT": 5,
+    "WITHIN_EVENT_TEMPORAL_OOS": 14
+  },
+  "fold_chronology_status_counts": {
+    "CHRONOLOGY_OK": 52,
+    "INSUFFICIENT_PRIOR_EVENTS": 4,
+    "INSUFFICIENT_PRIOR_FAMILIES": 4,
+    "NON_TEMPORAL_DIAGNOSTIC": 12
   },
   "fold_counts_by_method": {
     "CROSS_ROUND_SAME_FAMILY": 8,
@@ -26,23 +32,31 @@
     "LEAVE_FAMILY_OUT_RETROSPECTIVE_DIAGNOSTIC": 12,
     "WITHIN_EVENT_TEMPORAL_OOS": 20
   },
+  "fold_data_eligibility_status_counts": {
+    "DATA_ELIGIBLE": 44,
+    "NO_ELIGIBLE_HOLDOUT_CONDITIONS": 1,
+    "NO_ELIGIBLE_TRAIN_CONDITIONS": 6,
+    "NO_ELIGIBLE_TRAIN_CONDITIONS;NO_ELIGIBLE_HOLDOUT_CONDITIONS": 21
+  },
   "fold_status_counts": {
     "DIAGNOSTIC_ONLY": 12,
-    "FEASIBLE": 52,
+    "FEASIBLE": 36,
     "INSUFFICIENT_PRIOR_EVENTS": 4,
-    "INSUFFICIENT_PRIOR_FAMILIES": 4
+    "INSUFFICIENT_PRIOR_FAMILIES": 4,
+    "NO_ELIGIBLE_TRAIN_CONDITIONS": 2,
+    "NO_ELIGIBLE_TRAIN_OR_HOLDOUT_CONDITIONS": 14
   },
   "folds_total": 72,
   "forward_family_holdouts": {
     "ACTIVE_RESULTS__COL_2026": "FEASIBLE",
     "ACTIVE_RESULTS__HUN_2026": "INSUFFICIENT_PRIOR_FAMILIES",
     "ACTIVE_RESULTS__PER_2026": "FEASIBLE",
-    "ELECTION_DAY_PRE_RESULTS__COL_2026": "FEASIBLE",
+    "ELECTION_DAY_PRE_RESULTS__COL_2026": "NO_ELIGIBLE_TRAIN_OR_HOLDOUT_CONDITIONS",
     "ELECTION_DAY_PRE_RESULTS__HUN_2026": "INSUFFICIENT_PRIOR_FAMILIES",
-    "ELECTION_DAY_PRE_RESULTS__PER_2026": "FEASIBLE",
+    "ELECTION_DAY_PRE_RESULTS__PER_2026": "NO_ELIGIBLE_TRAIN_OR_HOLDOUT_CONDITIONS",
     "LATE_COUNT_DIAGNOSTIC__COL_2026": "FEASIBLE",
     "LATE_COUNT_DIAGNOSTIC__HUN_2026": "INSUFFICIENT_PRIOR_FAMILIES",
-    "LATE_COUNT_DIAGNOSTIC__PER_2026": "FEASIBLE",
+    "LATE_COUNT_DIAGNOSTIC__PER_2026": "NO_ELIGIBLE_TRAIN_CONDITIONS",
     "PRE_ELECTION__COL_2026": "FEASIBLE",
     "PRE_ELECTION__HUN_2026": "INSUFFICIENT_PRIOR_FAMILIES",
     "PRE_ELECTION__PER_2026": "FEASIBLE"
@@ -64,7 +78,8 @@
     "Only three independent election families exist in DATA-001.",
     "Exact Yes-token selection fails closed where accepted DATA-001 outcome labels are not exactly 'Yes'; no case normalization is permitted.",
     "Within-window tick count does not increase the independent election-family count.",
-    "Retrospective leave-family-out diagnostics are not prospective OOS evidence."
+    "Retrospective leave-family-out diagnostics are not prospective OOS evidence.",
+    "Fold FEASIBLE status requires non-empty eligible training and holdout condition universes in addition to chronology."
   ],
   "regime_lanes": [
     "PRE_ELECTION",
@@ -74,6 +89,6 @@
   ],
   "small_n_flag": "LOW_INDEPENDENT_FAMILY_COUNT",
   "token_pair_disagreements": 25,
-  "validation_protocol_sha256": "e079ba40557b8d5d23d99f2b7834ed9a581f359ec63b3fb120480ca5a171a9d4",
+  "validation_protocol_sha256": "43cce700c6c216cb16636ede9ed66bf6d592c43b0db83bde62edbbe81b9853d1",
   "validation_protocol_version": "004A2-event-time-validation-v1"
 }

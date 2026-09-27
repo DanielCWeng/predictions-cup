@@ -61,6 +61,10 @@ FOLD_FIELDS = (
     "chronological",
     "independent_family_holdout",
     "same_family_training_present",
+    "chronology_status",
+    "data_eligibility_status",
+    "eligible_train_conditions",
+    "eligible_holdout_conditions",
     "status",
     "reason",
 )
@@ -151,12 +155,16 @@ def main() -> None:
     protocol["validation_protocol_sha256"] = protocol_sha
     _write_json(OUTPUT / "validation_protocol.json", protocol)
 
-    folds = build_fold_inventory(package.windows)
+    folds = build_fold_inventory(package.windows, conditions)
     fold_rows = [fold.as_csv_row() for fold in folds]
     _write_csv(OUTPUT / "validation_fold_inventory.csv", fold_rows, FOLD_FIELDS)
 
     method_counts = Counter(fold.validation_method.value for fold in folds)
     status_counts = Counter(fold.status for fold in folds)
+    chronology_status_counts = Counter(fold.chronology_status for fold in folds)
+    data_eligibility_status_counts = Counter(
+        fold.data_eligibility_status for fold in folds
+    )
     feasible_by_method = Counter(
         fold.validation_method.value
         for fold in folds
@@ -185,6 +193,10 @@ def main() -> None:
         "fold_counts_by_method": dict(sorted(method_counts.items())),
         "feasible_fold_counts_by_method": dict(sorted(feasible_by_method.items())),
         "fold_status_counts": dict(sorted(status_counts.items())),
+        "fold_chronology_status_counts": dict(sorted(chronology_status_counts.items())),
+        "fold_data_eligibility_status_counts": dict(
+            sorted(data_eligibility_status_counts.items())
+        ),
         "forward_family_holdouts": {
             f"{fold.claim_regime.value}__{fold.holdout_family or ''}": fold.status
             for fold in forward_family
@@ -209,6 +221,10 @@ def main() -> None:
             ),
             "Within-window tick count does not increase the independent election-family count.",
             "Retrospective leave-family-out diagnostics are not prospective OOS evidence.",
+            (
+                "Fold FEASIBLE status requires non-empty eligible training and holdout "
+                "condition universes in addition to chronology."
+            ),
         ],
     }
     _write_json(OUTPUT / "validation_summary.json", summary)

@@ -169,10 +169,11 @@ canonical-token rule, regime membership, boundary policy, claim scopes, fold rul
 family grouping, uncertainty hierarchy, FDR lane policy and evidence-scope policy. Its SHA-256 is
 deterministic; changing the 004A regime hash or condition-universe hash changes validation identity.
 
-`validation_fold_inventory.csv` is data-independent with respect to future alpha outcomes. It
-materializes what can and cannot be claimed before a new battery is run: within-event folds,
-forward-event holdouts, forward-family holdouts, same-family transfers, retrospective diagnostics,
-and explicit insufficiency states.
+`validation_fold_inventory.csv` is outcome-independent with respect to future alpha research, but
+it deliberately consumes the frozen canonical `ConditionEligibility` universe. Chronology and data
+eligibility are recorded separately. A fold is `FEASIBLE` only when chronology permits it and both
+its eligible training and held-out condition universes are non-empty. Explicit reason codes include
+`NO_ELIGIBLE_TRAIN_CONDITIONS` and `NO_ELIGIBLE_HOLDOUT_CONDITIONS`.
 
 The committed generator reads only accepted repository artefacts. It does not rescan the 1.19GB
 DATA-001 corpus.
@@ -186,15 +187,19 @@ The deterministic build currently yields:
   `1f449f394b9a81743632b1f699188e5649769c48af7939f9a52db631712e37cb`
 - validation protocol version: `004A2-event-time-validation-v1`
 - validation protocol SHA-256:
-  `e079ba40557b8d5d23d99f2b7834ed9a581f359ec63b3fb120480ca5a171a9d4`
+  `43cce700c6c216cb16636ede9ed66bf6d592c43b0db83bde62edbbe81b9853d1`
 - 1,300 conditions total; 1,187 exact-`Yes` canonical; 113 fail closed
 - 25 token-pair disagreement cases retained explicitly
-- 72 data-independent fold-plan rows: 20 within-event, 20 forward-event, 12 forward-family,
+- 72 frozen-universe-aware fold-plan rows: 20 within-event, 20 forward-event, 12 forward-family,
   8 same-family transfer, and 12 retrospective family diagnostics
 
-Of the forward folds, 16/20 event holdouts and 8/12 family holdouts are feasible under chronology.
-All eight first-round→runoff same-family transfers are feasible. Four family folds fail closed with
-`INSUFFICIENT_PRIOR_FAMILIES`.
+Chronology alone permits 52 prospective folds, but the frozen canonical-condition universe reduces
+that to **36 empirically executable `FEASIBLE` folds**. Sixteen chronology-valid rows fail closed on
+data eligibility: all 13 chronology-valid `ELECTION_DAY_PRE_RESULTS` rows, Hungary late-count
+within-event, Peru first-round late-count forward-event, and the PER_2026 late-count forward-family
+fold. The election-day lane has zero usable canonical conditions in every event; Hungary has zero
+late-count usable canonical conditions. Chronology insufficiency remains separately recorded as four
+`INSUFFICIENT_PRIOR_EVENTS` and four `INSUFFICIENT_PRIOR_FAMILIES` rows.
 
 ## Generated package
 
