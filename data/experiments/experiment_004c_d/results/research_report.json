@@ -1,0 +1,88 @@
+{
+  "active_d1": "ACTIVE_DOES_NOT_SUPPORT",
+  "active_d2": "ACTIVE_DOES_NOT_SUPPORT",
+  "c03_status": "DORMANT_GRAPH_SUPPORT_FAIL",
+  "c04_status": {
+    "ACTIVE_RESULTS": "ACTIVE",
+    "PRE_ELECTION": "ACTIVE"
+  },
+  "d1_age_conditioned_magnitude_survived": false,
+  "d1_realistic_null_holm_reject": false,
+  "d1_testable_events_pre": [
+    "colombia_first_round",
+    "colombia_runoff"
+  ],
+  "d2_genuine_quote_renewal_survived": false,
+  "d2_realistic_null_holm_reject": false,
+  "d2_testable_events_pre": [
+    "colombia_first_round",
+    "colombia_runoff"
+  ],
+  "disposition": "NO_CONDITIONAL_EDGE",
+  "effects_measured_on_genuine_bbo_changes": true,
+  "experiment_id": "EXPERIMENT-004C-D",
+  "holm_family": {
+    "C01-ACTIVE": {
+      "p_holm": 1.0,
+      "p_raw": 1.0,
+      "reject": false
+    },
+    "C01-PRE": {
+      "p_holm": 1.0,
+      "p_raw": 1.0,
+      "reject": false
+    },
+    "C02-ACTIVE": {
+      "p_holm": 1.0,
+      "p_raw": 1.0,
+      "reject": false
+    },
+    "C02-PRE": {
+      "p_holm": 1.0,
+      "p_raw": 1.0,
+      "reject": false
+    },
+    "C03-ACTIVE": {
+      "p_holm": 1.0,
+      "p_raw": 1.0,
+      "reject": false
+    },
+    "C03-PRE": {
+      "p_holm": 1.0,
+      "p_raw": 1.0,
+      "reject": false
+    },
+    "C04-ACTIVE": {
+      "p_holm": 1.0,
+      "p_raw": 1.0,
+      "reject": false
+    },
+    "C04-PRE": {
+      "p_holm": 1.0,
+      "p_raw": 1.0,
+      "reject": false
+    }
+  },
+  "must_not_infer": [
+    "no election-direction forecast was tested",
+    "no direct trading P&L or execution edge was tested",
+    "ACTIVE cannot rescue a failed PRE primary",
+    "challenge events were sealed from 004B but were previously exposed to EXPERIMENT-003",
+    "row count is not independent election replication"
+  ],
+  "provenance": {
+    "astra_sha256": "95613edc6acfedd9b614143198366b1b2d62b9f10cbbcb5bd2425588760b6bff",
+    "branch": "experiment/004c-d-conditional-response-renewal",
+    "data001_sha256": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+    "implementation_sha": "1e308d7cf16cdf17fcf8ca247000c14b758a7316",
+    "kaggle_namespace": "004c_d_conditional_response",
+    "market_registry_sha256": "de93ccddafd12729ef7c77875bf8c8bfc6a255cc44efb1bfee5d201c69100e52",
+    "preregistration_sha256": "9eafa50476ffa3e3d793081ead48e1536c02bed5a8571ca92c981158773b2688",
+    "terminal_freeze_sha": "6adb6c2746fdba1453a5f845a515c9f56b5dab3b"
+  },
+  "raw_record_dominant_events": [
+    "colombia_first_round"
+  ],
+  "replication_rule": "expected sign and positive frozen predictive gain in every predesignated testable event; row pooling is not replication",
+  "surviving_prediction_type": "none"
+}

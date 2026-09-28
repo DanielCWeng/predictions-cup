@@ -1,0 +1,18 @@
+{
+  "id": "polyleviathan/004c-d-conditional-response-renewal",
+  "title": "004C D Conditional Response Renewal",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [
+    "polyleviathan/sig-cup-exp004c-d-code"
+  ],
+  "competition_sources": [],
+  "kernel_sources": [
+    "polyleviathan/sig-cup-data-001-build"
+  ]
+}

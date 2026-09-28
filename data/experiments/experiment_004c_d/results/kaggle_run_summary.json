@@ -1,0 +1,28 @@
+{
+  "data001_manifest_sha256": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+  "disposition": "NO_CONDITIONAL_EDGE",
+  "experiment_id": "EXPERIMENT-004C-D",
+  "implementation_commit": "1e308d7cf16cdf17fcf8ca247000c14b758a7316",
+  "null_draws": 9999,
+  "outputs": {
+    "FINAL_RESEARCH_REPORT.md": "8d6bb324674a818cdb52f89209a52d287416b46476e18639f905b8d369cddeda",
+    "MASTER_HANDOFF_004C_D.md": "1097fc496671dcebbb2531ebfa907ae692fd7b0b2bd864cf48708701619799d7",
+    "artifact_hashes.json": "0d4f93c334426295259486d713e98d6485a1c6ef61940e772496fd2d6ae6f1ea",
+    "bid_ask_decomposition.csv": "da554e3f86e2dc3f7bcaf644d37ab58908208a2d967caefd28a6add3469c4a82",
+    "challenge_access_provenance.json": "095061dea33446169257958f6ba88f5089727e10a1beca73d844201a44eab4cc",
+    "challenge_event_results.csv": "00a035d6328431edef5879f559ff7824c6a5ff5db5749cc5e3311a7f878168e5",
+    "feature_support_audit.csv": "321ba63578850a7fd0ea7dc605a65efb6f13ebea7100f5f235be5a1087a04839",
+    "holm_family_results.csv": "ed43eb6f7c30bccd1f8e37bcd5e2acadec38cdf6cbf3f7c13de7d8a4e4934aa1",
+    "horizon_diagnostics.csv": "7613a95f76936572d8605dee5636e6e6993d4c67ba6c688b0326522bf29d6f97",
+    "model_coefficients.csv": "466226c9aeb7efd69d9b5ea0ab90928abb233c3e8401a42b126ef3e8f220a2ec",
+    "negative_controls.csv": "24122f62eb60d5d343c54cc9922f63d8862932965af69594fca1248815c22e62",
+    "null_diagnostics.csv": "04580adfbf18026c183ef2c60b6a2c4c32cb286b766935a653046dad767fc59e",
+    "observation_exposure_audit.csv": "95295b30ac5b0f5bf63d770fafa8162037ca863aee0d6ef765166e575453c170",
+    "research_report.json": "c986e0f8b170a0f9e78ad4f2f203cfb8132052458d95bd0c196da438c070eb08",
+    "run_manifest.json": "66f2d0134da24789edc1e0507686112bcaeaed0411abd9042d5d20a5589c50a3",
+    "secondary_activation_status.csv": "8c3b749e6cb48b0af823d18df5ff19538e60492272377e6aaf44e7c2af6b2252"
+  },
+  "phase": "complete",
+  "preregistration_sha256": "9eafa50476ffa3e3d793081ead48e1536c02bed5a8571ca92c981158773b2688",
+  "terminal_freeze_commit": "6adb6c2746fdba1453a5f845a515c9f56b5dab3b"
+}
