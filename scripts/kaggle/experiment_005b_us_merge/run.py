@@ -86,21 +86,31 @@ def loo_dispersion(sum_: str, sumsq: str, count: str) -> str:
 def file_report(path: Path) -> dict[str, object]:
     con = connect()
     source = qpath(path)
-    row = con.execute(
-        f"SELECT COUNT(*), MIN(row_id), MAX(row_id) FROM read_parquet('{source}')"
-    ).fetchone()
     schema = con.execute(
         f"DESCRIBE SELECT * FROM read_parquet('{source}')"
     ).fetchall()
+    columns = [item[0] for item in schema]
+    if "row_id" in columns:
+        row = con.execute(
+            f"SELECT COUNT(*), MIN(row_id), MAX(row_id) FROM read_parquet('{source}')"
+        ).fetchone()
+        row_identity = {
+            "min_row_id": int(row[1]),
+            "max_row_id": int(row[2]),
+        }
+    else:
+        row = con.execute(
+            f"SELECT COUNT(*) FROM read_parquet('{source}')"
+        ).fetchone()
+        row_identity = {}
     con.close()
     return {
         "path": path.name,
         "bytes": path.stat().st_size,
         "sha256": sha256(path),
         "rows": int(row[0]),
-        "min_row_id": int(row[1]),
-        "max_row_id": int(row[2]),
-        "columns": [item[0] for item in schema],
+        **row_identity,
+        "columns": columns,
     }
 
 
@@ -558,7 +568,7 @@ def build_merge() -> list[Path]:
     report_path.write_text(
         json.dumps(report, indent=2, sort_keys=True) + "\n"
     )
-    return [output, report_path]
+    return [output]
 
 
 def write_task_report(outputs: list[Path]) -> None:
