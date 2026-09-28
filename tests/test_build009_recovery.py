@@ -77,7 +77,12 @@ def test_journal_persists_identity_before_dispatch_and_restores_unresolved(
 
     path = tmp_path / "execution.sqlite3"
     journal = ExecutionJournal(path)
-    journal.record_before_dispatch(plan.envelope, plan.intents)
+    journal.record_before_dispatch(
+        plan.envelope,
+        plan.intents,
+        audit=plan.audit,
+        submitted_monotonic_ns=480,
+    )
     journal.mark_state("logical-1", LifecycleState.UNCERTAIN, 500)
     journal.close()
 
@@ -94,7 +99,7 @@ def test_journal_persists_identity_before_dispatch_and_restores_unresolved(
         assert submission.logical_intent_id == "intent-1"
         assert submission.decision_observation_ns == 123
         assert submission.decision_monotonic_ns == 456
-        assert submission.observed_monotonic_ns == 456
+        assert submission.observed_monotonic_ns == 480
         assert submission.strategy_family == "FV-TAKE"
         assert submission.strategy_id == "fixture"
         assert submission.signal_value == pytest.approx(0.025)
