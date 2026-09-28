@@ -79,12 +79,6 @@ def logit_log1p(probability: float) -> float:
     return math.log(probability) - math.log1p(-probability)
 
 
-def logit_log1p(probability: float) -> float:
-    if probability <= 0.0 or probability >= 1.0:
-        raise ValueError("logit requires 0 < p < 1")
-    return math.log(probability) - math.log1p(-probability)
-
-
 def inverse_logit(log_odds: float) -> float:
     if log_odds >= 0.0:
         exponent = math.exp(-log_odds)
