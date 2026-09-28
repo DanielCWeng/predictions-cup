@@ -1,0 +1,5 @@
+hypothesis,regime,status,reason,multiplicity_slot_retained,rows,blocks,varying_blocks,max_block_ss_fraction,residualized_ss,coefficients_in_challenger
+D3_C03,PRE_ELECTION,DORMANT,"DORMANT_GRAPH_SUPPORT_FAIL: Hungary PRE has <3 family peers; Peru PRE presidential targets have 8 family peers but only 2 outside-family admitted conditions, so the prespecified same-degree matched non-neighbour control is unavailable without shrinking the graph.",True,,,,,,
+D3_C03,ACTIVE_RESULTS,DORMANT,"DORMANT_GRAPH_SUPPORT_FAIL: Hungary PRE has <3 family peers; Peru PRE presidential targets have 8 family peers but only 2 outside-family admitted conditions, so the prespecified same-degree matched non-neighbour control is unavailable without shrinking the graph.",True,,,,,,
+D4_C04,PRE_ELECTION,ACTIVE,OK,True,50820,717,717,0.0283586925287097,1.1179056077774424e-07,18
+D4_C04,ACTIVE_RESULTS,ACTIVE,OK,True,5078,72,72,0.18012222100781375,7.763282968631594e-07,18

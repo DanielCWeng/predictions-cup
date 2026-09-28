@@ -1,0 +1,26 @@
+{
+  "astra_commit": "5b274cdc487fa5aceb184689c1e6c776aa9f2df5",
+  "astra_sha256": "95613edc6acfedd9b614143198366b1b2d62b9f10cbbcb5bd2425588760b6bff",
+  "challenge_empirical_access_before_freeze": false,
+  "challenge_prior_status": "004B_SEALED_PRIOR_EXPERIMENT_EXPOSED",
+  "data001_manifest_sha256": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+  "data_verification": {
+    "files_by_event": {
+      "colombia_first_round": 23,
+      "colombia_runoff": 21,
+      "hungary_election": 32,
+      "peru_first_round": 17,
+      "peru_runoff": 20
+    },
+    "files_checked": 113,
+    "rows_checked": 127986555
+  },
+  "experiment_id": "EXPERIMENT-004C-D",
+  "implementation_commit": "1e308d7cf16cdf17fcf8ca247000c14b758a7316",
+  "kaggle_namespace": "004c_d_conditional_response",
+  "market_family_registry_sha256": "de93ccddafd12729ef7c77875bf8c8bfc6a255cc44efb1bfee5d201c69100e52",
+  "null_draws": 9999,
+  "preregistration_sha256": "9eafa50476ffa3e3d793081ead48e1536c02bed5a8571ca92c981158773b2688",
+  "real_order_placement": false,
+  "terminal_preregistration_freeze": "6adb6c2746fdba1453a5f845a515c9f56b5dab3b"
+}

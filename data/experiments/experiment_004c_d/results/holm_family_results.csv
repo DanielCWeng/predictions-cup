@@ -1,0 +1,9 @@
+slot,p_raw_intersection_union_replication,p_holm,rejected_holm_0_05,testable_events,event_p_values,dormant
+C01-PRE,1.0,1.0,False,colombia_first_round|colombia_runoff,"{""colombia_first_round"": 1.0, ""colombia_runoff"": 1.0}",False
+C01-ACTIVE,1.0,1.0,False,colombia_first_round|colombia_runoff,"{""colombia_first_round"": 1.0, ""colombia_runoff"": 1.0}",False
+C02-PRE,1.0,1.0,False,colombia_first_round|colombia_runoff,"{""colombia_first_round"": 1.0, ""colombia_runoff"": 1.0}",False
+C02-ACTIVE,1.0,1.0,False,colombia_first_round|colombia_runoff,"{""colombia_first_round"": 1.0, ""colombia_runoff"": 1.0}",False
+C03-PRE,1.0,1.0,False,,{},True
+C03-ACTIVE,1.0,1.0,False,,{},True
+C04-PRE,1.0,1.0,False,colombia_first_round,"{""colombia_first_round"": 1.0}",False
+C04-ACTIVE,1.0,1.0,False,colombia_first_round|colombia_runoff,"{""colombia_first_round"": 1.0, ""colombia_runoff"": 1.0}",False
