@@ -47,7 +47,9 @@
       "HUN_2026",
       "PER_2026"
     ],
+    "kaggle_mounted_manifest_sha256": "2d496514c9307a31d8864ac9deeb2ef2ad781fb6fabe894714cbdf00c7244f7a",
     "manifest_sha256": "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c",
+    "manifest_transport_note": "Kaggle mount differs from canonical repo manifest only by CRLF line endings; parsed JSON equality remains mandatory.",
     "participant_grain": "one participant-side OrderFilled row after canonical infrastructure exclusion",
     "primary": "DATA-002 participant-side OrderFilled rows",
     "sample_policy": "deterministic hash sample capped at 750000 participant rows per family; US_2024 must contribute at least 600000 sampled rows or fail closed"
