@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "action": "output",
+  "kernel": "polyleviathan/005b-ordering-falsification-block-gate-us",
+  "output_file_pattern": "*tx_block_report_US_2024.json",
+  "note": "Download compact US archival block-gate report for verification."
+}
