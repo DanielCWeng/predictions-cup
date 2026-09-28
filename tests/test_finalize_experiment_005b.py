@@ -27,7 +27,7 @@ BUILD_REGISTRY = cast(
         [dict[str, Any], dict[str, Any]],
         list[dict[str, Any]],
     ],
-    getattr(MODULE, "build_registry"),
+    MODULE.__dict__["build_registry"],
 )
 
 
