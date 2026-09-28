@@ -3,7 +3,7 @@
   "stage": "PRE_OUTCOME_DESIGN_FREEZE",
   "base_sha": "ba938bedcf63f562be8b26c9502e828391123867",
   "branch": "experiment/005d-structural-rv-atlas",
-  "freeze_parent_sha": "726ef6a54b981cb0dcae44c6f2afe7cc985cf4e0",
+  "freeze_parent_sha": "162a597c9e5a69eb9723e35cf1f600edb6d7d808",
   "artifacts": {
     "docs/experiments/EXPERIMENT_005D_STRUCTURAL_RV_ATLAS.md": "6a699406887bbcc551913d712166ae376d63c798cfe86b008f8ba5927d9ec3ed",
     "data/experiments/experiment_005d/preregistration.json": "d43a75ff8e0b5df6c717f37721e339116a6297b299c4e26d8b9a5f242b9c7a51",
@@ -11,12 +11,12 @@
     "src/predictions_cup/learning/structural_atlas.py": "3de4316cc5acda7c52832060c4983822f8d289583ae31cbe733a71eed5067566",
     "tests/test_structural_atlas.py": "31beebf56af4cd3e05735ab247ee77bad7781f4e8ebdf14942c2f0952111b312",
     "scripts/prepare_experiment_005d_kaggle.py": "93a150592fbcf0e3f76a3ad42d6778600ea15cec61098b39a5fe1e3496fb2247",
-    "scripts/kaggle/experiment_005d/run_body.py.txt": "f79369ec9edb9515090954f1fc02dd411ffeee611bf1fbf999c3ed86950d18f8",
+    "scripts/kaggle/experiment_005d/run_body.py.txt": "bbfa88c1a3ca1df1dbb5000cff93a5ff8781565bac2f773445d05fe6ec60969a",
     "scripts/kaggle/experiment_005d/kernel-metadata.json": "214984c92ded0b37d2be064dfe32223e0e2cfd5ca2a6dc8b12fa7a41751456b3"
   },
   "generated_runner": {
-    "sha256": "a92a0a40c8655e0c88c60e1d02f24b009cdad30d39356222715ce0ed18970457",
-    "bytes": 320369,
+    "sha256": "c422f35274c92054e4b992679d1b3deff3d8430d08f79e9c22a22f25dae2c447",
+    "bytes": 329775,
     "phase": "TRAIN_DEV",
     "generator_rule": "regenerate from the frozen prep script + frozen semantic inputs; generated run.py need not be hand-edited",
     "deterministic_regeneration": "PASS: two clean generations produced identical SHA-256"
@@ -30,7 +30,9 @@
     "hard_constraint_bbo_diagnostics": "PASS: descriptive only, depth_certified=false",
     "target_leakage_gate": "PASS: soft/slack reconstruction uses TRAIN-only target anchor; current target quote excluded from FV construction",
     "event_time_targets": "PASS: DATA-001 and DATA-002 structural targets implement 1/2/5/10 economic-trade horizons",
-    "historical_catalogue": "PASS: 14 USA_2024_GENERAL/CAN_2025_FEDERAL catalogue rows embedded"
+    "historical_catalogue": "PASS: 14 USA_2024_GENERAL/CAN_2025_FEDERAL catalogue rows embedded",
+    "challenger_ladder": "PASS: affine probability/logit, Huber, ridge, reliability-weighted raw RV, scalar Kalman, QP/KL, isotonic, smoothness, entropy and log-concavity diagnostics present",
+    "leakage_labels": "PASS: full-family target-using projections are DIRECT_PROJECTION, not LOO-PRICE"
   },
   "post_freeze_rule": "No model/target/horizon/split/screening additions after this marker. DEV may only remove/select among frozen candidates."
 }
