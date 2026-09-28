@@ -235,6 +235,59 @@ def bh_adjust(
     return out
 
 
+def hierarchical_block_bootstrap(
+    values: np.ndarray,
+    weights: np.ndarray,
+    families: Iterable[object],
+    blocks: Iterable[object],
+    *,
+    reps: int = 500,
+    seed: int = 0,
+) -> tuple[float, np.ndarray]:
+    """Bootstrap family -> block while preserving the frozen row-weight estimand."""
+    y = np.asarray(values, dtype=float)
+    w = np.asarray(weights, dtype=float)
+    fam = np.asarray(list(families), dtype=object)
+    blk = np.asarray(list(blocks), dtype=object)
+    if not (len(y) == len(w) == len(fam) == len(blk)):
+        raise ValueError("bootstrap arrays must align")
+    if len(y) == 0 or reps <= 0:
+        raise ValueError("bootstrap requires rows and positive reps")
+    if not np.all(np.isfinite(y)) or not np.all(np.isfinite(w)) or np.any(w < 0):
+        raise ValueError("bootstrap requires finite values and nonnegative weights")
+    if float(w.sum()) <= 0:
+        raise ValueError("bootstrap weights must sum positive")
+
+    by_family: dict[str, list[tuple[float, float]]] = {}
+    accum: dict[tuple[str, str], list[float]] = {}
+    for value, weight, family, block in zip(y, w, fam, blk, strict=True):
+        key = (str(family), str(block))
+        pair = accum.setdefault(key, [0.0, 0.0])
+        pair[0] += float(value * weight)
+        pair[1] += float(weight)
+    for (family, _), (numerator, denominator) in accum.items():
+        by_family.setdefault(family, []).append((numerator, denominator))
+
+    names = sorted(by_family)
+    if not names:
+        raise ValueError("bootstrap has no families")
+    rng = np.random.default_rng(seed)
+    draws = np.empty(reps, dtype=float)
+    for rep in range(reps):
+        numerator = 0.0
+        denominator = 0.0
+        for family in rng.choice(names, size=len(names), replace=True):
+            family_blocks = by_family[str(family)]
+            picks = rng.integers(0, len(family_blocks), size=len(family_blocks))
+            for pick in picks:
+                block_num, block_den = family_blocks[int(pick)]
+                numerator += block_num
+                denominator += block_den
+        draws[rep] = numerator / denominator
+    p_value = float(2.0 * min(np.mean(draws <= 0.0), np.mean(draws >= 0.0)))
+    return min(1.0, p_value), draws
+
+
 def effective_number(shares: Iterable[float]) -> float:
     x = np.asarray(list(shares), dtype=float)
     total = float(np.sum(x))
