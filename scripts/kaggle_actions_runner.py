@@ -50,7 +50,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     if data.get("schema_version") != 1:
         raise ValueError("schema_version must be 1")
     action = data.get("action")
-    if action not in {"auth_check", "run", "status", "output"}:
+    if action not in {"auth_check", "run", "status", "wait", "output"}:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
 
@@ -104,6 +104,57 @@ def status(kernel: str, output_dir: Path) -> str:
     text = (result.stdout or "") + (result.stderr or "")
     (output_dir / "status.txt").write_text(text, encoding="utf-8")
     return text
+
+
+def wait_for_kernel(data: dict[str, Any], kernel: str, output_dir: Path) -> None:
+    poll_seconds = int(data.get("poll_seconds", 30))
+    timeout_minutes = int(data.get("timeout_minutes", 300))
+    if poll_seconds < 10:
+        raise ValueError("poll_seconds must be at least 10")
+    if not 1 <= timeout_minutes <= 330:
+        raise ValueError("timeout_minutes must be between 1 and 330")
+
+    deadline = time.monotonic() + timeout_minutes * 60
+    last_status = ""
+    terminal = None
+    while time.monotonic() < deadline:
+        result = run_command(
+            ["kaggle", "kernels", "status", kernel],
+            check=False,
+        )
+        last_status = ((result.stdout or "") + (result.stderr or "")).strip()
+        lowered = last_status.lower()
+        if "complete" in lowered:
+            terminal = "complete"
+            break
+        if any(
+            token in lowered
+            for token in ("error", "failed", "cancelled", "canceled")
+        ):
+            terminal = "failed"
+            break
+        time.sleep(poll_seconds)
+
+    (output_dir / "final_status.txt").write_text(
+        last_status + "\n",
+        encoding="utf-8",
+    )
+    capture_logs(kernel, output_dir)
+    if terminal is None:
+        raise TimeoutError(
+            f"Kaggle kernel did not finish within {timeout_minutes} minutes"
+        )
+    if terminal != "complete":
+        raise RuntimeError(f"Kaggle kernel failed: {last_status}")
+
+    write_summary(
+        [
+            "## Kaggle wait",
+            "",
+            f"- Kernel: {kernel}",
+            f"- Final state: {terminal.upper()}",
+        ]
+    )
 
 
 def download_outputs(data: dict[str, Any], kernel: str, output_dir: Path) -> None:
@@ -205,6 +256,9 @@ def main() -> int:
         kernel = kernel_from_manifest(data)
         text = status(kernel, output_dir)
         write_summary(["## Kaggle status", "", f"Kernel: {kernel}", "", text])
+    elif action == "wait":
+        kernel = kernel_from_manifest(data)
+        wait_for_kernel(data, kernel, output_dir)
     elif action == "output":
         kernel = kernel_from_manifest(data)
         download_outputs(data, kernel, output_dir)
