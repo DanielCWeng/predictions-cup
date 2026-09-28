@@ -636,7 +636,7 @@ def hard_family_candidates(
         return []
     cols = [index[m["canonical_token_id"]] for m in members]
     values = panel[:, cols]
-    train, _, _, _, _ = split_masks(grid)
+    train, dev, _, _, _ = split_masks(grid)
     train_spread = np.nanmedian(spreads[train][:, cols], axis=0)
     reliability = 1.0 / np.clip(
         np.where(np.isfinite(train_spread), train_spread, 0.05), 0.005, 0.25
@@ -644,6 +644,59 @@ def hard_family_candidates(
     result: list[dict[str, Any]] = []
     if family["relation_type"] == "EXHAUSTIVE_PARTITION" and family.get("complete"):
         valid = np.all(np.isfinite(values), axis=1)
+        family_spread = spreads[:, cols]
+        tob_valid = valid & np.all(np.isfinite(family_spread), axis=1)
+        bids = values - family_spread / 2.0
+        asks = values + family_spread / 2.0
+        bid_sum = np.nansum(bids, axis=1)
+        ask_sum = np.nansum(asks, axis=1)
+        train_tob = tob_valid & train
+        dev_tob = tob_valid & dev
+        result.append({
+            "event": event,
+            "family_id": family["family_id"],
+            "leakage_mode": "LOO-PRICE",
+            "representation_family": "HARD_COHERENCE_DIAGNOSTIC",
+            "representation": "PARTITION_TOP_OF_BOOK_FEASIBILITY",
+            "target": "__FAMILY__",
+            "target_kind": "hard_top_of_book_coherence",
+            "horizon_kind": "CURRENT",
+            "horizon": 0,
+            "status": "DIAGNOSTIC_ONLY",
+            "train_n": int(train_tob.sum()),
+            "dev_n": int(dev_tob.sum()),
+            "train_underpriced_count": int(
+                np.sum(train_tob & (ask_sum < 1.0 - 1e-12))
+            ),
+            "train_overpriced_count": int(
+                np.sum(train_tob & (bid_sum > 1.0 + 1e-12))
+            ),
+            "dev_underpriced_count": int(
+                np.sum(dev_tob & (ask_sum < 1.0 - 1e-12))
+            ),
+            "dev_overpriced_count": int(
+                np.sum(dev_tob & (bid_sum > 1.0 + 1e-12))
+            ),
+            "dev_best_underpricing_gross": (
+                float(np.max(1.0 - ask_sum[dev_tob]))
+                if np.any(dev_tob) else None
+            ),
+            "dev_best_overpricing_gross": (
+                float(np.max(bid_sum[dev_tob] - 1.0))
+                if np.any(dev_tob) else None
+            ),
+            "depth_certified": False,
+            "arbitrage_claim": False,
+            "note": (
+                "BBO feasibility only. No hard-arbitrage claim without depth, "
+                "fees/costs, all-leg size and settlement verification."
+            ),
+            "p_value": None,
+            "q_value": None,
+            "fdr_group": "DESCRIPTIVE_ONLY|HARD_PARTITION|BBO",
+            "model_params": {"method": "M-020 top-of-book feasibility"},
+            "source_kind": "DATA-001",
+        })
         qp = np.full_like(values, np.nan)
         kl = np.full_like(values, np.nan)
         wqp = np.full_like(values, np.nan)
@@ -715,7 +768,58 @@ def hard_family_candidates(
         )
         cols2 = [index[m["canonical_token_id"]] for m in ordered]
         values2 = panel[:, cols2]
+        spread2 = spreads[:, cols2]
         valid = np.all(np.isfinite(values2), axis=1)
+        tob_valid = valid & np.all(np.isfinite(spread2), axis=1)
+        bid2 = values2 - spread2 / 2.0
+        ask2 = values2 + spread2 / 2.0
+        pair_edges = (
+            bid2[:, 1:] - ask2[:, :-1]
+            if values2.shape[1] >= 2
+            else np.empty((len(values2), 0))
+        )
+        max_edge = (
+            np.nanmax(pair_edges, axis=1)
+            if pair_edges.shape[1]
+            else np.full(len(values2), np.nan)
+        )
+        train_tob = tob_valid & train
+        dev_tob = tob_valid & dev
+        result.append({
+            "event": event,
+            "family_id": family["family_id"],
+            "leakage_mode": "LOO-PRICE",
+            "representation_family": "HARD_COHERENCE_DIAGNOSTIC",
+            "representation": "THRESHOLD_TOP_OF_BOOK_DOMINANCE",
+            "target": "__FAMILY__",
+            "target_kind": "hard_top_of_book_coherence",
+            "horizon_kind": "CURRENT",
+            "horizon": 0,
+            "status": "DIAGNOSTIC_ONLY",
+            "train_n": int(train_tob.sum()),
+            "dev_n": int(dev_tob.sum()),
+            "train_violation_count": int(
+                np.sum(train_tob & (max_edge > 1e-12))
+            ),
+            "dev_violation_count": int(
+                np.sum(dev_tob & (max_edge > 1e-12))
+            ),
+            "dev_best_gross_edge": (
+                float(np.nanmax(max_edge[dev_tob]))
+                if np.any(dev_tob) else None
+            ),
+            "depth_certified": False,
+            "arbitrage_claim": False,
+            "note": (
+                "Adjacent threshold BBO dominance only. No hard-arbitrage claim "
+                "without depth, fees/costs and executable all-leg size."
+            ),
+            "p_value": None,
+            "q_value": None,
+            "fdr_group": "DESCRIPTIVE_ONLY|HARD_THRESHOLD|BBO",
+            "model_params": {"method": "M-002/M-008 top-of-book dominance"},
+            "source_kind": "DATA-001",
+        })
         iso = np.full_like(values2, np.nan)
         for r in np.flatnonzero(valid):
             iso[r] = isotonic_nonincreasing(values2[r])
