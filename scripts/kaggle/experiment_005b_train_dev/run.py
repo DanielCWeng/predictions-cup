@@ -271,6 +271,22 @@ def rank_matrix(df: pd.DataFrame, features: list[str]) -> np.ndarray:
     return ranked.to_numpy(dtype=np.float64, copy=False)
 
 
+def feature_market_concentration(
+    markets: np.ndarray,
+    feature_values: np.ndarray,
+    target_values: np.ndarray,
+) -> tuple[float, float]:
+    valid = (
+        np.isfinite(feature_values)
+        & np.isfinite(target_values)
+    )
+    if not valid.any():
+        return math.nan, math.nan
+    _, counts = np.unique(markets[valid], return_counts=True)
+    shares = counts.astype(float) / counts.sum()
+    return float(np.sum(shares * shares)), float(shares.max())
+
+
 def union_find_clusters(
     corr: np.ndarray,
     features: list[str],
@@ -657,9 +673,17 @@ def main() -> None:
             family_corrs.append(fp)
         family_stack = np.vstack(family_corrs)
         pooled_sign = np.sign(pearson)
-        consistency = np.nanmean(
-            np.sign(family_stack) == pooled_sign[None, :],
-            axis=0,
+        valid_family = np.isfinite(family_stack)
+        family_matches = (
+            (np.sign(family_stack) == pooled_sign[None, :])
+            & valid_family
+        )
+        family_denominator = valid_family.sum(axis=0)
+        consistency = np.divide(
+            family_matches.sum(axis=0),
+            family_denominator,
+            out=np.full(len(features), np.nan),
+            where=family_denominator > 0,
         )
 
         hhi, max_share = market_concentration(train, target)
@@ -726,14 +750,15 @@ def main() -> None:
             )
         per_target[target] = rows
 
-    red_rank = rank_matrix(redundancy_train, features)
-    column_means = np.nanmean(red_rank, axis=0)
-    filled = np.where(
-        np.isfinite(red_rank),
-        red_rank,
-        column_means[None, :],
+    red_rank_frame = (
+        redundancy_train[features]
+        .apply(pd.to_numeric, errors="coerce")
+        .rank(pct=True, method="average")
     )
-    red_corr = np.corrcoef(filled, rowvar=False)
+    red_corr = red_rank_frame.corr(
+        method="pearson",
+        min_periods=100,
+    ).to_numpy(dtype=np.float64)
     clusters = union_find_clusters(red_corr, features, 0.95)
     median_abs = np.nanmedian(np.abs(pooled_spearman), axis=1)
     representative: dict[str, str] = {}
@@ -803,15 +828,35 @@ def main() -> None:
             )
         )
         chosen = []
+        target_label = label_for_target(target)
+        target_train = pd.to_numeric(
+            train[target],
+            errors="coerce",
+        ).to_numpy(dtype=float)
+        target_valid = (
+            train[target_label].notna().to_numpy()
+            & (
+                train[target_label].to_numpy()
+                < train["train_end_timestamp"].to_numpy()
+            )
+        )
+        target_train[~target_valid] = np.nan
+        train_markets = train["market_id"].astype(str).to_numpy()
         for row in eligible[:8]:
             dev_r = dev_metrics[target].get(row["feature"])
             train_r = row["spearman"]
+            feature_index = features.index(row["feature"])
+            feature_hhi, feature_max_share = feature_market_concentration(
+                train_markets,
+                x_train[:, feature_index],
+                target_train,
+            )
             stable = (
                 dev_r is not None
                 and train_r * dev_r > 0
                 and (
-                    row["max_market_share_sample"] is None
-                    or row["max_market_share_sample"] <= 0.50
+                    not np.isfinite(feature_max_share)
+                    or feature_max_share <= 0.50
                 )
             )
             label_name = "DISCOVERY_ONLY"
@@ -825,6 +870,16 @@ def main() -> None:
                 {
                     **row,
                     "dev_pearson": dev_r,
+                    "candidate_market_concentration_hhi_sample": (
+                        None
+                        if not np.isfinite(feature_hhi)
+                        else feature_hhi
+                    ),
+                    "candidate_max_market_share_sample": (
+                        None
+                        if not np.isfinite(feature_max_share)
+                        else feature_max_share
+                    ),
                     "selection_label": label_name,
                     "stable_train_dev": stable,
                 }
