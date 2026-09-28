@@ -1,0 +1,66 @@
+{
+  "experiment_id": "EXPERIMENT-005B",
+  "family": "US_2024",
+  "feature_target_spec_sha256": "47dc9c9a678f58558aba7e4bc282103cacbc0836f08018a79d4197487d689cf7",
+  "outputs": [
+    {
+      "bytes": 302291355,
+      "columns": [
+        "row_id",
+        "loo_family_price_movement_5",
+        "loo_family_activity_5",
+        "loo_family_dispersion_5",
+        "loo_family_fraction_up_5",
+        "loo_family_fraction_down_5",
+        "loo_family_price_movement_15",
+        "loo_family_activity_15",
+        "loo_family_dispersion_15",
+        "loo_family_fraction_up_15",
+        "loo_family_fraction_down_15",
+        "loo_family_price_movement_30",
+        "loo_family_activity_30",
+        "loo_family_dispersion_30",
+        "loo_family_fraction_up_30",
+        "loo_family_fraction_down_30",
+        "loo_family_price_movement_60",
+        "loo_family_activity_60",
+        "loo_family_dispersion_60",
+        "loo_family_fraction_up_60",
+        "loo_family_fraction_down_60"
+      ],
+      "max_row_id": 7890463,
+      "min_row_id": 1,
+      "path": "family_context_short_US_2024.parquet",
+      "rows": 7890463,
+      "sha256": "58d6b9eff01f826ee566f98046285ec186fcf5b7cc3ac610b057d8dd0ed17219"
+    },
+    {
+      "bytes": 394536383,
+      "columns": [
+        "row_id",
+        "loo_family_price_movement_120",
+        "loo_family_activity_120",
+        "loo_family_dispersion_120",
+        "loo_family_fraction_up_120",
+        "loo_family_fraction_down_120",
+        "loo_family_price_movement_300",
+        "loo_family_activity_300",
+        "loo_family_dispersion_300",
+        "loo_family_fraction_up_300",
+        "loo_family_fraction_down_300",
+        "loo_family_price_movement_900",
+        "loo_family_activity_900",
+        "loo_family_dispersion_900",
+        "loo_family_fraction_up_900",
+        "loo_family_fraction_down_900"
+      ],
+      "max_row_id": 7890463,
+      "min_row_id": 1,
+      "path": "family_context_long_US_2024.parquet",
+      "rows": 7890463,
+      "sha256": "849ed6b9a959dfee364ba77408a4df0a520da5bf1c382e6fd2db20a838328e3e"
+    }
+  ],
+  "schema_version": 1,
+  "task": "family_context"
+}
