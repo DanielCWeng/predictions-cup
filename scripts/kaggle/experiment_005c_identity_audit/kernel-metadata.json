@@ -1,0 +1,17 @@
+{
+  "id": "polyleviathan/005c-source-identity-audit",
+  "title": "005C Source Identity Audit",
+  "code_file": "audit.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [
+    "polyleviathan/sig-cup-polyleviathan-fills",
+    "polyleviathan/sig-cup-data-002-polymarket-fees"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}
