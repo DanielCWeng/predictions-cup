@@ -50,7 +50,7 @@ class DecisionRuntime:
         risk_context: RiskContext,
         logical_operation_id: str,
         mode: ExecutionMode,
-        created_monotonic_ns: int,
+        created_monotonic_ns: int | None = None,
     ) -> DecisionOutcome:
         decision_started = self._clock_ns()
 
@@ -72,11 +72,16 @@ class DecisionRuntime:
         plan: ExecutionPlan | None = None
         if decision.approved:
             plan_started = self._clock_ns()
+            decision_ns = (
+                plan_started
+                if created_monotonic_ns is None
+                else created_monotonic_ns
+            )
             plan = build_execution_plan(
                 decision,
                 logical_operation_id=logical_operation_id,
                 mode=mode,
-                created_monotonic_ns=created_monotonic_ns,
+                created_monotonic_ns=decision_ns,
             )
             plan_finished = self._clock_ns()
             self._observe("execution_plan", plan_finished - plan_started)
