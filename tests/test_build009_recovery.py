@@ -96,6 +96,7 @@ def test_journal_persists_identity_before_dispatch_and_restores_unresolved(
         assert unresolved[0].payload_sha256 == plan.envelope.payload_sha256
         submission = reopened.events("logical-1")[0]
         assert submission.event_type == "SUBMISSION"
+        assert submission.tournament_id == "t1"
         assert submission.logical_intent_id == "intent-1"
         assert submission.decision_observation_ns == 123
         assert submission.decision_monotonic_ns == 456
@@ -154,6 +155,7 @@ def test_journal_upgrades_pre_audit_event_schema(tmp_path: Path) -> None:
     finally:
         connection.close()
     assert {
+        "tournament_id",
         "decision_monotonic_ns",
         "strategy_family",
         "strategy_id",
