@@ -3,7 +3,7 @@
   "experiment_id": "EXPERIMENT-005A",
   "title": "Fee-Inferred Maker/Taker & Participant Structure Discovery",
   "namespace": "005a_fee_role_discovery",
-  "status": "PREREGISTERED_SCAFFOLD_EMPIRICAL_GATE_CLOSED",
+  "status": "PREREGISTERED_EMPIRICAL_GATE_OPEN",
   "base_main_sha": "69cb1924751515a495bf99556819147ad090d67d",
   "real_order_placement": false,
   "strategy_pnl": false,
@@ -12,8 +12,9 @@
   "best_wallet_selection": false,
   "gate_policy": {
     "data_002_merged": true,
-    "experiment_004c_fully_frozen": false,
-    "empirical_execution_allowed": false,
+    "experiment_004c_fully_frozen": true,
+    "empirical_execution_allowed": true,
+    "freeze_sha": "ba938bedcf63f562be8b26c9502e828391123867",
     "unlock_rule": "MASTER creates data/experiments/experiment_005a/empirical_gate.json after full 004C freeze and preflight --empirical passes"
   },
   "datasets": {
@@ -193,31 +194,31 @@
       "003": true,
       "004a": true,
       "004b": "DISCOVERY",
-      "004c": "DISCOVERY/PENDING_FINAL_FREEZE"
+      "004c": "DISCOVERY/FINAL_FROZEN"
     },
     "peru_first_round": {
       "003": true,
       "004a": true,
       "004b": "DISCOVERY",
-      "004c": "DISCOVERY/PENDING_FINAL_FREEZE"
+      "004c": "DISCOVERY/FINAL_FROZEN"
     },
     "colombia_first_round": {
       "003": true,
       "004a": true,
       "004b": "SEALED",
-      "004c": "CHALLENGE/PENDING_FINAL_FREEZE"
+      "004c": "CHALLENGE/FINAL_FROZEN"
     },
     "peru_runoff": {
       "003": true,
       "004a": true,
       "004b": "SEALED",
-      "004c": "CHALLENGE/PENDING_FINAL_FREEZE"
+      "004c": "CHALLENGE/FINAL_FROZEN"
     },
     "colombia_runoff": {
       "003": true,
       "004a": true,
       "004b": "SEALED",
-      "004c": "CHALLENGE/PENDING_FINAL_FREEZE"
+      "004c": "CHALLENGE/FINAL_FROZEN"
     },
     "holdout_claim": "none of the historical election families is globally pristine; future 005B evidence must account for exposure"
   },
