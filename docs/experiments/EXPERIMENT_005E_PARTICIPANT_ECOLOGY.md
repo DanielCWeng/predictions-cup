@@ -14,6 +14,8 @@ DATA-002 participant-side `OrderFilled` rows are the participant observation gra
 
 DATA-002 participant timestamps are one-second block-time proxies. Participant history therefore uses only rows with timestamps **strictly earlier** than the current row. `tx_hash` and `log_index` are never used to invent within-second information ordering. Same-second rows are treated as one observable batch for evidence weighting.
 
+Participant state is constructed independently inside each frozen family file. Accordingly, cross-event recurrence means recurrence across `event_id`/markets represented within that family; cross-family evidence means model transfer/stability across the five family datasets, not a globally continuous wallet ledger spanning overlapping family files.
+
 ## Split / freeze
 
 Each family uses a timestamp-only 70% TRAIN / 15% DEV / 15% HOLDOUT chronology with 300-second boundary embargo and target-interval purge. DEV selects the frozen participant-family shortlist and hyperparameters. HOLDOUT is then evaluated once. Earlier HOLDOUT outcomes may only become later strictly-past participant history through the preregistered online feature construction; they never trigger model redesign.
