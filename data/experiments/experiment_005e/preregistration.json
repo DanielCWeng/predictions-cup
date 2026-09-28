@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "protocol_revision": 2,
+  "protocol_revision": 3,
   "experiment_id": "EXPERIMENT-005E",
   "title": "Participant Ecology / Behavioural Atlas",
   "namespace": "005e_participant_ecology_atlas",
@@ -16,15 +16,31 @@
         "economic market stream reconstructed from passive fill legs within validated family+condition_id+tx_hash match groups; active row retained for conservation audit only",
         "clock-time price targets require at least one later economic fill in (t,t+h]; otherwise label is NO_FUTURE_OBSERVATION"
       ]
+    },
+    {
+      "revision": 3,
+      "timing": "before empirical response inspection",
+      "reason": "Completed schema-only DATA-002 conservation audit across all five families showed source float rounding in canonical YES-axis notional: p99 roughly 5e-7 to 1.4e-5, maximum below 4.97e-4, and zero eligible groups above 1e-3. A 1e-8 YES-notional tolerance would therefore reject valid groups for binary-float noise.",
+      "changes": [
+        "size conservation remains relative tolerance 1e-8",
+        "canonical YES-axis notional conservation uses relative tolerance 1e-3",
+        "value_usd is not a conservation gate because participant-side value semantics do not reconcile as an aggregate match invariant"
+      ]
     }
   ],
   "scientific_question": "Does observable participant behaviour contain repeatable predictive information about subsequent market state beyond generic market and activity controls?",
   "data": {
     "primary": "DATA-002 fill-complete participant-side OrderFilled corpus",
-    "families": ["US_2024", "CAN_2025", "HUN_2026", "PER_2026", "COL_2026"],
+    "families": [
+      "US_2024",
+      "CAN_2025",
+      "HUN_2026",
+      "PER_2026",
+      "COL_2026"
+    ],
     "participant_grain": "one participant-side OrderFilled row",
     "economic_market_grain": "group rows by family+condition_id+tx_hash; require exactly one order_is_match_taker_order=true active aggregate row and one or more passive rows; each passive row is one economic fill; active aggregate row is audit-only and never counted as an additional economic fill",
-    "economic_trade_validation": "active size and canonical YES-axis notional must reconcile to summed passive legs within declared numeric tolerance; malformed groups fail closed and are audited",
+    "economic_trade_validation": "require exactly one active aggregate row, at least one passive row, binary outcomes, relative size conservation <=1e-8, and relative canonical YES-axis notional conservation <=1e-3; malformed groups fail closed and are audited; value_usd is not used as a conservation gate",
     "infrastructure_registry": "data/reference/polymarket_infrastructure/infra_addresses.md",
     "identity_policy": "known exchange/adapters/protocol/fee/reward/system identities excluded from participant ecology; unknown identity is never asserted human"
   },
@@ -37,7 +53,7 @@
   },
   "split": {
     "method": "within-family chronological timestamp quantiles derived from timestamps only",
-    "train_fraction": 0.70,
+    "train_fraction": 0.7,
     "dev_fraction": 0.15,
     "holdout_fraction": 0.15,
     "purge_seconds": 300,
@@ -108,15 +124,31 @@
   },
   "targets": {
     "clock": {
-      "own_market_logit_change_seconds": [15, 60, 300],
-      "signed_participant_markout_seconds": [60, 300],
-      "absolute_own_market_logit_change_seconds": [60],
-      "future_economic_trade_count_seconds": [60],
+      "own_market_logit_change_seconds": [
+        15,
+        60,
+        300
+      ],
+      "signed_participant_markout_seconds": [
+        60,
+        300
+      ],
+      "absolute_own_market_logit_change_seconds": [
+        60
+      ],
+      "future_economic_trade_count_seconds": [
+        60
+      ],
       "missingness": "price targets are missing when no later economic fill occurs before the horizon"
     },
     "event": {
-      "own_market_logit_change_economic_trades": [2, 10],
-      "next_economic_price_change_sign": [1]
+      "own_market_logit_change_economic_trades": [
+        2,
+        10
+      ],
+      "next_economic_price_change_sign": [
+        1
+      ]
     }
   },
   "baseline_controls": [
@@ -129,15 +161,38 @@
     "probability level"
   ],
   "model_ladder": {
-    "regression": ["baseline ridge", "baseline+identity-history ridge", "baseline+full-behaviour ridge", "baseline+archetype ridge", "hist-gradient-boosting challenger"],
-    "classification": ["majority/base-rate", "L2 logistic baseline", "L2 logistic baseline+full-behaviour"],
-    "ridge_alpha_grid": [0.1, 1.0, 10.0, 100.0],
-    "hgb_max_leaf_nodes": [15, 31],
+    "regression": [
+      "baseline ridge",
+      "baseline+identity-history ridge",
+      "baseline+full-behaviour ridge",
+      "baseline+archetype ridge",
+      "hist-gradient-boosting challenger"
+    ],
+    "classification": [
+      "majority/base-rate",
+      "L2 logistic baseline",
+      "L2 logistic baseline+full-behaviour"
+    ],
+    "ridge_alpha_grid": [
+      0.1,
+      1,
+      10,
+      100
+    ],
+    "hgb_max_leaf_nodes": [
+      15,
+      31
+    ],
     "selection": "DEV only; primary comparison is incremental loss of participant-state variants versus generic baseline"
   },
   "screening": {
     "primary_metric": "out-of-sample squared-error improvement for 60s own-market logit change",
-    "secondary_metrics": ["60s signed markout", "300s own-market logit change", "next-price-change log loss", "60s activity response"],
+    "secondary_metrics": [
+      "60s signed markout",
+      "300s own-market logit change",
+      "next-price-change log loss",
+      "60s activity response"
+    ],
     "multiplicity": "Benjamini-Hochberg FDR 0.05 within target x horizon family",
     "dev_candidate_rule": "retain only predeclared participant feature families with positive DEV incremental performance and same-sign improvement in at least 3 families or a coherent predeclared regime-specific subset",
     "raw_p_value_is_not_selection": true
