@@ -1,4 +1,5 @@
 """Build the frozen EXPERIMENT-004C-D preregistration and metadata-only registry."""
+# ruff: noqa: E501
 
 from __future__ import annotations
 
