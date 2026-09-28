@@ -1,0 +1,361 @@
+{
+ "package": "polyleviathan_mmstrat_20260928",
+ "created_utc": "2026-09-28",
+ "question": "Which wallets behaved as market makers (low/zero fee, two-sided, short-hold inventory recycling) in HUN_2026, COL_2026, PER_2026 Polymarket election families, which made the most PnL, and what other profitable strategies exist.",
+ "families": {
+  "HUN_2026": {
+   "markets": 200,
+   "fills": 840134
+  },
+  "COL_2026": {
+   "markets": 380,
+   "fills": 693573
+  },
+  "PER_2026": {
+   "markets": 393,
+   "fills": 1212643
+  }
+ },
+ "inputs_not_committed": {
+  "per_fill_fee_corpus": [
+   {
+    "path": "/home/ubuntu/state_backup_20260902/sisterreq_fees_20260927/fees_HUN_2026.parquet",
+    "bytes": 33071799,
+    "sha256": "f1296cd030edfa3b5da40e823b441fd171128b368421d6c0b251aac241e7a130"
+   },
+   {
+    "path": "/home/ubuntu/state_backup_20260902/sisterreq_fees_20260927/fees_COL_2026.parquet",
+    "bytes": 31722950,
+    "sha256": "89d18d7c60adbbf611f02d6d0a0ecd86adc57f8b1180285ae84cc128d1194e2d"
+   },
+   {
+    "path": "/home/ubuntu/state_backup_20260902/sisterreq_fees_20260927/fees_PER_2026.parquet",
+    "bytes": 51718181,
+    "sha256": "805f6514297dffefbe37781146b8f7308f6c373a0c9fcf0f7c10a133dd7e4a18"
+   }
+  ],
+  "maker_rebate_payouts": {
+   "path": "/home/ubuntu/state_backup_20260902/sisterreq_fees_20260927/maker_rebate_payouts_scoped_wallets.parquet",
+   "bytes": 1225937,
+   "sha256": "30e59d150f1b65d1bf9203c578e2d03a96a10280f03f35ee33bc23047504c462"
+  },
+  "unattributed_fee_legs": {
+   "path": "/home/ubuntu/state_backup_20260902/sisterreq_fees_20260927/unattributed_fee_legs.parquet",
+   "bytes": 59436,
+   "sha256": "3963210d51452a12d402e06c52a4997cb55c4b4b2416171e26ff2aec05cbb0fc"
+  },
+  "market_inventory_csv": {
+   "path": "/home/ubuntu/polymarketwhale/campaigns/sisterreq_20260925/polyleviathan_election_market_inventory.csv",
+   "bytes": 5137357,
+   "sha256": "63ce8d117dc71f8861e59a739159e0f0a442754bf53dc42a76e4157ee1ee3625"
+  },
+  "election_family_manifest_json": {
+   "path": "/home/ubuntu/polymarketwhale/campaigns/sisterreq_20260925/polyleviathan_election_family_manifest.json",
+   "bytes": 11562879,
+   "sha256": "ab5885204d77e9eb5b739c9f1e84e7923466e4481e215e5867b5801f5b480d12"
+  },
+  "fee_snapshot": {
+   "path": "/home/ubuntu/polymarketwhale/campaigns/feejoin_20260927/market_fee_snapshot.parquet",
+   "bytes": 133709076,
+   "sha256": "eca80fa59765224424d36c7ccfde658e5eebf98ad256fb8d173e126c48cde210"
+  }
+ },
+ "upstream_sources": {
+  "fills": "Polyleviathan OCI trades lake (OrderFilled per participant order), exported by scripts/fills_export/export_fills_20260926.py; dedup key (tx_hash, log_index, token_id); counts equal manifests/fills_MANIFEST_20260926.*",
+  "fees": "custody fee/refund legs joined per fill by scripts/fee_extraction/{stage,assemble,preera}.py; see manifests/fees_*",
+  "resolution_payouts": "Postgres outcome_resolutions (read-only), per-token fractional payout",
+  "external_crosscheck": "Polymarket Data API /activity (top-5 pooled wallets, v1 run)",
+  "polymarketwhale_commit_at_packaging": "7feb9e84ea0864c2888a70d11e5e99b3a782cf41"
+ },
+ "runs": {
+  "codex_mmstrat_v1": {
+   "agent": "codex gpt-6-luna, reasoning max",
+   "session": "01a0e754-1a62-7382-93ec-8af5f9bed065",
+   "window_utc": "2026-09-28T09:24Z..11:20Z",
+   "brief": "briefs/phase1_TASK.md + ADDENDUM_1.md + ADDENDUM_2.md",
+   "report": "reports/codex_mmstrat_v1/REPORT.md"
+  },
+  "codex_mmstrat_v2": {
+   "agent": "codex gpt-6-luna, reasoning high (resume of same session)",
+   "window_utc": "2026-09-28T11:24Z..11:57Z",
+   "brief": "briefs/ADDENDUM_3.md",
+   "report": "reports/codex_mmstrat_v2/REPORT.md (V2 section on top; V1 text retained below by the analyst)"
+  },
+  "codex_mmstrat_phase2": {
+   "agent": "codex gpt-6-luna, reasoning high (independent session)",
+   "window_utc": "2026-09-28T11:26Z..12:07Z",
+   "brief": "briefs/phase2_TASK_as_run.md",
+   "report": "reports/codex_mmstrat_phase2/REPORT_PHASE2.md"
+  },
+  "orchestrator_grades": {
+   "agent": "Claude (orchestrator)",
+   "report": "reports/orchestrator_grades/GRADES.md"
+  }
+ },
+ "outputs_not_committed": {
+  "mmstrat_dir": [
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/data/analysis_summary.json",
+    "bytes": 191637,
+    "sha256": "45f8e59568470479dc574a6944d181e09dcf21162927475a29c5e27ae570d97f"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/data/anatomy_summary.json",
+    "bytes": 88749,
+    "sha256": "1f3d2331102f6a570ad36948687832e15b5df5824f7b68535493964035750b23"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/data/api_crosscheck.json",
+    "bytes": 6086,
+    "sha256": "2bb399e4ab510603b1ba06814110b057cbe3b5405a46817a99495e9c369cc32f"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/data/post_audit.json",
+    "bytes": 34026,
+    "sha256": "ba36873b1c18657b7f7a6839ed4b43da1c536510ba40d32490a50772c1fe15e4"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/data/strategy_anatomy.json",
+    "bytes": 363536,
+    "sha256": "b5a636590a10a9c4ad8633f4cf720bd89c5cedbe1889c2254afe2f2837e42b86"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/data/token_payouts.parquet",
+    "bytes": 109640,
+    "sha256": "a5df7e694a814dbba8d2abfabba7b8cdcbf0174442924db5d983818704eb248b"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/api_crosscheck.csv",
+    "bytes": 1811,
+    "sha256": "e52fb0cb1f55b896fb90f52895c3c395c996684d8389b540794251b7452aac4f"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/fee_eligibility_summary_v2.csv",
+    "bytes": 441,
+    "sha256": "451c9c55635c7a0712e699dd9719009d4e7176bf3eb999c7198c51b25b774108"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/mm_leaderboard.csv",
+    "bytes": 23722,
+    "sha256": "bbaad887ead684231f57f14186ade1ab9531db2df13de4e12315c30a4955d136"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/mm_leaderboard_v1.csv",
+    "bytes": 70712,
+    "sha256": "db9413bff826217a7cecc5e646d84df80ad7e313660d13407b092584d3de8299"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/mm_leaderboard_v2.csv",
+    "bytes": 23722,
+    "sha256": "bbaad887ead684231f57f14186ade1ab9531db2df13de4e12315c30a4955d136"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/other_profitable_strategies.csv",
+    "bytes": 9875,
+    "sha256": "cf2bfbcfc55b483f76c23f73be8b9da7d57d383bf8841ca2be7ee3320bead740"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/other_profitable_strategies_v1.csv",
+    "bytes": 78196,
+    "sha256": "56c3651e2fe155d7f7f0a156c7df74ed4948da494a80d32209cbe634d0a41e84"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/other_profitable_strategies_v2.csv",
+    "bytes": 9875,
+    "sha256": "cf2bfbcfc55b483f76c23f73be8b9da7d57d383bf8841ca2be7ee3320bead740"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/platform_wide_wallet_rebates_v2.csv",
+    "bytes": 551078,
+    "sha256": "96334a2f6b86868c071c145f37ad80ab82cf1f31dd4abb42a5de486486fc2742"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/strategy_anatomy.csv",
+    "bytes": 4343,
+    "sha256": "ba7f10c4cdd95a4ed88f43e3ae353ed60f96693b904e444707a223c3ebfd2fb2"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/strategy_anatomy_v1.csv",
+    "bytes": 145643,
+    "sha256": "f4b277ec6b9d06ffffeb7b5c3d6c22223a5bce87d73381536a5bacd8b14d6a7c"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/strategy_anatomy_v2.csv",
+    "bytes": 4343,
+    "sha256": "ba7f10c4cdd95a4ed88f43e3ae353ed60f96693b904e444707a223c3ebfd2fb2"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/strict_anatomy_COL_2026_v2.csv",
+    "bytes": 996,
+    "sha256": "0bc600c47fe8ab7a66b69a9c7e508ae015ff082aae0c7977db3bdfeb08cc2fe3"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/strict_anatomy_HUN_2026_v2.csv",
+    "bytes": 949,
+    "sha256": "30fcc98fb6777ff62e14c95c23bd43b9c2ccf6b70284e70108949e251598f38a"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/strict_anatomy_PER_2026_v2.csv",
+    "bytes": 975,
+    "sha256": "60d30a8b9ba62cbe2c90ac674cffbdc04bca534cd638a777d65839bb629237d8"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/strict_anatomy_pooled_v2.csv",
+    "bytes": 2559,
+    "sha256": "0f2b18c1d21b54eeab0f94431d02dac492a49cf3638ccb3b6d6b5e023a29c8fc"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/strict_fifo_metrics_v2.csv",
+    "bytes": 390596,
+    "sha256": "cc495e0c964cc5a1f67f36b57b45b75cd534c1e3a68f2b75e39284e863a687b2"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/strict_funnel_winner_loser_v2.csv",
+    "bytes": 2576,
+    "sha256": "35b73de0dfe6ca9451fe64a2ac81caa1d45dfd9e24b14697591be2b2bc011e6e"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/strict_leaderboard_COL_2026_v2.csv",
+    "bytes": 6176,
+    "sha256": "2915c950a5298f010d932e855ddb6b46f3945cf8f1159cea1d1c3e985a71e50a"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/strict_leaderboard_HUN_2026_v2.csv",
+    "bytes": 5889,
+    "sha256": "3cf11f13a85c81d7b08b258993e12a2058a482a4c8d11766db5436e6f5ff64a0"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/strict_leaderboard_PER_2026_v2.csv",
+    "bytes": 6335,
+    "sha256": "09a324723de86884abf58a161c743c81a4ef9caf922e378ce826b82404fd31aa"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/strict_leaderboard_pooled_v2.csv",
+    "bytes": 6435,
+    "sha256": "e81bf0a650a7c13d808754170a262d6843f27c2bead3b79f16880b46e629ce55"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/strict_metrics_COL_2026_v2.parquet",
+    "bytes": 6636002,
+    "sha256": "ef3b688a2533dde7fc9c2fa805382131290cd49e6b616d670ed9f2f93cb39352"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/strict_metrics_HUN_2026_v2.parquet",
+    "bytes": 8677329,
+    "sha256": "d1c8626c6c6efb68844ee96d00c65481e77e587e9bb431957d55f5243e6cf5bd"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/strict_metrics_PER_2026_v2.parquet",
+    "bytes": 10652532,
+    "sha256": "904d0059380bb1d42896e3af2ed6e31549cd1cd543f978cea8943d0955d6961c"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/strict_metrics_pooled_v2.parquet",
+    "bytes": 23251560,
+    "sha256": "147e9ebaac26854a24e8c0de7609e90dffbfede073be08bd91b821aab8abfc0d"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/wallet_fee_eligibility_v2.parquet",
+    "bytes": 6761433,
+    "sha256": "68155f4bdfea789de37ba66423c828f1cbb75a03b5c171536b99526a0ae0e1e1"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/wallet_metrics_COL_2026.parquet",
+    "bytes": 5077088,
+    "sha256": "8f6a46a69871ab4ce871d784d795ee841a140db7c6b555eea2dacc29fae3cb06"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/wallet_metrics_COL_2026_v1.parquet",
+    "bytes": 5039760,
+    "sha256": "7d791f662cf2ea146c4dee338fcf3ead9b1599a76aa61de8f37aa15ab48dbc75"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/wallet_metrics_COL_2026_v2.parquet",
+    "bytes": 5077088,
+    "sha256": "8f6a46a69871ab4ce871d784d795ee841a140db7c6b555eea2dacc29fae3cb06"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/wallet_metrics_HUN_2026.parquet",
+    "bytes": 6822721,
+    "sha256": "5dde1d416fbddca6e517446d7d8a3da37aa036c16277d050790540b48dff7800"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/wallet_metrics_HUN_2026_v1.parquet",
+    "bytes": 7029673,
+    "sha256": "b5a16a63d3f68c1db7df9a5178edf7a9ec29ab51a4d0f6d1e0bb218cc7f30d99"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/wallet_metrics_HUN_2026_v2.parquet",
+    "bytes": 6822721,
+    "sha256": "5dde1d416fbddca6e517446d7d8a3da37aa036c16277d050790540b48dff7800"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/wallet_metrics_PER_2026.parquet",
+    "bytes": 7926283,
+    "sha256": "59053f8e345ee8c9581a8011834ec4dce75e34deaa5fb7e4e2f3b27278bf1928"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/wallet_metrics_PER_2026_v1.parquet",
+    "bytes": 8671695,
+    "sha256": "0f8904cff53760c351d778e1809d6f68fd61843d5617d7a70dc0308ae242eb7c"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/wallet_metrics_PER_2026_v2.parquet",
+    "bytes": 7926283,
+    "sha256": "59053f8e345ee8c9581a8011834ec4dce75e34deaa5fb7e4e2f3b27278bf1928"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/wallet_metrics_pooled.parquet",
+    "bytes": 16777782,
+    "sha256": "22cf476e5ed90835637f52d36f5617181ec6dfea1dced06454e4098d9abc508a"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/wallet_metrics_pooled_v1.parquet",
+    "bytes": 17772866,
+    "sha256": "60d7d3d88bf4c6a405503de90207c41628f350b13f358ed767e04207b78ddbb9"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_20260928/outputs/wallet_metrics_pooled_v2.parquet",
+    "bytes": 16777782,
+    "sha256": "22cf476e5ed90835637f52d36f5617181ec6dfea1dced06454e4098d9abc508a"
+   }
+  ],
+  "phase2_dir": [
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_phase2_20260928/outputs/phase2/per_wallet_question_long.parquet",
+    "bytes": 221509,
+    "sha256": "06d5a59b67998080a3e821122154403508fe91fda3714903315b977f870db509"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_phase2_20260928/outputs/phase2/per_wallet_question_metrics.parquet",
+    "bytes": 234965,
+    "sha256": "6ddcb6c49b5decb51ce6ae0cd1b274b6bdd9251a999ced224a8d991cbccf77da"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_phase2_20260928/outputs/phase2/question_comparisons.parquet",
+    "bytes": 10686,
+    "sha256": "117bf5ef2cfddfc1e1df1c123f118f03df0a965a5a15dda85274ff7397be64eb"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_phase2_20260928/outputs/phase2/strict_tier_funnel.parquet",
+    "bytes": 2806,
+    "sha256": "13aea631cd9bc728febd3546488ed781a81acb4c3c0253636a9f33b6f4bed5d8"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_phase2_20260928/outputs/phase2/summary.json",
+    "bytes": 194,
+    "sha256": "a93f79dea9ca9640e7ef7c511deb60abf4af3647a8186683db4f3b6119260872"
+   },
+   {
+    "path": "/home/ubuntu/campaigns/mmstrat_phase2_20260928/outputs/phase2/wallet_roster.parquet",
+    "bytes": 14355,
+    "sha256": "32557c74e8f5935e799f31ad9ff65ce4576ad722d60e77afb6f9e0546d5abc60"
+   }
+  ]
+ },
+ "reproducibility_gaps": [
+  "The phase-1 (v1) and fix-pass (v2) analysis scripts were deleted by the analyst agent during its own scratch cleanup and are NOT in this package; v1/v2 numbers are reproducible only from the committed method text plus the recorded output hashes.",
+  "Phase-2 scripts (scripts/phase2) are the as-run versions and hard-code absolute /home/ubuntu paths.",
+  "Input corpora (per-fill fee parquets, inventory CSV) are not committed; sha256 above pins them."
+ ]
+}

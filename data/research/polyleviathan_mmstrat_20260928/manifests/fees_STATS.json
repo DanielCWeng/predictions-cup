@@ -1,0 +1,74 @@
+{
+ "legs_total": 265661,
+ "legs_attributed": 265067,
+ "legs_unattributed": 594,
+ "fills_total": 18317515,
+ "CAN_2025": {
+  "rows": 854625,
+  "first": "2024-12-30",
+  "last": "2025-08-21",
+  "unique_participants": 73202,
+  "fee_charged_usd_equiv": 0.0,
+  "fee_refunded_usd_equiv": 0.0,
+  "evidence": {
+   "no_fee_leg_observed": 20222,
+   "custody_not_scanned_pre_fee_era": 834403
+  }
+ },
+ "COL_2026": {
+  "rows": 693573,
+  "first": "2025-07-29",
+  "last": "2026-07-15",
+  "unique_participants": 35728,
+  "fee_charged_usd_equiv": 93832.99671546486,
+  "fee_refunded_usd_equiv": 3029.71200831259,
+  "evidence": {
+   "no_fee_leg_observed": 562108,
+   "fee_charged": 110692,
+   "fee_charged_partly_refunded": 2401,
+   "custody_not_scanned_pre_fee_era": 15168,
+   "fee_charged_fully_refunded": 3204
+  }
+ },
+ "HUN_2026": {
+  "rows": 840134,
+  "first": "2025-07-25",
+  "last": "2026-05-09",
+  "unique_participants": 53938,
+  "fee_charged_usd_equiv": 14671.876345959043,
+  "fee_refunded_usd_equiv": 12083.213771129556,
+  "evidence": {
+   "custody_not_scanned_pre_fee_era": 16791,
+   "fee_charged_fully_refunded": 2728,
+   "no_fee_leg_observed": 815357,
+   "fee_charged_partly_refunded": 1695,
+   "fee_charged": 3563
+  }
+ },
+ "PER_2026": {
+  "rows": 1212643,
+  "first": "2025-12-16",
+  "last": "2026-07-30",
+  "unique_participants": 54571,
+  "fee_charged_usd_equiv": 198527.41265,
+  "fee_refunded_usd_equiv": 0.0,
+  "evidence": {
+   "no_fee_leg_observed": 1082508,
+   "fee_charged": 130135
+  }
+ },
+ "US_2024": {
+  "rows": 14716540,
+  "first": "2023-01-14",
+  "last": "2024-12-18",
+  "unique_participants": 306893,
+  "fee_charged_usd_equiv": 0.0,
+  "fee_refunded_usd_equiv": 0.0,
+  "evidence": {
+   "no_fee_leg_observed": 338690,
+   "custody_not_scanned_pre_fee_era": 14377850
+  }
+ },
+ "rebate_payouts_all": 415325,
+ "rebate_usd_all": 101350535.32
+}
