@@ -86,6 +86,11 @@ def dt(value: str) -> pd.Timestamp:
     return pd.Timestamp(value)
 
 
+def datetime_ns(values: Any) -> np.ndarray:
+    """Normalize any Pandas/Arrow datetime unit to nanosecond integer time."""
+    return pd.DatetimeIndex(values).as_unit("ns").asi8.astype(np.int64, copy=False)
+
+
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     if not rows:
         rows = [{"status": "EMPTY"}]
@@ -248,7 +253,7 @@ def load_book_state(
             c = state_carry.get(str(token))
             bid = sub["best_bid"].to_numpy(float)
             ask = sub["best_ask"].to_numpy(float)
-            times_i = sub["observed_at"].astype("int64").to_numpy(np.int64)
+            times_i = datetime_ns(sub["observed_at"])
             valid = sub["bbo_valid"].to_numpy(bool)
 
             prev_bid = np.empty(n, float)
@@ -435,7 +440,7 @@ def rolling_counts(
 
 
 def asof_from_states(states: pd.DataFrame, query_ns: np.ndarray, field: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    t = states["observed_at"].astype("int64").to_numpy(np.int64)
+    t = datetime_ns(states["observed_at"])
     idx = np.searchsorted(t, query_ns, side="right") - 1
     ok = idx >= 0
     values = np.full(len(query_ns), np.nan, float)
@@ -481,7 +486,7 @@ def load_trade_features(
     for token, g in trades.groupby("token_id", sort=False):
         g = g.sort_values("observed_at").copy()
         s = states[states["token_id"].astype(str) == str(token)].sort_values("observed_at")
-        qns = g["observed_at"].astype("int64").to_numpy(np.int64)
+        qns = datetime_ns(g["observed_at"])
         if not s.empty:
             mid, _, _ = asof_from_states(s, qns - 1, "midpoint")
             g["abs_trade_mid_disp"] = np.abs(g["price"].to_numpy(float) - mid)
@@ -588,7 +593,7 @@ def build_clock(
         if s.empty:
             continue
         grid = pd.date_range(start, dev_end, freq=f"{GRID_SECONDS}s", inclusive="left", tz="UTC")
-        qns = grid.astype("int64").to_numpy(np.int64)
+        qns = datetime_ns(grid)
         mid, seg, state_ns = asof_from_states(s, qns, "midpoint")
         spread, _, _ = asof_from_states(s, qns, "spread")
         logmid = logit_array(mid)
@@ -606,7 +611,7 @@ def build_clock(
 
         cap = captures[captures["token_id"].astype(str) == str(token)].sort_values("bin_time")
         if not cap.empty:
-            bt = cap["bin_time"].astype("int64").to_numpy(np.int64)
+            bt = datetime_ns(cap["bin_time"])
             for w in WINDOWS:
                 for col, name in (
                     ("raw_rows", "raw"),
@@ -652,7 +657,7 @@ def build_clock(
             sd[~good] = np.nan
             frame[f"spread_h{h}"] = sd
 
-            genuine_times = s.loc[s["genuine_bbo"], "observed_at"].astype("int64").to_numpy(np.int64)
+            genuine_times = datetime_ns(s.loc[s["genuine_bbo"], "observed_at"])
             a = np.searchsorted(genuine_times, qns, side="right")
             b = np.searchsorted(genuine_times, future_ns, side="right")
             hazard = (b > a).astype(float)
@@ -835,7 +840,7 @@ def attach_depth_targets(
         if s.empty:
             continue
         d = d.copy().sort_values("time").reset_index(drop=True)
-        qns = d["time"].astype("int64").to_numpy(np.int64)
+        qns = datetime_ns(d["time"])
         d["event"] = event
         d["regime"] = regime
         d["market_id"] = market_map.get(str(token), "")
@@ -866,7 +871,7 @@ def attach_depth_targets(
             d[f"depth_abs_h{h}"] = np.abs(y)
 
         # Observable resilience: require at least one later depth snapshot by the horizon.
-        times = d["time"].astype("int64").to_numpy(np.int64)
+        times = datetime_ns(d["time"])
         depth2 = d["depth_2c"].to_numpy(float)
         pre = d["pre_shock_depth2"].to_numpy(float)
         shock = d["large_depth_shock"].to_numpy(bool)
