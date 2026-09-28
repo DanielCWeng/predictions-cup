@@ -87,6 +87,42 @@ def one(pattern: str) -> Path:
     return target
 
 
+def optional_one(pattern: str) -> Path | None:
+    matches = sorted(INPUT.rglob(pattern))
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise RuntimeError(f"expected at most one {pattern}, got {matches}")
+
+    cache = WORK / "_input_cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    archived: list[tuple[Path, str]] = []
+    for archive_path in sorted(INPUT.rglob("*.zip")):
+        try:
+            with zipfile.ZipFile(archive_path) as archive:
+                for name in archive.namelist():
+                    if Path(name).name == pattern:
+                        archived.append((archive_path, name))
+        except zipfile.BadZipFile:
+            continue
+    if len(archived) > 1:
+        raise RuntimeError(f"expected at most one archived {pattern}, got {archived}")
+    if not archived:
+        return None
+
+    archive_path, member = archived[0]
+    target = cache / pattern
+    if not target.exists():
+        with zipfile.ZipFile(archive_path) as archive, archive.open(member) as source:
+            with target.open("wb") as output:
+                while True:
+                    chunk = source.read(1 << 20)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+    return target
+
+
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     fields: list[str] = []
     for row in rows:
@@ -183,14 +219,58 @@ class PreparedFeatures:
 def reconstruction_family(
     family: str,
 ) -> tuple[dict[str, MarketSeries], pd.DataFrame, dict[str, Any]]:
-    fills_path = one(f"fills_{family}.parquet")
-    markets_path = one(f"markets_{family}.parquet")
+    fills_path = optional_one(f"fills_{family}.parquet")
+    markets_path = optional_one(f"markets_{family}.parquet")
+    source_kind = "DATA001_RAW_FILL"
+    fallback_meta: pd.DataFrame | None = None
+
     raw_columns = [
         "timestamp", "price", "size_shares", "value_usd", "token_id",
         "condition_id", "maker_address", "tx_hash", "log_index",
         "is_exchange_taker", "outcome_side",
     ]
-    table = pq.read_table(fills_path, columns=raw_columns)
+    if fills_path is not None and markets_path is not None:
+        table = pq.read_table(fills_path, columns=raw_columns)
+    else:
+        if fills_path is not None or markets_path is not None:
+            raise RuntimeError(
+                f"{family}: incomplete raw fill/market pair "
+                f"fills={fills_path} markets={markets_path}"
+            )
+        fee_path = one(f"fees_{family}.parquet")
+        fee_columns = [
+            "timestamp", "price", "size_shares", "value_usd", "token_id",
+            "condition_id", "participant_address", "tx_hash", "log_index",
+            "order_is_match_taker_order", "outcome_side", "event_id",
+        ]
+        fee_table = pq.read_table(fee_path, columns=fee_columns)
+        table = pa.table(
+            {
+                "timestamp": fee_table["timestamp"],
+                "price": fee_table["price"],
+                "size_shares": fee_table["size_shares"],
+                "value_usd": fee_table["value_usd"],
+                "token_id": fee_table["token_id"],
+                "condition_id": fee_table["condition_id"],
+                "maker_address": fee_table["participant_address"],
+                "tx_hash": fee_table["tx_hash"],
+                "log_index": fee_table["log_index"],
+                "is_exchange_taker": fee_table["order_is_match_taker_order"],
+                "outcome_side": fee_table["outcome_side"],
+            }
+        )
+        fallback_meta = (
+            fee_table.select(["condition_id", "event_id"])
+            .group_by(["condition_id", "event_id"])
+            .aggregate([("timestamp", "count")])
+            .select(["condition_id", "event_id"])
+            .to_pandas()
+        )
+        fallback_meta["market_family"] = ""
+        fallback_meta["question"] = ""
+        source_kind = "DATA002_MATCHED_FILL_FALLBACK"
+        del fee_table
+
     raw_rows = table.num_rows
 
     active = table.filter(pc.equal(table["is_exchange_taker"], True))
@@ -308,10 +388,14 @@ def reconstruction_family(
     )
     agg = agg.take(order)
 
-    meta = pq.read_table(
-        markets_path,
-        columns=["condition_id", "event_id", "market_family", "question"],
-    ).to_pandas()
+    if fallback_meta is not None:
+        meta = fallback_meta
+    else:
+        assert markets_path is not None
+        meta = pq.read_table(
+            markets_path,
+            columns=["condition_id", "event_id", "market_family", "question"],
+        ).to_pandas()
     meta["condition_id"] = meta["condition_id"].astype(str)
     meta["event_id"] = meta["event_id"].fillna("").astype(str)
     meta["market_family"] = meta["market_family"].fillna("").astype(str)
@@ -347,6 +431,7 @@ def reconstruction_family(
 
     audit = {
         "family": family,
+        "source_kind": source_kind,
         "raw_orderfilled_rows": raw_rows,
         "active_rows": active.num_rows,
         "passive_rows_after_role_audit": passive.num_rows,
