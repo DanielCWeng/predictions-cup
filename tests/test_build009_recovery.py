@@ -71,7 +71,7 @@ def test_journal_persists_identity_before_dispatch_and_restores_unresolved(
 
     path = tmp_path / "execution.sqlite3"
     journal = ExecutionJournal(path)
-    journal.record_before_dispatch(plan.envelope)
+    journal.record_before_dispatch(plan.envelope, plan.intents)
     journal.mark_state("logical-1", LifecycleState.UNCERTAIN, 500)
     journal.close()
 
@@ -83,6 +83,11 @@ def test_journal_persists_identity_before_dispatch_and_restores_unresolved(
         assert unresolved[0].idempotency_key is not None
         assert unresolved[0].payload_json == plan.envelope.payload_json
         assert unresolved[0].payload_sha256 == plan.envelope.payload_sha256
+        submission = reopened.events("logical-1")[0]
+        assert submission.event_type == "SUBMISSION"
+        assert submission.logical_intent_id == "intent-1"
+        assert submission.decision_observation_ns == 123
+        assert submission.exchange_id == "36"
 
         reopened.mark_state("logical-1", LifecycleState.RECONCILED, 600)
         assert reopened.unresolved() == ()
