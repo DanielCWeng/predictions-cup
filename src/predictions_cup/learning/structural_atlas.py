@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Iterable
+from collections.abc import Iterable
 
 import numpy as np
 from numpy.typing import NDArray
@@ -231,7 +231,9 @@ def common_factor_residual(panel: NDArray[np.float64], target_index: int) -> NDA
     return x[:, target_index] - np.nanmean(refs, axis=1)
 
 
-def structural_residual(observed: Iterable[float], coherent: Iterable[float]) -> NDArray[np.float64]:
+def structural_residual(
+    observed: Iterable[float], coherent: Iterable[float]
+) -> NDArray[np.float64]:
     a, b = _require_vector(observed), _require_vector(coherent)
     if len(a) != len(b):
         raise ValueError("observed/coherent vectors must match")
