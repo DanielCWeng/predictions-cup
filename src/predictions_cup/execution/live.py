@@ -52,7 +52,7 @@ class SigLiveSink:
             raise ValueError("placement dispatch requires a placement operation kind")
 
         # Safety-critical ordering: durable identity precedes network dispatch.
-        self._journal.record_before_dispatch(envelope)
+        self._journal.record_before_dispatch(envelope, plan.intents)
 
         try:
             raw = json.loads(envelope.payload_json)
@@ -85,6 +85,12 @@ class SigLiveSink:
                 LifecycleState.UNCERTAIN,
                 observed,
             )
+            self._journal.record_event(
+                logical_operation_id=envelope.logical_operation_id,
+                event_type="UNCERTAIN",
+                observed_monotonic_ns=observed,
+                terminal_status=LifecycleState.UNCERTAIN.value,
+            )
             raise
         except SigApiError:
             observed = self._clock_ns()
@@ -93,9 +99,129 @@ class SigLiveSink:
                 LifecycleState.REJECTED,
                 observed,
             )
+            self._journal.record_event(
+                logical_operation_id=envelope.logical_operation_id,
+                event_type="REJECTED",
+                observed_monotonic_ns=observed,
+                terminal_status=LifecycleState.REJECTED.value,
+            )
             raise
 
         observed = self._clock_ns()
+        if envelope.operation_kind is OperationKind.SINGLE_PLACEMENT:
+            intent = plan.intents[0] if plan.intents else None
+            self._journal.record_event(
+                logical_operation_id=envelope.logical_operation_id,
+                logical_intent_id=None if intent is None else intent.intent_id,
+                event_type="ACK",
+                observed_monotonic_ns=observed,
+                decision_observation_ns=(
+                    None if intent is None else intent.decision_observation_ns
+                ),
+                exchange_id=single_response.exchange_id,
+                exchange_order_id=(
+                    None
+                    if single_response.order_id is None
+                    else str(single_response.order_id)
+                ),
+                quantity=(
+                    None
+                    if single_response.quantity is None
+                    else str(single_response.quantity)
+                ),
+                price=(
+                    None
+                    if single_response.price is None
+                    else str(single_response.price)
+                ),
+                terminal_status=state.value,
+                detail_json=response_json,
+            )
+            if single_response.quantity_traded > 0:
+                self._journal.record_event(
+                    logical_operation_id=envelope.logical_operation_id,
+                    logical_intent_id=None if intent is None else intent.intent_id,
+                    event_type="FILL_SUMMARY",
+                    observed_monotonic_ns=observed,
+                    decision_observation_ns=(
+                        None if intent is None else intent.decision_observation_ns
+                    ),
+                    exchange_id=single_response.exchange_id,
+                    exchange_order_id=(
+                        None
+                        if single_response.order_id is None
+                        else str(single_response.order_id)
+                    ),
+                    quantity=str(single_response.quantity_traded),
+                    price=(
+                        None
+                        if single_response.fill_price is None
+                        else str(single_response.fill_price)
+                    ),
+                    terminal_status=state.value,
+                )
+        elif envelope.operation_kind is OperationKind.BEST_EFFORT_BATCH:
+            for result in batch_response.results:
+                intent = (
+                    plan.intents[result.index]
+                    if 0 <= result.index < len(plan.intents)
+                    else None
+                )
+                order_id = result.data.get("orderId")
+                self._journal.record_event(
+                    logical_operation_id=envelope.logical_operation_id,
+                    logical_intent_id=None if intent is None else intent.intent_id,
+                    event_type="ACK" if result.ok else "REJECTED",
+                    observed_monotonic_ns=observed,
+                    decision_observation_ns=(
+                        None if intent is None else intent.decision_observation_ns
+                    ),
+                    exchange_id=None if intent is None else intent.exchange_id,
+                    exchange_order_id=(
+                        str(order_id) if isinstance(order_id, (int, str)) else None
+                    ),
+                    terminal_status=(
+                        LifecycleState.ACKED.value
+                        if result.ok
+                        else LifecycleState.REJECTED.value
+                    ),
+                    detail_json=json.dumps(
+                        result.data,
+                        default=str,
+                        separators=(",", ":"),
+                    ),
+                )
+        else:
+            for result in multi_response.results:
+                intent = (
+                    plan.intents[result.index]
+                    if 0 <= result.index < len(plan.intents)
+                    else None
+                )
+                order_id = result.data.get("orderId")
+                self._journal.record_event(
+                    logical_operation_id=envelope.logical_operation_id,
+                    logical_intent_id=None if intent is None else intent.intent_id,
+                    event_type="ACK" if result.ok else "REJECTED",
+                    observed_monotonic_ns=observed,
+                    decision_observation_ns=(
+                        None if intent is None else intent.decision_observation_ns
+                    ),
+                    exchange_id=None if intent is None else intent.exchange_id,
+                    exchange_order_id=(
+                        str(order_id) if isinstance(order_id, (int, str)) else None
+                    ),
+                    terminal_status=(
+                        LifecycleState.ACKED.value
+                        if result.ok
+                        else LifecycleState.REJECTED.value
+                    ),
+                    detail_json=json.dumps(
+                        result.data,
+                        default=str,
+                        separators=(",", ":"),
+                    ),
+                )
         self._journal.mark_state(
             envelope.logical_operation_id,
             state,
