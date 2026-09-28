@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import random
-import time
 from collections.abc import Awaitable, Callable
 from decimal import Decimal
 from types import TracebackType
@@ -111,6 +110,7 @@ class SigTradingClient:
             resolved_payload=request.model_dump(mode="json", by_alias=True, exclude_none=True),
             accepted_statuses=frozenset({200, 207, 422}),
             execution_can_be_uncertain=True,
+            resume_incomplete_batch=True,
         )
         return self._validate(BatchOrderResponseDto, payload, "/orders/batch")
 
@@ -193,6 +193,7 @@ class SigTradingClient:
         resolved_payload: dict[str, object] | None,
         accepted_statuses: frozenset[int],
         execution_can_be_uncertain: bool,
+        resume_incomplete_batch: bool = False,
     ) -> tuple[int, object]:
         policy = self._retry_policy
         for attempt in range(1, policy.max_attempts + 1):
@@ -222,6 +223,19 @@ class SigTradingClient:
 
             if response.status_code in accepted_statuses:
                 return response.status_code, payload
+
+            if resume_incomplete_batch and response.status_code in {502, 503}:
+                if attempt < policy.max_attempts:
+                    await self._sleep(self._retry_delay(attempt))
+                    continue
+                raise SigExecutionUncertainError(
+                    status_code=response.status_code,
+                    code=self._error_code(payload) or "BATCH_INCOMPLETE",
+                    safe_message=(
+                        "SIG best-effort batch remains incomplete after bounded same-key "
+                        "retries; reconcile and resume only with the original key"
+                    ),
+                )
 
             if response.status_code == 502:
                 code = self._error_code(payload)
