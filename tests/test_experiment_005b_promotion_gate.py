@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 import numpy as np
 import pytest
@@ -14,7 +16,7 @@ pytest.importorskip("sklearn")
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _load(path: Path, name: str):
+def _load(path: Path, name: str) -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None
     assert spec.loader is not None
@@ -91,7 +93,7 @@ def test_model_improvement_gate_rejects_baselines() -> None:
 
 
 def test_holdout_uses_only_promoted_scalar_candidate() -> None:
-    freeze = {
+    freeze: dict[str, Any] = {
         "shortlist": {
             "target_clock_price_change_30": [
                 {
@@ -122,7 +124,7 @@ def test_holdout_uses_only_promoted_scalar_candidate() -> None:
 
 def test_holdout_target_gate_requires_promotion() -> None:
     target = "target_clock_price_change_30"
-    freeze = {
+    freeze: dict[str, Any] = {
         "shortlist": {
             target: [
                 {
