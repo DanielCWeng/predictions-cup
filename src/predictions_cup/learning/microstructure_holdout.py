@@ -15,29 +15,31 @@ DEFAULT_BLOCK_SECONDS = 30 * 60
 
 
 def squared_loss_improvement(
-    y: Sequence[float],
-    baseline_prediction: Sequence[float],
-    challenger_prediction: Sequence[float],
+    y: Sequence[float] | np.ndarray,
+    baseline_prediction: Sequence[float] | np.ndarray,
+    challenger_prediction: Sequence[float] | np.ndarray,
 ) -> np.ndarray:
     y_a = np.asarray(y, dtype=float)
     b_a = np.asarray(baseline_prediction, dtype=float)
     c_a = np.asarray(challenger_prediction, dtype=float)
     if not (len(y_a) == len(b_a) == len(c_a)):
         raise ValueError("prediction arrays must align")
-    return (y_a - b_a) ** 2 - (y_a - c_a) ** 2
+    result: np.ndarray = (y_a - b_a) ** 2 - (y_a - c_a) ** 2
+    return result
 
 
 def absolute_loss_improvement(
-    y: Sequence[float],
-    baseline_prediction: Sequence[float],
-    challenger_prediction: Sequence[float],
+    y: Sequence[float] | np.ndarray,
+    baseline_prediction: Sequence[float] | np.ndarray,
+    challenger_prediction: Sequence[float] | np.ndarray,
 ) -> np.ndarray:
     y_a = np.asarray(y, dtype=float)
     b_a = np.asarray(baseline_prediction, dtype=float)
     c_a = np.asarray(challenger_prediction, dtype=float)
     if not (len(y_a) == len(b_a) == len(c_a)):
         raise ValueError("prediction arrays must align")
-    return np.abs(y_a - b_a) - np.abs(y_a - c_a)
+    result: np.ndarray = np.abs(y_a - b_a) - np.abs(y_a - c_a)
+    return result
 
 
 def block_means(
