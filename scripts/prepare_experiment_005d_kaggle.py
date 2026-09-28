@@ -98,6 +98,9 @@ def main() -> None:
             "relationship_inventory": sha(RELATIONSHIPS),
             "family_registry": sha(FAMILY_REGISTRY),
         },
+        "data2_manifest_payload": json.loads(
+            DATA2_MANIFEST.read_text(encoding="utf-8")
+        ),
         "source_hashes": {
             "historical_catalogue": sha(HISTORICAL_CATALOGUE),
             "run_body": sha(KERNEL / "run_body.py.txt"),
