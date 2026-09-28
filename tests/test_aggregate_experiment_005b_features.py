@@ -69,6 +69,36 @@ def test_aggregate_reports(
     assert payload["totals"]["split_counts"]["TRAIN"] == 30
 
 
+
+
+def test_aggregate_accepts_feature_order_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    families = (
+        "US_2024",
+        "CAN_2025",
+        "COL_2026",
+        "HUN_2026",
+        "PER_2026",
+    )
+    for family in families:
+        report = _report(family)
+        if family == "CAN_2025":
+            report["feature_columns"] = ["b", "a"]
+        path = tmp_path / f"feature_target_build_report_{family}.json"
+        path.write_text(json.dumps(report))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["aggregate", "--root", str(tmp_path)],
+    )
+    MAIN()
+    payload = json.loads(
+        (tmp_path / "feature_target_build_report.json").read_text()
+    )
+    assert payload["feature_columns"] == ["a", "b"]
+
+
 def test_aggregate_refuses_schema_drift(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
