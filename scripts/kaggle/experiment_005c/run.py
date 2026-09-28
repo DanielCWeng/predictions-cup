@@ -260,9 +260,9 @@ def reconstruction_family(
             }
         )
         fallback_meta = (
-            fee_table.select(["condition_id", "event_id"])
+            fee_table.select(["condition_id", "event_id", "token_id"])
             .group_by(["condition_id", "event_id"])
-            .aggregate([("timestamp", "count")])
+            .aggregate([("token_id", "count")])
             .select(["condition_id", "event_id"])
             .to_pandas()
         )
