@@ -281,8 +281,10 @@ Every approved execution plan carries a non-wire `ExecutionAudit` containing:
 Before the first LIVE network write, the durable `SUBMISSION` journal event records that metadata
 alongside logical intent identity, exchange identity and submission time. Subsequent ACK, fill,
 Realtime order/fill and terminal reconciliation events share the same logical operation/order
-identity. This is sufficient to reconstruct signal -> decision -> submission -> acknowledgement/fill
-timing without putting analytics metadata into SIG order payloads.
+identity. The audit keeps distinct monotonic timestamps for source observation, approved decision/plan
+creation, pre-network submission, and local acknowledgement/fill observation. This is sufficient to
+reconstruct signal -> decision -> submission -> acknowledgement/fill timing without putting
+analytics metadata into SIG order payloads.
 
 The SQLite journal performs a forward-compatible column check on startup so branch-created
 pre-audit journals acquire the new structured fields rather than silently losing attribution.
@@ -294,6 +296,11 @@ pre-audit journals acquire the new structured fields rather than silently losing
 
 Each initial subscription and every revision-gap, reconnect, token-refresh or socket-error recovery
 boundary performs authoritative REST reconciliation before account state becomes trusted again.
+The account socket is established first while state remains untrusted. REST reconciliation then runs
+with the subscription active. If any account batch arrives while that snapshot is in flight, the
+snapshot is treated as potentially raced, trust stays revoked, and reconciliation repeats until a
+quiet subscribed snapshot completes. This removes the blind REST-to-subscribe window.
+
 A revision gap or malformed/unknown-order update immediately exits the current subscription path and
 forces resynchronization; new LIVE exposure therefore cannot continue on a broken account stream.
 
