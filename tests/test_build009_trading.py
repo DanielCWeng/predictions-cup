@@ -137,7 +137,7 @@ def test_single_order_uses_exact_wire_fields_and_trade_credential() -> None:
                 "side": "yes",
                 "action": "buy",
                 "quantity": 1,
-                "price": "0.5",
+                "price": 0.5,
                 "tournamentId": "t1",
                 "idempotencyKey": "single-1",
             },
