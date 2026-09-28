@@ -32,7 +32,7 @@ def _report(family: str) -> dict[str, object]:
     return {
         "family": family,
         "feature_target_spec_sha256": "a" * 64,
-        "feature_target_spec_repo_path": "spec.json",
+        "feature_target_spec_repo_path": "data/experiments/experiment_005b/feature_target_spec.json",
         "feature_count": 2,
         "target_count": 1,
         "feature_columns": ["a", "b"],
