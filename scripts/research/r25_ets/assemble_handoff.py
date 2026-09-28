@@ -70,6 +70,16 @@ def check_hash(path: Path, expected: str, label: str) -> None:
         raise ValueError(f"{label} SHA-256 mismatch: expected {expected}, got {actual}")
 
 
+def gap_items(value: str | None) -> list[dict[str, Any]]:
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return []
+    return [item for item in parsed if isinstance(item, dict)] if isinstance(parsed, list) else []
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fill-manifest", type=Path, required=True)
@@ -212,7 +222,10 @@ def main() -> None:
     }
     book_partial = {
         row["condition_id"] for row in coverage_rows
-        if row["source"] != "POLYLEVIATHAN_OCI_TRADES" and "missing required archive" in row.get("gap_reason", "")
+        if row["source"] != "POLYLEVIATHAN_OCI_TRADES" and (
+            "missing required archive" in row.get("gap_reason", "").lower()
+            or any("archive" in str(gap.get("reason", "")).lower() for gap in gap_items(row.get("known_gaps")))
+        )
     }
     orderbook_rows_by_market: dict[str, int] = defaultdict(int)
     for row in coverage_rows:
