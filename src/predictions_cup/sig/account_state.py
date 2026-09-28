@@ -9,6 +9,7 @@ from enum import StrEnum
 
 from pydantic import ValidationError
 
+from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.runtime.models import RuntimeOrderState, RuntimePortfolio, RuntimePosition
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
 from predictions_cup.sig.realtime_models import AccountBatchDto
@@ -23,6 +24,7 @@ class AccountTrustTransition(StrEnum):
     UNTRUSTED_SOCKET_ERROR = "UNTRUSTED_SOCKET_ERROR"
     UNTRUSTED_MALFORMED_PAYLOAD = "UNTRUSTED_MALFORMED_PAYLOAD"
     UNTRUSTED_UNKNOWN_OPEN_ORDER = "UNTRUSTED_UNKNOWN_OPEN_ORDER"
+    UNTRUSTED_FILL_REQUIRES_RECONCILIATION = "UNTRUSTED_FILL_REQUIRES_RECONCILIATION"
     UNTRUSTED_RESYNC_ACTIVITY = "UNTRUSTED_RESYNC_ACTIVITY"
 
 
@@ -37,10 +39,16 @@ class AccountBatchApplyResult:
 class AccountRealtimeStateEngine:
     """Realtime accelerates state; authoritative reconciliation restores trust."""
 
-    def __init__(self, *, tournament_id: str) -> None:
+    def __init__(
+        self,
+        *,
+        tournament_id: str,
+        reservations: ExecutionReservationBook | None = None,
+    ) -> None:
         if not tournament_id.strip():
             raise ValueError("tournament_id must not be blank")
         self.tournament_id = tournament_id
+        self._reservations = reservations
         self.trusted = False
         self.transition = AccountTrustTransition.INITIAL
         self.last_accepted_revision: int | None = None
@@ -82,6 +90,11 @@ class AccountRealtimeStateEngine:
             )
             for order in snapshot.open_orders
         }
+        # The authoritative snapshot now contains every position/open order that
+        # can economically overlap with local in-flight reservations. Clear the
+        # overlay before trust is restored so Risk never sees a gap between them.
+        if self._reservations is not None:
+            self._reservations.clear_after_authoritative_reconciliation()
         self.trusted = False
         self.last_accepted_revision = None
         if mark_trusted:
@@ -132,14 +145,19 @@ class AccountRealtimeStateEngine:
                 transition=self.transition,
             )
 
-        for fill in batch.fills:
-            market_id, current = self._positions.get(
-                fill.exchange_id,
-                (fill.market_id, Decimal("0")),
+        # account_batch fill records do not contain action/direction. Applying
+        # quantity as a signed delta can invert sell economics, and delayed batches
+        # can double-apply fills already present in the last REST snapshot. A valid
+        # fill therefore invalidates local exposure and forces authoritative truth.
+        if batch.fills:
+            self.mark_untrusted(
+                AccountTrustTransition.UNTRUSTED_FILL_REQUIRES_RECONCILIATION
             )
-            self._positions[fill.exchange_id] = (
-                market_id,
-                current + fill.quantity,
+            return AccountBatchApplyResult(
+                accepted=False,
+                duplicate=False,
+                requires_reconciliation=True,
+                transition=self.transition,
             )
 
         for update in batch.order_updates:
