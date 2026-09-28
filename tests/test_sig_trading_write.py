@@ -91,7 +91,7 @@ def test_order_input_enforces_documented_tick_and_market_semantics() -> None:
             action="buy",
             quantity=1,
             price=Decimal("1"),
-            expirationDate=datetime(2026, 10, 1, tzinfo=UTC),
+            expirationDate="2026-10-01T00:00:00Z",
         )
 
 
