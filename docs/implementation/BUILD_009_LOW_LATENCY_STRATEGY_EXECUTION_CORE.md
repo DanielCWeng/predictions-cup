@@ -381,14 +381,14 @@ performed directly on the GitHub branch.
 
 Benchmarked code SHA:
 
-`2ae4e24c9c85fd5d51aee6e491b14ae4c9434184`
+`8a56dec7ed2c0992ed9c86a911edf3a82786cc74`
 
-That exact SHA passed GitHub CI run #2344:
+That exact SHA passed GitHub CI run #2380:
 
 - Ruff: pass;
 - shell validation: pass;
-- mypy strict: pass across 179 source files;
-- pytest: **532 passed, 2 skipped**;
+- strict mypy: pass;
+- pytest: **533 passed, 2 skipped**;
 - application smoke: pass;
 - BUILD-009 benchmark smoke: pass.
 
@@ -397,11 +397,9 @@ Target host:
 - AWS EC2 `t4g.small`;
 - availability zone `us-east-1f`;
 - ARM64 / `aarch64`;
+- Linux `6.18.48-109.150.amzn2023.aarch64`;
 - Python 3.12.14;
-- process affinity CPUs 0 and 1;
-- normal always-on Polymarket and SIG capture remained running;
-- the heavy 005B reconstruction job and duplicate BUILD-009 benchmark were not running during the
-  final clean 3k and 1m batteries.
+- process affinity CPUs 0 and 1.
 
 Commands used:
 
@@ -429,13 +427,14 @@ median of the per-repeat percentile estimates.
 
 | Component | Mean | p50 | p95 | p99 | Throughput |
 |---|---:|---:|---:|---:|---:|
-| M-038 reference logit | 0.200 us | 0.177 us | 0.178 us | 0.182 us | ~5.00m/s |
-| M-041 exact CARA | 0.435 us | 0.406 us | 0.409 us | 0.411 us | ~2.30m/s |
-| Strategy evaluation | 4.510 us | 4.445 us | 4.522 us | 4.672 us | ~221k/s |
-| Central Risk | 7.136 us | 7.019 us | 7.257 us | 7.431 us | ~140k/s |
-| Execution-plan construction | 18.031 us | 17.733 us | 18.647 us | 18.649 us | ~55.5k/s |
-| Decision -> null sink | **35.698 us** | **35.766 us** | **36.887 us** | **37.326 us** | **~28.0k/s** |
-| SQLite/WAL pre-dispatch durability | **1.536 ms** | **1.224 ms** | **2.341 ms** | **2.514 ms** | **~651/s** |
+| Decimal/tick round-trip | 0.862 us | 0.821 us | 0.846 us | 0.862 us | ~1.16m/s |
+| M-038 reference logit | 0.215 us | 0.178 us | 0.181 us | 0.181 us | ~4.64m/s |
+| M-041 exact CARA | 0.433 us | 0.395 us | 0.397 us | 0.397 us | ~2.31m/s |
+| Strategy evaluation | 4.570 us | 4.518 us | 4.671 us | 4.754 us | ~219k/s |
+| Central Risk | 7.716 us | 7.536 us | 7.933 us | 8.079 us | ~130k/s |
+| Execution-plan construction | 19.099 us | 19.221 us | 20.121 us | 20.352 us | ~52.4k/s |
+| Decision -> null sink | **37.570 us** | **37.306 us** | **38.265 us** | **38.604 us** | **~26.6k/s** |
+| SQLite/WAL pre-dispatch durability | **1.545 ms** | **1.226 ms** | **2.377 ms** | **2.695 ms** | **~647/s** |
 
 The WAL cost is intentionally outside the calculation hot path. It is the measured price of
 persisting execution identity with `synchronous=FULL` before a LIVE network write.
@@ -444,19 +443,20 @@ persisting execution identity with `synchronous=FULL` before a LIVE network writ
 
 | Component | Mean | p50 | p95 | p99 | Throughput |
 |---|---:|---:|---:|---:|---:|
-| M-038 reference logit | 0.202 us | 0.178 us | 0.180 us | 0.190 us | ~4.94m/s |
-| M-041 exact CARA | 0.434 us | 0.395 us | 0.399 us | 0.437 us | ~2.31m/s |
-| Strategy evaluation | 4.569 us | 4.477 us | 4.824 us | 5.220 us | ~219k/s |
-| Central Risk | 7.127 us | 6.947 us | 7.409 us | 7.996 us | ~140k/s |
-| Execution-plan construction | 18.169 us | 18.172 us | 19.456 us | 20.643 us | ~55.0k/s |
-| Decision -> null sink | **36.414 us** | **35.855 us** | **37.449 us** | **39.246 us** | **~27.5k/s** |
+| Decimal/tick round-trip | 0.834 us | 0.818 us | 0.889 us | 0.950 us | ~1.20m/s |
+| M-038 reference logit | 0.202 us | 0.178 us | 0.179 us | 0.189 us | ~4.95m/s |
+| M-041 exact CARA | 0.429 us | 0.407 us | 0.411 us | 0.459 us | ~2.33m/s |
+| Strategy evaluation | 4.573 us | 4.459 us | 4.768 us | 5.167 us | ~219k/s |
+| Central Risk | 7.800 us | 7.685 us | 8.149 us | 9.025 us | ~128k/s |
+| Execution-plan construction | 19.692 us | 19.365 us | 23.476 us | 38.103 us | ~50.8k/s |
+| Decision -> null sink | **38.466 us** | **37.584 us** | **39.521 us** | **43.014 us** | **~26.0k/s** |
 
-The three million-call end-to-end means were **36.333 us, 37.133 us and 36.414 us**. The
-peak-to-peak spread was ~0.80 us (~2.2% of the median run), so the internal path was stable under
-the target-host background load.
+The three million-call end-to-end means were **38.538 us, 38.270 us and 38.466 us**. The
+peak-to-peak spread was ~0.268 us, about **0.7%** of the median run, so the internal path was stable
+on the target host.
 
 SIG's documented ~250 ms Realtime batching remains an upstream feed property and is not included in
-these internal processing figures. Likewise, these benchmarks do not claim Internet/SIG HTTP
+these internal processing figures. These benchmarks likewise do not claim Internet/SIG HTTP
 round-trip latency.
 
 The million-call run is deliberately not a generic GitHub-hosted hard latency gate.
