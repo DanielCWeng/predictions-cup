@@ -351,6 +351,40 @@ def apply_control(controls: np.ndarray, beta: np.ndarray) -> np.ndarray:
     return np.column_stack([np.ones(len(controls)), controls]) @ beta
 
 
+def response_metrics(signal: np.ndarray, response: np.ndarray) -> dict[str, Any]:
+    contribution = np.asarray(signal, float) * np.asarray(response, float)
+    finite = np.isfinite(contribution) & np.isfinite(signal)
+    if int(finite.sum()) == 0:
+        return {
+            "hit_rate": None,
+            "standardized_effect": None,
+            "signal_quantile_scores": [],
+            "quantile_monotone": None,
+        }
+    contribution = contribution[finite]
+    magnitude = np.abs(np.asarray(signal, float)[finite])
+    mean = float(np.mean(contribution))
+    std = float(np.std(contribution))
+    quantiles = np.quantile(magnitude, [0.25, 0.50, 0.75])
+    bucket = np.digitize(magnitude, quantiles, right=True)
+    scores = [
+        float(np.mean(contribution[bucket == q]))
+        if np.any(bucket == q) else None
+        for q in range(4)
+    ]
+    comparable = [value for value in scores if value is not None]
+    monotone = (
+        all(b >= a for a, b in zip(comparable, comparable[1:], strict=False))
+        if len(comparable) >= 2 else None
+    )
+    return {
+        "hit_rate": float(np.mean(contribution > 0.0)),
+        "standardized_effect": None if std <= 1e-18 else mean / std,
+        "signal_quantile_scores": scores,
+        "quantile_monotone": monotone,
+    }
+
+
 def candidate_eval(
     *,
     event: str,
@@ -430,6 +464,7 @@ def candidate_eval(
                 if abs(score) > 1e-18:
                     delayed_ratio = abs(delayed_score) / abs(score)
             phi, half_life = ar1_half_life(signal[train_valid], STEP_SECONDS)
+            metrics = response_metrics(sr, yr)
             rows.append({
                 "event": event,
                 "family_id": family_id,
@@ -446,6 +481,10 @@ def candidate_eval(
                 "train_score": float(np.mean(sr_train * yr_train)),
                 "dev_score": score,
                 "dev_beta": beta,
+                "dev_hit_rate": metrics["hit_rate"],
+                "dev_standardized_effect": metrics["standardized_effect"],
+                "dev_signal_quantile_scores": metrics["signal_quantile_scores"],
+                "dev_quantile_monotone": metrics["quantile_monotone"],
                 "dev_half1_score": half1,
                 "dev_half2_score": half2,
                 "p_value": p,
@@ -704,6 +743,7 @@ def candidate_eval(
                         delayed_score = float(np.mean(dsr * dyr))
                         if abs(score) > 1e-18:
                             delayed_ratio = abs(delayed_score) / abs(score)
+                    metrics = response_metrics(sr, yr)
                     rows.append({
                         "event": event,
                         "family_id": family_id,
@@ -720,6 +760,10 @@ def candidate_eval(
                         "train_score": float(np.mean(train_sr * train_yr)),
                         "dev_score": score,
                         "dev_beta": beta,
+                        "dev_hit_rate": metrics["hit_rate"],
+                        "dev_standardized_effect": metrics["standardized_effect"],
+                        "dev_signal_quantile_scores": metrics["signal_quantile_scores"],
+                        "dev_quantile_monotone": metrics["quantile_monotone"],
                         "dev_half1_score": half1,
                         "dev_half2_score": half2,
                         "p_value": p,
