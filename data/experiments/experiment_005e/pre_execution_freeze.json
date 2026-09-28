@@ -5,7 +5,7 @@
   "canonical_start": "ba938bedcf63f562be8b26c9502e828391123867",
   "created_before_any_005e_train_dev_or_holdout_outcome_inspection": true,
   "hashes": {
-    "preregistration_json": "ca37dada9980211111ce1ca3fbbecc4807d384893f14b0e4fb9d171823456388",
+    "preregistration_json": "a177c379c33e28b294afda138b5c8654ff054115ed9fca71d6c7265fd66083d8",
     "experiment_doc": "ece1dd8f8ced1d202b06555266748e93975c4534d3e38db56bc1ea0349c1ae42",
     "participant_ecology_py": "5d9bad89065811e141a9e4138b30c390222e4d06beab1260e7986cc4a1e9e2ff",
     "participant_ecology_tests": "cb2fdbd44a56d25bfb6cc02db6051e0f07ada8ce506c39301ee6d9efbc3dda2c",
@@ -15,5 +15,14 @@
     "infra_registry": "839f62b62c6b2e3d3b7a44d200c2d4b949c35de8e7dea006e9a2f2c8426959e8",
     "data002_manifest": "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c"
   },
-  "rule": "Any source uploaded or committed after empirical execution must byte-match these hashes unless an explicit pre-outcome amendment is separately frozen first. No outcome-driven source changes are permitted."
+  "rule": "Any source uploaded or committed after empirical execution must byte-match these hashes unless an explicit pre-outcome amendment is separately frozen first. No outcome-driven source changes are permitted.",
+  "pre_outcome_amendments": [
+    {
+      "field": "compute.kaggle_max_sessions",
+      "from": 3,
+      "to": 5,
+      "reason": "User clarified the shared Kaggle concurrency limit is five sessions.",
+      "timing": "before any 005E TRAIN/DEV or HOLDOUT empirical outcome inspection"
+    }
+  ]
 }
