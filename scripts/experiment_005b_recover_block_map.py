@@ -19,7 +19,7 @@ import json
 import sqlite3
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -415,7 +415,7 @@ def validate_and_export(
         "experiment_id": "EXPERIMENT-005B-ORDERING-FALSIFICATION",
         "classification": "POST_HOC_FALSIFICATION_ONLY",
         "stage": "authoritative_block_number_recovery",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "rpc_method": "eth_getTransactionByHash",
         "rpc_endpoint": rpc_host(DEFAULT_RPC),
         "mapping_logic": (
