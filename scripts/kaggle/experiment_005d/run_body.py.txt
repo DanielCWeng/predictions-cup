@@ -830,8 +830,6 @@ def generic_event_inventory_and_eval(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     inventory: list[dict[str, Any]] = []
     results: list[dict[str, Any]] = []
-    if PHASE != "TRAIN_DEV":
-        return inventory, results
     import pandas as pd
 
     for family in PREREG["data_sources"]["DATA-002"]["families"]:
@@ -927,8 +925,11 @@ def generic_event_inventory_and_eval(
                 tt, tp = streams[target]
                 if len(tt) < 150:
                     continue
-                train, dev, _, _, _ = split_masks(tt)
-                if int(train.sum()) < 100 or int(dev.sum()) < 50:
+                train, dev, hold, _, _ = split_masks(tt)
+                if PHASE == "TRAIN_DEV":
+                    if int(train.sum()) < 100 or int(dev.sum()) < 50:
+                        continue
+                elif int(hold.sum()) < 50:
                     continue
                 ref_markets = [m for m in markets if m != target]
                 sampled: list[np.ndarray] = []
@@ -949,13 +950,23 @@ def generic_event_inventory_and_eval(
                     & np.isfinite(tp)
                     & np.isfinite(comp_logit)
                 )
-                if int(train_fit.sum()) < 100:
+                if PHASE == "TRAIN_DEV" and int(train_fit.sum()) < 100:
                     continue
-                ia, sa = fit_affine(
-                    logit(comp_logit[train_fit]), logit(tp[train_fit])
+                if PHASE == "TRAIN_DEV":
+                    ia, sa = fit_affine(
+                        logit(comp_logit[train_fit]), logit(tp[train_fit])
+                    )
+                    affine = logistic(ia + sa * logit(comp_logit))
+                else:
+                    ia = sa = float("nan")
+                    affine = np.full(len(tp), np.nan)
+                baseline_mask = (
+                    (dev if PHASE == "TRAIN_DEV" else hold)
+                    & valid_refs
+                    & np.isfinite(tp)
                 )
-                affine = logistic(ia + sa * logit(comp_logit))
-                baseline_mask = dev & valid_refs & np.isfinite(tp)
+                if int(baseline_mask.sum()) < 50:
+                    continue
                 baseline_rmse = float(
                     np.sqrt(
                         np.mean(
@@ -963,7 +974,7 @@ def generic_event_inventory_and_eval(
                         )
                     )
                 )
-                for rep, fair_value, params in [
+                base_variants = [
                     (
                         "GENERIC_EVENT_EQUAL_PROB",
                         comp_prob,
@@ -984,9 +995,46 @@ def generic_event_inventory_and_eval(
                             "refs": ref_markets,
                         },
                     ),
-                ]:
+                ]
+                for slack_lambda in (0.25, 1.0, 4.0):
+                    soft = (tp + slack_lambda * comp_logit) / (1.0 + slack_lambda)
+                    base_variants.append(
+                        (
+                            f"GENERIC_EVENT_SOFT_SLACK_{slack_lambda:g}",
+                            soft,
+                            {
+                                "method": "soft_slack_logit_mean",
+                                "lambda": slack_lambda,
+                                "refs": ref_markets,
+                            },
+                        )
+                    )
+                for rep, fair_value, params in base_variants:
+                    candidate_key = (
+                        f"{family}:{event_id}|{inv_id}|{rep}|{target}|EVENT|0"
+                    )
+                    if PHASE == "HOLDOUT":
+                        frozen_params = (
+                            SHORTLIST.get("reconstruction_candidate_params", {})
+                            .get(candidate_key)
+                            if SHORTLIST
+                            else None
+                        )
+                        if frozen_params is None:
+                            continue
+                        method = frozen_params.get("method")
+                        if method == "affine_logit":
+                            fair_value = logistic(
+                                float(frozen_params["intercept"])
+                                + float(frozen_params["slope"]) * logit(comp_logit)
+                            )
+                            params = frozen_params
+                        elif method == "soft_slack_logit_mean":
+                            lam = float(frozen_params["lambda"])
+                            fair_value = (tp + lam * comp_logit) / (1.0 + lam)
+                            params = frozen_params
                     valid = (
-                        dev
+                        (dev if PHASE == "TRAIN_DEV" else hold)
                         & valid_refs
                         & np.isfinite(fair_value)
                         & np.isfinite(tp)
@@ -1010,6 +1058,27 @@ def generic_event_inventory_and_eval(
                     phi, half = ar1_half_life(
                         fair_value[train_fit] - tp[train_fit], 1.0
                     )
+                    if PHASE == "HOLDOUT":
+                        results.append({
+                            "candidate_key": candidate_key,
+                            "event": f"{family}:{event_id}",
+                            "family_id": inv_id,
+                            "leakage_mode": "LOO-PRICE",
+                            "representation_family": "GENERIC_EVENT_RECONSTRUCTION",
+                            "representation": rep,
+                            "target": target,
+                            "target_kind": "current_price_reconstruction",
+                            "horizon_kind": "EVENT",
+                            "horizon": 0,
+                            "status": "OK",
+                            "holdout_n": int(valid.sum()),
+                            "holdout_rmse": rmse,
+                            "baseline_rmse": baseline_rmse,
+                            "rmse_improvement": improve,
+                            "model_params": params,
+                            "source_kind": "DATA-002",
+                        })
+                        continue
                     results.append({
                         "event": f"{family}:{event_id}",
                         "family_id": inv_id,
@@ -1163,6 +1232,7 @@ def select_shortlist(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 (row["event"], row["family_id"], row["representation"])
             ].append(row)
     reconstruction = []
+    reconstruction_candidate_params: dict[str, Any] = {}
     for key, members in recon_groups.items():
         passed = [
             row
@@ -1178,6 +1248,12 @@ def select_shortlist(rows: list[dict[str, Any]]) -> dict[str, Any]:
                     np.median([row["rmse_improvement"] for row in passed])
                 ),
             })
+            for row in passed:
+                candidate_key = (
+                    f"{row['event']}|{row['family_id']}|{row['representation']}|"
+                    f"{row['target']}|EVENT|0"
+                )
+                reconstruction_candidate_params[candidate_key] = row["model_params"]
     return {
         "experiment_id": "EXPERIMENT-005D",
         "selection_policy_sha256": hashlib.sha256(
@@ -1186,6 +1262,7 @@ def select_shortlist(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "selected_predictive_candidate_keys": sorted(set(selected)),
         "candidate_params": candidate_params,
         "reconstruction_survivors": reconstruction,
+        "reconstruction_candidate_params": reconstruction_candidate_params,
         "holdout_status": "SEALED_NOT_INSPECTED",
     }
 
