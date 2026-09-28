@@ -70,6 +70,17 @@ def csv_rows(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
+def historical_catalogue_rows() -> list[dict[str, str]]:
+    lines = HISTORICAL_CATALOGUE.read_text(encoding="utf-8").splitlines()
+    needle = "index,catalogue_row_id,"
+    for i, line in enumerate(lines):
+        pos = line.find(needle)
+        if pos >= 0:
+            normalized = [line[pos:], *lines[i + 1 :]]
+            return list(csv.DictReader(normalized))
+    raise SystemExit("historical catalogue header not found")
+
+
 def main() -> None:
     prereg = json.loads(PREREG.read_text(encoding="utf-8"))
     phase = "HOLDOUT" if PRE_HOLDOUT.exists() else "TRAIN_DEV"
@@ -80,7 +91,7 @@ def main() -> None:
     )
     historical = [
         row
-        for row in csv_rows(HISTORICAL_CATALOGUE)
+        for row in historical_catalogue_rows()
         if row.get("election_id") in {"USA_2024_GENERAL", "CAN_2025_FEDERAL"}
     ]
     embedded = {
