@@ -1,0 +1,19 @@
+{
+  "authorization_basis": "PR #40 merged canonical EXPERIMENT-004C programme freeze on main; all four 004C lane PRs merged with final handoffs present.",
+  "data_002_main_sha": "69cb1924751515a495bf99556819147ad090d67d",
+  "data_002_merged": true,
+  "experiment_004c_freeze_pr": 40,
+  "experiment_004c_freeze_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+  "experiment_004c_fully_frozen": true,
+  "experiment_004c_integration_base_sha": "6aa6a6c9f4108e582584bc141cc68fa5383e522c",
+  "experiment_004c_lane_merge_commits": {
+    "A": "117a584c990c2a5488094200c1522de4261b66be",
+    "B": "777354f9aa6b56012b193853a2ae544e08be5ce3",
+    "C": "751118f3edc818a113656e9a9f31951d29d195d3",
+    "D": "6aa6a6c9f4108e582584bc141cc68fa5383e522c"
+  },
+  "experiment_id": "EXPERIMENT-005A",
+  "master_authorized": true,
+  "schema_version": 1,
+  "scientific_design_change_after_004c_results": false
+}
