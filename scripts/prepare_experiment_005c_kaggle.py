@@ -63,9 +63,12 @@ prereg_copy = copy(
 provenance_copy = copy(
     "data/experiments/experiment_005c/provenance.json"
 )
+amendment_copy = copy(
+    "data/experiments/experiment_005c/amendment_001_data_source_completeness.json"
+)
 runner = ROOT / "scripts/kaggle/experiment_005c/run.py"
 
-files = [bundle, prereg_copy, provenance_copy]
+files = [bundle, prereg_copy, provenance_copy, amendment_copy]
 manifest = {
     "experiment_id": "EXPERIMENT-005C",
     "freeze_commit": FREEZE_COMMIT,
