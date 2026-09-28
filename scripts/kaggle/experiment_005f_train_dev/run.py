@@ -39,6 +39,49 @@ FDR_Q = 0.10
 MAX_MODEL_ROWS = 250_000
 CLAIM_REGIMES = ("PRE_ELECTION", "ACTIVE_RESULTS")
 
+MICROFV_BLOCKS = {
+    "BLOCK_BBO": [
+        "spread", "snapshot_interval_s",
+    ],
+    "BLOCK_DEPTH": [
+        "spread", "snapshot_interval_s",
+        "imbalance_top", "microprice_disp_over_spread",
+        "depth_1c", "depth_2c", "depth_5c",
+        "depth_imbalance_1c", "depth_imbalance_2c", "depth_imbalance_5c",
+        "depth_concentration_1c_5c", "depth_slope_1c_5c",
+        "buy_impact_q10", "sell_impact_q10", "buy_impact_q50", "sell_impact_q50",
+        "buy_impact_q100", "sell_impact_q100",
+    ],
+    "BLOCK_OFI": [
+        "spread", "snapshot_interval_s",
+        "imbalance_top", "microprice_disp_over_spread",
+        "depth_1c", "depth_2c", "depth_5c",
+        "depth_imbalance_1c", "depth_imbalance_2c", "depth_imbalance_5c",
+        "snapshot_ofi", "snapshot_ofi_norm",
+    ],
+    "BLOCK_TRADE": [
+        "spread", "snapshot_interval_s",
+        "trade_count_15", "trade_count_60", "trade_value_60",
+        "trade_size_mean_60", "trade_size_max_60",
+        "trade_interarrival_median_60", "trade_burstiness_60",
+        "trade_activity_accel", "trade_abs_impact_60",
+    ],
+    "BLOCK_ALL": [
+        "spread", "snapshot_interval_s",
+        "imbalance_top", "microprice_disp_over_spread",
+        "depth_1c", "depth_2c", "depth_5c",
+        "depth_imbalance_1c", "depth_imbalance_2c", "depth_imbalance_5c",
+        "depth_concentration_1c_5c", "depth_slope_1c_5c",
+        "snapshot_ofi", "snapshot_ofi_norm",
+        "buy_impact_q10", "sell_impact_q10", "buy_impact_q50", "sell_impact_q50",
+        "buy_impact_q100", "sell_impact_q100",
+        "trade_count_15", "trade_count_60", "trade_value_60",
+        "trade_size_mean_60", "trade_size_max_60",
+        "trade_interarrival_median_60", "trade_burstiness_60",
+        "trade_activity_accel", "trade_abs_impact_60",
+    ],
+}
+
 REGIME_WINDOWS = {
     "colombia_first_round": {
         "family": "COL_2026",
@@ -1113,6 +1156,71 @@ def screen_regression(
 
 
 
+def screen_feature_block(
+    frame: pd.DataFrame,
+    regime: str,
+    target_col: str,
+    horizon: str,
+    block_name: str,
+    block_cols: list[str],
+) -> list[dict[str, Any]]:
+    base_cols = [c for c in ("ret_15", "ret_30", "ret_60") if c in frame.columns]
+    challenger = [c for c in block_cols if c in frame.columns and c not in base_cols]
+    if not challenger:
+        return []
+    cols = ["split", "event", "token_id", "time", target_col, *base_cols, *challenger]
+    x = frame[cols].replace([np.inf, -np.inf], np.nan).dropna()
+    tr = thin(x[x["split"] == "TRAIN"].sort_values(["time", "token_id"]))
+    dv = thin(x[x["split"] == "DEV"].sort_values(["time", "token_id"]))
+    if len(tr) < 500 or len(dv) < 200 or dv["token_id"].nunique() < 3:
+        return []
+    ytr = tr[target_col].to_numpy(float)
+    ydv = dv[target_col].to_numpy(float)
+
+    if base_cols:
+        sb = StandardScaler().fit(tr[base_cols])
+        Xtr_b, Xdv_b = sb.transform(tr[base_cols]), sb.transform(dv[base_cols])
+        base = Ridge(alpha=1.0).fit(Xtr_b, ytr)
+        pred_b = base.predict(Xdv_b)
+    else:
+        pred_b = np.full(len(dv), ytr.mean())
+
+    all_cols = base_cols + challenger
+    sc = StandardScaler().fit(tr[all_cols])
+    Xtr, Xdv = sc.transform(tr[all_cols]), sc.transform(dv[all_cols])
+    model = Ridge(alpha=1.0).fit(Xtr, ytr)
+    pred = model.predict(Xdv)
+    lb = (ydv - pred_b) ** 2
+    lc = (ydv - pred) ** 2
+    diff = lb - lc
+    tmp = dv[["event", "time"]].copy()
+    tmp["diff"] = diff
+    tmp["block"] = tmp["time"].dt.floor("30min")
+    blocks = tmp.groupby(["event", "block"], observed=True)["diff"].mean().to_numpy(float)
+    p = signflip_p(blocks, f"depth|{regime}|{target_col}|{block_name}")
+    return [{
+        "dataset": "depth",
+        "regime": regime,
+        "target_family": "MICRO_FV",
+        "target": target_col,
+        "horizon": horizon,
+        "feature": block_name,
+        "feature_family": "MICRO_FV_BLOCK",
+        "train_n": len(tr),
+        "dev_n": len(dv),
+        "markets": int(dv["token_id"].nunique()),
+        "events": int(dv["event"].nunique()),
+        "blocks": len(blocks),
+        "positive_blocks": int(np.sum(blocks > 0)),
+        "baseline_mse": float(np.mean(lb)),
+        "challenger_mse": float(np.mean(lc)),
+        "delta_mse": float(np.mean(diff)),
+        "coef_std": np.nan,
+        "p_raw": p,
+        "block_columns": "|".join(challenger),
+    }]
+
+
 def screen_classification(
     frame: pd.DataFrame,
     dataset: str,
@@ -1211,7 +1319,17 @@ def model_tournament(
         else:
             base_cols = ["ret_15", "ret_30", "ret_60"]
             classification = False
-        cols = [c for c in base_cols if c in sub.columns] + [candidate]
+        base_cols = [c for c in base_cols if c in sub.columns]
+        if dataset == "depth" and candidate in MICROFV_BLOCKS:
+            candidate_cols = [
+                c for c in MICROFV_BLOCKS[candidate]
+                if c in sub.columns and c not in base_cols
+            ]
+        else:
+            candidate_cols = [candidate] if candidate in sub.columns and candidate not in base_cols else []
+        cols = base_cols + candidate_cols
+        if not candidate_cols:
+            continue
         x = sub[["split", target, *cols]].replace([np.inf, -np.inf], np.nan).dropna()
         tr = thin(x[x["split"] == "TRAIN"])
         dv = thin(x[x["split"] == "DEV"])
@@ -1327,6 +1445,7 @@ def main() -> None:
             depth = load_depth(depth_root, tokens, start, empirical_end)
             depth = attach_depth_targets(depth, states, event, regime, market_map, start, end)
             if not depth.empty:
+                depth = attach_trade_features(depth, trade_features)
                 all_depth.append(depth)
                 shocks = depth[depth["large_depth_shock"]]
                 for h in CLOCK_H:
@@ -1404,6 +1523,10 @@ def main() -> None:
             f = depth_df[depth_df["regime"] == regime]
             for h in CLOCK_H:
                 screen += screen_regression(f, "depth", regime, "MICRO_FV", f"depth_price_h{h}", str(h), ["ret_15", "ret_30", "ret_60"], depth_candidates)
+                for block_name, block_cols in MICROFV_BLOCKS.items():
+                    screen += screen_feature_block(
+                        f, regime, f"depth_price_h{h}", str(h), block_name, block_cols
+                    )
                 screen += screen_regression(f, "depth", regime, "DEPTH_VOL", f"depth_abs_h{h}", str(h), ["ret_15", "ret_30", "ret_60"], depth_candidates)
 
     bh(screen)
@@ -1489,6 +1612,7 @@ def main() -> None:
         "clock_candidates": clock_candidates,
         "event_candidates": event_candidates,
         "depth_candidates": depth_candidates,
+        "microfv_blocks": MICROFV_BLOCKS,
         "trade_features_enabled": True,
         "clock_horizons_seconds": CLOCK_H,
         "event_horizons": EVENT_H,
