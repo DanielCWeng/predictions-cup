@@ -9,7 +9,7 @@ from predictions_cup.execution.models import (
     OperationKind,
     RuntimeOrderIntent,
 )
-from predictions_cup.runtime import RuntimeSnapshot
+from predictions_cup.runtime.models import RuntimeSnapshot
 from predictions_cup.strategy.core import NoTrade, Opportunity, StrategyResult
 
 MAX_SIG_QUANTITY = 2_147_483_647
