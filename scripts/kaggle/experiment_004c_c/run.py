@@ -897,7 +897,8 @@ def design_matrices(
     test_numeric = test_numeric.fillna(medians)
 
     q25 = train_numeric.quantile(0.25)
-    q75 = train_numeric.quantile(0.75)    scale = (q75 - q25).replace(0.0, 1.0).fillna(1.0)
+    q75 = train_numeric.quantile(0.75)
+    scale = (q75 - q25).replace(0.0, 1.0).fillna(1.0)
     center = train_numeric.median()
     x_train = ((train_numeric - center) / scale).to_numpy(dtype=float)
     x_test = ((test_numeric - center) / scale).to_numpy(dtype=float)
@@ -1796,7 +1797,8 @@ derived_rows.to_parquet(
 )
 
 coverage = map_frame.copy()
-coverage["sig_observed"] = coverage["sig_exchange_id"].isin(sig_ids)coverage["pm_panel_observed"] = coverage["pm_token_id"].isin(pm_obs_ids)
+coverage["sig_observed"] = coverage["sig_exchange_id"].isin(sig_ids)
+coverage["pm_panel_observed"] = coverage["pm_token_id"].isin(pm_obs_ids)
 coverage["pm_change_observed"] = coverage["pm_token_id"].isin(pm_change_ids)
 if not exact_rows.empty:
     decision_counts = exact_rows.groupby("sig_exchange_id").size().rename("evaluable_decisions")
