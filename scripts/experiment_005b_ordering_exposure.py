@@ -4,9 +4,9 @@
 Diagnostic only. The parent reconstruction is timestamp-sorted, so this uses a
 single streaming pass and never modifies PR #45 evidence.
 """
-from __future__ import annotations
-
 # ruff: noqa: E731
+
+from __future__ import annotations
 
 import argparse
 import json
