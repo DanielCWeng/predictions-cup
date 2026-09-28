@@ -4,6 +4,12 @@ import importlib.util
 from pathlib import Path
 
 import numpy as np
+import pytest
+
+
+pytest.importorskip("duckdb")
+pytest.importorskip("pandas")
+pytest.importorskip("sklearn")
 
 
 ROOT = Path(__file__).resolve().parents[1]
