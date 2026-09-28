@@ -1,0 +1,85 @@
+{
+  "experiment_id": "EXPERIMENT-005D",
+  "followup_id": "EXPERIMENT-005D-REVIEW-FOLLOWUP",
+  "label": "POST_HOC_INDEPENDENT_REVIEW_FALSIFICATION",
+  "source_head": "17fe6364f3f769173da10e84f5dd7b92ab7450c9",
+  "accepted_provenance": {
+    "base_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+    "preregistration_sha256": "d43a75ff8e0b5df6c717f37721e339116a6297b299c4e26d8b9a5f242b9c7a51",
+    "train_dev_runner_sha256": "525f4678565d80cbceddd7ede298c7f810fc41c4b94652dec34f08cd63ccaa5f",
+    "pre_holdout_freeze_sha256": "6ac0f6ea27b5553267d8fa94a9f5bca906680f18d03de45480269da8b9b21cbe",
+    "corrected_holdout_runner_sha256": "e65c961b73c56e26b322c8336944ea2fbc048ccf53bdd645cdaf77c53caef7ce",
+    "holdout_results_sha256": "610e4b6bd0ed199c63cc2543206ce70c4900e7cb1b84a24bf0e572f4f975920b"
+  },
+  "invariants": {
+    "fixed_predictive_cells": 13,
+    "shortlist_changes": false,
+    "signal_changes": false,
+    "control_changes": false,
+    "fitted_parameter_changes": false,
+    "outcome_changes": false,
+    "timestamp_changes": false,
+    "horizon_changes": false,
+    "delayed_state_gate": 0.8,
+    "original_holdout_reclassified": false,
+    "promotion_allowed": false
+  },
+  "regime_authority": [
+    "data/experiments/experiment_004a/regime_definitions.json",
+    "data/experiments/experiment_004a/event_timeline.json"
+  ],
+  "regime_assignment": {
+    "interval_rule": "half-open [start,end)",
+    "observation_timestamp": "signal/forecast-origin timestamp",
+    "categories": [
+      "PRE_ELECTION",
+      "ELECTION_DAY_PRE_RESULTS",
+      "ACTIVE_RESULTS",
+      "LATE_COUNT",
+      "POST_RESOLUTION_DIAGNOSTIC",
+      "OUTSIDE_ALL_CANONICAL_WINDOWS"
+    ]
+  },
+  "dependence_sensitivity": {
+    "status": "POST_HOC_FALSIFICATION_ONLY",
+    "bootstrap_draws": 1000,
+    "null_centering": "same as corrected HOLDOUT: center contribution series by observed mean, resample non-overlapping time-order blocks with replacement, one-sided positive-repair p-value",
+    "block_seconds": [
+      300,
+      1800,
+      3600,
+      14400,
+      28800
+    ],
+    "newly_tested_block_seconds": [
+      1800,
+      3600,
+      14400,
+      28800
+    ],
+    "optional_longer_choice": "8 hours chosen before follow-up results",
+    "fdr": "BH across the same fixed 13 predictive cells separately at each block length; robustness only, not a new confirmatory hierarchy"
+  },
+  "temporal_concentration": {
+    "eligible_cells": "the three original confirmatory-pass cells only",
+    "aggregation": "UTC clock-hour bins aligned to top of hour",
+    "contiguous_period_definition": "runs of adjacent occupied UTC clock-hour bins",
+    "top_hour_shares": [
+      1,
+      3,
+      6
+    ],
+    "first_second_half_definition": "split the used HOLDOUT time interval at its temporal midpoint",
+    "removal_test": "remove the UTC hour with the largest positive contribution sum; do not search alternate block definitions"
+  },
+  "effect_scale": {
+    "statistic": "TRAIN-controlled covariance between structural signal residual and future target-price-change residual",
+    "translations_residual_pp": [
+      1,
+      5,
+      10
+    ],
+    "warning": "beta translations are local descriptive probability-response equivalents, not PnL, executable spread, Sharpe, RMSE improvement, or directly realizable edge"
+  },
+  "orders_enabled": false
+}
