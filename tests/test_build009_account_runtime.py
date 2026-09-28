@@ -266,7 +266,10 @@ def test_accepted_realtime_fill_is_linked_to_execution_journal(tmp_path: Path) -
         }
     ]
     state = AccountRealtimeStateEngine(tournament_id="t1")
-    subscribers = [FakeSubscriber((payload,), SubscriberExit.STOPPED)]
+    subscribers = [
+        FakeSubscriber((payload,), SubscriberExit.STOPPED),
+        FakeSubscriber((), SubscriberExit.STOPPED),
+    ]
 
     async def mint_token() -> RealtimeTokenDto:
         return _token()
