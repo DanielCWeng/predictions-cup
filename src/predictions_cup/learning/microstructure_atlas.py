@@ -191,7 +191,7 @@ def _finite_float(value: object) -> float | None:
     if value is None:
         return None
     try:
-        out = float(value)
+        out = float(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return None
     return out if np.isfinite(out) else None
