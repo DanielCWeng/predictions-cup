@@ -79,6 +79,7 @@ def build_registry(
                     chosen.get("selection_label") if chosen else "DISCOVERY_ONLY"
                 ),
                 "train_spearman": chosen.get("spearman") if chosen else None,
+                "dev_spearman": chosen.get("dev_spearman") if chosen else None,
                 "dev_pearson": chosen.get("dev_pearson") if chosen else None,
                 "holdout_spearman": scalar_hold.get("spearman"),
                 "holdout_pearson": scalar_hold.get("pearson"),
@@ -99,6 +100,7 @@ def write_registry(path: Path, rows: list[dict[str, Any]]) -> None:
         "scalar_feature",
         "candidate_label",
         "train_spearman",
+        "dev_spearman",
         "dev_pearson",
         "holdout_spearman",
         "holdout_pearson",
@@ -187,7 +189,7 @@ def build_report(
         "## Candidate registry",
         "",
         (
-            "| Target | Scalar feature | Label | TRAIN ρ | DEV r | HOLDOUT ρ | "
+            "| Target | Scalar feature | Label | TRAIN ρ | DEV ρ | HOLDOUT ρ | "
             "Model | HOLDOUT model metric | Bootstrap interval |"
         ),
         "|---|---|---|---:|---:|---:|---|---|---|",
@@ -203,7 +205,7 @@ def build_report(
                     str(row["scalar_feature"] or "—"),
                     str(row["candidate_label"]),
                     fmt(row["train_spearman"]),
-                    fmt(row["dev_pearson"]),
+                    fmt(row["dev_spearman"]),
                     fmt(row["holdout_spearman"]),
                     str(row["dev_selected_model"]),
                     str(row["holdout_model_primary_metric"]),
