@@ -81,6 +81,13 @@
       "to": "bootstrap p-value retained only when the preregistered hierarchical weighted MSE gain is positive",
       "reason": "Static pre-HOLDOUT audit found the sign gate used a different estimand from the primary weighted MSE-gain statistic and the weighted bootstrap.",
       "timing": "before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection; running TRAIN/DEV v5 is unaffected"
+    },
+    {
+      "field": "participant history scope clarification",
+      "from": "cross-event recurrence wording without an explicit cross-family state boundary",
+      "to": "participant history is family-local; recurrence may span event_id/markets inside a family, while cross-family evidence refers model transfer/stability rather than a globally continuous wallet ledger",
+      "reason": "DATA-002 family files overlap in calendar time and the frozen runner builds each family independently; this is an interpretation clarification, not a computational change",
+      "timing": "before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection"
     }
   ],
   "local_frozen_source_commit": "567f364c5acf3825a940ea2220eac3cb511b9e6f",
