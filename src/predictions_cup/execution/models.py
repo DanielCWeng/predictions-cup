@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -65,6 +66,32 @@ class RuntimeOrderIntent:
             payload["price"] = float(ticks_to_limit_price(self.limit_price_ticks))
         payload["tournamentId"] = self.tournament_id
         return payload
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionAudit:
+    """Decision metadata required for later signal/latency/PnL attribution."""
+
+    strategy_family: str
+    strategy_id: str
+    signal_value: float
+    fair_value: float | None
+    decision_observation_ns: int
+
+    def __post_init__(self) -> None:
+        if not self.strategy_family.strip():
+            raise ValueError("strategy_family must not be blank")
+        if not self.strategy_id.strip():
+            raise ValueError("strategy_id must not be blank")
+        if not math.isfinite(self.signal_value):
+            raise ValueError("signal_value must be finite")
+        if self.fair_value is not None:
+            if not math.isfinite(self.fair_value):
+                raise ValueError("fair_value must be finite")
+            if not 0.0 <= self.fair_value <= 1.0:
+                raise ValueError("fair_value must be within probability support")
+        if self.decision_observation_ns < 0:
+            raise ValueError("decision_observation_ns must be non-negative")
 
 
 @dataclass(frozen=True, slots=True)
