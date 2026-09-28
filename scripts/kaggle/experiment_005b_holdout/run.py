@@ -22,8 +22,10 @@ from sklearn.preprocessing import StandardScaler
 FAMILIES = ("US_2024", "CAN_2025", "COL_2026", "HUN_2026", "PER_2026")
 OUT = Path("/kaggle/working/005b_historical_predictive_atlas/holdout")
 OUT.mkdir(parents=True, exist_ok=True)
-GATE_PATH = Path(__file__).with_name("holdout_gate.json")
-PROTOCOL_PATH = Path(__file__).with_name("holdout_protocol.json")
+HOLDOUT_PROTOCOL_SHA256 = "c6aa34e7e62161932ac9be3555c27c62d8738e549b0f73810e40a09aa2504c70"
+HOLDOUT_PROTOCOL_REPO_PATH = "data/experiments/experiment_005b/holdout_protocol.json"
+EXPECTED_TRAIN_DEV_SHORTLIST_SHA256 = "0000000000000000000000000000000000000000000000000000000000000000"
+HOLDOUT_GATE_COMMIT = "PENDING"
 EMBARGO = 300
 BOOT = 1000
 SEED = 505005
@@ -58,21 +60,24 @@ def label_for_target(target: str) -> str:
 
 
 def load_gate() -> tuple[dict[str, Any], dict[str, Any], str]:
-    if not GATE_PATH.exists():
-        raise RuntimeError("HOLDOUT gate missing: commit holdout_gate.json before launch")
-    gate = json.loads(GATE_PATH.read_text())
-    expected = gate.get("expected_train_dev_shortlist_sha256")
-    if not isinstance(expected, str) or len(expected) != 64 or set(expected) == {"0"}:
-        raise RuntimeError("HOLDOUT gate has no valid frozen shortlist SHA256")
+    expected = EXPECTED_TRAIN_DEV_SHORTLIST_SHA256
+    if len(expected) != 64 or set(expected) == {"0"}:
+        raise RuntimeError("HOLDOUT executable still carries the closed placeholder gate")
+    if HOLDOUT_GATE_COMMIT in ("", "PENDING"):
+        raise RuntimeError("HOLDOUT executable lacks its pre-HOLDOUT gate commit")
     freeze_path = locate_unique("train_dev_shortlist_freeze.json")
     actual = sha256(freeze_path)
     if actual != expected:
-        raise RuntimeError(f"shortlist hash mismatch expected={expected} actual={actual}")
+        raise RuntimeError(
+            f"shortlist hash mismatch expected={expected} actual={actual}"
+        )
     freeze = json.loads(freeze_path.read_text())
     if freeze.get("holdout_touched") is not False:
         raise RuntimeError("TRAIN/DEV freeze does not attest holdout_touched=false")
-    if gate.get("gate_commit") in (None, "", "PENDING"):
-        raise RuntimeError("HOLDOUT gate does not record its pre-HOLDOUT Git commit")
+    gate = {
+        "expected_train_dev_shortlist_sha256": expected,
+        "gate_commit": HOLDOUT_GATE_COMMIT,
+    }
     return gate, freeze, actual
 
 
@@ -605,7 +610,8 @@ def main() -> None:
         "experiment_id": "EXPERIMENT-005B",
         "stage": "SEALED_HOLDOUT",
         "gate": gate,
-        "holdout_protocol_sha256": sha256(PROTOCOL_PATH),
+        "holdout_protocol_sha256": HOLDOUT_PROTOCOL_SHA256,
+        "holdout_protocol_repo_path": HOLDOUT_PROTOCOL_REPO_PATH,
         "train_dev_shortlist_sha256": freeze_sha,
         "targets_evaluated": len(results),
         "results": results,
