@@ -279,8 +279,26 @@ def feature_market_concentration(
     return float(np.sum(shares * shares)), float(shares.max())
 
 
+def market_time_groups(df: pd.DataFrame) -> list[np.ndarray]:
+    markets = df["market_id"].astype(str).to_numpy()
+    times = df["timestamp"].to_numpy(dtype=np.int64)
+    row_index = np.arange(len(df), dtype=np.int64)
+    order = np.lexsort((row_index, times, markets))
+    sorted_markets = markets[order]
+    if not len(order):
+        return []
+    cuts = np.flatnonzero(
+        sorted_markets[1:] != sorted_markets[:-1]
+    ) + 1
+    return [
+        group.astype(np.int64, copy=False)
+        for group in np.split(order, cuts)
+    ]
+
+
 def circular_shift_spearman(
     df: pd.DataFrame,
+    groups: list[np.ndarray],
     feature: str,
     target: str,
     label: str,
@@ -293,11 +311,7 @@ def circular_shift_spearman(
     )
     y[~valid_target] = np.nan
     shifted = np.full(len(df), np.nan, dtype=float)
-    markets = df["market_id"].astype(str).to_numpy()
-    times = df["timestamp"].to_numpy(dtype=np.int64)
-    for market in np.unique(markets):
-        index = np.flatnonzero(markets == market)
-        index = index[np.argsort(times[index], kind="mergesort")]
+    for index in groups:
         finite_index = index[np.isfinite(x[index])]
         if not len(finite_index):
             continue
@@ -841,6 +855,7 @@ def main() -> None:
     shortlist: dict[str, list[dict[str, Any]]] = {}
     model_selection: dict[str, dict[str, Any]] = {}
     negative_controls: dict[str, dict[str, Any]] = {}
+    dev_market_groups = market_time_groups(dev)
     activity_index = features.index("trade_count_30")
     contemporaneous_index = features.index("absolute_return_30")
     contemporaneous_corr, _ = corr_columns(
@@ -971,6 +986,7 @@ def main() -> None:
             "within_market_circular_shift_dev_spearman": (
                 circular_shift_spearman(
                     dev,
+                    dev_market_groups,
                     primary_control_feature,
                     target,
                     target_label,
