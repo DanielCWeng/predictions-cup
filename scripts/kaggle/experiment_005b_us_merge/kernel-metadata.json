@@ -8,10 +8,11 @@
   "enable_gpu": false,
   "enable_tpu": false,
   "enable_internet": false,
-  "dataset_sources": [],
+  "dataset_sources": [
+    "polyleviathan/005b-us-base-price-intermediates"
+  ],
   "competition_sources": [],
   "kernel_sources": [
-    "polyleviathan/005b-historical-predictive-atlas-features",
     "polyleviathan/005b-us-activity",
     "polyleviathan/005b-us-family-context",
     "polyleviathan/005b-us-event-context",
