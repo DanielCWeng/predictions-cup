@@ -95,6 +95,13 @@
       "to": "also emit falsification_concentration_report.json on Kaggle from the same frozen evaluation object",
       "reason": "Original 005E brief requires a standalone falsification/concentration report; this is output packaging only and introduces no new metric, model, threshold, or selection.",
       "timing": "before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection; running TRAIN/DEV v5 is unaffected"
+    },
+    {
+      "field": "HOLDOUT market/event transfer summaries",
+      "from": "unweighted per-market mean row loss-gain diagnostic and no explicit event-level transfer summary",
+      "to": "hierarchically weighted per-market and per-event loss-gain summaries using the frozen HOLDOUT row weights",
+      "reason": "Original 005E brief explicitly asks whether anything transfers across markets/events; the prior per-market diagnostic targeted a different unweighted estimand. This adds reporting only and leaves true leave-family-out retraining as the stronger frozen transfer test.",
+      "timing": "before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection; running TRAIN/DEV v5 is unaffected"
     }
   ],
   "local_frozen_source_commit": "567f364c5acf3825a940ea2220eac3cb511b9e6f",
@@ -183,12 +190,13 @@
     "tests_sha256": "11471206fca5a1f71129ebdbb275c28ae5f00e12ca37223fe2e23590ff908ec6"
   },
   "next_holdout_runner": {
-    "github_runner_commit": "cd5cea1b463d9716425f84039895ccb75bcbb74f",
-    "runner_sha256": "2adf028c42e44a9f16440c2464a724f0fc146d086cb6f51bead3c1aa12fe0bb3",
-    "tests_sha256": "97daef730ad42524857cb70705d6abbc1a2a78da846ce2cfca5931dfbee8ffa6",
-    "focused_tests": 13,
+    "github_runner_commit": "b3937e1376a0593ea7913c0341a9dd4704502134",
+    "github_tests_commit": "d9864f4595d9cc878d59da08e7ad3622ba535ae4",
+    "runner_sha256": "5da22f6ac05e200ea25389aa6322bde2ef8fa16c1c86cd134e58877f668f05de",
+    "tests_sha256": "b3ff71526ebbb7787e55d05b67cdb6f2c7ebc559c13f73510ff58d9cfcb32231",
+    "focused_tests": 14,
     "status": "PRE_RESULT_CANDIDATE_NOT_PACKAGED",
-    "note": "Includes weighted bootstrap/sign-gate corrections and standalone falsification_concentration_report output; TRAIN/DEV v5 remains immutable."
+    "note": "Includes weighted bootstrap/sign gate, standalone falsification/concentration artifact, and weighted market/event transfer. TRAIN/DEV v5 remains immutable."
   },
   "phase_split_note": "Generic current-source fields refer to the immutable TRAIN/DEV v5 runner. The later next_holdout_runner record is the authority for HOLDOUT packaging."
 }
