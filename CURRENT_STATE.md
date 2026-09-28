@@ -1,134 +1,235 @@
 # Current State
 
-**Phase:** READ-ONLY LIVE-DATA + REPLAY/RESEARCH FOUNDATION.
+**As of:** 28 September 2026  
+**Canonical main before this documentation pass:** `4efa3dd002abc1cbf1997acdf8734adee2e13f4c`  
+**Phase:** ACCEPTED LIVE MAPPING + REPLAY/RESEARCH FOUNDATION; NO TRADING CAPABILITY.
 
-## Operating posture — 28 September 2026
+This file describes accepted repository state. GitHub merge state and the actual contents of `main`
+outrank stale prose, old branches, or chat history.
 
-- EXPERIMENT-004C is complete and frozen on `main`; no robust executable alpha was established across its four tested mechanisms.
-- The narrow positive result retained for future work is 004C-B's Colombia PRE soft competitive-family structure; it is not a general Cup edge.
-- Generic internal pairwise lead-lag, direct mapped PM→SIG transmission and the frozen D conditional-response mechanisms are not promoted from 004C.
-- These results are specification-level conclusions only; they do not reject the complete predictive information set, coherent FV broadly, external information broadly, or all state-dependent models.
-- PR #38 / EXPERIMENT-005A remains draft/open and unmerged; no 005A empirical discovery run was produced by the 004C close-out.
-- New 005 discovery lanes must use `docs/research/005_DISCOVERY_PRIOR_WORK_BOUNDARY.md` to avoid pre-freeze anchoring to detailed prior winners/magnitudes.
-- GitHub merge state and the actual contents of `main` outrank stale documentation or chat memory.
+## Accepted live universe
 
-This document describes the accepted repository state on `main`. For project intent/dependency
-order, read `ORCHESTRATOR.md` first.
+The 2026 SIG ↔ Polymarket crosswalk is generated, independently accepted, and present on `main`.
 
-## Implemented on main
+Canonical mapping artifacts:
 
-- repository foundation, Python tooling and CI;
-- typed configuration, secret-safe credential representation and canonical domain models;
-- authenticated read-only SIG REST client;
-- public read-only Polymarket research recorder;
-- SIG tournament Realtime ingestion, authoritative REST reconciliation and replayable persistence;
-- BUILD-006 full-universe Realtime / bulk scalar state / explicit tracked-depth state behind one
-  governed REST budget;
-- MAPPING-001 typed SIG ↔ Polymarket mapping framework with EXACT / NEAR / DERIVED / MODEL_ONLY
-  and SAME / COMPLEMENT semantics;
-- BUILD-005 deterministic observable-time replay and experiment/evaluation foundation;
-- EXPERIMENT-002 lead/lag, response-curve, relative-value and LOO-PRICE / LOO-FAMILY experiment
-  machinery;
-- BUILD-007 read-only EC2 systemd supervision for SIG + Polymarket collectors;
-- strict externally supplied supervised Polymarket universe with no hard-coded Cup IDs;
-- high-frequency Polymarket research history in immutable ZSTD Parquet shards;
-- small operational Polymarket SQLite for markets/tokens/ingestion health;
-- canonical Parquet replay support including deterministic hashed-trade de-duplication;
-- Gamma rate-limit resilience and fail-soft periodic metadata refresh after valid startup.
-- BUILD-008 canonical research evaluation harness;
-- DATA-001 accepted historical replay corpus;
-- DATA-002 accepted auxiliary fee/refund/rebate evidence dataset;
-- EXPERIMENT-004C A/B/C/D empirical evidence, reports and frozen provenance;
-- canonical 004C programme handoff at `docs/experiments/EXPERIMENT_004C_FINAL_HANDOFF.md`.
+- `data/mappings/sig_polymarket_2026.json`
+- `data/mappings/sig_polymarket_2026.csv`
+- `data/mappings/sig_polymarket_2026_acceptance.json`
+- `data/mappings/sig_polymarket_2026_summary.json`
 
-## Live validation evidence
+Accepted scope:
 
-### BUILD-006 / PR #19
+- **237** SIG exchanges / markets;
+- **140 EXACT**;
+- **87 DERIVED**;
+- **4 NEAR**;
+- **6 NO_TRADE**;
+- **0 MODEL_ONLY**;
+- **693** unique Polymarket condition IDs;
+- **1,386** aligned CLOB token IDs;
+- zero conflicting duplicate mappings.
 
-Accepted 60-second credentialed smoke at the merged head: 237 known exchanges, 1 tracked / 236
-untracked, 0 HTTP 429s, 0 reconciliation failures, 2 full-book reads, with the tracked book
-inside the 30-second freshness bound.
+The old statement that LIVE-MAPPING-GATE-001 is still outstanding is obsolete. Mapping acceptance is
+complete. Runtime configuration must use accepted crosswalk identities rather than guessed or broad
+heuristic IDs.
 
-### BUILD-007 / PR #20
+## Accepted implementation on main
 
-Merged/accepted at head `1fc3383ac2471466ef440b5f050559ba0a37deed`; merge commit
-`153116bb84bc64f202b4cd6dc7748e11d1a84e8b`. The ARM64 EC2 pre-merge gate passed on the
-actual host:
+The repository contains:
 
-- PyArrow 25.0.1 imported successfully on `aarch64`;
-- strict smoke universe held at 3 markets / 6 tokens;
-- service remained active through the bounded soak;
-- observations, book changes, depth snapshots and trades all produced ZSTD Parquet shards;
-- published Parquet files read back successfully;
-- scheduled Gamma refresh remained healthy;
-- 429 retries showed the corrected positive 1-second floor rather than the prior zero-delay burst;
-- manual service restart succeeded;
-- post-restart capture returned healthy with `websocket_connected=True`,
-  `markets_subscribed=3`, `tokens_subscribed=6`, `gamma_last_status=OK` and
-  `storage_failures=0`;
-- Parquet file count advanced after restart and prior shards remained readable.
+- BUILD-001 through BUILD-008 foundations;
+- read-only SIG REST and tournament Realtime capture;
+- governed broad SIG scalar/BBO state plus explicit tracked full-depth state;
+- accepted MAPPING-001 framework and accepted 2026 live crosswalk;
+- supervised mapping-bounded Polymarket capture with immutable ZSTD Parquet research history;
+- deterministic observable-time replay and executable markouts;
+- canonical research/evaluation machinery with chronological splits, purge/embargo, FDR,
+  dependence-aware resampling, stability checks, ablations and execution-stress separation;
+- DATA-001 historical replay corpus;
+- DATA-002 fee/refund/rebate and role-attribution evidence;
+- DATA-003 actual mapped-2026-universe Polymarket fills;
+- repository-native GitHub Actions → Kaggle execution via PR #47.
 
-The three-market/six-token universe was a temporary compatibility test only. It is not production
-mapping evidence and must not be promoted into production configuration.
+Routine Kaggle compute now uses:
 
-## Outstanding operational / acceptance gates
+`Agent → GitHub → kaggle/jobs/*.json → GitHub Actions → Kaggle → compact evidence → GitHub`
 
-- MAPPING-001 is an accepted framework, but the live credentialed 2026 SIG ↔ Polymarket
-  crosswalk has **not** been generated or accepted.
-- LIVE-MAPPING-GATE-001 / issue #13 remains the primary production gating task.
-- After mapping acceptance, populate `PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS` only from the
-  accepted crosswalk and run the mapping-bounded paired capture soak.
-- Production runtime acceptance still needs the final mapping-bounded SSH disconnect/reconnect and
-  reboot recovery checks.
-- Until the production mapping is accepted, Polymarket may remain disabled/stopped; temporary smoke
-  IDs are test-only.
+EC2 is not the default Kaggle middleman.
 
-## Research / experiment state
+## DATA-003 — mapped 2026 universe
 
-- BUILD-008 / PR #24 is merged/accepted as the canonical evaluation harness.
-- DATA-001 / PR #23 is merged/accepted as the historical replay corpus used by the completed research programme.
-- DATA-002 / PR #36 is merged/accepted as the separate fee/refund/rebate evidence dataset; it provides raw attribution evidence rather than a derived maker/taker truth label.
-- EXPERIMENT-004C-A / PR #34: `INCONCLUSIVE / NO PROMOTED EDGE`.
-- EXPERIMENT-004C-B / PR #35: `SOFT_COMPETITIVE_EFFECT_ONLY`; one narrow Colombia PRE soft effect survives, while no hard/exhaustive-family alpha promotes.
-- EXPERIMENT-004C-C / PR #37: `INCONCLUSIVE / NO PROMOTED EDGE`.
-- EXPERIMENT-004C-D / PR #39: `NO_CONDITIONAL_EDGE`.
-- The canonical programme interpretation is `docs/experiments/EXPERIMENT_004C_FINAL_HANDOFF.md`.
-- PR #38 / EXPERIMENT-005A remains draft/open and unmerged. Its scaffold may consume the final 004C freeze later under its own owner and gates; this close-out produced no 005A empirical output.
-- HIST-DATA-001 / PR #17 remains closed unmerged and is not accepted capability.
+DATA-003 is accepted on `main` through PR #48.
 
-## Not implemented on main
+Key quality facts:
 
-- validated production live 2026 SIG ↔ Polymarket crosswalk;
-- accepted empirical trading edge;
-- production fair-value model;
-- relationship/constraint engine used for live decisions;
-- opportunity scanning used for live orders;
-- risk decisions/calculations for trading;
-- execution;
-- order submission/cancellation;
-- portfolio accounting;
-- shadow/paper trading engine;
-- live trading.
+- 132,928 scoped fills;
+- 132,928 fee-evidence rows;
+- zero duplicate/conflicting fill keys;
+- custody-leg conservation passes;
+- zero condition/token overlap with the five-family DATA-001/DATA-002 population;
+- 231 accepted SIG mappings have observed rows;
+- 8 mapped conditions / 16 tokens have zero observed fills in the extracted range;
+- trade objects cover 2026-02-28 through 2026-09-21;
+- custody objects are absent for 2026-09-20 and 2026-09-21 and are explicitly labelled
+  `custody_not_ingested`, never imputed.
+
+DATA-003 is the preferred fresh mapped-universe replication/evaluation surface for findings that need
+to transfer from historical election families into the actual Cup universe.
+
+## Research programme state
+
+### EXPERIMENT-004C — complete / frozen
+
+- 004C-A: `INCONCLUSIVE / NO PROMOTED EDGE`.
+- 004C-B: `SOFT_COMPETITIVE_EFFECT_ONLY`; one narrow Colombia PRE soft effect.
+- 004C-C: `INCONCLUSIVE / NO PROMOTED EDGE`.
+- 004C-D: `NO_CONDITIONAL_EDGE`.
+
+The canonical programme handoff remains
+`docs/experiments/EXPERIMENT_004C_FINAL_HANDOFF.md`.
+
+### EXPERIMENT-005A — merged / accepted research record
+
+Disposition:
+
+`NARROW SAME-FAMILY 5s EFFECT ONLY / NO BROAD ROLE-AWARE EDGE`
+
+DATA-002 role annotation is strong enough to use, but participant identity, maker/taker state,
+liquidity response and broad role-aware flow did not produce a robust general mechanism. The sole
+surviving same-family PRE 5s cell is economically tiny and is a replication candidate only.
+
+### EXPERIMENT-005B — BLOCKED / NOT ACCEPTED
+
+PR #45 remains open and unmerged.
+
+The original experiment has a strong freeze/HOLDOUT chain and interesting realised-movement results,
+but its claimed causal same-second ordering uses `timestamp → tx_hash → log_index`. Transaction hash
+is not chronological transaction order, so same-block observations can be misordered.
+
+Required bounded follow-up:
+
+- branch: `experiment/005b-ordering-falsification`;
+- remediation implementation is present at `8c99a5e6a2c1f0e2e690b23fcb2c7881bb21bb0d` with a frozen
+  POST_HOC_FALSIFICATION_ONLY protocol and block-aware reconstruction code, but no empirical
+  falsification results are committed yet;
+- reconstruct true observable ordering from block/log order;
+- quantify affected observations;
+- rerun the exact frozen specification;
+- preserve original outputs byte-for-byte;
+- treat all corrected HOLDOUT comparison as `POST_HOC_FALSIFICATION_ONLY`.
+
+No 005B finding is canonical until that blocker is resolved.
+
+### EXPERIMENT-005C — merged / accepted negative-downgraded record
+
+Final disposition:
+
+`DOWNGRADE — FAMILYWISE NULL NOT REJECTED`
+
+The strongest US joint-panel cell is descriptively positive, but fails the preregistered
+dependence-preserving 35-cell familywise challenge and is temporally concentrated. Retain only as a
+shadow/research comparator, not as a promoted central model.
+
+### EXPERIMENT-005D — merged / accepted narrow structural record
+
+Final disposition:
+
+`NARROW LATE_COUNT STRUCTURAL EVIDENCE — RECONSTRUCTION STRONG / PREDICTIVE EVIDENCE WEAK AND REGIME-SPECIFIC`
+
+All 13 predictive HOLDOUT cells are LATE_COUNT. Peru retains weak dependence robustness; the
+Colombia relationship is statistically stable but economically tiny. Do not describe this as broad
+PRE/ACTIVE structural alpha or a standalone strategy.
+
+### EXPERIMENT-005E — merged / accepted primary null
+
+Final disposition:
+
+`NO_INCREMENTAL_EVIDENCE`
+
+Participant behaviour did not add robust incremental predictive value on the preregistered primary
+60-second target. Signed-markout and next-change diagnostics remain follow-up-only.
+
+### EXPERIMENT-005F — merged / accepted state-hazard evidence
+
+Four of 14 confirmatory coordinates passed HOLDOUT.
+
+The strongest reusable finding is **persistent economic-BBO age / renewal-hazard state**:
+`genuine_age_s` predicts 300-second update hazard in PRE_ELECTION and ACTIVE_RESULTS and also
+predicts ACTIVE jump hazard. Long-delay placebos show that this is a persistent state variable,
+not a generic short-lived lead-lag mechanism.
+
+PRE `trade_abs_impact_60` → 15s spread-change support is small and behaves more like a slow
+activity/liquidity-regime proxy than fresh trade-impact causality.
+
+## Monetisation families
+
+Programme implementation remains organized around:
+
+- `FV-TAKE`
+- `MAKE`
+- `STRUCT`
+- `PRED`
+- `EVENT`
+- `NO_TRADE`
+
+Research findings such as staleness, activity, volatility, liquidity and opponent ecology are
+features/challengers within these families, not automatically new strategy families.
+
+No strategy is registered for execution yet.
 
 ## Trading capability
 
 **NONE**
 
-`trading_enabled` defaults to `False`. Setting it to `True` remains configuration intent only and
-requires a separately supplied trade credential; no accepted execution or order-submission path
-exists on `main`.
+There is still no accepted:
 
-## Next implementation / acceptance target
+- production fair-value service;
+- baseline strategy engine that can emit live trading decisions;
+- central trading risk engine;
+- order submission/cancellation implementation;
+- portfolio accounting;
+- autonomous shadow/paper execution loop;
+- live trading path.
 
-Operationally, LIVE-MAPPING-GATE-001 remains the production mapping/capture gate and no 004C result changes the prohibition on execution.
+`PREDICTIONS_CUP_TRADING_ENABLED=true` remains configuration intent only and cannot place an order.
 
-Research-wise, the completed 004C freeze is the base for the separately owned EXPERIMENT-005 programme. PR #38 / 005A remains unmerged; any subsequent broad discovery lane must follow `docs/research/005_DISCOVERY_PRIOR_WORK_BOUNDARY.md` before detailed prior outcomes are inspected.
+## Remaining operational gates
+
+Mapping acceptance is complete. The remaining production-runtime work is narrower:
+
+- populate supervised Polymarket runtime IDs from the accepted crosswalk;
+- run the mapping-bounded paired live-capture soak on the accepted production universe;
+- complete SSH independence and reboot recovery validation;
+- retain fail-closed trust semantics for stale/missing depth and mapping identities.
+
+These are runtime-acceptance tasks, not mapping-discovery tasks.
+
+## Immediate programme direction
+
+1. Complete the bounded 005B causal-order falsification without redesign.
+2. Close broad predictive discovery.
+3. Establish simple baseline engines for the five approved monetisation families.
+4. Build common shadow/evaluation machinery.
+5. Replicate important historical findings on DATA-003 / the actual mapped 2026 universe.
+6. Use live SIG evidence to promote or demote mechanisms after launch.
+7. Iterate continuously without turning isolated findings into new strategy programmes.
+
+## Branch state
+
+After the 28 September reconciliation:
+
+- merged: PR #38, #41, #42, #43, #44, #47 and #48;
+- open/blocked: PR #45 only;
+- historical, backup, preregistration, review and superseded research branches may remain on GitHub
+  as provenance refs but are not canonical capability unless merged into `main`.
 
 ## Repository state discipline
 
 - Every implementation branch starts from current `main`.
 - Every accepted merge reconciles canonical project state.
-- Builders do not merge/accept their own implementation work.
-- Code acceptance and live/runtime acceptance are distinct when relevant.
+- Experimental HOLDOUTs remain immutable after consumption.
+- Post-HOLDOUT review may demote; it must not rescue/promote through redesign.
+- Builders do not treat green CI as scientific acceptance.
 - Active branch state must not be described as merged functionality.
-- GitHub merge state and actual `main` contents outrank stale documentation.
+- GitHub merge state and actual `main` contents are authoritative.

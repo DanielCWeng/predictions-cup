@@ -66,7 +66,11 @@ Key rules:
 - duplicate SIG exchange mappings and stale override identities fail validation;
 - canonical JSON ordering/content is deterministic; CSV and summary are derived artifacts.
 
-These contracts are accepted on `main`. The live 2026 crosswalk itself remains a separate outstanding acceptance gate under LIVE-MAPPING-GATE-001 / issue #13.
+These contracts and the live 2026 crosswalk are accepted on `main`. The canonical artifacts cover
+237 SIG exchanges: 140 EXACT, 87 DERIVED, 4 NEAR and 6 NO_TRADE, with 693 unique condition IDs
+and 1,386 aligned CLOB token IDs. `data/mappings/sig_polymarket_2026_acceptance.json` records
+`all_records_verified=true` and the mapped-token CLOB smoke. Regeneration remains fail-closed and
+reviewer-owned; accepted artifacts must not be hand-edited.
 
 
 ## SIG live runtime state — BUILD-006 accepted
@@ -138,7 +142,7 @@ Initial discovery remains fail-closed, and post-discovery local persistence fail
 suppressed.
 
 
-## Historical replay corpus — DATA-001 (PROPOSED, under review; not accepted)
+## Historical replay corpus — DATA-001 (MERGED / ACCEPTED)
 
 DATA-001 reuses the accepted BUILD-007 Polymarket research Parquet streams rather than defining a
 parallel replay format:
@@ -163,7 +167,7 @@ parallel replay format:
 
 See `docs/implementation/DATA_001_HISTORICAL_REPLAY_CORPUS.md`.
 
-## Fee / maker-taker evidence — DATA-002 (PROPOSED, under review; not accepted)
+## Fee / maker-taker evidence — DATA-002 (MERGED / ACCEPTED)
 
 DATA-002 is a separate, immutable auxiliary dataset of fee/refund/rebate evidence for the same five
 election families, joined to DATA-001 (and its own fills) only by
@@ -189,7 +193,7 @@ does not modify DATA-001 or define a competing fills schema:
 
 See `docs/implementation/DATA_002_POLYMARKET_FEES.md`.
 
-## SIG actual-market fills / DATA-002 fee evidence — DATA-003 (PROPOSED, under review; not accepted)
+## SIG actual-market fills / DATA-002 fee evidence — DATA-003 (MERGED / ACCEPTED)
 
 DATA-003 is a separate, immutable dataset scoped to the accepted SIG↔Polymarket mapping
 (`data/mappings/sig_polymarket_2026.json`), not the five broad DATA-001/DATA-002 election
@@ -207,3 +211,11 @@ families — the manifest confirms zero condition/token overlap between the two 
   private); its manifest, hashes and quality evidence live under `data/manifests/fills/`.
 
 See `docs/implementation/DATA_003_SIG_ACTUAL_FILLS.md`.
+
+
+## Strategy / execution boundary
+
+Accepted data contracts do not imply an accepted trading strategy. `OrderIntent`, `Order`,
+`Fill` and `Position` are canonical domain contracts; there is still no accepted order-submission
+or cancellation path, and `RiskDecision` remains a future trading-risk contract. Strategy engines
+for FV-TAKE / MAKE / STRUCT / PRED / EVENT are not yet registered for execution.

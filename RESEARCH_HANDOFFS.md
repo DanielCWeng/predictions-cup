@@ -1,9 +1,18 @@
 # Research Handoffs
 
-Use the following schema when research becomes accepted input to implementation decisions.
+Accepted research is implementation input, not automatic strategy promotion.
 
-| Research ID | Question | Finding | Confidence | Implication | Decision | Status |
-|---|---|---|---|---|---|---|
-| RESEARCH-ECOLOGY-001 | Can recurring competitor/bot behaviour create exploitable market ecology in the SIG Cup? | Historical competition evidence shows stable bot fingerprints, recurring takers, informed-bot following and crowding/response-window compression can matter; transfer to SIG is plausible but unproven without live observable-market evidence. | MODERATE | Preserve timing/depth/trade features from day one; highest-priority ecology test is whether observed post-external SIG reaction adds executable OOS value beyond direct external lead/lag. Identity is not required. | Capture + test live; defer large opponent simulator and new maths item until a stable incremental OOS signature appears. | CANONICAL RESEARCH — no runtime capability |
+| Research ID | Finding | Programme implication | Canonical status |
+|---|---|---|---|
+| RESEARCH-ECOLOGY-001 | Historical competition evidence suggests recurring participant/bot behaviour and crowding can matter, but transfer to SIG was unproven. | Preserve timing/depth/trade features; test incremental live value rather than build a large opponent simulator first. | CANONICAL RESEARCH |
+| EXPERIMENT-004C | Generic internal propagation, mapped PM→SIG transmission and frozen conditional-response mechanisms did not establish robust executable alpha; one narrow soft competitive-family effect survived. | Constrain naive lead-lag claims; retain only narrow mechanism-level challengers. | MERGED / FROZEN |
+| EXPERIMENT-005A | Role annotation is high quality, but broad role-aware flow, participant identity, maker adverse selection and liquidity response did not promote. | Reuse role data infrastructure; carry only same-family PRE 5s as a tiny fresh-replication candidate. | MERGED |
+| EXPERIMENT-005B | Broad atlas found strong realised-movement prediction, but same-block pseudo-ordering is scientifically unresolved. | Do not consume as canonical strategy evidence until bounded causal-order falsification completes. | BLOCKED / UNMERGED |
+| EXPERIMENT-005C | Strongest reduced-rank panel fails dependence-preserving familywise correction. | Shadow/research comparator only; no central-model promotion. | MERGED |
+| EXPERIMENT-005D | Structural reconstruction is strong; predictive evidence is LATE_COUNT-only, weak/regime-specific. | Feed STRUCT/EVENT as narrow challenger features, not a standalone strategy. | MERGED |
+| EXPERIMENT-005E | Participant-behaviour primary hypothesis is null. | Do not promote participant ecology as primary price alpha; secondary flow diagnostics require fresh preregistration. | MERGED |
+| EXPERIMENT-005F | Economic-BBO age robustly predicts update hazard across PRE/ACTIVE and ACTIVE jump hazard; long-delay persistence is substantial. | Treat staleness/renewal as a persistent state feature for later baseline/shadow engines, not short-lived causal lead-lag. | MERGED |
+| DATA-003 | Fresh fills scoped to the accepted 2026 SIG mapping are available with explicit coverage gaps. | Preferred surface for actual-universe replication before live promotion. | MERGED / ACCEPTED |
 
-Canonical research and maths documents exist, but no research finding has yet been promoted through this table into implemented strategy or execution capability on `main`. Active documentation work does not change runtime state.
+No handoff in this file creates execution capability. Strategy/fair-value/risk/execution modules remain
+separately gated.

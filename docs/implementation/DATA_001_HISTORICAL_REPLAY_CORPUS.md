@@ -1,6 +1,6 @@
 # DATA-001 — Historical Replay Corpus
 
-**Status:** READY FOR INDEPENDENT RE-REVIEW (2026-04-13T19 splice) — not accepted  
+**Status:** MERGED / ACCEPTED — PR #23  
 **Branch:** `data/001-historical-replay-corpus`  
 **Replaces:** HIST-DATA-001 / PR #17 (closed unmerged; lessons reused, branch not revived)
 

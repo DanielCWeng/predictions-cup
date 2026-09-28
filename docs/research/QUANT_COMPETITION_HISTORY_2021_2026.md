@@ -233,26 +233,26 @@ This day is now historical. The accepted repository foundation, SIG read-only st
 
 **Primary objective:** make the inputs to every later experiment trustworthy.
 
-### Gate A — LIVE-MAPPING-GATE-001
+### Gate A — LIVE-MAPPING-GATE-001 — COMPLETE
 
-- [~] Enumerate the fresh live SIG universe.
-- [~] Retrieve the live Polymarket candidate universe.
-- [ ] Produce an explicit reviewed decision for every live SIG exchange.
-- [ ] Assign EXACT / NEAR / DERIVED / MODEL_ONLY / NO_TRADE.
-- [ ] Verify exact market / condition / outcome / token semantics.
-- [ ] CLOB-smoke every accepted mapped token.
-- [ ] Generate canonical mapping + acceptance artefacts.
-- [ ] Independent review before production token IDs change.
-- [ ] Start mapping-bounded paired SIG + Polymarket capture only after acceptance.
+- [x] Enumerate the fresh live SIG universe.
+- [x] Retrieve the live Polymarket candidate universe.
+- [x] Produce an explicit reviewed decision for every live SIG exchange.
+- [x] Assign EXACT / NEAR / DERIVED / MODEL_ONLY / NO_TRADE.
+- [x] Verify exact market / condition / outcome / token semantics.
+- [x] CLOB-smoke accepted mapped identities.
+- [x] Generate canonical mapping + acceptance artefacts.
+- [x] Independent acceptance completed before production identity use.
+- [ ] Complete the separate mapping-bounded paired live-capture soak plus SSH/reboot runtime gate.
 
-### Gate B — DATA-001
+### Gate B — DATA-001 — COMPLETE
 
-- [~] Historical corpus built reproducibly from archived books + PolyLeviathan fills.
-- [~] BUILD-005 compatibility and real-data experiment smoke demonstrated.
-- [ ] Resolve the reviewer-blocked PMXT V1/V2 13-Apr-2026 source cutover.
-- [ ] Rebuild affected Peru/Hungary corpus material.
-- [ ] Regenerate manifests, quality evidence and Kaggle reproduction hashes.
-- [ ] Independently accept the resulting corpus and exact manifest SHA.
+- [x] Historical corpus built reproducibly from archived books + PolyLeviathan fills.
+- [x] BUILD-005 compatibility and real-data experiment smoke demonstrated.
+- [x] Reviewer-blocked PMXT V1/V2 cutover resolved in the accepted corpus.
+- [x] Affected corpus material rebuilt under accepted provenance.
+- [x] Manifests, quality evidence and reproduction hashes generated.
+- [x] DATA-001 independently accepted and used by the subsequent empirical programme.
 
 **End-of-day standard:** live market identity is reviewable and historical data truth has no knowingly avoidable source hole.
 

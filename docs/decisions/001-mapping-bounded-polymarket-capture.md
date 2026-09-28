@@ -20,7 +20,7 @@ unnecessary subscription, storage and operational load.
 
 The supervised Polymarket service is strict include-only.
 
-- Production IDs come from LIVE-MAPPING-GATE-001.
+- Production IDs come from the accepted LIVE-MAPPING-GATE-001 artifacts under `data/mappings/`.
 - IDs may be market IDs, condition IDs or token IDs.
 - Market/condition IDs select their aligned tokens; a token ID selects only that token.
 - Every configured ID must resolve against an active/non-closed Gamma market.
@@ -32,7 +32,7 @@ The broad heuristic remains an explicit/manual research capability, not the alwa
 
 ## Consequences
 
-- The production capture universe cannot be finalized before the live mapping gate is accepted.
+- The production capture universe is now fixed by the accepted live crosswalk.
 - Temporary public IDs used for runtime smoke tests must never be promoted into production config.
-- Mapping acceptance is now a direct dependency of production paired capture.
+- Mapping acceptance is complete; the remaining dependency is mapping-bounded live runtime validation.
 - Metadata discovery and high-frequency subscription scope are deliberately separate concepts.

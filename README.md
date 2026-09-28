@@ -4,11 +4,24 @@ Foundation for a quantitative prediction-market trading system being developed f
 
 ## Current status
 
-The accepted `main` baseline includes BUILD-007, EXPERIMENT-001A and EXPERIMENT-002. It has **no trading capability**. BUILD-007 / PR #20 is merged and live-accepted as the read-only EC2 supervision / strict-universe / Parquet capture layer.
+The accepted `main` baseline now includes BUILD-001 through BUILD-008, the accepted live 2026
+SIG ↔ Polymarket crosswalk, DATA-001/002/003, the completed 004C programme, merged 005A/005C/005D/
+005E/005F research records, and the repository-native GitHub Actions → Kaggle runner.
 
-BUILD-003 provides authenticated, read-only SIG REST access for market discovery, prices, orderbooks, trades/history, market nodes, exchanges, and account health. EXPERIMENT-001A provides a separate public read-only Polymarket research recorder for external market capture. Neither path submits or cancels orders, calculates fair value, or runs strategies.
+The accepted crosswalk covers **237 SIG exchanges**: **140 EXACT, 87 DERIVED, 4 NEAR, 6 NO_TRADE**,
+with **693 unique Polymarket condition IDs / 1,386 token IDs**. Production Polymarket capture must
+use identities from these accepted artifacts rather than a broad heuristic universe.
 
-BUILD-002 remains the owner of typed configuration and canonical domain objects. BUILD-003 validates SIG wire payloads separately and converts into those canonical contracts only where the conversion is lossless.
+The repo still has **no trading capability**. There is no accepted fair-value service, strategy
+engine producing live decisions, central trading-risk implementation, order submission/cancellation,
+or portfolio accounting. EXPERIMENT-005B / PR #45 is the only active unmerged scientific lane and
+is blocked pending a bounded causal same-block ordering falsification.
+
+Routine Kaggle compute now uses:
+
+`Agent → GitHub → kaggle/jobs/*.json → GitHub Actions → Kaggle → compact evidence → GitHub review`
+
+EC2 remains for persistent live runtime / EC2-resident work, not as the default Kaggle middleman.
 
 ## Canonical project-control read order
 
@@ -191,13 +204,14 @@ The service command is:
   --runtime-env-only --require-explicit-universe
 ```
 
-Until LIVE-MAPPING-GATE-001 supplies an accepted crosswalk, the production-intended supervised
-Polymarket universe is not available and the Polymarket service should remain stopped rather than
-fall back to the 3,160-market heuristic. The SIG supervised collector can run independently.
-The required ARM64 EC2 PyArrow/Parquet smoke/soak passed before merge on a deliberately bounded
-3-market / 6-token public test universe. PyArrow 25.0.1, ZSTD shard production/readback, scheduled
-Gamma refresh, the positive 1-second 429 retry floor and manual restart continuation were all
-validated. That temporary test set is not production mapping evidence and must not be promoted.
+The accepted live crosswalk now supplies the production identity boundary. Populate
+`PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS` only from those accepted market/condition/token
+identities; never fall back to the 3,160-market heuristic. The required ARM64 EC2 PyArrow/Parquet
+compatibility smoke passed on a deliberately bounded 3-market / 6-token public test universe.
+PyArrow 25.0.1, ZSTD shard production/readback, scheduled Gamma refresh, the positive 1-second 429
+retry floor and manual restart continuation were validated. Those temporary test IDs remain
+test-only. The remaining runtime acceptance is the mapping-bounded production soak plus SSH
+independence/reboot recovery using accepted production IDs.
 
 Gamma failures also fail at the correct boundary: startup without a valid universe fails closed;
 after startup, a failed scheduled metadata discovery/selection keeps the last-good universe and

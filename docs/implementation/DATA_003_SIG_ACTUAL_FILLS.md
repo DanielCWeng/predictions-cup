@@ -1,6 +1,6 @@
 # DATA-003 — SIG Actual-Market Fills (+ DATA-002 Fee Evidence)
 
-**Status:** PROPOSED, under review; not accepted
+**Status:** MERGED / ACCEPTED — PR #48
 **Branch:** `data/003-sig-actual-fills`
 **Depends on:** the accepted MAPPING-001 crosswalk (`data/mappings/sig_polymarket_2026.json`,
 `origin/main` commit `f01212c00402002c111fc1b9488cf55a289af7b1`) for market scope, and reuses the

@@ -3,7 +3,7 @@
 **Status:** MERGED / ACCEPTED — PR #20  
 **Branch:** `build/007-ec2-runtime-supervision`  
 **Base main at creation:** `6340428a1c486c66990853164aecf97c27d4d719`  
-**Live EC2 validated:** yes for pre-merge ARM64 runtime/storage gate; production mapping-bounded soak remains downstream of LIVE-MAPPING-GATE-001
+**Live EC2 validated:** pre-merge ARM64 runtime/storage gate passed; live crosswalk is now accepted; mapping-bounded production soak plus SSH/reboot recovery remain outstanding
 
 ## Scope
 
@@ -70,9 +70,10 @@ strictly against active Gamma markets. IDs may be market IDs, condition IDs or t
 - any unresolved configured ID -> fail closed;
 - no heuristic additions are permitted in strict mode.
 
-No Cup identity is hard-coded. The intended production input is the independently accepted
-LIVE-MAPPING-GATE-001 SIG ↔ Polymarket crosswalk. Until that exists, Polymarket capture can remain
-disabled; the installer leaves its unit disabled/stopped while SIG continues normally.
+No Cup identity is hard-coded. The accepted 2026 SIG ↔ Polymarket crosswalk under
+`data/mappings/` is now the production input. Polymarket supervised IDs must be populated only
+from those accepted identities. If a host has not yet been configured with accepted IDs, capture
+should remain disabled rather than falling back to guessed or heuristic IDs.
 
 
 ## systemd behavior
@@ -271,8 +272,7 @@ The accepted live evidence includes:
 The temporary 3-market / 6-token universe was a compatibility test only. It is not production
 mapping evidence and must not be promoted into runtime production configuration.
 
-The later production-intended Polymarket gate remains separate and depends on the accepted live
-crosswalk from LIVE-MAPPING-GATE-001. Once those production IDs exist, the mapping-bounded gate
+The accepted live crosswalk now supplies production IDs. The remaining mapping-bounded runtime gate
 must prove:
 
 1. installed Polymarket unit contains `--require-explicit-universe`;

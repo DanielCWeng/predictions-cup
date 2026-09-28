@@ -1,6 +1,6 @@
 # DATA-002 — Polymarket Fee / Maker-Taker Evidence
 
-**Status:** PROPOSED, under review; not accepted
+**Status:** MERGED / ACCEPTED — PR #36
 **Branch:** `data/002-polymarket-fees`
 **Depends on:** DATA-001 (`docs/implementation/DATA_001_HISTORICAL_REPLAY_CORPUS.md`) for join keys only — see
 [Relationship to DATA-001](#relationship-to-data-001). Neither dataset is mutated by the other.
@@ -240,8 +240,7 @@ historical books + fills                          fees + maker/taker evidence + 
                    (participant_address = DATA-001 maker_address)
 ```
 
-DATA-001 is already under review with research conducted against its hashes; nothing here mutates
-it. An experiment that wants both declares both dataset hashes explicitly, which keeps existing
+DATA-001 is accepted and research is pinned to its hashes; nothing here mutates it. An experiment that wants both declares both dataset hashes explicitly, which keeps existing
 EXPERIMENT-002/004A/004B/004C results exactly reproducible while adding a route to
 participant/order-flow research that doesn't rely on unsigned-fill heuristics or infrastructure-
 contract addresses to guess who initiated a trade.
