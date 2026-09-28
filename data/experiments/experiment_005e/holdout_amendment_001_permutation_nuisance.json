@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005E",
+  "amendment_id": "005E-HOLDOUT-AMENDMENT-001",
+  "timing": "after HOLDOUT v1 launch and before any HOLDOUT v1 output/result inspection",
+  "scientific_scope_change": false,
+  "issue": {
+    "component": "participant-state permutation falsification",
+    "problem": "The v1 runner passed the complete full_behavior feature vector to participant_state_permutation, so generic baseline price/size/activity controls were shuffled together with participant-added behaviour state.",
+    "consequence": "The placebo was not nuisance-preserving and could be artificially weak, biasing the falsification in favor of participant behaviour."
+  },
+  "correction": {
+    "rule": "Keep all frozen BASELINE columns fixed and permute only participant-added full_behavior features within the same preregistered market/time or frequency-matched strata.",
+    "frozen_features_targets_splits_models_thresholds_changed": false,
+    "local_tests": 15,
+    "runner_sha256": "a5c151517f0f4ea8c6f9486e1cec69aa07f1cfb84b05197e56709453d3ef5f59",
+    "implementation_commit": "50a79d31c03cf5523a2039599a4aadfc1ef3e523",
+    "code_dataset": "polyleviathan/sig-cup-005e-holdout-code",
+    "code_dataset_version": 2,
+    "code_manifest_sha256": "44b60aff2db45e03b95a650733669c035f4eaa1feb479f1483684673adc6b3b8",
+    "pre_holdout_freeze_sha256": "60f642ec50a1a9ffa5aebfba73d8a66960f6afb2c318e7d747e584df81ca6de1"
+  },
+  "invalidated_attempt": {
+    "kernel": "polyleviathan/005e-participant-ecology-holdout",
+    "version": 1,
+    "result_inspected": false,
+    "output_downloaded": false,
+    "disposition": "INVALIDATED_PRE_RESULT_STATIC_AUDIT",
+    "instruction": "Do not inspect or use v1 output. The first valid HOLDOUT exposure is corrected kernel v2."
+  }
+}
