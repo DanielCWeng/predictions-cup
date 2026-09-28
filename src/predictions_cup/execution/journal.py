@@ -11,6 +11,7 @@ from predictions_cup.execution.models import (
     ExecutionMode,
     LifecycleState,
     OperationKind,
+    lifecycle_transition_allowed,
 )
 
 
@@ -98,8 +99,22 @@ class ExecutionJournal:
         *,
         response_json: str | None = None,
     ) -> None:
+        row = self._connection.execute(
+            """
+            SELECT lifecycle_state FROM execution_envelopes
+            WHERE logical_operation_id = ?
+            """,
+            (logical_operation_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"unknown logical operation: {logical_operation_id}")
+        current = LifecycleState(str(row[0]))
+        if not lifecycle_transition_allowed(current, state):
+            raise ValueError(
+                f"invalid lifecycle transition {current.value} -> {state.value}"
+            )
         with self._connection:
-            cursor = self._connection.execute(
+            self._connection.execute(
                 """
                 UPDATE execution_envelopes
                 SET lifecycle_state = ?, updated_monotonic_ns = ?,
@@ -113,8 +128,6 @@ class ExecutionJournal:
                     logical_operation_id,
                 ),
             )
-        if cursor.rowcount != 1:
-            raise KeyError(f"unknown logical operation: {logical_operation_id}")
 
     def unresolved(self) -> tuple[ExecutionEnvelope, ...]:
         terminal = (
