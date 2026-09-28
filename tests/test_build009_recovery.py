@@ -61,6 +61,11 @@ def test_journal_persists_identity_before_dispatch_and_restores_unresolved(
         operation_kind=OperationKind.SINGLE_PLACEMENT,
         intents=(intent,),
         relationship_constraint=None,
+        strategy_family="FV-TAKE",
+        strategy_id="fixture",
+        signal_value=0.025,
+        fair_value=0.55,
+        decision_observation_ns=123,
     )
     plan = build_execution_plan(
         decision,
@@ -87,6 +92,10 @@ def test_journal_persists_identity_before_dispatch_and_restores_unresolved(
         assert submission.event_type == "SUBMISSION"
         assert submission.logical_intent_id == "intent-1"
         assert submission.decision_observation_ns == 123
+        assert submission.strategy_family == "FV-TAKE"
+        assert submission.strategy_id == "fixture"
+        assert submission.signal_value == pytest.approx(0.025)
+        assert submission.fair_value == pytest.approx(0.55)
         assert submission.exchange_id == "36"
 
         reopened.mark_state("logical-1", LifecycleState.RECONCILED, 600)
