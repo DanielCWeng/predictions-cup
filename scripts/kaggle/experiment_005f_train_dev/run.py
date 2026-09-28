@@ -558,14 +558,16 @@ def attach_trade_features(frame: pd.DataFrame, trade_features: pd.DataFrame) -> 
                 g[col] = np.nan
             parts.append(g)
             continue
+        g["__merge_ns"] = pd.DatetimeIndex(g["time"]).as_unit("ns").asi8
+        t = t.copy()
+        t["__merge_ns"] = pd.DatetimeIndex(t["bin_time"]).as_unit("ns").asi8
         merged = pd.merge_asof(
-            g,
-            t.drop(columns=["token_id"]),
-            left_on="time",
-            right_on="bin_time",
+            g.sort_values("__merge_ns"),
+            t.drop(columns=["token_id"]).sort_values("__merge_ns"),
+            on="__merge_ns",
             direction="backward",
             allow_exact_matches=False,
-        ).drop(columns=["bin_time"])
+        ).drop(columns=["bin_time", "__merge_ns"])
         parts.append(merged)
     return pd.concat(parts, ignore_index=True) if parts else frame
 
