@@ -848,7 +848,7 @@ def attach_depth_targets(
             ).to_numpy(object)
             same = (
                 (fseg == cur_seg)
-                & (target_split == d["split"].to_numpy(object))
+                & (target_split == d["split"].fillna("__NONE__").to_numpy(object))
                 & np.isfinite(cur_mid)
                 & np.isfinite(fmid)
             )
