@@ -1,9 +1,10 @@
 {
   "archetypes": {
     "assignment": "DEV/HOLDOUT use frozen TRAIN medians/scaler/PCA/centroids; never refit",
+    "same_second_rule": "no tx/log ordering inside a one-second block-time timestamp; batch aggregation is frozen before outcomes.",
     "selection": "cluster count fixed ex ante at 6; not selected by predictive performance",
     "stability": "5 deterministic bootstrap fits; report adjusted Rand index",
-    "training": "TRAIN-only standardized participant fingerprints using each eligible participant latest pre-boundary state",
+    "training": "TRAIN-only latest participant timestamp states with >=20 prior fills and >=2 prior active days; if multiple rows share that latest second, fingerprint features are averaged across the whole timestamp batch before fitting.",
     "transform": "TRAIN-only StandardScaler -> PCA up to 6 components -> MiniBatchKMeans k=6"
   },
   "baseline_features": [
@@ -83,7 +84,7 @@
     "HOLDOUT-based threshold/feature/cluster/horizon selection"
   ],
   "holdout_inference": {
-    "bootstrap": "500 deterministic hierarchical family -> calendar-day block resamples",
+    "bootstrap": "500 deterministic hierarchical family -> calendar-day block resamples after first collapsing row loss gain to market-timestamp batches.",
     "disposition_gates": {
       "CROSS_FAMILY_CANDIDATE": "full-behaviour primary target has positive HOLDOUT gain, BH q<=0.05, positive family gain in >=3/5 families, top-participant absolute effect share <0.50, effective contributing participants >=10, and neither preregistered participant-state permutation matches/exceeds observed gain",
       "INCONCLUSIVE": "required coverage/provenance/falsification evidence is unavailable or internally contradictory",
@@ -97,7 +98,8 @@
       "per-family holdout gains",
       "leave-family-out retraining diagnostic where support permits",
       "unseen/sparse/repeat participant slices"
-    ]
+    ],
+    "weighting": "equal family -> market -> observable timestamp batch -> participant-row weight; prevents same-second multi-fill batches from dominating fit/evaluation."
   },
   "infrastructure": {
     "policy": "exclude all canonical infrastructure addresses from participant ecology/skill claims; unknown does not imply human; no deanonymisation",
@@ -143,7 +145,8 @@
   "participant_feature_families": {
     "directional_behaviour": [
       "prior_pressure_balance",
-      "direction_run_length"
+      "prior_pressure_abs",
+      "current_prior_direction_alignment"
     ],
     "historical_markout": [
       "hist_markout_score",
@@ -154,15 +157,15 @@
       "log_market_participant_degree",
       "log_unique_markets_prior",
       "log_unique_events_prior",
-      "same_event_switch_rate"
+      "current_market_novelty"
     ],
     "recurrence": [
       "log_prior_fill_count",
       "log_prior_active_days",
       "log_recency_seconds",
       "log_lifetime_seconds",
-      "session_fill_count",
-      "log_session_age_seconds"
+      "log_recent_fill_count_300s",
+      "log_recent_fill_count_1800s"
     ],
     "size_behaviour": [
       "prior_mean_log_value",
@@ -176,20 +179,23 @@
       "market_history_share",
       "log_unique_events_prior",
       "event_history_share",
-      "switch_rate",
-      "same_event_switch_rate"
+      "current_market_novelty",
+      "current_event_novelty"
     ],
     "timing_behaviour": [
-      "hour_hhi_prior",
+      "prior_same_hour_share",
       "activity_acceleration"
     ]
   },
   "past_only_rules": {
     "direction_semantics": "owner YES pressure only; never called aggressor/taker direction",
     "historical_markout": "300s directional markout becomes available only at trade timestamp + 300s and enters later rows strictly after availability; shrinkage lambda=20 toward zero",
+    "simultaneous_rows": "same-second rows are treated as one observable batch for evidence weighting; they may retain row-specific current size/side but cannot become each other historical state.",
     "sparse_participant": "strong shrinkage; archetype assignment forced to sparse class when prior fills <20 or prior active days <2",
+    "timestamp_batch": "DATA-002 block-time is one-second resolution. Participant history uses only rows with timestamp strictly less than the current row timestamp; tx_hash/log_index never create pseudo-order inside a second.",
     "unseen_participant": "neutral/default representation"
   },
+  "pre_outcome_amendment_same_second": "Strict timestamp-batch semantics replaced lexical same-second row ordering before any successful 005E empirical processing.",
   "primary_target": {
     "definition": "60-second future own-market canonical YES logit change",
     "name": "y_60",
