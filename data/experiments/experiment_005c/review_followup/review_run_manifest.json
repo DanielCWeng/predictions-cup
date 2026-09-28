@@ -1,0 +1,54 @@
+{
+  "classification": "POST_HOC_INDEPENDENT_REVIEW_FALSIFICATION",
+  "experiment_id": "EXPERIMENT-005C",
+  "original_holdout_results_sha256": "69ded820bdb336aa4cda16d432c79d51aae017c89fcdb71ed5afe344a60114a9",
+  "original_runner_sha256": "ae4468a18d1a980c5db7bb8c683f4580ba91aad903cd49ee3e7dccc2756df40f",
+  "outputs": {
+    "b1_holdout_comparison.csv": {
+      "bytes": 9270,
+      "sha256": "f8d6601fbb2032945354bfa4801abbb52ab5a8813b7e8e66047c0a716aaa138d"
+    },
+    "block_sensitivity.csv": {
+      "bytes": 2758,
+      "sha256": "00cddf299a36dec875cf85f3913ae8e2c4c51ae9f175085840a036b05902888a"
+    },
+    "interpretation_metrics.json": {
+      "bytes": 556,
+      "sha256": "f32a288213e1de700441413bc65d44a8fab41b5c45743d9380d8668b90311fcf"
+    },
+    "multiplicity_falsification.csv": {
+      "bytes": 10167,
+      "sha256": "010a945e7d424e01c7d1db5bae712c1b0e999ebaed72daa40fda125955fd98d4"
+    },
+    "multiplicity_summary.json": {
+      "bytes": 1784,
+      "sha256": "9e10ad281bc19e27f0f96c814ceaa991888797ad265050e1f9609c01fc33bdee"
+    },
+    "review_summary.json": {
+      "bytes": 5642,
+      "sha256": "050e8e570133fc949ea7bbfcf99ebf387024d75b9d19aab32664bbdedebc4f3e"
+    },
+    "source_target_map.csv": {
+      "bytes": 8033,
+      "sha256": "4c1b058dec1e147cb4b7cac84363b8e5c89c865a317da75774cff165e87c3987"
+    },
+    "source_target_map.json": {
+      "bytes": 15949,
+      "sha256": "67d7ae314465e14a7228a2178e40ddb404a534bf0dac2fa5e3f8cb62c9007832"
+    },
+    "temporal_concentration.csv": {
+      "bytes": 4856,
+      "sha256": "4771b62854c35a2e091e55bec24f7a1198b1d80e71edf761a43a24e600e01c83"
+    },
+    "temporal_concentration_summary.json": {
+      "bytes": 1623,
+      "sha256": "70f4f2997a52c6bfcda4847f2e9e652a598f2b759884aea401ed8b9c39e5444e"
+    },
+    "us_event_semantics.json": {
+      "bytes": 5798,
+      "sha256": "99f90e5c5e1d18b5f9ff4118dcaec5c90c986ad4fc7df74e9c6ee0e21a02626a"
+    }
+  },
+  "pre_holdout_freeze_sha256": "20f977ffb64a56ecfe230ba45d9d0021dcc97e5218b13eb307db896d14c87933",
+  "review_preregistration_sha256": "17fa57eed1efdabaad1f9ed51a49a30c8eba62758795e009506142fb0ad0fc39"
+}
