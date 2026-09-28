@@ -10,7 +10,7 @@
   "change": {
     "master_seed": 20260928005,
     "sklearn_seed_rule": "master_seed % (2**32 - 1)",
-    "sklearn_seed_value": 3081052825,
+    "sklearn_seed_value": 3081058825,
     "affected_uses": [
       "LogisticRegression random_state",
       "HistGradientBoostingClassifier random_state",
