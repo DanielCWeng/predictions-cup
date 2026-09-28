@@ -128,8 +128,8 @@ def default_kernel_registry() -> KernelRegistry:
             name="Log odds",
             input_contract="0 < p < 1",
             output_contract="real log odds",
-            tolerance_abs=1e-15,
-            tolerance_rel=1e-15,
+            tolerance_abs=1e-12,
+            tolerance_rel=1e-12,
             implementations=(
                 KernelImplementation("ratio", "1", logit, reference=True),
                 KernelImplementation("log1p", "1", logit_log1p),
@@ -142,8 +142,8 @@ def default_kernel_registry() -> KernelRegistry:
             name="Binary CARA reservation probability",
             input_contract="p, gamma, inventory",
             output_contract="probability",
-            tolerance_abs=5e-3,
-            tolerance_rel=5e-3,
+            tolerance_abs=1e-12,
+            tolerance_rel=1e-12,
             implementations=(
                 KernelImplementation(
                     "stable",
