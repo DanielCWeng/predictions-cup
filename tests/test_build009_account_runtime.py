@@ -65,9 +65,12 @@ class FakeSubscriber:
         self,
         payloads: tuple[object, ...],
         outcome: SubscriberExit,
+        *,
+        connect_yields: int = 2,
     ) -> None:
         self.payloads = payloads
         self.outcome = outcome
+        self.connect_yields = connect_yields
 
     async def run(
         self,
@@ -79,7 +82,8 @@ class FakeSubscriber:
     ) -> SubscriberExit:
         del stop_event, on_maintenance
         on_connected()
-        await asyncio.sleep(0)
+        for _ in range(self.connect_yields):
+            await asyncio.sleep(0)
         for payload in self.payloads:
             await on_batch(
                 "user:profile-1",
@@ -167,7 +171,11 @@ def test_token_refresh_revokes_trust_before_resync() -> None:
 def test_account_batch_during_rest_snapshot_forces_another_resync() -> None:
     state = AccountRealtimeStateEngine(tournament_id="t1")
     subscribers = [
-        FakeSubscriber((_batch(1, 0),), SubscriberExit.TOKEN_REFRESH),
+        FakeSubscriber(
+            (_batch(1, 0),),
+            SubscriberExit.TOKEN_REFRESH,
+            connect_yields=1,
+        ),
         FakeSubscriber((), SubscriberExit.STOPPED),
     ]
     resync_count = 0
