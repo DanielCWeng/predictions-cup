@@ -416,6 +416,88 @@ def candidate_eval(
                 "holdout_beta": beta,
                 "_bootstrap_values": (sr * yr).tolist(),
             })
+    if PHASE == "TRAIN_DEV":
+        fair_value = target_price + signal
+        fair_value = np.where(
+            np.isfinite(fair_value), np.clip(fair_value, 1e-6, 1 - 1e-6), np.nan
+        )
+        target_logit = logit(target_price)
+        fair_logit = logit(fair_value)
+        logit_signal = fair_logit - target_logit
+        for horizon in CLOCK_HORIZONS:
+            steps = horizon // STEP_SECONDS
+            if steps < 1 or steps >= len(target_price):
+                continue
+            prob_change = np.full(len(target_price), np.nan)
+            logit_change = np.full(len(target_price), np.nan)
+            residual_change = np.full(len(target_price), np.nan)
+            abs_shrink = np.full(len(target_price), np.nan)
+            prob_change[:-steps] = target_price[steps:] - target_price[:-steps]
+            logit_change[:-steps] = target_logit[steps:] - target_logit[:-steps]
+            residual_change[:-steps] = signal[steps:] - signal[:-steps]
+            abs_shrink[:-steps] = np.abs(signal[:-steps]) - np.abs(signal[steps:])
+            diagnostics = (
+                (
+                    "future_logit_change",
+                    logit_signal,
+                    logit_change,
+                    lambda s, y: s * y,
+                ),
+                (
+                    "future_structural_residual_change",
+                    signal,
+                    residual_change,
+                    lambda s, y: -(s * y),
+                ),
+                (
+                    "absolute_residual_shrinkage",
+                    np.abs(signal),
+                    abs_shrink,
+                    lambda s, y: y,
+                ),
+                (
+                    "family_surface_repair_direction",
+                    signal,
+                    prob_change,
+                    lambda s, y: np.sign(s) * y,
+                ),
+            )
+            for target_kind, diag_signal, diag_y, score_fn in diagnostics:
+                valid_diag = np.isfinite(diag_signal) & np.isfinite(diag_y)
+                train_diag = valid_diag & train
+                dev_diag = valid_diag & dev
+                if int(train_diag.sum()) < 100 or int(dev_diag.sum()) < 50:
+                    continue
+                train_metric = float(
+                    np.mean(score_fn(diag_signal[train_diag], diag_y[train_diag]))
+                )
+                dev_metric = float(
+                    np.mean(score_fn(diag_signal[dev_diag], diag_y[dev_diag]))
+                )
+                rows.append({
+                    "event": event,
+                    "family_id": family_id,
+                    "leakage_mode": leakage_mode,
+                    "representation_family": representation_family,
+                    "representation": representation,
+                    "target": target,
+                    "target_kind": target_kind,
+                    "horizon_kind": "CLOCK",
+                    "horizon": horizon,
+                    "status": "DIAGNOSTIC_ONLY",
+                    "train_n": int(train_diag.sum()),
+                    "dev_n": int(dev_diag.sum()),
+                    "train_score": train_metric,
+                    "dev_score": dev_metric,
+                    "p_value": None,
+                    "q_value": None,
+                    "fdr_group": (
+                        f"DESCRIPTIVE_ONLY|{leakage_mode}|{representation_family}|"
+                        f"{target_kind}|CLOCK"
+                    ),
+                    "model_params": model_params,
+                    "source_kind": source_kind,
+                })
     return rows
 
 
