@@ -1,0 +1,14 @@
+{
+  "id": "polyleviathan/r25-ets-discovery",
+  "title": "R2.5 ETS Universe Discovery",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": []
+}
