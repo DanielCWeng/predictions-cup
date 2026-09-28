@@ -1,5 +1,3 @@
-[Reading 2641 lines from start (total: 2641 lines, 0 remaining)]
-
 [
   {
     "class": "HARD",
@@ -2641,5 +2639,3 @@
     "source": "DATA-002 shared event_id"
   }
 ]
-
-[executed on device: ip-172-31-73-211.ec2.internal (c5706598-02ec-4925-9d6e-43e31c32d097)]
