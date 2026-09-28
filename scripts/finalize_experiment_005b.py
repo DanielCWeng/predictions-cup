@@ -166,6 +166,203 @@ def build_registry(
         )
     return rows
 
+def build_dev_validation_table(
+    freeze: dict[str, Any],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for target in sorted(freeze.get("shortlist", {})):
+        for rank, candidate in enumerate(
+            freeze["shortlist"].get(target, []),
+            start=1,
+        ):
+            rows.append(
+                {
+                    "target": target,
+                    "candidate_rank": rank,
+                    "feature": candidate.get("feature"),
+                    "feature_group": candidate.get("feature_group"),
+                    "selection_label": candidate.get("selection_label"),
+                    "promoted_candidate": candidate.get(
+                        "promoted_candidate"
+                    ),
+                    "stable_train_dev": candidate.get(
+                        "stable_train_dev"
+                    ),
+                    "train_spearman": candidate.get("spearman"),
+                    "dev_spearman": candidate.get("dev_spearman"),
+                    "dev_pearson": candidate.get("dev_pearson"),
+                    "train_directional_response": candidate.get(
+                        "train_directional_response_promotion"
+                    ),
+                    "dev_directional_response": candidate.get(
+                        "dev_directional_response_promotion"
+                    ),
+                    "effect_sign_persistence": candidate.get(
+                        "effect_sign_persistence"
+                    ),
+                    "train_family_sign_consistency": candidate.get(
+                        "family_sign_consistency"
+                    ),
+                    "dev_family_sign_consistency": candidate.get(
+                        "dev_family_sign_consistency"
+                    ),
+                    "dev_family_support_count": candidate.get(
+                        "dev_family_support_count"
+                    ),
+                    "dev_regime_sign_consistency": candidate.get(
+                        "dev_regime_sign_consistency"
+                    ),
+                    "dev_regime_support_count": candidate.get(
+                        "dev_regime_support_count"
+                    ),
+                    "max_market_share": candidate.get(
+                        "candidate_max_market_share_sample"
+                    ),
+                    "market_count": candidate.get(
+                        "candidate_market_count_sample"
+                    ),
+                    "time_block_count": candidate.get(
+                        "candidate_time_block_count_sample"
+                    ),
+                    "model_improvement_ok": candidate.get(
+                        "model_improvement_ok"
+                    ),
+                }
+            )
+    return rows
+
+
+def build_holdout_validation_table(
+    holdout: dict[str, Any],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for result in holdout.get("results", []):
+        target = result.get("target")
+        scalar_entries = result.get("scalar_candidates")
+        if scalar_entries is None:
+            primary = result.get("scalar_candidate")
+            scalar_entries = [primary] if primary else []
+        model = result.get("model") or {}
+        selected = model.get("dev_selected", {})
+        metrics = model.get("holdout_metrics", {})
+        bootstrap = model.get("hierarchical_market_bootstrap", {})
+        for rank, candidate in enumerate(scalar_entries, start=1):
+            scalar = candidate.get("holdout", {})
+            rows.append(
+                {
+                    "target": target,
+                    "candidate_rank": rank,
+                    "feature": candidate.get("feature"),
+                    "selection_label": candidate.get(
+                        "selection_label"
+                    ),
+                    "holdout_support": scalar.get("support"),
+                    "holdout_pearson": scalar.get("pearson"),
+                    "holdout_spearman": scalar.get("spearman"),
+                    "holdout_directional_response": scalar.get(
+                        "directional_response"
+                    ),
+                    "holdout_decile_response": scalar.get(
+                        "decile_response"
+                    ),
+                    "holdout_standardized_effect": scalar.get(
+                        "standardized_effect"
+                    ),
+                    "holdout_rows": result.get("holdout_rows"),
+                    "holdout_market_count": result.get(
+                        "holdout_market_count"
+                    ),
+                    "dev_selected_model": selected.get("name"),
+                    "model_mae_improvement": metrics.get(
+                        "mae_improvement_vs_persistence"
+                    ),
+                    "model_mse_improvement": metrics.get(
+                        "mse_improvement_vs_persistence"
+                    ),
+                    "model_predictive_ic": metrics.get(
+                        "predictive_ic"
+                    ),
+                    "model_accuracy": metrics.get("accuracy"),
+                    "model_brier": metrics.get(
+                        "multiclass_brier"
+                    ),
+                    "bootstrap_lower_2_5": bootstrap.get(
+                        "lower_2_5"
+                    ),
+                    "bootstrap_upper_97_5": bootstrap.get(
+                        "upper_97_5"
+                    ),
+                }
+            )
+    return rows
+
+
+def build_model_comparison_table(
+    holdout: dict[str, Any],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    metric_columns = (
+        "mae",
+        "mse",
+        "mae_improvement_vs_persistence",
+        "mse_improvement_vs_persistence",
+        "predictive_ic",
+        "directional_accuracy",
+        "accuracy",
+        "multiclass_brier",
+        "expected_calibration_error",
+    )
+    for result in holdout.get("results", []):
+        model = result.get("model")
+        if not model:
+            continue
+        selected = model.get("dev_selected", {})
+        selected_metrics = model.get("holdout_metrics", {})
+        selected_row = {
+            "target": result.get("target"),
+            "kind": "dev_selected_model",
+            "name": selected.get("name"),
+        }
+        selected_row.update(
+            {
+                metric: selected_metrics.get(metric)
+                for metric in metric_columns
+            }
+        )
+        rows.append(selected_row)
+        for name, metrics in sorted(
+            model.get("baseline_metrics", {}).items()
+        ):
+            row = {
+                "target": result.get("target"),
+                "kind": "baseline",
+                "name": name,
+            }
+            row.update(
+                {
+                    metric: metrics.get(metric)
+                    for metric in metric_columns
+                }
+            )
+            rows.append(row)
+    return rows
+
+
+def write_table(
+    path: Path,
+    rows: list[dict[str, Any]],
+    fieldnames: list[str],
+) -> None:
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=fieldnames,
+            extrasaction="ignore",
+        )
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def write_registry(path: Path, rows: list[dict[str, Any]]) -> None:
     fieldnames = [
         "target",
@@ -395,6 +592,84 @@ def main() -> None:
     registry = build_registry(freeze, holdout)
     registry_path = root / "candidate_registry.csv"
     write_registry(registry_path, registry)
+
+    dev_rows = build_dev_validation_table(freeze)
+    write_table(
+        root / "dev_validation_table.csv",
+        dev_rows,
+        [
+            "target",
+            "candidate_rank",
+            "feature",
+            "feature_group",
+            "selection_label",
+            "promoted_candidate",
+            "stable_train_dev",
+            "train_spearman",
+            "dev_spearman",
+            "dev_pearson",
+            "train_directional_response",
+            "dev_directional_response",
+            "effect_sign_persistence",
+            "train_family_sign_consistency",
+            "dev_family_sign_consistency",
+            "dev_family_support_count",
+            "dev_regime_sign_consistency",
+            "dev_regime_support_count",
+            "max_market_share",
+            "market_count",
+            "time_block_count",
+            "model_improvement_ok",
+        ],
+    )
+
+    holdout_rows = build_holdout_validation_table(holdout)
+    write_table(
+        root / "holdout_validation_table.csv",
+        holdout_rows,
+        [
+            "target",
+            "candidate_rank",
+            "feature",
+            "selection_label",
+            "holdout_support",
+            "holdout_pearson",
+            "holdout_spearman",
+            "holdout_directional_response",
+            "holdout_decile_response",
+            "holdout_standardized_effect",
+            "holdout_rows",
+            "holdout_market_count",
+            "dev_selected_model",
+            "model_mae_improvement",
+            "model_mse_improvement",
+            "model_predictive_ic",
+            "model_accuracy",
+            "model_brier",
+            "bootstrap_lower_2_5",
+            "bootstrap_upper_97_5",
+        ],
+    )
+
+    model_rows = build_model_comparison_table(holdout)
+    write_table(
+        root / "model_comparison_table.csv",
+        model_rows,
+        [
+            "target",
+            "kind",
+            "name",
+            "mae",
+            "mse",
+            "mae_improvement_vs_persistence",
+            "mse_improvement_vs_persistence",
+            "predictive_ic",
+            "directional_accuracy",
+            "accuracy",
+            "multiclass_brier",
+            "expected_calibration_error",
+        ],
+    )
 
     report_path = root / "FINAL_REPORT.md"
     report_path.write_text(
