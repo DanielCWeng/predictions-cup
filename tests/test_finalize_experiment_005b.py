@@ -41,6 +41,7 @@ def test_registry_preserves_targets_without_candidates() -> None:
                     "spearman": 0.1,
                     "dev_spearman": 0.05,
                     "stable_train_dev": True,
+                    "promoted_candidate": True,
                 }
             ],
             "target_b": [],
