@@ -264,7 +264,7 @@ class SigTradingClient:
                     status_code=response.status_code,
                     payload=payload,
                 )
-            except SigMalformedResponseError:
+            except SigMalformedResponseError as exc:
                 if execution_can_be_uncertain and response.status_code >= 500:
                     raise SigExecutionUncertainError(
                         status_code=response.status_code,
@@ -273,7 +273,7 @@ class SigTradingClient:
                             "SIG returned an incomplete execution envelope; authoritative "
                             "reconciliation is required"
                         ),
-                    )
+                    ) from exc
                 raise
 
             if (
