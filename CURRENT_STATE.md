@@ -2,19 +2,14 @@
 
 **Phase:** READ-ONLY LIVE-DATA + REPLAY/RESEARCH FOUNDATION.
 
-## Operating posture — 26 September 2026
+## Operating posture — 28 September 2026
 
-- Broad strategy/mathematical research is frozen by default unless it answers a failed test,
-  implementation ambiguity, live venue observation or specific architectural/research decision.
-- The immediate research priority is the shared evaluation machine: authoritative replay,
-  standardized experiment contracts, event-aware OOS validation, false-discovery control,
-  block bootstrap, parameter stability, ablation and execution stress.
-- Baseline alpha families may then compete under that same harness: cross-venue information,
-  event-relative/structural residuals, simple microstructure, participant-conditioned flow and a
-  SIG-2026-style low-rank/cross-market benchmark.
-- **Monday 28 September gate:** at least four research families should be runnable at baseline
-  level through the same trustworthy harness. There is no requirement that four survive. If the
-  harness/data path is not trustworthy, priority collapses back onto data -> replay -> experiment.
+- EXPERIMENT-004C is complete and frozen on `main`; no robust executable alpha was established across its four tested mechanisms.
+- The narrow positive result retained for future work is 004C-B's Colombia PRE soft competitive-family structure; it is not a general Cup edge.
+- Generic internal pairwise lead-lag, direct mapped PM→SIG transmission and the frozen D conditional-response mechanisms are not promoted from 004C.
+- These results are specification-level conclusions only; they do not reject the complete predictive information set, coherent FV broadly, external information broadly, or all state-dependent models.
+- PR #38 / EXPERIMENT-005A remains draft/open and unmerged; no 005A empirical discovery run was produced by the 004C close-out.
+- New 005 discovery lanes must use `docs/research/005_DISCOVERY_PRIOR_WORK_BOUNDARY.md` to avoid pre-freeze anchoring to detailed prior winners/magnitudes.
 - GitHub merge state and the actual contents of `main` outrank stale documentation or chat memory.
 
 This document describes the accepted repository state on `main`. For project intent/dependency
@@ -40,6 +35,11 @@ order, read `ORCHESTRATOR.md` first.
 - small operational Polymarket SQLite for markets/tokens/ingestion health;
 - canonical Parquet replay support including deterministic hashed-trade de-duplication;
 - Gamma rate-limit resilience and fail-soft periodic metadata refresh after valid startup.
+- BUILD-008 canonical research evaluation harness;
+- DATA-001 accepted historical replay corpus;
+- DATA-002 accepted auxiliary fee/refund/rebate evidence dataset;
+- EXPERIMENT-004C A/B/C/D empirical evidence, reports and frozen provenance;
+- canonical 004C programme handoff at `docs/experiments/EXPERIMENT_004C_FINAL_HANDOFF.md`.
 
 ## Live validation evidence
 
@@ -85,20 +85,16 @@ mapping evidence and must not be promoted into production configuration.
 
 ## Research / experiment state
 
-- EXPERIMENT-002 / PR #16 is merged/accepted as experiment machinery. It does **not** establish
-  empirical alpha by itself; accepted real data still needs to be run through it.
-- HIST-DATA-001 / PR #17 was closed unmerged. It must not be described as accepted repository
-  capability. Historical research remains a useful parallel workstream and should reuse accepted
-  data/replay contracts.
-- DATA-001 / PR #23 is the current historical replay-corpus candidate and is **not yet accepted**.
-  Independent review found one blocking source-routing decision around the 13-Apr-2026 PMXT V1/V2
-  overlap; the affected corpus evidence must be rebuilt/reproduced before acceptance.
-- DATA-002 (`data/002-polymarket-fees`) is a new, separate, **not yet accepted** candidate: frozen
-  fee/refund/rebate evidence for the same five families, joined to DATA-001 only by
-  `condition_id`/`token_id`/`tx_hash`/`participant_address`. It ships raw attribution evidence
-  (`fee_evidence`, `order_is_match_taker_order`, ambiguity flags) rather than a derived
-  maker/taker label, and does not mutate DATA-001. See
-  `docs/implementation/DATA_002_POLYMARKET_FEES.md`.
+- BUILD-008 / PR #24 is merged/accepted as the canonical evaluation harness.
+- DATA-001 / PR #23 is merged/accepted as the historical replay corpus used by the completed research programme.
+- DATA-002 / PR #36 is merged/accepted as the separate fee/refund/rebate evidence dataset; it provides raw attribution evidence rather than a derived maker/taker truth label.
+- EXPERIMENT-004C-A / PR #34: `INCONCLUSIVE / NO PROMOTED EDGE`.
+- EXPERIMENT-004C-B / PR #35: `SOFT_COMPETITIVE_EFFECT_ONLY`; one narrow Colombia PRE soft effect survives, while no hard/exhaustive-family alpha promotes.
+- EXPERIMENT-004C-C / PR #37: `INCONCLUSIVE / NO PROMOTED EDGE`.
+- EXPERIMENT-004C-D / PR #39: `NO_CONDITIONAL_EDGE`.
+- The canonical programme interpretation is `docs/experiments/EXPERIMENT_004C_FINAL_HANDOFF.md`.
+- PR #38 / EXPERIMENT-005A remains draft/open and unmerged. Its scaffold may consume the final 004C freeze later under its own owner and gates; this close-out produced no 005A empirical output.
+- HIST-DATA-001 / PR #17 remains closed unmerged and is not accepted capability.
 
 ## Not implemented on main
 
@@ -124,13 +120,9 @@ exists on `main`.
 
 ## Next implementation / acceptance target
 
-The primary gating target is:
+Operationally, LIVE-MAPPING-GATE-001 remains the production mapping/capture gate and no 004C result changes the prohibition on execution.
 
-> LIVE-MAPPING-GATE-001 — generate and independently accept the live 2026 SIG ↔ Polymarket
-> crosswalk, then use it to start the mapping-bounded paired capture lane.
-
-In parallel, historical/live accepted data should be pushed through EXPERIMENT-002 rather than
-adding new strategy machinery without evidence.
+Research-wise, the completed 004C freeze is the base for the separately owned EXPERIMENT-005 programme. PR #38 / 005A remains unmerged; any subsequent broad discovery lane must follow `docs/research/005_DISCOVERY_PRIOR_WORK_BOUNDARY.md` before detailed prior outcomes are inspected.
 
 ## Repository state discipline
 

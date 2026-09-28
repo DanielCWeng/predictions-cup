@@ -42,27 +42,22 @@ historical evidence, live paired capture and paper/shadow validation.
   behavior matters.
 - Strategy claims require actual data; synthetic fixtures prove mechanics, not edge.
 
-## Current strategic posture — 26 September 2026
+## Current strategic posture — 28 September 2026
 
-The read-only infrastructure foundation is substantially in place:
+The repository now contains the completed EXPERIMENT-004C programme on canonical `main`.
 
-- BUILD-001 through BUILD-007 are merged/accepted;
-- EXPERIMENT-001A and EXPERIMENT-002 are merged/accepted;
-- MAPPING-001 is an accepted framework, but the live 2026 crosswalk is still outstanding;
-- BUILD-006 live validation established the 237-exchange SIG tournament shape and a governed
-  tracked-depth runtime;
-- BUILD-007 live validation established systemd supervision plus a strict-universe,
-  ARM64-compatible Parquet research lane;
-- EXPERIMENT-002 makes lead/lag, response-curve, relative-value and LOO experiments executable, but
-  no live or historical result is yet accepted as evidence of edge.
+- 004C-A: `INCONCLUSIVE / NO PROMOTED EDGE`; generic pairwise internal lead-lag is demoted.
+- 004C-B: `SOFT_COMPETITIVE_EFFECT_ONLY`; one narrow Colombia PRE competitive-family effect survives, but no hard/exhaustive-family alpha promotes.
+- 004C-C: `INCONCLUSIVE / NO PROMOTED EDGE`; raw PM→SIG 30-second prediction fails mapping-specific falsification and executable crossing economics.
+- 004C-D: `NO_CONDITIONAL_EDGE`; frozen age-conditioned and genuine-renewal interactions do not achieve predictive-gain support in the adequately supported challenge cells.
 
-The initial empirical strategy lane stays deliberately simple:
+Programme-level conclusion: **no robust executable alpha was established by 004C**. This is a statement about the tested mechanisms, not the complete predictive information set. Broad common-event state, other structural relationships, other external information and other state-dependent models remain open research families.
 
-1. direct external-market lead/lag;
-2. response/half-life measurement;
-3. simple residual / relative-value relationships;
-4. LOO-PRICE / LOO-FAMILY structure where mappings support it;
-5. selective market making only after state, mapping and replay evidence justify it.
+The only positive 004C discovery worth carrying forward is the narrow 004C-B soft competitive-family structure, and it must not be treated as a general Cup edge without a separately frozen follow-up.
+
+PR #38 / EXPERIMENT-005A remains draft/open and unmerged. Its empirical gate remains outside this 004C close-out. Any broader 005 discovery lane should follow `docs/research/005_DISCOVERY_PRIOR_WORK_BOUNDARY.md`: methodology and prior-work families may be inspected pre-freeze, but detailed prior outcome magnitudes/winners should remain embargoed until the new lane freezes its own feature universe, targets, validation rules, model ladder and screening policy.
+
+The canonical 004C programme handoff is `docs/experiments/EXPERIMENT_004C_FINAL_HANDOFF.md`.
 
 ## Dependency graph
 
@@ -122,13 +117,17 @@ SSH independence and reboot recovery.
 
 ### 3. Replay + empirical experiments
 
-EXPERIMENT-002 is accepted machinery, not accepted alpha. Run the lead/lag, response, relative-value
-and LOO suites on accepted historical/live data and record negative results as seriously as positive
-ones.
+The 004C identification programme is complete and frozen. Its four batteries tested internal
+propagation, structural family redistribution, mapped cross-venue price discovery and conditional
+age/activity/renewal response. No robust executable alpha promoted.
 
-The Monday 28 September gate remains useful: if the initial hypotheses are not runnable through
-our own data/replay path, priority collapses back onto data -> replay -> experiment rather than
-adding strategy complexity.
+Do not convert those negative results into blanket rejection of price information, structural
+models, external information or state-dependent prediction. The next research programme should
+broaden the predictor census under the contamination-control convention in
+`docs/research/005_DISCOVERY_PRIOR_WORK_BOUNDARY.md`.
+
+EXPERIMENT-005A remains a separate draft scaffold on PR #38 and must consume the final canonical
+004C freeze under its own owner/gates before empirical execution.
 
 ### 4. Historical data lane
 
@@ -184,14 +183,11 @@ A passing CI run is necessary but not sufficient for venue/runtime-sensitive wor
 
 ## Immediate next actions
 
-1. Ensure the temporary three-market / six-token BUILD-007 smoke universe is not mistaken for
-   production configuration; Polymarket may remain disabled until mapping is accepted.
-2. Execute LIVE-MAPPING-GATE-001 / issue #13.
-3. Populate the supervised Polymarket universe from the accepted crosswalk.
-4. Run the mapping-bounded paired capture soak and remaining production SSH/reboot checks.
-5. Run EXPERIMENT-002 against accepted real data.
-6. Use the results to decide whether lead/lag, relative value, LOO structure or selective market
-   making deserves the next strategy build.
+1. Treat `docs/experiments/EXPERIMENT_004C_FINAL_HANDOFF.md` as the canonical programme-level 004C interpretation.
+2. Keep PR #38 / EXPERIMENT-005A unmerged until its owner consumes the final 004C freeze SHA and satisfies its own empirical gate.
+3. For any 005B–005F discovery work, apply `docs/research/005_DISCOVERY_PRIOR_WORK_BOUNDARY.md` before inspecting detailed historical outcome tables.
+4. Continue the independent operational mapping/capture gates; no 004C result changes the prohibition on live execution.
+5. Record future negative evidence at the narrow specification level rather than rejecting broad mathematical families by association.
 
 ## Open questions
 
