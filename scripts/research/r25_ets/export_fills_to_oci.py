@@ -212,7 +212,12 @@ def main() -> None:
     if len(by_condition) != freeze.get("unique_cid_count") or len(by_token) != freeze.get("unique_token_count"):
         raise ValueError("frozen CID/token counts do not match the acquisition inventory")
     freeze_sha = sha256_file(args.freeze)
-    output_prefix = f"{PREFIX}freeze={freeze_sha[:16]}/fills/"
+    export_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    repository_commit = subprocess.check_output(
+        ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"], text=True,
+    ).strip()
+    acquisition_script_sha = sha256_file(Path(__file__).resolve())
+    output_prefix = f"{PREFIX}freeze={freeze_sha[:16]}/export={export_id}/fills/"
     trade_objects = source_objects(client, namespace, args.bucket, "trades/")
     custody_objects = source_objects(client, namespace, args.bucket, "custody/")
     creation_times = [parse_date(row.get("created_at")) for row in by_token.values()]
@@ -512,12 +517,11 @@ def main() -> None:
     manifest = {
         "schema_version": 1,
         "dataset_id": "POLYLEVIATHAN_R25_ETS_FILLS",
+        "export_id": export_id,
         "ets_universe_freeze_sha256": freeze_sha,
         "canonical_sig_mapping_sha256": freeze.get("canonical_sig_mapping_sha256"),
-        "repository_commit": subprocess.check_output(
-            ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"], text=True,
-        ).strip(),
-        "acquisition_script_sha256": sha256_file(Path(__file__).resolve()),
+        "repository_commit": repository_commit,
+        "acquisition_script_sha256": acquisition_script_sha,
         "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "bucket": args.bucket,
         "object_prefix": output_prefix,
