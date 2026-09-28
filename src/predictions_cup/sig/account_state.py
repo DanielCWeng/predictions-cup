@@ -54,7 +54,12 @@ class AccountRealtimeStateEngine:
         self.transition = transition
         self.last_accepted_revision = None
 
-    def apply_authoritative(self, snapshot: AccountAuthoritativeSnapshot) -> None:
+    def apply_authoritative(
+        self,
+        snapshot: AccountAuthoritativeSnapshot,
+        *,
+        mark_trusted: bool = True,
+    ) -> None:
         if snapshot.tournament_id != self.tournament_id:
             raise ValueError("authoritative snapshot tournament mismatch")
         self._positions = {
@@ -76,6 +81,12 @@ class AccountRealtimeStateEngine:
             )
             for order in snapshot.open_orders
         }
+        self.trusted = False
+        self.last_accepted_revision = None
+        if mark_trusted:
+            self.mark_trusted_after_reconciliation()
+
+    def mark_trusted_after_reconciliation(self) -> None:
         self.trusted = True
         self.transition = AccountTrustTransition.TRUSTED_AFTER_RECONCILIATION
         self.last_accepted_revision = None
