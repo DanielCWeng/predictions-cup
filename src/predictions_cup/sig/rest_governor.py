@@ -208,12 +208,15 @@ class SigRestGovernor:
         cooldown_delay = max(0.0, self._cooldown_until - now)
         return max(token_delay, cooldown_delay)
 
+    async def _sleep_once(self, delay: float) -> None:
+        await self._sleep(delay)
+
     async def _wait_interruptibly(self, delay: float) -> None:
         if delay <= 0:
             return
         self._queue_event.clear()
-        sleeper = asyncio.create_task(self._sleep(delay))
-        wake = asyncio.create_task(self._queue_event.wait())
+        sleeper: asyncio.Task[None] = asyncio.create_task(self._sleep_once(delay))
+        wake: asyncio.Task[bool] = asyncio.create_task(self._queue_event.wait())
         done, _ = await asyncio.wait(
             {sleeper, wake},
             return_when=asyncio.FIRST_COMPLETED,
