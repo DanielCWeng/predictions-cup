@@ -16,6 +16,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 from collections import defaultdict
@@ -26,8 +27,9 @@ from typing import Any
 
 SONAR_ROOT = Path("/home/ubuntu/polymarketwhale/Sonar")
 POLY_ROOT = Path("/home/ubuntu/polymarketwhale")
-DEFAULT_INVENTORY = Path(__file__).resolve().parents[3] / "data/research/ets_universe/ETS_TOKEN_INVENTORY.csv"
-DEFAULT_FREEZE = Path(__file__).resolve().parents[3] / "data/research/ets_universe/ETS_UNIVERSE_FREEZE.json"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_INVENTORY = REPO_ROOT / "data/research/ets_universe/ETS_TOKEN_INVENTORY.csv"
+DEFAULT_FREEZE = REPO_ROOT / "data/research/ets_universe/ETS_UNIVERSE_FREEZE.json"
 DEFAULT_LANE = Path("/home/ubuntu/campaigns/r25ets_20260928")
 PREFIX = "research/r25_ets/"
 BUCKET = "polymarket-bot-state"
@@ -506,6 +508,10 @@ def main() -> None:
         "dataset_id": "POLYLEVIATHAN_R25_ETS_FILLS",
         "ets_universe_freeze_sha256": freeze_sha,
         "canonical_sig_mapping_sha256": freeze.get("canonical_sig_mapping_sha256"),
+        "repository_commit": subprocess.check_output(
+            ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"], text=True,
+        ).strip(),
+        "acquisition_script_sha256": sha256_file(Path(__file__).resolve()),
         "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "bucket": args.bucket,
         "object_prefix": output_prefix,

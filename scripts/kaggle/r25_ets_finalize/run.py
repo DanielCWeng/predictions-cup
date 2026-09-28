@@ -256,6 +256,8 @@ def main() -> None:
         "dataset_id": "polyleviathan/sig-cup-r25-ets-historical-data",
         "dataset_type": "private_kaggle_kernel_output",
         "kernel_id": kernel_metadata["id"],
+        "repository_commit": (Path(__file__).resolve().parent / "REPOSITORY_COMMIT.txt").read_text(encoding="utf-8").strip(),
+        "finalizer_script_sha256": sha256(Path(__file__).resolve()),
         "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "canonical_sig_mapping_sha256": freeze["canonical_sig_mapping_sha256"],
         "ets_universe_freeze_sha256": sha256(freeze_path),
@@ -289,6 +291,7 @@ def main() -> None:
         ],
         "shards": [
             {"kernel_id": row["kernel_id"], "shard": row["shard"], "archive_source_bounds": row.get("archive_source_bounds"),
+             "repository_commit": row.get("repository_commit"), "acquisition_script_sha256": row.get("acquisition_script_sha256"),
              "pipeline_wheel_commit": row.get("pipeline_wheel_commit"), "file_count": row.get("file_count"), "bytes": row.get("bytes")}
             for row in shards
         ],

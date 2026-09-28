@@ -363,6 +363,8 @@ def main() -> None:
         "schema_version": 1,
         "dataset_id": "POLYLEVIATHAN_R25_ETS_ORDERBOOKS",
         "kernel_id": json.loads((Path(__file__).resolve().parent / "kernel-metadata.json").read_text())["id"],
+        "repository_commit": (Path(__file__).resolve().parent / "REPOSITORY_COMMIT.txt").read_text(encoding="utf-8").strip(),
+        "acquisition_script_sha256": sha256(Path(__file__).resolve()),
         "shard": shard,
         "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "universe_freeze_sha256": sha256(freeze_path),

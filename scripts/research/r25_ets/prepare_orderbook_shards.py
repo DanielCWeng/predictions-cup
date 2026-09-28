@@ -8,6 +8,7 @@ import csv
 import hashlib
 import json
 import shutil
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -72,6 +73,9 @@ def main() -> None:
         raise RuntimeError(f"cannot make five nonempty time shards from {total_hours} hours")
 
     shared_run = ROOT / "scripts/kaggle/r25_ets_orderbooks/run.py"
+    repository_commit = subprocess.check_output(
+        ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True,
+    ).strip()
     jobs_root = ROOT / "kaggle/jobs"
     for index in range(5):
         shard_start = start + timedelta(hours=(index * total_hours) // 5)
@@ -83,6 +87,7 @@ def main() -> None:
         shutil.copyfile(shared_run, kernel_dir / "run.py")
         shutil.copyfile(freeze_path, kernel_dir / "ETS_UNIVERSE_FREEZE.json")
         shutil.copyfile(inventory_path, kernel_dir / "ETS_TOKEN_INVENTORY.csv")
+        (kernel_dir / "REPOSITORY_COMMIT.txt").write_text(repository_commit + "\n", encoding="utf-8")
         shard = {
             "shard_id": shard_id,
             "partition_method": "five contiguous, equal-hour UTC time intervals",
@@ -123,6 +128,7 @@ def main() -> None:
     shutil.copyfile(ROOT / "scripts/kaggle/r25_ets_finalize/run.py", finalizer_dir / "run.py")
     shutil.copyfile(freeze_path, finalizer_dir / "ETS_UNIVERSE_FREEZE.json")
     shutil.copyfile(inventory_path, finalizer_dir / "ETS_TOKEN_INVENTORY.csv")
+    (finalizer_dir / "REPOSITORY_COMMIT.txt").write_text(repository_commit + "\n", encoding="utf-8")
     finalizer_metadata = {
         "id": "polyleviathan/r25-ets-finalize",
         "title": "R2.5 ETS immutable historical data output",

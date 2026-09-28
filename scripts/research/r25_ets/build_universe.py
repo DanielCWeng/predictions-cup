@@ -12,6 +12,7 @@ import argparse
 import csv
 import hashlib
 import json
+import subprocess
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -41,6 +42,12 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def repository_head() -> str:
+    return subprocess.check_output(
+        ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True,
+    ).strip()
 
 
 def json_text(value: Any) -> str:
@@ -410,6 +417,7 @@ def command_finalize(args: argparse.Namespace) -> None:
     freeze = {
         "schema_version": 1,
         "base_main_sha": args.base_sha,
+        "repository_commit_at_freeze": repository_head(),
         "canonical_sig_mapping_sha256": sha256(args.mapping),
         "mapping_acceptance_sha256": sha256(args.acceptance),
         "discovery_code_sha256": args.discovery_code_sha,
