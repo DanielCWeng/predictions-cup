@@ -1,0 +1,134 @@
+{
+  "dataset_id": "sig-cup-data-002-polymarket-fees",
+  "schema_version": 1,
+  "generated_at": "2026-09-27T23:50:49Z",
+  "source_commit": null,
+  "pipeline_commit": null,
+  "families": [
+    "US_2024",
+    "CAN_2025",
+    "COL_2026",
+    "HUN_2026",
+    "PER_2026"
+  ],
+  "time_coverage": {
+    "US_2024": {
+      "first": "2023-01-14",
+      "last": "2024-12-18"
+    },
+    "CAN_2025": {
+      "first": "2024-12-30",
+      "last": "2025-08-21"
+    },
+    "COL_2026": {
+      "first": "2025-07-29",
+      "last": "2026-07-15"
+    },
+    "HUN_2026": {
+      "first": "2025-07-25",
+      "last": "2026-05-09"
+    },
+    "PER_2026": {
+      "first": "2025-12-16",
+      "last": "2026-07-30"
+    }
+  },
+  "fee_regime_dates": {
+    "fees_introduced_utc": "2026-01-05",
+    "v2_migration_utc": "2026-04-28",
+    "sports_fee_rate_change_utc": "2026-07-10"
+  },
+  "files": [
+    {
+      "path": "schema_version=1/matched_fills/fees_CAN_2025.parquet",
+      "bytes": 38336632,
+      "rows": 854625,
+      "sha256": "7c577e1a9e8e337912b80e9d6e4f0643946bc56879f07abc124bff4bab323f74",
+      "kind": "matched_fills"
+    },
+    {
+      "path": "schema_version=1/matched_fills/fees_COL_2026.parquet",
+      "bytes": 31722950,
+      "rows": 693573,
+      "sha256": "89d18d7c60adbbf611f02d6d0a0ecd86adc57f8b1180285ae84cc128d1194e2d",
+      "kind": "matched_fills"
+    },
+    {
+      "path": "schema_version=1/matched_fills/fees_HUN_2026.parquet",
+      "bytes": 33071799,
+      "rows": 840134,
+      "sha256": "f1296cd030edfa3b5da40e823b441fd171128b368421d6c0b251aac241e7a130",
+      "kind": "matched_fills"
+    },
+    {
+      "path": "schema_version=1/matched_fills/fees_PER_2026.parquet",
+      "bytes": 51718181,
+      "rows": 1212643,
+      "sha256": "805f6514297dffefbe37781146b8f7308f6c373a0c9fcf0f7c10a133dd7e4a18",
+      "kind": "matched_fills"
+    },
+    {
+      "path": "schema_version=1/matched_fills/fees_US_2024.parquet",
+      "bytes": 582521281,
+      "rows": 14716540,
+      "sha256": "0852467c33f93dbdbc03034dfe9a09d17efabd888a8d0352b4e78bf54fd0e3b0",
+      "kind": "matched_fills"
+    },
+    {
+      "path": "schema_version=1/unmatched/unattributed_fee_legs.parquet",
+      "bytes": 59436,
+      "rows": 594,
+      "sha256": "3963210d51452a12d402e06c52a4997cb55c4b4b2416171e26ff2aec05cbb0fc",
+      "kind": "unmatched"
+    },
+    {
+      "path": "schema_version=1/rebates/maker_rebate_payouts_scoped_wallets.parquet",
+      "bytes": 1225937,
+      "rows": 97124,
+      "sha256": "30e59d150f1b65d1bf9203c578e2d03a96a10280f03f35ee33bc23047504c462",
+      "kind": "rebates"
+    },
+    {
+      "path": "schema_version=1/regimes/polymarket_fee_regimes.csv",
+      "bytes": 1535,
+      "rows": 7,
+      "sha256": "8ded772f413585914e18a4e34e778f7da7fe55b2647f3799a6e5312abc6a1d5b",
+      "kind": "regimes"
+    },
+    {
+      "path": "schema_version=1/regimes/polymarket_fee_regimes.parquet",
+      "bytes": 5509,
+      "rows": 7,
+      "sha256": "6e217a123cdd303a7b4ab68bb2b0bc8affdb5df3c3572672db1ac7549e339d3e",
+      "kind": "regimes"
+    },
+    {
+      "path": "schema_version=1/docs/DATA_DICTIONARY.md",
+      "bytes": 3168,
+      "rows": null,
+      "sha256": "33d5ad91d33549c6ae4d10774ece7387596ea90c8621945924d4a13f3fa4ee3d",
+      "kind": "docs"
+    },
+    {
+      "path": "schema_version=1/docs/POLYMARKET_FEE_DATA_NOTES.md",
+      "bytes": 4221,
+      "rows": null,
+      "sha256": "9cfaba7b39b0f379ce91b6f01041fe891ffd6067017312dd5b2b008c1bd76dc8",
+      "kind": "docs"
+    },
+    {
+      "path": "schema_version=1/docs/STATS.json",
+      "bytes": 1837,
+      "rows": null,
+      "sha256": "05084b90166419256aeb09d1c47b4ad4f99849e4546c0bb6dfb3db79be81dbd4",
+      "kind": "docs"
+    },
+    {
+      "path": "schema_version=1/docs/STATS.md",
+      "bytes": 1695,
+      "rows": null,
+      "sha256": "c72f89b1889b19e9c81d29ea6d2040f2a3c658dbcad4c8093624f2f500a61cc0",
+      "kind": "docs"
+    }
+  ]
+}

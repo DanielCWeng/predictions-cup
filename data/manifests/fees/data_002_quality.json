@@ -1,0 +1,37 @@
+{
+  "fee_transfer_records": 265661,
+  "matched_fee_transfers": 265067,
+  "unattributed_fee_transfers": 594,
+  "reconciliation_check": {
+    "matched_plus_unattributed": 265661,
+    "total": 265661,
+    "status": "PASS"
+  },
+  "family_fee_totals_usd_equiv": {
+    "US_2024": {
+      "fee_charged_usd_equiv": 0.0,
+      "fee_refunded_usd_equiv": 0.0
+    },
+    "CAN_2025": {
+      "fee_charged_usd_equiv": 0.0,
+      "fee_refunded_usd_equiv": 0.0
+    },
+    "COL_2026": {
+      "fee_charged_usd_equiv": 93832.99671546486,
+      "fee_refunded_usd_equiv": 3029.71200831259
+    },
+    "HUN_2026": {
+      "fee_charged_usd_equiv": 14671.876345959043,
+      "fee_refunded_usd_equiv": 12083.213771129556
+    },
+    "PER_2026": {
+      "fee_charged_usd_equiv": 198527.41265,
+      "fee_refunded_usd_equiv": 0.0
+    }
+  },
+  "rebates_scoped_wallets": {
+    "payouts": 415325,
+    "usd": 101350535.32,
+    "note": "rebate_payouts_all/rebate_usd_all in STATS.json are ALL distributor payouts pre-wallet-scoping; the shipped rebates/maker_rebate_payouts_scoped_wallets.parquet is filtered to wallets appearing in these fills (97,124 rows / $2,230,607.84 per STATS.md) - see docs/STATS.md for the scoped figure."
+  }
+}

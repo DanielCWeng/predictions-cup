@@ -1,0 +1,8 @@
+regime_id,effective_from_utc,effective_to_utc,scope,taker_fee,maker_rebate,carrier,fee_contract,evidence
+R0,2022-11-21,2026-01-04,all markets,0 (no fees),none,V1 exchanges; OrderFilled.fee = 0,-,no fee legs in custody for scoped monthly probe days; feeroles_20260925 first non-zero fee blk 81308967 2026-01-06
+R1,2026-01-05,2026-02-11,15-min crypto only,"0.25*[p(1-p)]^2 (early crypto; first charges fully refunded)",none,V1: gross fee charged via FeeModule then refunded (FeeRefunded / module->wallet leg),0xe3f18acc... (CTF) / 0xb768891e... (NegRisk),FEE_ERAS.md; reference_fees
+R2,2026-02-12,2026-03-05,+5-min crypto; 02-18 selected NCAAB / Serie A,per-market Gamma feeSchedule,none,V1 gross+refund,as R1,FEE_ERAS.md
+R3,2026-03-06,2026-03-29,all crypto horizons,per-market Gamma feeSchedule,none,V1 gross+refund,as R1,FEE_ERAS.md
+R4,2026-03-30,2026-04-27,broad rollout; Geopolitics/World exempt (blk 84862295 std / 84877268 NegRisk),per-market Gamma feeSchedule,25% of fees via daily distributor (from 2026-04-29),V1 gross+refund,as R1,FEE_ERAS.md
+R5,2026-04-28,2026-07-09,CLOB V2 migration (carrier change not fee change),per-market Gamma feeSchedule; taker-only,25% (direct payouts 2026-04-29..2026-06-25 observed),V2: realised fee = exchange->receiver collateral transfer 2 logs after the taker-order OrderFilled,0x115f48dc... (V2 fee receiver),receipt v2_ctf_86142516 (fee on taker order log 530; maker 528 fee 0)
+R6,2026-07-10,-,Sports 0.03 -> 0.05,per-market Gamma feeSchedule,15%,V2,0x115f48dc...,FEE_ERAS.md; reference_fees

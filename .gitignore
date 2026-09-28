@@ -34,6 +34,7 @@ coverage.xml
 !/data/manifests/
 /data/manifests/*
 !/data/manifests/historical/
+!/data/manifests/fees/
 
 # DATA-001 historical corpus / extracts live outside Git (local disk or Kaggle)
 historical_replay_corpus/

@@ -162,3 +162,29 @@ parallel replay format:
   `data/manifests/historical/`.
 
 See `docs/implementation/DATA_001_HISTORICAL_REPLAY_CORPUS.md`.
+
+## Fee / maker-taker evidence — DATA-002 (PROPOSED, under review; not accepted)
+
+DATA-002 is a separate, immutable auxiliary dataset of fee/refund/rebate evidence for the same five
+election families, joined to DATA-001 (and its own fills) only by
+`condition_id` / `token_id` / `tx_hash` / `participant_address` (= DATA-001 `maker_address`) — it
+does not modify DATA-001 or define a competing fills schema:
+
+- **fill-complete, not merely fee-transfer-complete:** every scoped fill has a row, including
+  fills with zero matched fee (`fee_evidence` explains why); row counts were checked against the
+  source `fills_total` and match exactly for all five families;
+- `fee_evidence` distinguishes `custody_not_scanned_pre_fee_era` (absence of evidence — never
+  translate to `maker`) from `no_fee_leg_observed` (scanned, genuinely zero fee) — these must not
+  be conflated across the 2026-01-05 fee-introduction and 2026-04-28 V1→V2 boundaries;
+- raw attribution evidence ships as columns (`order_is_match_taker_order`, `maker_address` /
+  `taker_address`, `participant_address` / `counterparty_address`, individual charge/refund
+  amounts, `fee_sent_by_exchange`, `fee_leg_refs`, `attribution_rules`, every ambiguity flag,
+  `custody_scan`) rather than a derived `is_taker=true/false` label, so an experiment preregisters
+  its own classification rule against the evidence;
+- maker rebates are a separate wallet-day evidence file (`rebates/`), never used to manufacture a
+  fill-level maker attribution;
+- the corpus lives outside Git, on Kaggle (`polyleviathan/sig-cup-data-002-polymarket-fees`,
+  private); its manifest, hashes and quality/reconciliation evidence live under
+  `data/manifests/fees/`.
+
+See `docs/implementation/DATA_002_POLYMARKET_FEES.md`.
