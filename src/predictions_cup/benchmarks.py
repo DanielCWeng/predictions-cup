@@ -441,9 +441,18 @@ def benchmark_report(
     }
     notes = (
         "Aggregate throughput uses one timer around N calls.",
-        "Percentiles use timed batches of up to 100 calls with empty-loop harness overhead measured separately.",
-        "Allocation profiling, when enabled, is a separate tracemalloc pass and is not mixed into speed timing.",
-        "SIG's documented 250 ms Realtime coalescing is upstream feed behaviour, not internal processing latency.",
+        (
+            "Percentiles use timed batches of up to 100 calls with empty-loop "
+            "harness overhead measured separately."
+        ),
+        (
+            "Allocation profiling, when enabled, is a separate tracemalloc pass "
+            "and is not mixed into speed timing."
+        ),
+        (
+            "SIG's documented 250 ms Realtime coalescing is upstream feed behaviour, "
+            "not internal processing latency."
+        ),
     )
     return BenchmarkReport(
         metadata=metadata,
