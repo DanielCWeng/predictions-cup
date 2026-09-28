@@ -221,9 +221,6 @@ def main() -> None:
     # older empty dates that cannot contribute source history to any frozen token.
     source_first_hour = PMXT_V1_FIRST_HOUR
     start = max(start, source_first_hour)
-    creation = [parse_time(row.get("created_at")) for row in rows]
-    if creation and all(value is not None for value in creation):
-        start = max(start, min(value for value in creation if value).replace(minute=0, second=0, microsecond=0))
     if end <= start:
         raise RuntimeError(f"empty shard after intersecting expected creation and source horizon: {shard}")
 

@@ -50,14 +50,18 @@ def main() -> None:
         raise RuntimeError("token inventory does not match the frozen universe")
     with inventory_path.open(encoding="utf-8-sig", newline="") as handle:
         rows = list(csv.DictReader(handle))
-    created = [parse_time(row.get("created_at")) for row in rows]
-    if created and all(value is not None for value in created):
-        first_needed = min(value for value in created if value).replace(minute=0, second=0, microsecond=0)
+    lifecycle = []
+    for row in rows:
+        dates = [parse_time(row.get("created_at")), parse_time(row.get("start_date"))]
+        valid = [value for value in dates if value is not None]
+        lifecycle.append(min(valid) if valid else None)
+    if lifecycle and all(value is not None for value in lifecycle):
+        first_needed = min(value for value in lifecycle if value).replace(minute=0, second=0, microsecond=0)
         start = max(SOURCE_FIRST, first_needed)
-        start_basis = "earliest frozen Gamma created_at, clamped to first verified PMXT archive hour"
+        start_basis = "earliest per-market Gamma creation/start date, clamped to first verified PMXT archive hour"
     else:
         start = SOURCE_FIRST
-        start_basis = "first verified PMXT archive hour; at least one Gamma created_at is missing"
+        start_basis = "first verified PMXT archive hour; at least one market lacks both a creation and start date"
     if args.as_of:
         end = parse_time(args.as_of)
         if end is None:
