@@ -1,0 +1,139 @@
+{
+  "data_002_manifest_sha256": "2d496514c9307a31d8864ac9deeb2ef2ad781fb6fabe894714cbdf00c7244f7a",
+  "experiment_id": "EXPERIMENT-005E",
+  "families": [
+    {
+      "accepted_groups": 6821998,
+      "dev_end": 1730589442,
+      "distinct_eligible_participants": 306864,
+      "economic_trade_rows": 7890463,
+      "eligible_participant_rows": 14712461,
+      "failure_counts": {
+        "active_count_not_one": 0,
+        "no_passive": 0,
+        "non_binary": 0
+      },
+      "family": "US_2024",
+      "fingerprint": "fingerprint_US_2024.parquet",
+      "fingerprint_rows": 56570,
+      "fingerprint_sha256": "b81ee7c762963df2c076a7a9c667946de2614e3d7fef9ddf1c5c2fae128f66a2",
+      "infrastructure_rows_excluded": 0,
+      "panel": "panel_US_2024.parquet",
+      "panel_sha256": "14771ef1255773abbdf3319df5f3670d3beab2e454bbeee5de4bbb24de6a3b04",
+      "rejected_groups": 1116,
+      "sample_rows": 628746,
+      "source_rows": 14716540,
+      "train_end": 1730271274,
+      "transaction_condition_groups": 6823114
+    },
+    {
+      "accepted_groups": 340791,
+      "dev_end": 1745888144,
+      "distinct_eligible_participants": 73192,
+      "economic_trade_rows": 512901,
+      "eligible_participant_rows": 853692,
+      "failure_counts": {
+        "active_count_not_one": 0,
+        "no_passive": 0,
+        "non_binary": 0
+      },
+      "family": "CAN_2025",
+      "fingerprint": "fingerprint_CAN_2025.parquet",
+      "fingerprint_rows": 1308,
+      "fingerprint_sha256": "5d4680823d814ca3c265781803c27a024545c5312062e3e755dea0e383fbcd87",
+      "infrastructure_rows_excluded": 0,
+      "panel": "panel_CAN_2025.parquet",
+      "panel_sha256": "eba9d146ab93af31b58a16204048b1290210af3287161009d7da9c3df32ea313",
+      "rejected_groups": 184,
+      "sample_rows": 628757,
+      "source_rows": 854625,
+      "train_end": 1745734743,
+      "transaction_condition_groups": 340975
+    },
+    {
+      "accepted_groups": 279775,
+      "dev_end": 1780246878,
+      "distinct_eligible_participants": 35722,
+      "economic_trade_rows": 412863,
+      "eligible_participant_rows": 692638,
+      "failure_counts": {
+        "active_count_not_one": 0,
+        "no_passive": 0,
+        "non_binary": 0
+      },
+      "family": "COL_2026",
+      "fingerprint": "fingerprint_COL_2026.parquet",
+      "fingerprint_rows": 1351,
+      "fingerprint_sha256": "f1bd909a8f416c3a282f56e4aa5549296e2d94e822c0354f51cb4762f7f71632",
+      "infrastructure_rows_excluded": 0,
+      "panel": "panel_COL_2026.parquet",
+      "panel_sha256": "640e5baf870fd682c7275893b8e45453e3f3ba7aa49fe381bec34a972658907b",
+      "rejected_groups": 177,
+      "sample_rows": 588731,
+      "source_rows": 693573,
+      "train_end": 1779339068,
+      "transaction_condition_groups": 279952
+    },
+    {
+      "accepted_groups": 333329,
+      "dev_end": 1776014405,
+      "distinct_eligible_participants": 53926,
+      "economic_trade_rows": 505395,
+      "eligible_participant_rows": 838724,
+      "failure_counts": {
+        "active_count_not_one": 0,
+        "no_passive": 0,
+        "non_binary": 0
+      },
+      "family": "HUN_2026",
+      "fingerprint": "fingerprint_HUN_2026.parquet",
+      "fingerprint_rows": 1813,
+      "fingerprint_sha256": "bfea4df0453b1429a99900534c3c0d327645d48a99c52b4f1c5f0a47588a497f",
+      "infrastructure_rows_excluded": 0,
+      "panel": "panel_HUN_2026.parquet",
+      "panel_sha256": "251769184d63168f8e26c604d866c24a634f685592405530734f5351006c163b",
+      "rejected_groups": 259,
+      "sample_rows": 629212,
+      "source_rows": 840134,
+      "train_end": 1775904843,
+      "transaction_condition_groups": 333588
+    },
+    {
+      "accepted_groups": 460795,
+      "dev_end": 1780939794,
+      "distinct_eligible_participants": 54559,
+      "economic_trade_rows": 750233,
+      "eligible_participant_rows": 1211028,
+      "failure_counts": {
+        "active_count_not_one": 0,
+        "no_passive": 0,
+        "non_binary": 0
+      },
+      "family": "PER_2026",
+      "fingerprint": "fingerprint_PER_2026.parquet",
+      "fingerprint_rows": 2122,
+      "fingerprint_sha256": "f760bcf07ab632493bcd370429e5774510c7a06f3f73b0a7096c25c35b317e4b",
+      "infrastructure_rows_excluded": 0,
+      "panel": "panel_PER_2026.parquet",
+      "panel_sha256": "9e47c0392ca6ba0254ecba039d6a15ed5b14077c82876ff2acd58b1a21c68cda",
+      "rejected_groups": 281,
+      "sample_rows": 629051,
+      "source_rows": 1212643,
+      "train_end": 1777190258,
+      "transaction_condition_groups": 461076
+    }
+  ],
+  "phase": "TRAIN_DEV",
+  "schema_version": 1,
+  "totals": {
+    "accepted_groups": 8236688,
+    "economic_trade_rows": 10071855,
+    "eligible_participant_rows": 18308543,
+    "fingerprint_rows": 63164,
+    "infrastructure_rows_excluded": 0,
+    "rejected_groups": 2017,
+    "sample_rows": 3104497,
+    "source_rows": 18317515,
+    "transaction_condition_groups": 8238705
+  }
+}

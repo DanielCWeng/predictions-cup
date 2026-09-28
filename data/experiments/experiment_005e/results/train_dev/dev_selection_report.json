@@ -1,0 +1,526 @@
+{
+  "feature_family_tests": {
+    "directional_behaviour": {
+      "alpha": 100.0,
+      "dev_mse": 0.1607177617300825,
+      "family_gains": {
+        "CAN_2025": -0.00032598154595268186,
+        "COL_2026": 0.00023938190595074182,
+        "HUN_2026": -0.0002453727490330099,
+        "PER_2026": 0.0008654473786144368,
+        "US_2024": -0.00019185409499505868
+      },
+      "features": [
+        "prior_pressure_balance",
+        "prior_pressure_abs",
+        "current_prior_direction_alignment"
+      ],
+      "overall_gain": 6.832417891691756e-05,
+      "positive_families": 2
+    },
+    "historical_markout": {
+      "alpha": 0.1,
+      "dev_mse": 0.16075742885990138,
+      "family_gains": {
+        "CAN_2025": 5.1227735561890086e-05,
+        "COL_2026": -6.532082772184311e-05,
+        "HUN_2026": -4.197791558512021e-05,
+        "PER_2026": 0.00033697013146999355,
+        "US_2024": -0.00013761387823489624
+      },
+      "features": [
+        "hist_markout_score",
+        "log_hist_markout_count",
+        "hist_markout_uncertainty"
+      ],
+      "overall_gain": 2.865704909804645e-05,
+      "positive_families": 2
+    },
+    "network_cross_market": {
+      "alpha": 100.0,
+      "dev_mse": 0.16033529046313244,
+      "family_gains": {
+        "CAN_2025": 0.0008915088917743827,
+        "COL_2026": 0.0008746995611262909,
+        "HUN_2026": -0.0003205291077323785,
+        "PER_2026": 0.002346083267945387,
+        "US_2024": -0.0015377853837788835
+      },
+      "features": [
+        "log_market_participant_degree",
+        "log_unique_markets_prior",
+        "log_unique_events_prior",
+        "current_market_novelty"
+      ],
+      "overall_gain": 0.00045079544586698606,
+      "positive_families": 3
+    },
+    "recurrence": {
+      "alpha": 0.1,
+      "dev_mse": 0.16078432844271323,
+      "family_gains": {
+        "CAN_2025": 0.00022086066480264677,
+        "COL_2026": 0.00031944680956913496,
+        "HUN_2026": -2.697807202182989e-05,
+        "PER_2026": -0.00017526460750844075,
+        "US_2024": -0.00032927746341063213
+      },
+      "features": [
+        "log_prior_fill_count",
+        "log_prior_active_days",
+        "log_recency_seconds",
+        "log_lifetime_seconds",
+        "log_recent_fill_count_300s",
+        "log_recent_fill_count_1800s"
+      ],
+      "overall_gain": 1.7574662861952195e-06,
+      "positive_families": 2
+    },
+    "size_behaviour": {
+      "alpha": 100.0,
+      "dev_mse": 0.16099841705830506,
+      "family_gains": {
+        "CAN_2025": 0.0001793104488657729,
+        "COL_2026": -0.00026691328569930506,
+        "HUN_2026": -6.341445357545272e-05,
+        "PER_2026": -0.0009014509572911611,
+        "US_2024": -9.187498828305829e-06
+      },
+      "features": [
+        "prior_mean_log_value",
+        "prior_std_log_value",
+        "current_size_z",
+        "market_size_percentile_proxy"
+      ],
+      "overall_gain": -0.00021233114930563346,
+      "positive_families": 1
+    },
+    "specialisation": {
+      "alpha": 0.1,
+      "dev_mse": 0.16031194479166766,
+      "family_gains": {
+        "CAN_2025": 0.001217117481801984,
+        "COL_2026": 0.001044358920655547,
+        "HUN_2026": -0.0004047489993449227,
+        "PER_2026": 0.0015902782397604898,
+        "US_2024": -0.001076300056214452
+      },
+      "features": [
+        "log_prior_same_market_count",
+        "log_unique_markets_prior",
+        "market_history_share",
+        "log_unique_events_prior",
+        "event_history_share",
+        "current_market_novelty",
+        "current_event_novelty"
+      ],
+      "overall_gain": 0.00047414111733176667,
+      "positive_families": 3
+    },
+    "timing_behaviour": {
+      "alpha": 0.1,
+      "dev_mse": 0.16077255061572773,
+      "family_gains": {
+        "CAN_2025": -2.9230304163289922e-05,
+        "COL_2026": -5.848086790125051e-05,
+        "HUN_2026": -7.4033887974417345e-06,
+        "PER_2026": 3.321588674964904e-05,
+        "US_2024": 0.00012957514047073904
+      },
+      "features": [
+        "prior_same_hour_share",
+        "activity_acceleration"
+      ],
+      "overall_gain": 1.3535293271693671e-05,
+      "positive_families": 2
+    }
+  },
+  "models": {
+    "archetype": {
+      "alpha": 100.0,
+      "dev_mse": 0.1610006253787762,
+      "family_gains": {
+        "CAN_2025": 0.00014899953905581076,
+        "COL_2026": 0.0002504081560035232,
+        "HUN_2026": -7.564735441618897e-05,
+        "PER_2026": -0.0009234377819082873,
+        "US_2024": -0.0004730199076190822
+      },
+      "features": [
+        "current_logit",
+        "ret_15",
+        "ret_60",
+        "ret_300",
+        "econ_count_15",
+        "econ_count_60",
+        "econ_count_300",
+        "econ_value_15",
+        "econ_value_60",
+        "econ_value_300",
+        "log_value",
+        "event_count_60_ex_market",
+        "archetype_0",
+        "archetype_1",
+        "archetype_2",
+        "archetype_3",
+        "archetype_4",
+        "archetype_5",
+        "archetype_sparse"
+      ],
+      "overall_gain_vs_baseline": -0.00021453946977678662
+    },
+    "baseline": {
+      "alpha": 0.1,
+      "dev_mse": 0.16078608590899943,
+      "features": [
+        "current_logit",
+        "ret_15",
+        "ret_60",
+        "ret_300",
+        "econ_count_15",
+        "econ_count_60",
+        "econ_count_300",
+        "econ_value_15",
+        "econ_value_60",
+        "econ_value_300",
+        "log_value",
+        "event_count_60_ex_market"
+      ]
+    },
+    "full_behavior": {
+      "alpha": 0.1,
+      "dev_mse": 0.16038325832349143,
+      "family_gains": {
+        "CAN_2025": 0.0008834903296562405,
+        "COL_2026": -2.2573535557707247e-05,
+        "HUN_2026": -0.0005784327135499451,
+        "PER_2026": 0.0034049801545939506,
+        "US_2024": -0.0016733263076027793
+      },
+      "features": [
+        "current_logit",
+        "ret_15",
+        "ret_60",
+        "ret_300",
+        "econ_count_15",
+        "econ_count_60",
+        "econ_count_300",
+        "econ_value_15",
+        "econ_value_60",
+        "econ_value_300",
+        "log_value",
+        "event_count_60_ex_market",
+        "log_prior_fill_count",
+        "log_prior_active_days",
+        "log_recency_seconds",
+        "log_lifetime_seconds",
+        "log_recent_fill_count_300s",
+        "log_recent_fill_count_1800s",
+        "log_prior_same_market_count",
+        "log_unique_markets_prior",
+        "market_history_share",
+        "log_unique_events_prior",
+        "event_history_share",
+        "current_market_novelty",
+        "current_event_novelty",
+        "prior_mean_log_value",
+        "prior_std_log_value",
+        "current_size_z",
+        "market_size_percentile_proxy",
+        "prior_pressure_balance",
+        "prior_pressure_abs",
+        "current_prior_direction_alignment",
+        "prior_same_hour_share",
+        "activity_acceleration",
+        "hist_markout_score",
+        "log_hist_markout_count",
+        "hist_markout_uncertainty",
+        "log_market_participant_degree"
+      ],
+      "overall_gain_vs_baseline": 0.0004028275855079977
+    },
+    "hgb_full_behavior": {
+      "dev_mse": 0.16868081850373182,
+      "features": [
+        "current_logit",
+        "ret_15",
+        "ret_60",
+        "ret_300",
+        "econ_count_15",
+        "econ_count_60",
+        "econ_count_300",
+        "econ_value_15",
+        "econ_value_60",
+        "econ_value_300",
+        "log_value",
+        "event_count_60_ex_market",
+        "log_prior_fill_count",
+        "log_prior_active_days",
+        "log_recency_seconds",
+        "log_lifetime_seconds",
+        "log_recent_fill_count_300s",
+        "log_recent_fill_count_1800s",
+        "log_prior_same_market_count",
+        "log_unique_markets_prior",
+        "market_history_share",
+        "log_unique_events_prior",
+        "event_history_share",
+        "current_market_novelty",
+        "current_event_novelty",
+        "prior_mean_log_value",
+        "prior_std_log_value",
+        "current_size_z",
+        "market_size_percentile_proxy",
+        "prior_pressure_balance",
+        "prior_pressure_abs",
+        "current_prior_direction_alignment",
+        "prior_same_hour_share",
+        "activity_acceleration",
+        "hist_markout_score",
+        "log_hist_markout_count",
+        "hist_markout_uncertainty",
+        "log_market_participant_degree"
+      ],
+      "max_leaf_nodes": 15,
+      "overall_gain_vs_baseline": -0.00789473259473239
+    },
+    "identity_history": {
+      "alpha": 0.1,
+      "dev_mse": 0.16068347616094014,
+      "family_gains": {
+        "CAN_2025": 0.00023544533831824227,
+        "COL_2026": 0.000266798477426583,
+        "HUN_2026": -9.199492928310682e-06,
+        "PER_2026": 0.00019011336413043978,
+        "US_2024": -0.00017010894665044074
+      },
+      "features": [
+        "current_logit",
+        "ret_15",
+        "ret_60",
+        "ret_300",
+        "econ_count_15",
+        "econ_count_60",
+        "econ_count_300",
+        "econ_value_15",
+        "econ_value_60",
+        "econ_value_300",
+        "log_value",
+        "event_count_60_ex_market",
+        "log_prior_fill_count",
+        "log_prior_active_days",
+        "log_recency_seconds",
+        "hist_markout_score",
+        "log_hist_markout_count"
+      ],
+      "overall_gain_vs_baseline": 0.00010260974805928469
+    },
+    "selected_behavior": {
+      "alpha": 0.1,
+      "dev_mse": 0.16022957467006427,
+      "family_gains": {
+        "CAN_2025": 0.0015337716113279151,
+        "COL_2026": 0.0006234696905589587,
+        "HUN_2026": -0.00040088470346222316,
+        "PER_2026": 0.002890382755814047,
+        "US_2024": -0.0018641831595630487
+      },
+      "features": [
+        "current_logit",
+        "ret_15",
+        "ret_60",
+        "ret_300",
+        "econ_count_15",
+        "econ_count_60",
+        "econ_count_300",
+        "econ_value_15",
+        "econ_value_60",
+        "econ_value_300",
+        "log_value",
+        "event_count_60_ex_market",
+        "log_prior_same_market_count",
+        "log_unique_markets_prior",
+        "market_history_share",
+        "log_unique_events_prior",
+        "event_history_share",
+        "current_market_novelty",
+        "current_event_novelty",
+        "log_market_participant_degree"
+      ],
+      "overall_gain_vs_baseline": 0.000556511238935159
+    }
+  },
+  "next_change_classification": {
+    "baseline": {
+      "C": 0.1,
+      "dev_accuracy": 0.5761024519349035,
+      "dev_log_loss": 0.6721086618283352,
+      "rows_dev": 337407,
+      "rows_train": 500000
+    },
+    "full_behavior": {
+      "C": 0.1,
+      "dev_accuracy": 0.5907109218243842,
+      "dev_log_loss": 0.6666620390350065,
+      "rows_dev": 337407,
+      "rows_train": 500000
+    },
+    "log_loss_gain": 0.005446622793328637,
+    "status": "OK"
+  },
+  "primary_target": "60s own-market logit change",
+  "rows_dev": 369872,
+  "rows_train": 1293292,
+  "secondary_targets": {
+    "abs_60": {
+      "baseline_alpha": 100.0,
+      "baseline_mse": 0.16883860962845781,
+      "family_gains": {
+        "CAN_2025": 0.0008148109519096683,
+        "COL_2026": -0.0004736413541605311,
+        "HUN_2026": -0.000741386181804346,
+        "PER_2026": 0.010876276619012526,
+        "US_2024": 0.0043353262338142046
+      },
+      "full_alpha": 100.0,
+      "full_mse": 0.16587633237470348,
+      "incremental_gain": 0.0029622772537543363,
+      "rows_dev": 369872,
+      "rows_train": 1293292,
+      "status": "OK"
+    },
+    "activity_60": {
+      "baseline_alpha": 0.1,
+      "baseline_mse": 8.394214568396523,
+      "family_gains": {
+        "CAN_2025": 0.03632810997830305,
+        "COL_2026": -0.01973371839861171,
+        "HUN_2026": 0.08151644454498452,
+        "PER_2026": -0.05638649241754479,
+        "US_2024": -0.07469152144469327
+      },
+      "full_alpha": 0.1,
+      "full_mse": 8.400808003944038,
+      "incremental_gain": -0.006593435547515014,
+      "rows_dev": 545504,
+      "rows_train": 2555862,
+      "status": "OK"
+    },
+    "event_10": {
+      "baseline_alpha": 0.1,
+      "baseline_mse": 0.70442632142662,
+      "family_gains": {
+        "CAN_2025": 0.0033678419192758047,
+        "COL_2026": 0.24095472093005244,
+        "HUN_2026": -0.002653633144325346,
+        "PER_2026": 0.0029700350488445215,
+        "US_2024": -0.011226255776937852
+      },
+      "full_alpha": 0.1,
+      "full_mse": 0.6577437796312381,
+      "incremental_gain": 0.04668254179538189,
+      "rows_dev": 538063,
+      "rows_train": 2545224,
+      "status": "OK"
+    },
+    "event_2": {
+      "baseline_alpha": 100.0,
+      "baseline_mse": 0.3634173006295131,
+      "family_gains": {
+        "CAN_2025": -0.0004748319789423805,
+        "COL_2026": 0.02405283909919742,
+        "HUN_2026": -0.000607195843465691,
+        "PER_2026": -0.0021772659910169745,
+        "US_2024": -0.0012833548682628093
+      },
+      "full_alpha": 0.1,
+      "full_mse": 0.3595152625460112,
+      "incremental_gain": 0.003902038083501924,
+      "rows_dev": 543337,
+      "rows_train": 2552938,
+      "status": "OK"
+    },
+    "signed_300": {
+      "baseline_alpha": 100.0,
+      "baseline_mse": 0.21800681915100792,
+      "family_gains": {
+        "CAN_2025": 0.0031932824152241107,
+        "COL_2026": 0.00567116536487372,
+        "HUN_2026": 0.002199220941586519,
+        "PER_2026": 0.008463772440533535,
+        "US_2024": 0.017361945901313236
+      },
+      "full_alpha": 100.0,
+      "full_mse": 0.21062894173830177,
+      "incremental_gain": 0.007377877412706152,
+      "rows_dev": 454978,
+      "rows_train": 1755823,
+      "status": "OK"
+    },
+    "signed_60": {
+      "baseline_alpha": 100.0,
+      "baseline_mse": 0.18971694594528626,
+      "family_gains": {
+        "CAN_2025": 0.004847215068326409,
+        "COL_2026": 0.004935339010131906,
+        "HUN_2026": 0.0006778743834787576,
+        "PER_2026": 0.011381061212676624,
+        "US_2024": 0.01323757030105023
+      },
+      "full_alpha": 100.0,
+      "full_mse": 0.18270113395015342,
+      "incremental_gain": 0.007015811995132848,
+      "rows_dev": 369872,
+      "rows_train": 1293292,
+      "status": "OK"
+    },
+    "y_15": {
+      "baseline_alpha": 100.0,
+      "baseline_mse": 0.11575696225853647,
+      "family_gains": {
+        "CAN_2025": -5.6115178689399026e-05,
+        "COL_2026": 0.0003867353208950042,
+        "HUN_2026": -1.2517915411097702e-05,
+        "PER_2026": -0.0022593959749512282,
+        "US_2024": -0.0009636285506517336
+      },
+      "full_alpha": 100.0,
+      "full_mse": 0.11633794671829813,
+      "incremental_gain": -0.000580984459761652,
+      "rows_dev": 280442,
+      "rows_train": 884211,
+      "status": "OK"
+    },
+    "y_300": {
+      "baseline_alpha": 100.0,
+      "baseline_mse": 0.20385781127612415,
+      "family_gains": {
+        "CAN_2025": -0.0003817701732095058,
+        "COL_2026": 0.009267073209958232,
+        "HUN_2026": -0.000929429606040047,
+        "PER_2026": -0.0018993216314664996,
+        "US_2024": -0.0009523390628289469
+      },
+      "full_alpha": 100.0,
+      "full_mse": 0.20283696872884144,
+      "incremental_gain": 0.0010208425472827132,
+      "rows_dev": 454978,
+      "rows_train": 1755823,
+      "status": "OK"
+    }
+  },
+  "selected_behavior_features": [
+    "log_prior_same_market_count",
+    "log_unique_markets_prior",
+    "market_history_share",
+    "log_unique_events_prior",
+    "event_history_share",
+    "current_market_novelty",
+    "current_event_novelty",
+    "log_market_participant_degree"
+  ],
+  "selected_feature_families": [
+    "specialisation",
+    "network_cross_market"
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "base_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+  "bundle_manifest": {
+    "canonical_start": "ba938bedcf63f562be8b26c9502e828391123867",
+    "experiment_id": "EXPERIMENT-005E",
+    "files": {
+      "data_002_manifest_expected.json": "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c",
+      "infra_registry.json": "839f62b62c6b2e3d3b7a44d200c2d4b949c35de8e7dea006e9a2f2c8426959e8",
+      "pre_holdout_freeze.json": "c1fd3463212c01b0d9a031df52df67f53ffa2e08c6c2bcd02e3bc518895e8931",
+      "predictions_cup_005e.bundle": "2fc50f4a8b5c57af59b3440343fdd5e6ab6fb9a41c4619bc52a9073e0284b78a",
+      "preregistration.json": "548868f418f8d6f1645cde33f9698e8d031839327623a6ca1d0e595de1d764da",
+      "run_config.json": "dca8fb868a6eb6a8926b99716ddfacd59a86a7dc3b32c35ffcb9739ca170ae4e"
+    },
+    "implementation_commit": "055fb09bca8e1271b466cb3dc3252cdef4e678c2",
+    "phase": "HOLDOUT",
+    "preregistration_sha256": "548868f418f8d6f1645cde33f9698e8d031839327623a6ca1d0e595de1d764da",
+    "runner_sha256": "ff881d9dfc1e8744be4fc94723536ad85322ba857cd43c571150e40a801728cd",
+    "schema_version": 1
+  },
+  "experiment_id": "EXPERIMENT-005E",
+  "output_files": [
+    "falsification_concentration_report.json",
+    "holdout_evaluation.json",
+    "salvage_panel_audit.json"
+  ],
+  "phase": "HOLDOUT",
+  "pre_holdout_freeze_sha256": "60f642ec50a1a9ffa5aebfba73d8a66960f6afb2c318e7d747e584df81ca6de1",
+  "runner_sha256": "ff881d9dfc1e8744be4fc94723536ad85322ba857cd43c571150e40a801728cd",
+  "salvage_panel_hashes": {
+    "CAN_2025": "d4afc9448f8755f9295d778a7b53a647ec58faa585574d398d0390b26a94aa26",
+    "COL_2026": "b01a89e6ce2d7a8b230332c54ab4b218e5e69b9a29a6daa1b80dfadda58ca4b0",
+    "HUN_2026": "4d1b3c53af5235b23cf0c92185f26a06f520793a306ff51cece188c55fb0d10d",
+    "PER_2026": "288e6abee2a5686cce743808a44d5f06062a1cd801b526c8815bbf966759ddb6",
+    "US_2024": "86be3d32961dc0929715ba456f5cbd55d14d4ac3e1b07b0027e7346db1558fcd"
+  }
+}

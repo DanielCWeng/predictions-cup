@@ -1,0 +1,253 @@
+{
+  "archetypes": {
+    "assignment": "DEV/HOLDOUT use frozen TRAIN medians/scaler/PCA/centroids; never refit",
+    "same_second_rule": "no tx/log ordering inside a one-second block-time timestamp; batch aggregation is frozen before outcomes.",
+    "selection": "cluster count fixed ex ante at 6; not selected by predictive performance",
+    "stability": "5 deterministic bootstrap fits; report adjusted Rand index",
+    "training": "TRAIN-only latest participant timestamp states with >=20 prior fills and >=2 prior active days; if multiple rows share that latest second, fingerprint features are averaged across the whole timestamp batch before fitting.",
+    "transform": "TRAIN-only StandardScaler -> PCA up to 6 components -> MiniBatchKMeans k=6"
+  },
+  "baseline_features": [
+    "current_logit",
+    "ret_15",
+    "ret_60",
+    "ret_300",
+    "econ_count_15",
+    "econ_count_60",
+    "econ_count_300",
+    "econ_value_15",
+    "econ_value_60",
+    "econ_value_300",
+    "log_value",
+    "event_count_60_ex_market"
+  ],
+  "canonical_start": "ba938bedcf63f562be8b26c9502e828391123867",
+  "compute": {
+    "ec2": "Git/hashes/packaging/synthetic tests only; no empirical participant analysis",
+    "kaggle_max_sessions": 5,
+    "namespace": "005e_participant_ecology_atlas",
+    "operational_amendment": "User clarified shared Kaggle concurrency is 5 sessions, not 3; amended before any 005E empirical outcome inspection."
+  },
+  "concentration": [
+    "top participant effect share",
+    "top 5",
+    "top 10",
+    "top 1 percent",
+    "effective number of contributing participants",
+    "unseen-wallet performance",
+    "sparse-wallet performance",
+    "repeat-wallet coverage"
+  ],
+  "contamination_boundary": "docs/research/005_DISCOVERY_PRIOR_WORK_BOUNDARY.md",
+  "data": {
+    "economic_trade_grain": "validated passive OrderFilled rows from transaction-condition groups with exactly one active row, >=1 passive row, binary YES/NO semantics, size conservation and YES-notional conservation",
+    "families": [
+      "US_2024",
+      "CAN_2025",
+      "COL_2026",
+      "HUN_2026",
+      "PER_2026"
+    ],
+    "kaggle_mounted_manifest_sha256": "2d496514c9307a31d8864ac9deeb2ef2ad781fb6fabe894714cbdf00c7244f7a",
+    "manifest_sha256": "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c",
+    "manifest_transport_note": "Kaggle mount differs from canonical repo manifest only by CRLF line endings; parsed JSON equality remains mandatory.",
+    "participant_grain": "one participant-side OrderFilled row after canonical infrastructure exclusion",
+    "primary": "DATA-002 participant-side OrderFilled rows",
+    "sample_policy": "deterministic hash sample capped at 750000 participant rows per family; US_2024 must contribute at least 600000 sampled rows or fail closed"
+  },
+  "dev_screening": {
+    "participant_family_gate": "positive weighted MSE gain versus generic baseline on primary target AND positive family-specific gain in >=3 of 5 families",
+    "pre_holdout_freeze": "write immutable JSON binding cuts, archetype transform, selected families/features, frozen model specs and omissions before HOLDOUT",
+    "variant_selection": "hyperparameters and feature-family shortlist selected on DEV only; raw p-value never selects"
+  },
+  "experiment_id": "EXPERIMENT-005E",
+  "falsification": [
+    "participant-state permutation preserving family/market/time-activity strata where support permits",
+    "frequency-matched pseudo-state permutation",
+    "infrastructure exclusion audit",
+    "one-participant removal",
+    "top-1/top-5/top-10 activity removal",
+    "top-1-percent activity removal",
+    "participant-frequency controls",
+    "size/activity controls",
+    "leave-market-out diagnostic",
+    "leave-event/family-out diagnostic where support permits",
+    "shuffled historical-score assignment",
+    "1-hour delayed historical-score placebo"
+  ],
+  "forbidden": [
+    "wallet leaderboard",
+    "smartest-wallet ranking",
+    "insider speculation",
+    "whole-sample wallet averages",
+    "full-history skill scores",
+    "HOLDOUT-based threshold/feature/cluster/horizon selection"
+  ],
+  "holdout_inference": {
+    "bootstrap": "500 deterministic hierarchical family -> calendar-day block resamples after first collapsing row loss gain to market-timestamp batches.",
+    "disposition_gates": {
+      "CROSS_FAMILY_CANDIDATE": "full-behaviour primary target has positive HOLDOUT gain, BH q<=0.05, positive family gain in >=3/5 families, top-participant absolute effect share <0.50, effective contributing participants >=10, and neither preregistered participant-state permutation matches/exceeds observed gain",
+      "INCONCLUSIVE": "required coverage/provenance/falsification evidence is unavailable or internally contradictory",
+      "NO_INCREMENTAL_EVIDENCE": "full-behaviour primary HOLDOUT gain <=0 or BH q>0.05",
+      "REGIME_SPECIFIC_CANDIDATE": "full-behaviour primary target has positive HOLDOUT gain, BH q<=0.05 and positive family gain in at least one but fewer than three families, or broad-concentration/transfer gates fail without a stronger falsification contradiction"
+    },
+    "final_refit": "after DEV freeze, refit each frozen model on the union of TRAIN+DEV with unchanged features/hyperparameters; HOLDOUT is never used in fitting or tuning",
+    "multiplicity": "Benjamini-Hochberg at alpha=0.05 across all frozen primary participant variants; unavailable/negative variants remain in the family",
+    "primary_statistic": "baseline squared-error loss minus challenger squared-error loss",
+    "transfer": [
+      "per-family holdout gains",
+      "leave-family-out retraining diagnostic where support permits",
+      "unseen/sparse/repeat participant slices"
+    ],
+    "weighting": "equal family -> market -> observable timestamp batch -> participant-row weight; prevents same-second multi-fill batches from dominating fit/evaluation."
+  },
+  "infrastructure": {
+    "policy": "exclude all canonical infrastructure addresses from participant ecology/skill claims; unknown does not imply human; no deanonymisation",
+    "registry": "data/reference/polymarket_infrastructure/infra_registry.json"
+  },
+  "interpretation_labels": [
+    "NO_INCREMENTAL_EVIDENCE",
+    "REGIME_SPECIFIC_CANDIDATE",
+    "CROSS_FAMILY_CANDIDATE",
+    "INCONCLUSIVE"
+  ],
+  "model_ladder": {
+    "classification": [
+      "majority/log-loss baseline",
+      "L2 logistic baseline",
+      "L2 logistic full-behaviour"
+    ],
+    "hgb_max_leaf_nodes": [
+      15,
+      31
+    ],
+    "logistic_C_grid": [
+      0.1,
+      1.0,
+      10.0
+    ],
+    "regression": [
+      "baseline ridge",
+      "baseline + each participant family ridge",
+      "identity-history ridge",
+      "full-behaviour ridge",
+      "archetype ridge",
+      "DEV-selected-family ridge",
+      "small histogram-gradient-boosting challenger"
+    ],
+    "ridge_alpha_grid": [
+      0.1,
+      1.0,
+      10.0,
+      100.0
+    ]
+  },
+  "participant_feature_families": {
+    "directional_behaviour": [
+      "prior_pressure_balance",
+      "prior_pressure_abs",
+      "current_prior_direction_alignment"
+    ],
+    "historical_markout": [
+      "hist_markout_score",
+      "log_hist_markout_count",
+      "hist_markout_uncertainty"
+    ],
+    "network_cross_market": [
+      "log_market_participant_degree",
+      "log_unique_markets_prior",
+      "log_unique_events_prior",
+      "current_market_novelty"
+    ],
+    "recurrence": [
+      "log_prior_fill_count",
+      "log_prior_active_days",
+      "log_recency_seconds",
+      "log_lifetime_seconds",
+      "log_recent_fill_count_300s",
+      "log_recent_fill_count_1800s"
+    ],
+    "size_behaviour": [
+      "prior_mean_log_value",
+      "prior_std_log_value",
+      "current_size_z",
+      "market_size_percentile_proxy"
+    ],
+    "specialisation": [
+      "log_prior_same_market_count",
+      "log_unique_markets_prior",
+      "market_history_share",
+      "log_unique_events_prior",
+      "event_history_share",
+      "current_market_novelty",
+      "current_event_novelty"
+    ],
+    "timing_behaviour": [
+      "prior_same_hour_share",
+      "activity_acceleration"
+    ]
+  },
+  "past_only_rules": {
+    "direction_semantics": "owner YES pressure only; never called aggressor/taker direction",
+    "historical_markout": "300s directional markout becomes available only at trade timestamp + 300s and enters later rows strictly after availability; shrinkage lambda=20 toward zero",
+    "simultaneous_rows": "same-second rows are treated as one observable batch for evidence weighting; they may retain row-specific current size/side but cannot become each other historical state.",
+    "sparse_participant": "strong shrinkage; archetype assignment forced to sparse class when prior fills <20 or prior active days <2",
+    "timestamp_batch": "DATA-002 block-time is one-second resolution. Participant history uses only rows with timestamp strictly less than the current row timestamp; tx_hash/log_index never create pseudo-order inside a second.",
+    "unseen_participant": "neutral/default representation"
+  },
+  "pre_outcome_amendment_same_second": "Strict timestamp-batch semantics replaced lexical same-second row ordering before any successful 005E empirical processing.",
+  "primary_target": {
+    "definition": "60-second future own-market canonical YES logit change",
+    "name": "y_60",
+    "selection_role": "sole primary target"
+  },
+  "question": "Does observable participant behaviour contain repeatable predictive information about subsequent market state?",
+  "schema_version": 1,
+  "secondary_targets": [
+    {
+      "definition": "15-second future own-market logit change",
+      "name": "y_15"
+    },
+    {
+      "definition": "300-second future own-market logit change",
+      "name": "y_300"
+    },
+    {
+      "definition": "future logit change after next 2 economic trades",
+      "name": "event_2"
+    },
+    {
+      "definition": "future logit change after next 10 economic trades",
+      "name": "event_10"
+    },
+    {
+      "definition": "sign of next economic-trade canonical price change",
+      "name": "next_price_change_sign"
+    },
+    {
+      "definition": "absolute 60-second future logit move",
+      "name": "abs_60"
+    },
+    {
+      "definition": "economic trade count in following 60 seconds",
+      "name": "activity_60"
+    },
+    {
+      "definition": "participant-owner YES pressure times 60-second future logit change",
+      "name": "signed_60"
+    },
+    {
+      "definition": "participant-owner YES pressure times 300-second future logit change",
+      "name": "signed_300"
+    }
+  ],
+  "splits": {
+    "design": "per-family chronological TRAIN/DEV/HOLDOUT",
+    "dev": "70th to 85th timestamp quantile, with 300s pre-HOLDOUT embargo and label-crossing purge",
+    "holdout": "85th percentile onward; inspected once after immutable DEV freeze",
+    "rule": "split boundaries depend on timestamps only, never response outcomes",
+    "train": "timestamps below the 70th participant-row timestamp quantile, with 300s pre-boundary embargo and label-crossing purge"
+  },
+  "status": "FROZEN_BEFORE_OUTCOME_INSPECTION",
+  "title": "Participant Ecology / Behavioural Atlas"
+}

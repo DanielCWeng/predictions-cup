@@ -1,0 +1,202 @@
+{
+  "archetypes": {
+    "assignment": "DEV/HOLDOUT use frozen TRAIN medians/scaler/PCA/centroids; never refit",
+    "same_second_rule": "no tx/log ordering inside a one-second block-time timestamp; batch aggregation is frozen before outcomes.",
+    "selection": "cluster count fixed ex ante at 6; not selected by predictive performance",
+    "stability": "5 deterministic bootstrap fits; report adjusted Rand index",
+    "training": "TRAIN-only latest participant timestamp states with >=20 prior fills and >=2 prior active days; if multiple rows share that latest second, fingerprint features are averaged across the whole timestamp batch before fitting.",
+    "transform": "TRAIN-only StandardScaler -> PCA up to 6 components -> MiniBatchKMeans k=6"
+  },
+  "baseline_features": [
+    "current_logit",
+    "ret_15",
+    "ret_60",
+    "ret_300",
+    "econ_count_15",
+    "econ_count_60",
+    "econ_count_300",
+    "econ_value_15",
+    "econ_value_60",
+    "econ_value_300",
+    "log_value",
+    "event_count_60_ex_market"
+  ],
+  "experiment_id": "EXPERIMENT-005E",
+  "family_local_history_boundary": "participant state is constructed independently inside each family file; recurrence can cross event_id/markets within a family, while cross-family evidence is model transfer/stability",
+  "fingerprint_features": [
+    "prior_pressure_balance",
+    "prior_pressure_abs",
+    "current_prior_direction_alignment",
+    "hist_markout_score",
+    "log_hist_markout_count",
+    "hist_markout_uncertainty",
+    "log_market_participant_degree",
+    "log_unique_markets_prior",
+    "log_unique_events_prior",
+    "current_market_novelty",
+    "log_prior_fill_count",
+    "log_prior_active_days",
+    "log_recency_seconds",
+    "log_lifetime_seconds",
+    "log_recent_fill_count_300s",
+    "log_recent_fill_count_1800s",
+    "prior_mean_log_value",
+    "prior_std_log_value",
+    "current_size_z",
+    "market_size_percentile_proxy",
+    "log_prior_same_market_count",
+    "market_history_share",
+    "event_history_share",
+    "current_event_novelty",
+    "prior_same_hour_share",
+    "activity_acceleration"
+  ],
+  "identity_history_comparator": [
+    "log_prior_fill_count",
+    "log_prior_active_days",
+    "log_recency_seconds",
+    "hist_markout_score",
+    "log_hist_markout_count"
+  ],
+  "infrastructure_policy": {
+    "policy": "exclude all canonical infrastructure addresses from participant ecology/skill claims; unknown does not imply human; no deanonymisation",
+    "registry": "data/reference/polymarket_infrastructure/infra_registry.json"
+  },
+  "model_ladder": {
+    "classification": [
+      "majority/log-loss baseline",
+      "L2 logistic baseline",
+      "L2 logistic full-behaviour"
+    ],
+    "hgb_max_leaf_nodes": [
+      15,
+      31
+    ],
+    "logistic_C_grid": [
+      0.1,
+      1.0,
+      10.0
+    ],
+    "regression": [
+      "baseline ridge",
+      "baseline + each participant family ridge",
+      "identity-history ridge",
+      "full-behaviour ridge",
+      "archetype ridge",
+      "DEV-selected-family ridge",
+      "small histogram-gradient-boosting challenger"
+    ],
+    "ridge_alpha_grid": [
+      0.1,
+      1.0,
+      10.0,
+      100.0
+    ]
+  },
+  "participant_feature_families": {
+    "directional_behaviour": [
+      "prior_pressure_balance",
+      "prior_pressure_abs",
+      "current_prior_direction_alignment"
+    ],
+    "historical_markout": [
+      "hist_markout_score",
+      "log_hist_markout_count",
+      "hist_markout_uncertainty"
+    ],
+    "network_cross_market": [
+      "log_market_participant_degree",
+      "log_unique_markets_prior",
+      "log_unique_events_prior",
+      "current_market_novelty"
+    ],
+    "recurrence": [
+      "log_prior_fill_count",
+      "log_prior_active_days",
+      "log_recency_seconds",
+      "log_lifetime_seconds",
+      "log_recent_fill_count_300s",
+      "log_recent_fill_count_1800s"
+    ],
+    "size_behaviour": [
+      "prior_mean_log_value",
+      "prior_std_log_value",
+      "current_size_z",
+      "market_size_percentile_proxy"
+    ],
+    "specialisation": [
+      "log_prior_same_market_count",
+      "log_unique_markets_prior",
+      "market_history_share",
+      "log_unique_events_prior",
+      "event_history_share",
+      "current_market_novelty",
+      "current_event_novelty"
+    ],
+    "timing_behaviour": [
+      "prior_same_hour_share",
+      "activity_acceleration"
+    ]
+  },
+  "past_only_rules": {
+    "direction_semantics": "owner YES pressure only; never called aggressor/taker direction",
+    "historical_markout": "300s directional markout becomes available only at trade timestamp + 300s and enters later rows strictly after availability; shrinkage lambda=20 toward zero",
+    "simultaneous_rows": "same-second rows are treated as one observable batch for evidence weighting; they may retain row-specific current size/side but cannot become each other historical state.",
+    "sparse_participant": "strong shrinkage; archetype assignment forced to sparse class when prior fills <20 or prior active days <2",
+    "timestamp_batch": "DATA-002 block-time is one-second resolution. Participant history uses only rows with timestamp strictly less than the current row timestamp; tx_hash/log_index never create pseudo-order inside a second.",
+    "unseen_participant": "neutral/default representation"
+  },
+  "primary_target": {
+    "definition": "60-second future own-market canonical YES logit change",
+    "name": "y_60",
+    "selection_role": "sole primary target"
+  },
+  "schema_version": 1,
+  "secondary_targets": [
+    {
+      "definition": "15-second future own-market logit change",
+      "name": "y_15"
+    },
+    {
+      "definition": "300-second future own-market logit change",
+      "name": "y_300"
+    },
+    {
+      "definition": "future logit change after next 2 economic trades",
+      "name": "event_2"
+    },
+    {
+      "definition": "future logit change after next 10 economic trades",
+      "name": "event_10"
+    },
+    {
+      "definition": "sign of next economic-trade canonical price change",
+      "name": "next_price_change_sign"
+    },
+    {
+      "definition": "absolute 60-second future logit move",
+      "name": "abs_60"
+    },
+    {
+      "definition": "economic trade count in following 60 seconds",
+      "name": "activity_60"
+    },
+    {
+      "definition": "participant-owner YES pressure times 60-second future logit change",
+      "name": "signed_60"
+    },
+    {
+      "definition": "participant-owner YES pressure times 300-second future logit change",
+      "name": "signed_300"
+    }
+  ],
+  "source_preregistration": "data/experiments/experiment_005e/preregistration.json",
+  "splits": {
+    "design": "per-family chronological TRAIN/DEV/HOLDOUT",
+    "dev": "70th to 85th timestamp quantile, with 300s pre-HOLDOUT embargo and label-crossing purge",
+    "holdout": "85th percentile onward; inspected once after immutable DEV freeze",
+    "rule": "split boundaries depend on timestamps only, never response outcomes",
+    "train": "timestamps below the 70th participant-row timestamp quantile, with 300s pre-boundary embargo and label-crossing purge"
+  },
+  "status": "FROZEN_BEFORE_OUTCOME_INSPECTION"
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005E",
+  "phase": "HOLDOUT",
+  "launch_status": "LAUNCHED_ONCE",
+  "launched_at_utc": "2026-09-28T14:19:45Z",
+  "kaggle_kernel": "polyleviathan/005e-participant-ecology-holdout",
+  "kaggle_version": 1,
+  "code_dataset": "polyleviathan/sig-cup-005e-holdout-code",
+  "data_dataset": "polyleviathan/sig-cup-data-002-polymarket-fees",
+  "implementation_commit": "c3ff593ded893f9976129e5ebd5ae1dee74c6e58",
+  "runner_sha256": "5da22f6ac05e200ea25389aa6322bde2ef8fa16c1c86cd134e58877f668f05de",
+  "kernel_metadata_sha256": "e5efa4b575f7ce6066a24b0d8010c64f61ed3492dce21b08f276145e94a48c43",
+  "pre_holdout_freeze_embedded_sha256": "60f642ec50a1a9ffa5aebfba73d8a66960f6afb2c318e7d747e584df81ca6de1",
+  "pre_holdout_freeze_file_sha256": "c1fd3463212c01b0d9a031df52df67f53ffa2e08c6c2bcd02e3bc518895e8931",
+  "code_manifest_sha256": "3a7a7c528abb0795a12288698937e4eac50d83c8535ac374c88f2535df8dbb1c",
+  "code_bundle_sha256": "2fc50f4a8b5c57af59b3440343fdd5e6ab6fb9a41c4619bc52a9073e0284b78a",
+  "preregistration_sha256": "548868f418f8d6f1645cde33f9698e8d031839327623a6ca1d0e595de1d764da",
+  "data_002_manifest_expected_sha256": "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c",
+  "data_002_manifest_kaggle_transport_sha256": "2d496514c9307a31d8864ac9deeb2ef2ad781fb6fabe894714cbdf00c7244f7a",
+  "holdout_result_inspected_before_launch": false,
+  "rule": "This is the single sealed HOLDOUT evaluation. Do not tune, relaunch with altered science, or inspect/choose alternate HOLDOUT specifications after outcome exposure."
+}

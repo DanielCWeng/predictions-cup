@@ -1,0 +1,137 @@
+{
+  "experiment_id": "EXPERIMENT-005E",
+  "family_reports": [
+    {
+      "accepted_groups": 6821998,
+      "dev_end": 1730589442,
+      "distinct_eligible_participants": 306864,
+      "economic_trade_rows": 7890463,
+      "eligible_participant_rows": 14712461,
+      "failure_counts": {
+        "active_count_not_one": 0,
+        "no_passive": 0,
+        "non_binary": 0
+      },
+      "family": "US_2024",
+      "fingerprint": "fingerprint_US_2024.parquet",
+      "fingerprint_rows": 56570,
+      "fingerprint_sha256": "a94c02f20783104830434f0eb8da1a8b611448fba864a70788168c63aae0ef12",
+      "infrastructure_rows_excluded": 0,
+      "panel": "panel_US_2024.parquet",
+      "panel_sha256": "86be3d32961dc0929715ba456f5cbd55d14d4ac3e1b07b0027e7346db1558fcd",
+      "rejected_groups": 1116,
+      "sample_rows": 739901,
+      "source_rows": 14716540,
+      "train_end": 1730271274,
+      "transaction_condition_groups": 6823114
+    },
+    {
+      "accepted_groups": 340791,
+      "dev_end": 1745888144,
+      "distinct_eligible_participants": 73192,
+      "economic_trade_rows": 512901,
+      "eligible_participant_rows": 853692,
+      "failure_counts": {
+        "active_count_not_one": 0,
+        "no_passive": 0,
+        "non_binary": 0
+      },
+      "family": "CAN_2025",
+      "fingerprint": "fingerprint_CAN_2025.parquet",
+      "fingerprint_rows": 1308,
+      "fingerprint_sha256": "41ecba95b5c9ffaebe96ccb018cc2d78730b368b2051ea21bb1f8711a2d933be",
+      "infrastructure_rows_excluded": 0,
+      "panel": "panel_CAN_2025.parquet",
+      "panel_sha256": "d4afc9448f8755f9295d778a7b53a647ec58faa585574d398d0390b26a94aa26",
+      "rejected_groups": 184,
+      "sample_rows": 739759,
+      "source_rows": 854625,
+      "train_end": 1745734743,
+      "transaction_condition_groups": 340975
+    },
+    {
+      "accepted_groups": 279775,
+      "dev_end": 1780246878,
+      "distinct_eligible_participants": 35722,
+      "economic_trade_rows": 412863,
+      "eligible_participant_rows": 692638,
+      "failure_counts": {
+        "active_count_not_one": 0,
+        "no_passive": 0,
+        "non_binary": 0
+      },
+      "family": "COL_2026",
+      "fingerprint": "fingerprint_COL_2026.parquet",
+      "fingerprint_rows": 1351,
+      "fingerprint_sha256": "b7d8312529fd893a46a580e736fb6e1fa8a7e5c7fae51c8c88827090dc2bd153",
+      "infrastructure_rows_excluded": 0,
+      "panel": "panel_COL_2026.parquet",
+      "panel_sha256": "b01a89e6ce2d7a8b230332c54ab4b218e5e69b9a29a6daa1b80dfadda58ca4b0",
+      "rejected_groups": 177,
+      "sample_rows": 692638,
+      "source_rows": 693573,
+      "train_end": 1779339068,
+      "transaction_condition_groups": 279952
+    },
+    {
+      "accepted_groups": 333329,
+      "dev_end": 1776014405,
+      "distinct_eligible_participants": 53926,
+      "economic_trade_rows": 505395,
+      "eligible_participant_rows": 838724,
+      "failure_counts": {
+        "active_count_not_one": 0,
+        "no_passive": 0,
+        "non_binary": 0
+      },
+      "family": "HUN_2026",
+      "fingerprint": "fingerprint_HUN_2026.parquet",
+      "fingerprint_rows": 1813,
+      "fingerprint_sha256": "c47e5be9c1a15a92763c51964b1a7db52f09cca273714eb5bc954d3117cf9c96",
+      "infrastructure_rows_excluded": 0,
+      "panel": "panel_HUN_2026.parquet",
+      "panel_sha256": "4d1b3c53af5235b23cf0c92185f26a06f520793a306ff51cece188c55fb0d10d",
+      "rejected_groups": 259,
+      "sample_rows": 740285,
+      "source_rows": 840134,
+      "train_end": 1775904843,
+      "transaction_condition_groups": 333588
+    },
+    {
+      "accepted_groups": 460795,
+      "dev_end": 1780939794,
+      "distinct_eligible_participants": 54559,
+      "economic_trade_rows": 750233,
+      "eligible_participant_rows": 1211028,
+      "failure_counts": {
+        "active_count_not_one": 0,
+        "no_passive": 0,
+        "non_binary": 0
+      },
+      "family": "PER_2026",
+      "fingerprint": "fingerprint_PER_2026.parquet",
+      "fingerprint_rows": 2122,
+      "fingerprint_sha256": "d582d5eaf2095958246796da69a029fabdaff9b28c6d1acd0d5926656946018f",
+      "infrastructure_rows_excluded": 0,
+      "panel": "panel_PER_2026.parquet",
+      "panel_sha256": "288e6abee2a5686cce743808a44d5f06062a1cd801b526c8815bbf966759ddb6",
+      "rejected_groups": 281,
+      "sample_rows": 739954,
+      "source_rows": 1212643,
+      "train_end": 1777190258,
+      "transaction_condition_groups": 461076
+    }
+  ],
+  "note": "byte-identical Kaggle-built HOLDOUT panels reused; only evaluation execution is salvaged",
+  "panel_hashes": {
+    "CAN_2025": "d4afc9448f8755f9295d778a7b53a647ec58faa585574d398d0390b26a94aa26",
+    "COL_2026": "b01a89e6ce2d7a8b230332c54ab4b218e5e69b9a29a6daa1b80dfadda58ca4b0",
+    "HUN_2026": "4d1b3c53af5235b23cf0c92185f26a06f520793a306ff51cece188c55fb0d10d",
+    "PER_2026": "288e6abee2a5686cce743808a44d5f06062a1cd801b526c8815bbf966759ddb6",
+    "US_2024": "86be3d32961dc0929715ba456f5cbd55d14d4ac3e1b07b0027e7346db1558fcd"
+  },
+  "pre_holdout_freeze_sha256": "60f642ec50a1a9ffa5aebfba73d8a66960f6afb2c318e7d747e584df81ca6de1",
+  "schema_version": 1,
+  "source_kernel": "polyleviathan/005e-participant-ecology-holdout-v2",
+  "source_status": "ENGINEERING_MEMORY_FAILURE_BEFORE_EVALUATION_OUTPUT"
+}

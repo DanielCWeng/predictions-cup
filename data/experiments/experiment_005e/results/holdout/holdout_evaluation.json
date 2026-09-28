@@ -1,0 +1,669 @@
+{
+  "baseline_mse": 0.31506385689150024,
+  "classification": {
+    "baseline": {
+      "accuracy": 0.5847078688812831,
+      "log_loss": 0.677277315060534,
+      "rows_holdout": 329869,
+      "rows_train": 1885250,
+      "status": "OK"
+    },
+    "full_behavior": {
+      "accuracy": 0.6049462059181069,
+      "log_loss": 0.6666606588052897,
+      "rows_holdout": 329869,
+      "rows_train": 1885250,
+      "status": "OK"
+    },
+    "log_loss_gain": 0.010616656255244328,
+    "status": "OK"
+  },
+  "disposition": "NO_INCREMENTAL_EVIDENCE",
+  "experiment_id": "EXPERIMENT-005E",
+  "falsification": {
+    "delayed_history_1h": {
+      "gain_vs_baseline": -0.0004394539320365376
+    },
+    "leave_family_out": {
+      "CAN_2025": {
+        "gain": -0.0035924539684173973,
+        "rows": 70644,
+        "status": "OK"
+      },
+      "COL_2026": {
+        "gain": 0.0015179186010034762,
+        "rows": 59404,
+        "status": "OK"
+      },
+      "HUN_2026": {
+        "gain": -0.0009061779802632675,
+        "rows": 70752,
+        "status": "OK"
+      },
+      "PER_2026": {
+        "gain": 0.0012195898564668073,
+        "rows": 73004,
+        "status": "OK"
+      },
+      "US_2024": {
+        "gain": -0.022873647028763572,
+        "rows": 89684,
+        "status": "OK"
+      }
+    },
+    "participant_state_frequency_matched_permutation": {
+      "gain_vs_baseline": -0.00539491191552216,
+      "mse": 0.3204587688070224,
+      "observed_full_behavior_gain": -0.0004317159840001583,
+      "permuted_features": [
+        "log_prior_fill_count",
+        "log_prior_active_days",
+        "log_recency_seconds",
+        "log_lifetime_seconds",
+        "log_recent_fill_count_300s",
+        "log_recent_fill_count_1800s",
+        "log_prior_same_market_count",
+        "log_unique_markets_prior",
+        "market_history_share",
+        "log_unique_events_prior",
+        "event_history_share",
+        "current_market_novelty",
+        "current_event_novelty",
+        "prior_mean_log_value",
+        "prior_std_log_value",
+        "current_size_z",
+        "market_size_percentile_proxy",
+        "prior_pressure_balance",
+        "prior_pressure_abs",
+        "current_prior_direction_alignment",
+        "prior_same_hour_share",
+        "activity_acceleration",
+        "hist_markout_score",
+        "log_hist_markout_count",
+        "hist_markout_uncertainty",
+        "log_market_participant_degree"
+      ],
+      "permuted_row_share": 0.9639437890659389
+    },
+    "participant_state_market_time_permutation": {
+      "gain_vs_baseline": -0.0006137778398292437,
+      "mse": 0.3156776347313295,
+      "observed_full_behavior_gain": -0.0004317159840001583,
+      "permuted_features": [
+        "log_prior_fill_count",
+        "log_prior_active_days",
+        "log_recency_seconds",
+        "log_lifetime_seconds",
+        "log_recent_fill_count_300s",
+        "log_recent_fill_count_1800s",
+        "log_prior_same_market_count",
+        "log_unique_markets_prior",
+        "market_history_share",
+        "log_unique_events_prior",
+        "event_history_share",
+        "current_market_novelty",
+        "current_event_novelty",
+        "prior_mean_log_value",
+        "prior_std_log_value",
+        "current_size_z",
+        "market_size_percentile_proxy",
+        "prior_pressure_balance",
+        "prior_pressure_abs",
+        "current_prior_direction_alignment",
+        "prior_same_hour_share",
+        "activity_acceleration",
+        "hist_markout_score",
+        "log_hist_markout_count",
+        "hist_markout_uncertainty",
+        "log_market_participant_degree"
+      ],
+      "permuted_row_share": 0.9627305440619773
+    },
+    "per_event_transfer": {
+      "events": 199,
+      "median_event_gain": -0.0010176458920243782,
+      "note": "hierarchically weighted event-level transfer diagnostic; true leave-family-out retraining remains the stronger frozen transfer test",
+      "positive_event_share": 0.32160804020100503
+    },
+    "per_market_transfer": {
+      "markets": 746,
+      "median_market_gain": -0.0006275330333091985,
+      "note": "hierarchically weighted per-market transfer diagnostic; exhaustive leave-one-market retraining omitted as computationally pathological",
+      "positive_market_share": 0.37131367292225204
+    },
+    "shuffled_historical_score": {
+      "gain_vs_baseline": -0.004905317267005493
+    }
+  },
+  "fdr_family_size": 5,
+  "holdout_inspected_once": true,
+  "phase": "HOLDOUT",
+  "primary_target": "y_60",
+  "primary_variants": {
+    "archetype": {
+      "baseline_mse": 0.31506385689150024,
+      "bootstrap_ci95": [
+        -0.00034968850564721666,
+        0.00043333391433879716
+      ],
+      "bootstrap_p": 1.0,
+      "challenger_mse": 0.31506982729024835,
+      "concentration": {
+        "effective_contributing_participants": 76.75221015698477,
+        "gain_without_top10_activity": 4.46879800600544e-06,
+        "gain_without_top1_activity": -2.253662093542856e-06,
+        "gain_without_top1pct_activity": -0.0001279747134345332,
+        "gain_without_top5_activity": 4.061963281806909e-06,
+        "participants": 53410,
+        "top10_effect_share": 0.2604940940972824,
+        "top1pct_effect_share": 0.7862182425024672,
+        "top5_effect_share": 0.19472683982385372,
+        "top_participant_effect_share": 0.08720918557085819
+      },
+      "family_gains": {
+        "CAN_2025": 0.0002417920546372021,
+        "COL_2026": -0.00023331201989434946,
+        "HUN_2026": 3.093691811784094e-05,
+        "PER_2026": 0.0002854779668410301,
+        "US_2024": -0.000354746913441617
+      },
+      "fdr": {
+        "family_size": 5,
+        "p": 1.0,
+        "q": 1.0,
+        "rank": 2,
+        "reject": false
+      },
+      "features": [
+        "current_logit",
+        "ret_15",
+        "ret_60",
+        "ret_300",
+        "econ_count_15",
+        "econ_count_60",
+        "econ_count_300",
+        "econ_value_15",
+        "econ_value_60",
+        "econ_value_300",
+        "log_value",
+        "event_count_60_ex_market",
+        "archetype_0",
+        "archetype_1",
+        "archetype_2",
+        "archetype_3",
+        "archetype_4",
+        "archetype_5",
+        "archetype_sparse"
+      ],
+      "mean_row_loss_gain": 0.0003439177028881426,
+      "positive_families": 3,
+      "rows_holdout": 363488,
+      "slices": {
+        "repeat": {
+          "mean_loss_gain": 6.18104714030541e-05,
+          "rows": 249992
+        },
+        "sparse": {
+          "mean_loss_gain": -0.0002691114859701977,
+          "rows": 113496
+        },
+        "unseen": {
+          "mean_loss_gain": 0.0033746639562655697,
+          "rows": 14502
+        }
+      },
+      "weighted_mse_gain": -5.970398748111894e-06
+    },
+    "full_behavior": {
+      "baseline_mse": 0.31506385689150024,
+      "bootstrap_ci95": [
+        -0.0021087137197548958,
+        0.0019692584873007733
+      ],
+      "bootstrap_p": 1.0,
+      "challenger_mse": 0.3154955728755004,
+      "concentration": {
+        "effective_contributing_participants": 282.92306233237576,
+        "gain_without_top10_activity": -0.00021290677963418825,
+        "gain_without_top1_activity": -0.0004042595938450859,
+        "gain_without_top1pct_activity": 0.0005809471741519058,
+        "gain_without_top5_activity": -0.00025468032104097166,
+        "participants": 53410,
+        "top10_effect_share": 0.13496086645651592,
+        "top1pct_effect_share": 0.7481386446557922,
+        "top5_effect_share": 0.08396534563447705,
+        "top_participant_effect_share": 0.02189865127442197
+      },
+      "family_gains": {
+        "CAN_2025": -0.0024813042187065704,
+        "COL_2026": 0.00011607744724401181,
+        "HUN_2026": -0.0008640469412944385,
+        "PER_2026": 0.00297453433881284,
+        "US_2024": -0.0019038405460571617
+      },
+      "fdr": {
+        "family_size": 5,
+        "p": 1.0,
+        "q": 1.0,
+        "rank": 3,
+        "reject": false
+      },
+      "features": [
+        "current_logit",
+        "ret_15",
+        "ret_60",
+        "ret_300",
+        "econ_count_15",
+        "econ_count_60",
+        "econ_count_300",
+        "econ_value_15",
+        "econ_value_60",
+        "econ_value_300",
+        "log_value",
+        "event_count_60_ex_market",
+        "log_prior_fill_count",
+        "log_prior_active_days",
+        "log_recency_seconds",
+        "log_lifetime_seconds",
+        "log_recent_fill_count_300s",
+        "log_recent_fill_count_1800s",
+        "log_prior_same_market_count",
+        "log_unique_markets_prior",
+        "market_history_share",
+        "log_unique_events_prior",
+        "event_history_share",
+        "current_market_novelty",
+        "current_event_novelty",
+        "prior_mean_log_value",
+        "prior_std_log_value",
+        "current_size_z",
+        "market_size_percentile_proxy",
+        "prior_pressure_balance",
+        "prior_pressure_abs",
+        "current_prior_direction_alignment",
+        "prior_same_hour_share",
+        "activity_acceleration",
+        "hist_markout_score",
+        "log_hist_markout_count",
+        "hist_markout_uncertainty",
+        "log_market_participant_degree"
+      ],
+      "mean_row_loss_gain": 3.6622096617971784e-05,
+      "positive_families": 2,
+      "rows_holdout": 363488,
+      "slices": {
+        "repeat": {
+          "mean_loss_gain": -0.0008575412220108449,
+          "rows": 249992
+        },
+        "sparse": {
+          "mean_loss_gain": 0.0012214365330311717,
+          "rows": 113496
+        },
+        "unseen": {
+          "mean_loss_gain": 0.017885798852249425,
+          "rows": 14502
+        }
+      },
+      "weighted_mse_gain": -0.0004317159840001583
+    },
+    "hgb_full_behavior": {
+      "baseline_mse": 0.31506385689150024,
+      "bootstrap_ci95": [
+        -0.012859105634267277,
+        0.006702746790294694
+      ],
+      "bootstrap_p": 1.0,
+      "challenger_mse": 0.3153958717717204,
+      "concentration": {
+        "effective_contributing_participants": 107.28257332032635,
+        "gain_without_top10_activity": -0.0003842733466261272,
+        "gain_without_top1_activity": -0.00040767407654425906,
+        "gain_without_top1pct_activity": -0.004193935285883488,
+        "gain_without_top5_activity": 0.00029425012396221644,
+        "participants": 53410,
+        "top10_effect_share": 0.2601674285780967,
+        "top1pct_effect_share": 0.8246817670754013,
+        "top5_effect_share": 0.1729409116356685,
+        "top_participant_effect_share": 0.04819844753059923
+      },
+      "family_gains": {
+        "CAN_2025": 0.00044119957875671245,
+        "COL_2026": 0.006282167132389493,
+        "HUN_2026": 0.0019940317289244835,
+        "PER_2026": -0.009384482755417811,
+        "US_2024": -0.0009929900857538754
+      },
+      "fdr": {
+        "family_size": 5,
+        "p": 1.0,
+        "q": 1.0,
+        "rank": 4,
+        "reject": false
+      },
+      "features": [
+        "current_logit",
+        "ret_15",
+        "ret_60",
+        "ret_300",
+        "econ_count_15",
+        "econ_count_60",
+        "econ_count_300",
+        "econ_value_15",
+        "econ_value_60",
+        "econ_value_300",
+        "log_value",
+        "event_count_60_ex_market",
+        "log_prior_fill_count",
+        "log_prior_active_days",
+        "log_recency_seconds",
+        "log_lifetime_seconds",
+        "log_recent_fill_count_300s",
+        "log_recent_fill_count_1800s",
+        "log_prior_same_market_count",
+        "log_unique_markets_prior",
+        "market_history_share",
+        "log_unique_events_prior",
+        "event_history_share",
+        "current_market_novelty",
+        "current_event_novelty",
+        "prior_mean_log_value",
+        "prior_std_log_value",
+        "current_size_z",
+        "market_size_percentile_proxy",
+        "prior_pressure_balance",
+        "prior_pressure_abs",
+        "current_prior_direction_alignment",
+        "prior_same_hour_share",
+        "activity_acceleration",
+        "hist_markout_score",
+        "log_hist_markout_count",
+        "hist_markout_uncertainty",
+        "log_market_participant_degree"
+      ],
+      "mean_row_loss_gain": 0.005936660749644665,
+      "positive_families": 3,
+      "rows_holdout": 363488,
+      "slices": {
+        "repeat": {
+          "mean_loss_gain": 0.0009902525822865491,
+          "rows": 249992
+        },
+        "sparse": {
+          "mean_loss_gain": -0.005465364406528587,
+          "rows": 113496
+        },
+        "unseen": {
+          "mean_loss_gain": 0.07105691219874652,
+          "rows": 14502
+        }
+      },
+      "weighted_mse_gain": -0.0003320148802201661
+    },
+    "identity_history": {
+      "baseline_mse": 0.31506385689150024,
+      "bootstrap_ci95": [
+        -0.001034658666866866,
+        0.00015770469251157653
+      ],
+      "bootstrap_p": 1.0,
+      "challenger_mse": 0.31538375930127505,
+      "concentration": {
+        "effective_contributing_participants": 83.98474311140897,
+        "gain_without_top10_activity": -0.00027246880217599245,
+        "gain_without_top1_activity": -0.00034628540134620903,
+        "gain_without_top1pct_activity": -0.0001838277635712088,
+        "gain_without_top5_activity": -0.00029240827912129544,
+        "participants": 53410,
+        "top10_effect_share": 0.2355437272776402,
+        "top1pct_effect_share": 0.7959732634005083,
+        "top5_effect_share": 0.1781969688339705,
+        "top_participant_effect_share": 0.08743326246850923
+      },
+      "family_gains": {
+        "CAN_2025": 8.230330684289022e-05,
+        "COL_2026": -0.000835859833927588,
+        "HUN_2026": 1.5465358884969582e-05,
+        "PER_2026": -0.0005249805211281489,
+        "US_2024": -0.0003364403595456089
+      },
+      "fdr": {
+        "family_size": 5,
+        "p": 1.0,
+        "q": 1.0,
+        "rank": 5,
+        "reject": false
+      },
+      "features": [
+        "current_logit",
+        "ret_15",
+        "ret_60",
+        "ret_300",
+        "econ_count_15",
+        "econ_count_60",
+        "econ_count_300",
+        "econ_value_15",
+        "econ_value_60",
+        "econ_value_300",
+        "log_value",
+        "event_count_60_ex_market",
+        "log_prior_fill_count",
+        "log_prior_active_days",
+        "log_recency_seconds",
+        "hist_markout_score",
+        "log_hist_markout_count"
+      ],
+      "mean_row_loss_gain": -0.0009564631312116425,
+      "positive_families": 2,
+      "rows_holdout": 363488,
+      "slices": {
+        "repeat": {
+          "mean_loss_gain": -0.0004367702754239291,
+          "rows": 249992
+        },
+        "sparse": {
+          "mean_loss_gain": 0.00013380579963226383,
+          "rows": 113496
+        },
+        "unseen": {
+          "mean_loss_gain": 0.008864288680057232,
+          "rows": 14502
+        }
+      },
+      "weighted_mse_gain": -0.0003199024097748082
+    },
+    "selected_behavior": {
+      "baseline_mse": 0.31506385689150024,
+      "bootstrap_ci95": [
+        -0.001144713887169977,
+        0.0014520170381505239
+      ],
+      "bootstrap_p": 0.776,
+      "challenger_mse": 0.3149390196153054,
+      "concentration": {
+        "effective_contributing_participants": 253.05296927673064,
+        "gain_without_top10_activity": 0.00013739723176985557,
+        "gain_without_top1_activity": 0.00012618416285370735,
+        "gain_without_top1pct_activity": 0.00025588600687518275,
+        "gain_without_top5_activity": 0.00020956687714616197,
+        "participants": 53410,
+        "top10_effect_share": 0.15256082599041434,
+        "top1pct_effect_share": 0.7291438484510943,
+        "top5_effect_share": 0.0977277430565238,
+        "top_participant_effect_share": 0.02455802931878515
+      },
+      "family_gains": {
+        "CAN_2025": 0.00012071006528319161,
+        "COL_2026": 0.0002345734233112906,
+        "HUN_2026": -4.683668763683091e-05,
+        "PER_2026": 0.0018644566023463538,
+        "US_2024": -0.0015487170223298097
+      },
+      "fdr": {
+        "family_size": 5,
+        "p": 0.776,
+        "q": 1.0,
+        "rank": 1,
+        "reject": false
+      },
+      "features": [
+        "current_logit",
+        "ret_15",
+        "ret_60",
+        "ret_300",
+        "econ_count_15",
+        "econ_count_60",
+        "econ_count_300",
+        "econ_value_15",
+        "econ_value_60",
+        "econ_value_300",
+        "log_value",
+        "event_count_60_ex_market",
+        "log_prior_same_market_count",
+        "log_unique_markets_prior",
+        "market_history_share",
+        "log_unique_events_prior",
+        "event_history_share",
+        "current_market_novelty",
+        "current_event_novelty",
+        "log_market_participant_degree"
+      ],
+      "mean_row_loss_gain": -7.328828500957222e-05,
+      "positive_families": 3,
+      "rows_holdout": 363488,
+      "slices": {
+        "repeat": {
+          "mean_loss_gain": -5.198032760778023e-05,
+          "rows": 249992
+        },
+        "sparse": {
+          "mean_loss_gain": 0.0008112842987982645,
+          "rows": 113496
+        },
+        "unseen": {
+          "mean_loss_gain": 0.018123209507497136,
+          "rows": 14502
+        }
+      },
+      "weighted_mse_gain": 0.00012483727619483354
+    }
+  },
+  "rows_dev": 369872,
+  "rows_holdout": 363488,
+  "rows_train": 1293292,
+  "schema_version": 1,
+  "secondary_targets": {
+    "abs_60": {
+      "baseline_mse": 0.294139488320995,
+      "family_gains": {
+        "CAN_2025": -0.005301641233402377,
+        "COL_2026": 0.0017145077922786078,
+        "HUN_2026": -0.0006412481365076772,
+        "PER_2026": 0.010051195932669177,
+        "US_2024": -0.003238758684244031
+      },
+      "full_behavior_mse": 0.29362267718683627,
+      "gain": 0.0005168111341587456,
+      "rows_holdout": 363488,
+      "status": "OK"
+    },
+    "activity_60": {
+      "baseline_mse": 14.382085925364432,
+      "family_gains": {
+        "CAN_2025": -0.034031374435699036,
+        "COL_2026": 0.02138840562494959,
+        "HUN_2026": 0.06719753060930245,
+        "PER_2026": -0.03858182197725846,
+        "US_2024": -0.1558655500683983
+      },
+      "full_behavior_mse": 14.41006448741385,
+      "gain": -0.027978562049417732,
+      "rows_holdout": 545802,
+      "status": "OK"
+    },
+    "event_10": {
+      "baseline_mse": 1.577220815040534,
+      "family_gains": {
+        "CAN_2025": -0.10639173868379093,
+        "COL_2026": 0.029690607246748435,
+        "HUN_2026": -0.06638459705837296,
+        "PER_2026": -0.005232755626230823,
+        "US_2024": -0.0512148743283789
+      },
+      "full_behavior_mse": 1.6171274867305396,
+      "gain": -0.03990667169000561,
+      "rows_holdout": 538618,
+      "status": "OK"
+    },
+    "event_2": {
+      "baseline_mse": 0.6931575838469531,
+      "family_gains": {
+        "CAN_2025": -0.0067066371273070136,
+        "COL_2026": 0.002260423601162409,
+        "HUN_2026": -0.007320427248819206,
+        "PER_2026": 0.0068407311750407485,
+        "US_2024": -0.0038433597228307304
+      },
+      "full_behavior_mse": 0.6949114377115041,
+      "gain": -0.0017538538645509583,
+      "rows_holdout": 543491,
+      "status": "OK"
+    },
+    "signed_300": {
+      "baseline_mse": 0.48008877312542986,
+      "family_gains": {
+        "CAN_2025": 0.006054996046423011,
+        "COL_2026": 0.010408146329402346,
+        "HUN_2026": 0.012053338104302869,
+        "PER_2026": 0.030423470477471404,
+        "US_2024": 0.0026115802701376645
+      },
+      "full_behavior_mse": 0.4677784668798826,
+      "gain": 0.012310306245547242,
+      "rows_holdout": 448303,
+      "status": "OK"
+    },
+    "signed_60": {
+      "baseline_mse": 0.3308286763665476,
+      "family_gains": {
+        "CAN_2025": 0.006731136651200564,
+        "COL_2026": 0.008182678570703705,
+        "HUN_2026": 0.013310158232246183,
+        "PER_2026": 0.01276599762880215,
+        "US_2024": 0.00523662899088656
+      },
+      "full_behavior_mse": 0.32158335635178,
+      "gain": 0.009245320014767633,
+      "rows_holdout": 363488,
+      "status": "OK"
+    },
+    "y_15": {
+      "baseline_mse": 0.2668953792527659,
+      "family_gains": {
+        "CAN_2025": -0.0010811175888609803,
+        "COL_2026": -0.00012871256539692677,
+        "HUN_2026": -0.0007498017382810973,
+        "PER_2026": 0.001252448620366886,
+        "US_2024": -0.0017366740421239368
+      },
+      "full_behavior_mse": 0.2673841507156252,
+      "gain": -0.0004887714628593054,
+      "rows_holdout": 269171,
+      "status": "OK"
+    },
+    "y_300": {
+      "baseline_mse": 0.44477728011809625,
+      "family_gains": {
+        "CAN_2025": -0.011316494242588626,
+        "COL_2026": -0.0013532612502509256,
+        "HUN_2026": -0.006754723483488878,
+        "PER_2026": 0.0006154614968595373,
+        "US_2024": -0.00542263163237533
+      },
+      "full_behavior_mse": 0.449623609940465,
+      "gain": -0.004846329822368767,
+      "rows_holdout": 448303,
+      "status": "OK"
+    }
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "archetype_result": {
+    "bootstrap_ari_median": 0.526705979347078,
+    "holdout_fdr_q": 1.0,
+    "holdout_primary_gain": -5.970398748111894e-06,
+    "interpretation": "descriptive archetypes only; no predictive promotion",
+    "train_cluster_count": 6
+  },
+  "candidates": [
+    {
+      "bootstrap_p": 0.776,
+      "decision": "do not deploy as participant-conditioned price alpha",
+      "family_gains": {
+        "CAN_2025": 0.00012071006528319161,
+        "COL_2026": 0.0002345734233112906,
+        "HUN_2026": -4.683668763683091e-05,
+        "PER_2026": 0.0018644566023463538,
+        "US_2024": -0.0015487170223298097
+      },
+      "fdr_q": 1.0,
+      "feature_families": [
+        "specialisation",
+        "network_cross_market"
+      ],
+      "holdout_weighted_mse_gain": 0.00012483727619483354,
+      "id": "PRIMARY_SELECTED_BEHAVIOR_Y60",
+      "positive_families": 3,
+      "status": "REJECTED_NO_INCREMENTAL_EVIDENCE",
+      "target": "60-second future own-market canonical-YES logit change"
+    },
+    {
+      "decision": "separately preregister and shadow-test; not promoted by 005E primary gate",
+      "family_gains": {
+        "CAN_2025": 0.006731136651200564,
+        "COL_2026": 0.008182678570703705,
+        "HUN_2026": 0.013310158232246183,
+        "PER_2026": 0.01276599762880215,
+        "US_2024": 0.00523662899088656
+      },
+      "holdout_gain": 0.009245320014767633,
+      "id": "SECONDARY_SIGNED_MARKOUT_60",
+      "positive_families": 5,
+      "status": "FOLLOW_UP_ONLY",
+      "target": "participant-direction-signed 60-second markout"
+    },
+    {
+      "decision": "separately preregister and shadow-test; not promoted by 005E primary gate",
+      "family_gains": {
+        "CAN_2025": 0.006054996046423011,
+        "COL_2026": 0.010408146329402346,
+        "HUN_2026": 0.012053338104302869,
+        "PER_2026": 0.030423470477471404,
+        "US_2024": 0.0026115802701376645
+      },
+      "holdout_gain": 0.012310306245547242,
+      "id": "SECONDARY_SIGNED_MARKOUT_300",
+      "positive_families": 5,
+      "status": "FOLLOW_UP_ONLY",
+      "target": "participant-direction-signed 300-second markout"
+    },
+    {
+      "baseline_accuracy": 0.5847078688812831,
+      "baseline_log_loss": 0.677277315060534,
+      "decision": "separately preregister and shadow-test; no 005E primary promotion",
+      "full_behavior_accuracy": 0.6049462059181069,
+      "full_behavior_log_loss": 0.6666606588052897,
+      "id": "SECONDARY_NEXT_CHANGE_CLASSIFICATION",
+      "log_loss_gain": 0.010616656255244328,
+      "status": "FOLLOW_UP_ONLY",
+      "target": "next price-change sign"
+    }
+  ],
+  "experiment_id": "EXPERIMENT-005E",
+  "primary_disposition": "NO_INCREMENTAL_EVIDENCE",
+  "primary_target": "y_60",
+  "schema_version": 1,
+  "selected_feature_families": [
+    "specialisation",
+    "network_cross_market"
+  ]
+}

@@ -1,0 +1,187 @@
+{
+  "bootstrap_ari": [
+    0.6437405380130299,
+    0.8711578685652107,
+    0.45814846092627376,
+    0.39029170113892453,
+    0.526705979347078
+  ],
+  "bootstrap_ari_median": 0.526705979347078,
+  "clusters": [
+    {
+      "cluster": 0,
+      "rows": 14852,
+      "share": 0.23513393705275157,
+      "top_standardized_features": [
+        {
+          "feature": "log_lifetime_seconds",
+          "mean_z": -0.9326462233648768
+        },
+        {
+          "feature": "log_recent_fill_count_1800s",
+          "mean_z": 0.9170611192159284
+        },
+        {
+          "feature": "log_recent_fill_count_300s",
+          "mean_z": 0.9026806478020889
+        },
+        {
+          "feature": "prior_same_hour_share",
+          "mean_z": 0.8699879041627652
+        },
+        {
+          "feature": "log_prior_active_days",
+          "mean_z": -0.7894514560396988
+        }
+      ]
+    },
+    {
+      "cluster": 1,
+      "rows": 3559,
+      "share": 0.056345386612627446,
+      "top_standardized_features": [
+        {
+          "feature": "log_prior_fill_count",
+          "mean_z": 2.6753101256748457
+        },
+        {
+          "feature": "log_hist_markout_count",
+          "mean_z": 2.3630196646977817
+        },
+        {
+          "feature": "hist_markout_uncertainty",
+          "mean_z": -2.135659351886965
+        },
+        {
+          "feature": "log_prior_same_market_count",
+          "mean_z": 1.2268724835873983
+        },
+        {
+          "feature": "log_prior_active_days",
+          "mean_z": 1.1456731443629113
+        }
+      ]
+    },
+    {
+      "cluster": 2,
+      "rows": 2841,
+      "share": 0.04497815211196251,
+      "top_standardized_features": [
+        {
+          "feature": "current_event_novelty",
+          "mean_z": 4.471236071581926
+        },
+        {
+          "feature": "current_market_novelty",
+          "mean_z": 3.80394504429319
+        },
+        {
+          "feature": "log_prior_same_market_count",
+          "mean_z": -1.5060746875369644
+        },
+        {
+          "feature": "event_history_share",
+          "mean_z": -1.3200234725268587
+        },
+        {
+          "feature": "log_recency_seconds",
+          "mean_z": 1.1037473933229909
+        }
+      ]
+    },
+    {
+      "cluster": 3,
+      "rows": 9882,
+      "share": 0.15644987651193717,
+      "top_standardized_features": [
+        {
+          "feature": "log_recency_seconds",
+          "mean_z": 1.1596435074739886
+        },
+        {
+          "feature": "hist_markout_uncertainty",
+          "mean_z": 0.8561980668327384
+        },
+        {
+          "feature": "log_recent_fill_count_1800s",
+          "mean_z": -0.8393655537494205
+        },
+        {
+          "feature": "log_hist_markout_count",
+          "mean_z": -0.7912935536028727
+        },
+        {
+          "feature": "log_recent_fill_count_300s",
+          "mean_z": -0.7904335792557902
+        }
+      ]
+    },
+    {
+      "cluster": 4,
+      "rows": 15494,
+      "share": 0.24529795453106198,
+      "top_standardized_features": [
+        {
+          "feature": "market_history_share",
+          "mean_z": 1.1541331398828913
+        },
+        {
+          "feature": "log_prior_same_market_count",
+          "mean_z": 1.044767649283117
+        },
+        {
+          "feature": "log_unique_markets_prior",
+          "mean_z": -0.9400302849359151
+        },
+        {
+          "feature": "event_history_share",
+          "mean_z": 0.9001598532468105
+        },
+        {
+          "feature": "log_market_participant_degree",
+          "mean_z": 0.8512556553475843
+        }
+      ]
+    },
+    {
+      "cluster": 5,
+      "rows": 16536,
+      "share": 0.2617946931796593,
+      "top_standardized_features": [
+        {
+          "feature": "hist_markout_score",
+          "mean_z": -1.0817288082356586
+        },
+        {
+          "feature": "log_unique_markets_prior",
+          "mean_z": 0.9562513667881842
+        },
+        {
+          "feature": "log_unique_events_prior",
+          "mean_z": 0.8128102977994958
+        },
+        {
+          "feature": "market_history_share",
+          "mean_z": -0.7995882322381251
+        },
+        {
+          "feature": "event_history_share",
+          "mean_z": -0.7708801718140252
+        }
+      ]
+    }
+  ],
+  "fit_rows": 63164,
+  "interpretation": "descriptive behavioural archetypes; not assumed alpha classes",
+  "n_clusters": 6,
+  "pca_components": 6,
+  "pca_explained_variance_ratio": [
+    0.2090063532297499,
+    0.1389935262444473,
+    0.10327370350317197,
+    0.07711129939075104,
+    0.06832266530037853,
+    0.054962391715240005
+  ],
+  "unique_participant_states": 63164
+}

@@ -178,10 +178,18 @@ The latest market-equivalence research materially expands the set of external st
 - Recommended experimental ordering remains: semantic graph / rule signatures → information-family de-duplication → synchronized high-frequency capture → LOO-FAMILY experiment → hard-constraint scanner → coherent-surface optimisation.
 
 
+| M-143 | Participant ecology | [x] | Shrunk past-only participant markout | `score_t = (Σ_{j:available_j<t} m_j)/(n_t+λ)`, with `λ=20` and neutral score 0 for unseen participants | Encode historical participant outcome behaviour without full-history leakage or sparse-wallet overfit | ESTIMATOR | EMPIRICALLY_TESTED / NO_PRIMARY_INCREMENT | Feature-family DEV gain was weak/non-stable and full primary HOLDOUT behaviour was negative; shuffled/delayed controls retained | EXPERIMENT-005E | `available_j` is label completion time, not fill time; current/future labels never enter current score. |
+| M-144 | Participant ecology | [x] | Incremental behavioural-state hypothesis | Compare `E[Δlogit_{t→t+h} | generic market/activity controls, participant state]` against the same model without participant state | Test whether participant ecology contains information beyond active-market tagging | TRADING HYPOTHESIS | REJECTED ON PRIMARY 60S TARGET | Sealed HOLDOUT selected-behaviour gain `+1.248e-4`, bootstrap `p=0.776`, BH `q=1.0`; full behaviour and identity-history negative | EXPERIMENT-005E | No participant-conditioned 60s price alpha is promoted. Predictive object remains state, not a named-wallet leaderboard. |
+| M-145 | Participant ecology | [x] | Effective contributing participants | For nonnegative contribution shares `s_i`, `N_eff=1/Σ_i s_i²` | Distinguish broad ecology effects from one/few-wallet concentration | ESTIMATOR | EMPIRICALLY_EXECUTED | Selected-behaviour HOLDOUT `N_eff≈253`; top participant effect share ≈2.46%, top-1% ≈72.9% | EXPERIMENT-005E | Concentration was not the primary failure; statistical reliability and transfer were. |
+| M-146 | Participant ecology | [x] | Hierarchical timestamp-batch weight | `w_i ∝ [F·M_f·B_{fm}·R_{fmt}]^{-1}`, normalized to mean 1 | Equalise family → market → observable timestamp batch → row so one-second multi-fill bursts do not dominate evidence | ESTIMATOR | EMPIRICALLY_EXECUTED | Used for DEV/HOLDOUT losses and the family→calendar-day block bootstrap in 005E | EXPERIMENT-005E | Required because DATA-002 fill timestamps are one-second block-time proxies with no valid within-second ordering. |
+
+| M-147 | Participant ecology | [x] | Participant-direction-signed markout hypothesis | `smarkout_h = pressure_t · (logit(P_{t+h})-logit(P_t))`; compare generic baseline vs participant behavioural state | Test whether participant state predicts the quality/informativeness of the currently observed participant direction even when unconditional price prediction fails | TRADING HYPOTHESIS | SECONDARY POSITIVE / FOLLOW-UP ONLY | Frozen 005E secondary HOLDOUT gain `+0.0092453` at 60s and `+0.0123103` at 300s; both positive in all 5 families | EXPERIMENT-005E-FOLLOWUP | Not a promoted 005E alpha: requires a new preregistered primary test, current-pressure executable mapping, fresh data and execution economics. |
+| M-148 | Participant ecology | [x] | Participant-conditioned next-change classifier | Compare `P(sign(ΔP_next)>0 | baseline, participant state)` vs baseline-only logistic model | Test whether participant behavioural state improves immediate direction classification rather than fixed-clock return magnitude | TRADING HYPOTHESIS | SECONDARY POSITIVE / FOLLOW-UP ONLY | Frozen 005E secondary HOLDOUT log-loss `0.677277→0.666661`; accuracy `0.584708→0.604946` | EXPERIMENT-005E-FOLLOWUP | Hypothesis-generating only; needs separately frozen calibration/null/transfer tests before competition use. |
+
 ## Current ledger snapshot
 
-- **Total mathematical / quantitative objects captured:** 142
-- **Capture checkboxes:** 142 / 142
+- **Total mathematical / quantitative objects captured:** 148
+- **Capture checkboxes:** 148 / 148
 - **Checkbox meaning:** captured in canonical memory, not validated
 - **Empirically supported:** 0
 - **Implemented:** 0
@@ -203,7 +211,7 @@ The latest market-equivalence research materially expands the set of external st
 2. **M-019 / M-136 — Depth-aware executable structural certificates.** Convert logical/partition relationships into real bid/ask/depth-aware opportunities rather than midpoint curiosities.
 3. **M-063 / M-065 — Fill-conditioned adverse-selection and OFI testing.** Treat flow features as unproven predictors of actual future maker markouts.
 4. **M-075 / M-076 / M-077 — Fill-hazard, queue and conservative paper-fill models.** Paper MM is meaningless if simulated fills are too generous.
-5. **M-021 / M-121 — Coherent probability projection and structural residuals.** Build only after semantic/family controls and LOO-FAMILY testing are working.
+5. **M-147 / M-148 — Participant-flow quality follow-up.** Re-test signed participant markout / next-change classification as a separately preregistered primary mechanism on fresh data; do not recycle 005E HOLDOUT.
 
 ## Canonical maintenance rule
 
