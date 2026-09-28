@@ -8,6 +8,7 @@ estimator classes.
 from __future__ import annotations
 
 from collections.abc import Collection, Mapping
+from typing import Any
 
 
 def is_classification_target(dataset: str, target: str) -> bool:
@@ -84,17 +85,17 @@ def build_frozen_model(
     *,
     classification: bool,
     random_state: int,
-):
+) -> Any:
     """Instantiate one exact estimator from the frozen 005F model ladder.
 
     Scikit-learn is imported lazily because the repository's lightweight
     unit-test environment does not require the Kaggle research stack.
     """
-    from sklearn.ensemble import (
+    from sklearn.ensemble import (  # type: ignore[import-not-found]
         HistGradientBoostingClassifier,
         HistGradientBoostingRegressor,
     )
-    from sklearn.linear_model import (
+    from sklearn.linear_model import (  # type: ignore[import-not-found]
         ElasticNet,
         LinearRegression,
         LogisticRegression,
