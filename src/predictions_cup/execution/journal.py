@@ -217,106 +217,116 @@ class ExecutionJournal:
         audit: ExecutionAudit | None = None,
         submitted_monotonic_ns: int | None = None,
     ) -> None:
-        existing = self._connection.execute(
-            """
-            SELECT tournament_id, idempotency_key, operation_kind, sink_mode,
-                   payload_sha256, payload_json
-            FROM execution_envelopes WHERE logical_operation_id = ?
-            """,
-            (envelope.logical_operation_id,),
-        ).fetchone()
-        if existing is not None:
-            expected = (
-                envelope.tournament_id,
-                envelope.idempotency_key,
-                envelope.operation_kind.value,
-                envelope.sink_mode.value,
-                envelope.payload_sha256,
-                envelope.payload_json,
-            )
-            if tuple(existing) != expected:
-                raise ValueError("logical operation identity cannot be reused with changed payload")
-            if submitted_monotonic_ns is not None:
-                self.record_event(
-                    logical_operation_id=envelope.logical_operation_id,
-                    event_type="RESUBMISSION",
-                    observed_monotonic_ns=submitted_monotonic_ns,
-                )
-            return
-
         submission_ns = (
             envelope.created_monotonic_ns
             if submitted_monotonic_ns is None
             else submitted_monotonic_ns
         )
-        with self._connection:
-            self._connection.execute(
-                """
-                INSERT INTO execution_envelopes (
-                    logical_operation_id, tournament_id, idempotency_key,
-                    operation_kind, sink_mode, payload_json, payload_sha256,
-                    intent_ids_json, lifecycle_state, created_monotonic_ns,
-                    updated_monotonic_ns, relationship_constraint
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    envelope.logical_operation_id,
-                    envelope.tournament_id,
-                    envelope.idempotency_key,
-                    envelope.operation_kind.value,
-                    envelope.sink_mode.value,
-                    envelope.payload_json,
-                    envelope.payload_sha256,
-                    json.dumps(envelope.intent_ids, separators=(",", ":")),
-                    envelope.lifecycle_state.value,
-                    envelope.created_monotonic_ns,
-                    envelope.created_monotonic_ns,
-                    envelope.relationship_constraint,
-                ),
-            )
-            if intents:
-                for intent in intents:
+        try:
+            with self._connection:
+                self._connection.execute(
+                    """
+                    INSERT INTO execution_envelopes (
+                        logical_operation_id, tournament_id, idempotency_key,
+                        operation_kind, sink_mode, payload_json, payload_sha256,
+                        intent_ids_json, lifecycle_state, created_monotonic_ns,
+                        updated_monotonic_ns, relationship_constraint
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        envelope.logical_operation_id,
+                        envelope.tournament_id,
+                        envelope.idempotency_key,
+                        envelope.operation_kind.value,
+                        envelope.sink_mode.value,
+                        envelope.payload_json,
+                        envelope.payload_sha256,
+                        json.dumps(envelope.intent_ids, separators=(",", ":")),
+                        envelope.lifecycle_state.value,
+                        envelope.created_monotonic_ns,
+                        envelope.created_monotonic_ns,
+                        envelope.relationship_constraint,
+                    ),
+                )
+                if intents:
+                    for intent in intents:
+                        self._insert_event(
+                            logical_operation_id=envelope.logical_operation_id,
+                            tournament_id=envelope.tournament_id,
+                            logical_intent_id=intent.intent_id,
+                            event_type="SUBMISSION",
+                            observed_monotonic_ns=submission_ns,
+                            decision_observation_ns=intent.decision_observation_ns,
+                            decision_monotonic_ns=(
+                                None if audit is None else audit.decision_monotonic_ns
+                            ),
+                            strategy_family=(
+                                None if audit is None else audit.strategy_family
+                            ),
+                            strategy_id=(
+                                intent.strategy_id
+                                if audit is None
+                                else audit.strategy_id
+                            ),
+                            signal_value=None if audit is None else audit.signal_value,
+                            fair_value=None if audit is None else audit.fair_value,
+                            exchange_id=intent.exchange_id,
+                            quantity=str(intent.quantity),
+                        )
+                else:
                     self._insert_event(
                         logical_operation_id=envelope.logical_operation_id,
                         tournament_id=envelope.tournament_id,
-                        logical_intent_id=intent.intent_id,
+                        logical_intent_id=None,
                         event_type="SUBMISSION",
                         observed_monotonic_ns=submission_ns,
-                        decision_observation_ns=intent.decision_observation_ns,
+                        decision_observation_ns=(
+                            None if audit is None else audit.decision_observation_ns
+                        ),
                         decision_monotonic_ns=(
                             None if audit is None else audit.decision_monotonic_ns
                         ),
                         strategy_family=(
                             None if audit is None else audit.strategy_family
                         ),
-                        strategy_id=(
-                            intent.strategy_id if audit is None else audit.strategy_id
-                        ),
+                        strategy_id=None if audit is None else audit.strategy_id,
                         signal_value=None if audit is None else audit.signal_value,
                         fair_value=None if audit is None else audit.fair_value,
-                        exchange_id=intent.exchange_id,
-                        quantity=str(intent.quantity),
                     )
-            else:
-                self._insert_event(
-                    logical_operation_id=envelope.logical_operation_id,
-                    tournament_id=envelope.tournament_id,
-                    logical_intent_id=None,
-                    event_type="SUBMISSION",
-                    observed_monotonic_ns=submission_ns,
-                    decision_observation_ns=(
-                        None if audit is None else audit.decision_observation_ns
-                    ),
-                    decision_monotonic_ns=(
-                        None if audit is None else audit.decision_monotonic_ns
-                    ),
-                    strategy_family=(
-                        None if audit is None else audit.strategy_family
-                    ),
-                    strategy_id=None if audit is None else audit.strategy_id,
-                    signal_value=None if audit is None else audit.signal_value,
-                    fair_value=None if audit is None else audit.fair_value,
-                )
+            return
+        except sqlite3.IntegrityError:
+            # The hot path optimistically INSERTs. Only an idempotent retry pays
+            # the read needed to prove the logical operation is byte-identical.
+            existing = self._connection.execute(
+                """
+                SELECT tournament_id, idempotency_key, operation_kind, sink_mode,
+                       payload_sha256, payload_json
+                FROM execution_envelopes WHERE logical_operation_id = ?
+                """,
+                (envelope.logical_operation_id,),
+            ).fetchone()
+            if existing is None:
+                raise
+
+        expected = (
+            envelope.tournament_id,
+            envelope.idempotency_key,
+            envelope.operation_kind.value,
+            envelope.sink_mode.value,
+            envelope.payload_sha256,
+            envelope.payload_json,
+        )
+        if tuple(existing) != expected:
+            raise ValueError(
+                "logical operation identity cannot be reused with changed payload"
+            )
+        if submitted_monotonic_ns is not None:
+            self.record_event(
+                logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
+                event_type="RESUBMISSION",
+                observed_monotonic_ns=submitted_monotonic_ns,
+            )
 
     def record_event(
         self,
