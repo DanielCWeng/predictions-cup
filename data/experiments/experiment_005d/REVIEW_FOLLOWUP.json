@@ -1,0 +1,259 @@
+{
+  "experiment_id": "EXPERIMENT-005D",
+  "followup_id": "EXPERIMENT-005D-REVIEW-FOLLOWUP",
+  "label": "POST_HOC_INDEPENDENT_REVIEW_FALSIFICATION",
+  "kaggle": {
+    "kernel": "polyleviathan/sig-cup-exp005d-review-followup",
+    "version": 1,
+    "runner_sha256": "b394bce34097a228281599862799837fb501bb5c9a30cf63c7583c061b2dad9f",
+    "status": "COMPLETE"
+  },
+  "original_empirical_output_changed": false,
+  "accepted_original_evidence": {
+    "corrected_holdout_runner_sha256": "e65c961b73c56e26b322c8336944ea2fbc048ccf53bdd645cdaf77c53caef7ce",
+    "holdout_results_sha256": "610e4b6bd0ed199c63cc2543206ce70c4900e7cb1b84a24bf0e572f4f975920b"
+  },
+  "followup_output_hashes": {
+    "regime_attribution_csv": "99e5fb3e036deea0f554ebe3f702880a6ccac11e8c1cd82d003cab4d880c1255",
+    "dependence_sensitivity_csv": "a14c035638f195f4c3615a8d5a874b86d777d50ed3d53520d04a325e08260ce2",
+    "time_concentration_by_hour_csv": "ee2036b21b72129718818f30bc7b7c7cabd89ca15c4f898f9e8746df61cc288d",
+    "effect_scale_csv": "bd0e4777405160b9f4d344ce1a9310a9fd0352caa8169b2e25c5104eb9db2b5d",
+    "raw_review_json": "259ad1d9f07148b52327226e2a62f8619df356eb4c7e18e2636da120f31bd98f"
+  },
+  "regime_attribution": {
+    "fixed_predictive_cells": 13,
+    "conclusion": "All 13 fixed predictive HOLDOUT cells are entirely within canonical EXPERIMENT-004A LATE_COUNT windows.",
+    "pre_election_share": 0,
+    "election_day_pre_results_share": 0,
+    "active_results_share": 0,
+    "late_count_share": 1,
+    "post_resolution_share": 0,
+    "outside_principal_windows_share": 0,
+    "peru": {
+      "event": "peru_first_round",
+      "panel_start_utc": "2026-04-10T00:00:00.100000Z",
+      "panel_end_utc": "2026-04-14T23:59:55.100000Z",
+      "train_end_exclusive_utc": "2026-04-12T23:54:57.100000Z",
+      "dev_start_utc": "2026-04-13T00:04:57.100000Z",
+      "dev_end_exclusive_utc": "2026-04-13T23:54:56.100000Z",
+      "holdout_start_utc": "2026-04-14T00:04:56.100000Z",
+      "holdout_end_utc": "2026-04-14T23:59:55.100000Z",
+      "canonical_late_count_start_utc": "2026-04-13T05:00:00Z",
+      "canonical_late_count_end_utc": "2026-05-15T15:04:00Z",
+      "holdout_regime": "LATE_COUNT",
+      "holdout_observation_share": 1
+    },
+    "colombia": {
+      "event": "colombia_runoff",
+      "panel_start_utc": "2026-06-19T00:00:00.296000Z",
+      "panel_end_utc": "2026-06-23T23:59:55.296000Z",
+      "train_end_exclusive_utc": "2026-06-21T23:54:57.296000Z",
+      "dev_start_utc": "2026-06-22T00:04:57.296000Z",
+      "dev_end_exclusive_utc": "2026-06-22T23:54:56.296000Z",
+      "holdout_start_utc": "2026-06-23T00:04:56.296000Z",
+      "holdout_end_utc": "2026-06-23T23:59:55.296000Z",
+      "canonical_late_count_start_utc": "2026-06-22T03:11:00Z",
+      "canonical_late_count_end_utc": "2026-06-25T05:00:00Z",
+      "holdout_regime": "LATE_COUNT",
+      "holdout_observation_share": 1
+    }
+  },
+  "peru": {
+    "relationship": "Fuerza Popular Senate most-seats -> Fuerza Popular Chamber most-seats",
+    "representation": "RAW_INDIRECT_PROB_MEAN",
+    "corrected_scientific_label": "LATE_COUNT_STRUCTURAL_CONVERGENCE_CANDIDATE",
+    "disposition": "RETAIN WITH WEAK DEPENDENCE ROBUSTNESS",
+    "horizon_5s": {
+      "original_5m": {
+        "p": 0.003996003996003996,
+        "q": 0.012987012987012988,
+        "ci": [
+          1.55606093672871e-8,
+          7.259187976213755e-8
+        ]
+      },
+      "block_30m": {
+        "p": 0.006993006993006993,
+        "q": 0.01818181818181818,
+        "ci": [
+          1.4574478751466383e-8,
+          7.00226496219168e-8
+        ]
+      },
+      "block_1h": {
+        "p": 0.014985014985014986,
+        "q": 0.03246753246753247,
+        "ci": [
+          1.2384211784108156e-8,
+          7.552262331078028e-8
+        ]
+      },
+      "block_4h": {
+        "p": 0.06293706293706294,
+        "q": 0.10227272727272728,
+        "ci": [
+          1.1765237160745707e-8,
+          9.262268338202424e-8
+        ]
+      },
+      "block_8h": {
+        "p": 0.000999000999000999,
+        "q": 0.0016233766233766235,
+        "ci": [
+          1.3861524231691074e-8,
+          7.036271660543935e-8
+        ]
+      },
+      "delayed_state_ratio": 0.6203972007085433,
+      "distinct_utc_hours": 24,
+      "contiguous_active_hour_periods": 1,
+      "positive_share_top_1_hour": 0.2215127445366988,
+      "positive_share_top_3_hours": 0.5349301815412676,
+      "positive_share_top_6_hours": 0.7529682306575273,
+      "first_temporal_half_score": 5.9164796025985246e-8,
+      "second_temporal_half_score": 1.5101123639978e-8,
+      "score_after_removing_highest_positive_hour": 2.883123053551574e-8,
+      "sign_survives_highest_positive_hour_removal": true,
+      "holdout_beta": 0.00046055839497318563,
+      "response_pp_for_1pp_residual": 0.00046055839497318563,
+      "response_pp_for_5pp_residual": 0.002302791974865928,
+      "response_pp_for_10pp_residual": 0.004605583949731856,
+      "standardized_effect": 0.02849876730835665,
+      "quantile_monotone": false
+    },
+    "horizon_60s": {
+      "original_5m": {
+        "p": 0.006993006993006993,
+        "q": 0.01818181818181818,
+        "ci": [
+          1.2057383171999193e-8,
+          3.226882460753945e-7
+        ]
+      },
+      "block_30m": {
+        "p": 0.001998001998001998,
+        "q": 0.008658008658008658,
+        "ci": [
+          8.763250352707165e-9,
+          3.1594645728272756e-7
+        ]
+      },
+      "block_1h": {
+        "p": 0.000999000999000999,
+        "q": 0.0025974025974025974,
+        "ci": [
+          -1.4266605568299828e-8,
+          3.2261319939180405e-7
+        ]
+      },
+      "block_4h": {
+        "p": 0.000999000999000999,
+        "q": 0.0021645021645021645,
+        "ci": [
+          -1.0052415040510993e-7,
+          3.2643795229839074e-7
+        ]
+      },
+      "block_8h": {
+        "p": 0.000999000999000999,
+        "q": 0.0016233766233766235,
+        "ci": [
+          1.0288776567437289e-7,
+          2.7986535411767136e-7
+        ]
+      },
+      "delayed_state_ratio": 0.7726126457083266,
+      "distinct_utc_hours": 24,
+      "contiguous_active_hour_periods": 1,
+      "positive_share_top_1_hour": 0.12417109603083418,
+      "positive_share_top_3_hours": 0.35447745859722346,
+      "positive_share_top_6_hours": 0.6179785669170164,
+      "first_temporal_half_score": 2.6096395441424297e-7,
+      "second_temporal_half_score": 6.949358260451162e-8,
+      "score_after_removing_highest_positive_hour": 1.711017851883971e-7,
+      "sign_survives_highest_positive_hour_removal": true,
+      "holdout_beta": 0.0020873219797346563,
+      "response_pp_for_1pp_residual": 0.0020873219797346563,
+      "response_pp_for_5pp_residual": 0.010436609898673281,
+      "response_pp_for_10pp_residual": 0.020873219797346562,
+      "standardized_effect": 0.05950181414089358,
+      "quantile_monotone": false
+    },
+    "dependence_interpretation": "Not uniformly robust to longer dependence blocks. The 5s 4h descriptive q-value is slightly above 0.10 despite a positive percentile interval; the 60s 1h and 4h percentile intervals cross zero even though null-centered one-sided p/q values remain small. The 8h sensitivity re-strengthens but has very low effective block count across a 24h HOLDOUT and is not treated as a rescue.",
+    "concentration_interpretation": "Evidence is stronger in the first half and somewhat concentrated, especially at 5s, but it spans all 24 UTC hours and remains positive after removing the single highest-positive-contribution hour.",
+    "tournament_recommendation": "YES — retain as one late-count structural-convergence feature family only, with 5s and 60s treated as correlated horizons; do not treat as generic structural alpha or standalone trading edge."
+  },
+  "colombia": {
+    "relationship": "Abelardo overall presidential winner -> Antioquia runoff first-place",
+    "representation": "AFFINE_INDIRECT_LOGIT",
+    "horizon_seconds": 5,
+    "corrected_scientific_label": "LATE_COUNT_STRUCTURAL_CONVERGENCE_CANDIDATE",
+    "disposition": "RETAIN — LATE_COUNT STRUCTURAL CONVERGENCE CANDIDATE",
+    "original_5m": {
+      "p": 0.000999000999000999,
+      "q": 0.006493506493506494,
+      "ci": [
+        2.3789586144568784e-10,
+        6.674618783926831e-10
+      ]
+    },
+    "block_30m": {
+      "p": 0.000999000999000999,
+      "q": 0.006493506493506494,
+      "ci": [
+        2.5490996877943444e-10,
+        6.567899017982614e-10
+      ]
+    },
+    "block_1h": {
+      "p": 0.000999000999000999,
+      "q": 0.0025974025974025974,
+      "ci": [
+        2.6774437099003296e-10,
+        6.551605244340637e-10
+      ]
+    },
+    "block_4h": {
+      "p": 0.000999000999000999,
+      "q": 0.0021645021645021645,
+      "ci": [
+        1.7122242699514827e-10,
+        6.809254976402939e-10
+      ]
+    },
+    "block_8h": {
+      "p": 0.000999000999000999,
+      "q": 0.0016233766233766235,
+      "ci": [
+        1.4626773611463688e-10,
+        6.883720182015118e-10
+      ]
+    },
+    "delayed_state_ratio": 0.4436208672644359,
+    "distinct_utc_hours": 24,
+    "contiguous_active_hour_periods": 1,
+    "positive_share_top_1_hour": 0.09027828050312037,
+    "positive_share_top_3_hours": 0.2683113069716402,
+    "positive_share_top_6_hours": 0.5251784646213137,
+    "first_temporal_half_score": 6.392466771976404e-10,
+    "second_temporal_half_score": 2.586235964816293e-10,
+    "score_after_removing_highest_positive_hour": 4.538364628575291e-10,
+    "sign_survives_highest_positive_hour_removal": true,
+    "holdout_beta": 0.000016232300061158588,
+    "response_pp_for_1pp_residual": 0.000016232300061158588,
+    "response_pp_for_5pp_residual": 0.00008116150030579295,
+    "response_pp_for_10pp_residual": 0.0001623230006115859,
+    "standardized_effect": 0.00391646229315697,
+    "quantile_monotone": false,
+    "dependence_interpretation": "Statistical direction is robust across all fixed longer block sensitivities and is not time-concentrated, but the translated effect scale is extremely small and remains non-monotone in signal magnitude.",
+    "tournament_recommendation": "Secondary diagnostic challenger only; not a standalone strategy."
+  },
+  "programme_disposition": "NARROW LATE_COUNT STRUCTURAL EVIDENCE — RECONSTRUCTION STRONG / PREDICTIVE EVIDENCE WEAK AND REGIME-SPECIFIC",
+  "interpretation_corrections": [
+    "Do not describe either surviving relationship as generic structural alpha.",
+    "All predictive HOLDOUT evidence in 005D is late-count convergence evidence.",
+    "The primary statistic is TRAIN-controlled covariance between structural signal residual and future target-price-change residual.",
+    "Beta translations are descriptive probability-response scales, not PnL, executable spread, RMSE improvement, Sharpe, or directly realizable edge.",
+    "No previously failed candidate is promoted by the post-hoc review."
+  ]
+}
