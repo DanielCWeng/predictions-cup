@@ -70,6 +70,7 @@ class SigTradingClient:
         timeout_seconds: float = 10.0,
         retry_policy: RetryPolicy | None = None,
         request_in_flight_wait_seconds: float = 90.0,
+        keepalive_expiry_seconds: float = 60.0,
         transport: httpx.AsyncBaseTransport | None = None,
         sleep: SleepFn = asyncio.sleep,
     ) -> None:
@@ -80,6 +81,8 @@ class SigTradingClient:
             raise ValueError("timeout_seconds must be positive")
         if request_in_flight_wait_seconds < 0:
             raise ValueError("request_in_flight_wait_seconds must be non-negative")
+        if keepalive_expiry_seconds <= 0:
+            raise ValueError("keepalive_expiry_seconds must be positive")
         self._governor = governor
         self._retry_policy = retry_policy or RetryPolicy()
         self._request_in_flight_wait_seconds = request_in_flight_wait_seconds
@@ -92,6 +95,11 @@ class SigTradingClient:
                 "Content-Type": "application/json",
             },
             timeout=httpx.Timeout(timeout_seconds),
+            limits=httpx.Limits(
+                max_connections=100,
+                max_keepalive_connections=20,
+                keepalive_expiry=keepalive_expiry_seconds,
+            ),
             transport=transport,
         )
 
@@ -119,11 +127,15 @@ class SigTradingClient:
             accepted_statuses=frozenset({200}),
             execution_can_be_uncertain=True,
         )
-        del status
-        return self._validate(SingleOrderResponseDto, payload, "/orders")
+        return self._validate_execution(
+            SingleOrderResponseDto,
+            payload,
+            "/orders",
+            status,
+        )
 
     async def place_batch(self, request: BatchOrderRequestDto) -> BatchOrderResponseDto:
-        _, payload = await self._request_json(
+        status, payload = await self._request_json(
             "POST",
             "orders/batch",
             route_template="/orders/batch",
@@ -132,12 +144,17 @@ class SigTradingClient:
             execution_can_be_uncertain=True,
             resume_incomplete_batch=True,
         )
-        return self._validate(BatchOrderResponseDto, payload, "/orders/batch")
+        return self._validate_execution(
+            BatchOrderResponseDto,
+            payload,
+            "/orders/batch",
+            status,
+        )
 
     async def place_multi_leg(
         self, request: MultiLegOrderRequestDto
     ) -> MultiLegResponseDto:
-        _, payload = await self._request_json(
+        status, payload = await self._request_json(
             "POST",
             "orders/multi-leg",
             route_template="/orders/multi-leg",
@@ -145,7 +162,55 @@ class SigTradingClient:
             accepted_statuses=frozenset({200}),
             execution_can_be_uncertain=True,
         )
-        return self._validate(MultiLegResponseDto, payload, "/orders/multi-leg")
+        return self._validate_execution(
+            MultiLegResponseDto,
+            payload,
+            "/orders/multi-leg",
+            status,
+        )
+
+    async def place_order_payload(self, payload_json: str) -> SingleOrderResponseDto:
+        status, payload = await self._request_json(
+            "POST",
+            "orders",
+            route_template="/orders",
+            resolved_payload=None,
+            resolved_content=payload_json.encode("utf-8"),
+            accepted_statuses=frozenset({200}),
+            execution_can_be_uncertain=True,
+        )
+        return self._validate_execution(
+            SingleOrderResponseDto, payload, "/orders", status
+        )
+
+    async def place_batch_payload(self, payload_json: str) -> BatchOrderResponseDto:
+        status, payload = await self._request_json(
+            "POST",
+            "orders/batch",
+            route_template="/orders/batch",
+            resolved_payload=None,
+            resolved_content=payload_json.encode("utf-8"),
+            accepted_statuses=frozenset({200, 207, 422}),
+            execution_can_be_uncertain=True,
+            resume_incomplete_batch=True,
+        )
+        return self._validate_execution(
+            BatchOrderResponseDto, payload, "/orders/batch", status
+        )
+
+    async def place_multi_leg_payload(self, payload_json: str) -> MultiLegResponseDto:
+        status, payload = await self._request_json(
+            "POST",
+            "orders/multi-leg",
+            route_template="/orders/multi-leg",
+            resolved_payload=None,
+            resolved_content=payload_json.encode("utf-8"),
+            accepted_statuses=frozenset({200}),
+            execution_can_be_uncertain=True,
+        )
+        return self._validate_execution(
+            MultiLegResponseDto, payload, "/orders/multi-leg", status
+        )
 
     async def cancel_order(self, order_id: int) -> object:
         if order_id <= 0:
@@ -190,7 +255,7 @@ class SigTradingClient:
             payload["marketId"] = market_id
         if tournament_id is not None:
             payload["tournamentId"] = tournament_id
-        _, response_payload = await self._request_json(
+        status, response_payload = await self._request_json(
             "POST",
             "orders/cancel-all",
             route_template="/orders/cancel-all",
@@ -198,10 +263,11 @@ class SigTradingClient:
             accepted_statuses=frozenset({200, 207, 422}),
             execution_can_be_uncertain=True,
         )
-        return self._validate(
+        return self._validate_execution(
             CancelAllResponseDto,
             response_payload,
             "/orders/cancel-all",
+            status,
         )
 
     async def _request_json(
@@ -212,14 +278,23 @@ class SigTradingClient:
         route_template: str,
         resolved_payload: dict[str, object] | None,
         accepted_statuses: frozenset[int],
+        resolved_content: bytes | None = None,
         execution_can_be_uncertain: bool,
         resume_incomplete_batch: bool = False,
     ) -> tuple[int, object]:
+        if resolved_payload is not None and resolved_content is not None:
+            raise ValueError("resolved_payload and resolved_content are mutually exclusive")
         policy = self._retry_policy
         for attempt in range(1, policy.max_attempts + 1):
             await self._governor.acquire(RestPriority.HIGH)
             try:
-                if resolved_payload is None:
+                if resolved_content is not None:
+                    response = await self._client.request(
+                        method,
+                        path,
+                        content=resolved_content,
+                    )
+                elif resolved_payload is None:
                     response = await self._client.request(method, path)
                 else:
                     response = await self._client.request(
@@ -246,7 +321,22 @@ class SigTradingClient:
                 response.status_code,
                 retry_after_seconds=self._retry_after_seconds(response),
             )
-            payload = self._decode_json(response, route_template)
+            try:
+                payload = self._decode_json(response, route_template)
+            except SigMalformedResponseError as exc:
+                if execution_can_be_uncertain and (
+                    response.status_code in accepted_statuses
+                    or response.status_code >= 500
+                ):
+                    raise SigExecutionUncertainError(
+                        status_code=response.status_code,
+                        code=None,
+                        safe_message=(
+                            "SIG returned a malformed execution response after dispatch; "
+                            "authoritative reconciliation is required"
+                        ),
+                    ) from exc
+                raise
 
             if response.status_code in accepted_statuses:
                 return response.status_code, payload
@@ -332,6 +422,26 @@ class SigTradingClient:
             raise error
 
         raise AssertionError("unreachable retry loop")
+
+    @classmethod
+    def _validate_execution(
+        cls,
+        model_type: type[ModelT],
+        payload: object,
+        route_template: str,
+        status_code: int,
+    ) -> ModelT:
+        try:
+            return cls._validate(model_type, payload, route_template)
+        except SigMalformedResponseError as exc:
+            raise SigExecutionUncertainError(
+                status_code=status_code,
+                code=None,
+                safe_message=(
+                    "SIG accepted an execution request but returned a malformed success "
+                    "envelope; authoritative reconciliation is required"
+                ),
+            ) from exc
 
     @staticmethod
     def _validate(
