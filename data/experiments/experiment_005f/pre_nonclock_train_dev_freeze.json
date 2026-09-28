@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "phase": "TRAIN_DEV_PRE_NONCLOCK_FREEZE",
+  "claim_regime": "PRE_ELECTION",
+  "dataset_scope": [
+    "event",
+    "depth"
+  ],
+  "source_kernel": "polyleviathan/005f-pre-nonclock-train-dev",
+  "source_kernel_version": 1,
+  "source_runner_sha256": "92f73c50f8408a4634b7500837363d0fc683d0dc601f38b4d281722cb0c572de",
+  "design_freeze_commit": "b5bf4cfe7482a58161523b66097910903050fc6b",
+  "execution_freeze_commit": "9ec9511536514bbaa97929a4b88d701cbc09987c",
+  "governing_amendments": [
+    "005F-AMENDMENT-003",
+    "005F-AMENDMENT-005"
+  ],
+  "holdout_read": false,
+  "data_manifest_sha256": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+  "identity_sha256": "e89fe8e25dcc494dad3ed96fe6672ab9f247c01eb70d4c0270a913f18a200a72",
+  "quality_sha256": "354801b67b9c32ae82d419f8a6198b7fd814923e8c424ac8716862b47907ccb5",
+  "raw_output_sha256": {
+    "book_state_capture_audit_csv": "7deff4fdca1a05ddcf0aad5ab87ce332e2a24959c28afcd35feb16aebf6de900",
+    "dev_model_tournament_csv": "26657648a6f3b1047c63447906e5ed18c04c05017d6a0149346caa336d799a6f",
+    "dev_selection_json": "664642a20abc714be4a8d9ed63056ea57899c653cf2f7c86d911f11c8cd4dac2",
+    "feature_atlas_json": "c3654773a798d9134c8ecec895a007c1cd010357e31b4e7214ba50080a123264",
+    "provenance_json": "a7167af23988c92b33da88cc08d83c211dadf48166dab50ad18923c048a965df",
+    "resilience_summary_csv": "712b9991cdc983b91e536de00a603aea04bb24ed99fa5005455451c1b2ad3ad4",
+    "target_atlas_json": "f7f4c63545d8b88ba1d96036cfcc68b20671f458a6b836e3bf21ed51b937bc99",
+    "train_dev_feature_screen_csv": "8f525db579afad657e6449437f3c81dbe2130997b02fb4c59b5c4c2935f2a939",
+    "train_dev_summary_json": "bc75f6630d2d1e2c4153611100f87e4a69810ebeec9567c3bb10afb8a656f267"
+  },
+  "summary": {
+    "clock_rows": 0,
+    "event_rows": 461029,
+    "depth_rows": 58421,
+    "screen_cells": 509,
+    "selected_coordinates": 4,
+    "confirmatory_candidates": 3,
+    "shadow_only_candidates": 1
+  },
+  "selection_integrity": {
+    "deterministic_recompute_exact_match": true,
+    "expected_coordinates": 4,
+    "frozen_coordinates": 4,
+    "unique_groups": true
+  },
+  "candidates": [
+    {
+      "blocks": 145,
+      "dataset": "event",
+      "dev_delta_mse": 0.00005695523666072089,
+      "dev_p_bh": 1,
+      "dev_p_raw": 1,
+      "events": 5,
+      "feature": "imbalance_top",
+      "feature_family": "MICROPRICE",
+      "horizon": "1",
+      "markets": 69,
+      "model": "HGB_D3_LR0.1",
+      "model_dev_mse": 0.00573768931263419,
+      "regime": "PRE_ELECTION",
+      "selection_class": "SHADOW_ONLY_NO_FDR",
+      "target": "event_price_k1",
+      "target_family": "PRICE_EVENT"
+    },
+    {
+      "blocks": 154,
+      "dataset": "event",
+      "dev_delta_mse": 0.000006248540430449025,
+      "dev_p_bh": 0.0006508827597429013,
+      "dev_p_raw": 0.000244081034903588,
+      "events": 5,
+      "feature": "qask",
+      "feature_family": "DEPTH",
+      "horizon": "2",
+      "markets": 78,
+      "model": "HGB_D3_LR0.03",
+      "model_dev_mse": 0.009773491804740296,
+      "regime": "PRE_ELECTION",
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "event_abs_k2",
+      "target_family": "VOL_EVENT"
+    },
+    {
+      "blocks": 167,
+      "dataset": "depth",
+      "dev_delta_mse": 0.00002516788443205634,
+      "dev_p_bh": 0.022211374176226508,
+      "dev_p_raw": 0.00366121552355382,
+      "events": 5,
+      "feature": "imbalance_top",
+      "feature_family": "MICROPRICE",
+      "horizon": "300",
+      "markets": 112,
+      "model": "ENET_0.001_0.5",
+      "model_dev_mse": 0.002926009626322218,
+      "regime": "PRE_ELECTION",
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "depth_price_h300",
+      "target_family": "MICRO_FV"
+    },
+    {
+      "blocks": 167,
+      "dataset": "depth",
+      "dev_delta_mse": 0.00006274435212166938,
+      "dev_p_bh": 0.0008093213262592655,
+      "dev_p_raw": 0.000244081034903588,
+      "events": 5,
+      "feature": "depth_slope_1c_5c",
+      "feature_family": "DEPTH",
+      "horizon": "300",
+      "markets": 112,
+      "model": "HGB_D2_LR0.1",
+      "model_dev_mse": 0.002735024373355307,
+      "regime": "PRE_ELECTION",
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "depth_abs_h300",
+      "target_family": "DEPTH_VOL"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "amendment_id": "005F-AMENDMENT-003",
+  "status": "PRE_RESULT_RESOURCE_AMENDMENT",
+  "parent_amendment": "005F-AMENDMENT-002",
+  "reason": "Further shard PRE_ELECTION by dataset group to use the explicitly available five-session Kaggle concurrency.",
+  "scientific_implementation_commit": "9ec9511536514bbaa97929a4b88d701cbc09987c",
+  "amended_runner_commit": "7899361bfade41211f143aa1d6b940b723c43319",
+  "claim_regime": "PRE_ELECTION",
+  "shards": {
+    "CLOCK": [
+      "clock"
+    ],
+    "NONCLOCK": [
+      "event",
+      "depth"
+    ]
+  },
+  "equivalence_basis": [
+    "BH-FDR grouping includes dataset, claim_regime, target_family and feature_family",
+    "candidate selection grouping includes dataset, claim_regime and target_family",
+    "model tournament fits are coordinate-local within dataset and claim_regime",
+    "no clock candidate competes with event or depth candidates for a frozen coordinate"
+  ],
+  "combination_rule": "Concatenate CLOCK and NONCLOCK screen/tournament/selection outputs within PRE_ELECTION, then combine with ACTIVE_RESULTS under AMENDMENT-002.",
+  "scientific_design_changed": false,
+  "feature_universe_changed": false,
+  "target_universe_changed": false,
+  "fdr_universe_changed": false,
+  "selection_rule_changed": false,
+  "holdout_accessed": false
+}

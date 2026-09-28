@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "amendment_id": "005F-AMENDMENT-011",
+  "status": "PRE_HOLDOUT_ENGINEERING_CLARIFICATION",
+  "reason": "Operationalize the preregistered deterministic systematic temporal thinning policy for final TRAIN+DEV fit-freeze.",
+  "fit_row_policy": {
+    "complete_case_universe": "For each frozen coordinate, define one complete-case row universe using target plus the full challenger feature-column set. Baseline and challenger use exactly these same rows.",
+    "split_application": "Apply thinning independently to TRAIN and DEV, matching the preregistered max_rows_per_split_regime=250000 policy.",
+    "stable_sort": [
+      "event",
+      "time",
+      "token_id"
+    ],
+    "thinning": "After stable sort within each split, if rows exceed 250000, keep every ceil(n/250000)-th row from the first row and truncate to 250000; otherwise keep all rows.",
+    "final_fit_order": "Concatenate thinned TRAIN rows followed by thinned DEV rows. Fit separate baseline/challenger scalers and same-class estimators on that identical combined row universe.",
+    "block_length_input": "Bootstrap block-length selection remains separate and uses all TRAIN rows with finite target, aggregated to one-minute event means as specified by 005F-AMENDMENT-009; it is not based on the thinned model-fit sample."
+  },
+  "candidate_set_changed": false,
+  "selected_models_changed": false,
+  "model_grid_changed": false,
+  "selection_rule_changed": false,
+  "holdout_accessed": false
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "amendment_id": "005F-AMENDMENT-010",
+  "status": "POST_SELECTION_RESOURCE_AMENDMENT",
+  "reason": "The canonical PRE_ELECTION CLOCK monolith completed cleanly before the regression hedge, so amendment 006 requires the monolithic CLOCK result to be canonical. Retire the redundant regression hedge to free Kaggle capacity for fit-freeze engineering validation.",
+  "canonical_clock_kernel": "polyleviathan/005f-pre-clock-train-dev",
+  "canonical_clock_freeze": "data/experiments/experiment_005f/pre_clock_train_dev_freeze.json",
+  "superseded_kernel": {
+    "kernel": "polyleviathan/005f-pre-clock-regression",
+    "role": "PRE CLOCK REGRESSION hedge under 005F-AMENDMENT-006",
+    "scientific_output_inspected": false,
+    "holdout_accessed": false
+  },
+  "classification_crosscheck_preserved": "data/experiments/experiment_005f/pre_clock_classification_train_dev_freeze.json",
+  "candidate_set_changed": false,
+  "selected_models_changed": false,
+  "selection_rule_changed": false,
+  "holdout_accessed": false
+}

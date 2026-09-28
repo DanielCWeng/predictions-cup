@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "amendment_id": "005F-AMENDMENT-006",
+  "status": "PRE_RESULT_RESOURCE_AMENDMENT",
+  "parent_amendment": "005F-AMENDMENT-003",
+  "reason": "Use one spare Kaggle CPU session to hedge the remaining PRE CLOCK screen with a target-family shard while the existing PRE CLOCK monolith continues.",
+  "claim_regime": "PRE_ELECTION",
+  "dataset": "clock",
+  "target_family_shards": {
+    "CLASSIFICATION": [
+      "UPDATE_HAZARD",
+      "JUMP_HAZARD"
+    ],
+    "REGRESSION": [
+      "PRICE",
+      "VOLATILITY",
+      "LIQUIDITY"
+    ]
+  },
+  "equivalence_basis": [
+    "BH-FDR grouping includes target_family, so no p-value family spans the two shards",
+    "candidate selection groups include dataset, claim_regime and target_family",
+    "model tournaments are coordinate-local after target-family selection",
+    "both shards use the same frozen feature construction and TRAIN/DEV boundaries"
+  ],
+  "usage_rule": "Use the monolithic PRE CLOCK result if it completes cleanly first. Otherwise use CLASSIFICATION+REGRESSION union only if both subshards complete under identical frozen code and hashes.",
+  "scientific_design_changed": false,
+  "feature_universe_changed": false,
+  "target_universe_changed": false,
+  "fdr_universe_changed": false,
+  "selection_rule_changed": false,
+  "holdout_accessed": false
+}

@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "amendment_id": "005F-AMENDMENT-005",
+  "status": "PRE_RESULT_RESOURCE_AMENDMENT",
+  "parent_amendment": "005F-AMENDMENT-003",
+  "reason": "Retire the redundant PRE_ELECTION monolithic shard after the preregistered CLOCK shard started, freeing one Kaggle CPU session for the preregistered NONCLOCK shard.",
+  "superseded_kernel": {
+    "kernel": "polyleviathan/005f-microstructure-liquidity-pre-train-dev",
+    "role": "PRE_ELECTION monolithic shard under amendment 002",
+    "scientific_output_inspected": false,
+    "holdout_accessed": false,
+    "provenance_preserved_in_git": true
+  },
+  "canonical_pre_execution": {
+    "clock": "polyleviathan/005f-pre-clock-train-dev",
+    "nonclock": "polyleviathan/005f-pre-nonclock-train-dev",
+    "combination_rule": "Concatenate CLOCK and NONCLOCK screens/tournaments/selections without cross-dataset recomputation, exactly as 005F-AMENDMENT-003."
+  },
+  "scientific_design_changed": false,
+  "feature_universe_changed": false,
+  "target_universe_changed": false,
+  "fdr_universe_changed": false,
+  "selection_rule_changed": false,
+  "holdout_accessed": false
+}

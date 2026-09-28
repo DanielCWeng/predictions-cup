@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "amendment_id": "005F-AMENDMENT-012",
+  "status": "PRE_HOLDOUT_FALSIFICATION_CLARIFICATION",
+  "reason": "Operationalize the preregistered capture-process falsification so HOLDOUT can test whether a selected microstructure feature adds beyond observation-process controls without fitting any new model after HOLDOUT access.",
+  "capture_falsification": {
+    "clock_capture_columns": [
+      "raw_capture_bin_age_s",
+      "raw_60",
+      "repeated_60"
+    ],
+    "depth_capture_columns": [
+      "snapshot_interval_s"
+    ],
+    "event_capture_columns": [],
+    "event_limitation": "The frozen event-time panel does not carry raw record-arrival/capture-age fields. Event candidates therefore receive source-version/continuity sensitivity in HOLDOUT, but no newly invented capture proxy is added.",
+    "row_universe": "For each clock/depth coordinate, define a separate falsification complete-case universe using target, frozen baseline columns, selected challenger columns, and all supported capture-control columns.",
+    "thinning": "Apply the same amendment-011 TRAIN/DEV stable temporal thinning independently to the falsification row universe.",
+    "estimators": "Fit capture-only = baseline + capture controls, and selected-plus-capture = baseline + capture controls + frozen selected challenger columns. Both use the same DEV-selected estimator class and exact hyperparameters as the frozen coordinate, with separate StandardScaler objects.",
+    "holdout_test": "On the identical HOLDOUT falsification complete-case rows, report capture-only loss minus selected-plus-capture loss. A positive effect supports incremental selected-feature information beyond capture controls; nonpositive effect is labelled capture-confounded for that diagnostic.",
+    "role": "Falsification only. These models cannot change candidate identity, selection class, horizon, feature, or selected estimator."
+  },
+  "fit_freeze_version_rule": "005f-fit-freeze version 1 predates this operationalization and is non-canonical even if it completes. Version 2 or later must serialize the capture falsification artifacts before pre-HOLDOUT freeze.",
+  "candidate_set_changed": false,
+  "selected_models_changed": false,
+  "model_grid_changed": false,
+  "selection_rule_changed": false,
+  "holdout_accessed": false
+}

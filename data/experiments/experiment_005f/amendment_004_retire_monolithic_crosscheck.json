@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "amendment_id": "005F-AMENDMENT-004",
+  "status": "PRE_RESULT_RESOURCE_AMENDMENT",
+  "reason": "Retire redundant monolithic TRAIN/DEV cross-check version 9 to free one Kaggle CPU session for the preregistered PRE_ELECTION dataset shard.",
+  "superseded_kernel": {
+    "kernel": "polyleviathan/005f-microstructure-liquidity-atlas-train-dev",
+    "retired_scope": "entire Kaggle kernel object",
+    "requested_initial_scope": "version 9 only",
+    "reason_version_only_failed": "installed Kaggle CLI advertised version-qualified deletion but returned a parsing error; whole-kernel retirement was the reliable cancellation path",
+    "role": "optional monolithic cross-check under 005F-AMENDMENT-002",
+    "scientific_output_inspected": false,
+    "holdout_accessed": false,
+    "provenance_preserved_in_git": true
+  },
+  "replacement_execution": {
+    "canonical_active": "polyleviathan/005f-microstructure-liquidity-active-train-dev",
+    "canonical_pre_parent": "polyleviathan/005f-microstructure-liquidity-pre-train-dev",
+    "additional_pre_shard": "polyleviathan/005f-pre-clock-train-dev",
+    "governing_amendments": [
+      "005F-AMENDMENT-002",
+      "005F-AMENDMENT-003"
+    ]
+  },
+  "scientific_design_changed": false,
+  "feature_universe_changed": false,
+  "target_universe_changed": false,
+  "fdr_universe_changed": false,
+  "selection_rule_changed": false,
+  "holdout_accessed": false
+}

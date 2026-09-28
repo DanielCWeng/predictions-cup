@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "amendment_id": "005F-AMENDMENT-009",
+  "status": "PRE_HOLDOUT_STATISTICAL_CLARIFICATION",
+  "reason": "Operationalize the preregistered TRAIN-selected moving-block bootstrap length in wall-clock time for a multi-market panel.",
+  "block_length_selection": {
+    "input": "For each frozen coordinate, use TRAIN complete-case target rows only.",
+    "aggregation": "Within each factual event window, aggregate target values to 1-minute UTC means; never concatenate across an event boundary for lag pairs.",
+    "autocorrelation": "For each integer lag 5..60 minutes, form within-event paired minute means, demean within event, pool valid paired products/variances, and compute the pooled Pearson autocorrelation.",
+    "selection": "Choose the first lag whose absolute autocorrelation is <0.10. If no lag qualifies or support is insufficient, use 60 minutes.",
+    "bounds": "Minimum 5 minutes; maximum 60 minutes.",
+    "freeze_stage": "Record one block_length_minutes per frozen coordinate in the TRAIN+DEV fit-freeze manifest before HOLDOUT."
+  },
+  "holdout_bootstrap": {
+    "unit": "1-minute mean baseline-minus-challenger loss improvement within factual event window",
+    "resampling": "Moving contiguous blocks of the frozen length independently within each event window.",
+    "aggregation": "Compute one mean per event window per draw and average event-window means equally; also report the raw observation-weighted mean separately as a descriptive metric.",
+    "draws": 2000,
+    "interval": "95% percentile interval",
+    "seed_rule": "deterministic from the master seed plus frozen coordinate identity"
+  },
+  "scientific_design_changed": false,
+  "candidate_universe_changed": false,
+  "selected_models_changed": false,
+  "selection_rule_changed": false,
+  "holdout_accessed": false
+}

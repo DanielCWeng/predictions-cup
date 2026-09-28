@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "amendment_id": "005F-AMENDMENT-015",
+  "status": "PRE_HOLDOUT_PROMOTION_CLARIFICATION",
+  "reason": "Resolve the interaction between amendment 012's explicit event-panel capture limitation and amendment 014's capture gate before any HOLDOUT access.",
+  "capture_gate_semantics": {
+    "supported_capture_model": "If amendment-012 capture models are supported, capture-only loss minus selected-plus-capture loss must be > 0. A nonpositive or nonfinite result receives CAPTURE_CONFOUNDED.",
+    "unsupported_capture_model": "If amendment-012 explicitly marks the capture comparator unsupported because the frozen panel lacks raw capture controls, do not invent a proxy and do not automatically fail the candidate. Record capture_test_supported=false and rely on the preregistered source-version, continuity, delayed/time-shift, activity and other supported falsifications.",
+    "event_panels": "The four frozen event-time coordinates have no raw capture-control comparator by construction and therefore use the unsupported rule above.",
+    "no_post_holdout_choice": "This rule is fixed before any HOLDOUT kernel is submitted."
+  },
+  "candidate_set_changed": false,
+  "selected_models_changed": false,
+  "model_grid_changed": false,
+  "selection_rule_changed": false,
+  "holdout_accessed": false
+}

@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "phase": "PRE_HOLDOUT_FREEZE",
+  "status": "IMMUTABLE_BEFORE_FIRST_HOLDOUT_ACCESS",
+  "holdout_read": false,
+  "holdout_kernel_submitted": false,
+  "branch": "experiment/005f-microstructure-liquidity-atlas",
+  "runner_commit": "aa88568bc6a8a85d290603ecd5bd4a3346788dfb",
+  "holdout_runner_sha256": "73ddd72a4e7cc5d369d425fff7dc211b15f230eb9249cf5d43fc95e1ddcf2ff4",
+  "fit_freeze": {
+    "manifest_sha256": "b6375379b5c2bc47ac29407436edfbbb7e4810dc558b8af08f59de26823c8363",
+    "committed_manifest_path": "data/experiments/experiment_005f/fit_freeze_manifest.json",
+    "kaggle_manifest_byte_match": true,
+    "candidate_count": 17,
+    "serialized_artifacts_checked": 120,
+    "serialized_artifact_hash_mismatches": 0,
+    "runner_sha256": "baf03cf18c9d78a80b287127d3144b3f12543a25c566de841c4a40e0f71d0b19",
+    "capture_comparator_supported_coordinates": 13,
+    "capture_comparator_unsupported_event_coordinates": 4
+  },
+  "train_dev_freeze": {
+    "path": "data/experiments/experiment_005f/canonical_train_dev_freeze.json",
+    "selected_coordinates": 17,
+    "confirmatory_eligible": 14,
+    "shadow_only": 3,
+    "unique_groups": 17
+  },
+  "immutable_choices": [
+    "candidate identities and selection classes",
+    "claim regimes and targets",
+    "features and feature-block expansions",
+    "DEV-selected estimator classes and hyperparameters",
+    "TRAIN+DEV fit row and thinning semantics",
+    "TRAIN-only jump thresholds",
+    "TRAIN-only bootstrap block lengths",
+    "capture-only and selected-plus-capture comparator models",
+    "HOLDOUT support/promotion gates",
+    "delayed/time-shift/sign/depth/source/freshness/activity/continuity falsifications"
+  ],
+  "governing_amendments": [
+    "005F-AMENDMENT-001",
+    "005F-AMENDMENT-002",
+    "005F-AMENDMENT-003",
+    "005F-AMENDMENT-004",
+    "005F-AMENDMENT-005",
+    "005F-AMENDMENT-006",
+    "005F-AMENDMENT-007",
+    "005F-AMENDMENT-008",
+    "005F-AMENDMENT-009",
+    "005F-AMENDMENT-010",
+    "005F-AMENDMENT-011",
+    "005F-AMENDMENT-012",
+    "005F-AMENDMENT-013",
+    "005F-AMENDMENT-014",
+    "005F-AMENDMENT-015"
+  ],
+  "data_hashes": {
+    "data_manifest_sha256": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+    "identity_sha256": "e89fe8e25dcc494dad3ed96fe6672ab9f247c01eb70d4c0270a913f18a200a72",
+    "quality_sha256": "354801b67b9c32ae82d419f8a6198b7fd814923e8c424ac8716862b47907ccb5"
+  },
+  "verification": {
+    "holdout_runner_compiles": true,
+    "experiment_005f_tests": "14 passed, 2 skipped",
+    "fit_manifest_hash_gate_bound": true,
+    "holdout_artifact_hash_gate_present": true,
+    "holdout_main_contains_no_model_fit_or_refit": true,
+    "full_factual_regime_state_loaded_for_causal_boundary_reconstruction": true,
+    "evaluation_rows_restricted_to_holdout_with_targets_ending_inside_same_factual_holdout": true,
+    "real_order_placement": false
+  }
+}
