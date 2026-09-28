@@ -30,6 +30,7 @@ EXPECTED = EMBEDDED["expected_hashes"]
 PREREG = EMBEDDED["preregistration"]
 PHASE = EMBEDDED["phase"]
 SHORTLIST = EMBEDDED.get("pre_holdout_freeze")
+DATA2_MANIFEST_PAYLOAD = EMBEDDED["data2_manifest_payload"]
 UTC_US = pa.timestamp("us", tz="UTC")
 
 
@@ -910,7 +911,23 @@ def build_data1_inventory() -> list[dict[str, Any]]:
 
 def data2_file(root: Path, family: str) -> Path | None:
     matches = list(root.rglob(f"fees_{family}.parquet"))
-    return matches[0] if len(matches) == 1 else None
+    if len(matches) != 1:
+        return None
+    path = matches[0]
+    expected = [
+        row
+        for row in DATA2_MANIFEST_PAYLOAD.get("files", [])
+        if Path(row.get("path", "")).name == path.name
+    ]
+    if len(expected) != 1:
+        raise RuntimeError(f"DATA-002 manifest missing unique record for {path.name}")
+    actual_sha = sha(path)
+    if actual_sha != expected[0].get("sha256"):
+        raise RuntimeError(
+            f"DATA-002 parquet drift for {path.name}: {actual_sha} != "
+            f"{expected[0].get('sha256')}"
+        )
+    return path
 
 
 def generic_event_inventory_and_eval(
@@ -1426,8 +1443,9 @@ def main() -> None:
         or sha(identity1) != EXPECTED["data_001_identity"]
     ):
         raise SystemExit("DATA-001 identity drift")
-    if sha(manifest2) != EXPECTED["data_002_manifest"]:
-        raise SystemExit("DATA-002 manifest drift")
+    mounted_data2_manifest = json.loads(manifest2.read_text(encoding="utf-8"))
+    if mounted_data2_manifest != DATA2_MANIFEST_PAYLOAD:
+        raise SystemExit("DATA-002 manifest semantic drift")
     corpus = manifest1.parent.parent
     data2_root = (
         manifest2.parent.parent
