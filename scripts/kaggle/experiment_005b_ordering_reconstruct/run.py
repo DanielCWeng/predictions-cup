@@ -95,7 +95,7 @@ def collision_stats(
 
 def reconstruct_family(family: str) -> dict[str, Any]:
     fees = locate_unique(f"fees_{family}.parquet")
-    block_map = locate_unique(f"upstream_order_{family}.parquet")
+    block_map = locate_unique(f"tx_block_{family}.parquet")
     old = locate_unique(f"canonical_trades_{family}.parquet")
     output = OUT / f"canonical_trades_{family}.parquet"
 
@@ -127,8 +127,6 @@ def reconstruct_family(family: str) -> dict[str, Any]:
         FROM read_parquet('{fees_q}') AS f
         LEFT JOIN read_parquet('{map_q}') AS m
           ON CAST(f.tx_hash AS VARCHAR)=CAST(m.tx_hash AS VARCHAR)
-         AND CAST(f.log_index AS BIGINT)=CAST(m.log_index AS BIGINT)
-         AND CAST(f.token_id AS VARCHAR)=CAST(m.token_id AS VARCHAR)
         """
     )
     null_blocks = scalar(
@@ -381,7 +379,7 @@ def reconstruct_family(family: str) -> dict[str, Any]:
             "block_timestamp_conflicts": block_timestamp_conflicts,
             "block_log_position_conflicts": log_position_conflicts,
             "fees_sha256": sha256(fees),
-            "block_map_sha256": sha256(block_map),
+            "tx_block_map_sha256": sha256(block_map),
             "parent_canonical_sha256": sha256(old),
             "corrected_canonical_path": output.name,
             "corrected_canonical_bytes": output.stat().st_size,
