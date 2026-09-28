@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "limitation_id": "004C-C-CAPTURE-LIMITATION-001",
+  "recorded_at_utc": "2026-09-27T21:42:00Z",
+  "discovered_after_preregistration": true,
+  "predictive_outcomes_inspected": false,
+  "retrospective_discovery_status": "UNAVAILABLE",
+  "evidence": {
+    "legacy_pm_overlap_start_utc": "2026-09-26T12:41:23.636149+00:00",
+    "legacy_pm_overlap_end_utc": "2026-09-26T14:33:51.923862+00:00",
+    "sig_book_observations_end_utc": "2026-09-26T10:58:43.015591+00:00",
+    "sig_scalar_price_table_present_before_collector_restart": false,
+    "recovered_historical_sig_scalar_copy": false
+  },
+  "operational_fault": {
+    "issue": "running SIG collector attempted record_prices against a database lacking price_observations",
+    "observed_error": "sqlite3.OperationalError: no such table: price_observations",
+    "correction": "restart read-only SIG collector on current code/schema with PREDICTIONS_CUP_TRADING_ENABLED=false",
+    "first_recovered_scalar_bbo_utc": "2026-09-27T21:40:22.888233+00:00"
+  },
+  "consequence": "No retrospective PM->SIG predictive claim will be made from the Sep 26 legacy PM capture. EXPERIMENT-004C-C empirical inference is forward/shadow-only from recovered overlapping capture.",
+  "no_rescue": "Do not substitute sparse SIG tracked books, NEAR mappings, alternate horizons, or post-hoc external data for the missing retrospective SIG BBO history."
+}

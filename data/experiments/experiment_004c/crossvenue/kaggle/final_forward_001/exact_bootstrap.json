@@ -1,0 +1,26 @@
+{
+  "absolute_error_improvement": {
+    "block_seconds": 300,
+    "contracts": 24,
+    "draws": 1000,
+    "lower_95": 0.0015540167309080642,
+    "point_estimate": 0.0019485503260489392,
+    "upper_95": 0.00211982864922297
+  },
+  "markout_1s": {
+    "block_seconds": 300,
+    "contracts": 24,
+    "draws": 1000,
+    "lower_95": -0.07999151006896896,
+    "point_estimate": -0.07987425289569781,
+    "upper_95": -0.07983133255591691
+  },
+  "markout_250ms": {
+    "block_seconds": 300,
+    "contracts": 24,
+    "draws": 1000,
+    "lower_95": -0.07995198403146278,
+    "point_estimate": -0.07983847153277036,
+    "upper_95": -0.07979042599506922
+  }
+}

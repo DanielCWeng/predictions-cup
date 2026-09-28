@@ -1,0 +1,37 @@
+{
+  "files": {
+    "pm_book_changes.parquet": {
+      "bytes": 28058228,
+      "sha256": "dd9e2d9c10c85a92d5d14cab76b96d136619146ed1b6cd5531ce2f52622f8167"
+    },
+    "pm_depth_snapshots.parquet": {
+      "bytes": 5141764,
+      "sha256": "3ec81fcac627a5c5c887f87fb6c4db87ac306339fb3c337a2553d3be35822108"
+    },
+    "pm_observations.parquet": {
+      "bytes": 5241669,
+      "sha256": "451e3bd9d07a658df147ca5582855778de077c1062c35ce53751f927e953f32f"
+    },
+    "pm_trades.parquet": {
+      "bytes": 9777,
+      "sha256": "e7b8d3f8a6fdd41f476f5c7418b230a0ab2b239e86fc068ca79a9bfad0adeeef"
+    },
+    "sig_prices.parquet": {
+      "bytes": 472382,
+      "sha256": "34e81f9a1b9a75f384f9874a9cc8fecaf4ca63e2be3cb582f8d8daa057e6cbbd"
+    }
+  },
+  "implementation_freeze_sha256": "85097b9356ed52dfa238be36e5e8ac504be1ae0a5eedd52aff1af40c1247d69c",
+  "mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
+  "preregistration_sha256": "795d5c547d9a7d7c9aafc59a498efc76c87b8ffd71f7a81fa8d43923f0bafd9e",
+  "row_counts": {
+    "pm_book_changes": 855711,
+    "pm_depth_snapshots": 88881,
+    "pm_observations": 1062438,
+    "pm_trades": 48,
+    "sig_prices": 159501
+  },
+  "schema_version": 1,
+  "snapshot_cutoff_utc": "2026-09-27T23:51:09.607822+00:00",
+  "snapshot_start_utc": "2026-09-27T21:40:22.888233+00:00"
+}

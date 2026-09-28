@@ -1,0 +1,17 @@
+{
+  "artifacts": {
+    "coverage_derived.csv": "a3095c244025be49a414243feedbdcb97f1c75a8fe0f1a935120d2cdcf839188",
+    "coverage_exact.csv": "fd0028f6a9c8a08588650bcfee895bb29f12dbd1530c69a2b3c32cca1b29fb46",
+    "phase0_audit.json": "b2f3a7de696b1f089cd5009a665bd6033461d4c6cb70975648c300843669a3a0"
+  },
+  "compute_environment": "Kaggle",
+  "dataset_ref": "polyleviathan/sig-cup-exp004c-c-crossvenue-forward",
+  "dataset_version": 2,
+  "kernel_ref": "polyleviathan/sig-cup-exp004c-c-cross-venue-price-discovery",
+  "kernel_version": 7,
+  "model_fit": false,
+  "namespace": "004c_c_crossvenue",
+  "run_id": "af7ac470691db1ed69052533",
+  "schema_version": 1,
+  "status": "INCONCLUSIVE_INSUFFICIENT_FORWARD_WINDOW"
+}

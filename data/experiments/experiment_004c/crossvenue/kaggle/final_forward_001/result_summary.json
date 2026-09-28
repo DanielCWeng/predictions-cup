@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-004C-C",
+  "run_id": "d8d427af680a60467d92b242",
+  "classification": {
+    "overall": "INCONCLUSIVE",
+    "exact": "INCONCLUSIVE_NO_PROMOTED_CROSS_VENUE_EDGE",
+    "derived": "DERIVED_PRICE_DISCOVERY_NOT_SUPPORTED"
+  },
+  "promotion_gate": {
+    "minimum_valid_exact_contracts": 40,
+    "observed_oos_exact_contracts": 24,
+    "valid_exact_contract_gate_pass": false,
+    "minimum_valid_oos_decisions": 1000,
+    "observed_oos_decisions": 3252,
+    "oos_decision_gate_pass": true,
+    "minimum_distinct_sig_markets": 20,
+    "observed_distinct_sig_markets": 24,
+    "distinct_sig_market_gate_pass": true
+  },
+  "exact": {
+    "raw_30s_equal_contract_mean_ae_improvement": 0.0019485503260489392,
+    "raw_30s_bootstrap_95": [
+      0.0015540167309080642,
+      0.00211982864922297
+    ],
+    "current_core_mean_ae_improvement": 0.0020131820430401223,
+    "delayed_pm_30s_mean_ae_improvement": -0.001539826130471862,
+    "wrong_contract_mean_ae_improvement": 0.011843802655703443,
+    "circular_shift_p_value": 0.3696303696303696,
+    "timestamp_250ms_mean_ae_improvement": 0.0019818320880813406,
+    "timestamp_1000ms_mean_ae_improvement": 0.0014194497971828067,
+    "horizon_5s_mean_ae_improvement": -0.0011222532005649136,
+    "next_sig_update_mean_ae_improvement": -0.002177955518839182,
+    "reverse_sig_to_pm_oos_rows": 0,
+    "fdr_rejected_contracts": 0,
+    "fdr_family_size": 140,
+    "oos_positive_contracts": 11,
+    "oos_negative_contracts": 13,
+    "markout_250ms": -0.07983847153277035,
+    "markout_1s": -0.07987425289569781,
+    "markout_250ms_bootstrap_95": [
+      -0.07995198403146278,
+      -0.07979042599506922
+    ],
+    "markout_1s_bootstrap_95": [
+      -0.07999151006896896,
+      -0.07983133255591691
+    ]
+  },
+  "derived": {
+    "oos_contracts": 52,
+    "oos_rows": 1386,
+    "equal_contract_mean_ae_improvement": -0.000011788267639260878,
+    "bootstrap_95": [
+      -0.000016601762360367105,
+      -0.000009020687086988223
+    ],
+    "fdr_rejected_contracts": 0,
+    "fdr_family_size": 87,
+    "markout_250ms": -0.0799823519949344,
+    "markout_1s": -0.07998439782144831
+  },
+  "observability": {
+    "forward_minutes": 130.77865981666667,
+    "pm_panel_cadence_seconds_p50": 5.049285,
+    "sig_cadence_seconds_p50": 11.672887,
+    "sig_quote_age_at_pm_innovation_seconds_p50": 5.8147835,
+    "causal_clock": "local_observed_at",
+    "retrospective_overlap_available": false
+  },
+  "interpretation": [
+    "Raw 30-second EXACT forecast improvement is positive but does not establish mapping-specific PM-to-SIG price discovery.",
+    "The frozen valid-contract coverage gate fails: 24 OOS EXACT contracts versus 40 required.",
+    "The wrong-contract challenger materially exceeds the valid-mapping challenger and the circular-shift null is not rejected.",
+    "Five-second and next-SIG-update diagnostics are negative, so the apparent 30-second effect is not a fast immediate transmission signature.",
+    "Executable crossing markouts are strongly negative; no tradable alpha is supported.",
+    "DERIVED synthetic mappings do not add predictive information and are not executable."
+  ]
+}

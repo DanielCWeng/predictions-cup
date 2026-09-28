@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-004C-C",
+  "namespace": "004c_c_crossvenue",
+  "frozen_at_utc": "2026-09-27T21:18:49Z",
+  "base_sha": "4e094d13b06d9e558cbc404cc4d472316d7d5bbb",
+  "shadow_only": true,
+  "live_orders": false,
+  "mapping": {
+    "source": "data/mappings/sig_polymarket_2026.json",
+    "sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
+    "acceptance_sha256": "fa59331a45897f7971454835e86f67a65313a2efff8ca387a3b2cf1ea99b19e5",
+    "exact_count": 140,
+    "derived_count": 87,
+    "near_primary": false
+  },
+  "observability": {
+    "causal_clock": "local_observed_at",
+    "source_timestamp_role": "diagnostic_only",
+    "decision_trigger": "mapped Polymarket best-bid-or-ask update that changes aligned midpoint",
+    "sig_full_universe_surface": "authoritative REST bulk-price best bid/ask",
+    "sig_configured_refresh_seconds": 10,
+    "polymarket_panel_seconds": 1,
+    "polymarket_depth_snapshot_seconds": 60,
+    "primary_fixed_horizon_seconds": 30,
+    "event_time_target": "next trusted observable SIG BBO update after decision time",
+    "robustness_horizons_seconds": [
+      5,
+      30
+    ],
+    "one_second_claim_allowed": false,
+    "reason_one_second_rejected": "SIG full-universe BBO is observed on a nominal 10-second REST refresh cadence"
+  },
+  "historical_discovery": {
+    "window_start_utc": "2026-09-26T12:41:23.636149+00:00",
+    "window_end_utc": "2026-09-26T14:33:51.923862+00:00",
+    "role": "retrospective discovery only; mappings and model frozen before predictive evaluation",
+    "walk_forward": {
+      "training_minutes": 45,
+      "development_minutes": 15,
+      "holdout_minutes": 15,
+      "step_minutes": 15,
+      "expanding_training": true,
+      "embargo_seconds": 30
+    }
+  },
+  "features": {
+    "baseline_sig_only": [
+      "sig_best_bid",
+      "sig_best_ask",
+      "sig_mid",
+      "sig_spread",
+      "sig_quote_age_seconds",
+      "sig_signed_change_30s",
+      "sig_absolute_change_30s",
+      "sig_update_count_30s",
+      "sig_reconciliation_or_validity_flags",
+      "regime"
+    ],
+    "challenger_adds_pm": [
+      "pm_best_bid",
+      "pm_best_ask",
+      "pm_mid",
+      "pm_spread",
+      "pm_signed_innovation_5s",
+      "pm_absolute_innovation_5s",
+      "pm_quote_age_seconds",
+      "relative_pm_minus_sig_freshness_seconds",
+      "aligned_pm_minus_sig_mid_gap",
+      "pm_update_count_30s",
+      "pm_depth_or_liquidity_when_asof_valid"
+    ],
+    "normalization": "training-fold-only median/IQR; zero-IQR features left unscaled",
+    "future_smoothing": false
+  },
+  "model": {
+    "family": "pooled linear ridge with mapping fixed effects",
+    "ridge_alpha": 0.001,
+    "tuning": "none",
+    "primary_prediction_metric": "paired absolute-error reduction challenger versus baseline",
+    "secondary_metrics": [
+      "RMSE",
+      "direction_accuracy",
+      "next-update absolute-error reduction"
+    ]
+  },
+  "exact_statistics": {
+    "aggregate_weighting": "equal-contract after explicit coverage accounting",
+    "contract_fdr_family_size": 140,
+    "contract_fdr_method": "Benjamini-Hochberg",
+    "contract_fdr_alpha": 0.05,
+    "insufficient_contracts_receive_p_value": 1,
+    "bootstrap": {
+      "method": "moving block within contract then equal-contract aggregation",
+      "draws": 1000,
+      "block_seconds": 300
+    },
+    "minimum_forward_coverage_for_promotion": {
+      "valid_exact_contracts": 40,
+      "valid_oos_decisions": 1000,
+      "distinct_sig_markets": 20
+    }
+  },
+  "controls": {
+    "delayed_pm_seconds": 30,
+    "pm_circular_shift": {
+      "draws": 1000,
+      "minimum_absolute_shift_seconds": 300
+    },
+    "wrong_contract": "same category, different economic family; nearest training-only PM update-rate/spread/midpoint profile",
+    "reverse_direction": true,
+    "timestamp_sensitivity_pm_delay_ms": [
+      250,
+      1000
+    ],
+    "relative_freshness_mandatory": true
+  },
+  "execution": {
+    "entry_latency_ms": 250,
+    "stress_latency_ms": 1000,
+    "sig_shadow_trade_size": 1,
+    "sig_depth_requirement": "BBO price is primary markout surface; lack of stored SIG size is disclosed and prevents a strong size-capacity claim",
+    "fees_per_share": 0,
+    "spread_crossing": true,
+    "direction": "sign of challenger forecasted subsequent SIG price-state change",
+    "primary_exit": "first valid executable SIG state at or after decision_time + 30 seconds",
+    "smallest_meaningful_net_markout_per_share": 0.005
+  },
+  "derived": {
+    "fdr_family_size": 87,
+    "separate_from_exact": true,
+    "transformation": "sum of reviewed mutually exclusive Yes margin buckets",
+    "shadow_trade_size": 1,
+    "synthetic_bid": "sum of component executable bids at q",
+    "synthetic_ask": "sum of component executable asks at q",
+    "synthetic_size": "minimum executable component size",
+    "fail_closed_on_missing_stale_or_untrusted_leg": true
+  },
+  "promotion": {
+    "exact_price_discovery_supported": "positive OOS incremental predictive information with bootstrap lower bound > 0, mandatory freshness/timestamp/null controls passed, and positive net executable markout meeting SME",
+    "exact_information_not_executable": "predictive criterion passes but executable markout/depth-capacity criterion does not",
+    "derived_price_discovery_supported": "DERIVED family independently passes its predictive and executable criteria",
+    "no_cross_venue_edge": "adequate coverage but primary incremental predictive criterion fails",
+    "inconclusive": "coverage, clock, capture or reconciliation limitations prevent the primary test"
+  }
+}

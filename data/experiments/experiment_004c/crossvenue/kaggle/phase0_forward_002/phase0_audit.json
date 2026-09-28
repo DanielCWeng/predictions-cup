@@ -1,0 +1,70 @@
+{
+  "causal_clock": "local_observed_at",
+  "evaluable_asof_decisions": 1463,
+  "exact_frozen_contracts": 140,
+  "experiment_id": "EXPERIMENT-004C-C",
+  "joint_exact_contracts": 140,
+  "minimum_walk_forward_minutes": 75,
+  "namespace": "004c_c_crossvenue",
+  "pm_exact_tokens_panel_observed": 140,
+  "pm_exact_tokens_with_book_changes": 140,
+  "pm_panel_observed_cadence_seconds": {
+    "p05": 5.040601,
+    "p50": 5.051011,
+    "p95": 5.290819
+  },
+  "predictive_model_fit": false,
+  "run_kind": "PHASE0_FORWARD_SUFFICIENCY_AUDIT",
+  "schema_version": 2,
+  "sig_exact_contracts_observed": 140,
+  "sig_observed_cadence_seconds": {
+    "p05": 11.211512,
+    "p50": 11.733111,
+    "p95": 12.202315
+  },
+  "sig_quote_age_at_pm_innovation_seconds": {
+    "p05": 0.7607672000000001,
+    "p50": 6.000575,
+    "p95": 11.2534169
+  },
+  "snapshot_duration_minutes": 26.032773883333334,
+  "source_snapshot_manifest": {
+    "files": {
+      "pm_book_changes.parquet": {
+        "bytes": 6002924,
+        "sha256": "489423abad87c7aa3e999201376dd1df42e07109fc0a4a13d7d5fa878eba30ca"
+      },
+      "pm_depth_snapshots.parquet": {
+        "bytes": 1143114,
+        "sha256": "67dd83be927274168cd873f2a03712e643923b58bac580c70a3cd2159f269cdc"
+      },
+      "pm_observations.parquet": {
+        "bytes": 1207225,
+        "sha256": "59f2dee2fe0cb16ebea0d53919f75dc8fcc882ce07ec667b42879e676607b00c"
+      },
+      "pm_trades.parquet": {
+        "bytes": 5121,
+        "sha256": "220c96cc59efbeb79712924475e473d48c080df4961188b07449317a43b9d7a0"
+      },
+      "sig_prices.parquet": {
+        "bytes": 103925,
+        "sha256": "4c32810c7b1649072d231a9282153c92f24975fee0c9a25e37a15df9696a5bc7"
+      }
+    },
+    "implementation_freeze_sha256": "9351c8b0df7734a91429d2832327570436ab78ff237ce66c0cd1acd6c85d7faf",
+    "mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
+    "preregistration_sha256": "795d5c547d9a7d7c9aafc59a498efc76c87b8ffd71f7a81fa8d43923f0bafd9e",
+    "row_counts": {
+      "pm_book_changes": 165989,
+      "pm_depth_snapshots": 17225,
+      "pm_observations": 208078,
+      "pm_trades": 6,
+      "sig_prices": 31758
+    },
+    "schema_version": 1,
+    "snapshot_cutoff_utc": "2026-09-27T22:06:24.854666+00:00",
+    "snapshot_start_utc": "2026-09-27T21:40:22.888233+00:00"
+  },
+  "source_timestamps_used_for_ordering": false,
+  "status": "INCONCLUSIVE_INSUFFICIENT_FORWARD_WINDOW"
+}

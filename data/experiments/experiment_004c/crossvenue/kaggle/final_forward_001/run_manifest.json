@@ -1,0 +1,146 @@
+{
+  "all_kaggle_output_artifacts": {
+    "coverage_derived.csv": {
+      "bytes": 1637,
+      "sha256": "d67893c6a015b76abb1a18371c52e00b0751536c916c1a19b53c52a479cd4624"
+    },
+    "coverage_exact.csv": {
+      "bytes": 25353,
+      "sha256": "1f40d76d6cefa6f24b6fa64fff66901fd9f0d803798535020eff96bcd4117277"
+    },
+    "derived_aggregate_unadjusted.json": {
+      "bytes": 229,
+      "sha256": "6bba5a8809e442c6ab9f42f168932d324b4c8f9f02cc3c4f07df5a4e9657862f"
+    },
+    "derived_asof_rows.parquet": {
+      "bytes": 142984,
+      "sha256": "cb297ef96541a669e3fa1178c0c1b64e0d86b3e143d1dc121c125b7542946760"
+    },
+    "derived_bootstrap.json": {
+      "bytes": 444,
+      "sha256": "f7d4becc30fd66d0117035e892ed5a368c525cf5b15904138f0ff5ea9de1604c"
+    },
+    "derived_contract_inference.csv": {
+      "bytes": 5281,
+      "sha256": "3cfe57249ca1b2d92f24a1962b2c356a1de0ddc1a6f44f8dfa175bb6e305233d"
+    },
+    "derived_contract_summary_unadjusted.csv": {
+      "bytes": 3702,
+      "sha256": "147a054985b47a9e69e6e9b4bca1b8cb812f815e26e5b3c06ed41289535c00a9"
+    },
+    "derived_holdout_predictions.parquet": {
+      "bytes": 130972,
+      "sha256": "fcf88fe5cf03495eba7b4c132bd39de763159d7c06644242aa2ae480480d7293"
+    },
+    "exact_5s_holdout_predictions.parquet": {
+      "bytes": 376537,
+      "sha256": "aa9820f4cec71c2592aa0d6d94d3c7a3b2848c500f03f93fcb600f882beaab1a"
+    },
+    "exact_aggregate_unadjusted.json": {
+      "bytes": 228,
+      "sha256": "868a24eb31e25c99c0b2a4dfbbad10c42bb6d2680379241858e4080b83ba9464"
+    },
+    "exact_asof_rows.parquet": {
+      "bytes": 671435,
+      "sha256": "42781ac1dabbc3aa93ff8180668e8a6acab668f726da527421e25359a1c0d053"
+    },
+    "exact_bootstrap.json": {
+      "bytes": 647,
+      "sha256": "dd5272ec5b1a80e1415537b6d9cfcb960f5c199f99a381f48beaafd0835b99b9"
+    },
+    "exact_contract_inference.csv": {
+      "bytes": 6580,
+      "sha256": "7648095a0ab47b04b6c4344bbf6b5f1363707e2756a5bb956b64dbc0a51d4036"
+    },
+    "exact_contract_summary_unadjusted.csv": {
+      "bytes": 1905,
+      "sha256": "e2f955e2e2bf7a892c91c76f0f633daaf50c50b1915b13c4acb092a5e2b4d4bf"
+    },
+    "exact_controls.json": {
+      "bytes": 1307,
+      "sha256": "9bbc1ab86897ed2888ebeeb1f1d1cec300f5fbf8408922ddfa12f7abf0e8ea51"
+    },
+    "exact_holdout_predictions.parquet": {
+      "bytes": 552365,
+      "sha256": "88c216b43a2a597bb667b99835cf5cb31897320637c750479df90268174de74c"
+    },
+    "exact_next_update_holdout_predictions.parquet": {
+      "bytes": 376539,
+      "sha256": "0aa17c8c9f56a5dff60933d1ed22d558aabdbdbebc42bcc2d828e69e2951008b"
+    },
+    "phase0_audit.json": {
+      "bytes": 2614,
+      "sha256": "3be3d13e281d9c579cb4f14de22503cdca25f2e0cae085d88479275ba5d06a4c"
+    },
+    "reverse_sig_to_pm_asof_rows.parquet": {
+      "bytes": 26318,
+      "sha256": "64ec46bb739777f292802f06c6dce06ab5245835daa79d6fd6c2636d005cab55"
+    },
+    "reverse_sig_to_pm_holdout_predictions.parquet": {
+      "bytes": 636,
+      "sha256": "2e836d6adff325aede8989ffcbc87094563445f1d0a4ba61dd92764ecca42844"
+    }
+  },
+  "committed_summary_artifacts": {
+    "coverage_derived.csv": {
+      "bytes": 1637,
+      "sha256": "d67893c6a015b76abb1a18371c52e00b0751536c916c1a19b53c52a479cd4624"
+    },
+    "coverage_exact.csv": {
+      "bytes": 25353,
+      "sha256": "1f40d76d6cefa6f24b6fa64fff66901fd9f0d803798535020eff96bcd4117277"
+    },
+    "derived_aggregate_unadjusted.json": {
+      "bytes": 229,
+      "sha256": "6bba5a8809e442c6ab9f42f168932d324b4c8f9f02cc3c4f07df5a4e9657862f"
+    },
+    "derived_bootstrap.json": {
+      "bytes": 444,
+      "sha256": "f7d4becc30fd66d0117035e892ed5a368c525cf5b15904138f0ff5ea9de1604c"
+    },
+    "derived_contract_inference.csv": {
+      "bytes": 5281,
+      "sha256": "3cfe57249ca1b2d92f24a1962b2c356a1de0ddc1a6f44f8dfa175bb6e305233d"
+    },
+    "derived_contract_summary_unadjusted.csv": {
+      "bytes": 3702,
+      "sha256": "147a054985b47a9e69e6e9b4bca1b8cb812f815e26e5b3c06ed41289535c00a9"
+    },
+    "exact_aggregate_unadjusted.json": {
+      "bytes": 228,
+      "sha256": "868a24eb31e25c99c0b2a4dfbbad10c42bb6d2680379241858e4080b83ba9464"
+    },
+    "exact_bootstrap.json": {
+      "bytes": 647,
+      "sha256": "dd5272ec5b1a80e1415537b6d9cfcb960f5c199f99a381f48beaafd0835b99b9"
+    },
+    "exact_contract_inference.csv": {
+      "bytes": 6580,
+      "sha256": "7648095a0ab47b04b6c4344bbf6b5f1363707e2756a5bb956b64dbc0a51d4036"
+    },
+    "exact_contract_summary_unadjusted.csv": {
+      "bytes": 1905,
+      "sha256": "e2f955e2e2bf7a892c91c76f0f633daaf50c50b1915b13c4acb092a5e2b4d4bf"
+    },
+    "exact_controls.json": {
+      "bytes": 1307,
+      "sha256": "9bbc1ab86897ed2888ebeeb1f1d1cec300f5fbf8408922ddfa12f7abf0e8ea51"
+    },
+    "phase0_audit.json": {
+      "bytes": 2614,
+      "sha256": "3be3d13e281d9c579cb4f14de22503cdca25f2e0cae085d88479275ba5d06a4c"
+    },
+    "result_summary.json": {
+      "bytes": 3174,
+      "sha256": "cb3bff6455ea1ed4cea3666d7cd2ed8f18c887c572f800a5fc6bc6aee986e314"
+    }
+  },
+  "compute_environment": "Kaggle",
+  "dataset_ref": "polyleviathan/sig-cup-exp004c-c-crossvenue-forward",
+  "experiment_id": "EXPERIMENT-004C-C",
+  "kernel_ref": "polyleviathan/sig-cup-exp004c-c-cross-venue-price-discovery",
+  "kernel_version": 8,
+  "run_id": "d8d427af680a60467d92b242",
+  "schema_version": 1,
+  "source_snapshot_cutoff_utc": "2026-09-27T23:51:09.607822+00:00"
+}

@@ -163,6 +163,142 @@ class CaptureSummary:
         }
 
 
+_SIG_SCALAR_PRICE_SCHEMA = {
+    "price_observations": {
+        "id",
+        "exchange_id",
+        "market_id",
+        "latest_price",
+        "best_bid",
+        "best_ask",
+        "spread",
+        "rest_observed_at",
+        "reason",
+    },
+}
+
+
+def load_sig_scalar_capture(
+    path: Path,
+    *,
+    selection: CaptureSelection | None = None,
+) -> tuple[ReplayEvent, ...]:
+    """Load authoritative tournament-wide SIG REST BBO without tracked-depth semantics.
+
+    Scalar BBO observations are emitted as trusted top-of-book states with empty depth.
+    They are intentionally separate from load_sig_capture so periodic bulk-price
+    samples cannot overwrite tracked-book trust or depth in BUILD-005 replay.
+    """
+    selected = selection or CaptureSelection()
+    events: list[ReplayEvent] = []
+    with closing(_connect(path)) as db:
+        _validate_schema(db, _SIG_SCALAR_PRICE_SCHEMA, "SIG scalar")
+        where, params = _where(
+            selected,
+            "rest_observed_at",
+            "exchange_id",
+            selected.sig_exchange_ids,
+        )
+        for row in db.execute(
+            "SELECT id, exchange_id, market_id, latest_price, best_bid, best_ask, "
+            f"rest_observed_at FROM price_observations{where} "
+            "ORDER BY rest_observed_at, id",
+            params,
+        ):
+            observed = _dt(row[6], "SIG scalar rest_observed_at")
+            bid = _optional_decimal(row[4], "SIG scalar best_bid")
+            ask = _optional_decimal(row[5], "SIG scalar best_ask")
+            instrument = _text(row[1], "SIG scalar exchange_id")
+            market = _text(row[2], "SIG scalar market_id")
+            sequence = _integer(row[0], "SIG scalar price id")
+            events.append(
+                _quote_event(
+                    source=ReplaySource.SIG,
+                    event_type=ReplayEventType.BOOK_OBSERVATION,
+                    sequence=sequence,
+                    instrument=instrument,
+                    market=market,
+                    observed=observed,
+                    source_at=None,
+                    quote_observed=observed,
+                    bid=bid,
+                    ask=ask,
+                    last_trade=_optional_decimal(
+                        row[3], "SIG scalar latest_price"
+                    ),
+                    valid=bid is not None and ask is not None,
+                )
+            )
+            events.append(
+                ReplayEvent(
+                    observed_at=observed,
+                    source_at=None,
+                    source=ReplaySource.SIG,
+                    event_type=ReplayEventType.TRUST,
+                    instrument_id=instrument,
+                    market_id=market,
+                    sequence=sequence,
+                    payload=TrustPayload(
+                        trusted=True,
+                        transition="TRUSTED_SCALAR_REST",
+                    ),
+                )
+            )
+    return tuple(sorted(events, key=lambda event: event.sort_key))
+
+
+def summarize_sig_scalar_capture(
+    path: Path,
+    *,
+    selection: CaptureSelection | None = None,
+) -> CaptureSummary:
+    """Summarize the tournament-wide scalar SIG BBO capture."""
+    selected = selection or CaptureSelection()
+    with closing(_connect(path)) as db:
+        _validate_schema(db, _SIG_SCALAR_PRICE_SCHEMA, "SIG scalar")
+        where, params = _where(
+            selected,
+            "rest_observed_at",
+            "exchange_id",
+            selected.sig_exchange_ids,
+        )
+        records = _count(db, "price_observations", where, params)
+        times = _minmax(db, "price_observations", "rest_observed_at", where, params)
+        instruments = _distinct_text(
+            db,
+            "price_observations",
+            "exchange_id",
+            where,
+            params,
+            "SIG scalar exchange_id",
+        )
+        valid_where, valid_params = _where(
+            selected,
+            "rest_observed_at",
+            "exchange_id",
+            selected.sig_exchange_ids,
+            extra_clause="best_bid IS NOT NULL AND best_ask IS NOT NULL",
+        )
+        trusted = _count(db, "price_observations", valid_where, valid_params)
+        gap_where, gap_params = _where(
+            selected,
+            "rest_observed_at",
+            "exchange_id",
+            selected.sig_exchange_ids,
+            extra_clause="best_bid IS NULL OR best_ask IS NULL",
+        )
+        gaps = _count(db, "price_observations", gap_where, gap_params)
+    return CaptureSummary(
+        records_loaded=records,
+        start_at=min(times) if times else None,
+        end_at=max(times) if times else None,
+        instruments=tuple(sorted(f"sig:{value}" for value in instruments)),
+        trusted_sig_observations=trusted,
+        external_observations=0,
+        data_gaps=gaps,
+    )
+
+
 def load_sig_capture(
     path: Path,
     *,
