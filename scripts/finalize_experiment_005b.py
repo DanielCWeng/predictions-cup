@@ -225,6 +225,9 @@ def build_report(
         for row in registry
         if row["scalar_feature"] is not None
     }
+    registry_target_count = len(
+        {row["target"] for row in registry}
+    )
     evaluated = {
         row["target"]: row
         for row in holdout.get("results", [])
@@ -295,8 +298,9 @@ def build_report(
         "## TRAIN → DEV screen",
         "",
         (
-            f"Targets with at least one TRAIN→DEV stable scalar candidate: "
-            f"**{len(stable_targets)} / {freeze.get('target_count', len(set(row['target'] for row in registry)))}**."
+            "Targets with at least one promoted scalar candidate: "
+            f"**{len(stable_targets)} / "
+            f"{freeze.get('target_count', registry_target_count)}**."
         ),
         (
             f"Targets opened in sealed HOLDOUT: "
