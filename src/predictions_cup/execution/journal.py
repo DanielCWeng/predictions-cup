@@ -22,6 +22,7 @@ from predictions_cup.execution.models import (
 class ExecutionJournalEvent:
     event_id: int
     logical_operation_id: str
+    tournament_id: str
     logical_intent_id: str | None
     event_type: str
     observed_monotonic_ns: int
@@ -54,6 +55,7 @@ class ExecutionJournal:
             """
             CREATE TABLE IF NOT EXISTS execution_envelopes (
                 logical_operation_id TEXT PRIMARY KEY,
+                tournament_id TEXT NOT NULL,
                 idempotency_key TEXT,
                 operation_kind TEXT NOT NULL,
                 sink_mode TEXT NOT NULL,
@@ -73,6 +75,7 @@ class ExecutionJournal:
             CREATE TABLE IF NOT EXISTS execution_events (
                 event_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 logical_operation_id TEXT NOT NULL,
+                tournament_id TEXT NOT NULL,
                 logical_intent_id TEXT,
                 event_type TEXT NOT NULL,
                 observed_monotonic_ns INTEGER NOT NULL,
@@ -95,7 +98,9 @@ class ExecutionJournal:
             )
             """
         )
+        self._ensure_execution_envelope_columns()
         self._ensure_execution_event_columns()
+        self._backfill_tournament_ids()
         self._connection.execute(
             """
             CREATE INDEX IF NOT EXISTS execution_events_operation_idx
@@ -103,6 +108,18 @@ class ExecutionJournal:
             """
         )
         self._connection.commit()
+
+    def _ensure_execution_envelope_columns(self) -> None:
+        existing = {
+            str(row[1])
+            for row in self._connection.execute(
+                "PRAGMA table_info(execution_envelopes)"
+            ).fetchall()
+        }
+        if "tournament_id" not in existing:
+            self._connection.execute(
+                "ALTER TABLE execution_envelopes ADD COLUMN tournament_id TEXT"
+            )
 
     def _ensure_execution_event_columns(self) -> None:
         existing = {
@@ -112,6 +129,7 @@ class ExecutionJournal:
             ).fetchall()
         }
         additions = (
+            ("tournament_id", "TEXT"),
             ("decision_monotonic_ns", "INTEGER"),
             ("strategy_family", "TEXT"),
             ("strategy_id", "TEXT"),
@@ -123,6 +141,71 @@ class ExecutionJournal:
                 self._connection.execute(
                     f"ALTER TABLE execution_events ADD COLUMN {name} {sql_type}"
                 )
+
+    @staticmethod
+    def _extract_tournament_id(payload_json: str) -> str | None:
+        raw = json.loads(payload_json)
+        if not isinstance(raw, dict):
+            return None
+        direct = raw.get("tournamentId")
+        if isinstance(direct, str) and direct.strip():
+            return direct
+        for collection_name in ("orders", "legs"):
+            collection = raw.get(collection_name)
+            if not isinstance(collection, list) or not collection:
+                continue
+            values = {
+                item.get("tournamentId")
+                for item in collection
+                if isinstance(item, dict)
+                and isinstance(item.get("tournamentId"), str)
+                and str(item.get("tournamentId")).strip()
+            }
+            if len(values) == 1:
+                value = next(iter(values))
+                if isinstance(value, str):
+                    return value
+        return None
+
+    def _backfill_tournament_ids(self) -> None:
+        rows = self._connection.execute(
+            """
+            SELECT logical_operation_id, payload_json, tournament_id
+            FROM execution_envelopes
+            """
+        ).fetchall()
+        for logical_operation_id, payload_json, tournament_id in rows:
+            if tournament_id is not None and str(tournament_id).strip():
+                continue
+            derived = self._extract_tournament_id(str(payload_json))
+            if derived is None:
+                continue
+            self._connection.execute(
+                """
+                UPDATE execution_envelopes
+                SET tournament_id = ?
+                WHERE logical_operation_id = ?
+                """,
+                (derived, str(logical_operation_id)),
+            )
+        self._connection.execute(
+            """
+            UPDATE execution_events
+            SET tournament_id = (
+                SELECT execution_envelopes.tournament_id
+                FROM execution_envelopes
+                WHERE execution_envelopes.logical_operation_id =
+                      execution_events.logical_operation_id
+            )
+            WHERE tournament_id IS NULL
+            """
+        )
+
+    @staticmethod
+    def _required_tournament_id(value: object) -> str:
+        if value is None or not str(value).strip():
+            raise RuntimeError("execution journal row is missing tournament identity")
+        return str(value)
 
     def close(self) -> None:
         self._connection.close()
@@ -136,13 +219,15 @@ class ExecutionJournal:
     ) -> None:
         existing = self._connection.execute(
             """
-            SELECT idempotency_key, operation_kind, sink_mode, payload_sha256, payload_json
+            SELECT tournament_id, idempotency_key, operation_kind, sink_mode,
+                   payload_sha256, payload_json
             FROM execution_envelopes WHERE logical_operation_id = ?
             """,
             (envelope.logical_operation_id,),
         ).fetchone()
         if existing is not None:
             expected = (
+                envelope.tournament_id,
                 envelope.idempotency_key,
                 envelope.operation_kind.value,
                 envelope.sink_mode.value,
@@ -168,13 +253,15 @@ class ExecutionJournal:
             self._connection.execute(
                 """
                 INSERT INTO execution_envelopes (
-                    logical_operation_id, idempotency_key, operation_kind, sink_mode,
-                    payload_json, payload_sha256, intent_ids_json, lifecycle_state,
-                    created_monotonic_ns, updated_monotonic_ns, relationship_constraint
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    logical_operation_id, tournament_id, idempotency_key,
+                    operation_kind, sink_mode, payload_json, payload_sha256,
+                    intent_ids_json, lifecycle_state, created_monotonic_ns,
+                    updated_monotonic_ns, relationship_constraint
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     envelope.logical_operation_id,
+                    envelope.tournament_id,
                     envelope.idempotency_key,
                     envelope.operation_kind.value,
                     envelope.sink_mode.value,
@@ -191,6 +278,7 @@ class ExecutionJournal:
                 for intent in intents:
                     self._insert_event(
                         logical_operation_id=envelope.logical_operation_id,
+                        tournament_id=envelope.tournament_id,
                         logical_intent_id=intent.intent_id,
                         event_type="SUBMISSION",
                         observed_monotonic_ns=submission_ns,
@@ -212,6 +300,7 @@ class ExecutionJournal:
             else:
                 self._insert_event(
                     logical_operation_id=envelope.logical_operation_id,
+                    tournament_id=envelope.tournament_id,
                     logical_intent_id=None,
                     event_type="SUBMISSION",
                     observed_monotonic_ns=submission_ns,
@@ -235,6 +324,7 @@ class ExecutionJournal:
         logical_operation_id: str,
         event_type: str,
         observed_monotonic_ns: int,
+        tournament_id: str | None = None,
         logical_intent_id: str | None = None,
         source_timestamp: str | None = None,
         decision_observation_ns: int | None = None,
@@ -258,6 +348,7 @@ class ExecutionJournal:
         with self._connection:
             self._insert_event(
                 logical_operation_id=logical_operation_id,
+                tournament_id=tournament_id,
                 logical_intent_id=logical_intent_id,
                 event_type=event_type,
                 observed_monotonic_ns=observed_monotonic_ns,
@@ -281,8 +372,9 @@ class ExecutionJournal:
         self,
         *,
         logical_operation_id: str,
-        logical_intent_id: str | None,
-        event_type: str,
+        tournament_id: str | None = None,
+        logical_intent_id: str | None = None,
+        event_type: str = "",
         observed_monotonic_ns: int,
         source_timestamp: str | None = None,
         decision_observation_ns: int | None = None,
@@ -299,18 +391,32 @@ class ExecutionJournal:
         terminal_status: str | None = None,
         detail_json: str | None = None,
     ) -> None:
+        if tournament_id is None:
+            row = self._connection.execute(
+                """
+                SELECT tournament_id
+                FROM execution_envelopes
+                WHERE logical_operation_id = ?
+                """,
+                (logical_operation_id,),
+            ).fetchone()
+            tournament_id = (
+                None if row is None else self._required_tournament_id(row[0])
+            )
+        tournament_id = self._required_tournament_id(tournament_id)
         self._connection.execute(
             """
             INSERT INTO execution_events (
-                logical_operation_id, logical_intent_id, event_type,
+                logical_operation_id, tournament_id, logical_intent_id, event_type,
                 observed_monotonic_ns, source_timestamp, decision_observation_ns,
                 decision_monotonic_ns, strategy_family, strategy_id, signal_value, fair_value,
                 exchange_id, exchange_order_id, fill_id, quantity, price,
                 terminal_status, detail_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 logical_operation_id,
+                tournament_id,
                 logical_intent_id,
                 event_type,
                 observed_monotonic_ns,
@@ -334,8 +440,9 @@ class ExecutionJournal:
     def events(self, logical_operation_id: str) -> tuple[ExecutionJournalEvent, ...]:
         rows = self._connection.execute(
             """
-            SELECT event_id, logical_operation_id, logical_intent_id, event_type,
-                   observed_monotonic_ns, source_timestamp, decision_observation_ns,
+            SELECT event_id, logical_operation_id, tournament_id,
+                   logical_intent_id, event_type, observed_monotonic_ns,
+                   source_timestamp, decision_observation_ns,
                    decision_monotonic_ns, strategy_family, strategy_id, signal_value, fair_value,
                    exchange_id, exchange_order_id, fill_id, quantity, price,
                    terminal_status, detail_json
@@ -349,27 +456,28 @@ class ExecutionJournal:
             ExecutionJournalEvent(
                 event_id=int(row[0]),
                 logical_operation_id=str(row[1]),
-                logical_intent_id=None if row[2] is None else str(row[2]),
-                event_type=str(row[3]),
-                observed_monotonic_ns=int(row[4]),
-                source_timestamp=None if row[5] is None else str(row[5]),
+                tournament_id=self._required_tournament_id(row[2]),
+                logical_intent_id=None if row[3] is None else str(row[3]),
+                event_type=str(row[4]),
+                observed_monotonic_ns=int(row[5]),
+                source_timestamp=None if row[6] is None else str(row[6]),
                 decision_observation_ns=(
-                    None if row[6] is None else int(row[6])
-                ),
-                decision_monotonic_ns=(
                     None if row[7] is None else int(row[7])
                 ),
-                strategy_family=None if row[8] is None else str(row[8]),
-                strategy_id=None if row[9] is None else str(row[9]),
-                signal_value=None if row[10] is None else float(row[10]),
-                fair_value=None if row[11] is None else float(row[11]),
-                exchange_id=None if row[12] is None else str(row[12]),
-                exchange_order_id=None if row[13] is None else str(row[13]),
-                fill_id=None if row[14] is None else str(row[14]),
-                quantity=None if row[15] is None else str(row[15]),
-                price=None if row[16] is None else str(row[16]),
-                terminal_status=None if row[17] is None else str(row[17]),
-                detail_json=None if row[18] is None else str(row[18]),
+                decision_monotonic_ns=(
+                    None if row[8] is None else int(row[8])
+                ),
+                strategy_family=None if row[9] is None else str(row[9]),
+                strategy_id=None if row[10] is None else str(row[10]),
+                signal_value=None if row[11] is None else float(row[11]),
+                fair_value=None if row[12] is None else float(row[12]),
+                exchange_id=None if row[13] is None else str(row[13]),
+                exchange_order_id=None if row[14] is None else str(row[14]),
+                fill_id=None if row[15] is None else str(row[15]),
+                quantity=None if row[16] is None else str(row[16]),
+                price=None if row[17] is None else str(row[17]),
+                terminal_status=None if row[18] is None else str(row[18]),
+                detail_json=None if row[19] is None else str(row[19]),
             )
             for row in rows
         )
@@ -437,9 +545,10 @@ class ExecutionJournal:
         )
         rows = self._connection.execute(
             """
-            SELECT logical_operation_id, idempotency_key, operation_kind, sink_mode,
-                   payload_json, payload_sha256, intent_ids_json, lifecycle_state,
-                   created_monotonic_ns, relationship_constraint
+            SELECT logical_operation_id, tournament_id, idempotency_key,
+                   operation_kind, sink_mode, payload_json, payload_sha256,
+                   intent_ids_json, lifecycle_state, created_monotonic_ns,
+                   relationship_constraint
             FROM execution_envelopes
             WHERE lifecycle_state NOT IN (?, ?, ?, ?)
             ORDER BY created_monotonic_ns, logical_operation_id
@@ -448,7 +557,7 @@ class ExecutionJournal:
         ).fetchall()
         result: list[ExecutionEnvelope] = []
         for row in rows:
-            intent_ids_raw = json.loads(row[6])
+            intent_ids_raw = json.loads(row[7])
             if not isinstance(intent_ids_raw, list) or not all(
                 isinstance(value, str) for value in intent_ids_raw
             ):
@@ -456,15 +565,18 @@ class ExecutionJournal:
             result.append(
                 ExecutionEnvelope.persisted(
                     logical_operation_id=str(row[0]),
-                    idempotency_key=None if row[1] is None else str(row[1]),
-                    operation_kind=OperationKind(str(row[2])),
-                    sink_mode=ExecutionMode(str(row[3])),
-                    payload_json=str(row[4]),
-                    payload_sha256=str(row[5]),
+                    tournament_id=self._required_tournament_id(row[1]),
+                    idempotency_key=None if row[2] is None else str(row[2]),
+                    operation_kind=OperationKind(str(row[3])),
+                    sink_mode=ExecutionMode(str(row[4])),
+                    payload_json=str(row[5]),
+                    payload_sha256=str(row[6]),
                     intent_ids=tuple(intent_ids_raw),
-                    lifecycle_state=LifecycleState(str(row[7])),
-                    created_monotonic_ns=int(row[8]),
-                    relationship_constraint=None if row[9] is None else str(row[9]),
+                    lifecycle_state=LifecycleState(str(row[8])),
+                    created_monotonic_ns=int(row[9]),
+                    relationship_constraint=(
+                        None if row[10] is None else str(row[10])
+                    ),
                 )
             )
         return tuple(result)
