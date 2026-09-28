@@ -41,11 +41,14 @@ def sha(path: Path) -> str:
     return h.hexdigest()
 
 
-def one(name: str) -> Path:
-    matches = sorted(INPUT.rglob(name))
-    if len(matches) != 1:
-        raise SystemExit(f"expected exactly one {name}, got {matches}")
-    return matches[0]
+def one_any(*names: str) -> Path:
+    matches: list[Path] = []
+    for name in names:
+        matches.extend(INPUT.rglob(name))
+    unique = sorted(set(matches))
+    if len(unique) != 1:
+        raise SystemExit(f"expected exactly one of {names}, got {unique}")
+    return unique[0]
 
 
 def seed(component: str) -> int:
@@ -1232,9 +1235,9 @@ def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 
 
 def main() -> None:
-    manifest1 = one("data_001_corpus_manifest.json")
-    identity1 = one("data_001_market_identity.csv")
-    manifest2 = one("data_002_manifest.json")
+    manifest1 = one_any("data_001_corpus_manifest.json", "corpus_manifest.json")
+    identity1 = one_any("data_001_market_identity.csv", "market_identity.csv")
+    manifest2 = one_any("data_002_manifest.json")
     if (
         sha(manifest1) != EXPECTED["data_001_manifest"]
         or sha(identity1) != EXPECTED["data_001_identity"]
