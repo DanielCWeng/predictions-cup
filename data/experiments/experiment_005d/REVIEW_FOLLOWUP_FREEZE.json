@@ -21,5 +21,8 @@
   "temporal_aggregation": "UTC clock-hour bins aligned to top of hour",
   "empirical_change_policy": "No original empirical output changes; follow-up can only retain, weaken, downgrade, or reject.",
   "holdout_status": "ALREADY_EXPOSED_POST_HOC_REVIEW_ONLY",
-  "orders_enabled": false
+  "orders_enabled": false,
+  "regime_definitions_sha256": "9d7d76e15b9bf15603836641a5f9d09902a910b7e3d9ef043445cab32bc90df5",
+  "event_timeline_sha256": "2e2d3c4441d331f2de15350ff24fb31d605aa3c080c818b898c01e8e78090e7d",
+  "deterministic_regeneration": "PASS — two clean generations produced identical review runner SHA-256"
 }
