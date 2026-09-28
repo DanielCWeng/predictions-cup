@@ -1,233 +1,245 @@
 {
-  "schema_version": 1,
-  "protocol_revision": 3,
-  "experiment_id": "EXPERIMENT-005E",
-  "title": "Participant Ecology / Behavioural Atlas",
-  "namespace": "005e_participant_ecology_atlas",
-  "canonical_base_sha": "ba938bedcf63f562be8b26c9502e828391123867",
-  "status": "PRE_HOLDOUT_PROTOCOL_FROZEN",
-  "frozen_before_prior_outcome_rankings": true,
-  "amendments": [
-    {
-      "revision": 2,
-      "timing": "before empirical response inspection",
-      "reason": "DATA-002 transaction-shape audit showed one active aggregate order can match multiple passive maker fills. Counting the active row as a single economic trade would collapse real passive fill legs. Clock-time silence must also remain missing rather than being imputed as zero movement.",
-      "changes": [
-        "economic market stream reconstructed from passive fill legs within validated family+condition_id+tx_hash match groups; active row retained for conservation audit only",
-        "clock-time price targets require at least one later economic fill in (t,t+h]; otherwise label is NO_FUTURE_OBSERVATION"
-      ]
-    },
-    {
-      "revision": 3,
-      "timing": "before empirical response inspection",
-      "reason": "Completed schema-only DATA-002 conservation audit across all five families showed source float rounding in canonical YES-axis notional: p99 roughly 5e-7 to 1.4e-5, maximum below 4.97e-4, and zero eligible groups above 1e-3. A 1e-8 YES-notional tolerance would therefore reject valid groups for binary-float noise.",
-      "changes": [
-        "size conservation remains relative tolerance 1e-8",
-        "canonical YES-axis notional conservation uses relative tolerance 1e-3",
-        "value_usd is not a conservation gate because participant-side value semantics do not reconcile as an aggregate match invariant"
-      ]
-    }
+  "archetypes": {
+    "assignment": "DEV/HOLDOUT use frozen TRAIN medians/scaler/PCA/centroids; never refit",
+    "selection": "cluster count fixed ex ante at 6; not selected by predictive performance",
+    "stability": "5 deterministic bootstrap fits; report adjusted Rand index",
+    "training": "TRAIN-only standardized participant fingerprints using each eligible participant latest pre-boundary state",
+    "transform": "TRAIN-only StandardScaler -> PCA up to 6 components -> MiniBatchKMeans k=6"
+  },
+  "baseline_features": [
+    "current_logit",
+    "ret_15",
+    "ret_60",
+    "ret_300",
+    "econ_count_15",
+    "econ_count_60",
+    "econ_count_300",
+    "econ_value_15",
+    "econ_value_60",
+    "econ_value_300",
+    "log_value",
+    "event_count_60_ex_market"
   ],
-  "scientific_question": "Does observable participant behaviour contain repeatable predictive information about subsequent market state beyond generic market and activity controls?",
+  "canonical_start": "ba938bedcf63f562be8b26c9502e828391123867",
+  "compute": {
+    "ec2": "Git/hashes/packaging/synthetic tests only; no empirical participant analysis",
+    "kaggle_max_sessions": 5,
+    "namespace": "005e_participant_ecology_atlas",
+    "operational_amendment": "User clarified shared Kaggle concurrency is 5 sessions, not 3; amended before any 005E empirical outcome inspection."
+  },
+  "concentration": [
+    "top participant effect share",
+    "top 5",
+    "top 10",
+    "top 1 percent",
+    "effective number of contributing participants",
+    "unseen-wallet performance",
+    "sparse-wallet performance",
+    "repeat-wallet coverage"
+  ],
+  "contamination_boundary": "docs/research/005_DISCOVERY_PRIOR_WORK_BOUNDARY.md",
   "data": {
-    "primary": "DATA-002 fill-complete participant-side OrderFilled corpus",
+    "economic_trade_grain": "validated passive OrderFilled rows from transaction-condition groups with exactly one active row, >=1 passive row, binary YES/NO semantics, size conservation and YES-notional conservation",
     "families": [
       "US_2024",
       "CAN_2025",
+      "COL_2026",
       "HUN_2026",
-      "PER_2026",
-      "COL_2026"
+      "PER_2026"
     ],
-    "participant_grain": "one participant-side OrderFilled row",
-    "economic_market_grain": "group rows by family+condition_id+tx_hash; require exactly one order_is_match_taker_order=true active aggregate row and one or more passive rows; each passive row is one economic fill; active aggregate row is audit-only and never counted as an additional economic fill",
-    "economic_trade_validation": "require exactly one active aggregate row, at least one passive row, binary outcomes, relative size conservation <=1e-8, and relative canonical YES-axis notional conservation <=1e-3; malformed groups fail closed and are audited; value_usd is not used as a conservation gate",
-    "infrastructure_registry": "data/reference/polymarket_infrastructure/infra_addresses.md",
-    "identity_policy": "known exchange/adapters/protocol/fee/reward/system identities excluded from participant ecology; unknown identity is never asserted human"
+    "manifest_sha256": "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c",
+    "participant_grain": "one participant-side OrderFilled row after canonical infrastructure exclusion",
+    "primary": "DATA-002 participant-side OrderFilled rows",
+    "sample_policy": "deterministic hash sample capped at 750000 participant rows per family; US_2024 must contribute at least 600000 sampled rows or fail closed"
   },
-  "semantics": {
-    "canonical_yes_price": "YES row: price; NO row: 1-price; OTHER rejected for directional price targets",
-    "participant_yes_pressure": "YES BUY or NO SELL = +1; YES SELL or NO BUY = -1; otherwise missing",
-    "aggressor_status": "not inferred from participant_side; economic role is outside the primary 005E signal",
-    "market_target_state": "last canonical economic-fill YES price observed at or before each horizon, valid only if at least one later economic fill occurs in (t,t+h]; otherwise NO_FUTURE_OBSERVATION",
-    "same_timestamp_policy": "participant feature state is formed strictly before the current row under deterministic timestamp, tx_hash, log_index ordering; same-second future rows never enter past state"
+  "dev_screening": {
+    "participant_family_gate": "positive weighted MSE gain versus generic baseline on primary target AND positive family-specific gain in >=3 of 5 families",
+    "pre_holdout_freeze": "write immutable JSON binding cuts, archetype transform, selected families/features, frozen model specs and omissions before HOLDOUT",
+    "variant_selection": "hyperparameters and feature-family shortlist selected on DEV only; raw p-value never selects"
   },
-  "split": {
-    "method": "within-family chronological timestamp quantiles derived from timestamps only",
-    "train_fraction": 0.7,
-    "dev_fraction": 0.15,
-    "holdout_fraction": 0.15,
-    "purge_seconds": 300,
-    "embargo_seconds": 300,
-    "selection_rule": "TRAIN characterises and fits transforms; DEV selects predeclared feature families/hyperparameters; HOLDOUT is opened once after immutable DEV freeze"
-  },
-  "sampling": {
-    "history": "all eligible participant rows are used to build past-only state",
-    "evaluation": "deterministic fill-id hash sample after feature construction, outcome-independent",
-    "max_rows_per_family": 750000,
-    "us_2024_min_target_rows": 600000,
-    "reason": "retain the full history state while bounding supervised fit/inference cost"
-  },
-  "feature_families": {
-    "recurrence": [
-      "log1p prior fill count",
-      "log1p active days",
-      "log1p seconds since previous appearance",
-      "log1p lifetime seconds",
-      "session fill count with 30-minute session break",
-      "session age seconds"
-    ],
-    "specialisation": [
-      "log1p same-market prior fill count",
-      "log1p cumulative unique markets",
-      "current-market historical share",
-      "log1p cumulative unique events",
-      "current-event historical share",
-      "cumulative market-switch rate"
-    ],
-    "size_behaviour": [
-      "past mean log1p USD value",
-      "past value dispersion",
-      "current value z-score versus participant past",
-      "current value percentile proxy versus contemporaneous market activity"
-    ],
-    "directional_behaviour": [
-      "past canonical YES-pressure balance",
-      "same-direction run length",
-      "past agreement between participant pressure and lagged own-market return"
-    ],
-    "timing_behaviour": [
-      "recency",
-      "session persistence",
-      "participant historical hour-of-day concentration",
-      "activity acceleration proxy from session count versus lifetime rate"
-    ],
-    "historical_markout": [
-      "300-second matured directional logit markout cumulative sum/count",
-      "empirical-Bayes shrunk historical markout with lambda=20",
-      "historical score count and uncertainty proxy",
-      "all current scores exclude labels whose 300-second horizon has not matured"
-    ],
-    "network_cross_market": [
-      "participant-market bipartite degree",
-      "market participant degree",
-      "participant event breadth",
-      "same-event market-switch rate"
+  "experiment_id": "EXPERIMENT-005E",
+  "falsification": [
+    "participant-state permutation preserving family/market/time-activity strata where support permits",
+    "frequency-matched pseudo-state permutation",
+    "infrastructure exclusion audit",
+    "one-participant removal",
+    "top-1/top-5/top-10 activity removal",
+    "top-1-percent activity removal",
+    "participant-frequency controls",
+    "size/activity controls",
+    "leave-market-out diagnostic",
+    "leave-event/family-out diagnostic where support permits",
+    "shuffled historical-score assignment",
+    "1-hour delayed historical-score placebo"
+  ],
+  "forbidden": [
+    "wallet leaderboard",
+    "smartest-wallet ranking",
+    "insider speculation",
+    "whole-sample wallet averages",
+    "full-history skill scores",
+    "HOLDOUT-based threshold/feature/cluster/horizon selection"
+  ],
+  "holdout_inference": {
+    "bootstrap": "500 deterministic hierarchical family -> calendar-day block resamples",
+    "disposition_gates": {
+      "CROSS_FAMILY_CANDIDATE": "full-behaviour primary target has positive HOLDOUT gain, BH q<=0.05, positive family gain in >=3/5 families, top-participant absolute effect share <0.50, effective contributing participants >=10, and neither preregistered participant-state permutation matches/exceeds observed gain",
+      "INCONCLUSIVE": "required coverage/provenance/falsification evidence is unavailable or internally contradictory",
+      "NO_INCREMENTAL_EVIDENCE": "full-behaviour primary HOLDOUT gain <=0 or BH q>0.05",
+      "REGIME_SPECIFIC_CANDIDATE": "full-behaviour primary target has positive HOLDOUT gain, BH q<=0.05 and positive family gain in at least one but fewer than three families, or broad-concentration/transfer gates fail without a stronger falsification contradiction"
+    },
+    "final_refit": "after DEV freeze, refit each frozen model on the union of TRAIN+DEV with unchanged features/hyperparameters; HOLDOUT is never used in fitting or tuning",
+    "multiplicity": "Benjamini-Hochberg at alpha=0.05 across all frozen primary participant variants; unavailable/negative variants remain in the family",
+    "primary_statistic": "baseline squared-error loss minus challenger squared-error loss",
+    "transfer": [
+      "per-family holdout gains",
+      "leave-family-out retraining diagnostic where support permits",
+      "unseen/sparse/repeat participant slices"
     ]
   },
-  "archetypes": {
-    "method": "TRAIN-only StandardScaler -> PCA(6) -> MiniBatchKMeans(k=6)",
-    "fit_population": "TRAIN participant end-state rows with at least 20 prior fills and 2 active days",
-    "sparse_assignment": "participants below support receive SPARSE_DEFAULT",
-    "dev_holdout": "assigned with frozen TRAIN scaler/PCA/centroids; no refit",
-    "cluster_count_selection": "fixed before outcome inspection; not chosen by DEV/HOLDOUT predictive performance",
-    "stability": "report adjusted Rand index across deterministic TRAIN bootstrap refits"
+  "infrastructure": {
+    "policy": "exclude all canonical infrastructure addresses from participant ecology/skill claims; unknown does not imply human; no deanonymisation",
+    "registry": "data/reference/polymarket_infrastructure/infra_registry.json"
   },
-  "targets": {
-    "clock": {
-      "own_market_logit_change_seconds": [
-        15,
-        60,
-        300
-      ],
-      "signed_participant_markout_seconds": [
-        60,
-        300
-      ],
-      "absolute_own_market_logit_change_seconds": [
-        60
-      ],
-      "future_economic_trade_count_seconds": [
-        60
-      ],
-      "missingness": "price targets are missing when no later economic fill occurs before the horizon"
-    },
-    "event": {
-      "own_market_logit_change_economic_trades": [
-        2,
-        10
-      ],
-      "next_economic_price_change_sign": [
-        1
-      ]
-    }
-  },
-  "baseline_controls": [
-    "current market logit/price level",
-    "anonymous own-market returns over 15/60/300s",
-    "anonymous economic-trade count and unsigned value over 15/60/300s",
-    "current fill value",
-    "broader event activity over 60s",
-    "common event movement excluding target where computationally available",
-    "probability level"
+  "interpretation_labels": [
+    "NO_INCREMENTAL_EVIDENCE",
+    "REGIME_SPECIFIC_CANDIDATE",
+    "CROSS_FAMILY_CANDIDATE",
+    "INCONCLUSIVE"
   ],
   "model_ladder": {
-    "regression": [
-      "baseline ridge",
-      "baseline+identity-history ridge",
-      "baseline+full-behaviour ridge",
-      "baseline+archetype ridge",
-      "hist-gradient-boosting challenger"
-    ],
     "classification": [
-      "majority/base-rate",
+      "majority/log-loss baseline",
       "L2 logistic baseline",
-      "L2 logistic baseline+full-behaviour"
-    ],
-    "ridge_alpha_grid": [
-      0.1,
-      1,
-      10,
-      100
+      "L2 logistic full-behaviour"
     ],
     "hgb_max_leaf_nodes": [
       15,
       31
     ],
-    "selection": "DEV only; primary comparison is incremental loss of participant-state variants versus generic baseline"
-  },
-  "screening": {
-    "primary_metric": "out-of-sample squared-error improvement for 60s own-market logit change",
-    "secondary_metrics": [
-      "60s signed markout",
-      "300s own-market logit change",
-      "next-price-change log loss",
-      "60s activity response"
+    "logistic_C_grid": [
+      0.1,
+      1.0,
+      10.0
     ],
-    "multiplicity": "Benjamini-Hochberg FDR 0.05 within target x horizon family",
-    "dev_candidate_rule": "retain only predeclared participant feature families with positive DEV incremental performance and same-sign improvement in at least 3 families or a coherent predeclared regime-specific subset",
-    "raw_p_value_is_not_selection": true
+    "regression": [
+      "baseline ridge",
+      "baseline + each participant family ridge",
+      "identity-history ridge",
+      "full-behaviour ridge",
+      "archetype ridge",
+      "DEV-selected-family ridge",
+      "small histogram-gradient-boosting challenger"
+    ],
+    "ridge_alpha_grid": [
+      0.1,
+      1.0,
+      10.0,
+      100.0
+    ]
   },
-  "falsification": [
-    "participant-state permutation within condition x 30-minute bucket x activity/frequency stratum",
-    "frequency-matched pseudo-identities",
-    "infrastructure exclusion audit",
-    "top-1/top-5/top-10/top-1-percent participant activity removal",
-    "participant-frequency and size/activity controls",
-    "leave-market-out diagnostics",
-    "leave-event-out diagnostics",
-    "leave-family-out diagnostics",
-    "shuffled historical-score assignment within support strata",
-    "delayed participant-state placebo where feasible"
+  "participant_feature_families": {
+    "directional_behaviour": [
+      "prior_pressure_balance",
+      "direction_run_length"
+    ],
+    "historical_markout": [
+      "hist_markout_score",
+      "log_hist_markout_count",
+      "hist_markout_uncertainty"
+    ],
+    "network_cross_market": [
+      "log_market_participant_degree",
+      "log_unique_markets_prior",
+      "log_unique_events_prior",
+      "same_event_switch_rate"
+    ],
+    "recurrence": [
+      "log_prior_fill_count",
+      "log_prior_active_days",
+      "log_recency_seconds",
+      "log_lifetime_seconds",
+      "session_fill_count",
+      "log_session_age_seconds"
+    ],
+    "size_behaviour": [
+      "prior_mean_log_value",
+      "prior_std_log_value",
+      "current_size_z",
+      "market_size_percentile_proxy"
+    ],
+    "specialisation": [
+      "log_prior_same_market_count",
+      "log_unique_markets_prior",
+      "market_history_share",
+      "log_unique_events_prior",
+      "event_history_share",
+      "switch_rate",
+      "same_event_switch_rate"
+    ],
+    "timing_behaviour": [
+      "hour_hhi_prior",
+      "activity_acceleration"
+    ]
+  },
+  "past_only_rules": {
+    "direction_semantics": "owner YES pressure only; never called aggressor/taker direction",
+    "historical_markout": "300s directional markout becomes available only at trade timestamp + 300s and enters later rows strictly after availability; shrinkage lambda=20 toward zero",
+    "sparse_participant": "strong shrinkage; archetype assignment forced to sparse class when prior fills <20 or prior active days <2",
+    "unseen_participant": "neutral/default representation"
+  },
+  "primary_target": {
+    "definition": "60-second future own-market canonical YES logit change",
+    "name": "y_60",
+    "selection_role": "sole primary target"
+  },
+  "question": "Does observable participant behaviour contain repeatable predictive information about subsequent market state?",
+  "schema_version": 1,
+  "secondary_targets": [
+    {
+      "definition": "15-second future own-market logit change",
+      "name": "y_15"
+    },
+    {
+      "definition": "300-second future own-market logit change",
+      "name": "y_300"
+    },
+    {
+      "definition": "future logit change after next 2 economic trades",
+      "name": "event_2"
+    },
+    {
+      "definition": "future logit change after next 10 economic trades",
+      "name": "event_10"
+    },
+    {
+      "definition": "sign of next economic-trade canonical price change",
+      "name": "next_price_change_sign"
+    },
+    {
+      "definition": "absolute 60-second future logit move",
+      "name": "abs_60"
+    },
+    {
+      "definition": "economic trade count in following 60 seconds",
+      "name": "activity_60"
+    },
+    {
+      "definition": "participant-owner YES pressure times 60-second future logit change",
+      "name": "signed_60"
+    },
+    {
+      "definition": "participant-owner YES pressure times 300-second future logit change",
+      "name": "signed_300"
+    }
   ],
-  "concentration": [
-    "share of incremental effect from top participant/top5/top10/top1percent using anonymised audit IDs",
-    "effective number of contributing participants",
-    "unseen-wallet holdout performance",
-    "sparse-wallet holdout performance",
-    "repeat-wallet coverage"
-  ],
-  "dispositions": [
-    "NO_INCREMENTAL_SIGNAL",
-    "REGIME_SPECIFIC_CANDIDATE",
-    "CROSS_FAMILY_CANDIDATE",
-    "TOURNAMENT_FEATURE_CANDIDATE",
-    "INCONCLUSIVE"
-  ],
-  "hard_boundaries": {
-    "no_named_wallet_leaderboard": true,
-    "no_deanonymisation": true,
-    "no_order_placement": true,
-    "ec2_empirical_analysis": false,
-    "kaggle_max_simultaneous_sessions": 3
-  }
+  "splits": {
+    "design": "per-family chronological TRAIN/DEV/HOLDOUT",
+    "dev": "70th to 85th timestamp quantile, with 300s pre-HOLDOUT embargo and label-crossing purge",
+    "holdout": "85th percentile onward; inspected once after immutable DEV freeze",
+    "rule": "split boundaries depend on timestamps only, never response outcomes",
+    "train": "timestamps below the 70th participant-row timestamp quantile, with 300s pre-boundary embargo and label-crossing purge"
+  },
+  "status": "FROZEN_BEFORE_OUTCOME_INSPECTION",
+  "title": "Participant Ecology / Behavioural Atlas"
 }
