@@ -284,6 +284,7 @@ def candidate_eval(
     broad_move: np.ndarray,
     model_params: dict[str, Any],
     source_kind: str = "DATA-001",
+    trade_stream: tuple[np.ndarray, np.ndarray] | None = None,
 ) -> list[dict[str, Any]]:
     train, dev, hold, _, _ = split_masks(times_ns)
     rows: list[dict[str, Any]] = []
@@ -499,6 +500,207 @@ def candidate_eval(
                     "model_params": model_params,
                     "source_kind": source_kind,
                 })
+    if trade_stream is not None:
+        trade_times, trade_prices = trade_stream
+        if len(trade_times) >= max(EVENT_HORIZONS) + 2:
+            event_train, event_dev, event_hold, _, _ = split_masks(trade_times)
+            state_idx = np.searchsorted(times_ns, trade_times, side="right") - 1
+            state_ok = state_idx >= 0
+            safe_idx = np.maximum(state_idx, 0)
+            event_signal = np.full(len(trade_times), np.nan)
+            event_broad = np.full(len(trade_times), np.nan)
+            event_signal[state_ok] = signal[safe_idx[state_ok]]
+            event_broad[state_ok] = broad_move[safe_idx[state_ok]]
+            event_own = np.full(len(trade_times), np.nan)
+            event_own[1:] = trade_prices[1:] - trade_prices[:-1]
+            delayed_idx = np.searchsorted(
+                times_ns,
+                trade_times - 60 * 1_000_000_000,
+                side="right",
+            ) - 1
+            delayed_ok = delayed_idx >= 0
+            delayed_safe = np.maximum(delayed_idx, 0)
+            delayed_signal = np.full(len(trade_times), np.nan)
+            delayed_signal[delayed_ok] = signal[delayed_safe[delayed_ok]]
+            event_controls = np.column_stack([event_own, event_broad])
+
+            for event_horizon in EVENT_HORIZONS:
+                event_y = np.full(len(trade_prices), np.nan)
+                event_y[:-event_horizon] = (
+                    trade_prices[event_horizon:] - trade_prices[:-event_horizon]
+                )
+                valid_event = (
+                    np.isfinite(event_signal)
+                    & np.isfinite(event_y)
+                    & np.all(np.isfinite(event_controls), axis=1)
+                )
+                train_event = valid_event & event_train
+                dev_event = valid_event & event_dev
+                key = (
+                    f"{event}|{family_id}|{representation}|{target}|"
+                    f"EVENT|{event_horizon}"
+                )
+                if PHASE == "TRAIN_DEV":
+                    if int(train_event.sum()) < 100 or int(dev_event.sum()) < 50:
+                        rows.append({
+                            "event": event,
+                            "family_id": family_id,
+                            "leakage_mode": leakage_mode,
+                            "representation_family": representation_family,
+                            "representation": representation,
+                            "target": target,
+                            "target_kind": "future_probability_change",
+                            "horizon_kind": "EVENT",
+                            "horizon": event_horizon,
+                            "status": "UNAVAILABLE",
+                            "train_n": int(train_event.sum()),
+                            "dev_n": int(dev_event.sum()),
+                            "p_value": None,
+                            "q_value": None,
+                            "fdr_group": (
+                                f"{leakage_mode}|{representation_family}|"
+                                "future_probability_change|EVENT"
+                            ),
+                            "model_params": model_params,
+                            "source_kind": source_kind,
+                        })
+                        continue
+                    by = fit_control(
+                        event_controls[train_event], event_y[train_event]
+                    )
+                    bs = fit_control(
+                        event_controls[train_event], event_signal[train_event]
+                    )
+                    train_yr = (
+                        event_y[train_event]
+                        - apply_control(event_controls[train_event], by)
+                    )
+                    train_sr = (
+                        event_signal[train_event]
+                        - apply_control(event_controls[train_event], bs)
+                    )
+                    yr = (
+                        event_y[dev_event]
+                        - apply_control(event_controls[dev_event], by)
+                    )
+                    sr = (
+                        event_signal[dev_event]
+                        - apply_control(event_controls[dev_event], bs)
+                    )
+                    score = float(np.mean(sr * yr))
+                    denom = float(sr @ sr)
+                    beta = None if denom <= 0 else float((sr @ yr) / denom)
+                    mid = len(sr) // 2
+                    half1 = (
+                        float(np.mean(sr[:mid] * yr[:mid]))
+                        if mid >= 25 else None
+                    )
+                    half2 = (
+                        float(np.mean(sr[mid:] * yr[mid:]))
+                        if len(sr) - mid >= 25 else None
+                    )
+                    p = circular_shift_p(
+                        sr,
+                        yr,
+                        f"{event}|{family_id}|{representation}|{target}|"
+                        f"EVENT|{event_horizon}",
+                    )
+                    delayed_valid = (
+                        dev_event
+                        & np.isfinite(delayed_signal)
+                    )
+                    delayed_score = None
+                    delayed_ratio = None
+                    if int(delayed_valid.sum()) >= 50:
+                        dyr = (
+                            event_y[delayed_valid]
+                            - apply_control(event_controls[delayed_valid], by)
+                        )
+                        dsr = (
+                            delayed_signal[delayed_valid]
+                            - apply_control(event_controls[delayed_valid], bs)
+                        )
+                        delayed_score = float(np.mean(dsr * dyr))
+                        if abs(score) > 1e-18:
+                            delayed_ratio = abs(delayed_score) / abs(score)
+                    rows.append({
+                        "event": event,
+                        "family_id": family_id,
+                        "leakage_mode": leakage_mode,
+                        "representation_family": representation_family,
+                        "representation": representation,
+                        "target": target,
+                        "target_kind": "future_probability_change",
+                        "horizon_kind": "EVENT",
+                        "horizon": event_horizon,
+                        "status": "OK",
+                        "train_n": int(train_event.sum()),
+                        "dev_n": int(dev_event.sum()),
+                        "train_score": float(np.mean(train_sr * train_yr)),
+                        "dev_score": score,
+                        "dev_beta": beta,
+                        "dev_half1_score": half1,
+                        "dev_half2_score": half2,
+                        "p_value": p,
+                        "q_value": None,
+                        "delayed_60s_score": delayed_score,
+                        "delayed_60s_effect_ratio": delayed_ratio,
+                        "fdr_group": (
+                            f"{leakage_mode}|{representation_family}|"
+                            "future_probability_change|EVENT"
+                        ),
+                        "model_params": {
+                            **model_params,
+                            "control_y": by.tolist(),
+                            "control_signal": bs.tolist(),
+                        },
+                        "source_kind": source_kind,
+                    })
+                else:
+                    frozen = (
+                        SHORTLIST["candidate_params"].get(key)
+                        if SHORTLIST else None
+                    )
+                    if frozen is None:
+                        continue
+                    hold_event = valid_event & event_hold
+                    if int(hold_event.sum()) < 50:
+                        rows.append({
+                            "candidate_key": key,
+                            "status": "UNAVAILABLE_HOLDOUT",
+                            "holdout_n": int(hold_event.sum()),
+                        })
+                        continue
+                    by = np.asarray(frozen["control_y"], float)
+                    bs = np.asarray(frozen["control_signal"], float)
+                    yr = (
+                        event_y[hold_event]
+                        - apply_control(event_controls[hold_event], by)
+                    )
+                    sr = (
+                        event_signal[hold_event]
+                        - apply_control(event_controls[hold_event], bs)
+                    )
+                    score = float(np.mean(sr * yr))
+                    denom = float(sr @ sr)
+                    beta = None if denom <= 0 else float((sr @ yr) / denom)
+                    rows.append({
+                        "candidate_key": key,
+                        "event": event,
+                        "family_id": family_id,
+                        "leakage_mode": leakage_mode,
+                        "representation_family": representation_family,
+                        "representation": representation,
+                        "target": target,
+                        "target_kind": "future_probability_change",
+                        "horizon_kind": "EVENT",
+                        "horizon": event_horizon,
+                        "status": "OK",
+                        "holdout_n": int(hold_event.sum()),
+                        "holdout_score": score,
+                        "holdout_beta": beta,
+                        "_bootstrap_values": (sr * yr).tolist(),
+                    })
     return rows
 
 
@@ -568,6 +770,84 @@ def quote_series(corpus: Path, event: str, tokens: list[str]) -> dict[str, dict[
     return out
 
 
+def economic_trade_series(
+    corpus: Path, event: str, tokens: list[str]
+) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    root = corpus / "schema_version=1" / event / "books" / "trades"
+    fs = files(root)
+    if not fs:
+        return {}
+    ds = pads.dataset(fs, format="parquet")
+    expr = pads.field("token_id").isin(tokens)
+    table = ds.to_table(
+        columns=[
+            "token_id",
+            "observed_at",
+            "source_timestamp",
+            "transaction_hash",
+            "price",
+            "size",
+        ],
+        filter=expr,
+    )
+    if table.num_rows == 0:
+        return {}
+    order = pc.sort_indices(
+        table,
+        sort_keys=[
+            ("token_id", "ascending"),
+            ("observed_at", "ascending"),
+            ("source_timestamp", "ascending"),
+            ("transaction_hash", "ascending"),
+            ("price", "ascending"),
+            ("size", "ascending"),
+        ],
+    )
+    rows = pc.take(table, order).to_pylist()
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[str(row["token_id"])].append(row)
+    out: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    for token, values in grouped.items():
+        unique: dict[tuple[Any, ...], tuple[int, float] | None] = {}
+        for row in values:
+            try:
+                price = float(row["price"])
+            except (TypeError, ValueError):
+                continue
+            if not (0.0 < price < 1.0):
+                continue
+            observed = iso_ns(row["observed_at"])
+            tx = str(row.get("transaction_hash") or "").strip()
+            if tx:
+                key: tuple[Any, ...] = ("TX", tx)
+            else:
+                key = (
+                    "FALLBACK",
+                    observed,
+                    price,
+                    str(row.get("size") or ""),
+                )
+            prior = unique.get(key)
+            if prior is None and key in unique:
+                continue
+            if prior is not None:
+                if abs(prior[1] - price) > 1e-9:
+                    unique[key] = None
+                continue
+            unique[key] = (observed, price)
+        clean = sorted(
+            (value for value in unique.values() if value is not None),
+            key=lambda item: (item[0], item[1]),
+        )
+        if clean:
+            out[token] = (
+                np.asarray([item[0] for item in clean], dtype=np.int64),
+                np.asarray([item[1] for item in clean], dtype=float),
+            )
+    return out
+
+
 def sample_series(
     series: dict[str, np.ndarray], grid: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -621,6 +901,7 @@ def hard_family_candidates(
     panel: np.ndarray,
     spreads: np.ndarray,
     tokens: list[str],
+    trade_streams: dict[str, tuple[np.ndarray, np.ndarray]],
 ) -> list[dict[str, Any]]:
     index = {t: i for i, t in enumerate(tokens)}
     members = [
@@ -753,6 +1034,9 @@ def hard_family_candidates(
                         signal=signal,
                         broad_move=broad_move(panel, cols[k]),
                         model_params=params,
+                        trade_stream=trade_streams.get(
+                            member["canonical_token_id"]
+                        ),
                     )
                 )
     elif family["relation_type"] == "CONDITIONAL_STAGED":
@@ -839,6 +1123,9 @@ def hard_family_candidates(
                     signal=signal,
                     broad_move=broad_move(panel, cols2[k]),
                     model_params={"method": "weighted_isotonic_equal"},
+                    trade_stream=trade_streams.get(
+                        member["canonical_token_id"]
+                    ),
                 )
             )
     return result
@@ -850,6 +1137,7 @@ def indirect_graph_candidates(
     grid: np.ndarray,
     panel: np.ndarray,
     tokens: list[str],
+    trade_streams: dict[str, tuple[np.ndarray, np.ndarray]],
 ) -> list[dict[str, Any]]:
     index = {t: i for i, t in enumerate(tokens)}
     grouped: dict[str, list[str]] = defaultdict(list)
@@ -951,6 +1239,7 @@ def indirect_graph_candidates(
                     signal=signal,
                     broad_move=broad_move(panel, ti),
                     model_params=params,
+                    trade_stream=trade_streams.get(target),
                 )
             )
     return out
@@ -1599,17 +1888,25 @@ def main() -> None:
         grid, panel, spreads, tokens = event_panel(
             corpus, event, sorted(event_tokens[event])
         )
+        trade_streams = economic_trade_series(
+            corpus, event, sorted(event_tokens[event])
+        )
         if len(grid) < 100:
             continue
         for family in hard_by_event.get(event, []):
             results.extend(
                 hard_family_candidates(
-                    family, event, grid, panel, spreads, tokens
+                    family, event, grid, panel, spreads, tokens, trade_streams
                 )
             )
         results.extend(
             indirect_graph_candidates(
-                event, rel_by_event.get(event, []), grid, panel, tokens
+                event,
+                rel_by_event.get(event, []),
+                grid,
+                panel,
+                tokens,
+                trade_streams,
             )
         )
 
