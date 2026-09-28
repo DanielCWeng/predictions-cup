@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "amendment_id": "REGIME_SUPPORT_006",
+  "type": "source_brief_compliance_before_predictive_screen",
+  "predictive_results_seen": false,
+  "predictive_design_change": "adds five documented regime/state indicator predictors requested by the source brief",
+  "source": "data/experiments/experiment_004a/regime_definitions.json",
+  "base_stage2_feature_count": 226,
+  "added_features": [
+    "regime_pre_election",
+    "regime_election_day_pre_results",
+    "regime_active_results",
+    "regime_late_count",
+    "regime_post_resolution_diagnostic"
+  ],
+  "final_screen_feature_count": 231,
+  "semantics": "1 for the named documented 004A interval; 0 for another documented 004A regime; missing for US_2024, CAN_2025, and timestamps outside all documented intervals. No state is guessed from market prices.",
+  "support_gate_correction": "Feature-target candidates must themselves have at least 1000 supported sampled rows, 3 distinct family-qualified markets and 4 distinct family-day blocks. Target-level support counts remain descriptive only.",
+  "holdout_reproduction": "The same committed 004A boundaries are recreated inside the sealed HOLDOUT executable; regime columns are not read from or written into Stage-2 parquets."
+}
