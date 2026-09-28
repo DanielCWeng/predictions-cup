@@ -1,0 +1,72 @@
+{
+  "dataset_id": "sigfills-20260928",
+  "manifest": "data/manifests/fills/data_003_manifest.json",
+  "generated_from": "sigfills_20260928.tar.zst MANIFEST.json (extraction_cutoff_utc 2026-09-28T18:52:11Z)",
+  "fill_complete_gate": {
+    "fills": 132928,
+    "fees": 132928,
+    "pass": true
+  },
+  "dedup": {
+    "dropped": 0,
+    "duplicate_key_groups": 0,
+    "conflicting_duplicate_groups": 0,
+    "cross_partition_duplicate_keys": 0
+  },
+  "custody_leg_conservation": {
+    "attributed": 43388,
+    "unattributed": 69,
+    "total": 43457,
+    "pass": true
+  },
+  "fee_evidence_counts": {
+    "custody_not_ingested": 6257,
+    "fee_charged": 43388,
+    "no_fee_leg_observed": 83283
+  },
+  "mapping_scope": {
+    "EXACT": 140,
+    "DERIVED": 87,
+    "NEAR": 4,
+    "NO_TRADE_excluded": 6,
+    "conditions": 693,
+    "tokens": 1386,
+    "sig_markets_with_rows": 231,
+    "tokens_with_rows": 1370,
+    "conditions_zero_fill": 8,
+    "tokens_zero_fill": 16,
+    "sisterreq_condition_overlap": 0,
+    "sisterreq_token_overlap": 0
+  },
+  "trade_object_coverage": {
+    "requested_dates": 115,
+    "objects_read": 115,
+    "missing_objects": 0,
+    "requested_range": ["2026-02-28", "2026-09-21"],
+    "note": "static oci_trade_object_inventory.json had 113/115; live listing added trades/2026-09-20.parquet and trades/2026-09-21.parquet"
+  },
+  "custody_coverage": {
+    "fill_day_scans_available": 113,
+    "fill_day_scans_missing": ["2026-09-20", "2026-09-21"],
+    "live_2026_object_range": ["2026-01-01", "2026-09-19"]
+  },
+  "rebates": {
+    "scoped_wallet_payout_rows": 30731,
+    "scoped_wallets": 11080,
+    "source": "complete DATA-002 2026-04-15..2026-07-31 daily stage (30,731 rows); 0 from live 2026-08-01..2026-09-19 custody scans"
+  },
+  "self_validation": {
+    "method": "one-day re-run of DATA-002 stage/assemble logic over all five-family tokens, then HUN_2026 day slice exact-compared by (timestamp, tx_hash, log_index)",
+    "sample_family": "HUN_2026",
+    "sample_day": "2026-04-15",
+    "reference_rows": 4588,
+    "regenerated_rows": 4588,
+    "exact_match": true,
+    "exact_column_schema": true
+  },
+  "known_gaps": {
+    "trade_object_gap": "2026-09-22..2026-09-28 not in live trades lake listing at extraction time; excluded",
+    "custody_gap": "2026-09-20, 2026-09-21 have no custody object; fee_evidence=custody_not_ingested, fee amounts null, not imputed",
+    "rebate_gap": "no scoped rebate payouts observed in live custody after 2026-06-25 (matches DATA-002's rebate cutoff)"
+  }
+}
