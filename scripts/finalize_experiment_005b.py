@@ -11,7 +11,7 @@ import csv
 import hashlib
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 
 def sha256(path: Path) -> str:
@@ -23,7 +23,10 @@ def sha256(path: Path) -> str:
 
 
 def load_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return cast(
+        dict[str, Any],
+        json.loads(path.read_text(encoding="utf-8")),
+    )
 
 
 def load_feature_build(root: Path) -> dict[str, Any]:
