@@ -216,8 +216,14 @@ def main() -> None:
     trade_objects = source_objects(client, namespace, args.bucket, "trades/")
     custody_objects = source_objects(client, namespace, args.bucket, "custody/")
     creation_times = [parse_date(row.get("created_at")) for row in by_token.values()]
-    if creation_times and all(value is not None for value in creation_times):
-        first_expected_day = min(value for value in creation_times if value).date().isoformat()
+    expected_starts = []
+    for row in by_token.values():
+        dates = [parse_date(row.get("created_at")), parse_date(row.get("start_date"))]
+        valid_dates = [value for value in dates if value is not None]
+        expected_starts.append(min(valid_dates) if valid_dates else None)
+    lifecycle_dates_complete = bool(expected_starts) and all(value is not None for value in expected_starts)
+    if lifecycle_dates_complete:
+        first_expected_day = min(value for value in expected_starts if value is not None).date().isoformat()
         days = sorted(day for day in trade_objects if day >= first_expected_day)
     else:
         # Missing creation timestamps disable source pruning; no inferred time window is used.
@@ -543,7 +549,8 @@ def main() -> None:
         "source_scan_last_available_trade_day": scan_end_day,
         "missing_trade_object_days": missing_trade_object_days,
         "earliest_expected_market_created_at": min(creation_times).isoformat().replace("+00:00", "Z") if creation_times and all(creation_times) else None,
-        "source_pruning_basis": "earliest accepted Gamma created_at; if any are unavailable, all source dates are scanned",
+        "earliest_expected_market_start_or_creation": min(expected_starts).isoformat().replace("+00:00", "Z") if lifecycle_dates_complete else None,
+        "source_pruning_basis": "earliest per-market Gamma creation/start date; if any market lacks both, all source dates are scanned",
         "source_date_first": days[0], "source_date_last": days[-1],
         "source_trade_objects": {d: trade_objects[d] for d in days},
         "source_custody_objects": {d: custody_objects[d] for d in days if d in custody_objects},
