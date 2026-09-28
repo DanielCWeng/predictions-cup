@@ -161,17 +161,17 @@ class SigLiveSink:
                     terminal_status=state.value,
                 )
         elif envelope.operation_kind is OperationKind.BEST_EFFORT_BATCH:
-            for result in batch_response.results:
+            for batch_result in batch_response.results:
                 intent = (
-                    plan.intents[result.index]
-                    if 0 <= result.index < len(plan.intents)
+                    plan.intents[batch_result.index]
+                    if 0 <= batch_result.index < len(plan.intents)
                     else None
                 )
-                order_id = result.data.get("orderId")
+                order_id = batch_result.data.get("orderId")
                 self._journal.record_event(
                     logical_operation_id=envelope.logical_operation_id,
                     logical_intent_id=None if intent is None else intent.intent_id,
-                    event_type="ACK" if result.ok else "REJECTED",
+                    event_type="ACK" if batch_result.ok else "REJECTED",
                     observed_monotonic_ns=observed,
                     decision_observation_ns=(
                         None if intent is None else intent.decision_observation_ns
@@ -182,27 +182,27 @@ class SigLiveSink:
                     ),
                     terminal_status=(
                         LifecycleState.ACKED.value
-                        if result.ok
+                        if batch_result.ok
                         else LifecycleState.REJECTED.value
                     ),
                     detail_json=json.dumps(
-                        result.data,
+                        batch_result.data,
                         default=str,
                         separators=(",", ":"),
                     ),
                 )
         else:
-            for result in multi_response.results:
+            for multi_result in multi_response.results:
                 intent = (
-                    plan.intents[result.index]
-                    if 0 <= result.index < len(plan.intents)
+                    plan.intents[multi_result.index]
+                    if 0 <= multi_result.index < len(plan.intents)
                     else None
                 )
-                order_id = result.data.get("orderId")
+                order_id = multi_result.data.get("orderId")
                 self._journal.record_event(
                     logical_operation_id=envelope.logical_operation_id,
                     logical_intent_id=None if intent is None else intent.intent_id,
-                    event_type="ACK" if result.ok else "REJECTED",
+                    event_type="ACK" if multi_result.ok else "REJECTED",
                     observed_monotonic_ns=observed,
                     decision_observation_ns=(
                         None if intent is None else intent.decision_observation_ns
@@ -213,11 +213,11 @@ class SigLiveSink:
                     ),
                     terminal_status=(
                         LifecycleState.ACKED.value
-                        if result.ok
+                        if multi_result.ok
                         else LifecycleState.REJECTED.value
                     ),
                     detail_json=json.dumps(
-                        result.data,
+                        multi_result.data,
                         default=str,
                         separators=(",", ":"),
                     ),
