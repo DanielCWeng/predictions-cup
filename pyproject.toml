@@ -37,7 +37,10 @@ testpaths = ["tests"]
 target-version = "py312"
 line-length = 100
 src = ["src", "tests"]
-extend-exclude = ["scripts/kaggle/experiment_004c_b/run.py"]
+extend-exclude = [
+  "scripts/kaggle/experiment_004c_b/run.py",
+  "data/research/polyleviathan_mmstrat_20260928/scripts",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

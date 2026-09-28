@@ -1,0 +1,205 @@
+{
+ "package": "polyleviathan_mmstrat_20260928",
+ "files": [
+  {
+   "path": "README.md",
+   "bytes": 4768,
+   "sha256": "b32190d76f5edc909ae9def73055997ed7312d9b8f929614b5c0d52a091d54dc"
+  },
+  {
+   "path": "briefs/ADDENDUM_1.md",
+   "bytes": 1857,
+   "sha256": "d5f588020aca737d00f79eeba103c7f023e28a97dad439599fd4dab3183c27be"
+  },
+  {
+   "path": "briefs/ADDENDUM_2.md",
+   "bytes": 353,
+   "sha256": "12a9a1ae7d556e14953393ef00ba682bbdee3885229e977bb11bacb4902d0ba1"
+  },
+  {
+   "path": "briefs/ADDENDUM_3.md",
+   "bytes": 2825,
+   "sha256": "4fcb8a015812b481e16605f72c09670ce46cb24997a70811b14e787566a736fc"
+  },
+  {
+   "path": "briefs/phase1_TASK.md",
+   "bytes": 9583,
+   "sha256": "d05764d1069c28814b68ed74064b09fc5303d744b42c35544efa2496cd8f967b"
+  },
+  {
+   "path": "briefs/phase2_TASK_as_run.md",
+   "bytes": 6763,
+   "sha256": "bd43e6147b3f800b018b9316526bbdb8df9d6efa9ca48efd530d50716c2c2a71"
+  },
+  {
+   "path": "briefs/phase2_TASK_team_questions.md",
+   "bytes": 4979,
+   "sha256": "8fcebae8d6f9cdc746240ca38f6af6f3262feac5345113b163258956060db9d4"
+  },
+  {
+   "path": "manifests/fees_DATA_DICTIONARY.md",
+   "bytes": 3168,
+   "sha256": "33d5ad91d33549c6ae4d10774ece7387596ea90c8621945924d4a13f3fa4ee3d"
+  },
+  {
+   "path": "manifests/fees_DATA_NOTES.md",
+   "bytes": 4221,
+   "sha256": "9cfaba7b39b0f379ce91b6f01041fe891ffd6067017312dd5b2b008c1bd76dc8"
+  },
+  {
+   "path": "manifests/fees_STATS.json",
+   "bytes": 1837,
+   "sha256": "05084b90166419256aeb09d1c47b4ad4f99849e4546c0bb6dfb3db79be81dbd4"
+  },
+  {
+   "path": "manifests/fees_STATS.md",
+   "bytes": 1695,
+   "sha256": "c72f89b1889b19e9c81d29ea6d2040f2a3c658dbcad4c8093624f2f500a61cc0"
+  },
+  {
+   "path": "manifests/fills_MANIFEST_20260926.json",
+   "bytes": 3572,
+   "sha256": "56acc9b217ac07f4997adf90b22c0d7bbc6a0f14f59a573c25390a4765be33d8"
+  },
+  {
+   "path": "manifests/fills_MANIFEST_20260926.md",
+   "bytes": 1801,
+   "sha256": "06038e0c9a3448dd6b10febbf09690e0c011592a71bd6f32c04dcd47c87801da"
+  },
+  {
+   "path": "manifests/polymarket_fee_regimes.csv",
+   "bytes": 1535,
+   "sha256": "8ded772f413585914e18a4e34e778f7da7fe55b2647f3799a6e5312abc6a1d5b"
+  },
+  {
+   "path": "provenance/provenance.json",
+   "bytes": 15145,
+   "sha256": "7ad463ab59e9f894578d61070fa9324aa28ecfe8f38e07741484290c3ee1a5da"
+  },
+  {
+   "path": "reports/codex_mmstrat_phase2/REPORT_PHASE2.md",
+   "bytes": 498880,
+   "sha256": "3bdde03170db0eb26f7e9d219ced60b983ca78c2c367d1240af314aedcd4f524"
+  },
+  {
+   "path": "reports/codex_mmstrat_phase2/charts/entry_price_distribution.png",
+   "bytes": 9513,
+   "sha256": "93b516142b6ae501f5cf9f4ec13642a7b2e0bf8a01d6f6c53cb52910c3711e56"
+  },
+  {
+   "path": "reports/codex_mmstrat_phase2/charts/holding_time.png",
+   "bytes": 11127,
+   "sha256": "bd7e253ff6617b9fa887b740de9c225f2303ef2101339613d272c6b8eeeeb436"
+  },
+  {
+   "path": "reports/codex_mmstrat_phase2/charts/pnl_attribution.png",
+   "bytes": 12284,
+   "sha256": "8903da46dc9e955a8ee3aa1b7567443530162158fadedd2d39523cffcbbfb431"
+  },
+  {
+   "path": "reports/codex_mmstrat_v1/REPORT.md",
+   "bytes": 69861,
+   "sha256": "ba0b21930332ebe73ddca550f688c14b76cfac6ee9392765f5778a1cd20a263f"
+  },
+  {
+   "path": "reports/codex_mmstrat_v2/REPORT.md",
+   "bytes": 111242,
+   "sha256": "ef1de39848c8241ef8f7b9842eb3f3364cc8400f97ab7af292cee611d418f1b3"
+  },
+  {
+   "path": "reports/orchestrator_grades/GRADES.md",
+   "bytes": 1960,
+   "sha256": "dd1b79ec40e6bf0f10609e1ee79af1f174f4d51f060fdaa2f68692cbc9d9018e"
+  },
+  {
+   "path": "scripts/fee_extraction/assemble.py",
+   "bytes": 12983,
+   "sha256": "b62808646980d91407b8e582e42f3d2d691cd8b0cd6b77472b6e25f2186685d2"
+  },
+  {
+   "path": "scripts/fee_extraction/build_manifest.py",
+   "bytes": 3408,
+   "sha256": "c021e1c52b8857bc126fef0ac3d523ed19989edc4bde9c2456485ce15f76e54d"
+  },
+  {
+   "path": "scripts/fee_extraction/preera.py",
+   "bytes": 608,
+   "sha256": "21e851f9dcea74ce45b2f91d4666057af724ba38acda8dedd952cfcbaa9c28df"
+  },
+  {
+   "path": "scripts/fee_extraction/stage.py",
+   "bytes": 5678,
+   "sha256": "4a4287a195d1ef6ece37b74bd4bff0893f0da6f5262a429c61d5776373b963e0"
+  },
+  {
+   "path": "scripts/fills_export/export_fills_20260926.py",
+   "bytes": 9774,
+   "sha256": "b4f14fdae5e9fbb19e468a1ae62d84d1c2f2af7f54bd71fe18cae79e2ee6ca2a"
+  },
+  {
+   "path": "scripts/market_inventory/build_inventory.py",
+   "bytes": 26404,
+   "sha256": "41c62cbb8ee9670a61b0bf4ed8fe9406db29964d30d153a2cd7e46bf0c370006"
+  },
+  {
+   "path": "scripts/market_inventory/curate_pg_families.py",
+   "bytes": 6830,
+   "sha256": "3f5060cfe2146d7793a5a7b1fbcbff90f91824eafd8ba6414333d2b2e519b831"
+  },
+  {
+   "path": "scripts/market_inventory/discover_gamma.py",
+   "bytes": 14074,
+   "sha256": "32e1fc09f63fafe8d2717570b7e5d8d768048d610a71c732adb8cc96bb457942"
+  },
+  {
+   "path": "scripts/market_inventory/discover_postgres.py",
+   "bytes": 5377,
+   "sha256": "9ba473e7914ccac4e18be6788cf8295156ff99a5b86672ce5cab6364f07eda2c"
+  },
+  {
+   "path": "scripts/market_inventory/fetch_pg_inventory.py",
+   "bytes": 5520,
+   "sha256": "c305b122fba7e172c11c6fb063c8a02951a5a3debba4c3e610b8c59d72afb597"
+  },
+  {
+   "path": "scripts/market_inventory/fetch_tokens_by_condition.py",
+   "bytes": 1885,
+   "sha256": "518e9905d3b2549aa653cd95376ce40702f5a35f97213cfd1929cd0b67bbe2ad"
+  },
+  {
+   "path": "scripts/market_inventory/list_oci_root.py",
+   "bytes": 2084,
+   "sha256": "3645d3ce37d1cd51e42f2e67bb31f819c16c2228bfef80864084c68bf9190269"
+  },
+  {
+   "path": "scripts/market_inventory/list_oci_trade_sources.py",
+   "bytes": 2310,
+   "sha256": "6608f1835162a17606b690f2c94b79e1127f77705915cf4f20d23775d2f8eddd"
+  },
+  {
+   "path": "scripts/market_inventory/scan_election_tokens.py",
+   "bytes": 20731,
+   "sha256": "2a1b6c17f23c595dccbaffc7c95573034b9f052414714abdc7e40a681086a50c"
+  },
+  {
+   "path": "scripts/market_inventory/select_gamma.py",
+   "bytes": 7051,
+   "sha256": "62cef563e236acb135cabd5c42f5a3c10fcf449b5cda398fa3106cc6e1d5708e"
+  },
+  {
+   "path": "scripts/phase2/enrich.py",
+   "bytes": 14388,
+   "sha256": "d5f87eba5c5821113f0ed7d0bd4de3134d6e0755251f02ccced37d785fdaf14f"
+  },
+  {
+   "path": "scripts/phase2/make_report.py",
+   "bytes": 15902,
+   "sha256": "1ccd164fff2ddacfcec9cb85e1efd817d436906b7a31592a4869772be32ac5db"
+  },
+  {
+   "path": "scripts/phase2/phase2.py",
+   "bytes": 21138,
+   "sha256": "964b3d61a1488c2a55867a2e0d3d22f0a0345ce592d0f8a3265b2cb9000f6411"
+  }
+ ]
+}
