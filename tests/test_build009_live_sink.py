@@ -126,6 +126,7 @@ def test_cancel_dispatch_timestamp_is_sampled_after_durable_identity(
         sink_mode=ExecutionMode.LIVE,
         created_monotonic_ns=500,
         order_id=91,
+        tournament_id="t1",
     )
     ticks = iter((600, 700, 800))
     journal = ExecutionJournal(tmp_path / "execution.sqlite3")
