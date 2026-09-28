@@ -7,7 +7,7 @@ from decimal import Decimal
 
 import httpx
 import pytest
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 from predictions_cup.config import AppSettings
 from predictions_cup.sig.account_state import (
@@ -28,8 +28,8 @@ from predictions_cup.sig.trading_dto import (
 
 def _settings() -> AppSettings:
     return AppSettings(
-        sig_trade_credential="trade-secret",
-        sig_read_credential="read-secret",
+        sig_trade_credential=SecretStr("trade-secret"),
+        sig_read_credential=SecretStr("read-secret"),
     )
 
 
@@ -91,7 +91,7 @@ def test_order_input_enforces_documented_tick_and_market_semantics() -> None:
             action="buy",
             quantity=1,
             price=Decimal("1"),
-            expirationDate="2026-10-01T00:00:00Z",
+            expirationDate=datetime(2026, 10, 1, tzinfo=UTC),
         )
 
 
