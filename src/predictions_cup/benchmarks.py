@@ -19,10 +19,17 @@ from pathlib import Path
 from typing import Any
 
 from predictions_cup.execution.journal import ExecutionJournal
-from predictions_cup.execution.models import ExecutionEnvelope, ExecutionMode, OperationKind
+from predictions_cup.execution.models import (
+    ExecutionEnvelope,
+    ExecutionMode,
+    OperationKind,
+    RuntimeOrderIntent,
+)
 from predictions_cup.execution.sinks import NullSink
 from predictions_cup.risk.core import RiskContext
 from predictions_cup.runtime import (
+    OrderAction,
+    OutcomeSide,
     RuntimeMarket,
     RuntimePortfolio,
     RuntimeSnapshot,
@@ -257,42 +264,28 @@ def _journal_benchmark(count: int) -> BenchmarkStats:
             started = time.perf_counter_ns()
             samples: list[float] = []
             for index in range(count):
+                intent = RuntimeOrderIntent(
+                    intent_id=f"intent-{index}",
+                    exchange_id="36",
+                    market_id="m1",
+                    tournament_id="t1",
+                    outcome_side=OutcomeSide.YES,
+                    action=OrderAction.BUY,
+                    quantity=1,
+                    limit_price_ticks=100,
+                    strategy_id="journal-benchmark",
+                    decision_observation_ns=index + 1,
+                )
                 envelope = ExecutionEnvelope.placement(
                     logical_operation_id=f"journal-{index}",
                     operation_kind=OperationKind.SINGLE_PLACEMENT,
                     sink_mode=ExecutionMode.LIVE,
                     idempotency_key=f"journal-key-{index}",
-                    intents=(),
+                    intents=(intent,),
                     created_monotonic_ns=index + 1,
                 )
                 call_started = time.perf_counter_ns()
-                try:
-                    journal.record_before_dispatch(envelope)
-                except ValueError:
-                    # placement() correctly rejects empty intents; create a minimal persisted
-                    # envelope to benchmark the journal independently from strategy objects.
-                    payload = (
-                        '{"idempotencyKey":"journal-key-' + str(index) + '","exchangeId":"36",'
-                        '"side":"yes","action":"buy","quantity":1,"tournamentId":"t1"}'
-                    )
-                    envelope = ExecutionEnvelope.persisted(
-                        logical_operation_id=f"journal-{index}",
-                        operation_kind=OperationKind.SINGLE_PLACEMENT,
-                        sink_mode=ExecutionMode.LIVE,
-                        idempotency_key=f"journal-key-{index}",
-                        payload_json=payload,
-                        payload_sha256=__import__("hashlib").sha256(
-                            payload.encode("utf-8")
-                        ).hexdigest(),
-                        intent_ids=(f"intent-{index}",),
-                        lifecycle_state=__import__(
-                            "predictions_cup.execution.models",
-                            fromlist=["LifecycleState"],
-                        ).LifecycleState.PENDING,
-                        created_monotonic_ns=index + 1,
-                        relationship_constraint=None,
-                    )
-                    journal.record_before_dispatch(envelope)
+                journal.record_before_dispatch(envelope)
                 samples.append(float(time.perf_counter_ns() - call_started))
             elapsed = time.perf_counter_ns() - started
         finally:
