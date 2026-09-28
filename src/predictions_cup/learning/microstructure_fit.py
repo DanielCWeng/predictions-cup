@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Collection, Mapping
 
+
 def is_classification_target(dataset: str, target: str) -> bool:
     return dataset == "clock" and (
         target.startswith("update_h") or target.startswith("jump_h")
