@@ -10,6 +10,7 @@
   "enable_internet": false,
   "dataset_sources": [
     "polyleviathan/sig-cup-polyleviathan-fills",
+    "polyleviathan/sig-cup-data-002-polymarket-fees",
     "polyleviathan/sig-cup-005c-code"
   ],
   "competition_sources": [],
