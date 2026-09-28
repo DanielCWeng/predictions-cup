@@ -252,7 +252,10 @@ def main() -> None:
         "classification": "POST_HOC_FALSIFICATION_ONLY",
         "stage": "matrix_difference_audit",
         "parent_pr": 45,
-        "comparison": "original timestamp,tx_hash,log_index vs corrected timestamp,log_index,tx_hash",
+        "comparison": (
+            "original timestamp,tx_hash,log_index vs corrected "
+            "timestamp,log_index,tx_hash"
+        ),
         "families": families,
         "totals": {
             key: sum(int(row[key]) for row in families)
