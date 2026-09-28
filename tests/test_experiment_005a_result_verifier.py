@@ -42,3 +42,10 @@ def test_audit_bh_counts_rejections(tmp_path: Path) -> None:
     result = audit_bh(path)
     assert result["rows"] == 2
     assert result["bh_rejections"] == 1
+
+
+def test_audit_bh_rejects_wrong_row_count(tmp_path: Path) -> None:
+    path = tmp_path / "summary.csv"
+    path.write_text("intersection_p,bh_q,bh_reject_5pct\n0.4,0.4,false\n")
+    with pytest.raises(RuntimeError, match="expected 2 summary rows, found 1"):
+        audit_bh(path, expected_rows=2)
