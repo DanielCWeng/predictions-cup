@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from dataclasses import dataclass
 from pathlib import Path
 
 from predictions_cup.execution.models import (
@@ -11,8 +12,26 @@ from predictions_cup.execution.models import (
     ExecutionMode,
     LifecycleState,
     OperationKind,
+    RuntimeOrderIntent,
     lifecycle_transition_allowed,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionJournalEvent:
+    event_id: int
+    logical_operation_id: str
+    logical_intent_id: str | None
+    event_type: str
+    observed_monotonic_ns: int
+    decision_observation_ns: int | None
+    exchange_id: str | None
+    exchange_order_id: str | None
+    fill_id: str | None
+    quantity: str | None
+    price: str | None
+    terminal_status: str | None
+    detail_json: str | None
 
 
 class ExecutionJournal:
@@ -42,12 +61,43 @@ class ExecutionJournal:
             )
             """
         )
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS execution_events (
+                event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                logical_operation_id TEXT NOT NULL,
+                logical_intent_id TEXT,
+                event_type TEXT NOT NULL,
+                observed_monotonic_ns INTEGER NOT NULL,
+                decision_observation_ns INTEGER,
+                exchange_id TEXT,
+                exchange_order_id TEXT,
+                fill_id TEXT,
+                quantity TEXT,
+                price TEXT,
+                terminal_status TEXT,
+                detail_json TEXT,
+                FOREIGN KEY(logical_operation_id)
+                    REFERENCES execution_envelopes(logical_operation_id)
+            )
+            """
+        )
+        self._connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS execution_events_operation_idx
+            ON execution_events(logical_operation_id, event_id)
+            """
+        )
         self._connection.commit()
 
     def close(self) -> None:
         self._connection.close()
 
-    def record_before_dispatch(self, envelope: ExecutionEnvelope) -> None:
+    def record_before_dispatch(
+        self,
+        envelope: ExecutionEnvelope,
+        intents: tuple[RuntimeOrderIntent, ...] = (),
+    ) -> None:
         existing = self._connection.execute(
             """
             SELECT idempotency_key, operation_kind, sink_mode, payload_sha256, payload_json
@@ -90,6 +140,135 @@ class ExecutionJournal:
                     envelope.relationship_constraint,
                 ),
             )
+            if intents:
+                for intent in intents:
+                    self._insert_event(
+                        logical_operation_id=envelope.logical_operation_id,
+                        logical_intent_id=intent.intent_id,
+                        event_type="SUBMISSION",
+                        observed_monotonic_ns=envelope.created_monotonic_ns,
+                        decision_observation_ns=intent.decision_observation_ns,
+                        exchange_id=intent.exchange_id,
+                        quantity=str(intent.quantity),
+                    )
+            else:
+                self._insert_event(
+                    logical_operation_id=envelope.logical_operation_id,
+                    logical_intent_id=None,
+                    event_type="SUBMISSION",
+                    observed_monotonic_ns=envelope.created_monotonic_ns,
+                )
+
+    def record_event(
+        self,
+        *,
+        logical_operation_id: str,
+        event_type: str,
+        observed_monotonic_ns: int,
+        logical_intent_id: str | None = None,
+        decision_observation_ns: int | None = None,
+        exchange_id: str | None = None,
+        exchange_order_id: str | None = None,
+        fill_id: str | None = None,
+        quantity: str | None = None,
+        price: str | None = None,
+        terminal_status: str | None = None,
+        detail_json: str | None = None,
+    ) -> None:
+        if not event_type.strip():
+            raise ValueError("event_type must not be blank")
+        if observed_monotonic_ns < 0:
+            raise ValueError("observed_monotonic_ns must be non-negative")
+        with self._connection:
+            self._insert_event(
+                logical_operation_id=logical_operation_id,
+                logical_intent_id=logical_intent_id,
+                event_type=event_type,
+                observed_monotonic_ns=observed_monotonic_ns,
+                decision_observation_ns=decision_observation_ns,
+                exchange_id=exchange_id,
+                exchange_order_id=exchange_order_id,
+                fill_id=fill_id,
+                quantity=quantity,
+                price=price,
+                terminal_status=terminal_status,
+                detail_json=detail_json,
+            )
+
+    def _insert_event(
+        self,
+        *,
+        logical_operation_id: str,
+        logical_intent_id: str | None,
+        event_type: str,
+        observed_monotonic_ns: int,
+        decision_observation_ns: int | None = None,
+        exchange_id: str | None = None,
+        exchange_order_id: str | None = None,
+        fill_id: str | None = None,
+        quantity: str | None = None,
+        price: str | None = None,
+        terminal_status: str | None = None,
+        detail_json: str | None = None,
+    ) -> None:
+        self._connection.execute(
+            """
+            INSERT INTO execution_events (
+                logical_operation_id, logical_intent_id, event_type,
+                observed_monotonic_ns, decision_observation_ns, exchange_id,
+                exchange_order_id, fill_id, quantity, price, terminal_status,
+                detail_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                logical_operation_id,
+                logical_intent_id,
+                event_type,
+                observed_monotonic_ns,
+                decision_observation_ns,
+                exchange_id,
+                exchange_order_id,
+                fill_id,
+                quantity,
+                price,
+                terminal_status,
+                detail_json,
+            ),
+        )
+
+    def events(self, logical_operation_id: str) -> tuple[ExecutionJournalEvent, ...]:
+        rows = self._connection.execute(
+            """
+            SELECT event_id, logical_operation_id, logical_intent_id, event_type,
+                   observed_monotonic_ns, decision_observation_ns, exchange_id,
+                   exchange_order_id, fill_id, quantity, price, terminal_status,
+                   detail_json
+            FROM execution_events
+            WHERE logical_operation_id = ?
+            ORDER BY event_id
+            """,
+            (logical_operation_id,),
+        ).fetchall()
+        return tuple(
+            ExecutionJournalEvent(
+                event_id=int(row[0]),
+                logical_operation_id=str(row[1]),
+                logical_intent_id=None if row[2] is None else str(row[2]),
+                event_type=str(row[3]),
+                observed_monotonic_ns=int(row[4]),
+                decision_observation_ns=(
+                    None if row[5] is None else int(row[5])
+                ),
+                exchange_id=None if row[6] is None else str(row[6]),
+                exchange_order_id=None if row[7] is None else str(row[7]),
+                fill_id=None if row[8] is None else str(row[8]),
+                quantity=None if row[9] is None else str(row[9]),
+                price=None if row[10] is None else str(row[10]),
+                terminal_status=None if row[11] is None else str(row[11]),
+                detail_json=None if row[12] is None else str(row[12]),
+            )
+            for row in rows
+        )
 
     def mark_state(
         self,
