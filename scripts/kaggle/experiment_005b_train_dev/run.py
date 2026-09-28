@@ -21,7 +21,7 @@ from sklearn.preprocessing import StandardScaler
 FAMILIES = ("US_2024", "CAN_2025", "COL_2026", "HUN_2026", "PER_2026")
 OUT = Path("/kaggle/working/005b_historical_predictive_atlas/train_dev")
 OUT.mkdir(parents=True, exist_ok=True)
-SCREENING_MODEL_SPEC_SHA256 = "1f0e48fba4e974075da0be0b5d51834d3f30ad3a0af71c6e2851d00069f1078a"
+SCREENING_MODEL_SPEC_SHA256 = "fea0821b58fbd841e05b7326a48b9ca94d502e2168bbc079b8d9bd6bcbae597a"
 SCREENING_MODEL_SPEC_REPO_PATH = "data/experiments/experiment_005b/screening_model_spec.json"
 META = {
     "family", "event_id", "market_id", "condition_id", "timestamp", "tx_hash", "log_index",
