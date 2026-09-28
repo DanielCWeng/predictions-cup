@@ -1,75 +1,163 @@
 #!/usr/bin/env python3
 """Quantify EXPERIMENT-005B exposure to same-second pseudo-ordering.
 
-This is diagnostic only. It does not modify the frozen 005B feature/target/model
-specification or any original PR #45 artefact.
+Diagnostic only. The parent reconstruction is timestamp-sorted, so this uses a
+single streaming pass and never modifies PR #45 evidence.
 """
 from __future__ import annotations
 
 import argparse
 import json
+from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
-import duckdb
+import pyarrow.parquet as pq
 
 FAMILIES = ("US_2024", "CAN_2025", "COL_2026", "HUN_2026", "PER_2026")
 
 
-def quantify(root: Path) -> dict[str, object]:
-    con = duckdb.connect()
-    con.execute("PRAGMA threads=4")
-    families: list[dict[str, object]] = []
-    for family in FAMILIES:
-        path = root / f"canonical_trades_{family}.parquet"
-        con.read_parquet(str(path)).create_view("fills", replace=True)
-        row: dict[str, object] = {
-            "family": family,
-            "total_rows": int(con.execute("SELECT COUNT(*) FROM fills").fetchone()[0]),
-        }
-        for label, keys in (
-            ("family", ("timestamp",)),
-            ("event", ("event_id", "timestamp")),
-            ("market", ("condition_id", "timestamp")),
-        ):
-            key_sql = ", ".join(keys)
-            con.execute(
-                f"""
-                CREATE OR REPLACE TEMP TABLE groups AS
-                SELECT {key_sql},
-                       COUNT(*) AS n_rows,
-                       COUNT(DISTINCT tx_hash) AS n_tx
-                FROM fills
-                GROUP BY {key_sql}
-                """
-            )
-            grouped = con.execute(
-                """
-                SELECT
-                    COALESCE(SUM(n_rows) FILTER (WHERE n_rows > 1), 0),
-                    COALESCE(SUM(n_rows) FILTER (WHERE n_tx > 1), 0),
-                    COUNT(*) FILTER (WHERE n_tx > 1)
-                FROM groups
-                """
-            ).fetchone()
-            row[f"rows_same_{label}_second"] = int(grouped[0])
-            row[f"rows_multi_tx_{label}_second"] = int(grouped[1])
-            row[f"collision_groups_{label}"] = int(grouped[2])
-            using = ", ".join(keys)
-            tx_count = con.execute(
-                f"""
-                SELECT COUNT(DISTINCT fills.tx_hash)
-                FROM fills
-                JOIN groups USING ({using})
-                WHERE groups.n_tx > 1
-                """
-            ).fetchone()[0]
-            row[f"unique_tx_multi_{label}_second"] = int(tx_count)
-        families.append(row)
+def empty_scope() -> dict[str, int]:
+    return {
+        "rows_same_second": 0,
+        "rows_multi_tx_second": 0,
+        "collision_groups": 0,
+        "unique_tx_multi_second": 0,
+    }
 
-    totals: dict[str, int] = {"total_rows": sum(int(x["total_rows"]) for x in families)}
+
+def add_subgroups(
+    rows: list[tuple[str | None, str | None, str]],
+    index: int,
+    stats: dict[str, int],
+) -> None:
+    groups: dict[str | None, list[str]] = defaultdict(list)
+    for row in rows:
+        groups[row[index]].append(row[2])
+    for tx_rows in groups.values():
+        n = len(tx_rows)
+        if n > 1:
+            stats["rows_same_second"] += n
+        ntx = len(set(tx_rows))
+        if ntx > 1:
+            stats["rows_multi_tx_second"] += n
+            stats["collision_groups"] += 1
+            stats["unique_tx_multi_second"] += ntx
+
+
+def flush_timestamp_group(
+    rows: list[tuple[str | None, str | None, str]],
+    family_stats: dict[str, int],
+    event_stats: dict[str, int],
+    market_stats: dict[str, int],
+) -> None:
+    if not rows:
+        return
+    n = len(rows)
+    if n > 1:
+        family_stats["rows_same_second"] += n
+    ntx = len({row[2] for row in rows})
+    if ntx > 1:
+        family_stats["rows_multi_tx_second"] += n
+        family_stats["collision_groups"] += 1
+        family_stats["unique_tx_multi_second"] += ntx
+    add_subgroups(rows, 0, event_stats)
+    add_subgroups(rows, 1, market_stats)
+
+
+def quantify_family(path: Path, family: str) -> dict[str, Any]:
+    pf = pq.ParquetFile(path)
+    total_rows = int(pf.metadata.num_rows)
+    family_stats = empty_scope()
+    event_stats = empty_scope()
+    market_stats = empty_scope()
+
+    current_ts: int | None = None
+    current_rows: list[tuple[str | None, str | None, str]] = []
+    observed_rows = 0
+    previous_ts: int | None = None
+
+    for batch in pf.iter_batches(
+        batch_size=131_072,
+        columns=["timestamp", "event_id", "condition_id", "tx_hash"],
+    ):
+        data = batch.to_pydict()
+        for timestamp, event_id, condition_id, tx_hash in zip(
+            data["timestamp"],
+            data["event_id"],
+            data["condition_id"],
+            data["tx_hash"],
+            strict=True,
+        ):
+            if timestamp is None or tx_hash is None:
+                raise RuntimeError(f"{family}: null timestamp/tx_hash")
+            ts = int(timestamp)
+            if previous_ts is not None and ts < previous_ts:
+                raise RuntimeError(
+                    f"{family}: parent reconstruction is not timestamp-sorted"
+                )
+            previous_ts = ts
+            if current_ts is None:
+                current_ts = ts
+            if ts != current_ts:
+                flush_timestamp_group(
+                    current_rows,
+                    family_stats,
+                    event_stats,
+                    market_stats,
+                )
+                current_rows = []
+                current_ts = ts
+            current_rows.append(
+                (
+                    None if event_id is None else str(event_id),
+                    None if condition_id is None else str(condition_id),
+                    str(tx_hash),
+                )
+            )
+            observed_rows += 1
+    flush_timestamp_group(
+        current_rows,
+        family_stats,
+        event_stats,
+        market_stats,
+    )
+    if observed_rows != total_rows:
+        raise RuntimeError(
+            f"{family}: streamed rows {observed_rows} != metadata {total_rows}"
+        )
+
+    row: dict[str, Any] = {"family": family, "total_rows": total_rows}
+    for label, stats in (
+        ("family", family_stats),
+        ("event", event_stats),
+        ("market", market_stats),
+    ):
+        row[f"rows_same_{label}_second"] = stats["rows_same_second"]
+        row[f"rows_multi_tx_{label}_second"] = stats["rows_multi_tx_second"]
+        row[f"collision_groups_{label}"] = stats["collision_groups"]
+        row[f"unique_tx_multi_{label}_second"] = stats[
+            "unique_tx_multi_second"
+        ]
+    return row
+
+
+def quantify(root: Path) -> dict[str, object]:
+    families: list[dict[str, Any]] = []
+    for family in FAMILIES:
+        row = quantify_family(
+            root / f"canonical_trades_{family}.parquet",
+            family,
+        )
+        families.append(row)
+        print("FAMILY " + json.dumps(row, sort_keys=True), flush=True)
+
+    totals: dict[str, int] = {
+        "total_rows": sum(int(row["total_rows"]) for row in families)
+    }
     for key in families[0]:
         if key not in {"family", "total_rows"}:
-            totals[key] = sum(int(x[key]) for x in families)
+            totals[key] = sum(int(row[key]) for row in families)
     return {
         "schema_version": 1,
         "experiment_id": "EXPERIMENT-005B-ORDERING-FALSIFICATION",
@@ -86,8 +174,11 @@ def main() -> None:
     args = parser.parse_args()
     result = quantify(args.root)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
-    print(json.dumps(result["totals"], sort_keys=True))
+    args.out.write_text(
+        json.dumps(result, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print("TOTAL " + json.dumps(result["totals"], sort_keys=True), flush=True)
 
 
 if __name__ == "__main__":
