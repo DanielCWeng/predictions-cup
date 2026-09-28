@@ -1004,7 +1004,6 @@ def main() -> None:
             )
         )
         target_train[~target_valid] = np.nan
-        train_markets = train["market_id"].astype(str).to_numpy()
         for row in eligible:
             dev_stats = dev_metrics[target].get(row["feature"], {})
             dev_pearson = dev_stats.get("pearson")
