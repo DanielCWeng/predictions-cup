@@ -1,36 +1,37 @@
 # Experiment Registry
 
-This registry is intentionally small. It records the near-term empirical programme without
-claiming that an experiment has evidence, edge, or production readiness before the replay and
-data gates support that claim.
+This registry records canonical empirical status. A merged experiment can be a negative result; merge
+status does not imply alpha, strategy promotion or execution readiness.
 
-| Experiment | Question | Status | Immediate inputs / maths |
+| Experiment | Question | Canonical status | Programme interpretation |
 |---|---|---|---|
-| LEADLAG-001 | Does an observable external/related-market price move precede executable target repricing? | `EXPERIMENT-003 COMPLETE / INCONCLUSIVE` | frozen 30s-grid/5s-lookback same-venue screen was weak; not a decisive event-time lead/lag test |
-| RV-001 | Does a simple external/reference fair-value residual predict later executable target repricing? | `EXPERIMENT-003 COMPLETE / INCONCLUSIVE` | naive equal-weight logit-level-gap specification was weak; calibrated structural FV was not tested; stability caveat recorded |
-| LOO-PRICE-001 | Can related/direct-family markets predict a target when its own quote is removed from the predictor? | `EXPERIMENT-003 COMPLETE / DIAGNOSTIC` | same-event sibling logit-level-gap diagnostic; not exact exhaustive-partition reconstruction |
-| LOO-FAMILY-001 | Can non-mechanical related markets predict a target after its direct information family is removed? | `EXPERIMENT-003 COMPLETE / INCONCLUSIVE` | M-027/M-028; explicit INDIRECT inventory with hard leakage separation |
-| MICROSTRUCTURE-001 | Do simple observable book-state features add short-horizon predictive information beyond own-price/state controls? | `EXPERIMENT-003 COMPLETE / INCONCLUSIVE` | stability passed; no nominal BH rejection; imbalance and implemented microprice displacement are algebraically redundant |
-| PARTICIPANT-001 | Does train-frozen participant identity condition future repricing beyond identity-blind fill activity? | `EXPERIMENT-003 COMPLETE / CONFIRMATORY INVALIDATED` | baseline/placebo deviation plus dominant protocol-contract identities; current signal is participant/protocol-identity exploratory structure, not trader-skill evidence |
-| LOWRANK-001 | Does a restrained leave-target-out common factor improve on own-price plus equal-weight cross-market baselines? | `EXPERIMENT-003 COMPLETE / INCONCLUSIVE` | pre-result first-three-reference amendment documented; usable evidence only from Peru first round, so severely underpowered |
-| 004C-A | Does generic internal source→target propagation add predictive information after freshness/activity/common-state controls? | `COMPLETE / INCONCLUSIVE / NO PROMOTED EDGE` | observed-record timing is not genuine quote-renewal evidence; demote generic pairwise lead-lag |
-| 004C-B | Does coherent/competitive family redistribution predict correction? | `COMPLETE / SOFT_COMPETITIVE_EFFECT_ONLY` | one narrow Colombia PRE competitive-family effect survived; no hard/exhaustive-family edge promoted |
-| 004C-C | Does mapped Polymarket price discovery predict subsequent SIG repricing? | `COMPLETE / INCONCLUSIVE / NO PROMOTED EDGE` | raw 30s effect failed mapping-specific controls; wrong-contract control stronger; crossing economics negative |
-| 004C-D | Do age/activity/genuine-renewal conditions rescue the historical structure? | `COMPLETE / NO_CONDITIONAL_EDGE` | supported Colombia PRE cells failed predictive-gain gates; Peru PRE untestable under frozen outside-family-control rule |
-| 005A | Does fee-role / aggressive-flow structure add predictive information? | `SCAFFOLD IN REVIEW / EMPIRICAL GATE CLOSED` | PR #38 remains draft/unmerged; no 005A empirical discovery run is part of the 004C close-out |
-| MM-001 | Are selective market-making economics positive after spread/fill assumptions? | `PLANNED — REQUIRES FILL MODEL` | executable spread economics; no maker-fill model in BUILD-005 |
-| ECO-001 | Does external impulse plus observable local reaction improve on direct lead/lag? | `DEFER UNTIL LIVE ECOLOGY DATA` | challenger to LEADLAG-001, not a primary build target |
+| EXPERIMENT-001A | Can public Polymarket data be captured reproducibly for research? | MERGED / ACCEPTED CAPTURE FOUNDATION | Read-only capture semantics; no strategy claim. |
+| EXPERIMENT-002 | Can lead/lag, RV and leave-one-out relationships be evaluated under observable-time replay? | MERGED / ACCEPTED MACHINERY | Experiment machinery only; evidence depends on the dataset/run. |
+| EXPERIMENT-003 | Do simple historical price/microstructure/participant relationship families survive controls? | COMPLETE / MOSTLY INCONCLUSIVE | Useful negative/prior evidence; not a production strategy set. |
+| EXPERIMENT-004A / 004A.2 | What election-time regimes/event-time windows are empirically usable? | COMPLETE / ACCEPTED REGIME EVIDENCE | Supplies canonical regime semantics used by later work. |
+| EXPERIMENT-004B | Is there non-random directed election-market structure? | COMPLETE / DISCOVERY EVIDENCE | System-level structure exists; individual transferable leader/follower identity was not established. |
+| EXPERIMENT-004C-A | Does generic internal propagation survive freshness/activity/common-state controls? | COMPLETE / INCONCLUSIVE / NO PROMOTED EDGE | Do not promote generic internal pairwise lead-lag. |
+| EXPERIMENT-004C-B | Does coherent/competitive redistribution predict correction? | COMPLETE / SOFT_COMPETITIVE_EFFECT_ONLY | One narrow Colombia PRE soft effect; no broad hard-family edge. |
+| EXPERIMENT-004C-C | Does mapped Polymarket price discovery predict SIG repricing? | COMPLETE / INCONCLUSIVE / NO PROMOTED EDGE | Mapping-specific controls and economics do not support promotion. |
+| EXPERIMENT-004C-D | Do age/activity/genuine-renewal interactions rescue 004B structure? | COMPLETE / NO_CONDITIONAL_EDGE | Frozen conditional mechanisms did not promote. |
+| EXPERIMENT-005A | Does fee-role/aggressive-flow/participant structure add predictive information? | MERGED / NARROW SAME-FAMILY 5s EFFECT ONLY | Role annotation is usable; broad role-aware alpha is not supported. Carry one tiny PRE 5s same-family candidate for fresh replication only. |
+| EXPERIMENT-005B | What does a broad identity-blind historical price/fill predictive atlas find? | BLOCKED / PR #45 OPEN / NOT ACCEPTED | Original realised-movement findings are not canonical because same-block ordering used tx-hash pseudo-order. Bounded causal-order falsification required. |
+| EXPERIMENT-005C | Does joint/reduced-rank cross-market prediction add portable value? | MERGED / DOWNGRADE — FAMILYWISE NULL NOT REJECTED | Keep the strongest panel as shadow/research comparator only. |
+| EXPERIMENT-005D | Do coherent structural/RV surfaces predict correction? | MERGED / NARROW LATE_COUNT STRUCTURAL EVIDENCE | Strong reconstruction; predictive evidence is weak/regime-specific. Peru weak dependence robustness; Colombia effect tiny. |
+| EXPERIMENT-005E | Does participant ecology add incremental primary price prediction? | MERGED / NO_INCREMENTAL_EVIDENCE | Primary participant-behaviour hypothesis is negative; secondary diagnostics are follow-up-only. |
+| EXPERIMENT-005F | Do rich microstructure/liquidity/event-time states add predictive information? | MERGED / QUALIFIED STATE-HAZARD SUPPORT | Persistent genuine economic-BBO age predicts update hazard in PRE/ACTIVE and ACTIVE jump hazard; not generic microstructure alpha. |
+| MM-001 | Are selective passive market-making economics positive after fills/costs? | PLANNED BASELINE ENGINE / REQUIRES FILL MODEL | Belongs to MAKE. No passive fill model or executable maker claim yet. |
+| LIVE-REPLICATION | Do accepted historical findings transfer to the actual mapped 2026 universe? | NEXT PHASE | Use DATA-003 and live SIG evidence. |
 
 ## Registry discipline
 
-- BUILD-005 supplies deterministic observable-time replay and executable markouts; EXPERIMENT-002
-  adds experiment code, not evidence of edge.
-- Instrument relationships are explicit configuration. Similar titles never create a relationship
-  automatically.
-- LOO-PRICE and LOO-FAMILY are separate experiment families. LOO-FAMILY rejects predictor sets
-  containing the target, configured direct/excluded family members, or references classified as
-  direct equivalents, complements or mechanical siblings.
-- Train/development/holdout separation remains chronological and holdout data is not used for
-  parameter selection.
-- Maker fills, queue position, production trading, strategy optimisation and complex ML remain
-  outside this registry's current implementation scope.
+- The approved monetisation families are `FV-TAKE`, `MAKE`, `STRUCT`, `PRED`, `EVENT` and
+  `NO_TRADE`.
+- Findings such as staleness, flow quality, volatility, liquidity or participant ecology are normally
+  features/challengers within those families.
+- Chronological TRAIN/DEV/HOLDOUT boundaries, purge/embargo and preregistered multiplicity controls
+  remain binding.
+- Once HOLDOUT is consumed, follow-up analysis may falsify/narrow but may not redesign to rescue.
+- Historical success is not equivalent to actual-2026-universe validation.
+- Maker fills, queue position, autonomous execution and portfolio/risk decisions remain outside the
+  accepted experiment runtime unless explicitly implemented and reviewed.
