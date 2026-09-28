@@ -1,25 +1,39 @@
 {
   "schema_version": 1,
+  "protocol_revision": 2,
   "experiment_id": "EXPERIMENT-005E",
   "title": "Participant Ecology / Behavioural Atlas",
   "namespace": "005e_participant_ecology_atlas",
   "canonical_base_sha": "ba938bedcf63f562be8b26c9502e828391123867",
   "status": "PRE_HOLDOUT_PROTOCOL_FROZEN",
   "frozen_before_prior_outcome_rankings": true,
+  "amendments": [
+    {
+      "revision": 2,
+      "timing": "before empirical response inspection",
+      "reason": "DATA-002 transaction-shape audit showed one active aggregate order can match multiple passive maker fills. Counting the active row as a single economic trade would collapse real passive fill legs. Clock-time silence must also remain missing rather than being imputed as zero movement.",
+      "changes": [
+        "economic market stream reconstructed from passive fill legs within validated family+condition_id+tx_hash match groups; active row retained for conservation audit only",
+        "clock-time price targets require at least one later economic fill in (t,t+h]; otherwise label is NO_FUTURE_OBSERVATION"
+      ]
+    }
+  ],
   "scientific_question": "Does observable participant behaviour contain repeatable predictive information about subsequent market state beyond generic market and activity controls?",
   "data": {
     "primary": "DATA-002 fill-complete participant-side OrderFilled corpus",
     "families": ["US_2024", "CAN_2025", "HUN_2026", "PER_2026", "COL_2026"],
     "participant_grain": "one participant-side OrderFilled row",
-    "economic_market_grain": "order_is_match_taker_order=true rows used once as the canonical economic-trade stream for market-state targets and anonymous flow controls",
+    "economic_market_grain": "group rows by family+condition_id+tx_hash; require exactly one order_is_match_taker_order=true active aggregate row and one or more passive rows; each passive row is one economic fill; active aggregate row is audit-only and never counted as an additional economic fill",
+    "economic_trade_validation": "active size and canonical YES-axis notional must reconcile to summed passive legs within declared numeric tolerance; malformed groups fail closed and are audited",
     "infrastructure_registry": "data/reference/polymarket_infrastructure/infra_addresses.md",
     "identity_policy": "known exchange/adapters/protocol/fee/reward/system identities excluded from participant ecology; unknown identity is never asserted human"
   },
   "semantics": {
-    "canonical_yes_price": "YES row: price; NO row: 1-price",
+    "canonical_yes_price": "YES row: price; NO row: 1-price; OTHER rejected for directional price targets",
     "participant_yes_pressure": "YES BUY or NO SELL = +1; YES SELL or NO BUY = -1; otherwise missing",
     "aggressor_status": "not inferred from participant_side; economic role is outside the primary 005E signal",
-    "market_target_state": "last canonical economic-trade YES price observed at or before each horizon; no trade before horizon implies unchanged last-trade state"
+    "market_target_state": "last canonical economic-fill YES price observed at or before each horizon, valid only if at least one later economic fill occurs in (t,t+h]; otherwise NO_FUTURE_OBSERVATION",
+    "same_timestamp_policy": "participant feature state is formed strictly before the current row under deterministic timestamp, tx_hash, log_index ordering; same-second future rows never enter past state"
   },
   "split": {
     "method": "within-family chronological timestamp quantiles derived from timestamps only",
@@ -97,7 +111,8 @@
       "own_market_logit_change_seconds": [15, 60, 300],
       "signed_participant_markout_seconds": [60, 300],
       "absolute_own_market_logit_change_seconds": [60],
-      "future_economic_trade_count_seconds": [60]
+      "future_economic_trade_count_seconds": [60],
+      "missingness": "price targets are missing when no later economic fill occurs before the horizon"
     },
     "event": {
       "own_market_logit_change_economic_trades": [2, 10],
