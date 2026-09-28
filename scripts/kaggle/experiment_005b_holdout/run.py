@@ -158,7 +158,7 @@ def selected_columns(freeze: dict[str, Any]) -> dict[str, set[str]]:
     by_target: dict[str, set[str]] = {}
     for target, rows in freeze["shortlist"].items():
         cols = {target, label_for_target(target)}
-        stable = [row for row in rows if row.get("stable_train_dev")]
+        stable = [row for row in rows if row.get("promoted_candidate")]
         if stable:
             cols.add(stable[0]["feature"])
         model = freeze["model_selection"].get(target, {})
@@ -524,7 +524,7 @@ def evaluate_target(
     stable = [
         row
         for row in freeze["shortlist"].get(target, [])
-        if row.get("stable_train_dev")
+        if row.get("promoted_candidate")
     ]
     if stable:
         scalar = stable[0]
@@ -681,7 +681,7 @@ def main() -> None:
             row.get("stable_train_dev")
             for row in freeze["shortlist"].get(target, [])
         )
-        has_model = freeze["model_selection"].get(target, {}).get("status") == "OK"
+        has_model = freeze["model_selection"].get(target, {}).get("promotion_eligible") is True
         if not (has_scalar or has_model):
             continue
         print(f"HOLDOUT {target}", flush=True)
