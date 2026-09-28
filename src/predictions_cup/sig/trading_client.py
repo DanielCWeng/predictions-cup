@@ -199,7 +199,14 @@ class SigTradingClient:
         for attempt in range(1, policy.max_attempts + 1):
             await self._governor.acquire(RestPriority.HIGH)
             try:
-                response = await self._client.request(method, path, json=resolved_payload)
+                if resolved_payload is None:
+                    response = await self._client.request(method, path)
+                else:
+                    response = await self._client.request(
+                        method,
+                        path,
+                        json=resolved_payload,
+                    )
             except httpx.TransportError as exc:
                 if attempt < policy.max_attempts:
                     await self._sleep(self._retry_delay(attempt))
