@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005A",
+  "stage": "SECOND_STAGE_NULL_INFERENCE",
+  "status": "FROZEN_BEFORE_NULL_RESULTS",
+  "implementation_timing": "after stage-1 observed panels; choices below are mechanical operationalizations of the predeclared null families and apply uniformly to every cell",
+  "master_seed": 20260928005,
+  "draws": 999,
+  "statistic": "out_of_sample_loss_gain = baseline_validation_mse - challenger_validation_mse",
+  "positive_gate": "cells with observed loss_gain <= 0 fail the predeclared positive predictive-increment requirement and receive p=1 without stochastic draws; they remain members of BH",
+  "training_policy": "fit the frozen baseline and challenger once on the unchanged chronological training fold; stochastic nulls alter validation-time predictor alignment only, so training outcomes are never repeatedly re-used to choose a null fit",
+  "a2_a3": {
+    "circular_shift": "jointly circular-shift the signed-flow challenger columns on each unique source-market 30s validation grid within event/regime; minimum absolute shift is 10 grid rows = 300s",
+    "block_shift": "jointly circular-shift the signed-flow challenger columns by whole 300s blocks within each source market/event/regime validation grid",
+    "a2_source_unit": "condition_id",
+    "a3_source_unit": "source_condition_id; one source-time transformed value is mapped consistently to every target pair",
+    "sign_permutation": "NOT_RUN_FROM_AGGREGATED_PANEL: mechanical token-side constraints cannot be revalidated after fill aggregation; this omission cannot rescue a failed mechanism",
+    "matched_unrelated_family": "separate negative-control diagnostic; never used to select a source edge"
+  },
+  "a4": {
+    "identity_null": "permute validation fill participant identities within event/regime/market_family/300s-block/TAKER strata; historical score state remains past-only and is queried using the permuted validation identity",
+    "concentration": "report deterministic top-1/top-5/top-10 participant-volume removal and largest-wallet single ablation; wallet ranking uses unsigned taker value only, never response outcomes"
+  },
+  "a5": {
+    "liquidity": "same validation-time circular and whole-300s-block signed-flow shifts as A2 on the condition grid",
+    "maker": "validation-time challenger rows are circularly shifted within event/regime/condition only when the paired row timestamps are all at least 300s apart; whole-block null is reported only where a lossless block shift is structurally available",
+    "capture_placebos": "raw-record, repeated-unchanged and depth-snapshot response cells are null-tested/reported separately and can explain, never promote, a genuine-liquidity result"
+  },
+  "multiplicity": "Benjamini-Hochberg within each declared mechanism family across PRE/ACTIVE and all five declared horizons; A5 liquidity BH applies to the three primary continuous response families, while capture placebos remain diagnostics",
+  "seed_derivation": "first 64 bits of SHA256(master_seed|component|draw)"
+}
