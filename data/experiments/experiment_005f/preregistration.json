@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "status": "FROZEN_PRE_EMPIRICAL",
+  "design_freeze_commit": "b5bf4cfe7482a58161523b66097910903050fc6b",
+  "start_commit": "ba938bedcf63f562be8b26c9502e828391123867",
+  "research_clock": "DATA-001 observed_at only",
+  "claim_regimes": [
+    "PRE_ELECTION",
+    "ACTIVE_RESULTS"
+  ],
+  "clock_grid_seconds": 15,
+  "clock_horizons_seconds": [
+    1,
+    5,
+    15,
+    30,
+    60,
+    120,
+    300
+  ],
+  "event_horizons": [
+    1,
+    2,
+    5,
+    10
+  ],
+  "capture_bin_seconds": 5,
+  "continuity_gap_seconds": 300,
+  "depth_bands_probability": [
+    0.01,
+    0.02,
+    0.05
+  ],
+  "depth_shock_fraction": 0.5,
+  "impact_quantities": [
+    10,
+    50,
+    100,
+    500
+  ],
+  "split": {
+    "train_fraction": 0.6,
+    "dev_fraction": 0.2,
+    "holdout_fraction": 0.2,
+    "clock_purge_seconds": 300,
+    "event_purge_events": 10
+  },
+  "feature_windows_seconds": [
+    5,
+    15,
+    30,
+    60,
+    120,
+    300
+  ],
+  "ofi": "Cont top-of-book formula frozen in design; evaluated only when both prior/current top quantities are observable",
+  "snapshot_ofi": "same Cont formula over consecutive authoritative depth snapshots; explicitly labelled snapshot-transition OFI",
+  "trade_state": "PMXT V2 trade/activity only; no participant identity, maker/taker role, or inferred aggressor sign",
+  "model_ladder": {
+    "baseline": "own-price/history",
+    "single_feature": "linear/logistic",
+    "ols": true,
+    "ridge_alpha": [
+      0.1,
+      1,
+      10
+    ],
+    "elasticnet_alpha": [
+      0.001,
+      0.01,
+      0.1
+    ],
+    "elasticnet_l1_ratio": [
+      0.1,
+      0.5,
+      0.9
+    ],
+    "tree_max_depth": [
+      2,
+      3
+    ],
+    "tree_learning_rate": [
+      0.03,
+      0.1
+    ],
+    "tree_max_estimators": 300
+  },
+  "fdr_q": 0.1,
+  "dev_gate": {
+    "min_markets": 10,
+    "min_positive_temporal_blocks": 3,
+    "incremental_metric_must_be_positive": true
+  },
+  "holdout_selection": {
+    "confirmatory": "one best DEV candidate per regime/target family among candidates passing support, stability, positive lift, and BH-FDR",
+    "shadow_only_fallback": "if none passes FDR, freeze at most one best positive support/stability challenger per regime/target family; it is ineligible for promotion and is reported only as falsification/generalization evidence"
+  },
+  "inference": {
+    "block_minutes": 30,
+    "bootstrap_draws": 2000,
+    "signflip_draws": 4096,
+    "seed": 20260928005
+  },
+  "safety": {
+    "real_order_placement": false,
+    "ec2_empirical_compute": false
+  }
+}
