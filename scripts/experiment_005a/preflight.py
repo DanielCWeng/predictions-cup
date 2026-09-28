@@ -12,6 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE_SHA = "69cb1924751515a495bf99556819147ad090d67d"
+EXPERIMENT_004C_FREEZE_SHA = "ba938bedcf63f562be8b26c9502e828391123867"
 GATE_PATH = ROOT / "data/experiments/experiment_005a/empirical_gate.json"
 EXPECTED_SHA256 = {
     "data/manifests/fees/data_002_manifest.json":
@@ -78,8 +79,8 @@ def validate_empirical_gate() -> None:
         raise RuntimeError(f"EMPIRICAL BLOCKED: false/missing gate fields: {failed}")
     if gate.get("data_002_main_sha") != BASE_SHA:
         raise RuntimeError("EMPIRICAL BLOCKED: DATA-002 canonical main SHA mismatch")
-    if not gate.get("experiment_004c_freeze_sha"):
-        raise RuntimeError("EMPIRICAL BLOCKED: experiment_004c_freeze_sha missing")
+    if gate.get("experiment_004c_freeze_sha") != EXPERIMENT_004C_FREEZE_SHA:
+        raise RuntimeError("EMPIRICAL BLOCKED: EXPERIMENT-004C canonical freeze SHA mismatch")
 
 
 def main() -> None:
