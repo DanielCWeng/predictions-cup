@@ -2130,20 +2130,31 @@ def bootstrap_ci(
         return float(np.mean(x)), float("nan"), float("nan"), 1.0
     block = max(1, PURGE_SECONDS // STEP_SECONDS)
     rng = np.random.default_rng(seed(component))
+    observed = float(np.mean(x))
+    centered = x - observed
     blocks = [x[s : min(len(x), s + block)] for s in range(0, len(x), block)]
+    null_blocks = [
+        centered[s : min(len(centered), s + block)]
+        for s in range(0, len(centered), block)
+    ]
     means = []
+    null_means = []
     for _ in range(HOLDOUT_BOOTSTRAP_DRAWS):
         pieces: list[np.ndarray] = []
+        null_pieces: list[np.ndarray] = []
         count = 0
         while count < len(x):
-            piece = blocks[int(rng.integers(0, len(blocks)))]
+            idx = int(rng.integers(0, len(blocks)))
+            piece = blocks[idx]
             pieces.append(piece)
+            null_pieces.append(null_blocks[idx])
             count += len(piece)
         sample = np.concatenate(pieces)[: len(x)]
+        null_sample = np.concatenate(null_pieces)[: len(x)]
         means.append(float(np.mean(sample)))
-    observed = float(np.mean(x))
-    one_sided_p = (1.0 + sum(value <= 0.0 for value in means)) / (
-        1.0 + len(means)
+        null_means.append(float(np.mean(null_sample)))
+    one_sided_p = (1.0 + sum(value >= observed for value in null_means)) / (
+        1.0 + len(null_means)
     )
     return (
         observed,
