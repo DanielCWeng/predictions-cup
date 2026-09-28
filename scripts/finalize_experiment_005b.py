@@ -89,7 +89,7 @@ def build_registry(
     rows: list[dict[str, Any]] = []
     for target in sorted(freeze.get("shortlist", {})):
         shortlisted = freeze["shortlist"].get(target, [])
-        stable = [row for row in shortlisted if row.get("stable_train_dev")]
+        stable = [row for row in shortlisted if row.get("promoted_candidate")]
         chosen = stable[0] if stable else None
         hrow = hold_map.get(target, {})
         scalar_hold = (hrow.get("scalar_candidate") or {}).get("holdout", {})
