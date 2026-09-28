@@ -2,8 +2,17 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
+from predictions_cup.execution.journal import ExecutionJournal
+from predictions_cup.execution.models import (
+    ExecutionEnvelope,
+    ExecutionMode,
+    OperationKind,
+    RuntimeOrderIntent,
+)
+from predictions_cup.runtime import OrderAction, OutcomeSide
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
 from predictions_cup.sig.account_runtime import AccountRealtimeController
 from predictions_cup.sig.account_state import AccountRealtimeStateEngine
@@ -151,3 +160,88 @@ def test_token_refresh_revokes_trust_before_resync() -> None:
 
     assert trust_seen == [False, False]
     assert state.trusted is True
+
+
+
+def test_accepted_realtime_fill_is_linked_to_execution_journal(tmp_path: Path) -> None:
+    journal = ExecutionJournal(tmp_path / "execution.sqlite3")
+    intent = RuntimeOrderIntent(
+        intent_id="intent-91",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=1,
+        limit_price_ticks=84,
+        strategy_id="fixture",
+        decision_observation_ns=111,
+    )
+    envelope = ExecutionEnvelope.placement(
+        logical_operation_id="op-91",
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        sink_mode=ExecutionMode.LIVE,
+        idempotency_key="key-91",
+        intents=(intent,),
+        created_monotonic_ns=112,
+    )
+    journal.record_before_dispatch(envelope, (intent,))
+    journal.record_event(
+        logical_operation_id="op-91",
+        logical_intent_id="intent-91",
+        event_type="ACK",
+        observed_monotonic_ns=113,
+        exchange_id="36",
+        exchange_order_id="91",
+    )
+
+    payload = _batch(1, 0)
+    payload["fills"] = [
+        {
+            "orderId": 91,
+            "exchangeId": "36",
+            "marketId": "m1",
+            "price": "0.42",
+            "quantity": "1",
+            "executedAt": "2026-09-28T21:00:00Z",
+            "tournamentId": "t1",
+        }
+    ]
+    state = AccountRealtimeStateEngine(tournament_id="t1")
+    subscribers = [FakeSubscriber((payload,), SubscriberExit.STOPPED)]
+
+    async def mint_token() -> RealtimeTokenDto:
+        return _token()
+
+    async def resync() -> AccountAuthoritativeSnapshot:
+        return _snapshot()
+
+    def factory(**kwargs: Any) -> FakeSubscriber:
+        del kwargs
+        return subscribers.pop(0)
+
+    async def scenario() -> None:
+        controller = AccountRealtimeController(
+            state=state,
+            mint_token=mint_token,
+            authoritative_resync=resync,
+            subscriber_factory=factory,
+            execution_journal=journal,
+            clock_ns=lambda: 999,
+        )
+        await controller.run(stop_event=asyncio.Event())
+
+    try:
+        asyncio.run(scenario())
+        fills = [
+            event
+            for event in journal.events("op-91")
+            if event.event_type == "REALTIME_FILL"
+        ]
+        assert len(fills) == 1
+        assert fills[0].exchange_order_id == "91"
+        assert fills[0].source_timestamp == "2026-09-28T21:00:00+00:00"
+        assert fills[0].quantity == "1"
+        assert fills[0].price == "0.42"
+    finally:
+        journal.close()
