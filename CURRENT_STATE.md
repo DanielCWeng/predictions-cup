@@ -110,6 +110,9 @@ is not chronological transaction order, so same-block observations can be misord
 Required bounded follow-up:
 
 - branch: `experiment/005b-ordering-falsification`;
+- remediation implementation is present at `8c99a5e6a2c1f0e2e690b23fcb2c7881bb21bb0d` with a frozen
+  POST_HOC_FALSIFICATION_ONLY protocol and block-aware reconstruction code, but no empirical
+  falsification results are committed yet;
 - reconstruct true observable ordering from block/log order;
 - quantify affected observations;
 - rerun the exact frozen specification;
