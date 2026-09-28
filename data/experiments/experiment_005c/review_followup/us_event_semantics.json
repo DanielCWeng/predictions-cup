@@ -1,0 +1,145 @@
+{
+  "canonical_metadata_dataset": "polyleviathan/polyleviathan-market-meta",
+  "classification": "POST_HOC_INDEPENDENT_REVIEW_FALSIFICATION",
+  "dev_decision_times": {
+    "count": 466,
+    "end_utc": "2024-11-04T12:18:15+00:00",
+    "start_utc": "2024-10-23T16:59:30+00:00"
+  },
+  "event_id": "10656",
+  "event_title_candidates_from_metadata": [],
+  "holdout_calendar_relation": "ELECTION_EVE_THROUGH_ELECTION_DAY_OR_LATER",
+  "holdout_decision_times": {
+    "count": 475,
+    "end_utc": "2024-11-06T08:07:30+00:00",
+    "start_utc": "2024-11-04T12:48:15+00:00"
+  },
+  "market_count": 5,
+  "markets": [
+    {
+      "condition_id": "0xab0132a0b89e43d95c2643ac835877c757849e9a64ebac3c9f0c4696db41a288",
+      "economic_observation_count_seconds": 29898,
+      "economic_observation_end_utc": "2024-11-06T18:33:07+00:00",
+      "economic_observation_start_utc": "2024-05-15T18:06:56+00:00",
+      "question": "Will a 3rd party candidate win the popular vote or the Presidency?",
+      "selected_as_target": false
+    },
+    {
+      "condition_id": "0x136e99098f7d4087b4c5775d9f9a512de67e50bda37e88fa86b05a226c390182",
+      "economic_observation_count_seconds": 32848,
+      "economic_observation_end_utc": "2024-11-07T00:12:59+00:00",
+      "economic_observation_start_utc": "2024-05-15T16:36:31+00:00",
+      "question": "Will a Republican win the popular vote and a Democrat win the Presidency?",
+      "selected_as_target": true
+    },
+    {
+      "condition_id": "0xafde9e890a2db339b6515cd75c2d09574dcaf731b483a1ef6ea0a3abc5ec8abd",
+      "economic_observation_count_seconds": 32106,
+      "economic_observation_end_utc": "2024-11-06T21:50:35+00:00",
+      "economic_observation_start_utc": "2024-05-15T16:25:31+00:00",
+      "question": "Will a Democrat win the popular vote and the Presidency? ",
+      "selected_as_target": true
+    },
+    {
+      "condition_id": "0xc53c00d3ed7df96cb528e049ca2d8a6056b620a82bfffd3ad58d35c5f92c02d6",
+      "economic_observation_count_seconds": 11908,
+      "economic_observation_end_utc": "2024-11-06T22:51:54+00:00",
+      "economic_observation_start_utc": "2024-05-15T16:08:34+00:00",
+      "question": "Will a Democrat win the popular vote and a Republican win the Presidency?",
+      "selected_as_target": true
+    },
+    {
+      "condition_id": "0x2010ff3939e8e664dd57369aa907bbaa6d03ae18be27fe3ab2f4cdcb95a8b2ab",
+      "economic_observation_count_seconds": 12599,
+      "economic_observation_end_utc": "2024-11-07T00:36:59+00:00",
+      "economic_observation_start_utc": "2024-05-15T18:06:56+00:00",
+      "question": "Will a Republican win the popular vote and the Presidency? ",
+      "selected_as_target": true
+    }
+  ],
+  "metadata_file": "markets.parquet",
+  "metadata_schema": [
+    "condition_id",
+    "question",
+    "slug",
+    "parent_event_slug",
+    "yes_token_id",
+    "no_token_id",
+    "image_url",
+    "category",
+    "start_date_ts",
+    "end_date_ts",
+    "last_metadata_updated",
+    "description",
+    "resolution_source",
+    "market_type",
+    "is_resolved",
+    "tick_size",
+    "outcomes_json",
+    "winner_outcome",
+    "fee_category"
+  ],
+  "panel_id": "US_2024_event_6e91434eb80f",
+  "purge_embargo_seconds": 120,
+  "raw_selected_metadata": [
+    {
+      "condition_id": "0x2010ff3939e8e664dd57369aa907bbaa6d03ae18be27fe3ab2f4cdcb95a8b2ab",
+      "end_date_ts": "1730808000",
+      "last_metadata_updated": "1782393216",
+      "parent_event_slug": null,
+      "question": "Will a Republican win the popular vote and the Presidency? ",
+      "slug": "will-a-republican-win-the-popular-vote-and-the-presidency",
+      "start_date_ts": "1715702534"
+    },
+    {
+      "condition_id": "0xab0132a0b89e43d95c2643ac835877c757849e9a64ebac3c9f0c4696db41a288",
+      "end_date_ts": "1730808000",
+      "last_metadata_updated": "1782395130",
+      "parent_event_slug": null,
+      "question": "Will a 3rd party candidate win the popular vote or the Presidency?",
+      "slug": "will-a-3rd-party-candidate-win-the-popular-vote-or-the-presidency",
+      "start_date_ts": "1715787036"
+    },
+    {
+      "condition_id": "0xafde9e890a2db339b6515cd75c2d09574dcaf731b483a1ef6ea0a3abc5ec8abd",
+      "end_date_ts": "1730808000",
+      "last_metadata_updated": "1782393480",
+      "parent_event_slug": null,
+      "question": "Will a Democrat win the popular vote and the Presidency? ",
+      "slug": "will-a-democrat-win-the-popular-vote-and-the-presidency",
+      "start_date_ts": "1715701747"
+    },
+    {
+      "condition_id": "0x136e99098f7d4087b4c5775d9f9a512de67e50bda37e88fa86b05a226c390182",
+      "end_date_ts": "1730808000",
+      "last_metadata_updated": "1782393186",
+      "parent_event_slug": null,
+      "question": "Will a Republican win the popular vote and a Democrat win the Presidency?",
+      "slug": "will-a-republican-win-the-popular-vote-and-a-democrat-win-the-presidency",
+      "start_date_ts": "1715792291"
+    },
+    {
+      "condition_id": "0xc53c00d3ed7df96cb528e049ca2d8a6056b620a82bfffd3ad58d35c5f92c02d6",
+      "end_date_ts": "1730808000",
+      "last_metadata_updated": "1782394227",
+      "parent_event_slug": null,
+      "question": "Will a Democrat win the popular vote and a Republican win the Presidency?",
+      "slug": "will-a-democrat-win-the-popular-vote-and-a-republican-win-the-presidency",
+      "start_date_ts": "1715787036"
+    }
+  ],
+  "raw_split_boundaries_epoch_seconds": {
+    "dev_holdout": 1730722845,
+    "train_dev": 1729702650
+  },
+  "raw_split_boundaries_utc": {
+    "dev_holdout": "2024-11-04T12:20:45+00:00",
+    "train_dev": "2024-10-23T16:57:30+00:00"
+  },
+  "train_decision_times": {
+    "count": 1429,
+    "end_utc": "2024-10-23T15:33:00+00:00",
+    "start_utc": "2024-05-16T02:09:00+00:00"
+  },
+  "us_2024_general_election_calendar_anchor_utc": "2024-11-05T00:00:00+00:00"
+}
