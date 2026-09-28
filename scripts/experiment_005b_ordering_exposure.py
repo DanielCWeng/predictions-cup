@@ -6,6 +6,8 @@ single streaming pass and never modifies PR #45 evidence.
 """
 from __future__ import annotations
 
+# ruff: noqa: E731
+
 import argparse
 import json
 from collections import defaultdict
