@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "experiment_id": "EXPERIMENT-005B",
-  "status": "CLOSED",
-  "expected_train_dev_shortlist_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-  "gate_commit": "PENDING",
-  "note": "Template only. HOLDOUT kernel must fail until Stage 3 output is independently downloaded, reviewed, hash-bound and committed here."
+  "status": "OPEN",
+  "expected_train_dev_shortlist_sha256": "44025aa2c5e5bddd97d88c81e649d86d6bf55d6cccec1d57c2aa7af12a9a7ec6",
+  "gate_commit": "726cbdb13de00f5aa8b5d4a6e7c675cc2e4da361",
+  "note": "Opened only after TRAIN/DEV freeze was independently reviewed, hash-bound, and committed; HOLDOUT may be queried exactly once under the sealed protocol."
 }
