@@ -10,7 +10,7 @@ from typing import Protocol
 
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
-from predictions_cup.execution.models import LifecycleState, OperationKind
+from predictions_cup.execution.models import ExecutionEnvelope, LifecycleState, OperationKind
 from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.runtime import RuntimePortfolio
 from predictions_cup.sig.account_reconciliation import (
@@ -167,12 +167,10 @@ async def _recover_single_cancel(
     journal: ExecutionJournal,
     rest: RecoveryRest,
     live_sink: SigLiveSink,
-    envelope: object,
+    envelope: ExecutionEnvelope,
     clock_ns: ClockNs,
 ) -> None:
-    payload_json = getattr(envelope, "payload_json")
-    logical_operation_id = getattr(envelope, "logical_operation_id")
-    raw = json.loads(payload_json)
+    raw = json.loads(envelope.payload_json)
     order_id = raw.get("orderId")
     if not isinstance(order_id, int) or order_id <= 0:
         raise RuntimeError("journal contains malformed single-cancel envelope")
@@ -188,7 +186,7 @@ async def _recover_single_cancel(
         if abs(fills.total_quantity_filled) >= abs(order.quantity)
         else LifecycleState.CANCELLED
     )
-    journal.mark_state(logical_operation_id, terminal, clock_ns())
+    journal.mark_state(envelope.logical_operation_id, terminal, clock_ns())
 
 
 async def _cancel_all_scope_has_open_orders(
