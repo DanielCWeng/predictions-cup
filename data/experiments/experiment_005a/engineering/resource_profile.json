@@ -1,0 +1,46 @@
+{
+  "benchmarks": {
+    "peru_fee_role_columns": {
+      "arrow_nbytes": 361943917,
+      "rows": 1212643,
+      "seconds": 0.4093
+    },
+    "peru_r1_bbo_columns": {
+      "arrow_nbytes": 2300298943,
+      "rows": 21752096,
+      "seconds": 47.8676
+    }
+  },
+  "data001": {
+    "colombia_first_round": {
+      "books/book_changes": {"bytes": 564508450, "files": 5, "rows": 64046576},
+      "books/depth_snapshots": {"bytes": 10960493, "files": 5, "rows": 62410},
+      "fills": {"bytes": 3312069, "files": 5, "rows": 58990}
+    },
+    "colombia_runoff": {
+      "books/book_changes": {"bytes": 103979810, "files": 5, "rows": 12576636},
+      "books/depth_snapshots": {"bytes": 4178576, "files": 5, "rows": 29534},
+      "fills": {"bytes": 2075292, "files": 5, "rows": 34671}
+    },
+    "hungary_election": {
+      "books/book_changes": {"bytes": 49537876, "files": 10, "rows": 6970076},
+      "books/depth_snapshots": {"bytes": 14536743, "files": 10, "rows": 154135},
+      "fills": {"bytes": 14977419, "files": 10, "rows": 262077}
+    },
+    "peru_first_round": {
+      "books/book_changes": {"bytes": 176182376, "files": 5, "rows": 21752096},
+      "books/depth_snapshots": {"bytes": 14077295, "files": 5, "rows": 102970},
+      "fills": {"bytes": 13678695, "files": 5, "rows": 265128}
+    },
+    "peru_runoff": {
+      "books/book_changes": {"bytes": 176498025, "files": 5, "rows": 21324303},
+      "books/depth_snapshots": {"bytes": 16456544, "files": 5, "rows": 112277},
+      "fills": {"bytes": 6698206, "files": 5, "rows": 122149}
+    }
+  },
+  "data002": {
+    "fees_COL_2026.parquet": {"bytes": 31722950, "rows": 693573},
+    "fees_HUN_2026.parquet": {"bytes": 33071799, "rows": 840134},
+    "fees_PER_2026.parquet": {"bytes": 51718181, "rows": 1212643}
+  }
+}
