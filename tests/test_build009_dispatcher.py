@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Mapping
 
-from predictions_cup.execution.models import ExecutionMode
+from predictions_cup.execution.models import ExecutionEvent, ExecutionMode
 from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.risk.core import RiskContext
 from predictions_cup.runtime import RuntimePortfolio, RuntimeSnapshot
@@ -55,7 +55,7 @@ def test_event_driven_coordinator_evaluates_only_affected_strategy() -> None:
     async def dispatch(
         plan: ExecutionPlan,
         state: RuntimeSnapshot,
-    ) -> object:
+    ) -> ExecutionEvent:
         del plan, state
         raise AssertionError("NO_TRADE must not reach the sink")
 
@@ -80,7 +80,7 @@ def test_event_driven_coordinator_evaluates_only_affected_strategy() -> None:
             max_state_age_ns=1_000,
         ),
         mode=ExecutionMode.SHADOW,
-        dispatch=dispatch,  # type: ignore[arg-type]
+        dispatch=dispatch,
     )
 
     async def scenario() -> None:
@@ -117,7 +117,7 @@ def test_explicit_scheduled_trigger_works_without_market_change() -> None:
     async def dispatch(
         plan: ExecutionPlan,
         state: RuntimeSnapshot,
-    ) -> object:
+    ) -> ExecutionEvent:
         del plan, state
         raise AssertionError("NO_TRADE must not reach the sink")
 
@@ -134,7 +134,7 @@ def test_explicit_scheduled_trigger_works_without_market_change() -> None:
             max_state_age_ns=1_000,
         ),
         mode=ExecutionMode.SHADOW,
-        dispatch=dispatch,  # type: ignore[arg-type]
+        dispatch=dispatch,
     )
     snapshot = RuntimeSnapshot(
         markets=(),
