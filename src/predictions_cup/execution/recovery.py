@@ -12,7 +12,7 @@ from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import ExecutionEnvelope, LifecycleState, OperationKind
 from predictions_cup.execution.sinks import ExecutionPlan
-from predictions_cup.runtime import RuntimePortfolio
+from predictions_cup.runtime.models import RuntimePortfolio
 from predictions_cup.sig.account_reconciliation import (
     AccountAuthoritativeSnapshot,
     reconcile_account,
