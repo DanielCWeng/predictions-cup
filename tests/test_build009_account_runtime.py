@@ -12,6 +12,7 @@ from predictions_cup.execution.models import (
     OperationKind,
     RuntimeOrderIntent,
 )
+from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.runtime import OrderAction, OutcomeSide
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
 from predictions_cup.sig.account_runtime import AccountRealtimeController
@@ -306,3 +307,29 @@ def test_accepted_realtime_fill_is_linked_to_execution_journal(tmp_path: Path) -
         assert fills[0].price == "0.42"
     finally:
         journal.close()
+
+def test_authoritative_account_snapshot_clears_local_execution_reservations() -> None:
+    reservations = ExecutionReservationBook()
+    intent = RuntimeOrderIntent(
+        intent_id="intent-clear",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=3,
+        limit_price_ticks=100,
+        strategy_id="fixture",
+        decision_observation_ns=100,
+    )
+    reservations.reserve("op-clear", (intent,))
+    state = AccountRealtimeStateEngine(
+        tournament_id="t1",
+        reservations=reservations,
+    )
+
+    state.apply_authoritative(_snapshot())
+
+    assert reservations.intent_ids() == frozenset()
+    assert state.trusted is True
+
