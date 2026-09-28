@@ -26,6 +26,28 @@ def load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def load_feature_build(root: Path) -> dict[str, Any]:
+    aggregate = root / "feature_target_build_report.json"
+    if aggregate.exists():
+        return load_json(aggregate)
+    paths = sorted(root.glob("feature_target_build_report_*.json"))
+    if not paths:
+        raise FileNotFoundError("no feature-target build report found")
+    families = [load_json(path) for path in paths]
+    return {
+        "schema_version": 1,
+        "experiment_id": "EXPERIMENT-005B",
+        "stage": "features_targets_aggregate",
+        "families": families,
+        "totals": {
+            "rows": sum(int(item.get("rows", 0)) for item in families),
+            "output_bytes": sum(
+                int(item.get("output_bytes", 0)) for item in families
+            ),
+        },
+    }
+
+
 def fmt(value: Any, digits: int = 4) -> str:
     if value is None:
         return "—"
@@ -257,7 +279,7 @@ def main() -> None:
     args = parser.parse_args()
     root = args.root
     reconstruction = load_json(root / "trade_reconstruction_report.json")
-    feature_build = load_json(root / "feature_target_build_report.json")
+    feature_build = load_feature_build(root)
     freeze = load_json(root / "train_dev_shortlist_freeze.json")
     holdout = load_json(root / "holdout_results.json")
 
