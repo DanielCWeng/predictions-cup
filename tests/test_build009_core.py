@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Mapping
 from decimal import Decimal
 from pathlib import Path
 
@@ -36,7 +37,7 @@ from predictions_cup.strategy.core import (
     StrategyFamily,
     StrategyRegistry,
 )
-from predictions_cup.strategy.kernels import default_kernel_registry
+from predictions_cup.strategy.kernels import KernelRegistry, default_kernel_registry
 
 
 def _snapshot(
@@ -83,7 +84,7 @@ def _opportunity(
     relationship_id: str | None = None,
     requires_depth: bool = False,
 ) -> Opportunity:
-    legs = (
+    legs: tuple[CandidateLeg, ...] = (
         CandidateLeg(
             exchange_id="36",
             market_id="m1",
@@ -154,11 +155,15 @@ def test_all_legal_sig_ticks_round_trip_exactly() -> None:
 def test_strategy_extension_does_not_touch_execution_core() -> None:
     registry = StrategyRegistry()
 
-    def extra_strategy(snapshot: RuntimeSnapshot, kernels: object, config: object) -> NoTrade:
+    def extra_strategy(
+        snapshot: RuntimeSnapshot,
+        kernels: KernelRegistry,
+        config: Mapping[str, float],
+    ) -> NoTrade:
         del snapshot, kernels, config
         return NoTrade(reason="fixture")
 
-    registry.register("extra", extra_strategy)  # type: ignore[arg-type]
+    registry.register("extra", extra_strategy)
     result = registry.evaluate("extra", _snapshot(), default_kernel_registry(), {})
     assert isinstance(result, NoTrade)
     assert result.family is StrategyFamily.NO_TRADE
