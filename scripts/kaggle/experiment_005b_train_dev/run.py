@@ -317,6 +317,7 @@ def fit_regression_models(
     y_dev: np.ndarray,
     features: list[str],
     target: str,
+    own_feature_index: int | None,
 ) -> dict[str, Any]:
     train_ok = np.isfinite(y_train)
     dev_ok = np.isfinite(y_dev)
@@ -342,16 +343,11 @@ def fit_regression_models(
         }
     ]
     candidates: list[tuple[str, list[int], Any, dict[str, Any]]] = []
-    own_feature = (
-        "price_change_30"
-        if "price_change" in target
-        else "realised_vol_30"
-    )
-    if own_feature in features:
+    if own_feature_index is not None:
         candidates.append(
             (
                 "own_history_linear",
-                [features.index(own_feature)],
+                [own_feature_index],
                 make_pipeline(
                     SimpleImputer(strategy="median"),
                     StandardScaler(),
@@ -766,7 +762,8 @@ def main() -> None:
         for name in cluster:
             representative[name] = chosen
 
-    dev_metrics: dict[str, dict[str, float | None]] = {}
+    x_dev_rank = rank_matrix(dev, features)
+    dev_metrics: dict[str, dict[str, dict[str, float | None]]] = {}
     for target in targets:
         label = label_for_target(target)
         valid = (
@@ -782,10 +779,21 @@ def main() -> None:
         ).to_numpy(dtype=float)
         y[~valid] = np.nan
         p, _ = corr_columns(x_dev, y)
+        y_rank = (
+            pd.Series(y)
+            .rank(pct=True, method="average")
+            .to_numpy(dtype=float)
+        )
+        s, _ = corr_columns(x_dev_rank, y_rank)
         dev_metrics[target] = {
-            features[i]: (
-                None if not np.isfinite(p[i]) else float(p[i])
-            )
+            features[i]: {
+                "pearson": (
+                    None if not np.isfinite(p[i]) else float(p[i])
+                ),
+                "spearman": (
+                    None if not np.isfinite(s[i]) else float(s[i])
+                ),
+            }
             for i in range(len(features))
         }
 
@@ -835,7 +843,9 @@ def main() -> None:
         target_train[~target_valid] = np.nan
         train_markets = train["market_id"].astype(str).to_numpy()
         for row in eligible[:8]:
-            dev_r = dev_metrics[target].get(row["feature"])
+            dev_stats = dev_metrics[target].get(row["feature"], {})
+            dev_pearson = dev_stats.get("pearson")
+            dev_spearman = dev_stats.get("spearman")
             train_r = row["spearman"]
             feature_index = features.index(row["feature"])
             feature_hhi, feature_max_share = feature_market_concentration(
@@ -844,8 +854,8 @@ def main() -> None:
                 target_train,
             )
             stable = (
-                dev_r is not None
-                and train_r * dev_r > 0
+                dev_spearman is not None
+                and train_r * dev_spearman > 0
                 and (
                     not np.isfinite(feature_max_share)
                     or feature_max_share <= 0.50
@@ -861,7 +871,8 @@ def main() -> None:
             chosen.append(
                 {
                     **row,
-                    "dev_pearson": dev_r,
+                    "dev_pearson": dev_pearson,
+                    "dev_spearman": dev_spearman,
                     "candidate_market_concentration_hhi_sample": (
                         None
                         if not np.isfinite(feature_hhi)
@@ -891,8 +902,20 @@ def main() -> None:
             }
             continue
 
-        xtr = numeric_matrix(train_model, model_features)
-        xdv = numeric_matrix(dev_model, model_features)
+        matrix_features = list(model_features)
+        own_feature_index: int | None = None
+        if "_sign_" not in target:
+            own_feature = (
+                "price_change_30"
+                if "price_change" in target
+                else "realised_vol_30"
+            )
+            if own_feature not in matrix_features:
+                matrix_features.append(own_feature)
+            own_feature_index = matrix_features.index(own_feature)
+
+        xtr = numeric_matrix(train_model, matrix_features)
+        xdv = numeric_matrix(dev_model, matrix_features)
         ytr = pd.to_numeric(
             train_model[target],
             errors="coerce",
@@ -934,6 +957,7 @@ def main() -> None:
                 ydv,
                 model_features,
                 target,
+                own_feature_index,
             )
         model_selection[target] = {
             "features": model_features,
@@ -947,9 +971,12 @@ def main() -> None:
                 {
                     "target": target,
                     **row,
-                    "dev_pearson": dev_metrics[target].get(
-                        row["feature"]
-                    ),
+                    "dev_pearson": dev_metrics[target]
+                    .get(row["feature"], {})
+                    .get("pearson"),
+                    "dev_spearman": dev_metrics[target]
+                    .get(row["feature"], {})
+                    .get("spearman"),
                     "representative": representative[row["feature"]],
                 }
             )
