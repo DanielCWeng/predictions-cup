@@ -174,6 +174,16 @@ def fit_cell(
         "val_w": val_w,
         "vy": vy,
         "baseline_prediction": p0,
+        "observed_prediction": p1,
+        "original_challenger": vx1[:, [features.index(name) for name in challenger_features]],
+        "challenger_slopes": np.asarray(
+            [
+                challenger.coefficient[features.index(name)]
+                / challenger.scale[features.index(name)]
+                for name in challenger_features
+            ],
+            dtype=float,
+        ),
         "observed_gain": loss0 - loss1,
         "baseline_mse": loss0,
         "challenger_mse": loss1,
@@ -276,15 +286,12 @@ def transformed_validation(
 
 
 def null_gain(fit: dict[str, Any], transformed: np.ndarray, challenger_features: tuple[str, ...]) -> float:
-    from predictions_cup.learning.flow_models import predict_ridge, weighted_mse
+    from predictions_cup.learning.flow_models import weighted_mse
 
-    va = fit["validation_frame"]
-    model = fit["challenger_model"]
-    full = va.loc[:, list(model.feature_names)].to_numpy(float)
-    positions = [model.feature_names.index(name) for name in challenger_features]
-    for column, pos in enumerate(positions):
-        full[:, pos] = transformed[:, column]
-    prediction = predict_ridge(model, full)
+    if transformed.shape[1] != len(challenger_features):
+        raise RuntimeError("transformed challenger width mismatch")
+    delta = (transformed - fit["original_challenger"]) @ fit["challenger_slopes"]
+    prediction = fit["observed_prediction"] + delta
     challenger_loss = weighted_mse(fit["vy"], prediction, fit["val_w"])
     return float(fit["baseline_mse"] - challenger_loss)
 
