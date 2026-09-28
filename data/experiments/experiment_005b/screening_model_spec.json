@@ -55,7 +55,8 @@
     "sign_persistence_required": true,
     "single_market_share_max": 0.5,
     "model_gate_abs_train_association": 0.01,
-    "concentration_gate": "feature-target sample specific; max single-market share <= 0.50"
+    "concentration_gate": "feature-target sample specific; max single-market share <= 0.50",
+    "stability_statistic": "TRAIN Spearman and DEV Spearman must have the same non-zero sign; DEV Pearson is retained as a secondary diagnostic."
   },
   "model_eligibility": {
     "atlas_only_target_fragments": [
@@ -107,7 +108,8 @@
       "l2_regularization": 1
     },
     "regression_selection": "highest DEV MAE improvement versus persistence baseline",
-    "classification_selection": "lowest DEV multiclass Brier score, then highest accuracy"
+    "classification_selection": "lowest DEV multiclass Brier score, then highest accuracy",
+    "own_history_baseline": "Always evaluated for regression targets using price_change_30 for price-change targets and realised_vol_30 for realised-movement targets, even when that feature is not shortlisted."
   },
   "shortlist_freeze_requirement": "Stage output must be committed and hash-bound before any HOLDOUT query."
 }
