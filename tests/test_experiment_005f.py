@@ -119,3 +119,39 @@ def test_bh_adjustment_is_monotone() -> None:
     result = benjamini_hochberg({"a": 0.001, "b": 0.02, "c": 0.5}, q=0.10)
     assert result["a"]["reject"] is True
     assert result["b"]["p_bh"] >= result["a"]["p_bh"]
+
+
+def test_fit_freeze_model_semantics() -> None:
+    from predictions_cup.learning.microstructure_fit import (
+        baseline_columns,
+        build_frozen_model,
+        full_feature_columns,
+        is_classification_target,
+    )
+
+    assert baseline_columns("clock", "update_h300") == ("genuine_15", "genuine_60")
+    assert baseline_columns("clock", "jump_h300") == ("abs_ret_15", "rv_60")
+    assert baseline_columns("event", "event_price_k2") == ("event_ret1", "event_ret2")
+    assert is_classification_target("clock", "jump_h300") is True
+    assert is_classification_target("depth", "depth_price_h60") is False
+
+    base, full = full_feature_columns(
+        dataset="depth",
+        target="depth_price_h60",
+        candidate="learned_micro_fv_all",
+        available_columns={"ret_15", "ret_30", "ret_60", "snapshot_ofi_norm", "depth_2c"},
+        microfv_blocks={"learned_micro_fv_all": ("snapshot_ofi_norm", "depth_2c")},
+    )
+    assert base == ("ret_15", "ret_30", "ret_60")
+    assert full == ("ret_15", "ret_30", "ret_60", "snapshot_ofi_norm", "depth_2c")
+
+    assert build_frozen_model("RIDGE_1.0", classification=False, random_state=7).alpha == 1.0
+    assert build_frozen_model("LOGIT_C0.1", classification=True, random_state=7).C == 0.1
+    assert build_frozen_model("HGB_D2_LR0.03", classification=False, random_state=7).max_depth == 2
+
+
+def test_fit_freeze_rejects_out_of_grid_hgb() -> None:
+    from predictions_cup.learning.microstructure_fit import build_frozen_model
+
+    with pytest.raises(ValueError):
+        build_frozen_model("HGB_D7_LR0.03", classification=False, random_state=7)
