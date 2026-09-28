@@ -196,3 +196,60 @@ def test_holdout_evidence_primitives() -> None:
     assert loo["b"] == pytest.approx(1.0)
     stability = stability_summary(["a", "a", "b", "b"], [1.0, 1.0, 2.0, 2.0])
     assert stability["all_positive"] is True
+
+def test_event_time_holdout_bootstrap_and_blocks() -> None:
+    from predictions_cup.learning.microstructure_holdout import (
+        equal_event_time_block_bootstrap,
+        event_block_means,
+    )
+
+    events = ["a", "a", "a", "b", "b", "b"]
+    times = [
+        0,
+        60 * NS,
+        120 * NS,
+        0,
+        60 * NS,
+        120 * NS,
+    ]
+    values = [1.0, 2.0, 3.0, 2.0, 4.0, 6.0]
+    blocks = event_block_means(
+        events,
+        times,
+        values,
+        block_seconds=120,
+    )
+    assert sorted(blocks.tolist()) == [1.5, 3.0, 3.0, 6.0]
+
+    boot = equal_event_time_block_bootstrap(
+        events,
+        times,
+        values,
+        block_length_minutes=2,
+        draws=200,
+        seed=7,
+    )
+    assert boot["events"] == 2
+    assert boot["event_equal_mean"] == pytest.approx(3.0)
+    assert boot["raw_observation_mean"] == pytest.approx(3.0)
+    assert boot["lower"] <= boot["upper"]
+
+
+def test_event_time_bootstrap_preserves_wall_clock_gaps() -> None:
+    from predictions_cup.learning.microstructure_holdout import (
+        equal_event_time_block_bootstrap,
+    )
+
+    boot = equal_event_time_block_bootstrap(
+        ["a", "a"],
+        [0, 10 * 60 * NS],
+        [1.0, 3.0],
+        block_length_minutes=5,
+        draws=100,
+        seed=3,
+    )
+    assert boot["events"] == 1
+    assert boot["raw_observation_mean"] == pytest.approx(2.0)
+    assert np.isfinite(boot["lower"])
+    assert np.isfinite(boot["upper"])
+
