@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005C",
+  "amendment_id": "COMPUTE_COORDINATION_002",
+  "status": "OPERATIONAL_ONLY",
+  "original_freeze_commit": "ea7ed06dd47cb8240cc8a1e5dedabf00d009843f",
+  "original_preregistration_sha256": "b6505f8b07dd064cb1e4133a660c5d1f43864823b696539aa60e474eb9b8b6f5",
+  "correction": {
+    "field": "kaggle.shared_capacity",
+    "frozen_value": 3,
+    "corrected_value": 5,
+    "source": "User clarification during execution",
+    "scientific_design_changed": false,
+    "predictive_outputs_used": false
+  },
+  "statement": "This amendment changes only shared-compute coordination. It does not alter data, reconstruction, features, grids, horizons, models, validation, selection, nulls, ablations, uncertainty, or HOLDOUT policy."
+}
