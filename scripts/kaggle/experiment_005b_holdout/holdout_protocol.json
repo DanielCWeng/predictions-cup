@@ -22,7 +22,7 @@
     "evaluation": "all valid rows; no target-value sampling"
   },
   "scalar_shortlist_policy": {
-    "per_target": "first stable_train_dev candidate in frozen order only",
+    "per_target": "Evaluate every frozen TRAIN/DEV row with promoted_candidate=true exactly once on HOLDOUT, preserving frozen order. HOLDOUT never selects among them.",
     "metrics": [
       "pearson",
       "spearman",
@@ -32,7 +32,8 @@
       "support",
       "market_count",
       "family_sign_consistency"
-    ]
+    ],
+    "reselection": "NONE"
   },
   "model_metrics": {
     "regression": [
