@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from datetime import datetime
 from time import monotonic_ns
-from typing import Protocol
+from typing import Protocol, cast
 
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
@@ -86,39 +87,91 @@ class AccountRealtimeController:
         self._subscriber_factory = subscriber_factory
         self._execution_journal = execution_journal
         self._clock_ns = clock_ns
+        self._resyncing = False
+        self._batch_seen_during_resync = False
 
     async def run(self, *, stop_event: asyncio.Event) -> None:
         while not stop_event.is_set():
             token = await self._mint_token()
-            authoritative = await self._authoritative_resync()
-            self._state.apply_authoritative(authoritative)
-
             subscriber = self._subscriber_factory(
                 topic=token.channels.user,
                 token=token,
                 event_name="account_batch",
             )
+            connected = asyncio.Event()
+            self._resyncing = True
+            self._batch_seen_during_resync = False
 
-            try:
-                outcome = await subscriber.run(
+            subscriber_task = asyncio.create_task(
+                subscriber.run(
                     on_batch=self._handle_batch,
-                    on_connected=self._on_connected,
+                    on_connected=connected.set,
                     stop_event=stop_event,
                 )
-            except AccountResyncRequired:
-                # AccountRealtimeStateEngine already revoked trust for a malformed
-                # payload, revision gap, or unknown resting-order update.
+            )
+            connected_wait = asyncio.create_task(connected.wait())
+            waiters = {
+                cast(asyncio.Task[object], subscriber_task),
+                cast(asyncio.Task[object], connected_wait),
+            }
+            done, _ = await asyncio.wait(
+                waiters,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            if subscriber_task in done and not connected.is_set():
+                connected_wait.cancel()
+                with suppress(asyncio.CancelledError):
+                    await connected_wait
+                outcome = subscriber_task.result()
+                if outcome is SubscriberExit.STOPPED:
+                    return
+                self._mark_exit_untrusted(outcome)
                 continue
+
+            await connected_wait
+
+            try:
+                await self._restore_trust_while_subscribed()
+                if subscriber_task.done():
+                    outcome = subscriber_task.result()
+                else:
+                    outcome = await subscriber_task
+            except AccountResyncRequired:
+                # The state engine has already revoked trust. Re-subscribe and
+                # reconcile authoritatively before accepting more account data.
+                continue
+            except BaseException:
+                subscriber_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await subscriber_task
+                raise
 
             if outcome is SubscriberExit.STOPPED:
                 return
-            if outcome is SubscriberExit.TOKEN_REFRESH:
-                transition = AccountTrustTransition.UNTRUSTED_TOKEN_REFRESH
-            elif outcome is SubscriberExit.SOCKET_ERROR:
-                transition = AccountTrustTransition.UNTRUSTED_SOCKET_ERROR
-            else:
-                transition = AccountTrustTransition.UNTRUSTED_RECONNECT
-            self._state.mark_untrusted(transition)
+            self._mark_exit_untrusted(outcome)
+
+    async def _restore_trust_while_subscribed(self) -> None:
+        while True:
+            self._resyncing = True
+            self._batch_seen_during_resync = False
+            authoritative = await self._authoritative_resync()
+            self._state.apply_authoritative(authoritative)
+            if not self._batch_seen_during_resync:
+                self._resyncing = False
+                return
+            self._state.mark_untrusted(
+                AccountTrustTransition.UNTRUSTED_RESYNC_ACTIVITY
+            )
+
+    def _mark_exit_untrusted(self, outcome: SubscriberExit) -> None:
+        if outcome is SubscriberExit.TOKEN_REFRESH:
+            transition = AccountTrustTransition.UNTRUSTED_TOKEN_REFRESH
+        elif outcome is SubscriberExit.SOCKET_ERROR:
+            transition = AccountTrustTransition.UNTRUSTED_SOCKET_ERROR
+        else:
+            transition = AccountTrustTransition.UNTRUSTED_RECONNECT
+        self._state.mark_untrusted(transition)
 
     async def _handle_batch(
         self,
@@ -127,6 +180,9 @@ class AccountRealtimeController:
         observed_at: datetime,
     ) -> None:
         del topic
+        if self._resyncing:
+            self._batch_seen_during_resync = True
+            return
         result = self._state.handle_raw_batch(payload, observed_at=observed_at)
         if result.requires_reconciliation:
             raise AccountResyncRequired
@@ -178,8 +234,3 @@ class AccountRealtimeController:
                 terminal_status="OPEN" if update.open else "CLOSED",
             )
 
-    @staticmethod
-    def _on_connected() -> None:
-        # Trust is established only by the authoritative resync immediately
-        # before subscribe, never by the socket connection itself.
-        return None
