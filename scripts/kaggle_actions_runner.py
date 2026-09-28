@@ -75,7 +75,13 @@ def output_dir_for(manifest_path: Path) -> Path:
 def auth_check(output_dir: Path) -> None:
     result = run_command(["kaggle", "kernels", "list", "--mine", "--page", "1"])
     (output_dir / "auth_check.txt").write_text(result.stdout, encoding="utf-8")
-    write_summary(\n        ["## Kaggle auth check", "", "Authenticated successfully and listed owned kernels."]\n    )
+    write_summary(
+        [
+            "## Kaggle auth check",
+            "",
+            "Authenticated successfully and listed owned kernels.",
+        ]
+    )
 
 
 def kernel_from_manifest(data: dict[str, Any]) -> str:
