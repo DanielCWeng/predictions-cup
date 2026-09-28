@@ -75,6 +75,20 @@ DELAYED_PM_FEATURES = [
     "delayed_pm_available",
 ]
 DELAYED_CHALLENGER_FEATURES = BASELINE_FEATURES + DELAYED_PM_FEATURES
+WRONG_PM_FEATURES = [
+    "wrong_pm_best_bid",
+    "wrong_pm_best_ask",
+    "wrong_pm_mid",
+    "wrong_pm_spread",
+    "wrong_pm_signed_innovation_5s",
+    "wrong_pm_absolute_innovation_5s",
+    "wrong_pm_quote_age_seconds",
+    "wrong_relative_pm_minus_sig_freshness_seconds",
+    "wrong_pm_minus_sig_mid_gap",
+    "wrong_pm_update_count_30s",
+    "wrong_pm_available",
+]
+WRONG_CHALLENGER_FEATURES = BASELINE_FEATURES + WRONG_PM_FEATURES
 
 DERIVED_PM_FEATURES = [
     "synthetic_best_bid",
@@ -91,6 +105,30 @@ DERIVED_PM_FEATURES = [
     "synthetic_ask_size",
 ]
 DERIVED_CHALLENGER_FEATURES = BASELINE_FEATURES + DERIVED_PM_FEATURES
+
+REVERSE_BASELINE_FEATURES = [
+    "reverse_pm_best_bid",
+    "reverse_pm_best_ask",
+    "reverse_pm_mid",
+    "reverse_pm_spread",
+    "reverse_pm_quote_age_seconds",
+    "reverse_pm_signed_change_30s",
+    "reverse_pm_absolute_change_30s",
+    "reverse_pm_update_count_30s",
+    "regime_pre_election",
+]
+REVERSE_SIG_FEATURES = [
+    "reverse_sig_best_bid",
+    "reverse_sig_best_ask",
+    "reverse_sig_mid",
+    "reverse_sig_spread",
+    "reverse_sig_innovation",
+    "reverse_sig_absolute_innovation",
+    "reverse_sig_update_count_30s",
+    "reverse_relative_sig_minus_pm_freshness_seconds",
+    "reverse_sig_minus_pm_mid_gap",
+]
+REVERSE_CHALLENGER_FEATURES = REVERSE_BASELINE_FEATURES + REVERSE_SIG_FEATURES
 
 
 def sha256(path: Path) -> str:
@@ -119,6 +157,25 @@ def as_utc_ns(values: pd.Series) -> pd.Series:
 def logit(values: pd.Series, epsilon: float) -> pd.Series:
     clipped = values.clip(lower=epsilon, upper=1.0 - epsilon)
     return np.log(clipped / (1.0 - clipped))
+
+
+def market_category(title: str) -> str:
+    if " House " in f" {title} ":
+        return "house"
+    if " Senate" in title:
+        return "senate"
+    if " Governor" in title:
+        return "governor"
+    return "other"
+
+
+def race_key(title: str) -> str:
+    value = title.strip().lower().rstrip("?")
+    for party in ("democratic", "republican"):
+        prefix = f"will the {party} party win the "
+        if value.startswith(prefix):
+            return value[len(prefix) :]
+    return value
 
 
 def top_size(levels: object, price: float) -> float:
@@ -217,6 +274,9 @@ def build_exact_rows(
     depth: pd.DataFrame,
     map_frame: pd.DataFrame,
     prereg: dict[str, object],
+    *,
+    observation_delay_ms: int = 0,
+    horizon_seconds_override: int | None = None,
 ) -> pd.DataFrame:
     impl = (
         json.loads((INPUT / "implementation_freeze_001.json").read_text())
@@ -238,7 +298,11 @@ def build_exact_rows(
     intensity_seconds = int(exact_cfg["intensity_window_seconds"])
     epsilon = float(exact_cfg["logit_epsilon"])
     delayed_pm_seconds = int(prereg["controls"]["delayed_pm_seconds"])
-    horizon_seconds = int(prereg["observability"]["primary_fixed_horizon_seconds"])
+    horizon_seconds = (
+        int(prereg["observability"]["primary_fixed_horizon_seconds"])
+        if horizon_seconds_override is None
+        else int(horizon_seconds_override)
+    )
     entry_latency_ms = int(prereg["execution"]["entry_latency_ms"])
     stress_latency_ms = int(prereg["execution"]["stress_latency_ms"])
 
@@ -246,6 +310,10 @@ def build_exact_rows(
     for mapping in map_frame.itertuples(index=False):
         sig_group = sig[sig["exchange_id"] == mapping.sig_exchange_id].copy()
         changes = pm_changes[pm_changes["token_id"] == mapping.pm_token_id].copy()
+        if observation_delay_ms:
+            changes["observed_at"] = changes["observed_at"] + pd.to_timedelta(
+                observation_delay_ms, unit="ms"
+            )
         if sig_group.empty or changes.empty:
             continue
 
@@ -428,7 +496,7 @@ def build_exact_rows(
             delayed_lookup,
             intensity_seconds,
         )
-        decisions["pm_quote_age_seconds"] = 0.0
+        decisions["pm_quote_age_seconds"] = observation_delay_ms / 1000.0
         decisions["relative_pm_minus_sig_freshness_seconds"] = -decisions["sig_quote_age_seconds"]
         decisions["pm_minus_sig_mid_gap"] = decisions["pm_mid"] - decisions["sig_mid"]
         decisions["pm_signed_innovation_5s"] = logit(decisions["pm_mid"], epsilon) - logit(
@@ -470,6 +538,10 @@ def build_exact_rows(
         decisions["sig_market_id"] = mapping.sig_market_id
 
         depth_group = depth[depth["token_id"] == mapping.pm_token_id].copy()
+        if observation_delay_ms and not depth_group.empty:
+            depth_group["recorded_at"] = depth_group["recorded_at"] + pd.to_timedelta(
+                observation_delay_ms, unit="ms"
+            )
         if not depth_group.empty:
             depth_join = pd.merge_asof(
                 decisions[["decision_at"]].sort_values("decision_at"),
@@ -825,8 +897,7 @@ def design_matrices(
     test_numeric = test_numeric.fillna(medians)
 
     q25 = train_numeric.quantile(0.25)
-    q75 = train_numeric.quantile(0.75)
-    scale = (q75 - q25).replace(0.0, 1.0).fillna(1.0)
+    q75 = train_numeric.quantile(0.75)    scale = (q75 - q25).replace(0.0, 1.0).fillna(1.0)
     center = train_numeric.median()
     x_train = ((train_numeric - center) / scale).to_numpy(dtype=float)
     x_test = ((test_numeric - center) / scale).to_numpy(dtype=float)
@@ -848,15 +919,427 @@ def ridge_predict(
     features: list[str],
     contract_ids: list[str],
     alpha: float,
+    target_column: str = "target_fixed_change",
 ) -> np.ndarray:
     x_train, x_test = design_matrices(train, test, features, contract_ids)
-    y_train = train["target_fixed_change"].to_numpy(dtype=float)
+    y_train = train[target_column].to_numpy(dtype=float)
     train_design = np.column_stack((np.ones(len(x_train)), x_train))
     test_design = np.column_stack((np.ones(len(x_test)), x_test))
     penalty = np.eye(train_design.shape[1]) * alpha
     penalty[0, 0] = 0.0
     beta = np.linalg.pinv(train_design.T @ train_design + penalty) @ train_design.T @ y_train
     return np.asarray(test_design @ beta, dtype=float)
+
+
+def select_wrong_contract_map(
+    pm_changes: pd.DataFrame,
+    map_frame: pd.DataFrame,
+    *,
+    cutoff: pd.Timestamp,
+) -> dict[str, str]:
+    history = pm_changes[pm_changes["observed_at"] < cutoff].copy()
+    for column in ["best_bid", "best_ask"]:
+        history[column] = pd.to_numeric(history[column], errors="coerce")
+    history = history.dropna(subset=["best_bid", "best_ask"])
+    history = history[history["best_bid"] <= history["best_ask"]]
+    history["mid"] = (history["best_bid"] + history["best_ask"]) / 2.0
+    history["spread"] = history["best_ask"] - history["best_bid"]
+    summaries = history.groupby("token_id").agg(
+        mean_mid=("mid", "mean"),
+        mean_spread=("spread", "mean"),
+        update_count=("observed_at", "size"),
+    )
+    summaries["log_update_count"] = np.log1p(summaries["update_count"].astype(float))
+
+    result: dict[str, str] = {}
+    for _category, category_map in map_frame.groupby("category"):
+        tokens = [
+            token for token in category_map["pm_token_id"].astype(str) if token in summaries.index
+        ]
+        if len(tokens) < 2:
+            continue
+        features = summaries.loc[
+            tokens,
+            ["mean_mid", "mean_spread", "log_update_count"],
+        ].astype(float)
+        center = features.median(axis=0)
+        scale = (features.quantile(0.75) - features.quantile(0.25)).replace(0.0, 1.0)
+        scaled = (features - center) / scale
+
+        for row in category_map.itertuples(index=False):
+            true_token = str(row.pm_token_id)
+            if true_token not in scaled.index:
+                continue
+            candidates = category_map[category_map["race_key"] != row.race_key][
+                "pm_token_id"
+            ].astype(str)
+            candidates = [token for token in candidates if token in scaled.index]
+            if not candidates:
+                continue
+            delta = scaled.loc[candidates] - scaled.loc[true_token]
+            distance = (delta * delta).sum(axis=1)
+            wrong_token = str(
+                sorted(
+                    zip(distance.tolist(), candidates, strict=True),
+                    key=lambda item: (item[0], item[1]),
+                )[0][1]
+            )
+            result[str(row.sig_exchange_id)] = wrong_token
+    return result
+
+
+def attach_wrong_contract_features(
+    frame: pd.DataFrame,
+    pm_changes: pd.DataFrame,
+    wrong_map: dict[str, str],
+    *,
+    innovation_seconds: int,
+    intensity_seconds: int,
+    epsilon: float,
+) -> pd.DataFrame:
+    output = frame.copy()
+    for column in WRONG_PM_FEATURES:
+        output[column] = np.nan
+    output["wrong_pm_available"] = 0.0
+
+    for contract, indices in output.groupby("sig_exchange_id").groups.items():
+        wrong_token = wrong_map.get(str(contract))
+        if wrong_token is None:
+            continue
+        source = pm_changes[pm_changes["token_id"] == wrong_token].copy()
+        if source.empty:
+            continue
+        for column in ["best_bid", "best_ask"]:
+            source[column] = pd.to_numeric(source[column], errors="coerce")
+        source = source.dropna(subset=["best_bid", "best_ask"]).sort_values("observed_at")
+        source = source[source["best_bid"] <= source["best_ask"]]
+        if source.empty:
+            continue
+        source["wrong_mid_source"] = (source["best_bid"] + source["best_ask"]) / 2.0
+        target = output.loc[indices].sort_values("decision_at").copy()
+        left = target[["decision_at"]].copy()
+        current = pd.merge_asof(
+            left,
+            source[["observed_at", "best_bid", "best_ask", "wrong_mid_source"]].sort_values(
+                "observed_at"
+            ),
+            left_on="decision_at",
+            right_on="observed_at",
+            direction="backward",
+        )
+        previous = previous_asof(
+            source.rename(columns={"observed_at": "change_at"}),
+            target["decision_at"] - pd.to_timedelta(innovation_seconds, unit="s"),
+            time_col="change_at",
+            columns=["wrong_mid_source"],
+            prefix="history_",
+        )
+        current_mid = current["wrong_mid_source"]
+        previous_mid = previous["history_wrong_mid_source"]
+        quote_age = (
+            target["decision_at"].reset_index(drop=True) - current["observed_at"]
+        ).dt.total_seconds()
+        available = (
+            current["best_bid"].notna()
+            & current["best_ask"].notna()
+            & current_mid.notna()
+            & previous_mid.notna()
+        )
+        assigned = pd.DataFrame(index=target.index)
+        assigned["wrong_pm_best_bid"] = current["best_bid"].to_numpy()
+        assigned["wrong_pm_best_ask"] = current["best_ask"].to_numpy()
+        assigned["wrong_pm_mid"] = current_mid.to_numpy()
+        assigned["wrong_pm_spread"] = (current["best_ask"] - current["best_bid"]).to_numpy()
+        assigned["wrong_pm_quote_age_seconds"] = quote_age.to_numpy()
+        assigned["wrong_relative_pm_minus_sig_freshness_seconds"] = (
+            quote_age.to_numpy() - target["sig_quote_age_seconds"].to_numpy()
+        )
+        assigned["wrong_pm_minus_sig_mid_gap"] = (
+            current_mid.to_numpy() - target["sig_mid"].to_numpy()
+        )
+        assigned["wrong_pm_signed_innovation_5s"] = (
+            logit(pd.Series(current_mid.to_numpy()), epsilon)
+            - logit(pd.Series(previous_mid.to_numpy()), epsilon)
+        ).to_numpy()
+        assigned["wrong_pm_absolute_innovation_5s"] = np.abs(
+            assigned["wrong_pm_signed_innovation_5s"]
+        )
+        assigned["wrong_pm_update_count_30s"] = update_counts(
+            source["observed_at"],
+            target["decision_at"],
+            intensity_seconds,
+        )
+        assigned["wrong_pm_available"] = available.astype(float).to_numpy()
+        output.loc[assigned.index, WRONG_PM_FEATURES] = assigned[WRONG_PM_FEATURES]
+    return output
+
+
+
+def build_reverse_rows(
+    sig: pd.DataFrame,
+    pm_changes: pd.DataFrame,
+    map_frame: pd.DataFrame,
+    prereg: dict[str, object],
+) -> pd.DataFrame:
+    """Symmetric SIG→PM diagnostic using the same local-observation clock."""
+    horizon_seconds = int(prereg["observability"]["primary_fixed_horizon_seconds"])
+    rows: list[pd.DataFrame] = []
+    for mapping in map_frame.itertuples(index=False):
+        sig_group = sig[sig["exchange_id"] == mapping.sig_exchange_id].copy()
+        pm_group = pm_changes[pm_changes["token_id"] == mapping.pm_token_id].copy()
+        if sig_group.empty or pm_group.empty:
+            continue
+
+        sig_group = sig_group.sort_values("rest_observed_at").drop_duplicates(
+            subset=["rest_observed_at"], keep="last"
+        )
+        for column in ["best_bid", "best_ask"]:
+            sig_group[column] = pd.to_numeric(sig_group[column], errors="coerce")
+        sig_group = sig_group.dropna(subset=["best_bid", "best_ask"])
+        sig_group = sig_group[sig_group["best_bid"] <= sig_group["best_ask"]]
+        sig_group["sig_mid_source"] = (
+            sig_group["best_bid"] + sig_group["best_ask"]
+        ) / 2.0
+        sig_group["prior_sig_mid"] = sig_group["sig_mid_source"].shift()
+        sig_group = sig_group[
+            sig_group["sig_mid_source"].ne(sig_group["prior_sig_mid"])
+        ].copy()
+        if sig_group.empty:
+            continue
+
+        for column in ["best_bid", "best_ask"]:
+            pm_group[column] = pd.to_numeric(pm_group[column], errors="coerce")
+        pm_group = pm_group.dropna(subset=["best_bid", "best_ask"]).sort_values(
+            "observed_at"
+        )
+        pm_group = pm_group[pm_group["best_bid"] <= pm_group["best_ask"]]
+        pm_group["pm_mid_source"] = (
+            pm_group["best_bid"] + pm_group["best_ask"]
+        ) / 2.0
+        pm_group = pm_group[
+            pm_group["pm_mid_source"].ne(pm_group["pm_mid_source"].shift())
+        ].copy()
+        if pm_group.empty:
+            continue
+
+        decisions = sig_group[
+            [
+                "rest_observed_at",
+                "best_bid",
+                "best_ask",
+                "sig_mid_source",
+                "prior_sig_mid",
+            ]
+        ].rename(
+            columns={
+                "rest_observed_at": "decision_at",
+                "best_bid": "reverse_sig_best_bid",
+                "best_ask": "reverse_sig_best_ask",
+                "sig_mid_source": "reverse_sig_mid",
+            }
+        ).reset_index(drop=True)
+        decisions["reverse_sig_spread"] = (
+            decisions["reverse_sig_best_ask"] - decisions["reverse_sig_best_bid"]
+        )
+        decisions["reverse_sig_innovation"] = (
+            decisions["reverse_sig_mid"] - decisions["prior_sig_mid"]
+        )
+        decisions["reverse_sig_absolute_innovation"] = decisions[
+            "reverse_sig_innovation"
+        ].abs()
+
+        current_pm = pd.merge_asof(
+            decisions[["decision_at"]].sort_values("decision_at"),
+            pm_group[
+                ["observed_at", "best_bid", "best_ask", "pm_mid_source"]
+            ].sort_values("observed_at"),
+            left_on="decision_at",
+            right_on="observed_at",
+            direction="backward",
+        )
+        decisions["reverse_pm_best_bid"] = current_pm["best_bid"].to_numpy()
+        decisions["reverse_pm_best_ask"] = current_pm["best_ask"].to_numpy()
+        decisions["reverse_pm_mid"] = current_pm["pm_mid_source"].to_numpy()
+        decisions["reverse_pm_spread"] = (
+            decisions["reverse_pm_best_ask"] - decisions["reverse_pm_best_bid"]
+        )
+        decisions["reverse_pm_quote_age_seconds"] = (
+            decisions["decision_at"].reset_index(drop=True)
+            - current_pm["observed_at"]
+        ).dt.total_seconds().to_numpy()
+
+        prior_pm = previous_asof(
+            pm_group.rename(columns={"observed_at": "change_at"}),
+            decisions["decision_at"] - pd.to_timedelta(30, unit="s"),
+            time_col="change_at",
+            columns=["pm_mid_source"],
+            prefix="history_",
+        )
+        decisions["reverse_pm_mid_30s_ago"] = prior_pm[
+            "history_pm_mid_source"
+        ].to_numpy()
+        decisions["reverse_pm_signed_change_30s"] = (
+            decisions["reverse_pm_mid"] - decisions["reverse_pm_mid_30s_ago"]
+        )
+        decisions["reverse_pm_absolute_change_30s"] = decisions[
+            "reverse_pm_signed_change_30s"
+        ].abs()
+        decisions["reverse_pm_update_count_30s"] = update_counts(
+            pm_group["observed_at"], decisions["decision_at"], 30
+        )
+        decisions["reverse_sig_update_count_30s"] = update_counts(
+            sig_group["decision_at"]
+            if "decision_at" in sig_group
+            else sig_group["rest_observed_at"],
+            decisions["decision_at"],
+            30,
+        )
+        decisions["reverse_relative_sig_minus_pm_freshness_seconds"] = (
+            -decisions["reverse_pm_quote_age_seconds"]
+        )
+        decisions["reverse_sig_minus_pm_mid_gap"] = (
+            decisions["reverse_sig_mid"] - decisions["reverse_pm_mid"]
+        )
+        decisions["regime_pre_election"] = 1.0
+
+        target_pm = first_after(
+            pm_group,
+            decisions["decision_at"] + pd.to_timedelta(horizon_seconds, unit="s"),
+            time_col="observed_at",
+            columns=["pm_mid_source"],
+            prefix="target_",
+        )
+        decisions["target_reverse_pm_mid"] = target_pm[
+            "target_pm_mid_source"
+        ].to_numpy()
+        decisions["target_reverse_change"] = (
+            decisions["target_reverse_pm_mid"] - decisions["reverse_pm_mid"]
+        )
+        decisions["sig_exchange_id"] = mapping.sig_exchange_id
+        decisions["pm_token_id"] = mapping.pm_token_id
+        decisions["sig_market_id"] = mapping.sig_market_id
+        decisions = decisions.dropna(
+            subset=[
+                "prior_sig_mid",
+                "reverse_pm_best_bid",
+                "reverse_pm_best_ask",
+                "reverse_pm_mid",
+                "reverse_pm_mid_30s_ago",
+                "target_reverse_pm_mid",
+            ]
+        )
+        rows.append(decisions)
+
+    if not rows:
+        return pd.DataFrame()
+    return pd.concat(rows, ignore_index=True).sort_values(
+        ["decision_at", "sig_exchange_id"]
+    ).reset_index(drop=True)
+
+
+def build_reverse_holdout_predictions(
+    rows: pd.DataFrame,
+    prereg: dict[str, object],
+    contract_ids: list[str],
+) -> pd.DataFrame:
+    if rows.empty:
+        return pd.DataFrame()
+    cfg = prereg["historical_discovery"]["walk_forward"]
+    start = rows["decision_at"].min()
+    snapshot_end = rows["decision_at"].max()
+    training = pd.Timedelta(minutes=int(cfg["training_minutes"]))
+    development = pd.Timedelta(minutes=int(cfg["development_minutes"]))
+    holdout = pd.Timedelta(minutes=int(cfg["holdout_minutes"]))
+    step = pd.Timedelta(minutes=int(cfg["step_minutes"]))
+    embargo = pd.Timedelta(seconds=int(cfg["embargo_seconds"]))
+    alpha = float(prereg["model"]["ridge_alpha"])
+    outputs: list[pd.DataFrame] = []
+    fold = 0
+    while True:
+        train_end = start + training + step * fold
+        hold_start = train_end + development
+        hold_end = hold_start + holdout
+        if hold_end > snapshot_end:
+            break
+        fit = rows[rows["decision_at"] < hold_start - embargo].copy()
+        test = rows[
+            (rows["decision_at"] >= hold_start)
+            & (rows["decision_at"] < hold_end)
+        ].copy()
+        if len(fit) < 100 or test.empty:
+            fold += 1
+            continue
+        test["reverse_baseline_prediction"] = ridge_predict(
+            fit,
+            test,
+            features=REVERSE_BASELINE_FEATURES,
+            contract_ids=contract_ids,
+            alpha=alpha,
+            target_column="target_reverse_change",
+        )
+        test["reverse_challenger_prediction"] = ridge_predict(
+            fit,
+            test,
+            features=REVERSE_CHALLENGER_FEATURES,
+            contract_ids=contract_ids,
+            alpha=alpha,
+            target_column="target_reverse_change",
+        )
+        test["reverse_absolute_error_improvement"] = (
+            (test["target_reverse_change"] - test["reverse_baseline_prediction"]).abs()
+            - (
+                test["target_reverse_change"]
+                - test["reverse_challenger_prediction"]
+            ).abs()
+        )
+        test["fold"] = fold
+        outputs.append(test)
+        fold += 1
+    if not outputs:
+        return pd.DataFrame()
+    return pd.concat(outputs, ignore_index=True)
+
+
+def timestamp_sensitivity_summary(
+    sig: pd.DataFrame,
+    pm_changes: pd.DataFrame,
+    depth: pd.DataFrame,
+    map_frame: pd.DataFrame,
+    prereg: dict[str, object],
+    contract_ids: list[str],
+) -> dict[str, object]:
+    output: dict[str, object] = {}
+    for delay_ms in prereg["controls"]["timestamp_sensitivity_pm_delay_ms"]:
+        rows = build_exact_rows(
+            sig,
+            pm_changes,
+            depth,
+            map_frame,
+            prereg,
+            observation_delay_ms=int(delay_ms),
+        )
+        predictions = build_holdout_predictions(
+            rows,
+            prereg,
+            contract_ids,
+            challenger_features=CURRENT_CORE_CHALLENGER_FEATURES,
+        )
+        if predictions.empty:
+            output[str(delay_ms)] = {
+                "oos_rows": 0,
+                "oos_contracts": 0,
+                "equal_contract_mean_ae_improvement": None,
+            }
+            continue
+        per_contract = predictions.groupby("sig_exchange_id")[
+            "absolute_error_improvement"
+        ].mean()
+        output[str(delay_ms)] = {
+            "oos_rows": int(len(predictions)),
+            "oos_contracts": int(predictions["sig_exchange_id"].nunique()),
+            "equal_contract_mean_ae_improvement": float(per_contract.mean()),
+        }
+    return output
 
 
 def stable_seed(run_id: str, component: str) -> int:
@@ -1102,6 +1585,7 @@ def build_holdout_predictions(
     *,
     challenger_features: list[str],
     extra_challengers: dict[str, list[str]] | None = None,
+    wrong_contract_context: tuple[pd.DataFrame, pd.DataFrame] | None = None,
 ) -> pd.DataFrame:
     cfg = prereg["historical_discovery"]["walk_forward"]
     start = rows["decision_at"].min()
@@ -1152,6 +1636,43 @@ def build_holdout_predictions(
             test[f"{name}_absolute_error_improvement"] = (
                 test["target_fixed_change"] - test["baseline_prediction"]
             ).abs() - (test["target_fixed_change"] - test[column]).abs()
+
+        if wrong_contract_context is not None:
+            pm_context, map_context = wrong_contract_context
+            exact_cfg = json.loads((INPUT / "implementation_freeze_001.json").read_text())["exact"]
+            wrong_map = select_wrong_contract_map(
+                pm_context,
+                map_context,
+                cutoff=hold_start - embargo,
+            )
+            wrong_fit = attach_wrong_contract_features(
+                fit,
+                pm_context,
+                wrong_map,
+                innovation_seconds=int(exact_cfg["pm_innovation_lookback_seconds"]),
+                intensity_seconds=int(exact_cfg["intensity_window_seconds"]),
+                epsilon=float(exact_cfg["logit_epsilon"]),
+            )
+            wrong_test = attach_wrong_contract_features(
+                test,
+                pm_context,
+                wrong_map,
+                innovation_seconds=int(exact_cfg["pm_innovation_lookback_seconds"]),
+                intensity_seconds=int(exact_cfg["intensity_window_seconds"]),
+                epsilon=float(exact_cfg["logit_epsilon"]),
+            )
+            test["wrong_contract_prediction"] = ridge_predict(
+                wrong_fit,
+                wrong_test,
+                features=WRONG_CHALLENGER_FEATURES,
+                contract_ids=contract_ids,
+                alpha=alpha,
+            )
+            test["wrong_contract_absolute_error_improvement"] = (
+                test["target_fixed_change"] - test["baseline_prediction"]
+            ).abs() - (test["target_fixed_change"] - test["wrong_contract_prediction"]).abs()
+            test["wrong_contract_feature_available"] = wrong_test["wrong_pm_available"].to_numpy()
+
         test["fold"] = fold
         test["absolute_error_improvement"] = (
             test["target_fixed_change"] - test["baseline_prediction"]
@@ -1224,8 +1745,11 @@ map_frame = pd.DataFrame(
         "sig_exchange_id": [str(record["sig_exchange_id"]) for record in exact],
         "pm_token_id": [str(record["direct_polymarket"]["mapped_token_id"]) for record in exact],
         "sig_market_id": [str(record["sig_market_id"]) for record in exact],
+        "sig_market_title": [str(record["sig_market_title"]) for record in exact],
     }
 )
+map_frame["category"] = map_frame["sig_market_title"].map(market_category)
+map_frame["race_key"] = map_frame["sig_market_title"].map(race_key)
 contract_ids = sorted(map_frame["sig_exchange_id"].tolist())
 
 sig = pd.read_parquet(INPUT / "sig_prices.parquet")
@@ -1272,8 +1796,7 @@ derived_rows.to_parquet(
 )
 
 coverage = map_frame.copy()
-coverage["sig_observed"] = coverage["sig_exchange_id"].isin(sig_ids)
-coverage["pm_panel_observed"] = coverage["pm_token_id"].isin(pm_obs_ids)
+coverage["sig_observed"] = coverage["sig_exchange_id"].isin(sig_ids)coverage["pm_panel_observed"] = coverage["pm_token_id"].isin(pm_obs_ids)
 coverage["pm_change_observed"] = coverage["pm_token_id"].isin(pm_change_ids)
 if not exact_rows.empty:
     decision_counts = exact_rows.groupby("sig_exchange_id").size().rename("evaluable_decisions")
@@ -1376,6 +1899,7 @@ if sufficient:
             "current_core": CURRENT_CORE_CHALLENGER_FEATURES,
             "delayed_pm": DELAYED_CHALLENGER_FEATURES,
         },
+        wrong_contract_context=(pm_changes, map_frame),
     )
     predictions.to_parquet(
         OUTPUT / "exact_holdout_predictions.parquet",
@@ -1455,6 +1979,14 @@ if sufficient:
                 .mean()
                 .mean()
             ),
+            "equal_contract_wrong_contract_ae_improvement": float(
+                predictions.groupby("sig_exchange_id")["wrong_contract_absolute_error_improvement"]
+                .mean()
+                .mean()
+            ),
+            "wrong_contract_feature_availability_rate": float(
+                predictions["wrong_contract_feature_available"].mean()
+            ),
             "pm_time_shift_null": circular_shift_null(
                 predictions,
                 innovation_column="pm_signed_innovation_5s",
@@ -1468,7 +2000,121 @@ if sufficient:
         (OUTPUT / "exact_bootstrap.json").write_text(
             json.dumps(exact_bootstrap, sort_keys=True, indent=2) + "\n"
         )
-        (OUTPUT / "exact_controls_partial.json").write_text(
+        sensitivity = timestamp_sensitivity_summary(
+            sig,
+            pm_changes,
+            depth,
+            map_frame,
+            prereg,
+            contract_ids,
+        )
+
+        rows_5s = build_exact_rows(
+            sig,
+            pm_changes,
+            depth,
+            map_frame,
+            prereg,
+            horizon_seconds_override=5,
+        )
+        predictions_5s = build_holdout_predictions(
+            rows_5s,
+            prereg,
+            contract_ids,
+            challenger_features=CURRENT_CORE_CHALLENGER_FEATURES,
+        )
+        if predictions_5s.empty:
+            horizon_5s = {
+                "oos_rows": 0,
+                "oos_contracts": 0,
+                "equal_contract_mean_ae_improvement": None,
+            }
+        else:
+            horizon_5s = {
+                "oos_rows": int(len(predictions_5s)),
+                "oos_contracts": int(predictions_5s["sig_exchange_id"].nunique()),
+                "equal_contract_mean_ae_improvement": float(
+                    predictions_5s.groupby("sig_exchange_id")[
+                        "absolute_error_improvement"
+                    ].mean().mean()
+                ),
+            }
+        predictions_5s.to_parquet(
+            OUTPUT / "exact_5s_holdout_predictions.parquet",
+            index=False,
+            compression="zstd",
+        )
+
+        event_rows = exact_rows.copy()
+        event_rows["target_fixed_change"] = event_rows["target_next_change"]
+        event_predictions = build_holdout_predictions(
+            event_rows,
+            prereg,
+            contract_ids,
+            challenger_features=CURRENT_CORE_CHALLENGER_FEATURES,
+        )
+        if event_predictions.empty:
+            next_update = {
+                "oos_rows": 0,
+                "oos_contracts": 0,
+                "equal_contract_mean_ae_improvement": None,
+            }
+        else:
+            next_update = {
+                "oos_rows": int(len(event_predictions)),
+                "oos_contracts": int(event_predictions["sig_exchange_id"].nunique()),
+                "equal_contract_mean_ae_improvement": float(
+                    event_predictions.groupby("sig_exchange_id")[
+                        "absolute_error_improvement"
+                    ].mean().mean()
+                ),
+            }
+        event_predictions.to_parquet(
+            OUTPUT / "exact_next_update_holdout_predictions.parquet",
+            index=False,
+            compression="zstd",
+        )
+
+        reverse_rows = build_reverse_rows(sig, pm_changes, map_frame, prereg)
+        reverse_predictions = build_reverse_holdout_predictions(
+            reverse_rows,
+            prereg,
+            contract_ids,
+        )
+        reverse_rows.to_parquet(
+            OUTPUT / "reverse_sig_to_pm_asof_rows.parquet",
+            index=False,
+            compression="zstd",
+        )
+        reverse_predictions.to_parquet(
+            OUTPUT / "reverse_sig_to_pm_holdout_predictions.parquet",
+            index=False,
+            compression="zstd",
+        )
+        if reverse_predictions.empty:
+            reverse_summary = {
+                "oos_rows": 0,
+                "oos_contracts": 0,
+                "equal_contract_mean_ae_improvement": None,
+            }
+        else:
+            reverse_summary = {
+                "oos_rows": int(len(reverse_predictions)),
+                "oos_contracts": int(
+                    reverse_predictions["sig_exchange_id"].nunique()
+                ),
+                "equal_contract_mean_ae_improvement": float(
+                    reverse_predictions.groupby("sig_exchange_id")[
+                        "reverse_absolute_error_improvement"
+                    ].mean().mean()
+                ),
+            }
+
+        control_summary["timestamp_sensitivity_pm_delay_ms"] = sensitivity
+        control_summary["horizon_5s"] = horizon_5s
+        control_summary["next_sig_update"] = next_update
+        control_summary["reverse_sig_to_pm"] = reverse_summary
+        (OUTPUT / "exact_controls.json").write_text(
             json.dumps(control_summary, sort_keys=True, indent=2) + "\n"
         )
 
