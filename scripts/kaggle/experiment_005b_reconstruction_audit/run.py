@@ -92,17 +92,17 @@ def audit_family(family: str) -> dict[str, object]:
             "active_outcome": row[0],
             "passive_outcomes": row[1],
             "passive_count": int(row[2]),
-            "groups": int(row[3]),
+            "group_count": int(row[3]),
             "median_yes_rel_error": float(row[4]),
         }
         for row in con.execute(
             """
-            SELECT active_outcome, passive_outcomes, passive_count, COUNT(*) groups,
+            SELECT active_outcome, passive_outcomes, passive_count, COUNT(*) group_count,
                    MEDIAN(yes_rel_error)
             FROM x
             WHERE yes_rel_error > 1e-8
             GROUP BY 1,2,3
-            ORDER BY groups DESC
+            ORDER BY group_count DESC
             LIMIT 25
             """
         ).fetchall()
