@@ -73,6 +73,12 @@ def logit(probability: float) -> float:
     return math.log(probability / (1.0 - probability))
 
 
+def logit_log1p(probability: float) -> float:
+    if probability <= 0.0 or probability >= 1.0:
+        raise ValueError("logit requires 0 < p < 1")
+    return math.log(probability) - math.log1p(-probability)
+
+
 def inverse_logit(log_odds: float) -> float:
     if log_odds >= 0.0:
         exponent = math.exp(-log_odds)
@@ -84,6 +90,13 @@ def inverse_logit(log_odds: float) -> float:
 def binary_cara_reservation_exact(probability: float, gamma: float, inventory: float) -> float:
     """M-041: sigma(logit(p) - gamma*q)."""
     return inverse_logit(logit(probability) - gamma * inventory)
+
+
+def binary_cara_reservation_naive(
+    probability: float, gamma: float, inventory: float
+) -> float:
+    value = logit(probability) - gamma * inventory
+    return 1.0 / (1.0 + math.exp(-value))
 
 
 def binary_cara_reservation_first_order(
@@ -118,7 +131,8 @@ def default_kernel_registry() -> KernelRegistry:
             tolerance_abs=1e-15,
             tolerance_rel=1e-15,
             implementations=(
-                KernelImplementation("reference", "1", logit, reference=True),
+                KernelImplementation("ratio", "1", logit, reference=True),
+                KernelImplementation("log1p", "1", logit_log1p),
             ),
         )
     )
@@ -132,15 +146,33 @@ def default_kernel_registry() -> KernelRegistry:
             tolerance_rel=5e-3,
             implementations=(
                 KernelImplementation(
-                    "exact",
+                    "stable",
                     "1",
                     binary_cara_reservation_exact,
                     reference=True,
                 ),
                 KernelImplementation(
-                    "first_order_m042",
+                    "naive",
+                    "1",
+                    binary_cara_reservation_naive,
+                ),
+            ),
+        )
+    )
+    registry.register(
+        KernelSpec(
+            maths_ledger_id="M-042",
+            name="Binary CARA first-order reservation approximation",
+            input_contract="p, gamma, inventory",
+            output_contract="probability approximation",
+            tolerance_abs=0.0,
+            tolerance_rel=0.0,
+            implementations=(
+                KernelImplementation(
+                    "python",
                     "1",
                     binary_cara_reservation_first_order,
+                    reference=True,
                 ),
             ),
         )
