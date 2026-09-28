@@ -1,0 +1,20 @@
+{
+  "id": "polyleviathan/005c-review-falsification",
+  "title": "005C Review Falsification",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [
+    "polyleviathan/sig-cup-polyleviathan-fills",
+    "polyleviathan/sig-cup-data-002-polymarket-fees",
+    "polyleviathan/polyleviathan-market-meta",
+    "polyleviathan/sig-cup-005c-code",
+    "polyleviathan/sig-cup-005c-review-code"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}
