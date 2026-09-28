@@ -5,15 +5,16 @@
   "canonical_start": "ba938bedcf63f562be8b26c9502e828391123867",
   "created_before_any_005e_train_dev_or_holdout_outcome_inspection": true,
   "hashes": {
-    "preregistration_json": "a177c379c33e28b294afda138b5c8654ff054115ed9fca71d6c7265fd66083d8",
+    "preregistration_json": "47e6c771a4d23712251028f5cc3aa7ad3d3aabdf564c885a7f22e87d31d5eec9",
     "experiment_doc": "ece1dd8f8ced1d202b06555266748e93975c4534d3e38db56bc1ea0349c1ae42",
     "participant_ecology_py": "5d9bad89065811e141a9e4138b30c390222e4d06beab1260e7986cc4a1e9e2ff",
     "participant_ecology_tests": "cb2fdbd44a56d25bfb6cc02db6051e0f07ada8ce506c39301ee6d9efbc3dda2c",
-    "kaggle_runner_py": "02aee410253dda6c79228d1a209347c167621fb5593aa67f586555974401c112",
+    "kaggle_runner_py": "4a634502ff16a6f5fdbd37d010b72dbbe41aa676c60ad8574254b2eec63dd732",
     "kaggle_prepare_py": "d39e5f971d526083a769eb0d4e181b2b6e31cc4a694c1bb033ab391cf55c24a5",
     "kernel_metadata": "f188ae51b0cf120c30a5f2c8ebe7a1b0d53f57dbdaf0a3211dd5c98aae6d7c72",
     "infra_registry": "839f62b62c6b2e3d3b7a44d200c2d4b949c35de8e7dea006e9a2f2c8426959e8",
-    "data002_manifest": "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c"
+    "data002_manifest": "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c",
+    "data002_manifest_kaggle_transport": "2d496514c9307a31d8864ac9deeb2ef2ad781fb6fabe894714cbdf00c7244f7a"
   },
   "rule": "Any source uploaded or committed after empirical execution must byte-match these hashes unless an explicit pre-outcome amendment is separately frozen first. No outcome-driven source changes are permitted.",
   "pre_outcome_amendments": [
@@ -22,6 +23,13 @@
       "from": 3,
       "to": 5,
       "reason": "User clarified the shared Kaggle concurrency limit is five sessions.",
+      "timing": "before any 005E TRAIN/DEV or HOLDOUT empirical outcome inspection"
+    },
+    {
+      "field": "DATA-002 manifest transport hash / runner provenance gate",
+      "from": "canonical LF byte hash only",
+      "to": "canonical LF hash plus Kaggle CRLF transport hash, with mandatory parsed JSON equality",
+      "reason": "First Kaggle attempt exited before empirical processing because the mounted manifest differs bytewise only by CRLF line endings.",
       "timing": "before any 005E TRAIN/DEV or HOLDOUT empirical outcome inspection"
     }
   ]
