@@ -1,0 +1,14 @@
+{
+  "candidate_count": 17,
+  "confirmatory_not_supported": 10,
+  "confirmatory_supported": 4,
+  "data_manifest_sha256": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+  "experiment": "EXPERIMENT-005F",
+  "fit_manifest_sha256": "b6375379b5c2bc47ac29407436edfbbb7e4810dc558b8af08f59de26823c8363",
+  "identity_sha256": "e89fe8e25dcc494dad3ed96fe6672ab9f247c01eb70d4c0270a913f18a200a72",
+  "phase": "HOLDOUT",
+  "quality_sha256": "354801b67b9c32ae82d419f8a6198b7fd814923e8c424ac8716862b47907ccb5",
+  "real_order_placement": false,
+  "runner_sha256": "73ddd72a4e7cc5d369d425fff7dc211b15f230eb9249cf5d43fc95e1ddcf2ff4",
+  "shadow_only": 3
+}
