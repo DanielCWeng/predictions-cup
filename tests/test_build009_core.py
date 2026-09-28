@@ -204,6 +204,71 @@ def test_risk_fails_closed_on_live_limits_and_account_trust() -> None:
     assert decision.reason == "account_state_untrusted"
 
 
+def test_mixed_tournament_operation_fails_closed() -> None:
+    snapshot = RuntimeSnapshot(
+        markets=(
+            RuntimeMarket(
+                market_id="m1",
+                status="open",
+                exchange_ids=("36",),
+                tournament_id="t1",
+                mapping_accepted=True,
+                tradeable=True,
+            ),
+            RuntimeMarket(
+                market_id="m2",
+                status="open",
+                exchange_ids=("46",),
+                tournament_id="t2",
+                mapping_accepted=True,
+                tradeable=True,
+            ),
+        ),
+        books=(),
+        portfolio=RuntimePortfolio(account_trusted=True),
+        observation_monotonic_ns=1_000_000,
+    )
+    proposal = Opportunity(
+        family=StrategyFamily.FV_TAKE,
+        strategy_id="mixed-tournament",
+        legs=(
+            CandidateLeg(
+                exchange_id="36",
+                market_id="m1",
+                tournament_id="t1",
+                outcome_side=OutcomeSide.YES,
+                action=OrderAction.BUY,
+                quantity=1,
+                limit_price_ticks=100,
+            ),
+            CandidateLeg(
+                exchange_id="46",
+                market_id="m2",
+                tournament_id="t2",
+                outcome_side=OutcomeSide.YES,
+                action=OrderAction.BUY,
+                quantity=1,
+                limit_price_ticks=100,
+            ),
+        ),
+        gross_edge=0.02,
+        fair_value=0.55,
+        decision_observation_ns=1_000_000,
+    )
+    decision = evaluate_risk(
+        proposal,
+        snapshot,
+        RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=1_000_000,
+        ),
+    )
+    assert decision.approved is False
+    assert decision.reason == "mixed_tournament_operation"
+
+
 def test_depth_sensitive_opportunity_rejects_untrusted_or_stale_depth() -> None:
     context = RiskContext(
         mode=ExecutionMode.SHADOW,
