@@ -692,7 +692,7 @@ def build_event_time(
         g["microprice_disp_over_spread"] = (micro - g["midpoint"]) / g["spread"].replace(0, np.nan)
         g["split"] = assign_split(g["time"], bounds)
 
-        split_arr = g["split"].to_numpy(object)
+        split_arr = g["split"].fillna("__NONE__").astype(str).to_numpy(dtype=object)
         for boundary_name in ("TRAIN", "DEV"):
             idx = np.flatnonzero(split_arr == boundary_name)
             if len(idx):
@@ -703,7 +703,10 @@ def build_event_time(
             future = g.shift(-k)
             same = (
                 (future["segment"].to_numpy() == g["segment"].to_numpy())
-                & (future["split"].fillna("__NONE__").to_numpy(object) == g["split"].fillna("__NONE__").to_numpy(object))
+                & (
+                    future["split"].fillna("__NONE__").astype(str).to_numpy()
+                    == g["split"].fillna("__NONE__").astype(str).to_numpy()
+                )
             )
             y = future["logit_mid"].to_numpy(float) - g["logit_mid"].to_numpy(float)
             y[~same] = np.nan
