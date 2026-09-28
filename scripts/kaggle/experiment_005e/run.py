@@ -1825,21 +1825,41 @@ def holdout_analysis(
                 "gain": float(mse(yf, base_family, wf) - mse(yf, full_family, wf)),
             }
         falsification["leave_family_out"] = leave_family
-        market_gain = (
-            pd.DataFrame(
-                {
-                    "condition_id": holdout["condition_id"].astype(str).to_numpy(),
-                    "loss_gain": observed_loss_gain,
-                }
-            )
-            .groupby("condition_id", sort=False)["loss_gain"]
-            .agg(["mean", "size"])
+        transfer = pd.DataFrame(
+            {
+                "condition_id": holdout["condition_id"].astype(str).to_numpy(),
+                "event_id": holdout["event_id"].astype(str).to_numpy(),
+                "weighted_numerator": observed_loss_gain * w_holdout,
+                "weight": w_holdout,
+            }
         )
+
+        def grouped_transfer(key: str) -> pd.DataFrame:
+            grouped = (
+                transfer.groupby(key, sort=False)
+                .agg(
+                    weighted_numerator=("weighted_numerator", "sum"),
+                    weight=("weight", "sum"),
+                    rows=("weight", "size"),
+                )
+                .reset_index()
+            )
+            grouped["gain"] = grouped["weighted_numerator"] / grouped["weight"]
+            return grouped
+
+        market_gain = grouped_transfer("condition_id")
+        event_gain = grouped_transfer("event_id")
         falsification["per_market_transfer"] = {
             "markets": int(len(market_gain)),
-            "positive_market_share": float(np.mean(market_gain["mean"].to_numpy(float) > 0)),
-            "median_market_gain": float(np.median(market_gain["mean"].to_numpy(float))),
-            "note": "per-market transfer diagnostic; exhaustive leave-one-market retraining omitted as computationally pathological",
+            "positive_market_share": float(np.mean(market_gain["gain"].to_numpy(float) > 0)),
+            "median_market_gain": float(np.median(market_gain["gain"].to_numpy(float))),
+            "note": "hierarchically weighted per-market transfer diagnostic; exhaustive leave-one-market retraining omitted as computationally pathological",
+        }
+        falsification["per_event_transfer"] = {
+            "events": int(len(event_gain)),
+            "positive_event_share": float(np.mean(event_gain["gain"].to_numpy(float) > 0)),
+            "median_event_gain": float(np.median(event_gain["gain"].to_numpy(float))),
+            "note": "hierarchically weighted event-level transfer diagnostic; true leave-family-out retraining remains the stronger frozen transfer test",
         }
 
     secondary: dict[str, Any] = {}
