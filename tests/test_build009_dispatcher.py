@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 from predictions_cup.execution.models import ExecutionEvent, ExecutionMode, LifecycleState
 from predictions_cup.execution.reservations import ExecutionReservationBook
@@ -88,6 +88,7 @@ def test_event_driven_coordinator_evaluates_only_affected_strategy() -> None:
             ),
         ),
         risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
             kill_switch=False,
             limits=None,
             max_state_age_ns=1_000,
@@ -140,6 +141,7 @@ def test_explicit_scheduled_trigger_works_without_market_change() -> None:
         ),
         bindings=(StrategyBinding(strategy_id="scheduled", config={}),),
         risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
             kill_switch=False,
             limits=None,
             max_state_age_ns=1_000,
@@ -217,7 +219,12 @@ def _opportunity(strategy_id: str) -> Opportunity:
 def test_live_same_state_change_reserves_first_approval_before_second_risk_check() -> None:
     strategies = StrategyRegistry()
 
-    def make_strategy(strategy_id: str):
+    def make_strategy(
+        strategy_id: str,
+    ) -> Callable[
+        [RuntimeSnapshot, KernelRegistry, Mapping[str, float]],
+        StrategyResult,
+    ]:
         def strategy(
             snapshot: RuntimeSnapshot,
             kernels: KernelRegistry,
