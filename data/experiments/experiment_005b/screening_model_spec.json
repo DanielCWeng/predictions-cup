@@ -46,14 +46,16 @@
     "absolute_spearman_threshold": 0.95,
     "sample": "deterministic redundancy sample",
     "clustering": "connected components under absolute Spearman threshold",
-    "representative": "highest median absolute TRAIN Spearman across supported targets; lexical tie-break"
+    "representative": "highest median absolute TRAIN Spearman across supported targets; lexical tie-break",
+    "missing_value_handling": "pairwise complete rank correlation; minimum 100 observations"
   },
   "dev_selection": {
     "train_top_representatives_per_target": 8,
     "shortlist_cap_per_target": 12,
     "sign_persistence_required": true,
     "single_market_share_max": 0.5,
-    "model_gate_abs_train_association": 0.01
+    "model_gate_abs_train_association": 0.01,
+    "concentration_gate": "feature-target sample specific; max single-market share <= 0.50"
   },
   "model_eligibility": {
     "atlas_only_target_fragments": [
