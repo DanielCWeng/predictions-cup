@@ -46,6 +46,13 @@
       "to": "explicit AS aliases; no feature, target, split, model, screening, falsification, or disposition rule changed",
       "reason": "Kaggle version 2 exited at CREATE TEMP VIEW src because DuckDB rejects the bare alias form for family.",
       "timing": "after a parser-only failure and before any 005E TRAIN/DEV outcome inspection"
+    },
+    {
+      "field": "deterministic participant sampling / DuckDB temp lifetime",
+      "from": "global ROW_NUMBER ORDER BY HASH over the full wide p4 table; large intermediates retained",
+      "to": "deterministic hash-threshold sampling with a 740000-row target and 750000 hard cap, plus dropping superseded audit/feature/markout intermediates as soon as downstream tables are materialized",
+      "reason": "Version 3 exhausted Kaggle's 17.5 GiB DuckDB temp limit before creating any outcome panel. This is a resource-equivalent implementation change; the sample remains outcome-independent and hash-deterministic, and all features/targets/splits/models/DEV gates remain unchanged.",
+      "timing": "before any 005E TRAIN/DEV outcome inspection"
     }
   ],
   "local_frozen_source_commit": "567f364c5acf3825a940ea2220eac3cb511b9e6f",
@@ -66,6 +73,14 @@
       "disposition": "ENGINEERING_FAILURE_BEFORE_EMPIRICAL_PROCESSING",
       "failure": "DuckDB ParserException at CREATE TEMP VIEW src caused by bare alias syntax for family",
       "outcome_inspection": false
+    },
+    {
+      "kaggle_kernel": "polyleviathan/005e-participant-ecology-train-dev",
+      "version": 3,
+      "disposition": "ENGINEERING_RESOURCE_FAILURE_BEFORE_OUTCOME_PANEL",
+      "failure": "DuckDB temp spill limit exhausted (17.5 GiB) while globally sorting wide US_2024 p4 rows for deterministic hash rank in sample_base",
+      "outcome_inspection": false,
+      "produced_train_dev_report": false
     }
   ],
   "github_frozen_source_commit": "9ecdcca9a5f8c0b739917968d4a94ee66dc7e2c5",
