@@ -59,15 +59,19 @@ EC2 is not the default Kaggle middleman.
 
 ## Active implementation lane — BUILD-009
 
-Draft PR #50 on `build/009-low-latency-strategy-execution-core` is implementing the common
-low-latency SHADOW/LIVE strategy and execution core. It is **not accepted capability on `main`**.
+Draft PR #50 on `build/009-low-latency-strategy-execution-core` now has its technical BUILD-009
+gates complete on benchmarked code SHA `2ae4e24c9c85fd5d51aee6e491b14ae4c9434184`. GitHub CI
+#2344 passed lint, strict mypy, 532 tests with 2 skips, application smoke and benchmark smoke.
+Target-host 3k/journal and repeated 1m hot-path evidence is recorded in the BUILD-009 implementation
+handoff. It is still **not accepted capability on `main`** because independent review/merge has
+not occurred.
 
 The branch is intentionally fail-closed: SHADOW remains the default, and LIVE requires explicit
 enablement, trade credential, tournament identity, configured central risk caps, kill-switch
 release, trusted account state, durable operation identity and authoritative recovery.
 
 No 005 research finding is promoted by this implementation ticket. EXPERIMENT-005B remains frozen
-and separate.
+and separate. No real SIG orders were sent during BUILD-009 implementation or benchmarking.
 
 Until PR #50 is independently accepted and merged, the canonical statement remains:
 
