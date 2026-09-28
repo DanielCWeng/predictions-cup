@@ -1,4 +1,3 @@
-# ruff: noqa: E501
 """EXPERIMENT-005C post-HOLDOUT independent review falsification.
 
 This runner is deliberately bounded. It reproduces only the 35 already-frozen
@@ -997,4 +996,255 @@ def main() -> None:
                 "family": family,
                 "panel_id": selection["panel_id"],
                 "panel_scope": selection["panel_scope"],
-                "grid_seconds": selection["grid_seconds"],
+                "grid_seconds": selection["grid_seconds"],                "horizon_seconds": selection["horizon_seconds"],
+                "model": selection["model"],
+                "lag_depth": selection["lag_depth"],
+                "alpha": selection["alpha"],
+                "rank": selection["rank"],
+                "frozen_b1_lag_depth": selection["baseline"]["B1"]["lag_depth"],
+                "frozen_b1_alpha": selection["baseline"]["B1"]["alpha"],
+                "frozen_b2_lag_depth": selection["baseline"]["B2"]["lag_depth"],
+                "frozen_b2_alpha": selection["baseline"]["B2"]["alpha"],
+                "b1_holdout_mse": b1_mse,
+                "b2_holdout_mse": b2_mse,
+                "challenger_holdout_mse": challenger_mse,
+                "challenger_improvement_vs_b1": b1_cmp["pooled_improvement"],
+                "challenger_improvement_vs_b2": b2_cmp["pooled_improvement"],
+                "median_target_improvement_vs_b1": b1_cmp[
+                    "median_target_improvement"
+                ],
+                "fraction_targets_helped_vs_b1": b1_cmp["fraction_targets_helped"],
+            }
+        )
+
+        advantage, b2_loss, valid = target_time_losses(
+            state["y_hold"],
+            state["pred"],
+            state["b2_pred"],
+        )
+        valid_count = int(np.sum(valid))
+        if valid_count == 0:
+            raise RuntimeError("no valid loss observations")
+        raw_advantage_sum = float(np.nansum(advantage[valid]))
+        b2_loss_sum = float(np.nansum(b2_loss[valid]))
+        pooled_mean = raw_advantage_sum / valid_count
+        centered = np.where(valid, advantage - pooled_mean, np.nan)
+        hourly_centered = aggregate_hourly(
+            state["hold_q"],
+            centered,
+            valid,
+        )
+        per_time = runner.per_time_loss_diff(
+            state["y_hold"],
+            state["pred"],
+            state["b2_pred"],
+        )
+        cell_item = {
+            "family": family,
+            "panel_id": str(selection["panel_id"]),
+            "grid_seconds": int(selection["grid_seconds"]),
+            "horizon_seconds": int(selection["horizon_seconds"]),
+            "model": str(selection["model"]),
+            "loss_advantage_sum": raw_advantage_sum,
+            "b2_loss_sum": b2_loss_sum,
+            "valid_loss_cells": valid_count,
+            "hourly_centered": hourly_centered,
+            "per_time_loss_advantage": per_time,
+            "loss_advantage_matrix": advantage,
+            "b2_loss_matrix": b2_loss,
+            "valid_loss_matrix": valid,
+            "hold_q": state["hold_q"],
+        }
+        cell_states.append(cell_item)
+
+        if (
+            selection["panel_id"] == US_PANEL
+            and int(selection["grid_seconds"]) == US_PRIMARY_GRID
+            and int(selection["horizon_seconds"]) == US_PRIMARY_HORIZON
+            and str(selection["model"]) == "M2"
+        ):
+            primary_selection = selection
+            primary_state = state
+
+    if primary_selection is None or primary_state is None:
+        raise RuntimeError("strongest frozen US selection not found")
+
+    write_csv(WORK / "b1_holdout_comparison.csv", b1_rows)
+
+    multiplicity_rows, multiplicity_summary = compute_multiplicity(cell_states)
+    write_csv(WORK / "multiplicity_falsification.csv", multiplicity_rows)
+    (WORK / "multiplicity_summary.json").write_text(
+        json.dumps(multiplicity_summary, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    sensitivity_rows = block_sensitivity(cell_states)
+    write_csv(WORK / "block_sensitivity.csv", sensitivity_rows)
+
+    primary_item = next(
+        item
+        for item in cell_states
+        if item["panel_id"] == US_PANEL
+        and item["grid_seconds"] == US_PRIMARY_GRID
+        and item["horizon_seconds"] == US_PRIMARY_HORIZON
+        and item["model"] == "M2"
+    )
+    temporal_rows, temporal_summary = temporal_concentration(primary_item)
+    write_csv(WORK / "temporal_concentration.csv", temporal_rows)
+    (WORK / "temporal_concentration_summary.json").write_text(
+        json.dumps(temporal_summary, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    primary_panel = panel_from_selection(runner, primary_selection)
+    semantics, question_map = metadata_semantics(
+        primary_selection,
+        primary_panel,
+        family_series["US_2024"],
+        runner,
+    )
+    (WORK / "us_event_semantics.json").write_text(
+        json.dumps(semantics, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    coefficient_rows = source_target_map(
+        primary_selection,
+        primary_state,
+        question_map,
+    )
+    write_csv(WORK / "source_target_map.csv", coefficient_rows)
+    (WORK / "source_target_map.json").write_text(
+        json.dumps(coefficient_rows, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    primary_key = (
+        "US_2024",
+        US_PANEL,
+        US_PRIMARY_GRID,
+        US_PRIMARY_HORIZON,
+        "M2",
+    )
+    primary_b1_row = next(
+        row
+        for row in b1_rows
+        if (
+            row["family"],
+            row["panel_id"],
+            int(row["grid_seconds"]),
+            int(row["horizon_seconds"]),
+            row["model"],
+        )
+        == primary_key
+    )
+    original_primary = next(
+        row
+        for row in original_holdout
+        if (
+            row["family"] == "US_2024"
+            and row["panel_id"] == US_PANEL
+            and int(row["grid_seconds"]) == US_PRIMARY_GRID
+            and int(row["horizon_seconds"]) == US_PRIMARY_HORIZON
+            and row["model"] == "M2"
+        )
+    )
+
+    interpretation = {
+        "classification": REVIEW_CLASSIFICATION,
+        "cell": {
+            "family": "US_2024",
+            "panel_id": US_PANEL,
+            "grid_seconds": US_PRIMARY_GRID,
+            "horizon_seconds": US_PRIMARY_HORIZON,
+            "model": "M2",
+        },
+        "cross_sectional_ic": float(original_primary["cross_sectional_ic"]),
+        "median_time_series_ic": float(original_primary["median_time_series_ic"]),
+        "sign_accuracy": float(original_primary["sign_accuracy"]),
+        "interpretation": (
+            "Evidence is primarily per-market time-series forecasting through time, "
+            "not contemporaneous cross-sectional ranking, if the reported IC signs "
+            "and magnitudes remain as frozen."
+        ),
+    }
+    (WORK / "interpretation_metrics.json").write_text(
+        json.dumps(interpretation, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    disposition = final_disposition(
+        float(primary_b1_row["challenger_improvement_vs_b1"]),
+        multiplicity_summary,
+        sensitivity_rows,
+        temporal_summary,
+    )
+    summary = {
+        "classification": REVIEW_CLASSIFICATION,
+        "experiment_id": "EXPERIMENT-005C",
+        "review_preregistration_sha256": REVIEW_PREREG_SHA256,
+        "original_runner_sha256": ORIGINAL_RUNNER_SHA256,
+        "pre_holdout_freeze_sha256": PRE_HOLDOUT_FREEZE_SHA256,
+        "original_holdout_results_sha256": ORIGINAL_HOLDOUT_SHA256,
+        "frozen_selection_count": len(selections),
+        "primary_cell": {
+            "family": "US_2024",
+            "panel_id": US_PANEL,
+            "grid_seconds": US_PRIMARY_GRID,
+            "horizon_seconds": US_PRIMARY_HORIZON,
+            "model": "M2",
+        },
+        "primary_challenger_improvement_vs_b1": primary_b1_row[
+            "challenger_improvement_vs_b1"
+        ],
+        "primary_challenger_improvement_vs_b2": primary_b1_row[
+            "challenger_improvement_vs_b2"
+        ],
+        "multiplicity": multiplicity_summary,
+        "temporal_concentration": temporal_summary,
+        "event_semantics": {
+            "event_id": semantics["event_id"],
+            "event_title_candidates_from_metadata": semantics[
+                "event_title_candidates_from_metadata"
+            ],
+            "holdout_calendar_relation": semantics["holdout_calendar_relation"],
+            "holdout_decision_times": semantics["holdout_decision_times"],
+        },
+        "interpretation": interpretation,
+        "final_disposition": disposition,
+        "programme_rule": (
+            "This review may only retain, weaken, downgrade or reject "
+            "existing 005C conclusions."
+        ),
+        "original_005c_outputs_modified": False,
+    }
+    (WORK / "review_summary.json").write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    manifest = {
+        "classification": REVIEW_CLASSIFICATION,
+        "experiment_id": "EXPERIMENT-005C",
+        "review_preregistration_sha256": REVIEW_PREREG_SHA256,
+        "original_runner_sha256": ORIGINAL_RUNNER_SHA256,
+        "pre_holdout_freeze_sha256": PRE_HOLDOUT_FREEZE_SHA256,
+        "original_holdout_results_sha256": ORIGINAL_HOLDOUT_SHA256,
+        "outputs": {},
+    }
+    for path in sorted(WORK.iterdir()):
+        if path.is_file() and path.name != "review_run_manifest.json":
+            manifest["outputs"][path.name] = {
+                "bytes": path.stat().st_size,
+                "sha256": sha256(path),
+            }
+    (WORK / "review_run_manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    print(json.dumps(summary, sort_keys=True), flush=True)
+
+
+if __name__ == "__main__":
+    main()
