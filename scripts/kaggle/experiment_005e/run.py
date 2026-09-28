@@ -28,6 +28,7 @@ BASE_SHA = "ba938bedcf63f562be8b26c9502e828391123867"
 DATA002_MANIFEST_SHA = "2d496514c9307a31d8864ac9deeb2ef2ad781fb6fabe894714cbdf00c7244f7a"
 SIZE_TOL = 1e-8
 YES_NOTIONAL_TOL = 1e-3
+SAMPLE_TARGET = 740_000
 SAMPLE_CAP = 750_000
 US_MIN = 600_000
 EMBARGO_SECONDS = 300
@@ -340,6 +341,22 @@ def create_source_and_reconstruction(
     distinct_participants = int(
         scalar(con, "SELECT COUNT(DISTINCT participant_address) FROM participant_eligible")
     )
+    failure_counts = {
+        "active_count_not_one": int(
+            scalar(con, "SELECT COUNT(*) FROM group_audit WHERE active_count<>1")
+        ),
+        "no_passive": int(
+            scalar(con, "SELECT COUNT(*) FROM group_audit WHERE passive_count<1")
+        ),
+        "non_binary": int(scalar(con, "SELECT COUNT(*) FROM group_audit WHERE NOT all_binary")),
+    }
+    # These wide audit/reconstruction intermediates are no longer needed after
+    # econ and participant_eligible have been materialized. Drop them before the
+    # large participant-window stage so Kaggle's bounded DuckDB temp disk is
+    # available for the actual frozen feature computation.
+    con.execute("DROP TABLE group_audit")
+    con.execute("DROP TABLE accepted")
+    con.execute("DROP TABLE econ_raw")
     return {
         "source_rows": total_rows,
         "transaction_condition_groups": total_groups,
@@ -349,15 +366,7 @@ def create_source_and_reconstruction(
         "eligible_participant_rows": participant_rows,
         "distinct_eligible_participants": distinct_participants,
         "infrastructure_rows_excluded": infra_excluded,
-        "failure_counts": {
-            "active_count_not_one": int(
-                scalar(con, "SELECT COUNT(*) FROM group_audit WHERE active_count<>1")
-            ),
-            "no_passive": int(
-                scalar(con, "SELECT COUNT(*) FROM group_audit WHERE passive_count<1")
-            ),
-            "non_binary": int(scalar(con, "SELECT COUNT(*) FROM group_audit WHERE NOT all_binary")),
-        },
+        "failure_counts": failure_counts,
     }
 
 
@@ -504,6 +513,8 @@ def create_participant_features(con: duckdb.DuckDBPyConnection) -> tuple[int, in
         FROM p0
         """
     )
+    con.execute("DROP TABLE p0")
+    con.execute("DROP TABLE participant_eligible")
     return train_end, dev_end
 
 
@@ -514,24 +525,46 @@ def create_sample_and_markout_history(
     dev_end: int,
     stage: str,
 ) -> None:
+    p4_rows = int(scalar(con, "SELECT COUNT(*) FROM p4"))
+    if p4_rows <= SAMPLE_CAP:
+        sample_threshold_ppm = 1_000_000
+    else:
+        sample_threshold_ppm = max(
+            1,
+            int(SAMPLE_TARGET * 1_000_000 / p4_rows),
+        )
     con.execute(
         f"""
         CREATE TEMP TABLE sample_base AS
-        SELECT * EXCLUDE(sample_rank)
-        FROM (
-          SELECT
-            p4.*,
-            MD5(
-              tx_hash || ':' || CAST(log_index AS VARCHAR) || ':' ||
-              participant_address || ':' || condition_id
-            ) sample_id,
-            ROW_NUMBER() OVER (
-              ORDER BY HASH(tx_hash,log_index,participant_address,condition_id)
-            ) sample_rank
-          FROM p4
-        )
-        WHERE sample_rank<={SAMPLE_CAP}
+        SELECT
+          p4.*,
+          MD5(
+            tx_hash || ':' || CAST(log_index AS VARCHAR) || ':' ||
+            participant_address || ':' || condition_id
+          ) sample_id
+        FROM p4
+        WHERE MOD(
+          HASH(tx_hash,log_index,participant_address,condition_id),
+          1000000
+        ) < {sample_threshold_ppm}
         """
+    )
+    sampled_rows = int(scalar(con, "SELECT COUNT(*) FROM sample_base"))
+    if sampled_rows > SAMPLE_CAP:
+        raise RuntimeError(
+            f"deterministic hash sample exceeded hard cap: {sampled_rows}>{SAMPLE_CAP}"
+        )
+    con.execute(
+        """
+        CREATE TEMP TABLE train_last_raw AS
+        SELECT p4.*
+        FROM p4
+        WHERE timestamp<? - ?
+        QUALIFY timestamp=MAX(timestamp) OVER (
+          PARTITION BY participant_address
+        )
+        """,
+        [train_end, EMBARGO_SECONDS],
     )
     history_limit = dev_end if stage == "discovery" else 9_223_372_036_854_775_000
     con.execute(
@@ -605,18 +638,6 @@ def create_sample_and_markout_history(
           ON s.participant_address=md.participant_address
          AND s.timestamp-3600>md.available_ts
         """
-    )
-    con.execute(
-        """
-        CREATE TEMP TABLE train_last_raw AS
-        SELECT p4.*
-        FROM p4
-        WHERE timestamp<? - ?
-        QUALIFY timestamp=MAX(timestamp) OVER (
-          PARTITION BY participant_address
-        )
-        """,
-        [train_end, EMBARGO_SECONDS],
     )
     con.execute(
         f"""
