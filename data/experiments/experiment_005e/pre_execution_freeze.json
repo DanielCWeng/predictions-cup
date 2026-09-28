@@ -171,12 +171,14 @@
     "local_tested_commit": "cb3f74de35c949eb6bd51db83260477dfd6aa107",
     "github_runner_commit": "3cc867634591f4344bc9575b65b3e5678ee62d79",
     "runner_sha256": "d5553d445e3c87a94084931012645b418a7708c211eeb42474a67d28c7687a17",
-    "focused_tests": 11,
-    "scope": "HOLDOUT inference only; TRAIN/DEV v5 remains bound to e8c68c13ec65209507c22469cce1c7d8a75f14ee / runner 4bfee0c72cdbd46e6854862c99d4b176b6dce36230cfc72cc114caa99726ee9e"
+    "focused_tests": 12,
+    "scope": "HOLDOUT inference only; TRAIN/DEV v5 remains bound to e8c68c13ec65209507c22469cce1c7d8a75f14ee / runner 4bfee0c72cdbd46e6854862c99d4b176b6dce36230cfc72cc114caa99726ee9e",
+    "tests_sha256": "11471206fca5a1f71129ebdbb275c28ae5f00e12ca37223fe2e23590ff908ec6"
   },
   "next_holdout_runner": {
     "github_runner_commit": "3cc867634591f4344bc9575b65b3e5678ee62d79",
     "runner_sha256": "d5553d445e3c87a94084931012645b418a7708c211eeb42474a67d28c7687a17",
-    "status": "PRE_RESULT_CANDIDATE_NOT_PACKAGED"
+    "status": "PRE_RESULT_CANDIDATE_NOT_PACKAGED",
+    "focused_tests": 12
   }
 }
