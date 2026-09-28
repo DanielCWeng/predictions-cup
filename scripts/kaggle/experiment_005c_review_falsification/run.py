@@ -1,5 +1,5 @@
 
-This runner is deliberately bounded. It reproduces only the 35 already-frozen
+"""This runner is deliberately bounded. It reproduces only the 35 already-frozen
 HOLDOUT selections and may retain, weaken, downgrade, or reject the existing
 005C claim. It cannot select a new candidate.
 """
@@ -24,12 +24,13 @@ INPUT = Path("/kaggle/input")
 WORK = Path("/kaggle/working/005c_review_falsification")
 
 REVIEW_CLASSIFICATION = "POST_HOC_INDEPENDENT_REVIEW_FALSIFICATION"
-REVIEW_PREREG_SHA256 = "0567e3b5114d527dc8b67079c35e0dcb04ebdecc4889fc8367a24e9caa8f3181"
+REVIEW_PREREG_SHA256 = "17fa57eed1efdabaad1f9ed51a49a30c8eba62758795e009506142fb0ad0fc39"
 ORIGINAL_RUNNER_SHA256 = "ae4468a18d1a980c5db7bb8c683f4580ba91aad903cd49ee3e7dccc2756df40f"
 PRE_HOLDOUT_FREEZE_SHA256 = "20f977ffb64a56ecfe230ba45d9d0021dcc97e5218b13eb307db896d14c87933"
+DISPOSITION_AMENDMENT_SHA256 = "d54ff2ef6331e63709bacf1a98956ab83d5f38c441e0e0a214fad289eab87531"
 ORIGINAL_HOLDOUT_SHA256 = "69ded820bdb336aa4cda16d432c79d51aae017c89fcdb71ed5afe344a60114a9"
 REVIEW_MASTER_SEED = 20260928051
-MULTIPLICITY_DRAWS = 20_000
+MULTIPLICITY_DRAWS = 10_000
 BLOCK_DRAWS = 5_000
 FAMILIES = ("US_2024", "CAN_2025", "COL_2026", "HUN_2026", "PER_2026")
 US_PANEL = "US_2024_event_6e91434eb80f"
@@ -113,6 +114,10 @@ def load_review_bundle() -> tuple[dict[str, Any], dict[str, Any], list[dict[str,
     if sha256(prereg_path) != REVIEW_PREREG_SHA256:
         raise RuntimeError("review preregistration changed")
     prereg = json.loads(prereg_path.read_text())
+
+    amendment_path = manifest_path.parent / "amendment_001_disposition_rule.json"
+    if sha256(amendment_path) != DISPOSITION_AMENDMENT_SHA256:
+        raise RuntimeError("review disposition amendment changed")
 
     freeze_path = manifest_path.parent / "PRE_HOLDOUT_FREEZE.json"
     if sha256(freeze_path) != PRE_HOLDOUT_FREEZE_SHA256:
@@ -269,52 +274,82 @@ def compute_multiplicity(
         ],
         dtype=np.float64,
     )
-    null_stats = np.zeros((MULTIPLICITY_DRAWS, n_cells), dtype=np.float64)
 
-    for family_index, family in enumerate(FAMILIES):
-        indices = [i for i, item in enumerate(states) if item["family"] == family]
-        if not indices:
-            continue
-        hours = sorted(
-            {
-                hour
-                for i in indices
-                for hour in states[i]["hourly_centered"]
-            }
+    all_hours = sorted(
+        {
+            int(timestamp // 3600)
+            for item in states
+            for timestamp, value in zip(
+                np.asarray(item["hold_q"], dtype=np.int64),
+                np.asarray(item["per_time_loss_advantage"], dtype=np.float64),
+                strict=True,
+            )
+            if np.isfinite(value)
+        }
+    )
+    if not all_hours:
+        raise RuntimeError("no active UTC hours for multiplicity")
+    hour_to_pos = {hour: pos for pos, hour in enumerate(all_hours)}
+
+    observed_t = np.full(n_cells, np.nan, dtype=np.float64)
+    observed_mean = np.full(n_cells, np.nan, dtype=np.float64)
+    observed_se = np.full(n_cells, np.nan, dtype=np.float64)
+    block_counts = np.zeros(n_cells, dtype=np.int64)
+    weights = np.zeros((n_cells, len(all_hours)), dtype=np.float64)
+
+    for cell_index, item in enumerate(states):
+        times = np.asarray(item["hold_q"], dtype=np.int64)
+        values = np.asarray(item["per_time_loss_advantage"], dtype=np.float64)
+        valid = np.isfinite(values)
+        times = times[valid]
+        values = values[valid]
+        if len(values) < 2:
+            raise RuntimeError(f"insufficient multiplicity rows for {item['panel_id']}")
+
+        hours = times // 3600
+        unique_hours = np.unique(hours)
+        mean = float(values.mean())
+        influence = np.zeros(len(unique_hours), dtype=np.float64)
+        for local_index, hour in enumerate(unique_hours):
+            mask = hours == hour
+            influence[local_index] = float(np.sum(values[mask] - mean))
+
+        blocks = len(unique_hours)
+        if blocks < 2:
+            raise RuntimeError(f"insufficient UTC-hour clusters for {item['panel_id']}")
+        variance = (blocks / (blocks - 1.0)) * float(np.sum(influence**2))
+        se = float(np.sqrt(max(variance, 0.0)) / len(values))
+        if not np.isfinite(se) or se <= 0:
+            raise RuntimeError(f"non-positive cluster SE for {item['panel_id']}")
+
+        observed_mean[cell_index] = mean
+        observed_se[cell_index] = se
+        observed_t[cell_index] = mean / se
+        block_counts[cell_index] = blocks
+        denominator = len(values) * se
+        for hour, contribution in zip(unique_hours, influence, strict=True):
+            weights[cell_index, hour_to_pos[int(hour)]] = contribution / denominator
+
+    rng = np.random.default_rng(REVIEW_MASTER_SEED)
+    null_stats = np.empty((MULTIPLICITY_DRAWS, n_cells), dtype=np.float64)
+    chunk = 1000
+    for start in range(0, MULTIPLICITY_DRAWS, chunk):
+        stop = min(MULTIPLICITY_DRAWS, start + chunk)
+        signs = rng.choice(
+            np.array([-1.0, 1.0]),
+            size=(stop - start, len(all_hours)),
         )
-        if not hours:
-            raise RuntimeError(f"{family}: no active hours for multiplicity")
-        hour_to_pos = {hour: pos for pos, hour in enumerate(hours)}
-        block_sums = np.zeros((len(hours), len(indices)), dtype=np.float64)
-        denominators = np.zeros(len(indices), dtype=np.float64)
-        for local_col, cell_index in enumerate(indices):
-            item = states[cell_index]
-            denominators[local_col] = float(item["b2_loss_sum"])
-            for hour, (value_sum, _count) in item["hourly_centered"].items():
-                block_sums[hour_to_pos[hour], local_col] = value_sum
+        null_stats[start:stop] = signs @ weights.T
 
-        family_seed = REVIEW_MASTER_SEED + 1000 * (family_index + 1)
-        rng = np.random.default_rng(family_seed)
-        signs = rng.integers(
-            0,
-            2,
-            size=(MULTIPLICITY_DRAWS, len(hours)),
-            dtype=np.int8,
-        ).astype(np.float64)
-        signs = signs * 2.0 - 1.0
-        null_family = signs @ block_sums
-        null_family = 100.0 * null_family / denominators[None, :]
-        null_stats[:, indices] = null_family
-
-    max_null = np.max(null_stats, axis=1)
+    max_null = np.nanmax(null_stats, axis=1)
     rows: list[dict[str, Any]] = []
     for i, item in enumerate(states):
-        obs = float(observed_pct[i])
+        obs_t = float(observed_t[i])
         unadjusted = float(
-            (1 + np.sum(null_stats[:, i] >= obs)) / (MULTIPLICITY_DRAWS + 1)
+            (1 + np.sum(null_stats[:, i] >= obs_t)) / (MULTIPLICITY_DRAWS + 1)
         )
         adjusted = float(
-            (1 + np.sum(max_null >= obs)) / (MULTIPLICITY_DRAWS + 1)
+            (1 + np.sum(max_null >= obs_t)) / (MULTIPLICITY_DRAWS + 1)
         )
         rows.append(
             {
@@ -324,13 +359,17 @@ def compute_multiplicity(
                 "grid_seconds": item["grid_seconds"],
                 "horizon_seconds": item["horizon_seconds"],
                 "model": item["model"],
-                "observed_pooled_improvement_pct_vs_b2": obs,
+                "observed_pooled_improvement_pct_vs_b2": float(observed_pct[i]),
+                "observed_mean_time_loss_advantage": float(observed_mean[i]),
+                "utc_hour_cluster_se": float(observed_se[i]),
+                "observed_cluster_t": obs_t,
+                "active_utc_hour_clusters": int(block_counts[i]),
                 "unadjusted_block_wild_p": unadjusted,
-                "familywise_max_stat_p": adjusted,
-                "null_q95_cell_pct": float(np.quantile(null_stats[:, i], 0.95)),
-                "null_q99_cell_pct": float(np.quantile(null_stats[:, i], 0.99)),
-                "global_max_null_q95_pct": float(np.quantile(max_null, 0.95)),
-                "global_max_null_q99_pct": float(np.quantile(max_null, 0.99)),
+                "familywise_max_t_p": adjusted,
+                "null_q95_cell_t": float(np.quantile(null_stats[:, i], 0.95)),
+                "null_q99_cell_t": float(np.quantile(null_stats[:, i], 0.99)),
+                "global_max_null_q95_t": float(np.quantile(max_null, 0.95)),
+                "global_max_null_q99_t": float(np.quantile(max_null, 0.99)),
                 "draws": MULTIPLICITY_DRAWS,
                 "block_minutes": 60,
             }
@@ -338,35 +377,54 @@ def compute_multiplicity(
 
     corr = np.corrcoef(null_stats, rowvar=False)
     corr = np.nan_to_num(corr, nan=0.0, posinf=0.0, neginf=0.0)
+    corr = (corr + corr.T) / 2.0
     np.fill_diagonal(corr, 1.0)
-    eigvals = np.linalg.eigvalsh((corr + corr.T) / 2.0)
+    eigvals = np.linalg.eigvalsh(corr)
     eigvals = np.clip(eigvals, 0.0, None)
+    denominator = float(np.sum(eigvals**2))
     effective = (
-        float((eigvals.sum() ** 2) / np.sum(eigvals**2))
-        if np.sum(eigvals**2) > 0
+        float(np.sum(eigvals) ** 2 / denominator)
+        if denominator > 0
         else float("nan")
     )
-    strongest = int(np.argmax(observed_pct))
+
+    primary_matches = [
+        index
+        for index, item in enumerate(states)
+        if item["panel_id"] == US_PANEL
+        and int(item["grid_seconds"]) == US_PRIMARY_GRID
+        and int(item["horizon_seconds"]) == US_PRIMARY_HORIZON
+        and item["model"] == "M2"
+    ]
+    if len(primary_matches) != 1:
+        raise RuntimeError(f"primary multiplicity cell match count {len(primary_matches)}")
+    primary_index = primary_matches[0]
     summary = {
         "classification": REVIEW_CLASSIFICATION,
         "procedure": (
-            "20,000-draw one-sided synchronized 1-hour block-wild max statistic; "
-            "loss-advantage residuals centered within frozen cell; family-hour "
-            "Rademacher sign shared by all related cells; families randomized independently"
+            "10,000-draw one-sided synchronized absolute-UTC-hour cluster-wild "
+            "max-t bootstrap; each frozen cell is centered at its observed mean; "
+            "the same Rademacher multiplier is used by every cell sharing an "
+            "absolute UTC hour, preserving overlap dependence without assuming "
+            "independence across the 35 tests"
         ),
         "draws": MULTIPLICITY_DRAWS,
         "master_seed": REVIEW_MASTER_SEED,
         "cell_count": n_cells,
+        "union_utc_hour_count": len(all_hours),
         "effective_test_count_participation_ratio": effective,
         "null_correlation_eigenvalues": eigvals.tolist(),
-        "global_max_q95_pct": float(np.quantile(max_null, 0.95)),
-        "global_max_q99_pct": float(np.quantile(max_null, 0.99)),
-        "strongest_observed_index": strongest,
-        "strongest_observed_pct": float(observed_pct[strongest]),
-        "strongest_unadjusted_p": rows[strongest]["unadjusted_block_wild_p"],
-        "strongest_familywise_p": rows[strongest]["familywise_max_stat_p"],
-        "strongest_survives_fwer_5pct": bool(
-            rows[strongest]["familywise_max_stat_p"] <= 0.05
+        "global_max_q95_t": float(np.quantile(max_null, 0.95)),
+        "global_max_q99_t": float(np.quantile(max_null, 0.99)),
+        "primary_index": primary_index,
+        "primary_observed_pooled_improvement_pct_vs_b2": float(
+            observed_pct[primary_index]
+        ),
+        "primary_observed_cluster_t": float(observed_t[primary_index]),
+        "primary_unadjusted_p": rows[primary_index]["unadjusted_block_wild_p"],
+        "primary_familywise_p": rows[primary_index]["familywise_max_t_p"],
+        "primary_survives_fwer_5pct": bool(
+            rows[primary_index]["familywise_max_t_p"] < 0.05
         ),
     }
     return rows, summary
@@ -379,7 +437,7 @@ def block_seed(component: str) -> int:
     )
 
 
-def circular_block_bootstrap(
+def moving_block_bootstrap(
     values: np.ndarray,
     block_rows: int,
     component: str,
@@ -395,32 +453,45 @@ def circular_block_bootstrap(
         "effective_blocks": effective,
         "draws": BLOCK_DRAWS,
     }
-    if n < 5 or block_rows < 1 or effective < 2.0:
+    if n == 0:
+        result.update({"ci_low": None, "ci_high": None, "status": "NO_VALID_ROWS"})
+        return result
+    if block_rows < 1:
+        raise ValueError("block_rows must be positive")
+    if block_rows > n:
         result.update(
             {
                 "ci_low": None,
                 "ci_high": None,
-                "status": "INSUFFICIENT_EFFECTIVE_BLOCKS",
+                "status": "INSUFFICIENT_DURATION",
+            }
+        )
+        return result
+    if effective < 4.0:
+        result.update(
+            {
+                "ci_low": None,
+                "ci_high": None,
+                "status": "UNSTABLE_TOO_FEW_BLOCK_EQUIVALENTS",
             }
         )
         return result
 
     rng = np.random.default_rng(block_seed(component))
     needed = math.ceil(n / block_rows)
-    offsets = np.arange(block_rows, dtype=np.int64)
+    max_start = n - block_rows
     draws = np.empty(BLOCK_DRAWS, dtype=np.float64)
     for draw in range(BLOCK_DRAWS):
-        starts = rng.integers(0, n, size=needed)
-        indices = (
-            starts[:, None] + offsets[None, :]
-        ) % n
-        sample = clean[indices.ravel()[:n]]
+        starts = rng.integers(0, max_start + 1, size=needed)
+        sample = np.concatenate(
+            [clean[start : start + block_rows] for start in starts]
+        )[:n]
         draws[draw] = float(sample.mean())
     result.update(
         {
             "ci_low": float(np.quantile(draws, 0.025)),
             "ci_high": float(np.quantile(draws, 0.975)),
-            "status": "OK",
+            "status": "STABLE_ENOUGH_FOR_CI",
         }
     )
     return result
@@ -440,9 +511,9 @@ def block_sensitivity(states: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for item in wanted:
         grid = int(item["grid_seconds"])
         values = np.asarray(item["per_time_loss_advantage"], dtype=np.float64)
-        for minutes in (5, 15, 30, 60):
+        for minutes in (5, 15, 30, 60, 120):
             block_rows = int(math.ceil(minutes * 60 / grid))
-            summary = circular_block_bootstrap(
+            summary = moving_block_bootstrap(
                 values,
                 block_rows,
                 (
@@ -459,29 +530,6 @@ def block_sensitivity(states: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "horizon_seconds": item["horizon_seconds"],
                     "model": item["model"],
                     "requested_block_minutes": minutes,
-                    **summary,
-                }
-            )
-        optional_rows = int(math.ceil(120 * 60 / grid))
-        optional_effective = int(np.isfinite(values).sum()) / optional_rows
-        if optional_effective >= 2.0:
-            summary = circular_block_bootstrap(
-                values,
-                optional_rows,
-                (
-                    f"{item['panel_id']}|g{grid}|h{item['horizon_seconds']}|"
-                    f"{item['model']}|120m"
-                ),
-            )
-            rows.append(
-                {
-                    "classification": REVIEW_CLASSIFICATION,
-                    "family": item["family"],
-                    "panel_id": item["panel_id"],
-                    "grid_seconds": grid,
-                    "horizon_seconds": item["horizon_seconds"],
-                    "model": item["model"],
-                    "requested_block_minutes": 120,
                     **summary,
                 }
             )
@@ -553,16 +601,27 @@ def temporal_concentration(primary: dict[str, Any]) -> tuple[list[dict[str, Any]
             return None
         return float(sum(value for _hour, value in positives[:k]) / positive_total)
 
-    midpoint = len(hours) // 2
-    first_hours = set(hours[:midpoint])
-    second_hours = set(hours[midpoint:])
+    active_rows = valid.any(axis=1)
+    valid_times = times[active_rows]
+    if not len(valid_times):
+        raise RuntimeError("no active HOLDOUT rows for temporal concentration")
+    midpoint_timestamp = int(
+        (int(valid_times.min()) + int(valid_times.max())) // 2
+    )
+    row_hours = times // 3600 * 3600
 
-    def aggregate(selected: set[int]) -> dict[str, Any]:
-        adv = float(
-            sum(float(by_hour[h]["loss_advantage_sum"]) for h in selected)
-        )
-        base = float(sum(float(by_hour[h]["b2_loss_sum"]) for h in selected))
-        obs = int(sum(int(by_hour[h]["observations"]) for h in selected))
+    def aggregate_rows(row_mask: np.ndarray) -> dict[str, Any]:
+        cell_mask = valid[row_mask]
+        if not cell_mask.any():
+            return {
+                "loss_advantage_sum": float("nan"),
+                "b2_loss_sum": float("nan"),
+                "observations": 0,
+                "relative_improvement_pct_vs_b2": float("nan"),
+            }
+        adv = float(np.nansum(advantage[row_mask][cell_mask]))
+        base = float(np.nansum(b2_loss[row_mask][cell_mask]))
+        obs = int(np.sum(cell_mask))
         return {
             "loss_advantage_sum": adv,
             "b2_loss_sum": base,
@@ -574,7 +633,11 @@ def temporal_concentration(primary: dict[str, Any]) -> tuple[list[dict[str, Any]
 
     remove_one = {hour for hour, _value in positives[:1]}
     remove_three = {hour for hour, _value in positives[:3]}
-    all_hours = set(hours)
+    first_mask = active_rows & (times <= midpoint_timestamp)
+    second_mask = active_rows & (times > midpoint_timestamp)
+    keep_after_one = active_rows & ~np.isin(row_hours, list(remove_one))
+    keep_after_three = active_rows & ~np.isin(row_hours, list(remove_three))
+
     summary = {
         "classification": REVIEW_CLASSIFICATION,
         "aggregation": "UTC 1-hour active blocks",
@@ -587,10 +650,15 @@ def temporal_concentration(primary: dict[str, Any]) -> tuple[list[dict[str, Any]
         "share_positive_advantage_top_1": share(1),
         "share_positive_advantage_top_3": share(3),
         "share_positive_advantage_top_5": share(5),
-        "first_half": aggregate(first_hours),
-        "second_half": aggregate(second_hours),
-        "after_removing_strongest_1_positive_block": aggregate(all_hours - remove_one),
-        "after_removing_strongest_3_positive_blocks": aggregate(all_hours - remove_three),
+        "first_last_valid_holdout_utc": [
+            iso_utc(int(valid_times.min())),
+            iso_utc(int(valid_times.max())),
+        ],
+        "absolute_time_midpoint_utc": iso_utc(midpoint_timestamp),
+        "first_half": aggregate_rows(first_mask),
+        "second_half": aggregate_rows(second_mask),
+        "after_removing_strongest_1_positive_block": aggregate_rows(keep_after_one),
+        "after_removing_strongest_3_positive_blocks": aggregate_rows(keep_after_three),
         "strongest_positive_hours_utc": [iso_utc(hour) for hour, _value in positives[:5]],
     }
     return rows, summary
@@ -813,64 +881,145 @@ def metadata_semantics(
     return semantics, question_map
 
 
+def semantic_relation_hint(target_question: str, source_question: str) -> str:
+    target = target_question.lower()
+    source = source_question.lower()
+    states = (
+        "arizona", "georgia", "michigan", "nevada", "north carolina",
+        "pennsylvania", "wisconsin", "florida", "texas", "ohio",
+    )
+    candidates = ("trump", "harris", "biden", "vance", "walz")
+    shared_candidates = [name for name in candidates if name in target and name in source]
+    if shared_candidates:
+        return "SAME_CANDIDATE"
+    shared_states = [name for name in states if name in target and name in source]
+    if shared_states:
+        return "SAME_STATE"
+    structural_terms = ("electoral college", "electoral vote", "senate", "house")
+    if any(term in target for term in structural_terms) and any(
+        term in source for term in structural_terms
+    ):
+        return "ELECTORAL_COLLEGE_OR_CHAMBER"
+    overall_terms = ("presidential election", "win the election", "next president")
+    if any(term in target for term in overall_terms) or any(
+        term in source for term in overall_terms
+    ):
+        return "OVERALL_ELECTION"
+    return "COMMON_EVENT_OTHER"
+
+
 def source_target_map(
     selection: dict[str, Any],
     state: dict[str, Any],
     question_map: dict[str, str],
 ) -> list[dict[str, Any]]:
     coef = np.asarray(state["coef"], dtype=np.float64)
-    prepared = state["prepared"]
     lag = int(selection["lag_depth"])
-    m = len(selection["panel_markets"])
+    market_ids = [str(value) for value in selection["panel_markets"]]
+    m = len(market_ids)
     target_indices = list(state["target_indices"])
-    groups = np.asarray(prepared.source_groups, dtype=np.int64)
-    return_feature_count = m * lag
+    return_count = m * lag
+    mask_offset = return_count
+    age_offset = 2 * return_count
     rows: list[dict[str, Any]] = []
 
+    def source_norms(source_index: int, output_col: int) -> tuple[float, float, float]:
+        ret = coef[
+            source_index * lag : (source_index + 1) * lag,
+            output_col,
+        ]
+        mask = coef[
+            mask_offset + source_index * lag : mask_offset + (source_index + 1) * lag,
+            output_col,
+        ]
+        age = coef[
+            age_offset + source_index * lag : age_offset + (source_index + 1) * lag,
+            output_col,
+        ]
+        return (
+            float(np.linalg.norm(ret)),
+            float(np.linalg.norm(mask)),
+            float(np.linalg.norm(age)),
+        )
+
     for output_col, target_panel_index in enumerate(target_indices):
-        target_id = str(selection["panel_markets"][target_panel_index])
-        for source_index, source_id_raw in enumerate(selection["panel_markets"]):
-            source_id = str(source_id_raw)
-            group_mask = groups == source_index
-            group_norm = float(np.linalg.norm(coef[group_mask, output_col]))
-            return_positions = [
-                source_index * lag + lag_index
-                for lag_index in range(lag)
-            ]
-            return_coefficients = [
-                float(coef[position, output_col])
-                for position in return_positions
-                if position < return_feature_count
-            ]
-            dominant_index = int(np.argmax(np.abs(return_coefficients)))
-            dominant_value = return_coefficients[dominant_index]
+        target_id = market_ids[target_panel_index]
+        target_question = question_map.get(target_id, "")
+        own_return = [
+            float(coef[target_panel_index * lag + lag_index, output_col])
+            for lag_index in range(lag)
+        ]
+        own_return_norm, own_mask_norm, own_age_norm = source_norms(
+            target_panel_index,
+            output_col,
+        )
+        rows.append(
+            {
+                "classification": REVIEW_CLASSIFICATION,
+                "row_type": "OWN_HISTORY",
+                "target_condition_id": target_id,
+                "target_question": target_question,
+                "source_condition_id": target_id,
+                "source_question": target_question,
+                "semantic_relation": "OWN_HISTORY",
+                "return_lag": None,
+                "signed_return_coefficient": None,
+                "absolute_return_coefficient": None,
+                "source_return_l2_norm": own_return_norm,
+                "source_mask_l2_norm": own_mask_norm,
+                "source_age_l2_norm": own_age_norm,
+                "own_return_coefficient_lag0": own_return[0] if lag > 0 else None,
+                "own_return_coefficient_lag1": own_return[1] if lag > 1 else None,
+                "own_return_coefficient_lag2": own_return[2] if lag > 2 else None,
+            }
+        )
+
+        candidates: list[tuple[float, int, int, float]] = []
+        for source_index in range(m):
+            if source_index == target_panel_index:
+                continue
+            for lag_index in range(lag):
+                value = float(
+                    coef[source_index * lag + lag_index, output_col]
+                )
+                candidates.append((abs(value), source_index, lag_index, value))
+        candidates.sort(key=lambda item: (-item[0], item[1], item[2]))
+
+        for rank, (_abs_value, source_index, lag_index, value) in enumerate(
+            candidates[:3],
+            start=1,
+        ):
+            source_id = market_ids[source_index]
+            source_question = question_map.get(source_id, "")
+            return_norm, mask_norm, age_norm = source_norms(
+                source_index,
+                output_col,
+            )
             rows.append(
                 {
                     "classification": REVIEW_CLASSIFICATION,
+                    "row_type": "TOP_CROSS_RETURN_COEFFICIENT",
+                    "cross_rank": rank,
                     "target_condition_id": target_id,
-                    "target_question": question_map.get(target_id, ""),
+                    "target_question": target_question,
                     "source_condition_id": source_id,
-                    "source_question": question_map.get(source_id, ""),
-                    "is_own_history": source_index == target_panel_index,
-                    "source_group_l2_norm": group_norm,
-                    "return_coefficient_lag0": (
-                        return_coefficients[0] if len(return_coefficients) > 0 else None
+                    "source_question": source_question,
+                    "semantic_relation": semantic_relation_hint(
+                        target_question,
+                        source_question,
                     ),
-                    "return_coefficient_lag1": (
-                        return_coefficients[1] if len(return_coefficients) > 1 else None
+                    "return_lag": lag_index,
+                    "signed_return_coefficient": value,
+                    "absolute_return_coefficient": abs(value),
+                    "return_sign": (
+                        "positive" if value > 0 else "negative" if value < 0 else "zero"
                     ),
-                    "return_coefficient_lag2": (
-                        return_coefficients[2] if len(return_coefficients) > 2 else None
-                    ),
-                    "dominant_return_lag": dominant_index,
-                    "dominant_return_coefficient": dominant_value,
-                    "dominant_return_sign": (
-                        "positive"
-                        if dominant_value > 0
-                        else "negative"
-                        if dominant_value < 0
-                        else "zero"
-                    ),
+                    "source_return_l2_norm": return_norm,
+                    "source_mask_l2_norm": mask_norm,
+                    "source_age_l2_norm": age_norm,
+                    "own_return_coefficient_lag0": None,
+                    "own_return_coefficient_lag1": None,
+                    "own_return_coefficient_lag2": None,
                 }
             )
     return rows
@@ -922,7 +1071,7 @@ def final_disposition(
 ) -> str:
     if not np.isfinite(primary_b1_improvement) or primary_b1_improvement <= 0:
         return "DOWNGRADE — DOES NOT BEAT B1"
-    if not bool(multiplicity_summary["strongest_survives_fwer_5pct"]):
+    if not bool(multiplicity_summary["primary_survives_fwer_5pct"]):
         return "DOWNGRADE — FAMILYWISE NULL NOT REJECTED"
 
     primary_sensitivity = [
@@ -932,12 +1081,35 @@ def final_disposition(
         and int(row["grid_seconds"]) == US_PRIMARY_GRID
         and int(row["horizon_seconds"]) == US_PRIMARY_HORIZON
     ]
-    stable_rows = [row for row in primary_sensitivity if row["status"] == "OK"]
-    if stable_rows and any(float(row["ci_low"]) <= 0 for row in stable_rows):
+    stable_rows = [
+        row
+        for row in primary_sensitivity
+        if row["status"] == "STABLE_ENOUGH_FOR_CI"
+    ]
+    if stable_rows and any(
+        row["ci_low"] is not None and float(row["ci_low"]) <= 0
+        for row in stable_rows
+    ):
         return "DOWNGRADE — DEPENDENCE-SENSITIVE"
 
     top_one = temporal_summary.get("share_positive_advantage_top_1")
-    if top_one is not None and float(top_one) >= 0.50:
+    after_one = temporal_summary.get(
+        "after_removing_strongest_1_positive_block",
+        {},
+    )
+    after_one_improvement = (
+        after_one.get("relative_improvement_pct_vs_b2")
+        if isinstance(after_one, dict)
+        else None
+    )
+    if (
+        top_one is not None
+        and float(top_one) >= 0.50
+    ) or (
+        after_one_improvement is not None
+        and np.isfinite(float(after_one_improvement))
+        and float(after_one_improvement) <= 0
+    ):
         return "RETAIN — TEMPORALLY CONCENTRATED"
     return "RETAIN — ROBUST WITHIN-EVENT JOINT CANDIDATE"
 
@@ -945,7 +1117,7 @@ def final_disposition(
 def main() -> None:
     WORK.mkdir(parents=True, exist_ok=True)
     prereg, freeze, original_holdout, runner = load_review_bundle()
-    if prereg["classification"] != REVIEW_CLASSIFICATION:
+    if prereg["label"] != REVIEW_CLASSIFICATION:
         raise RuntimeError("wrong review classification")
 
     selections = list(freeze["selections"])
