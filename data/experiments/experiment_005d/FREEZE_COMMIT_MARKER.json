@@ -3,7 +3,7 @@
   "stage": "PRE_OUTCOME_DESIGN_FREEZE",
   "base_sha": "ba938bedcf63f562be8b26c9502e828391123867",
   "branch": "experiment/005d-structural-rv-atlas",
-  "freeze_parent_sha": "f2fca38e99af4a2b07942f312709bdbdf5365401",
+  "freeze_parent_sha": "792aa00aaf40a9d12dbaaa324d622c00e85dcaac",
   "artifacts": {
     "docs/experiments/EXPERIMENT_005D_STRUCTURAL_RV_ATLAS.md": "6a699406887bbcc551913d712166ae376d63c798cfe86b008f8ba5927d9ec3ed",
     "data/experiments/experiment_005d/preregistration.json": "d43a75ff8e0b5df6c717f37721e339116a6297b299c4e26d8b9a5f242b9c7a51",
@@ -11,12 +11,12 @@
     "src/predictions_cup/learning/structural_atlas.py": "3de4316cc5acda7c52832060c4983822f8d289583ae31cbe733a71eed5067566",
     "tests/test_structural_atlas.py": "31beebf56af4cd3e05735ab247ee77bad7781f4e8ebdf14942c2f0952111b312",
     "scripts/prepare_experiment_005d_kaggle.py": "e369906d1a5ea1474c620a30f49885dfca0918b948d46ac9a36ecc4cfc8cc0eb",
-    "scripts/kaggle/experiment_005d/run_body.py.txt": "b4ced5441d79dc2738b7a71fd45b5f9124aa1b7dd188d7e4cf7329db8849a6ff",
+    "scripts/kaggle/experiment_005d/run_body.py.txt": "4be4022caba94108eac03418424d4495be6dcabd57ce90598f4c263a46715841",
     "scripts/kaggle/experiment_005d/kernel-metadata.json": "214984c92ded0b37d2be064dfe32223e0e2cfd5ca2a6dc8b12fa7a41751456b3"
   },
   "generated_runner": {
-    "sha256": "811f8195eec9b6c96bf69860c72ca77223e8e278bc28667f13c8b82d72c58951",
-    "bytes": 292268,
+    "sha256": "9811da8682e4cf94cd3c4bc330b685d4f21aaeaf1a860dcd2b4980165c567b8c",
+    "bytes": 292794,
     "phase": "TRAIN_DEV",
     "generator_rule": "regenerate from the frozen prep script + frozen semantic inputs; generated run.py need not be hand-edited",
     "deterministic_regeneration": "PASS: two clean generations produced identical SHA-256"
@@ -27,7 +27,8 @@
     "holdout_status": "SEALED_NOT_INSPECTED",
     "ruff": "PASS",
     "data_002_mount_policy": "semantic JSON equality + per-Parquet SHA-256",
-    "hard_constraint_bbo_diagnostics": "PASS: descriptive only, depth_certified=false"
+    "hard_constraint_bbo_diagnostics": "PASS: descriptive only, depth_certified=false",
+    "target_leakage_gate": "PASS: soft/slack reconstruction uses TRAIN-only target anchor; current target quote excluded from FV construction"
   },
   "post_freeze_rule": "No model/target/horizon/split/screening additions after this marker. DEV may only remove/select among frozen candidates."
 }
