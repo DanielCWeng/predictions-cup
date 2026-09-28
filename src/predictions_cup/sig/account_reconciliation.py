@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
 
-from predictions_cup.runtime import (
+from predictions_cup.runtime.models import (
     RuntimeOrderState,
     RuntimePortfolio,
     RuntimePosition,
