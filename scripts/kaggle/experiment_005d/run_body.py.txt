@@ -194,6 +194,87 @@ def fit_ridge_matrix(x: np.ndarray, y: np.ndarray, ridge: float) -> tuple[np.nda
     return beta, intercept
 
 
+def kalman_reference_filter(
+    measurements: np.ndarray, process_var: float, measurement_var: float
+) -> np.ndarray:
+    z = np.asarray(measurements, float)
+    out = np.full(len(z), np.nan)
+    state: float | None = None
+    variance = max(measurement_var, 1e-8)
+    q = max(process_var, 1e-8)
+    r = max(measurement_var, 1e-8)
+    for i, value in enumerate(z):
+        if state is not None:
+            variance += q
+        if not np.isfinite(value):
+            continue
+        if state is None:
+            state = float(value)
+            variance = r
+        else:
+            gain = variance / (variance + r)
+            state = state + gain * (float(value) - state)
+            variance = (1.0 - gain) * variance
+        out[i] = state
+    return out
+
+
+def threshold_pmf(surface: np.ndarray) -> np.ndarray:
+    s = np.asarray(surface, float)
+    if s.ndim != 2 or s.shape[1] < 2:
+        raise ValueError("threshold surface must be 2-D with >=2 thresholds")
+    pmf = np.empty((s.shape[0], s.shape[1] + 1), float)
+    pmf[:, 0] = 1.0 - s[:, 0]
+    pmf[:, 1:-1] = s[:, :-1] - s[:, 1:]
+    pmf[:, -1] = s[:, -1]
+    pmf = np.clip(pmf, 0.0, None)
+    total = pmf.sum(axis=1, keepdims=True)
+    return np.divide(
+        pmf,
+        total,
+        out=np.full_like(pmf, np.nan),
+        where=total > 0,
+    )
+
+
+def survival_from_pmf(pmf: np.ndarray) -> np.ndarray:
+    p = np.asarray(pmf, float)
+    return 1.0 - np.cumsum(p[:, :-1], axis=1)
+
+
+def smooth_pmf(pmf: np.ndarray, lam: float) -> np.ndarray:
+    base = np.asarray(pmf, float)
+    out = base.copy()
+    for _ in range(8):
+        neighbor = out.copy()
+        neighbor[:, 0] = out[:, 1]
+        neighbor[:, -1] = out[:, -2]
+        if out.shape[1] > 2:
+            neighbor[:, 1:-1] = (out[:, :-2] + out[:, 2:]) / 2.0
+        out = (base + lam * neighbor) / (1.0 + lam)
+        out = np.clip(out, 0.0, None)
+        out /= np.clip(out.sum(axis=1, keepdims=True), 1e-12, None)
+    return out
+
+
+def entropy_shrink_pmf(pmf: np.ndarray, lam: float) -> np.ndarray:
+    p = np.asarray(pmf, float)
+    uniform = np.full_like(p, 1.0 / p.shape[1])
+    out = (p + lam * uniform) / (1.0 + lam)
+    return out / np.clip(out.sum(axis=1, keepdims=True), 1e-12, None)
+
+
+def logconcave_pmf_challenger(pmf: np.ndarray) -> np.ndarray:
+    out = np.clip(np.asarray(pmf, float), 1e-12, None)
+    for _ in range(8):
+        if out.shape[1] <= 2:
+            break
+        floor = np.sqrt(out[:, :-2] * out[:, 2:])
+        out[:, 1:-1] = np.maximum(out[:, 1:-1], floor)
+        out /= np.clip(out.sum(axis=1, keepdims=True), 1e-12, None)
+    return out
+
+
 def ar1_half_life(values: np.ndarray, step_seconds: float) -> tuple[float | None, float | None]:
     x = values[np.isfinite(values)]
     if len(x) < 20:
@@ -936,7 +1017,7 @@ def hard_family_candidates(
         result.append({
             "event": event,
             "family_id": family["family_id"],
-            "leakage_mode": "LOO-PRICE",
+            "leakage_mode": "DIRECT_PROJECTION",
             "representation_family": "HARD_COHERENCE_DIAGNOSTIC",
             "representation": "PARTITION_TOP_OF_BOOK_FEASIBILITY",
             "target": "__FAMILY__",
@@ -997,12 +1078,14 @@ def hard_family_candidates(
                     "PARTITION_RECONSTRUCTION",
                     exact - target,
                     {"method": "exact_partition_loo"},
+                    "LOO-PRICE",
                 ),
                 (
                     "HARD_PARTITION_QP",
                     "COHERENT_PROJECTION",
                     qp[:, k] - target,
                     {"method": "quadratic_equal"},
+                    "DIRECT_PROJECTION",
                 ),
                 (
                     "HARD_PARTITION_QP_RELIABILITY",
@@ -1012,20 +1095,22 @@ def hard_family_candidates(
                         "method": "quadratic_train_spread",
                         "weights": reliability.tolist(),
                     },
+                    "DIRECT_PROJECTION",
                 ),
                 (
                     "HARD_PARTITION_KL",
                     "COHERENT_PROJECTION",
                     kl[:, k] - target,
                     {"method": "bernoulli_kl"},
+                    "DIRECT_PROJECTION",
                 ),
             ]
-            for name, rep_family, signal, params in variants:
+            for name, rep_family, signal, params, leakage in variants:
                 result.extend(
                     candidate_eval(
                         event=event,
                         family_id=family["family_id"],
-                        leakage_mode="LOO-PRICE",
+                        leakage_mode=leakage,
                         representation_family=rep_family,
                         representation=name,
                         target=member["canonical_token_id"],
@@ -1072,7 +1157,7 @@ def hard_family_candidates(
         result.append({
             "event": event,
             "family_id": family["family_id"],
-            "leakage_mode": "LOO-PRICE",
+            "leakage_mode": "DIRECT_PROJECTION",
             "representation_family": "HARD_COHERENCE_DIAGNOSTIC",
             "representation": "THRESHOLD_TOP_OF_BOOK_DOMINANCE",
             "target": "__FAMILY__",
@@ -1104,30 +1189,141 @@ def hard_family_candidates(
             "model_params": {"method": "M-002/M-008 top-of-book dominance"},
             "source_kind": "DATA-001",
         })
+        train_spread2 = np.nanmedian(spreads[train][:, cols2], axis=0)
+        reliability2 = 1.0 / np.clip(
+            np.where(np.isfinite(train_spread2), train_spread2, 0.05),
+            0.005,
+            0.25,
+        )
         iso = np.full_like(values2, np.nan)
+        iso_weighted = np.full_like(values2, np.nan)
         for r in np.flatnonzero(valid):
             iso[r] = isotonic_nonincreasing(values2[r])
-        for k, member in enumerate(ordered):
-            target = values2[:, k]
-            signal = iso[:, k] - target
-            result.extend(
-                candidate_eval(
-                    event=event,
-                    family_id=family["family_id"],
-                    leakage_mode="LOO-PRICE",
-                    representation_family="THRESHOLD_SURFACE",
-                    representation="THRESHOLD_ISOTONIC",
-                    target=member["canonical_token_id"],
-                    times_ns=grid,
-                    target_price=target,
-                    signal=signal,
-                    broad_move=broad_move(panel, cols2[k]),
-                    model_params={"method": "weighted_isotonic_equal"},
-                    trade_stream=trade_streams.get(
-                        member["canonical_token_id"]
-                    ),
-                )
+            iso_weighted[r] = isotonic_nonincreasing(
+                values2[r], reliability2
             )
+        pmf = np.full((len(values2), values2.shape[1] + 1), np.nan)
+        pmf_weighted = np.full_like(pmf, np.nan)
+        if np.any(valid):
+            pmf[valid] = threshold_pmf(iso[valid])
+            pmf_weighted[valid] = threshold_pmf(iso_weighted[valid])
+        surfaces: list[tuple[str, np.ndarray, dict[str, Any]]] = [
+            (
+                "THRESHOLD_ISOTONIC_EQUAL",
+                iso,
+                {"method": "weighted_isotonic", "weights": "equal"},
+            ),
+            (
+                "THRESHOLD_ISOTONIC_RELIABILITY",
+                iso_weighted,
+                {
+                    "method": "weighted_isotonic",
+                    "weights": reliability2.tolist(),
+                },
+            ),
+        ]
+        for lam in (0.1, 1.0):
+            smooth = np.full_like(values2, np.nan)
+            entropy = np.full_like(values2, np.nan)
+            if np.any(valid):
+                smooth[valid] = survival_from_pmf(
+                    smooth_pmf(pmf_weighted[valid], lam)
+                )
+                entropy[valid] = survival_from_pmf(
+                    entropy_shrink_pmf(pmf_weighted[valid], lam)
+                )
+            surfaces.extend([
+                (
+                    f"THRESHOLD_SMOOTHNESS_{lam:g}",
+                    smooth,
+                    {
+                        "method": "pmf_neighbor_smoothness_challenger",
+                        "lambda": lam,
+                    },
+                ),
+                (
+                    f"THRESHOLD_ENTROPY_{lam:g}",
+                    entropy,
+                    {
+                        "method": "maximum_entropy_shrinkage_challenger",
+                        "lambda": lam,
+                    },
+                ),
+            ])
+        logconcave = np.full_like(values2, np.nan)
+        if np.any(valid):
+            logconcave[valid] = survival_from_pmf(
+                logconcave_pmf_challenger(pmf_weighted[valid])
+            )
+        surfaces.append(
+            (
+                "THRESHOLD_LOGCONCAVE_DIAGNOSTIC",
+                logconcave,
+                {
+                    "method": "iterative_logconcavity_challenger",
+                    "diagnostic_only": True,
+                },
+            )
+        )
+        if np.any(valid & train) or np.any(valid & dev):
+            train_pmf = pmf_weighted[valid & train]
+            dev_pmf = pmf_weighted[valid & dev]
+            result.append({
+                "event": event,
+                "family_id": family["family_id"],
+                "leakage_mode": "DIRECT_PROJECTION",
+                "representation_family": "THRESHOLD_DISTRIBUTION",
+                "representation": "THRESHOLD_IMPLIED_PMF",
+                "target": "__FAMILY__",
+                "target_kind": "implied_distribution",
+                "horizon_kind": "CURRENT",
+                "horizon": 0,
+                "status": "DIAGNOSTIC_ONLY",
+                "train_n": int(len(train_pmf)),
+                "dev_n": int(len(dev_pmf)),
+                "train_mean_entropy": (
+                    float(np.mean(-np.sum(
+                        train_pmf * np.log(np.clip(train_pmf, 1e-12, 1.0)),
+                        axis=1,
+                    ))) if len(train_pmf) else None
+                ),
+                "dev_mean_entropy": (
+                    float(np.mean(-np.sum(
+                        dev_pmf * np.log(np.clip(dev_pmf, 1e-12, 1.0)),
+                        axis=1,
+                    ))) if len(dev_pmf) else None
+                ),
+                "p_value": None,
+                "q_value": None,
+                "fdr_group": "DESCRIPTIVE_ONLY|THRESHOLD_PMF",
+                "model_params": {
+                    "method": "isotonic_implied_pmf",
+                    "weights": reliability2.tolist(),
+                },
+                "source_kind": "DATA-001",
+            })
+        for name, surface, params in surfaces:
+            for k, member in enumerate(ordered):
+                target = values2[:, k]
+                signal = surface[:, k] - target
+                result.extend(
+                    candidate_eval(
+                        event=event,
+                        family_id=family["family_id"],
+                        leakage_mode="DIRECT_PROJECTION",
+                        representation_family="THRESHOLD_SURFACE",
+                        representation=name,
+                        target=member["canonical_token_id"],
+                        times_ns=grid,
+                        target_price=target,
+                        signal=signal,
+                        broad_move=broad_move(panel, cols2[k]),
+                        model_params=params,
+                        trade_stream=trade_streams.get(
+                            member["canonical_token_id"]
+                        ),
+                    )
+                )
     return result
 
 
@@ -1162,17 +1358,81 @@ def indirect_graph_candidates(
         train_ok = complete & train
         if int(train_ok.sum()) < 100:
             continue
+        comp_prob = np.nanmean(rp, axis=1)
         comp = np.nanmean(logit(rp), axis=1)
         tx = comp[train_ok]
         ty = logit(tp[train_ok])
+        pa0, pa1 = fit_affine(comp_prob[train_ok], tp[train_ok])
         ia, sa = fit_affine(tx, ty)
         ih, sh = fit_huber(tx, ty)
+        ref_logit_train = logit(rp[train_ok])
+        ref_rmse = np.sqrt(
+            np.mean((ref_logit_train - ty[:, None]) ** 2, axis=0)
+        )
+        reliability = 1.0 / np.clip(ref_rmse, 1e-4, None)
+        rel_prob = np.full(len(grid), np.nan)
+        rel_logit = np.full(len(grid), np.nan)
+        allok = np.all(np.isfinite(rp), axis=1)
+        rel_prob[allok] = (
+            rp[allok] @ reliability / float(reliability.sum())
+        )
+        rel_logit[allok] = logistic(
+            logit(rp[allok]) @ reliability / float(reliability.sum())
+        )
+        q = (
+            float(np.var(np.diff(tx)))
+            if len(tx) > 2 else 1e-4
+        )
+        r = float(np.var(ty - tx)) if len(tx) > 1 else 1e-3
+        kalman_logit = kalman_reference_filter(comp, q, r)
         variants: list[tuple[str, str, np.ndarray, dict[str, Any]]] = [
             (
                 "RAW_INDIRECT_PROB_MEAN",
                 "RAW_RV",
-                np.nanmean(rp, axis=1),
+                comp_prob,
                 {"method": "raw_probability_mean", "refs": refs},
+            ),
+            (
+                "RAW_INDIRECT_RELIABILITY_PROB",
+                "RAW_RV",
+                rel_prob,
+                {
+                    "method": "train_reliability_probability_mean",
+                    "weights": reliability.tolist(),
+                    "refs": refs,
+                },
+            ),
+            (
+                "RAW_INDIRECT_RELIABILITY_LOGIT",
+                "RAW_RV",
+                rel_logit,
+                {
+                    "method": "train_reliability_logit_mean",
+                    "weights": reliability.tolist(),
+                    "refs": refs,
+                },
+            ),
+            (
+                "AFFINE_INDIRECT_PROBABILITY",
+                "CALIBRATED_RV",
+                np.clip(pa0 + pa1 * comp_prob, 1e-6, 1 - 1e-6),
+                {
+                    "method": "affine_probability",
+                    "intercept": pa0,
+                    "slope": pa1,
+                    "refs": refs,
+                },
+            ),
+            (
+                "KALMAN_INDIRECT_LOGIT",
+                "STATE_SPACE_RV",
+                logistic(kalman_logit),
+                {
+                    "method": "scalar_kalman_reference_logit",
+                    "process_variance": q,
+                    "measurement_variance": r,
+                    "refs": refs,
+                },
             ),
             (
                 "RAW_INDIRECT_LOGIT_MEAN",
