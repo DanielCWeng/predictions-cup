@@ -2027,7 +2027,11 @@ def load_salvaged_holdout_panels(
     required.update(CLOCK_TARGETS)
     required.update(CLOCK_TARGETS.values())
     for spec in freeze["model_specs"].values():
-        required.update(spec.get("features", []))
+        required.update(
+            feature
+            for feature in spec.get("features", [])
+            if not str(feature).startswith("archetype_")
+        )
 
     import pyarrow.parquet as pq_local
 
