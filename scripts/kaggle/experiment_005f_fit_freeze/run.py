@@ -2073,6 +2073,17 @@ def _fit_candidate_columns(dataset: str, candidate: str, available: set[str], ba
     return [candidate] if candidate in available and candidate not in base else []
 
 
+def _fit_capture_columns(dataset: str, available: set[str], base: list[str], challenger: list[str]) -> list[str]:
+    if dataset == "clock":
+        names = ["raw_capture_bin_age_s", "raw_60", "repeated_60"]
+    elif dataset == "depth":
+        names = ["snapshot_interval_s"]
+    else:
+        names = []
+    excluded = set(base) | set(challenger)
+    return [name for name in names if name in available and name not in excluded]
+
+
 def _fit_model(model_name: str, classification: bool):
     if classification:
         if model_name.startswith("LOGIT_C"):
@@ -2255,6 +2266,7 @@ def fit_freeze_main() -> None:
         if not challenger:
             raise RuntimeError(f"challenger columns missing for {cid}")
         full=base+challenger
+        capture=_fit_capture_columns(dataset, set(sub.columns), base, challenger)
         row_cols=["split","event","token_id","time",target,*full]
         x=sub[row_cols].replace([np.inf,-np.inf],np.nan).dropna()
         train_all=x[x["split"]=="TRAIN"].sort_values(["event","time","token_id"],kind="stable")
@@ -2285,6 +2297,51 @@ def fit_freeze_main() -> None:
             "baseline_model.joblib":baseline,
             "challenger_model.joblib":challenger_model,
         }
+
+        capture_manifest={
+            "supported":False,
+            "capture_columns":capture,
+            "reason":"event_panel_has_no_raw_capture_controls" if dataset == "event" else "no_supported_capture_columns",
+        }
+        if capture:
+            capture_only=base+capture
+            selected_plus_capture=base+capture+[col for col in challenger if col not in capture]
+            fcols=["split","event","token_id","time",target,*selected_plus_capture]
+            fx=sub[fcols].replace([np.inf,-np.inf],np.nan).dropna()
+            ftrain_all=fx[fx["split"]=="TRAIN"].sort_values(["event","time","token_id"],kind="stable")
+            fdev_all=fx[fx["split"]=="DEV"].sort_values(["event","time","token_id"],kind="stable")
+            ftr=thin(ftrain_all)
+            fdv=thin(fdev_all)
+            ffit=pd.concat([ftr,fdv],ignore_index=True)
+            if len(ftr)<500 or len(fdv)<200:
+                raise RuntimeError(f"insufficient capture-falsification support for {cid}: {len(ftr)=} {len(fdv)=}")
+            fy=ffit[target].to_numpy(int if classification else float)
+            if classification and len(np.unique(fy))<2:
+                raise RuntimeError(f"capture-falsification target degenerate for {cid}")
+            cap_scaler=StandardScaler().fit(ffit[capture_only])
+            comb_scaler=StandardScaler().fit(ffit[selected_plus_capture])
+            cap_model=_fit_model(model_name,classification)
+            comb_model=_fit_model(model_name,classification)
+            cap_model.fit(cap_scaler.transform(ffit[capture_only]),fy)
+            comb_model.fit(comb_scaler.transform(ffit[selected_plus_capture]),fy)
+            objects.update({
+                "capture_only_scaler.joblib":cap_scaler,
+                "selected_plus_capture_scaler.joblib":comb_scaler,
+                "capture_only_model.joblib":cap_model,
+                "selected_plus_capture_model.joblib":comb_model,
+            })
+            capture_manifest={
+                "supported":True,
+                "capture_columns":capture,
+                "capture_only_columns":capture_only,
+                "selected_plus_capture_columns":selected_plus_capture,
+                "train_complete_rows":len(ftrain_all),
+                "dev_complete_rows":len(fdev_all),
+                "train_fit_rows":len(ftr),
+                "dev_fit_rows":len(fdv),
+                "fit_rows":len(ffit),
+            }
+
         hashes={}
         for name,obj in objects.items():
             path=cdir/name
@@ -2301,6 +2358,8 @@ def fit_freeze_main() -> None:
             "train_complete_rows":len(train_all),"dev_complete_rows":len(dev_all),
             "train_fit_rows":len(tr),"dev_fit_rows":len(dv),"fit_rows":len(fit),
             "block_length_minutes":block_minutes,
+            "capture_falsification_supported":bool(capture_manifest["supported"]),
+            "capture_falsification_fit_rows":capture_manifest.get("fit_rows",0),
         })
         candidate_manifests.append({
             "candidate_id":cid,
@@ -2324,6 +2383,7 @@ def fit_freeze_main() -> None:
             "block_length_minutes":block_minutes,
             "artifact_directory":safe,
             "artifact_sha256":hashes,
+            "capture_falsification":capture_manifest,
             "seed":_candidate_seed(cid),
         })
 
