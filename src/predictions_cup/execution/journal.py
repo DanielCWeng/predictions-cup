@@ -24,6 +24,7 @@ class ExecutionJournalEvent:
     logical_intent_id: str | None
     event_type: str
     observed_monotonic_ns: int
+    source_timestamp: str | None
     decision_observation_ns: int | None
     exchange_id: str | None
     exchange_order_id: str | None
@@ -69,6 +70,7 @@ class ExecutionJournal:
                 logical_intent_id TEXT,
                 event_type TEXT NOT NULL,
                 observed_monotonic_ns INTEGER NOT NULL,
+                source_timestamp TEXT,
                 decision_observation_ns INTEGER,
                 exchange_id TEXT,
                 exchange_order_id TEXT,
@@ -166,6 +168,7 @@ class ExecutionJournal:
         event_type: str,
         observed_monotonic_ns: int,
         logical_intent_id: str | None = None,
+        source_timestamp: str | None = None,
         decision_observation_ns: int | None = None,
         exchange_id: str | None = None,
         exchange_order_id: str | None = None,
@@ -185,6 +188,7 @@ class ExecutionJournal:
                 logical_intent_id=logical_intent_id,
                 event_type=event_type,
                 observed_monotonic_ns=observed_monotonic_ns,
+                source_timestamp=source_timestamp,
                 decision_observation_ns=decision_observation_ns,
                 exchange_id=exchange_id,
                 exchange_order_id=exchange_order_id,
@@ -202,6 +206,7 @@ class ExecutionJournal:
         logical_intent_id: str | None,
         event_type: str,
         observed_monotonic_ns: int,
+        source_timestamp: str | None = None,
         decision_observation_ns: int | None = None,
         exchange_id: str | None = None,
         exchange_order_id: str | None = None,
@@ -215,16 +220,17 @@ class ExecutionJournal:
             """
             INSERT INTO execution_events (
                 logical_operation_id, logical_intent_id, event_type,
-                observed_monotonic_ns, decision_observation_ns, exchange_id,
-                exchange_order_id, fill_id, quantity, price, terminal_status,
-                detail_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                observed_monotonic_ns, source_timestamp, decision_observation_ns,
+                exchange_id, exchange_order_id, fill_id, quantity, price,
+                terminal_status, detail_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 logical_operation_id,
                 logical_intent_id,
                 event_type,
                 observed_monotonic_ns,
+                source_timestamp,
                 decision_observation_ns,
                 exchange_id,
                 exchange_order_id,
@@ -240,9 +246,9 @@ class ExecutionJournal:
         rows = self._connection.execute(
             """
             SELECT event_id, logical_operation_id, logical_intent_id, event_type,
-                   observed_monotonic_ns, decision_observation_ns, exchange_id,
-                   exchange_order_id, fill_id, quantity, price, terminal_status,
-                   detail_json
+                   observed_monotonic_ns, source_timestamp, decision_observation_ns,
+                   exchange_id, exchange_order_id, fill_id, quantity, price,
+                   terminal_status, detail_json
             FROM execution_events
             WHERE logical_operation_id = ?
             ORDER BY event_id
@@ -256,16 +262,17 @@ class ExecutionJournal:
                 logical_intent_id=None if row[2] is None else str(row[2]),
                 event_type=str(row[3]),
                 observed_monotonic_ns=int(row[4]),
+                source_timestamp=None if row[5] is None else str(row[5]),
                 decision_observation_ns=(
-                    None if row[5] is None else int(row[5])
+                    None if row[6] is None else int(row[6])
                 ),
-                exchange_id=None if row[6] is None else str(row[6]),
-                exchange_order_id=None if row[7] is None else str(row[7]),
-                fill_id=None if row[8] is None else str(row[8]),
-                quantity=None if row[9] is None else str(row[9]),
-                price=None if row[10] is None else str(row[10]),
-                terminal_status=None if row[11] is None else str(row[11]),
-                detail_json=None if row[12] is None else str(row[12]),
+                exchange_id=None if row[7] is None else str(row[7]),
+                exchange_order_id=None if row[8] is None else str(row[8]),
+                fill_id=None if row[9] is None else str(row[9]),
+                quantity=None if row[10] is None else str(row[10]),
+                price=None if row[11] is None else str(row[11]),
+                terminal_status=None if row[12] is None else str(row[12]),
+                detail_json=None if row[13] is None else str(row[13]),
             )
             for row in rows
         )
@@ -307,6 +314,22 @@ class ExecutionJournal:
                     logical_operation_id,
                 ),
             )
+
+    def logical_operation_for_exchange_order_id(
+        self,
+        exchange_order_id: str,
+    ) -> str | None:
+        row = self._connection.execute(
+            """
+            SELECT logical_operation_id
+            FROM execution_events
+            WHERE exchange_order_id = ?
+            ORDER BY event_id DESC
+            LIMIT 1
+            """,
+            (exchange_order_id,),
+        ).fetchone()
+        return None if row is None else str(row[0])
 
     def unresolved(self) -> tuple[ExecutionEnvelope, ...]:
         terminal = (
