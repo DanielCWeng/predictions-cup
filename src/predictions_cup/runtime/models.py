@@ -52,6 +52,7 @@ class RuntimeMarket:
 class RuntimePosition:
     exchange_id: str
     market_id: str
+    tournament_id: str
     gross_exposure: float
 
 
@@ -60,6 +61,7 @@ class RuntimeOrderState:
     logical_intent_id: str
     exchange_id: str
     market_id: str
+    tournament_id: str
     reserved_exposure: float
     open: bool
     uncertain: bool
