@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "amendment_id": "005F-AMENDMENT-002",
+  "status": "PRE_RESULT_RESOURCE_AMENDMENT",
+  "reason": "Use available Kaggle concurrency to execute the two predeclared claim regimes as disjoint deterministic shards.",
+  "scientific_implementation_commit": "9ec9511536514bbaa97929a4b88d701cbc09987c",
+  "amended_runner_commit": "7899361bfade41211f143aa1d6b940b723c43319",
+  "shard_key": "claim_regime",
+  "shards": [
+    "PRE_ELECTION",
+    "ACTIVE_RESULTS"
+  ],
+  "equivalence_basis": [
+    "TRAIN/DEV split boundaries are defined independently inside each event x claim_regime window",
+    "all feature screens fit within one claim_regime",
+    "BH-FDR grouping includes claim_regime",
+    "candidate selection groups include claim_regime",
+    "model tournaments fit within one claim_regime",
+    "no model or statistic in 005F pools PRE_ELECTION with ACTIVE_RESULTS"
+  ],
+  "combination_rule": "Concatenate per-regime screen/tournament/audit outputs and concatenate dev_selection candidate arrays without recomputation across regimes.",
+  "monolithic_run_role": "cross-check if it completes; regime-shard union may be canonical if both shards complete under identical frozen code and hashes",
+  "scientific_design_changed": false,
+  "feature_universe_changed": false,
+  "target_universe_changed": false,
+  "fdr_universe_changed": false,
+  "selection_rule_changed": false,
+  "holdout_accessed": false
+}
