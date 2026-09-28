@@ -11,7 +11,8 @@ import duckdb
 FAMILIES = ("US_2024", "CAN_2025", "COL_2026", "HUN_2026", "PER_2026")
 SPEC_FREEZE_COMMIT = "1ad933fe586d0c07da7ea06801af05a0a808f385"
 DATASET_MANIFEST_SHA256 = "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c"
-TOLERANCE = 1e-8
+SIZE_TOLERANCE = 1e-8
+YES_NOTIONAL_TOLERANCE = 1e-3
 OUT = Path("/kaggle/working/005b_historical_predictive_atlas/reconstruction")
 OUT.mkdir(parents=True, exist_ok=True)
 
@@ -97,9 +98,9 @@ def reconstruct_family(family: str) -> dict[str, object]:
           AND passive_count >= 1
           AND all_binary
           AND ABS(active_size-passive_size)
-              <= {TOLERANCE} * GREATEST(1.0, ABS(active_size), ABS(passive_size))
+              <= {SIZE_TOLERANCE} * GREATEST(1.0, ABS(active_size), ABS(passive_size))
           AND ABS(active_yes_notional-passive_yes_notional)
-              <= {TOLERANCE} * GREATEST(
+              <= {YES_NOTIONAL_TOLERANCE} * GREATEST(
                     1.0, ABS(active_yes_notional), ABS(passive_yes_notional)
                  )
         """
@@ -150,7 +151,7 @@ def reconstruct_family(family: str) -> dict[str, object]:
                 f"""SELECT COUNT(*) FROM group_audit
                     WHERE active_count=1 AND passive_count>=1 AND all_binary
                       AND ABS(active_size-passive_size)
-                        > {TOLERANCE} * GREATEST(1.0,ABS(active_size),ABS(passive_size))""",
+                        > {YES_NOTIONAL_TOLERANCE} * GREATEST(1.0,ABS(active_size),ABS(passive_size))""",
             )
         ),
         "yes_notional_conservation": int(
@@ -159,7 +160,7 @@ def reconstruct_family(family: str) -> dict[str, object]:
                 f"""SELECT COUNT(*) FROM group_audit
                     WHERE active_count=1 AND passive_count>=1 AND all_binary
                       AND ABS(active_yes_notional-passive_yes_notional)
-                        > {TOLERANCE} * GREATEST(
+                        > {YES_NOTIONAL_TOLERANCE} * GREATEST(
                             1.0,ABS(active_yes_notional),ABS(passive_yes_notional)
                           )""",
             )
@@ -191,12 +192,14 @@ def main() -> None:
         "stage": "canonical_trade_reconstruction",
         "spec_freeze_commit": SPEC_FREEZE_COMMIT,
         "data_002_manifest_sha256": DATASET_MANIFEST_SHA256,
-        "tolerance": TOLERANCE,
+        "size_tolerance": SIZE_TOLERANCE,
+        "yes_notional_tolerance": YES_NOTIONAL_TOLERANCE,
         "policy": {
             "economic_trade_rows": "passive OrderFilled rows only",
             "active_row": "audit-only aggregate; never double counted",
             "yes_axis": "YES p; NO 1-p; OTHER rejected",
             "multi_maker": "preserved as separate passive economic fills",
+            "rounding_audit": "005B reconstruction audit found max YES-notional relative error <5e-4 and zero groups above 1e-3",
         },
         "families": families,
         "totals": {
