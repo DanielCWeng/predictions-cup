@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005C",
+  "followup_id": "005C_REVIEW_FALSIFICATION",
+  "amendment_id": "DISPOSITION_RULE_001",
+  "status": "FROZEN_BEFORE_FOLLOWUP_EMPIRICAL_OUTPUT",
+  "parent_review_preregistration_sha256": "17fa57eed1efdabaad1f9ed51a49a30c8eba62758795e009506142fb0ad0fc39",
+  "scientific_search_changed": false,
+  "rules": {
+    "DOWNGRADE — DOES NOT BEAT B1": "Primary 15s/15s US challenger pooled HOLDOUT improvement vs frozen B1 <= 0.",
+    "DOWNGRADE — FAMILYWISE NULL NOT REJECTED": "Primary 15s/15s US synchronized UTC-hour max-t familywise adjusted p >= 0.05.",
+    "DOWNGRADE — DEPENDENCE-SENSITIVE": "Among block-sensitivity rows eligible for a stable CI (>=4 effective block-equivalents), any primary 15s/15s US 95% CI has lower bound <= 0.",
+    "RETAIN — TEMPORALLY CONCENTRATED": "After clearing B1, multiplicity and stable-block checks, either the strongest positive UTC hour contributes >=50% of total positive advantage or removing that single hour makes pooled improvement vs B2 <= 0.",
+    "RETAIN — ROBUST WITHIN-EVENT JOINT CANDIDATE": "Clears all preceding downgrade/concentration rules."
+  },
+  "unstable_long_blocks": "Rows with <4 effective block-equivalents are explicitly inconclusive and cannot by themselves retain or downgrade the result."
+}
