@@ -88,7 +88,7 @@ class AccountRealtimeController:
         self._execution_journal = execution_journal
         self._clock_ns = clock_ns
         self._resyncing = False
-        self._batch_seen_during_resync = False
+        self._resync_generation = 0
 
     async def run(self, *, stop_event: asyncio.Event) -> None:
         while not stop_event.is_set():
@@ -100,7 +100,6 @@ class AccountRealtimeController:
             )
             connected = asyncio.Event()
             self._resyncing = True
-            self._batch_seen_during_resync = False
 
             subscriber_task = asyncio.create_task(
                 subscriber.run(
@@ -154,7 +153,7 @@ class AccountRealtimeController:
     async def _restore_trust_while_subscribed(self) -> None:
         while True:
             self._resyncing = True
-            self._batch_seen_during_resync = False
+            generation_before = self._resync_generation
             authoritative = await self._authoritative_resync()
             self._state.apply_authoritative(
                 authoritative,
@@ -163,7 +162,7 @@ class AccountRealtimeController:
             # Drain callbacks already queued by the subscribed socket while trust
             # is still false. A batch seen here makes the REST snapshot ambiguous.
             await asyncio.sleep(0)
-            if not self._batch_seen_during_resync:
+            if self._resync_generation == generation_before:
                 self._state.mark_trusted_after_reconciliation()
                 self._resyncing = False
                 return
@@ -188,7 +187,7 @@ class AccountRealtimeController:
     ) -> None:
         del topic
         if self._resyncing:
-            self._batch_seen_during_resync = True
+            self._resync_generation += 1
             return
         result = self._state.handle_raw_batch(payload, observed_at=observed_at)
         if result.requires_reconciliation:
