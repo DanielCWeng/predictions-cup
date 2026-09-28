@@ -1,0 +1,70 @@
+{
+  "a1_role_quality": {
+    "data001_fills": 374891,
+    "disposition": "STRONG_ROLE_ANNOTATION_QUALITY_POST_V2",
+    "duplicate_right_join_keys": 0,
+    "exact_matches": 374891,
+    "outcome_disagreements": 0,
+    "post_v2_clean_role_fee_agreement_fraction": 0.99468,
+    "post_v2_high_confidence_role_coverage_fraction": 0.99468,
+    "post_v2_passive_positive_fee_rows": 235,
+    "post_v2_rows": 94962,
+    "price_disagreements": 0,
+    "strict_complement_pair_explained_rows": 119,
+    "unmatched": 0
+  },
+  "audited_005a_head": "5a79aed12c3d94f449916d37e1ac13a37731da62",
+  "data002_gate": {
+    "main_sha": "69cb1924751515a495bf99556819147ad090d67d",
+    "merged": true
+  },
+  "empirical_gate_present": false,
+  "engineering": {
+    "005a_ci": "PASS",
+    "code_manifest_reproducible_two_builds": true,
+    "code_manifest_sha256": "506c0e7db0baa640a202048fcdb54fbd73b8cac0e79c9a5ef4faa84425cf8c45",
+    "focused_tests_passed": 39,
+    "gate_absence_fail_closed_verified": true,
+    "kaggle_code_bundle_bytes_approx": 712704,
+    "kaggle_code_files": 17,
+    "memory_note": "current runner is event-partitioned; selected BBO Arrow footprint peaks near 713MB for Colombia first round, but Python row materialization can expand this materially",
+    "resource_profile_path": "data/experiments/experiment_005a/engineering/resource_profile.json"
+  },
+  "experiment_004c_lanes": {
+    "A": {
+      "ci": "PASS",
+      "disposition": "INCONCLUSIVE",
+      "head": "2782277a46ad3b2147a6e85788c85f2ce77405fd",
+      "pr": 34,
+      "terminal_freeze": "4aafab4bd77d58fd82a510fa2b95842689f49ba2"
+    },
+    "B": {
+      "ci": "PASS",
+      "disposition": "SOFT_COMPETITIVE_EFFECT_ONLY",
+      "head": "65bd8a81a7e4ef36e920df5e092a37b51cc00eb7",
+      "pr": 35
+    },
+    "C": {
+      "ci": "PASS",
+      "disposition": "INCONCLUSIVE_NO_PROMOTED_CROSS_VENUE_EDGE",
+      "head": "fbc8c2214969c8d9c7bd7afa7a7b20d248ecb742",
+      "immutable_evidence_commit": "239a05e9b55666530855af49ce5b00120c34a066",
+      "pr": 37
+    },
+    "D": {
+      "ci": "PENDING_AT_AUDIT_WRITE",
+      "disposition": "NO_CONDITIONAL_EDGE",
+      "empirical_implementation": "1e308d7cf16cdf17fcf8ca247000c14b758a7316",
+      "head_after_ci_maintenance": "a0c9f10eda0a38b5997af9ca70e9bf4b276d07da",
+      "maintenance_changes": "lint/type only; preregistration bytes unchanged",
+      "pr": 39,
+      "preregistration_sha256": "9eafa50476ffa3e3d793081ead48e1536c02bed5a8571ca92c981158773b2688",
+      "terminal_freeze": "6adb6c2746fdba1453a5f845a515c9f56b5dab3b"
+    }
+  },
+  "experiment_id": "EXPERIMENT-005A",
+  "master_004c_composite_freeze_present": false,
+  "schema_version": 1,
+  "status": "LAUNCH_READY_ENGINEERING_GATE2_CLOSED",
+  "unlock_requirement": "MASTER must create the official 004C composite freeze/gate record; this readiness record is not authorization to inspect 005A price responses."
+}
