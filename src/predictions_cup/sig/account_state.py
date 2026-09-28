@@ -75,6 +75,7 @@ class AccountRealtimeStateEngine:
                 logical_intent_id=f"sig-order-{order.id}",
                 exchange_id=order.exchange_id,
                 market_id=market_by_exchange.get(order.exchange_id, "UNKNOWN"),
+                tournament_id=self.tournament_id,
                 reserved_exposure=float(abs(order.quantity)),
                 open=order.open,
                 uncertain=False,
@@ -180,6 +181,7 @@ class AccountRealtimeStateEngine:
                 RuntimePosition(
                     exchange_id=exchange_id,
                     market_id=market_id,
+                    tournament_id=self.tournament_id,
                     gross_exposure=float(abs(quantity)),
                 )
                 for exchange_id, (market_id, quantity) in self._positions.items()
