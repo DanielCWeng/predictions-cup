@@ -940,8 +940,7 @@ def main() -> None:
     }
     freeze_path = OUT / "train_dev_shortlist_freeze.json"
     freeze_path.write_text(
-        json.dumps(freeze, indent=2, sort_keys=True) + "
-"
+        json.dumps(freeze, indent=2, sort_keys=True) + "\n"
     )
     summary = {
         "targets_with_stable_candidate": sum(
@@ -958,8 +957,7 @@ def main() -> None:
         ),
     }
     (OUT / "train_dev_summary.json").write_text(
-        json.dumps(summary, indent=2, sort_keys=True) + "
-"
+        json.dumps(summary, indent=2, sort_keys=True) + "\n"
     )
     print(json.dumps(summary, sort_keys=True))
 
