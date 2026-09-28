@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "amendment_id": "schema_order_amendment_010",
+  "classification": "ENGINEERING_ONLY",
+  "trigger": "After the completed US_2024 bounded-continuation merge, aggregate validation found that physical Parquet feature-column order differed between US_2024 and the four non-US family matrices.",
+  "observed_state": {
+    "feature_target_spec_sha256": "47dc9c9a678f58558aba7e4bc282103cacbc0836f08018a79d4197487d689cf7",
+    "feature_count_all_families": 226,
+    "target_count_all_families": 47,
+    "feature_name_sets_equal": true,
+    "target_columns_equal": true,
+    "first_observed_order_difference": "last_interarrival_seconds placement relative to windowed anonymous-activity features",
+    "us_output_sha256": "0f28fce1f2dd75227a37876ed378e49d163fd91f46a8451def6b8304b3ae074f",
+    "us_rows": 7890463
+  },
+  "change": {
+    "aggregate_validation": "Require identical feature name sets with no duplicates, identical feature/target counts and identical frozen spec hash; retain US_2024 feature ordering as the canonical aggregate order.",
+    "stage_3_validation": "Require identical feature name sets with no duplicates and identical target ordering; select all downstream matrices explicitly by canonical feature names."
+  },
+  "scientific_effect": "NONE",
+  "unchanged": [
+    "feature definitions and values",
+    "target definitions and values",
+    "time splits and embargoes",
+    "screening/model specification",
+    "negative controls",
+    "promotion thresholds",
+    "HOLDOUT protocol and gate"
+  ],
+  "holdout_status": "CLOSED",
+  "note": "This amendment resolves non-semantic physical column ordering only. It must not be used to alter or rescue empirical results."
+}
