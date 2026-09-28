@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005A",
+  "data_002_merged": true,
+  "data_002_main_sha": "69cb1924751515a495bf99556819147ad090d67d",
+  "experiment_004c_fully_frozen": true,
+  "master_authorized": true,
+  "experiment_004c_freeze_sha": "747bff082f25e0f99895e2def1986e61a619ddb0",
+  "experiment_004c_canonical_integration_base_sha": "6aa6a6c9f4108e582584bc141cc68fa5383e522c",
+  "experiment_004c_final_handoff_commit": "d22503e3a8d64b99e0c114089489bbe202eccb03",
+  "experiment_004c_final_handoff_path": "docs/experiments/EXPERIMENT_004C_FINAL_HANDOFF.md",
+  "authorization_basis": "MASTER integration branch declares EXPERIMENT-004C Programme status COMPLETE / FROZEN and records all four accepted lane heads and merge SHAs.",
+  "price_response_access_authorized": true
+}
