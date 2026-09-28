@@ -136,3 +136,9 @@ def test_holdout_positive_gate_uses_weighted_primary_estimand() -> None:
     assert "weighted_gain = float(baseline_mse - challenger_mse)" in code
     assert "raw_p[name] = p_value if weighted_gain > 0 else 1.0" in code
     assert "raw_p[name] = p_value if float(np.mean(loss_gain)) > 0 else 1.0" not in code
+
+def test_holdout_emits_separate_falsification_concentration_artifact() -> None:
+    runner = Path("scripts/kaggle/experiment_005e/run.py").read_text()
+    assert 'WORK / "falsification_concentration_report.json"' in runner
+    assert '"concentration",' in runner
+    assert '"falsification": evaluation["falsification"]' in runner
