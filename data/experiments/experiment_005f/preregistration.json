@@ -105,5 +105,11 @@
   "safety": {
     "real_order_placement": false,
     "ec2_empirical_compute": false
-  }
+  },
+  "model_sampling": {
+    "max_rows_per_split_regime": 250000,
+    "policy": "deterministic systematic temporal thinning after full feature/label construction",
+    "purpose": "bound repeated model fits without choosing rows from outcomes"
+  },
+  "canonical_train_dev_kernel": "version >=2; v1 is engineering pilot and its scientific outputs must not be used"
 }
