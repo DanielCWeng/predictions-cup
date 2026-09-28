@@ -6,7 +6,6 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from time import monotonic_ns
 
-from predictions_cup.execution.models import ExecutionMode
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.risk.core import RiskContext, RiskDecision, evaluate_risk
@@ -49,7 +48,6 @@ class DecisionRuntime:
         strategy_config: Mapping[str, float],
         risk_context: RiskContext,
         logical_operation_id: str,
-        mode: ExecutionMode,
         created_monotonic_ns: int | None = None,
     ) -> DecisionOutcome:
         decision_started = self._clock_ns()
@@ -80,7 +78,6 @@ class DecisionRuntime:
             plan = build_execution_plan(
                 decision,
                 logical_operation_id=logical_operation_id,
-                mode=mode,
                 created_monotonic_ns=decision_ns,
             )
             plan_finished = self._clock_ns()
