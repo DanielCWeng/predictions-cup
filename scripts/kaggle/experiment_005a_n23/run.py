@@ -425,7 +425,7 @@ def main() -> None:
             "null_draws.csv": sha256(WORK / "null_draws.csv"),
         },
     }
-    (WORK / "run_manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\\n")
+    (WORK / "run_manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     print(json.dumps({
         "status": "COMPLETE",
         "cells": len(summaries),
