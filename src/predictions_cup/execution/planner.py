@@ -41,6 +41,7 @@ def build_execution_plan(
         signal_value=decision.signal_value,
         fair_value=decision.fair_value,
         decision_observation_ns=decision.decision_observation_ns,
+        decision_monotonic_ns=created_monotonic_ns,
     )
     idempotency_key = deterministic_idempotency_key(
         logical_operation_id,
