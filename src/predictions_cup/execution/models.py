@@ -77,6 +77,7 @@ class ExecutionAudit:
     signal_value: float
     fair_value: float | None
     decision_observation_ns: int
+    decision_monotonic_ns: int
 
     def __post_init__(self) -> None:
         if not self.strategy_family.strip():
@@ -92,6 +93,8 @@ class ExecutionAudit:
                 raise ValueError("fair_value must be within probability support")
         if self.decision_observation_ns < 0:
             raise ValueError("decision_observation_ns must be non-negative")
+        if self.decision_monotonic_ns < 0:
+            raise ValueError("decision_monotonic_ns must be non-negative")
 
 
 @dataclass(frozen=True, slots=True)
