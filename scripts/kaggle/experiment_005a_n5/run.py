@@ -154,7 +154,13 @@ def fit_cell(frame: pd.DataFrame, *, base_features: tuple[str, ...], challenger_
     return {
         "status":"OK", "data":data, "validation":validation, "validation_frame":va,
         "challenger_model":challenger, "val_w":vw, "vy":vy, "baseline_mse":l0,
-        "challenger_mse":l1, "observed_gain":l0-l1,
+        "challenger_mse":l1, "observed_prediction":p1,
+        "original_challenger":vx1[:,[features.index(name) for name in challenger_features]],
+        "challenger_slopes":np.asarray([
+            challenger.coefficient[features.index(name)]/challenger.scale[features.index(name)]
+            for name in challenger_features
+        ],dtype=float),
+        "observed_gain":l0-l1,
     }
 
 
@@ -257,13 +263,12 @@ def maker_block_transform(index: dict[str, Any], *, component: str, draw: int) -
 
 
 def null_gain(fit: dict[str, Any], transformed: np.ndarray, challenger: tuple[str, ...]) -> float:
-    from predictions_cup.learning.flow_models import predict_ridge, weighted_mse
-    va=fit["validation_frame"]; model=fit["challenger_model"]
-    full=va.loc[:,list(model.feature_names)].to_numpy(float)
-    for j,name in enumerate(challenger):
-        full[:,model.feature_names.index(name)]=transformed[:,j]
-    p=predict_ridge(model,full)
-    return float(fit["baseline_mse"]-weighted_mse(fit["vy"],p,fit["val_w"]))
+    from predictions_cup.learning.flow_models import weighted_mse
+    if transformed.shape[1] != len(challenger):
+        raise RuntimeError("transformed challenger width mismatch")
+    delta=(transformed-fit["original_challenger"])@fit["challenger_slopes"]
+    prediction=fit["observed_prediction"]+delta
+    return float(fit["baseline_mse"]-weighted_mse(fit["vy"],prediction,fit["val_w"]))
 
 
 def upper_p(obs: float, vals: list[float]) -> float:
