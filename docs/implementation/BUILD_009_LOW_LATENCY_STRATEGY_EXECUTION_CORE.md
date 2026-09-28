@@ -268,6 +268,25 @@ The coordinator captures the current immutable `RuntimeSnapshot`, executes strat
 Risk synchronously, and only awaits at the final sink dispatch boundary. This preserves the
 single-asyncio-loop / synchronous-calculation baseline.
 
+## Structured execution audit
+
+Every approved execution plan carries a non-wire `ExecutionAudit` containing:
+
+- strategy family;
+- strategy ID;
+- scalar signal value (the opportunity gross edge at this boundary);
+- fair value when defined;
+- decision observation monotonic timestamp.
+
+Before the first LIVE network write, the durable `SUBMISSION` journal event records that metadata
+alongside logical intent identity, exchange identity and submission time. Subsequent ACK, fill,
+Realtime order/fill and terminal reconciliation events share the same logical operation/order
+identity. This is sufficient to reconstruct signal -> decision -> submission -> acknowledgement/fill
+timing without putting analytics metadata into SIG order payloads.
+
+The SQLite journal performs a forward-compatible column check on startup so branch-created
+pre-audit journals acquire the new structured fields rather than silently losing attribution.
+
 ## Account Realtime controller
 
 `AccountRealtimeController` binds the private `user:{profile_id}` / `account_batch` channel to
@@ -349,7 +368,7 @@ Target-host evidence commands:
 
 ```bash
 python -m predictions_cup.benchmarks --calls 100000 --warmup 3000 --repeats 3 --include-journal
-python -m predictions_cup.benchmarks --calls 1000000 --warmup 3000 --repeats 3 --include-journal
+python -m predictions_cup.benchmarks --calls 1000000 --warmup 3000 --repeats 3
 ```
 
 The million-call run is deliberately not a generic GitHub-hosted hard latency gate.
