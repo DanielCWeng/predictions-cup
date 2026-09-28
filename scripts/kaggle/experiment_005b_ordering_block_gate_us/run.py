@@ -14,13 +14,15 @@ specification, thresholds, splits, shortlist, or parent PR #45 artefacts.
 
 from __future__ import annotations
 
-import argparse
+# ruff: noqa: UP047
+
 import asyncio
 import hashlib
 import json
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 import aiohttp
 import duckdb
@@ -71,14 +73,13 @@ async def rpc_batch(
     last_error: Exception | None = None
     for attempt in range(MAX_RETRIES):
         try:
-            async with semaphore:
-                async with session.post(
-                    rpc_url,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=90),
-                ) as response:
-                    status = response.status
-                    data: Any = await response.json(content_type=None)
+            async with semaphore, session.post(
+                rpc_url,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=90),
+            ) as response:
+                status = response.status
+                data: Any = await response.json(content_type=None)
             if status == 200 and isinstance(data, list):
                 by_id = {
                     int(item["id"]): item
@@ -113,7 +114,7 @@ async def rpc_batch(
             )
         except (
             aiohttp.ClientError,
-            asyncio.TimeoutError,
+            TimeoutError,
             RuntimeError,
             ValueError,
         ) as exc:
