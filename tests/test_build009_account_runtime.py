@@ -79,6 +79,7 @@ class FakeSubscriber:
     ) -> SubscriberExit:
         del stop_event, on_maintenance
         on_connected()
+        await asyncio.sleep(0)
         for payload in self.payloads:
             await on_batch(
                 "user:profile-1",
@@ -161,6 +162,48 @@ def test_token_refresh_revokes_trust_before_resync() -> None:
     assert trust_seen == [False, False]
     assert state.trusted is True
 
+
+
+def test_account_batch_during_rest_snapshot_forces_another_resync() -> None:
+    state = AccountRealtimeStateEngine(tournament_id="t1")
+    subscribers = [
+        FakeSubscriber((_batch(1, 0),), SubscriberExit.TOKEN_REFRESH),
+        FakeSubscriber((), SubscriberExit.STOPPED),
+    ]
+    resync_count = 0
+    trust_seen: list[bool] = []
+
+    async def mint_token() -> RealtimeTokenDto:
+        return _token()
+
+    async def resync() -> AccountAuthoritativeSnapshot:
+        nonlocal resync_count
+        resync_count += 1
+        trust_seen.append(state.trusted)
+        await asyncio.sleep(0)
+        return _snapshot()
+
+    def factory(**kwargs: Any) -> FakeSubscriber:
+        del kwargs
+        return subscribers.pop(0)
+
+    async def scenario() -> None:
+        controller = AccountRealtimeController(
+            state=state,
+            mint_token=mint_token,
+            authoritative_resync=resync,
+            subscriber_factory=factory,
+        )
+        await controller.run(stop_event=asyncio.Event())
+
+    asyncio.run(scenario())
+
+    # One batch arrived while the first authoritative snapshot was in flight,
+    # so that connection requires a second snapshot before trust can return.
+    # TOKEN_REFRESH then starts a fresh subscribed+resync cycle.
+    assert resync_count == 3
+    assert trust_seen == [False, False, False]
+    assert state.trusted is True
 
 
 def test_accepted_realtime_fill_is_linked_to_execution_journal(tmp_path: Path) -> None:
