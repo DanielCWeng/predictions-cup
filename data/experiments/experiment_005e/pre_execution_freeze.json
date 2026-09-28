@@ -101,6 +101,13 @@
       "status": "ENGINEERING_MEMORY_FAILURE_BEFORE_EVALUATION_OUTPUT",
       "outcome_inspection": false,
       "note": "All five frozen HOLDOUT panels completed and were preserved; process was killed after panel construction and before holdout_evaluation.json or any model result was emitted."
+    },
+    {
+      "kernel": "polyleviathan/005e-participant-ecology-holdout-eval",
+      "version": 1,
+      "status": "ENGINEERING_SCHEMA_PREFLIGHT_FAILURE_BEFORE_EVALUATION",
+      "outcome_inspection": false,
+      "note": "Required generated archetype_* columns from source panels even though assign_archetypes() creates them from the frozen TRAIN transform; failed before panel values or HOLDOUT metrics were evaluated."
     }
   ],
   "local_current_source_commit": "096772f8b11c74e7c9f223ee1456c8e2f702e433",
@@ -249,9 +256,9 @@
     },
     "eval_code_dataset": "polyleviathan/sig-cup-005e-holdout-eval-code",
     "eval_kernel": "polyleviathan/005e-participant-ecology-holdout-eval",
-    "eval_implementation_commit": "16569df83708b97b2dbdaa040b54c70284d866ac",
-    "eval_runner_sha256": "4e2f81e16702a2f6cb12bc96d59b9e467f8c95ab0d8bbef236ea66f2129dd882",
+    "eval_implementation_commit": "055fb09bca8e1271b466cb3dc3252cdef4e678c2",
+    "eval_runner_sha256": "ff881d9dfc1e8744be4fc94723536ad85322ba857cd43c571150e40a801728cd",
     "pre_holdout_freeze_sha256": "60f642ec50a1a9ffa5aebfba73d8a66960f6afb2c318e7d747e584df81ca6de1",
-    "status": "LAUNCHED_BEFORE_RESULT_INSPECTION"
+    "status": "EVAL_V2_RUNNING_BEFORE_RESULT_INSPECTION"
   }
 }
