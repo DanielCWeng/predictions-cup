@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from time import monotonic_ns
 
 from predictions_cup.execution.models import (
+    ExecutionAudit,
     ExecutionEnvelope,
     ExecutionEvent,
     LifecycleState,
@@ -21,6 +22,7 @@ ClockNs = Callable[[], int]
 class ExecutionPlan:
     envelope: ExecutionEnvelope
     intents: tuple[RuntimeOrderIntent, ...]
+    audit: ExecutionAudit | None = None
 
 
 class NullSink:
