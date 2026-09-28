@@ -694,6 +694,12 @@ def indirect_graph_candidates(
         ih, sh = fit_huber(tx, ty)
         variants: list[tuple[str, str, np.ndarray, dict[str, Any]]] = [
             (
+                "RAW_INDIRECT_PROB_MEAN",
+                "RAW_RV",
+                np.nanmean(rp, axis=1),
+                {"method": "raw_probability_mean", "refs": refs},
+            ),
+            (
                 "RAW_INDIRECT_LOGIT_MEAN",
                 "RAW_RV",
                 logistic(comp),
@@ -830,6 +836,24 @@ def generic_event_inventory_and_eval(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     inventory: list[dict[str, Any]] = []
     results: list[dict[str, Any]] = []
+    for row in EMBEDDED.get("historical_catalogue", []):
+        exact_market = str(row.get("market_id") or "").strip()
+        exact_condition = str(row.get("condition_id") or "").strip()
+        inventory.append({
+            "inventory_id": f"HISTORICAL_CATALOGUE::{row.get('catalogue_row_id')}",
+            "source": "RESEARCH-PACKAGE-001 market catalogue",
+            "class": "SOFT",
+            "relation_type": row.get("structural_role") or row.get("role") or "HISTORICAL_STRUCTURAL_NODE",
+            "semantic_basis": row.get("semantic_analogue") or row.get("question") or row.get("title"),
+            "family": row.get("election_id"),
+            "exact_identity_available": bool(exact_market or exact_condition),
+            "test_status": (
+                "ELIGIBLE_FOR_GENERIC_DATA002_EVENT_CENSUS"
+                if exact_market or exact_condition
+                else "SEMANTIC_NODE_ONLY_NO_EXACT_ID"
+            ),
+            "hard_identity": False,
+        })
     import pandas as pd
 
     for family in PREREG["data_sources"]["DATA-002"]["families"]:
