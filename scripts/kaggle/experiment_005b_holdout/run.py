@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,78 @@ HOLDOUT_GATE_COMMIT = "PENDING"
 EMBARGO = 300
 BOOT = 1000
 SEED = 505005
+REGIME_FEATURES = (
+    "regime_pre_election",
+    "regime_election_day_pre_results",
+    "regime_active_results",
+    "regime_late_count",
+    "regime_post_resolution_diagnostic",
+)
+REGIME_WINDOWS = {
+    "COL_2026": (
+        ("regime_pre_election", "2026-05-29T00:00:00+00:00", "2026-05-31T13:00:00+00:00"),
+        ("regime_election_day_pre_results", "2026-05-31T13:00:00+00:00", "2026-05-31T21:11:00+00:00"),
+        ("regime_active_results", "2026-05-31T21:11:00+00:00", "2026-06-01T03:11:00+00:00"),
+        ("regime_late_count", "2026-06-01T03:11:00+00:00", "2026-06-05T05:00:00+00:00"),
+        ("regime_pre_election", "2026-06-19T00:00:00+00:00", "2026-06-21T13:00:00+00:00"),
+        ("regime_election_day_pre_results", "2026-06-21T13:00:00+00:00", "2026-06-21T21:11:00+00:00"),
+        ("regime_active_results", "2026-06-21T21:11:00+00:00", "2026-06-22T03:11:00+00:00"),
+        ("regime_late_count", "2026-06-22T03:11:00+00:00", "2026-06-25T05:00:00+00:00"),
+    ),
+    "HUN_2026": (
+        ("regime_pre_election", "2026-04-05T00:00:00+00:00", "2026-04-12T04:00:00+00:00"),
+        ("regime_election_day_pre_results", "2026-04-12T04:00:00+00:00", "2026-04-12T18:18:00+00:00"),
+        ("regime_active_results", "2026-04-12T18:18:00+00:00", "2026-04-13T00:18:00+00:00"),
+        ("regime_late_count", "2026-04-13T00:18:00+00:00", "2026-04-18T22:00:00+00:00"),
+        ("regime_post_resolution_diagnostic", "2026-04-18T22:00:00+00:00", "2026-05-07T12:00:00+00:00"),
+    ),
+    "PER_2026": (
+        ("regime_pre_election", "2026-04-10T00:00:00+00:00", "2026-04-12T12:00:00+00:00"),
+        ("regime_election_day_pre_results", "2026-04-12T12:00:00+00:00", "2026-04-12T23:00:00+00:00"),
+        ("regime_active_results", "2026-04-12T23:00:00+00:00", "2026-04-13T05:00:00+00:00"),
+        ("regime_late_count", "2026-04-13T05:00:00+00:00", "2026-05-15T15:04:00+00:00"),
+        ("regime_post_resolution_diagnostic", "2026-05-15T15:04:00+00:00", "2026-05-17T17:03:00+00:00"),
+        ("regime_pre_election", "2026-06-05T00:00:00+00:00", "2026-06-07T12:00:00+00:00"),
+        ("regime_election_day_pre_results", "2026-06-07T12:00:00+00:00", "2026-06-07T23:12:00+00:00"),
+        ("regime_active_results", "2026-06-07T23:12:00+00:00", "2026-06-08T05:12:00+00:00"),
+        ("regime_late_count", "2026-06-08T05:12:00+00:00", "2026-06-29T19:50:00+00:00"),
+        ("regime_post_resolution_diagnostic", "2026-06-29T19:50:00+00:00", "2026-07-03T21:05:00+00:00"),
+    ),
+}
+
+
+def epoch(value: str) -> int:
+    return int(datetime.fromisoformat(value).timestamp())
+
+
+REGIME_WINDOWS_EPOCH = {
+    family: tuple(
+        (name, epoch(start), epoch(end))
+        for name, start, end in windows
+    )
+    for family, windows in REGIME_WINDOWS.items()
+}
+
+
+def apply_documented_regimes(frame: pd.DataFrame) -> pd.DataFrame:
+    result = frame.copy()
+    for feature in REGIME_FEATURES:
+        result[feature] = np.nan
+    families = result["family"].astype(str).to_numpy()
+    timestamps = result["timestamp"].to_numpy(dtype=np.int64)
+    for family, windows in REGIME_WINDOWS_EPOCH.items():
+        family_mask = families == family
+        documented = np.zeros(len(result), dtype=bool)
+        for feature, start, end in windows:
+            mask = family_mask & (timestamps >= start) & (timestamps < end)
+            if mask.any():
+                result.loc[mask, feature] = 1.0
+                documented |= mask
+        for feature in REGIME_FEATURES:
+            missing = documented & result[feature].isna().to_numpy()
+            if missing.any():
+                result.loc[missing, feature] = 0.0
+    return result
 
 
 def sha256(path: Path) -> str:
@@ -100,7 +173,12 @@ def sql_columns(columns: set[str]) -> str:
         "family", "market_id", "condition_id", "timestamp", "tx_hash", "log_index",
         "raw_split", "train_end_timestamp", "dev_end_timestamp",
     }
-    return ",".join(sorted(required | columns))
+    physical = {
+        column
+        for column in columns
+        if column not in REGIME_FEATURES
+    }
+    return ",".join(sorted(required | physical))
 
 
 def load_target_frames(
@@ -137,8 +215,12 @@ def load_target_frames(
         )
         con.close()
     return (
-        pd.concat(train_parts, ignore_index=True),
-        pd.concat(hold_parts, ignore_index=True),
+        apply_documented_regimes(
+            pd.concat(train_parts, ignore_index=True)
+        ),
+        apply_documented_regimes(
+            pd.concat(hold_parts, ignore_index=True)
+        ),
     )
 
 
