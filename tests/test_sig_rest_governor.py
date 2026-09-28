@@ -74,6 +74,27 @@ def test_global_governor_paces_concurrent_callers_deterministically() -> None:
     asyncio.run(scenario())
 
 
+def test_high_priority_can_use_reserved_token_immediately_after_read() -> None:
+    async def scenario() -> None:
+        clock = FakeClock()
+        governor = SigRestGovernor(
+            rate_per_second=2.0,
+            sleep=clock.sleep,
+            monotonic=clock.monotonic,
+            random_fn=lambda: 0.0,
+        )
+        await governor.acquire(RestPriority.NORMAL)
+        before = clock.now
+        await governor.acquire(RestPriority.HIGH)
+
+        assert clock.now == before
+        assert clock.sleeps == []
+        assert governor.snapshot().requests_total == 2
+        await governor.aclose()
+
+    asyncio.run(scenario())
+
+
 def test_high_priority_overtakes_background_waiting_for_capacity() -> None:
     async def scenario() -> None:
         now = 0.0
