@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from typing import cast
 
+from pydantic import SecretStr
+
+from predictions_cup.config import AppSettings
+from predictions_cup.execution.interlocks import assert_live_interlocks
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import (
@@ -14,6 +19,7 @@ from predictions_cup.execution.models import (
     RuntimeOrderIntent,
 )
 from predictions_cup.execution.planner import build_execution_plan
+from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.risk.core import RiskDecision
 from predictions_cup.runtime import OrderAction, OutcomeSide
 from predictions_cup.sig.trading_client import SigTradingClient
@@ -47,9 +53,37 @@ class FakeTradingClient:
             }
         )
 
+    async def place_order_payload(
+        self,
+        payload_json: str,
+    ) -> SingleOrderResponseDto:
+        request = SingleOrderRequestDto.model_validate(json.loads(payload_json))
+        return await self.place_order(request)
+
     async def cancel_order(self, order_id: int) -> object:
         assert order_id == 91
         return {"cancelled": True}
+
+
+def _permit():
+    settings = AppSettings(
+        sig_trade_credential=SecretStr("trade-secret"),
+        tournament_id="t1",
+        tournament_slug="cup",
+        trading_enabled=True,
+        execution_mode="LIVE",
+        global_kill_switch=False,
+        risk_max_order_size=10,
+        risk_max_gross_exposure=100.0,
+        risk_max_per_market_exposure=100.0,
+        risk_max_open_order_exposure=100.0,
+        risk_max_concurrent_open_orders=10,
+    )
+    return assert_live_interlocks(
+        settings,
+        explicit_live_invocation=True,
+        account_trusted=True,
+    )
 
 
 def _intent() -> RuntimeOrderIntent:
@@ -74,6 +108,7 @@ def test_live_sink_records_observation_decision_dispatch_and_ack_clocks(
     decision = RiskDecision(
         approved=True,
         reason="approved",
+        execution_mode=ExecutionMode.LIVE,
         operation_kind=OperationKind.SINGLE_PLACEMENT,
         intents=(intent,),
         strategy_family="FV-TAKE",
@@ -85,14 +120,17 @@ def test_live_sink_records_observation_decision_dispatch_and_ack_clocks(
     plan = build_execution_plan(
         decision,
         logical_operation_id="op-91",
-        mode=ExecutionMode.LIVE,
         created_monotonic_ns=150,
     )
     ticks = iter((200, 300, 400))
     journal = ExecutionJournal(tmp_path / "execution.sqlite3")
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
     sink = SigLiveSink(
         client=cast(SigTradingClient, FakeTradingClient()),
         journal=journal,
+        permit=_permit(),
+        reservations=reservations,
         clock_ns=lambda: next(ticks),
     )
 
@@ -136,6 +174,8 @@ def test_cancel_dispatch_timestamp_is_sampled_after_durable_identity(
     sink = SigLiveSink(
         client=cast(SigTradingClient, FakeTradingClient()),
         journal=journal,
+        permit=_permit(),
+        reservations=ExecutionReservationBook(),
         clock_ns=lambda: next(ticks),
     )
 
