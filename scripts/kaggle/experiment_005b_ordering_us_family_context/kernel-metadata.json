@@ -8,9 +8,9 @@
   "enable_gpu": false,
   "enable_tpu": false,
   "enable_internet": false,
-  "dataset_sources": [
-    "polyleviathan/005b-ordering-falsification-us-base-price"
-  ],
+  "dataset_sources": [],
   "competition_sources": [],
-  "kernel_sources": []
+  "kernel_sources": [
+    "polyleviathan/005b-ordering-falsification-us-base-price"
+  ]
 }
