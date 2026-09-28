@@ -41,11 +41,20 @@ def main() -> None:
             "feature_target_spec_sha256",
             "feature_count",
             "target_count",
-            "feature_columns",
             "target_columns",
         ):
             if report[key] != reference[key]:
                 raise RuntimeError(f"schema/spec drift for {family}: {key}")
+        reference_features = reference["feature_columns"]
+        current_features = report["feature_columns"]
+        if (
+            len(reference_features) != len(set(reference_features))
+            or len(current_features) != len(set(current_features))
+            or set(current_features) != set(reference_features)
+        ):
+            raise RuntimeError(
+                f"schema/spec drift for {family}: feature_columns"
+            )
 
     split_counts: dict[str, int] = {}
     for report in reports:
