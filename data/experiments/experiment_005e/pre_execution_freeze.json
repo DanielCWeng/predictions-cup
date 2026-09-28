@@ -88,6 +88,13 @@
       "to": "participant history is family-local; recurrence may span event_id/markets inside a family, while cross-family evidence refers model transfer/stability rather than a globally continuous wallet ledger",
       "reason": "DATA-002 family files overlap in calendar time and the frozen runner builds each family independently; this is an interpretation clarification, not a computational change",
       "timing": "before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection"
+    },
+    {
+      "field": "HOLDOUT falsification/concentration artifact",
+      "from": "falsification and concentration evidence nested only inside holdout_evaluation.json",
+      "to": "also emit falsification_concentration_report.json on Kaggle from the same frozen evaluation object",
+      "reason": "Original 005E brief requires a standalone falsification/concentration report; this is output packaging only and introduces no new metric, model, threshold, or selection.",
+      "timing": "before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection; running TRAIN/DEV v5 is unaffected"
     }
   ],
   "local_frozen_source_commit": "567f364c5acf3825a940ea2220eac3cb511b9e6f",
@@ -176,10 +183,12 @@
     "tests_sha256": "11471206fca5a1f71129ebdbb275c28ae5f00e12ca37223fe2e23590ff908ec6"
   },
   "next_holdout_runner": {
-    "github_runner_commit": "3cc867634591f4344bc9575b65b3e5678ee62d79",
-    "runner_sha256": "d5553d445e3c87a94084931012645b418a7708c211eeb42474a67d28c7687a17",
+    "github_runner_commit": "cd5cea1b463d9716425f84039895ccb75bcbb74f",
+    "runner_sha256": "2adf028c42e44a9f16440c2464a724f0fc146d086cb6f51bead3c1aa12fe0bb3",
+    "tests_sha256": "97daef730ad42524857cb70705d6abbc1a2a78da846ce2cfca5931dfbee8ffa6",
+    "focused_tests": 13,
     "status": "PRE_RESULT_CANDIDATE_NOT_PACKAGED",
-    "focused_tests": 12
+    "note": "Includes weighted bootstrap/sign-gate corrections and standalone falsification_concentration_report output; TRAIN/DEV v5 remains immutable."
   },
   "phase_split_note": "Generic current-source fields refer to the immutable TRAIN/DEV v5 runner. The later next_holdout_runner record is the authority for HOLDOUT packaging."
 }
