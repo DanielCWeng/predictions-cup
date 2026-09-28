@@ -66,11 +66,11 @@ class FakeSubscriber:
         payloads: tuple[object, ...],
         outcome: SubscriberExit,
         *,
-        connect_yields: int = 2,
+        connect_delay: float = 0.001,
     ) -> None:
         self.payloads = payloads
         self.outcome = outcome
-        self.connect_yields = connect_yields
+        self.connect_delay = connect_delay
 
     async def run(
         self,
@@ -82,8 +82,7 @@ class FakeSubscriber:
     ) -> SubscriberExit:
         del stop_event, on_maintenance
         on_connected()
-        for _ in range(self.connect_yields):
-            await asyncio.sleep(0)
+        await asyncio.sleep(self.connect_delay)
         for payload in self.payloads:
             await on_batch(
                 "user:profile-1",
@@ -174,7 +173,7 @@ def test_account_batch_during_rest_snapshot_forces_another_resync() -> None:
         FakeSubscriber(
             (_batch(1, 0),),
             SubscriberExit.TOKEN_REFRESH,
-            connect_yields=1,
+            connect_delay=0.0,
         ),
         FakeSubscriber((), SubscriberExit.STOPPED),
     ]
