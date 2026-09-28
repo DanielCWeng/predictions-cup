@@ -524,6 +524,8 @@ def main() -> None:
             "ordering": ["block_number", "log_index", "token_id"],
             "source_code": "Sonar/custody_indexer.py CUSTODY_SCHEMA; block_number retained from source chain log",
         },
+        "timestamp_semantics": "UTC block timestamp from the upstream Polyleviathan trades lake at one-second resolution; no fill-receive timestamp is claimed",
+        "side_semantics": "side is copied from the upstream canonical trade row; aggressor interpretation is not established",
         "dedup_key": DEDUP_KEY,
         "row_count": total_rows,
         "duplicate_rows_removed": total_duplicates,
