@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "amendment_id": "005F-AMENDMENT-007",
+  "status": "PRE_HOLDOUT_ENGINEERING_CLARIFICATION",
+  "reason": "Exact causal reconstruction of genuine-change age and observable top-quantity state can require pre-HOLDOUT history older than a fixed 300-second context window when the feed remains continuously observable but economically unchanged.",
+  "protocol_clarification": {
+    "original_phrase": "loads only the minimum trailing context needed to calculate lagged features, plus HOLDOUT",
+    "clarified_meaning": "minimum semantically sufficient causal context. For stateful features whose sufficient context is not bounded by 300 seconds, the HOLDOUT kernel may read earlier rows from the same factual event/regime solely to reconstruct state at the HOLDOUT boundary.",
+    "allowed_pre_holdout_use": [
+      "reconstruct last observable BBO and continuity state",
+      "reconstruct last genuine BBO-change time",
+      "reconstruct carried observable best-level quantities",
+      "construct trailing trade/capture/depth state needed at HOLDOUT entry"
+    ],
+    "prohibited_pre_holdout_use": [
+      "feature or horizon selection",
+      "model or hyperparameter selection",
+      "model fitting or refitting",
+      "threshold tuning",
+      "loss/significance calculation",
+      "candidate promotion",
+      "any evaluation label before HOLDOUT"
+    ],
+    "evaluation_rule": "Only rows with decision time in HOLDOUT and targets terminating inside the same factual HOLDOUT regime may contribute to reported evidence."
+  },
+  "scientific_design_changed": false,
+  "candidate_universe_changed": false,
+  "model_grid_changed": false,
+  "selection_rule_changed": false,
+  "holdout_accessed": false
+}
