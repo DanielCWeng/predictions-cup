@@ -100,6 +100,7 @@ class ExecutionAudit:
 @dataclass(frozen=True, slots=True)
 class ExecutionEnvelope:
     logical_operation_id: str
+    tournament_id: str
     operation_kind: OperationKind
     sink_mode: ExecutionMode
     idempotency_key: str | None
@@ -115,6 +116,7 @@ class ExecutionEnvelope:
         cls,
         *,
         logical_operation_id: str,
+        tournament_id: str,
         operation_kind: OperationKind,
         sink_mode: ExecutionMode,
         idempotency_key: str,
@@ -124,6 +126,12 @@ class ExecutionEnvelope:
     ) -> ExecutionEnvelope:
         if not idempotency_key.strip():
             raise ValueError("placement requires a non-blank idempotency key")
+        tournament_ids = {intent.tournament_id for intent in intents}
+        if len(tournament_ids) != 1:
+            raise ValueError("placement intents must share one tournament_id")
+        tournament_id = next(iter(tournament_ids))
+        if not tournament_id.strip():
+            raise ValueError("placement requires a non-blank tournament_id")
         if operation_kind is OperationKind.SINGLE_PLACEMENT:
             if len(intents) != 1:
                 raise ValueError("single placement requires exactly one intent")
@@ -149,6 +157,7 @@ class ExecutionEnvelope:
         payload_json = json.dumps(payload, separators=(",", ":"), ensure_ascii=True)
         return cls(
             logical_operation_id=logical_operation_id,
+            tournament_id=tournament_id,
             operation_kind=operation_kind,
             sink_mode=sink_mode,
             idempotency_key=idempotency_key,
@@ -173,6 +182,8 @@ class ExecutionEnvelope:
         exchange_id: str | None = None,
         market_id: str | None = None,
     ) -> ExecutionEnvelope:
+        if tournament_id is None or not tournament_id.strip():
+            raise ValueError("cancellation requires explicit tournament_id")
         if operation_kind is OperationKind.SINGLE_CANCELLATION:
             if order_id is None or order_id <= 0:
                 raise ValueError("single cancellation requires a positive order_id")
@@ -192,6 +203,7 @@ class ExecutionEnvelope:
         payload_json = json.dumps(payload, separators=(",", ":"), ensure_ascii=True)
         return cls(
             logical_operation_id=logical_operation_id,
+            tournament_id=tournament_id,
             operation_kind=operation_kind,
             sink_mode=sink_mode,
             idempotency_key=None,
@@ -217,8 +229,11 @@ class ExecutionEnvelope:
         created_monotonic_ns: int,
         relationship_constraint: str | None,
     ) -> ExecutionEnvelope:
+        if not tournament_id.strip():
+            raise ValueError("persisted execution requires tournament_id")
         return cls(
             logical_operation_id=logical_operation_id,
+            tournament_id=tournament_id,
             operation_kind=operation_kind,
             sink_mode=sink_mode,
             idempotency_key=idempotency_key,
