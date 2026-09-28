@@ -1,4 +1,3 @@
-"""EXPERIMENT-005C post-HOLDOUT independent review falsification.
 
 This runner is deliberately bounded. It reproduces only the 35 already-frozen
 HOLDOUT selections and may retain, weaken, downgrade, or reject the existing
@@ -996,7 +995,8 @@ def main() -> None:
                 "family": family,
                 "panel_id": selection["panel_id"],
                 "panel_scope": selection["panel_scope"],
-                "grid_seconds": selection["grid_seconds"],                "horizon_seconds": selection["horizon_seconds"],
+                "grid_seconds": selection["grid_seconds"],
+                "horizon_seconds": selection["horizon_seconds"],
                 "model": selection["model"],
                 "lag_depth": selection["lag_depth"],
                 "alpha": selection["alpha"],
