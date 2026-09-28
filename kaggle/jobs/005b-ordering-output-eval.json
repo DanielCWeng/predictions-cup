@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "action": "wait_output",
+  "kernel": "polyleviathan/005b-ordering-falsification-eval",
+  "allow_missing": true,
+  "poll_seconds": 60,
+  "timeout_minutes": 330,
+  "output_file_pattern": ".*holdout_results\\.json$",
+  "note": "Wait for frozen corrected evaluator to exist and complete, then download only post-hoc HOLDOUT results."
+}
