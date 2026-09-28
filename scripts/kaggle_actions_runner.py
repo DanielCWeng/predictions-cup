@@ -50,7 +50,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     if data.get("schema_version") != 1:
         raise ValueError("schema_version must be 1")
     action = data.get("action")
-    if action not in {"auth_check", "run", "status", "logs", "wait", "wait_run", "output"}:
+    if action not in {"auth_check", "run", "status", "logs", "wait", "wait_run", "wait_output", "output"}:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
 
@@ -173,6 +173,14 @@ def download_outputs(data: dict[str, Any], kernel: str, output_dir: Path) -> Non
     run_command(args)
 
 
+def wait_then_output(data: dict[str, Any], output_dir: Path) -> None:
+    kernel = kernel_from_manifest(data)
+    wait_dir = output_dir / "wait"
+    wait_dir.mkdir(parents=True, exist_ok=True)
+    wait_for_kernel(data, kernel, wait_dir)
+    download_outputs(data, kernel, output_dir)
+
+
 def wait_then_run(data: dict[str, Any], output_dir: Path) -> None:
     dependency = str(data.get("wait_kernel", "")).strip()
     if not dependency or "/" not in dependency:
@@ -289,6 +297,8 @@ def main() -> int:
         wait_for_kernel(data, kernel, output_dir)
     elif action == "wait_run":
         wait_then_run(data, output_dir)
+    elif action == "wait_output":
+        wait_then_output(data, output_dir)
     elif action == "output":
         kernel = kernel_from_manifest(data)
         download_outputs(data, kernel, output_dir)
