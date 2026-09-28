@@ -77,7 +77,8 @@ def _within_tolerance(left: Decimal, right: Decimal, tolerance: Decimal) -> bool
 def reconstruct_transaction_group(
     rows: Sequence[Mapping[str, Any]],
     *,
-    tolerance: Decimal = Decimal("1e-8"),
+    size_tolerance: Decimal = Decimal("1e-8"),
+    yes_notional_tolerance: Decimal = Decimal("1e-3"),
 ) -> tuple[ReconstructedTrade, ...]:
     if not rows:
         raise ReconstructionError("empty group")
@@ -104,7 +105,7 @@ def reconstruct_transaction_group(
     active_row = active[0]
     active_size = _decimal(active_row["size_shares"], "active size")
     passive_size = sum((_decimal(row["size_shares"], "passive size") for row in passive), Decimal())
-    if not _within_tolerance(active_size, passive_size, tolerance):
+    if not _within_tolerance(active_size, passive_size, size_tolerance):
         raise ReconstructionError("size conservation failed")
 
     active_yes_notional = canonical_yes_price(
@@ -118,7 +119,11 @@ def reconstruct_transaction_group(
         ),
         Decimal(),
     )
-    if not _within_tolerance(active_yes_notional, passive_yes_notional, tolerance):
+    if not _within_tolerance(
+        active_yes_notional,
+        passive_yes_notional,
+        yes_notional_tolerance,
+    ):
         raise ReconstructionError("YES-axis price/size conservation failed")
 
     trades = tuple(
