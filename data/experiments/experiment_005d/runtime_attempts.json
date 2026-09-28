@@ -1,0 +1,22 @@
+{
+  "experiment_id": "EXPERIMENT-005D",
+  "holdout_status": "SEALED_NOT_INSPECTED",
+  "attempts": [
+    {
+      "kaggle_version": 2,
+      "runner_status": "INVALIDATED_PRE_EVIDENCE",
+      "reason": "Runner generation was scientifically identical but byte-nondeterministic because sanitized semantic field names were iterated from Python sets. No outputs were used.",
+      "remediation": "Changed sanitizer field containers to deterministic tuples and verified two clean generations produce identical runner SHA-256."
+    },
+    {
+      "kaggle_version": 3,
+      "runner_sha256": "871e642011a88d19e05e8fe29823af3f4fe6716d68e36cedee6f37804a6c6d96",
+      "runner_status": "FAILED_PRE_EVIDENCE",
+      "reason": "Kaggle rewrote DATA-002 manifest JSON formatting, so raw-byte SHA verification falsely raised DATA-002 manifest drift before empirical computation.",
+      "evidence": "Local extracted Kaggle manifest parsed identically to the accepted repo manifest although raw-byte hashes differed.",
+      "remediation": "Require semantic JSON payload equality and verify each consumed DATA-002 Parquet against the accepted per-file SHA-256."
+    }
+  ],
+  "current_runner_sha256": "c597bba58f04dbb0af35ec0f2239cb009e1256cf737b6617ae35331887400dd2",
+  "next_attempt": "Launch only when Kaggle concurrency is within the project limit."
+}
