@@ -3,7 +3,7 @@
   "experiment_id": "EXPERIMENT-005A",
   "title": "Fee-Inferred Maker/Taker & Participant Structure Discovery",
   "namespace": "005a_fee_role_discovery",
-  "status": "PREREGISTERED_EMPIRICAL_GATE_OPEN",
+  "status": "EMPIRICAL_COMPLETE_DESIGN_FROZEN",
   "base_main_sha": "69cb1924751515a495bf99556819147ad090d67d",
   "real_order_placement": false,
   "strategy_pnl": false,

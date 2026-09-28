@@ -1,0 +1,7 @@
+event,regime,conditions,decision_grid_rows,role_rows,a2_rows,a3_same_family_rows,a3_semantic_rows,collector_instants
+colombia_first_round,PRE_ELECTION,9,7320,27550,65880,234240,43920,1330869
+colombia_first_round,ACTIVE_RESULTS,23,720,14029,16560,205920,2880,1330869
+peru_runoff,PRE_ELECTION,5,7200,15651,36000,144000,0,796303
+peru_runoff,ACTIVE_RESULTS,23,720,15880,16560,174240,1440,796303
+colombia_runoff,PRE_ELECTION,3,7320,11035,21960,14640,14640,628950
+colombia_runoff,ACTIVE_RESULTS,4,720,10817,2880,2880,2880,628950

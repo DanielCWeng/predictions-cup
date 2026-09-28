@@ -1,18 +1,24 @@
 # EXPERIMENT-005A — Fee-Inferred Maker/Taker & Participant Structure Discovery
 
-**Status:** preregistered/scaffolded; empirical gate CLOSED
+**Status:** empirical execution COMPLETE; canonical result package VERIFIED
 **Branch:** `experiment/005a-fee-role-structure-discovery`
 **Base:** `69cb1924751515a495bf99556819147ad090d67d` (PR #36 / DATA-002 merged)
 
 ## Current boundary
 
-DATA-002 is on canonical `main`, so Gate 1 is satisfied. Gate 2 is not: EXPERIMENT-004C is not fully master-frozen.
-This branch therefore contains instrumentation, frozen semantics, provenance, tests and the discovery preregistration only.
-No 005A empirical response matrix, null battery, Kaggle discovery run, wallet ranking, strategy backtest, threshold search
-or live order placement has been executed.
+Gate 1 and Gate 2 are satisfied. The canonical EXPERIMENT-004C programme freeze is
+`ba938bedcf63f562be8b26c9502e828391123867`, and the 005A empirical gate pins that exact SHA.
 
-`scripts/experiment_005a/preflight.py --empirical` deliberately fails until MASTER creates
-`data/experiments/experiment_005a/empirical_gate.json` after the full 004C freeze.
+The empirical discovery matrix and frozen null batteries are complete. The canonical fail-closed result verifier passes
+across A2/A3, A4, A5, N23, N4 and N5. The terminal interpretation is **NARROW SAME-FAMILY 5s EFFECT ONLY /
+NO BROAD ROLE-AWARE EDGE**. No strategy-P&L, threshold-search or live-order claim is made.
+
+Canonical result entry points:
+
+- `data/experiments/experiment_005a/results/FINAL_RESEARCH_REPORT.md`
+- `data/experiments/experiment_005a/results/MASTER_HANDOFF_005A.md`
+- `data/experiments/experiment_005a/results/canonical_verification.json`
+- `data/experiments/experiment_005a/results/artifact_hashes.json`
 
 ## Role semantics
 
@@ -67,7 +73,11 @@ The canonical participant-infrastructure registry is pinned by SHA-256 in `prove
 
 ## Next action
 
-After EXPERIMENT-004C is fully frozen, MASTER should add the exact 004C freeze SHA to the empirical gate record.
-Only then should 005A join DATA-001 + DATA-002, run Phase-0 match-level reconciliation/coverage audits, freeze the empirical
-implementation, and execute the discovery matrix. The role rules, sign convention, horizons, mechanism families, null classes
-and no-alpha restrictions above are already frozen and must not be tuned after seeing 005A outcomes.
+Do not mine 005A for neighboring horizons, best pairs, wallets or thresholds.
+
+Carry the role-enrichment infrastructure forward. Carry only the same-family PRE_ELECTION 5s signed-flow result as a
+frozen replication candidate: it survives its declared null/FDR rule, but its relative OOS MSE gain is only 0.0007655%
+and a winning cell does not promote a mechanism under the preregistration.
+
+Any later trading claim requires genuinely forward/unexposed evidence and an effect large enough to survive spread,
+fees and latency. The frozen 005A role rules, sign convention and null definitions must not be retuned to improve this result.

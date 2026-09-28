@@ -1,0 +1,15 @@
+{
+  "code_bundle_implementation_commit": "a0217eed5f775735d5ad01edf3141963be7b1787",
+  "draws": 999,
+  "experiment_id": "EXPERIMENT-005A",
+  "master_seed": 20260928005,
+  "outputs": {
+    "capture_placebo_null_summary.csv": "9cdd6a61cf517d0eeb47f7f7f3b5705466c8b70ece1ba1dca8f7fe6da9ddccdc",
+    "liquidity_primary_null_summary.csv": "33370e4b9c93a455183f3ffa357fc95f4b3b0a7da15f038a0bee57239e957d9a",
+    "maker_null_summary.csv": "b8279641ba0cc0be716c284c4e585c74e64bf102d8f896b8da03e2f6ab6eb356",
+    "null_draws.csv": "b25fb932e9c39d7f511d710713f86ffabca42f0b759bd2933afff72d011df0df"
+  },
+  "stage": "N5_MAKER_LIQUIDITY_NULLS",
+  "stage1_implementation_commit": "a0217eed5f775735d5ad01edf3141963be7b1787",
+  "stage1_manifest_sha256": "c9ace53fece580f4181516e7360df924f4a39418063d0d825b2d6520c3d81214"
+}

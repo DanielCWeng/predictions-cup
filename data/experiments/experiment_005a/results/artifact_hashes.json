@@ -1,0 +1,105 @@
+{
+  "experiment_id": "EXPERIMENT-005A",
+  "files": {
+    "FINAL_RESEARCH_REPORT.md": {
+      "bytes": 7355,
+      "sha256": "f72d9edb3e06201b86dea2244fb6b3afe1adea79419b1aafc0cdcc78126f41af"
+    },
+    "MASTER_HANDOFF_005A.md": {
+      "bytes": 2830,
+      "sha256": "b82185dd42a9b9c3f731beaeb0125f9946aa3be822652d49d11c5d85ff8ed358"
+    },
+    "a23_coverage.csv": {
+      "bytes": 523,
+      "sha256": "c1bbeba5200e042e2a881649392562e6fae94f482cb6f5ee2c39ca207852b164"
+    },
+    "a23_observed_incremental_models.csv": {
+      "bytes": 5225,
+      "sha256": "b178cdecbedeb30f64d143c1a610f4f115bf471410eb524436d2dfc8dfc27521"
+    },
+    "a4_coverage.csv": {
+      "bytes": 553,
+      "sha256": "a6f6f6374d4bad698c06156891b39ba6b15f29a11c077974c0890ccc091ca7b1"
+    },
+    "a4_history_audit.csv": {
+      "bytes": 259,
+      "sha256": "77c1feca043dff48d16b8718f69061d035c6e1e17042fcf250eede3004d6672e"
+    },
+    "a4_observed_incremental_models.csv": {
+      "bytes": 1887,
+      "sha256": "adaeebc0595009bb2c5cfd67b1c044f91419324cd621e9a36b3d81da9f7b4171"
+    },
+    "a5_coverage.csv": {
+      "bytes": 717,
+      "sha256": "28af8bb62912f07d552eb2261873fc9295304cd21ec11499142195261f823893"
+    },
+    "a5_liquidity_binary_descriptive.csv": {
+      "bytes": 854,
+      "sha256": "fc7ffbc48429dbbe0aef6db8d9fc0d4025c24e8157486993a1ee699e42cc486a"
+    },
+    "a5_liquidity_observed_models.csv": {
+      "bytes": 14870,
+      "sha256": "f42088398be0c658d66a6ea9d8f8d915aacc4c2187a2847277f3933ca234adc1"
+    },
+    "a5_maker_observed_models.csv": {
+      "bytes": 3684,
+      "sha256": "a3defc07cc5da2cb00f9e1874987b3fa2c5f6de747cf02bd97cf300d8fa8d592"
+    },
+    "canonical_verification.json": {
+      "bytes": 1970,
+      "sha256": "61267d65e115a5e7c34b8c627b3cbdea76a9ee94ffc763b3690b0dc640fab993"
+    },
+    "n23_null_summary.csv": {
+      "bytes": 4618,
+      "sha256": "d43b39b470813bebaf231636c1902d3e60edbb971e51147060ee23cedbce8217"
+    },
+    "n4_concentration_ablations.csv": {
+      "bytes": 606,
+      "sha256": "9ccb233309912940e93d3fa5eee74c60d3644821a6e2572a0aa04bc0a978a4f6"
+    },
+    "n4_participant_null_summary.csv": {
+      "bytes": 982,
+      "sha256": "87c12d3fafbddcdc17dafe12ab5f1484550b68afb45d24a60bb3cb4603c27e5c"
+    },
+    "n5_capture_placebo_null_summary.csv": {
+      "bytes": 5920,
+      "sha256": "9cdd6a61cf517d0eeb47f7f7f3b5705466c8b70ece1ba1dca8f7fe6da9ddccdc"
+    },
+    "n5_liquidity_primary_null_summary.csv": {
+      "bytes": 5604,
+      "sha256": "33370e4b9c93a455183f3ffa357fc95f4b3b0a7da15f038a0bee57239e957d9a"
+    },
+    "n5_maker_null_summary.csv": {
+      "bytes": 2086,
+      "sha256": "b8279641ba0cc0be716c284c4e585c74e64bf102d8f896b8da03e2f6ab6eb356"
+    },
+    "run_manifests/a23.json": {
+      "bytes": 5609,
+      "sha256": "ab0db1b56c754ac4ccb20cc668209106e40c2c369bb989f3de31b54db6f8e59c"
+    },
+    "run_manifests/a4.json": {
+      "bytes": 4818,
+      "sha256": "7ccdf02a1f2b6ec4ea4558d765967c06123e7d83e856a59e7dd47da4627d933d"
+    },
+    "run_manifests/a5.json": {
+      "bytes": 8721,
+      "sha256": "c9ace53fece580f4181516e7360df924f4a39418063d0d825b2d6520c3d81214"
+    },
+    "run_manifests/n23.json": {
+      "bytes": 574,
+      "sha256": "8f172a2231bf23ea90792b0c849812aebab8c5dfa26c0c5930dc6ae9abf9db1d"
+    },
+    "run_manifests/n4.json": {
+      "bytes": 893,
+      "sha256": "ec2b448b53b3995354575d75088b17f6d4a34f378d217fb891e9c9de6e865bfa"
+    },
+    "run_manifests/n5.json": {
+      "bytes": 808,
+      "sha256": "445a70ee8277e89fcf427c6a47c7f747b3a92d1e669c20cfe23b52c1fe58395c"
+    }
+  },
+  "note": "Large panels/null draws remain pinned by the six copied run manifests and Kaggle outputs; compact summaries are committed here.",
+  "raw_null_draws_committed": false,
+  "raw_panels_committed": false,
+  "status": "COMPACT_CANONICAL_EVIDENCE_PACKAGE"
+}

@@ -1,0 +1,13 @@
+{
+  "code_bundle_implementation_commit": "a0217eed5f775735d5ad01edf3141963be7b1787",
+  "draws": 999,
+  "experiment_id": "EXPERIMENT-005A",
+  "master_seed": 20260928005,
+  "outputs": {
+    "null_draws.csv": "d06dc3144df153e0d0a3ff8d4ad41404e3c0cdf3451705d881838d55ac4494e8",
+    "null_summary.csv": "d43b39b470813bebaf231636c1902d3e60edbb971e51147060ee23cedbce8217"
+  },
+  "stage": "N23_FLOW_NULLS",
+  "stage1_implementation_commit": "a0217eed5f775735d5ad01edf3141963be7b1787",
+  "stage1_manifest_sha256": "ab0db1b56c754ac4ccb20cc668209106e40c2c369bb989f3de31b54db6f8e59c"
+}

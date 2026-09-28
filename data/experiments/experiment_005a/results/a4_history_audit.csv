@@ -1,0 +1,6 @@
+horizon_seconds,fill_rows,finite_historical_labels,rows_with_history_ge_20,unique_participants,nonzero_scores
+1,33233,29895,9451,8147,6496
+5,33233,27436,9222,8147,7560
+30,33233,22569,8749,8147,7813
+60,33233,20438,8506,8147,7745
+300,33233,15594,7397,8147,6663

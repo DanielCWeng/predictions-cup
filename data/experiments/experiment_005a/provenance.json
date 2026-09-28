@@ -32,12 +32,12 @@
     "docs/implementation/DATA_002_POLYMARKET_FEES.md": "c895f14121ece15d72fd06f203a2f92b708e6557217d5fb7cedb0c4b434d29d5"
   },
   "gate_2": {
-    "empirical_work_performed": false,
+    "empirical_work_performed": true,
     "experiment_004c_fully_frozen": true,
     "experiment_004c_freeze_sha": "ba938bedcf63f562be8b26c9502e828391123867",
     "experiment_004c_freeze_pr": 40,
     "integration_base_sha": "6aa6a6c9f4108e582584bc141cc68fa5383e522c",
     "reason": "Canonical EXPERIMENT-004C programme freeze merged to main via PR #40; Gate 2 may open."
   },
-  "status": "PREREGISTERED_GATE_2_OPEN_NO_EMPIRICAL_RESULTS_YET"
+  "status": "EMPIRICAL_COMPLETE_CANONICAL_RESULT_VERIFIED"
 }

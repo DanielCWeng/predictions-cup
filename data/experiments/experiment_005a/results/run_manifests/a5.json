@@ -1,0 +1,202 @@
+{
+  "a5_operationalization": {
+    "experiment_id": "EXPERIMENT-005A",
+    "liquidity_response": {
+      "baseline_features": [
+        "own_price_move_t_minus_30_to_t",
+        "midpoint_t",
+        "spread_t",
+        "quote_age_t",
+        "abs_own_price_move_300s",
+        "genuine_bbo_changes_30s",
+        "fill_count_30s",
+        "unsigned_fill_value_30s",
+        "common_event_move_ex_target"
+      ],
+      "capture_placebos": [
+        "future_raw_record_count",
+        "future_repeated_unchanged_count",
+        "future_depth_snapshot_count"
+      ],
+      "challenger_additions": [
+        "signed_taker_value_30s",
+        "signed_taker_shares_30s"
+      ],
+      "depth_is_snapshot_state_not_queue_model": true,
+      "descriptive_binary_response": "future_genuine_renewal",
+      "genuine_change_only": true,
+      "primary_continuous_responses": [
+        "future_genuine_change_count",
+        "future_spread_change",
+        "future_total_depth_change"
+      ],
+      "unchanged_bbo_records_are_not_renewal": true,
+      "unit": "condition x 30s decision grid"
+    },
+    "maker_adverse_selection": {
+      "baseline_features": [
+        "midpoint_t",
+        "spread_t",
+        "quote_age_t",
+        "abs_price_move_300s",
+        "total_depth_t"
+      ],
+      "challenger_additions": [
+        "signed_taker_value_30s",
+        "signed_taker_shares_30s",
+        "participant_conditioned_taker_value_30s",
+        "family_activity_ex_target_30s"
+      ],
+      "interpretation": "predictive adverse-selection state only; no maker profitability claim",
+      "loss": "hierarchically weighted squared error",
+      "participant_history": {
+        "embargo_seconds": 300,
+        "label_must_be_observable_before_use": true,
+        "minimum_history": 20,
+        "prior_count": 20,
+        "prior_mean": 0,
+        "target": "TAKER_HIGH_CONFIDENCE owner-perspective markout at same horizon"
+      },
+      "split": "chronological per event-regime 2/3 train 1/3 validation with 300s purge/embargo",
+      "target": "negative owner-perspective canonical YES markout",
+      "unit": "MAKER_HIGH_CONFIDENCE fill"
+    },
+    "primary_surface": {
+      "events": [
+        "colombia_first_round",
+        "peru_runoff",
+        "colombia_runoff"
+      ],
+      "fee_regime": "V2",
+      "horizons_seconds": [
+        1,
+        5,
+        30,
+        60,
+        300
+      ],
+      "pool_pre_active": false,
+      "regimes": [
+        "PRE_ELECTION",
+        "ACTIVE_RESULTS"
+      ],
+      "role_confidence": "HIGH_CONFIDENCE_ONLY"
+    },
+    "schema_version": 1,
+    "selection": {
+      "all_declared_horizons_reported": true,
+      "best_market_selection": false,
+      "best_wallet_selection": false,
+      "horizon_search": false,
+      "threshold_search": false
+    },
+    "stage": "A5_MAKER_LIQUIDITY",
+    "status": "FROZEN_BEFORE_A5_RESPONSE_ACCESS"
+  },
+  "code_manifest": {
+    "a5_operationalization_sha256": "d24114d3a3f0d386f5109af4e89bcbb65da516154895c79e36134255bb030118",
+    "empirical_gate_sha256": "d08da00fa20e8e424e0ac06179dcb853f68e85f7e0cd9efba4d6b6c526462fae",
+    "execution_spec_sha256": "f3c7daa2efc0d112a38eddb12434fbfb243a81b659777866b1ea65579047eef8",
+    "experiment_id": "EXPERIMENT-005A",
+    "files": {
+      "a5_operationalization.json": "d24114d3a3f0d386f5109af4e89bcbb65da516154895c79e36134255bb030118",
+      "conditions.csv": "d67db2bc097573a5d697f44c9767a490e0fb4d91bbac726f680772ad68effdfb",
+      "data_002_manifest_expected.json": "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c",
+      "empirical_gate.json": "d08da00fa20e8e424e0ac06179dcb853f68e85f7e0cd9efba4d6b6c526462fae",
+      "execution_spec.json": "f3c7daa2efc0d112a38eddb12434fbfb243a81b659777866b1ea65579047eef8",
+      "infra_registry.json": "839f62b62c6b2e3d3b7a44d200c2d4b949c35de8e7dea006e9a2f2c8426959e8",
+      "predictions_cup_005a.bundle/predictions_cup/__init__.py": "bb675035d8c391e5920ff2dc1c479746c4c74cac0f77032b83766d85fc08fe12",
+      "predictions_cup_005a.bundle/predictions_cup/learning/__init__.py": "aab0b3dcfbc7ba67d22cc8604142eeac5d8c0b418296a742d29c2a0c72c16e80",
+      "predictions_cup_005a.bundle/predictions_cup/learning/fee_role_data.py": "60a0b8fcbbf4d535771fcc8dfeb79479a334c7f7ec2afd92230250cf77008dd3",
+      "predictions_cup_005a.bundle/predictions_cup/learning/fee_role_registry.py": "3311ae531519b92b45c65b3753fa34361bfe17bee88e9cf588991eee581bd54b",
+      "predictions_cup_005a.bundle/predictions_cup/learning/fee_role_structure.py": "77fa872c681284e898c3623a048a24ee9d60aa1c4b920b9a36f8d93e96998fd7",
+      "predictions_cup_005a.bundle/predictions_cup/learning/flow_models.py": "4fcf6036807050ff2a6ddd31ed1d839a5629f2ce8b07a9a357ea7522cd0121a4",
+      "predictions_cup_005a.bundle/predictions_cup/learning/flow_panel.py": "2220b8806f7428eb607368eadde3539a95d3993773afe5aa1f0e1be32dd8620f",
+      "predictions_cup_005a.bundle/predictions_cup/learning/flow_response.py": "b9b3fa02d8654cde7d08c14685c2343bcbdbf976c37a2aff8e8a312ac230225f",
+      "predictions_cup_005a.bundle/predictions_cup/learning/liquidity_response.py": "0dedb514a1c9af00fee8c9917df8e0c5fe1d03d1e93cd8d0a562e6312bbdcc20",
+      "predictions_cup_005a.bundle/predictions_cup/learning/participant_role.py": "f7634f7cdcdaa34ed39ea982699bdef572a8a8c9783ac3b61369c41a0e70c61d",
+      "predictions_cup_005a.bundle/predictions_cup/learning/role_markouts.py": "5910d9eb8c7cc82eb2297df4956906633f144ca62b25f69a06c1e9b76796942f",
+      "preregistration.json": "4dabed87aff3d9267e9c57cd1477b5f755f01ecee8762575f53dc27168346839",
+      "regime_definitions.json": "9d7d76e15b9bf15603836641a5f9d09902a910b7e3d9ef043445cab32bc90df5"
+    },
+    "implementation_commit": "a0217eed5f775735d5ad01edf3141963be7b1787",
+    "preregistration_sha256": "4dabed87aff3d9267e9c57cd1477b5f755f01ecee8762575f53dc27168346839",
+    "stage": "A5_CODE"
+  },
+  "data_checks": {
+    "data001": {
+      "files_checked": 64,
+      "rows_checked": 98444876
+    },
+    "data002": {
+      "files_checked": 13,
+      "rows_checked": 18415247
+    }
+  },
+  "execution_spec_sha256": "f3c7daa2efc0d112a38eddb12434fbfb243a81b659777866b1ea65579047eef8",
+  "experiment_id": "EXPERIMENT-005A",
+  "gate": {
+    "authorization_basis": "PR #40 merged canonical EXPERIMENT-004C programme freeze on main; all four 004C lane PRs merged with final handoffs present.",
+    "data_002_main_sha": "69cb1924751515a495bf99556819147ad090d67d",
+    "data_002_merged": true,
+    "experiment_004c_freeze_pr": 40,
+    "experiment_004c_freeze_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+    "experiment_004c_fully_frozen": true,
+    "experiment_004c_integration_base_sha": "6aa6a6c9f4108e582584bc141cc68fa5383e522c",
+    "experiment_004c_lane_merge_commits": {
+      "A": "117a584c990c2a5488094200c1522de4261b66be",
+      "B": "777354f9aa6b56012b193853a2ae544e08be5ce3",
+      "C": "751118f3edc818a113656e9a9f31951d29d195d3",
+      "D": "6aa6a6c9f4108e582584bc141cc68fa5383e522c"
+    },
+    "experiment_id": "EXPERIMENT-005A",
+    "master_authorized": true,
+    "schema_version": 1,
+    "scientific_design_change_after_004c_results": false
+  },
+  "liquidity_panels": {
+    "liquidity_panel_1s.parquet": {
+      "bytes": 1538294,
+      "sha256": "795feb96ce7740bc236a6e0af979a243a4b00e4b9a2229613490294c971f122d"
+    },
+    "liquidity_panel_300s.parquet": {
+      "bytes": 1904461,
+      "sha256": "3c29ec03f5e42c21cb530e21875acb09f9c8f3eab48bdac50d173d25d81729e7"
+    },
+    "liquidity_panel_30s.parquet": {
+      "bytes": 1792452,
+      "sha256": "56b6d36d752cad76d503e18e63ba7e8cdaf6fc6fabc688f46b6cd187744b4ec5"
+    },
+    "liquidity_panel_5s.parquet": {
+      "bytes": 1633861,
+      "sha256": "229887e8e108fb7c8cf41a272074786b560938ced28ac2956c0fd786f990d414"
+    },
+    "liquidity_panel_60s.parquet": {
+      "bytes": 1849198,
+      "sha256": "1cb68756345d030c21096f50368ab75f22c35917ee0384bc63ac6fadc9b46fc1"
+    }
+  },
+  "maker_panels": {
+    "maker_panel_1s.parquet": {
+      "bytes": 1423822,
+      "sha256": "67b17ff1f68433cec2de3aff9b1ac29b6a6fe8bfadab961882bd5191378dd6b9"
+    },
+    "maker_panel_300s.parquet": {
+      "bytes": 1417486,
+      "sha256": "369c131690ed008848a0fdf4caa2dbeea2f9a92a58e15ad68756be10abcc3998"
+    },
+    "maker_panel_30s.parquet": {
+      "bytes": 1433115,
+      "sha256": "46d1b4d3b9ae5f5b0cf8e7ee03917d6824c8a230671704ffc4bbd6a1534e8e1e"
+    },
+    "maker_panel_5s.parquet": {
+      "bytes": 1435350,
+      "sha256": "d8ca19228015e16095703cd4784446ddaf653d9702f8d27308c988b2423af896"
+    },
+    "maker_panel_60s.parquet": {
+      "bytes": 1431539,
+      "sha256": "febc76d45fa750ed76a778288ae39fee385b009028b9f925dec02b123523e039"
+    }
+  },
+  "stage": "A5_MAKER_LIQUIDITY_OBSERVED_AND_PANELS"
+}

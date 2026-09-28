@@ -1,0 +1,104 @@
+{
+  "code_manifest": {
+    "execution_spec_sha256": "f3c7daa2efc0d112a38eddb12434fbfb243a81b659777866b1ea65579047eef8",
+    "experiment_id": "EXPERIMENT-005A",
+    "files": {
+      "conditions.csv": "d67db2bc097573a5d697f44c9767a490e0fb4d91bbac726f680772ad68effdfb",
+      "data_002_manifest_expected.json": "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c",
+      "empirical_gate.json": "d08da00fa20e8e424e0ac06179dcb853f68e85f7e0cd9efba4d6b6c526462fae",
+      "execution_spec.json": "f3c7daa2efc0d112a38eddb12434fbfb243a81b659777866b1ea65579047eef8",
+      "infra_registry.json": "839f62b62c6b2e3d3b7a44d200c2d4b949c35de8e7dea006e9a2f2c8426959e8",
+      "predictions_cup_005a.bundle/predictions_cup/__init__.py": "bb675035d8c391e5920ff2dc1c479746c4c74cac0f77032b83766d85fc08fe12",
+      "predictions_cup_005a.bundle/predictions_cup/learning/__init__.py": "113dedd7be4fc561c64dd46bd2d86fff889b0939bf3dca671e56e1ac9a4ccb6c",
+      "predictions_cup_005a.bundle/predictions_cup/learning/fee_role_data.py": "60a0b8fcbbf4d535771fcc8dfeb79479a334c7f7ec2afd92230250cf77008dd3",
+      "predictions_cup_005a.bundle/predictions_cup/learning/fee_role_registry.py": "3311ae531519b92b45c65b3753fa34361bfe17bee88e9cf588991eee581bd54b",
+      "predictions_cup_005a.bundle/predictions_cup/learning/fee_role_structure.py": "77fa872c681284e898c3623a048a24ee9d60aa1c4b920b9a36f8d93e96998fd7",
+      "predictions_cup_005a.bundle/predictions_cup/learning/flow_models.py": "4fcf6036807050ff2a6ddd31ed1d839a5629f2ce8b07a9a357ea7522cd0121a4",
+      "predictions_cup_005a.bundle/predictions_cup/learning/flow_panel.py": "2220b8806f7428eb607368eadde3539a95d3993773afe5aa1f0e1be32dd8620f",
+      "predictions_cup_005a.bundle/predictions_cup/learning/flow_response.py": "b9b3fa02d8654cde7d08c14685c2343bcbdbf976c37a2aff8e8a312ac230225f",
+      "predictions_cup_005a.bundle/predictions_cup/learning/participant_role.py": "f7634f7cdcdaa34ed39ea982699bdef572a8a8c9783ac3b61369c41a0e70c61d",
+      "preregistration.json": "4dabed87aff3d9267e9c57cd1477b5f755f01ecee8762575f53dc27168346839",
+      "regime_definitions.json": "9d7d76e15b9bf15603836641a5f9d09902a910b7e3d9ef043445cab32bc90df5",
+      "same_family_pairs.csv": "25d74294c09cdcbddd234766acbabb11d2c529f5a97c811cce5ee7716c51e407",
+      "semantic_pairs.csv": "4b6d7498a775f589679e787d67f9aedfadcfdd03103d0813b89a73c355cdae97"
+    },
+    "gate_present": true,
+    "implementation_commit": "a0217eed5f775735d5ad01edf3141963be7b1787",
+    "preregistration_sha256": "4dabed87aff3d9267e9c57cd1477b5f755f01ecee8762575f53dc27168346839",
+    "runner_sha256": "f4eae89974a56934d80964103a5fe2d6ff84a43f10ea0c2f25549dcc96b8cc9a"
+  },
+  "data_checks": {
+    "data001": {
+      "files_checked": 64,
+      "rows_checked": 98444876
+    },
+    "data002": {
+      "files_checked": 13,
+      "rows_checked": 18415247
+    }
+  },
+  "execution_spec_sha256": "f3c7daa2efc0d112a38eddb12434fbfb243a81b659777866b1ea65579047eef8",
+  "experiment_id": "EXPERIMENT-005A",
+  "gate": {
+    "authorization_basis": "PR #40 merged canonical EXPERIMENT-004C programme freeze on main; all four 004C lane PRs merged with final handoffs present.",
+    "data_002_main_sha": "69cb1924751515a495bf99556819147ad090d67d",
+    "data_002_merged": true,
+    "experiment_004c_freeze_pr": 40,
+    "experiment_004c_freeze_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+    "experiment_004c_fully_frozen": true,
+    "experiment_004c_integration_base_sha": "6aa6a6c9f4108e582584bc141cc68fa5383e522c",
+    "experiment_004c_lane_merge_commits": {
+      "A": "117a584c990c2a5488094200c1522de4261b66be",
+      "B": "777354f9aa6b56012b193853a2ae544e08be5ce3",
+      "C": "751118f3edc818a113656e9a9f31951d29d195d3",
+      "D": "6aa6a6c9f4108e582584bc141cc68fa5383e522c"
+    },
+    "experiment_id": "EXPERIMENT-005A",
+    "master_authorized": true,
+    "schema_version": 1,
+    "scientific_design_change_after_004c_results": false
+  },
+  "outputs": {
+    "coverage.csv": {
+      "bytes": 523,
+      "sha256": "c1bbeba5200e042e2a881649392562e6fae94f482cb6f5ee2c39ca207852b164"
+    },
+    "observed_incremental_models.csv": {
+      "bytes": 5225,
+      "sha256": "b178cdecbedeb30f64d143c1a610f4f115bf471410eb524436d2dfc8dfc27521"
+    },
+    "panels/a2.parquet": {
+      "bytes": 1427886,
+      "sha256": "76ea07a9b132cd2800502218c02d60c7da9cf21c1b5b0df17bda63f9aaa12ee5"
+    },
+    "panels/a3.parquet": {
+      "bytes": 4374510,
+      "sha256": "dd335baa22206bbc56477e08d797b926935221d73f0e20500b45443103192fa8"
+    },
+    "role_enriched/colombia_first_round__ACTIVE_RESULTS.parquet": {
+      "bytes": 1201800,
+      "sha256": "ba45b2be3d7c8fa092c288f9a1c3ad9b4383fe6461bb34c4d5dfa26f5fe2f47f"
+    },
+    "role_enriched/colombia_first_round__PRE_ELECTION.parquet": {
+      "bytes": 2400483,
+      "sha256": "62a9ca4c9bdec8b133ae011b456316237ebbf6e7a6f4b674afe6cb8551b22d96"
+    },
+    "role_enriched/colombia_runoff__ACTIVE_RESULTS.parquet": {
+      "bytes": 999805,
+      "sha256": "a8a44e90484b3c40a58ba076102fe4443dc301c4aea0473789ce99aa1aac8fab"
+    },
+    "role_enriched/colombia_runoff__PRE_ELECTION.parquet": {
+      "bytes": 1031228,
+      "sha256": "7adb35f21db8b990cd121279ab740c746190485b3576e60d173844dabed5d225"
+    },
+    "role_enriched/peru_runoff__ACTIVE_RESULTS.parquet": {
+      "bytes": 1383890,
+      "sha256": "97d01a6302c6d67b541fdf41ccacf6eb5dc04c94d5a3a25a7101a487a2599c70"
+    },
+    "role_enriched/peru_runoff__PRE_ELECTION.parquet": {
+      "bytes": 1422907,
+      "sha256": "60fa415b82c1ebf3b7d88ab8ebd0f087e7c856f21ae1181efb63559ae976e1a1"
+    }
+  },
+  "stage": "A2_A3_OBSERVED_AND_PANELS"
+}
