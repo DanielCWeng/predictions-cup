@@ -875,6 +875,9 @@ def main() -> None:
                         if not np.isfinite(consistency[fi])
                         else float(consistency[fi])
                     ),
+                    "family_support_count": int(
+                        family_denominator[fi]
+                    ),
                 }
             )
         per_target[target] = rows
@@ -1035,7 +1038,10 @@ def main() -> None:
             if stable:
                 label_name = (
                     "CROSS_FAMILY_CANDIDATE"
-                    if (row["family_sign_consistency"] or 0) >= 0.8
+                    if (
+                        (row["family_sign_consistency"] or 0) >= 0.8
+                        and row["family_support_count"] >= 2
+                    )
                     else "WITHIN_FAMILY_STABLE"
                 )
             chosen.append(
