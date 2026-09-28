@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Callable
 from time import monotonic_ns
 
+from predictions_cup.execution.interlocks import LiveExecutionPermit
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.models import (
     ExecutionEnvelope,
@@ -14,14 +16,10 @@ from predictions_cup.execution.models import (
     LifecycleState,
     OperationKind,
 )
+from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.sig.errors import SigApiError, SigExecutionUncertainError
 from predictions_cup.sig.trading_client import SigTradingClient
-from predictions_cup.sig.trading_dto import (
-    BatchOrderRequestDto,
-    MultiLegOrderRequestDto,
-    SingleOrderRequestDto,
-)
 
 ClockNs = Callable[[], int]
 
@@ -34,16 +32,31 @@ class SigLiveSink:
         *,
         client: SigTradingClient,
         journal: ExecutionJournal,
+        permit: LiveExecutionPermit,
+        reservations: ExecutionReservationBook,
         clock_ns: ClockNs = monotonic_ns,
     ) -> None:
         self._client = client
         self._journal = journal
+        self._permit = permit
+        self._reservations = reservations
         self._clock_ns = clock_ns
 
     async def dispatch(self, plan: ExecutionPlan) -> ExecutionEvent:
         envelope = plan.envelope
         if envelope.sink_mode is not ExecutionMode.LIVE:
             raise ValueError("SigLiveSink accepts LIVE envelopes only")
+        if envelope.tournament_id != self._permit.tournament_id:
+            raise ValueError("LIVE permit tournament does not match execution envelope")
+        if not self._reservations.contains_operation(
+            envelope.logical_operation_id,
+            envelope.intent_ids,
+        ):
+            raise ValueError("LIVE execution plan is missing its synchronous reservation")
+        if hashlib.sha256(envelope.payload_json.encode("utf-8")).hexdigest() != (
+            envelope.payload_sha256
+        ):
+            raise ValueError("execution payload hash mismatch")
         if envelope.operation_kind not in {
             OperationKind.SINGLE_PLACEMENT,
             OperationKind.BEST_EFFORT_BATCH,
@@ -62,10 +75,9 @@ class SigLiveSink:
         network_dispatch_ns = self._clock_ns()
 
         try:
-            raw = json.loads(envelope.payload_json)
             if envelope.operation_kind is OperationKind.SINGLE_PLACEMENT:
-                single_response = await self._client.place_order(
-                    SingleOrderRequestDto.model_validate(raw)
+                single_response = await self._client.place_order_payload(
+                    envelope.payload_json
                 )
                 state = (
                     LifecycleState.OPEN
@@ -74,14 +86,14 @@ class SigLiveSink:
                 )
                 response_json = single_response.model_dump_json(by_alias=True)
             elif envelope.operation_kind is OperationKind.BEST_EFFORT_BATCH:
-                batch_response = await self._client.place_batch(
-                    BatchOrderRequestDto.model_validate(raw)
+                batch_response = await self._client.place_batch_payload(
+                    envelope.payload_json
                 )
                 state = LifecycleState.ACKED
                 response_json = batch_response.model_dump_json(by_alias=True)
             else:
-                multi_response = await self._client.place_multi_leg(
-                    MultiLegOrderRequestDto.model_validate(raw)
+                multi_response = await self._client.place_multi_leg_payload(
+                    envelope.payload_json
                 )
                 state = LifecycleState.ACKED
                 response_json = multi_response.model_dump_json(by_alias=True)
@@ -89,6 +101,7 @@ class SigLiveSink:
             observed = self._clock_ns()
             self._journal.record_event(
                 logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
                 event_type="NETWORK_DISPATCH",
                 observed_monotonic_ns=network_dispatch_ns,
             )
@@ -99,6 +112,7 @@ class SigLiveSink:
             )
             self._journal.record_event(
                 logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
                 event_type="UNCERTAIN",
                 observed_monotonic_ns=observed,
                 terminal_status=LifecycleState.UNCERTAIN.value,
@@ -108,6 +122,7 @@ class SigLiveSink:
             observed = self._clock_ns()
             self._journal.record_event(
                 logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
                 event_type="NETWORK_DISPATCH",
                 observed_monotonic_ns=network_dispatch_ns,
             )
@@ -118,6 +133,7 @@ class SigLiveSink:
             )
             self._journal.record_event(
                 logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
                 event_type="REJECTED",
                 observed_monotonic_ns=observed,
                 terminal_status=LifecycleState.REJECTED.value,
@@ -127,6 +143,7 @@ class SigLiveSink:
         observed = self._clock_ns()
         self._journal.record_event(
             logical_operation_id=envelope.logical_operation_id,
+            tournament_id=envelope.tournament_id,
             event_type="NETWORK_DISPATCH",
             observed_monotonic_ns=network_dispatch_ns,
         )
@@ -134,6 +151,7 @@ class SigLiveSink:
             intent = plan.intents[0] if plan.intents else None
             self._journal.record_event(
                 logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
                 logical_intent_id=None if intent is None else intent.intent_id,
                 event_type="ACK",
                 observed_monotonic_ns=observed,
@@ -162,6 +180,7 @@ class SigLiveSink:
             if single_response.quantity_traded > 0:
                 self._journal.record_event(
                     logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
                     logical_intent_id=None if intent is None else intent.intent_id,
                     event_type="FILL_SUMMARY",
                     observed_monotonic_ns=observed,
@@ -192,6 +211,7 @@ class SigLiveSink:
                 order_id = batch_result.data.get("orderId")
                 self._journal.record_event(
                     logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
                     logical_intent_id=None if intent is None else intent.intent_id,
                     event_type="ACK" if batch_result.ok else "REJECTED",
                     observed_monotonic_ns=observed,
@@ -223,6 +243,7 @@ class SigLiveSink:
                 order_id = multi_result.data.get("orderId")
                 self._journal.record_event(
                     logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
                     logical_intent_id=None if intent is None else intent.intent_id,
                     event_type="ACK" if multi_result.ok else "REJECTED",
                     observed_monotonic_ns=observed,
@@ -260,6 +281,8 @@ class SigLiveSink:
     async def cancel(self, envelope: ExecutionEnvelope) -> ExecutionEvent:
         if envelope.sink_mode is not ExecutionMode.LIVE:
             raise ValueError("SigLiveSink accepts LIVE envelopes only")
+        if envelope.tournament_id != self._permit.tournament_id:
+            raise ValueError("LIVE permit tournament does not match execution envelope")
         if envelope.operation_kind not in {
             OperationKind.SINGLE_CANCELLATION,
             OperationKind.CANCEL_ALL,
@@ -306,6 +329,7 @@ class SigLiveSink:
             observed = self._clock_ns()
             self._journal.record_event(
                 logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
                 event_type="CANCEL_SUBMITTED",
                 observed_monotonic_ns=network_dispatch_ns,
                 exchange_order_id=(
@@ -322,6 +346,7 @@ class SigLiveSink:
             )
             self._journal.record_event(
                 logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
                 event_type="CANCEL_UNCERTAIN",
                 observed_monotonic_ns=observed,
                 exchange_order_id=(
@@ -336,6 +361,7 @@ class SigLiveSink:
             observed = self._clock_ns()
             self._journal.record_event(
                 logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
                 event_type="CANCEL_SUBMITTED",
                 observed_monotonic_ns=network_dispatch_ns,
                 exchange_order_id=(
@@ -352,6 +378,7 @@ class SigLiveSink:
             )
             self._journal.record_event(
                 logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
                 event_type="CANCEL_REJECTED",
                 observed_monotonic_ns=observed,
                 exchange_order_id=(
@@ -366,6 +393,7 @@ class SigLiveSink:
         observed = self._clock_ns()
         self._journal.record_event(
             logical_operation_id=envelope.logical_operation_id,
+            tournament_id=envelope.tournament_id,
             event_type="CANCEL_SUBMITTED",
             observed_monotonic_ns=network_dispatch_ns,
             exchange_order_id=(
@@ -377,6 +405,7 @@ class SigLiveSink:
         )
         self._journal.record_event(
             logical_operation_id=envelope.logical_operation_id,
+            tournament_id=envelope.tournament_id,
             event_type="CANCEL_ACK",
             observed_monotonic_ns=observed,
             exchange_order_id=(
