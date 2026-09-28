@@ -11,6 +11,7 @@ from predictions_cup.learning.participant_ecology import (
     canonical_yes_price,
     chronological_cuts,
     effective_number,
+    hierarchical_block_bootstrap,
     participant_yes_pressure,
     prior_count_from_sorted_groups,
     prior_cumsum_from_sorted_groups,
@@ -80,6 +81,24 @@ def test_bh_adjust_is_monotone_and_deterministic() -> None:
     assert result["b"]["rank"] == 2
     assert result["a"]["q"] <= result["b"]["q"] <= result["c"]["q"]
     assert result["a"]["reject"] is True
+
+
+def test_hierarchical_block_bootstrap_preserves_weighted_estimand() -> None:
+    values = np.array([4.0, 0.0, -1.0, -1.0])
+    weights = np.array([1.0, 3.0, 2.0, 2.0])
+    families = ["A", "A", "B", "B"]
+    blocks = [1, 1, 2, 3]
+    p_value, draws = hierarchical_block_bootstrap(
+        values,
+        weights,
+        families,
+        blocks,
+        reps=25,
+        seed=7,
+    )
+    assert 0.0 <= p_value <= 1.0
+    assert draws.shape == (25,)
+    assert np.all(np.isfinite(draws))
 
 
 def test_effective_number() -> None:
