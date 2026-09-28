@@ -67,10 +67,12 @@ class FakeSubscriber:
         outcome: SubscriberExit,
         *,
         connect_delay: float = 0.001,
+        payload_gate: asyncio.Event | None = None,
     ) -> None:
         self.payloads = payloads
         self.outcome = outcome
         self.connect_delay = connect_delay
+        self.payload_gate = payload_gate
 
     async def run(
         self,
@@ -83,6 +85,8 @@ class FakeSubscriber:
         del stop_event, on_maintenance
         on_connected()
         await asyncio.sleep(self.connect_delay)
+        if self.payload_gate is not None:
+            await self.payload_gate.wait()
         for payload in self.payloads:
             await on_batch(
                 "user:profile-1",
@@ -169,11 +173,13 @@ def test_token_refresh_revokes_trust_before_resync() -> None:
 
 def test_account_batch_during_rest_snapshot_forces_another_resync() -> None:
     state = AccountRealtimeStateEngine(tournament_id="t1")
+    payload_gate = asyncio.Event()
     subscribers = [
         FakeSubscriber(
             (_batch(1, 0),),
             SubscriberExit.TOKEN_REFRESH,
             connect_delay=0.0,
+            payload_gate=payload_gate,
         ),
         FakeSubscriber((), SubscriberExit.STOPPED),
     ]
@@ -187,7 +193,9 @@ def test_account_batch_during_rest_snapshot_forces_another_resync() -> None:
         nonlocal resync_count
         resync_count += 1
         trust_seen.append(state.trusted)
-        await asyncio.sleep(0)
+        if resync_count == 1:
+            payload_gate.set()
+            await asyncio.sleep(0)
         return _snapshot()
 
     def factory(**kwargs: Any) -> FakeSubscriber:
