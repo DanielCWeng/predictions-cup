@@ -52,6 +52,11 @@ class RiskDecision:
     operation_kind: OperationKind | None = None
     intents: tuple[RuntimeOrderIntent, ...] = ()
     relationship_constraint: str | None = None
+    strategy_family: str | None = None
+    strategy_id: str | None = None
+    signal_value: float | None = None
+    fair_value: float | None = None
+    decision_observation_ns: int | None = None
 
 
 def _deny(reason: str) -> RiskDecision:
@@ -182,4 +187,9 @@ def evaluate_risk(
         operation_kind=operation_kind,
         intents=tuple(intents),
         relationship_constraint=opportunity.relationship_id,
+        strategy_family=opportunity.family.value,
+        strategy_id=opportunity.strategy_id,
+        signal_value=opportunity.gross_edge,
+        fair_value=opportunity.fair_value,
+        decision_observation_ns=opportunity.decision_observation_ns,
     )
