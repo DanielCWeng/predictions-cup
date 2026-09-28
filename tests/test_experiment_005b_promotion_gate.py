@@ -6,7 +6,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-
 pytest.importorskip("duckdb")
 pytest.importorskip("pandas")
 pytest.importorskip("sklearn")
