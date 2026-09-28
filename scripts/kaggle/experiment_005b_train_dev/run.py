@@ -191,6 +191,22 @@ def schema_columns(
     return features, targets
 
 
+def validate_schema_columns(
+    reference_features: list[str],
+    reference_targets: list[str],
+    current_features: list[str],
+    current_targets: list[str],
+    family: str,
+) -> None:
+    if (
+        len(reference_features) != len(set(reference_features))
+        or len(current_features) != len(set(current_features))
+        or set(current_features) != set(reference_features)
+        or current_targets != reference_targets
+    ):
+        raise RuntimeError(f"schema drift for {family}")
+
+
 def full_support(
     con: duckdb.DuckDBPyConnection,
     path: Path,
@@ -821,10 +837,22 @@ def main() -> None:
     files = locate_files()
     con = duckdb.connect()
     features, targets = schema_columns(con, files[FAMILIES[0]])
+    validate_schema_columns(
+        features,
+        targets,
+        features,
+        targets,
+        FAMILIES[0],
+    )
     for family in FAMILIES[1:]:
         current_features, current_targets = schema_columns(con, files[family])
-        if current_features != features or current_targets != targets:
-            raise RuntimeError(f"schema drift for {family}")
+        validate_schema_columns(
+            features,
+            targets,
+            current_features,
+            current_targets,
+            family,
+        )
 
     support_by_family = {}
     train_parts = []
