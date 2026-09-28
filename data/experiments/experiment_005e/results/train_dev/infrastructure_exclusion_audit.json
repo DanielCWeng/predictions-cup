@@ -1,0 +1,12 @@
+{
+  "excluded_rows_by_family": {
+    "CAN_2025": 0,
+    "COL_2026": 0,
+    "HUN_2026": 0,
+    "PER_2026": 0,
+    "US_2024": 0
+  },
+  "policy": "excluded from participant ecology/skill claims; unknown identity is not assumed human",
+  "registry_count": 30,
+  "registry_sha256": "839f62b62c6b2e3d3b7a44d200c2d4b949c35de8e7dea006e9a2f2c8426959e8"
+}
