@@ -364,17 +364,17 @@ class SigLiveSink:
             raise
 
         observed = self._clock_ns()
-            self._journal.record_event(
-                logical_operation_id=envelope.logical_operation_id,
-                event_type="CANCEL_SUBMITTED",
-                observed_monotonic_ns=network_dispatch_ns,
-                exchange_order_id=(
-                    str(raw["orderId"])
-                    if isinstance(raw.get("orderId"), (int, str))
-                    else None
-                ),
-                detail_json=envelope.payload_json,
-            )
+        self._journal.record_event(
+            logical_operation_id=envelope.logical_operation_id,
+            event_type="CANCEL_SUBMITTED",
+            observed_monotonic_ns=network_dispatch_ns,
+            exchange_order_id=(
+                str(raw["orderId"])
+                if isinstance(raw.get("orderId"), (int, str))
+                else None
+            ),
+            detail_json=envelope.payload_json,
+        )
         self._journal.record_event(
             logical_operation_id=envelope.logical_operation_id,
             event_type="CANCEL_ACK",
