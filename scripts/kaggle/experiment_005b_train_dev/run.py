@@ -279,6 +279,47 @@ def feature_market_concentration(
     return float(np.sum(shares * shares)), float(shares.max())
 
 
+def circular_shift_spearman(
+    df: pd.DataFrame,
+    feature: str,
+    target: str,
+    label: str,
+) -> float | None:
+    x = pd.to_numeric(df[feature], errors="coerce").to_numpy(dtype=float)
+    y = pd.to_numeric(df[target], errors="coerce").to_numpy(dtype=float)
+    valid_target = (
+        df[label].notna().to_numpy()
+        & (df[label].to_numpy() < df["dev_end_timestamp"].to_numpy())
+    )
+    y[~valid_target] = np.nan
+    shifted = np.full(len(df), np.nan, dtype=float)
+    markets = df["market_id"].astype(str).to_numpy()
+    times = df["timestamp"].to_numpy(dtype=np.int64)
+    for market in np.unique(markets):
+        index = np.flatnonzero(markets == market)
+        index = index[np.argsort(times[index], kind="mergesort")]
+        finite_index = index[np.isfinite(x[index])]
+        if not len(finite_index):
+            continue
+        if len(finite_index) == 1:
+            shifted[finite_index] = x[finite_index]
+            continue
+        amount = max(1, len(finite_index) // 2)
+        shifted[finite_index] = np.roll(x[finite_index], amount)
+    x_rank = (
+        pd.Series(shifted)
+        .rank(pct=True, method="average")
+        .to_numpy(dtype=float)
+    )
+    y_rank = (
+        pd.Series(y)
+        .rank(pct=True, method="average")
+        .to_numpy(dtype=float)
+    )
+    corr, _ = corr_columns(x_rank[:, None], y_rank)
+    return None if not np.isfinite(corr[0]) else float(corr[0])
+
+
 def union_find_clusters(
     corr: np.ndarray,
     features: list[str],
@@ -799,6 +840,18 @@ def main() -> None:
 
     shortlist: dict[str, list[dict[str, Any]]] = {}
     model_selection: dict[str, dict[str, Any]] = {}
+    negative_controls: dict[str, dict[str, Any]] = {}
+    activity_index = features.index("trade_count_30")
+    contemporaneous_index = features.index("absolute_return_30")
+    contemporaneous_corr, _ = corr_columns(
+        x_dev[:, [activity_index]],
+        x_dev[:, contemporaneous_index],
+    )
+    activity_contemporaneous_spearman = (
+        None
+        if not np.isfinite(contemporaneous_corr[0])
+        else float(contemporaneous_corr[0])
+    )
     train_model = (
         train.groupby("family", sort=False, group_keys=False)
         .head(30000)
@@ -888,6 +941,45 @@ def main() -> None:
                 }
             )
         shortlist[target] = chosen[:12]
+        primary_control_feature = None
+        for candidate in chosen:
+            if candidate["stable_train_dev"]:
+                primary_control_feature = candidate["feature"]
+                break
+        if primary_control_feature is None and chosen:
+            primary_control_feature = chosen[0]["feature"]
+        negative_controls[target] = {
+            "own_recent_price_dev_spearman": (
+                dev_metrics[target]
+                .get("price_change_30", {})
+                .get("spearman")
+            ),
+            "current_absolute_movement_dev_spearman": (
+                dev_metrics[target]
+                .get("absolute_return_30", {})
+                .get("spearman")
+            ),
+            "recent_activity_future_dev_spearman": (
+                dev_metrics[target]
+                .get("trade_count_30", {})
+                .get("spearman")
+            ),
+            "recent_activity_contemporaneous_movement_spearman": (
+                activity_contemporaneous_spearman
+            ),
+            "circular_shift_feature": primary_control_feature,
+            "within_market_circular_shift_dev_spearman": (
+                circular_shift_spearman(
+                    dev,
+                    primary_control_feature,
+                    target,
+                    target_label,
+                )
+                if primary_control_feature is not None
+                else None
+            ),
+            "selection_use": "NONE",
+        }
 
         model_features = [
             row["feature"]
@@ -1011,6 +1103,7 @@ def main() -> None:
         "representative_feature_count": len(reps),
         "shortlist": shortlist,
         "model_selection": model_selection,
+        "negative_controls": negative_controls,
         "holdout_touched": False,
     }
     freeze_path = OUT / "train_dev_shortlist_freeze.json"
