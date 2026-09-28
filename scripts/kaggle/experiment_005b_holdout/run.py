@@ -154,6 +154,23 @@ def load_gate() -> tuple[dict[str, Any], dict[str, Any], str]:
     return gate, freeze, actual
 
 
+def target_has_holdout_evidence(
+    freeze: dict[str, Any],
+    target: str,
+) -> bool:
+    has_scalar = any(
+        row.get("promoted_candidate")
+        for row in freeze["shortlist"].get(target, [])
+    )
+    has_model = (
+        freeze["model_selection"]
+        .get(target, {})
+        .get("promotion_eligible")
+        is True
+    )
+    return bool(has_scalar or has_model)
+
+
 def selected_columns(freeze: dict[str, Any]) -> dict[str, set[str]]:
     by_target: dict[str, set[str]] = {}
     for target, rows in freeze["shortlist"].items():
@@ -692,12 +709,7 @@ def main() -> None:
     columns = selected_columns(freeze)
     results = []
     for target in sorted(columns):
-        has_scalar = any(
-            row.get("promoted_candidate")
-            for row in freeze["shortlist"].get(target, [])
-        )
-        has_model = freeze["model_selection"].get(target, {}).get("promotion_eligible") is True
-        if not (has_scalar or has_model):
+        if not target_has_holdout_evidence(freeze, target):
             continue
         print(f"HOLDOUT {target}", flush=True)
         results.append(evaluate_target(target, freeze, columns[target]))
