@@ -5,14 +5,16 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import datetime
+from time import monotonic_ns
 from typing import Protocol
 
+from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
 from predictions_cup.sig.account_state import (
     AccountRealtimeStateEngine,
     AccountTrustTransition,
 )
-from predictions_cup.sig.realtime_models import RealtimeTokenDto
+from predictions_cup.sig.realtime_models import AccountBatchDto, RealtimeTokenDto
 from predictions_cup.sig.realtime_subscriber import (
     SubscriberExit,
     SupabaseTournamentSubscriber,
@@ -20,6 +22,7 @@ from predictions_cup.sig.realtime_subscriber import (
 
 MintToken = Callable[[], Awaitable[RealtimeTokenDto]]
 AuthoritativeResync = Callable[[], Awaitable[AccountAuthoritativeSnapshot]]
+ClockNs = Callable[[], int]
 
 
 class AccountSubscriber(Protocol):
@@ -74,11 +77,15 @@ class AccountRealtimeController:
         mint_token: MintToken,
         authoritative_resync: AuthoritativeResync,
         subscriber_factory: AccountSubscriberFactory = _default_subscriber_factory,
+        execution_journal: ExecutionJournal | None = None,
+        clock_ns: ClockNs = monotonic_ns,
     ) -> None:
         self._state = state
         self._mint_token = mint_token
         self._authoritative_resync = authoritative_resync
         self._subscriber_factory = subscriber_factory
+        self._execution_journal = execution_journal
+        self._clock_ns = clock_ns
 
     async def run(self, *, stop_event: asyncio.Event) -> None:
         while not stop_event.is_set():
@@ -123,6 +130,53 @@ class AccountRealtimeController:
         result = self._state.handle_raw_batch(payload, observed_at=observed_at)
         if result.requires_reconciliation:
             raise AccountResyncRequired
+        if result.accepted and self._execution_journal is not None:
+            self._record_execution_events(AccountBatchDto.model_validate(payload))
+
+    def _record_execution_events(self, batch: AccountBatchDto) -> None:
+        journal = self._execution_journal
+        if journal is None:
+            return
+        observed_ns = self._clock_ns()
+        for fill in batch.fills:
+            order_id = str(fill.order_id)
+            logical_operation_id = journal.logical_operation_for_exchange_order_id(
+                order_id
+            )
+            if logical_operation_id is None:
+                continue
+            journal.record_event(
+                logical_operation_id=logical_operation_id,
+                event_type="REALTIME_FILL",
+                observed_monotonic_ns=observed_ns,
+                source_timestamp=fill.executed_at.isoformat(),
+                exchange_id=fill.exchange_id,
+                exchange_order_id=order_id,
+                quantity=str(fill.quantity),
+                price=str(fill.price),
+            )
+        for update in batch.order_updates:
+            order_id = str(update.order_id)
+            logical_operation_id = journal.logical_operation_for_exchange_order_id(
+                order_id
+            )
+            if logical_operation_id is None:
+                continue
+            journal.record_event(
+                logical_operation_id=logical_operation_id,
+                event_type="REALTIME_ORDER_UPDATE",
+                observed_monotonic_ns=observed_ns,
+                source_timestamp=update.at.isoformat(),
+                exchange_id=update.exchange_id,
+                exchange_order_id=order_id,
+                quantity=str(update.quantity_traded),
+                price=(
+                    None
+                    if update.latest_trade_price is None
+                    else str(update.latest_trade_price)
+                ),
+                terminal_status="OPEN" if update.open else "CLOSED",
+            )
 
     @staticmethod
     def _on_connected() -> None:
