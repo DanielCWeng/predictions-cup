@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from math import exp, log
-from typing import Iterable, Mapping, Sequence
 
 import numpy as np
 
@@ -47,7 +47,7 @@ class L2Book:
     previous_bbo: CanonicalBBO | None = None
 
     @classmethod
-    def empty(cls) -> "L2Book":
+    def empty(cls) -> L2Book:
         return cls(bids={}, asks={})
 
     def invalidate_depth(self) -> None:
@@ -124,12 +124,29 @@ class L2Book:
         current = reconstructed if reconstructed is not None else source_bbo
         prev = self.previous_bbo
 
-        genuine = bool(current is not None and prev is not None and current != prev and not source_ambiguous)
-        bid_changed = bool(genuine and current is not None and prev is not None and current.bid != prev.bid)
-        ask_changed = bool(genuine and current is not None and prev is not None and current.ask != prev.ask)
-        spread_changed = bool(genuine and current is not None and prev is not None and current.spread != prev.spread)
+        genuine = bool(
+            current is not None
+            and prev is not None
+            and current != prev
+            and not source_ambiguous
+        )
+        bid_changed = bool(
+            genuine and current is not None and prev is not None and current.bid != prev.bid
+        )
+        ask_changed = bool(
+            genuine and current is not None and prev is not None and current.ask != prev.ask
+        )
+        spread_changed = bool(
+            genuine
+            and current is not None
+            and prev is not None
+            and current.spread != prev.spread
+        )
         midpoint_changed = bool(
-            genuine and current is not None and prev is not None and current.midpoint != prev.midpoint
+            genuine
+            and current is not None
+            and prev is not None
+            and current.midpoint != prev.midpoint
         )
 
         if not source_ambiguous and current is not None:
@@ -210,7 +227,9 @@ def clipped_logit(probability: float, *, eps: float = 1e-6) -> float:
 
 
 def depth_within(levels: Mapping[float, float], midpoint: float, band: float) -> float:
-    return float(sum(size for price, size in levels.items() if abs(price - midpoint) <= band + 1e-12))
+    return float(
+        sum(size for price, size in levels.items() if abs(price - midpoint) <= band + 1e-12)
+    )
 
 
 def top_sizes(book: L2Book) -> tuple[float, float] | None:
