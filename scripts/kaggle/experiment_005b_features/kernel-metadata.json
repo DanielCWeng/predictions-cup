@@ -1,6 +1,6 @@
 {
   "id": "polyleviathan/005b-historical-predictive-atlas-features",
-  "title": "005B Historical Predictive Atlas - Features and Targets",
+  "title": "005B Historical Predictive Atlas Features",
   "code_file": "run.py",
   "language": "python",
   "kernel_type": "script",
