@@ -12,7 +12,7 @@ from predictions_cup.execution.models import (
     LifecycleState,
     RuntimeOrderIntent,
 )
-from predictions_cup.runtime import OrderAction, OutcomeSide, RuntimeSnapshot
+from predictions_cup.runtime.models import OrderAction, OutcomeSide, RuntimeSnapshot
 
 ClockNs = Callable[[], int]
 
