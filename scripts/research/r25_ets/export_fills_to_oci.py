@@ -27,6 +27,7 @@ from typing import Any
 SONAR_ROOT = Path("/home/ubuntu/polymarketwhale/Sonar")
 POLY_ROOT = Path("/home/ubuntu/polymarketwhale")
 DEFAULT_INVENTORY = Path(__file__).resolve().parents[3] / "data/research/ets_universe/ETS_TOKEN_INVENTORY.csv"
+DEFAULT_FREEZE = Path(__file__).resolve().parents[3] / "data/research/ets_universe/ETS_UNIVERSE_FREEZE.json"
 DEFAULT_LANE = Path("/home/ubuntu/campaigns/r25ets_20260928")
 PREFIX = "research/r25_ets/"
 BUCKET = "polymarket-bot-state"
@@ -174,6 +175,7 @@ def assert_tx_block_map(custody: Any, day: str) -> Any:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--inventory", type=Path, default=DEFAULT_INVENTORY)
+    parser.add_argument("--freeze", type=Path, default=DEFAULT_FREEZE)
     parser.add_argument("--lane", type=Path, default=DEFAULT_LANE)
     parser.add_argument("--bucket", default=BUCKET)
     parser.add_argument("--object-prefix", default=PREFIX)
@@ -199,6 +201,16 @@ def main() -> None:
     namespace = client.get_namespace().data
     storage_options = _oci_s3_storage_options(namespace)
     by_token, by_condition = load_inventory(args.inventory)
+    freeze = json.loads(args.freeze.read_text(encoding="utf-8"))
+    inventory_sha = sha256_file(args.inventory)
+    if inventory_sha != freeze.get("sha256", {}).get("cid_token_inventory"):
+        raise ValueError("frozen token inventory checksum does not match ETS_UNIVERSE_FREEZE.json")
+    if freeze.get("pending_candidate_count") or freeze.get("pending_relationship_review_count"):
+        raise ValueError("fill export requires an ETS universe freeze with no pending semantic review")
+    if len(by_condition) != freeze.get("unique_cid_count") or len(by_token) != freeze.get("unique_token_count"):
+        raise ValueError("frozen CID/token counts do not match the acquisition inventory")
+    freeze_sha = sha256_file(args.freeze)
+    output_prefix = f"{PREFIX}freeze={freeze_sha[:16]}/fills/"
     trade_objects = source_objects(client, namespace, args.bucket, "trades/")
     custody_objects = source_objects(client, namespace, args.bucket, "custody/")
     creation_times = [parse_date(row.get("created_at")) for row in by_token.values()]
@@ -419,7 +431,7 @@ def main() -> None:
                 chunk.write_parquet(local_path, compression="zstd", statistics=True)
                 disk_gate(args.lane, f"after_write_{condition_id}_{day}")
                 digest = sha256_file(local_path)
-                object_name = f"{PREFIX}fills/family=SIG_CUP_ETS/condition_id={condition_id}/date={day}/part-000.parquet"
+                object_name = f"{output_prefix}family=SIG_CUP_ETS/condition_id={condition_id}/date={day}/part-000.parquet"
                 with local_path.open("rb") as handle:
                     client.put_object(
                         namespace_name=namespace, bucket_name=args.bucket, object_name=object_name,
@@ -492,9 +504,11 @@ def main() -> None:
     manifest = {
         "schema_version": 1,
         "dataset_id": "POLYLEVIATHAN_R25_ETS_FILLS",
+        "ets_universe_freeze_sha256": freeze_sha,
+        "canonical_sig_mapping_sha256": freeze.get("canonical_sig_mapping_sha256"),
         "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "bucket": args.bucket,
-        "object_prefix": PREFIX + "fills/",
+        "object_prefix": output_prefix,
         "source": "OCI trades/ canonical daily Parquet, using sisterreq_fills_20260926 identity/dedup semantics",
         "block_number_join": {
             "source_prefix": "custody/",
@@ -542,10 +556,11 @@ def main() -> None:
     }
     manifest_payload = json_bytes(manifest)
     manifest_sha = hashlib.sha256(manifest_payload).hexdigest()
-    put_bytes(client, namespace, args.bucket, PREFIX + "fills/MANIFEST.json", manifest_payload)
+    manifest_object = output_prefix + "MANIFEST.json"
+    put_bytes(client, namespace, args.bucket, manifest_object, manifest_payload)
     args.lane.mkdir(parents=True, exist_ok=True)
     summary = {
-        "status": manifest["status"], "manifest_object": PREFIX + "fills/MANIFEST.json",
+        "status": manifest["status"], "manifest_object": manifest_object,
         "manifest_sha256": manifest_sha,
         "fill_rows": total_rows, "files": len(output_files), "bytes": manifest["bytes"],
         "markets_attempted": len(by_condition), "tokens_attempted": len(by_token),
