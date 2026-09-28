@@ -27,6 +27,7 @@ class ExecutionJournalEvent:
     observed_monotonic_ns: int
     source_timestamp: str | None
     decision_observation_ns: int | None
+    decision_monotonic_ns: int | None
     strategy_family: str | None
     strategy_id: str | None
     signal_value: float | None
@@ -77,6 +78,7 @@ class ExecutionJournal:
                 observed_monotonic_ns INTEGER NOT NULL,
                 source_timestamp TEXT,
                 decision_observation_ns INTEGER,
+                decision_monotonic_ns INTEGER,
                 strategy_family TEXT,
                 strategy_id TEXT,
                 signal_value REAL,
@@ -110,6 +112,7 @@ class ExecutionJournal:
             ).fetchall()
         }
         additions = (
+            ("decision_monotonic_ns", "INTEGER"),
             ("strategy_family", "TEXT"),
             ("strategy_id", "TEXT"),
             ("signal_value", "REAL"),
@@ -129,6 +132,7 @@ class ExecutionJournal:
         envelope: ExecutionEnvelope,
         intents: tuple[RuntimeOrderIntent, ...] = (),
         audit: ExecutionAudit | None = None,
+        submitted_monotonic_ns: int | None = None,
     ) -> None:
         existing = self._connection.execute(
             """
@@ -147,8 +151,19 @@ class ExecutionJournal:
             )
             if tuple(existing) != expected:
                 raise ValueError("logical operation identity cannot be reused with changed payload")
+            if submitted_monotonic_ns is not None:
+                self.record_event(
+                    logical_operation_id=envelope.logical_operation_id,
+                    event_type="RESUBMISSION",
+                    observed_monotonic_ns=submitted_monotonic_ns,
+                )
             return
 
+        submission_ns = (
+            envelope.created_monotonic_ns
+            if submitted_monotonic_ns is None
+            else submitted_monotonic_ns
+        )
         with self._connection:
             self._connection.execute(
                 """
@@ -178,8 +193,11 @@ class ExecutionJournal:
                         logical_operation_id=envelope.logical_operation_id,
                         logical_intent_id=intent.intent_id,
                         event_type="SUBMISSION",
-                        observed_monotonic_ns=envelope.created_monotonic_ns,
+                        observed_monotonic_ns=submission_ns,
                         decision_observation_ns=intent.decision_observation_ns,
+                        decision_monotonic_ns=(
+                            None if audit is None else audit.decision_monotonic_ns
+                        ),
                         strategy_family=(
                             None if audit is None else audit.strategy_family
                         ),
@@ -196,9 +214,12 @@ class ExecutionJournal:
                     logical_operation_id=envelope.logical_operation_id,
                     logical_intent_id=None,
                     event_type="SUBMISSION",
-                    observed_monotonic_ns=envelope.created_monotonic_ns,
+                    observed_monotonic_ns=submission_ns,
                     decision_observation_ns=(
                         None if audit is None else audit.decision_observation_ns
+                    ),
+                    decision_monotonic_ns=(
+                        None if audit is None else audit.decision_monotonic_ns
                     ),
                     strategy_family=(
                         None if audit is None else audit.strategy_family
@@ -217,6 +238,7 @@ class ExecutionJournal:
         logical_intent_id: str | None = None,
         source_timestamp: str | None = None,
         decision_observation_ns: int | None = None,
+        decision_monotonic_ns: int | None = None,
         strategy_family: str | None = None,
         strategy_id: str | None = None,
         signal_value: float | None = None,
@@ -241,6 +263,7 @@ class ExecutionJournal:
                 observed_monotonic_ns=observed_monotonic_ns,
                 source_timestamp=source_timestamp,
                 decision_observation_ns=decision_observation_ns,
+                decision_monotonic_ns=decision_monotonic_ns,
                 strategy_family=strategy_family,
                 strategy_id=strategy_id,
                 signal_value=signal_value,
@@ -263,6 +286,7 @@ class ExecutionJournal:
         observed_monotonic_ns: int,
         source_timestamp: str | None = None,
         decision_observation_ns: int | None = None,
+        decision_monotonic_ns: int | None = None,
         strategy_family: str | None = None,
         strategy_id: str | None = None,
         signal_value: float | None = None,
@@ -280,10 +304,10 @@ class ExecutionJournal:
             INSERT INTO execution_events (
                 logical_operation_id, logical_intent_id, event_type,
                 observed_monotonic_ns, source_timestamp, decision_observation_ns,
-                strategy_family, strategy_id, signal_value, fair_value,
+                decision_monotonic_ns, strategy_family, strategy_id, signal_value, fair_value,
                 exchange_id, exchange_order_id, fill_id, quantity, price,
                 terminal_status, detail_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 logical_operation_id,
@@ -292,6 +316,7 @@ class ExecutionJournal:
                 observed_monotonic_ns,
                 source_timestamp,
                 decision_observation_ns,
+                decision_monotonic_ns,
                 strategy_family,
                 strategy_id,
                 signal_value,
@@ -311,7 +336,7 @@ class ExecutionJournal:
             """
             SELECT event_id, logical_operation_id, logical_intent_id, event_type,
                    observed_monotonic_ns, source_timestamp, decision_observation_ns,
-                   strategy_family, strategy_id, signal_value, fair_value,
+                   decision_monotonic_ns, strategy_family, strategy_id, signal_value, fair_value,
                    exchange_id, exchange_order_id, fill_id, quantity, price,
                    terminal_status, detail_json
             FROM execution_events
@@ -331,17 +356,20 @@ class ExecutionJournal:
                 decision_observation_ns=(
                     None if row[6] is None else int(row[6])
                 ),
-                strategy_family=None if row[7] is None else str(row[7]),
-                strategy_id=None if row[8] is None else str(row[8]),
-                signal_value=None if row[9] is None else float(row[9]),
-                fair_value=None if row[10] is None else float(row[10]),
-                exchange_id=None if row[11] is None else str(row[11]),
-                exchange_order_id=None if row[12] is None else str(row[12]),
-                fill_id=None if row[13] is None else str(row[13]),
-                quantity=None if row[14] is None else str(row[14]),
-                price=None if row[15] is None else str(row[15]),
-                terminal_status=None if row[16] is None else str(row[16]),
-                detail_json=None if row[17] is None else str(row[17]),
+                decision_monotonic_ns=(
+                    None if row[7] is None else int(row[7])
+                ),
+                strategy_family=None if row[8] is None else str(row[8]),
+                strategy_id=None if row[9] is None else str(row[9]),
+                signal_value=None if row[10] is None else float(row[10]),
+                fair_value=None if row[11] is None else float(row[11]),
+                exchange_id=None if row[12] is None else str(row[12]),
+                exchange_order_id=None if row[13] is None else str(row[13]),
+                fill_id=None if row[14] is None else str(row[14]),
+                quantity=None if row[15] is None else str(row[15]),
+                price=None if row[16] is None else str(row[16]),
+                terminal_status=None if row[17] is None else str(row[17]),
+                detail_json=None if row[18] is None else str(row[18]),
             )
             for row in rows
         )
