@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.dataset as pads
-from sklearn.linear_model import ElasticNet, LinearRegression, Ridge
+from sklearn.linear_model import ElasticNet, LinearRegression, LogisticRegression, Ridge
 from sklearn.preprocessing import StandardScaler
 
 INPUT = Path("/kaggle/input")
@@ -25,7 +25,7 @@ EXPECTED_MANIFEST = "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8
 EXPECTED_IDENTITY = "e89fe8e25dcc494dad3ed96fe6672ab9f247c01eb70d4c0270a913f18a200a72"
 EXPECTED_QUALITY = "354801b67b9c32ae82d419f8a6198b7fd814923e8c424ac8716862b47907ccb5"
 DESIGN_FREEZE_COMMIT = "b5bf4cfe7482a58161523b66097910903050fc6b"
-EXECUTION_FREEZE_COMMIT = "911de70297363beb4b689f7c85664605ec3baf53"
+EXECUTION_FREEZE_COMMIT = "c238b656eb19f972e99b48f8bc536a1f434fe381"
 SEED = 20260928005
 NS = 1_000_000_000
 GRID_SECONDS = 15
@@ -449,6 +449,126 @@ def asof_from_states(states: pd.DataFrame, query_ns: np.ndarray, field: str) -> 
     return values, seg, source_time
 
 
+
+def load_trade_features(
+    root: Path,
+    tokens: set[str],
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    states: pd.DataFrame,
+) -> pd.DataFrame:
+    """Trailing, identity-free PMXT V2 trade/activity features.
+
+    Same-time trades are later joined with allow_exact_matches=False so a quote event
+    never consumes an archive trade sharing its observable timestamp.
+    """
+    columns = ["token_id", "observed_at", "price", "size", "source_version"]
+    parts: list[pd.DataFrame] = []
+    for batch in filtered_batches(root, columns, tokens, "observed_at", start, end, batch_size=100_000):
+        parts.append(batch.to_pandas())
+    if not parts:
+        return pd.DataFrame()
+    trades = pd.concat(parts, ignore_index=True)
+    trades["observed_at"] = pd.to_datetime(trades["observed_at"], utc=True)
+    trades["price"] = pd.to_numeric(trades["price"], errors="coerce")
+    trades["size"] = pd.to_numeric(trades["size"], errors="coerce")
+    trades = trades[
+        np.isfinite(trades["price"])
+        & np.isfinite(trades["size"])
+        & (trades["size"] > 0)
+    ].copy()
+    out_parts: list[pd.DataFrame] = []
+    for token, g in trades.groupby("token_id", sort=False):
+        g = g.sort_values("observed_at").copy()
+        s = states[states["token_id"].astype(str) == str(token)].sort_values("observed_at")
+        qns = g["observed_at"].astype("int64").to_numpy(np.int64)
+        if not s.empty:
+            mid, _, _ = asof_from_states(s, qns - 1, "midpoint")
+            g["abs_trade_mid_disp"] = np.abs(g["price"].to_numpy(float) - mid)
+        else:
+            g["abs_trade_mid_disp"] = np.nan
+        g["trade_value"] = g["price"] * g["size"]
+        g["interarrival_s"] = g["observed_at"].diff().dt.total_seconds()
+        indexed = g.set_index("observed_at")
+        base = indexed.resample(
+            f"{CAPTURE_BIN_SECONDS}s", label="right", closed="right"
+        ).agg(
+            trade_count=("size", "size"),
+            trade_value=("trade_value", "sum"),
+            trade_size_sum=("size", "sum"),
+            trade_size_max=("size", "max"),
+            abs_trade_mid_disp_sum=("abs_trade_mid_disp", "sum"),
+            impact_obs=("abs_trade_mid_disp", "count"),
+        )
+        base["trade_count"] = base["trade_count"].fillna(0.0)
+        for col in ("trade_value", "trade_size_sum", "abs_trade_mid_disp_sum", "impact_obs"):
+            base[col] = base[col].fillna(0.0)
+        base["trade_size_max"] = base["trade_size_max"].fillna(0.0)
+
+        dt_series = indexed["interarrival_s"]
+        ia_med = dt_series.rolling("60s", closed="left").median().resample(
+            f"{CAPTURE_BIN_SECONDS}s", label="right", closed="right"
+        ).last().reindex(base.index).ffill()
+        ia_mean = dt_series.rolling("60s", closed="left").mean().resample(
+            f"{CAPTURE_BIN_SECONDS}s", label="right", closed="right"
+        ).last().reindex(base.index).ffill()
+        ia_std = dt_series.rolling("60s", closed="left").std().resample(
+            f"{CAPTURE_BIN_SECONDS}s", label="right", closed="right"
+        ).last().reindex(base.index).ffill()
+        base["trade_interarrival_median_60"] = ia_med
+        denom = ia_std + ia_mean
+        base["trade_burstiness_60"] = (ia_std - ia_mean) / denom.replace(0, np.nan)
+
+        for w in WINDOWS:
+            periods = max(1, w // CAPTURE_BIN_SECONDS)
+            base[f"trade_count_{w}"] = base["trade_count"].rolling(periods, min_periods=1).sum()
+            base[f"trade_value_{w}"] = base["trade_value"].rolling(periods, min_periods=1).sum()
+            size_sum = base["trade_size_sum"].rolling(periods, min_periods=1).sum()
+            count = base[f"trade_count_{w}"]
+            base[f"trade_size_mean_{w}"] = size_sum / count.replace(0, np.nan)
+            base[f"trade_size_max_{w}"] = base["trade_size_max"].rolling(periods, min_periods=1).max()
+            imp_sum = base["abs_trade_mid_disp_sum"].rolling(periods, min_periods=1).sum()
+            imp_n = base["impact_obs"].rolling(periods, min_periods=1).sum()
+            base[f"trade_abs_impact_{w}"] = imp_sum / imp_n.replace(0, np.nan)
+        base["trade_activity_accel"] = base["trade_count_15"] / 15.0 - base["trade_count_60"] / 60.0
+        base = base.reset_index().rename(columns={"observed_at": "bin_time"})
+        base["token_id"] = str(token)
+        keep = ["token_id", "bin_time", "trade_interarrival_median_60", "trade_burstiness_60", "trade_activity_accel"]
+        for w in WINDOWS:
+            keep += [
+                f"trade_count_{w}", f"trade_value_{w}", f"trade_size_mean_{w}",
+                f"trade_size_max_{w}", f"trade_abs_impact_{w}",
+            ]
+        out_parts.append(base[keep])
+    return pd.concat(out_parts, ignore_index=True) if out_parts else pd.DataFrame()
+
+
+def attach_trade_features(frame: pd.DataFrame, trade_features: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    if trade_features.empty:
+        return frame
+    parts: list[pd.DataFrame] = []
+    feature_cols = [c for c in trade_features.columns if c not in {"token_id", "bin_time"}]
+    for token, g in frame.groupby("token_id", sort=False):
+        t = trade_features[trade_features["token_id"].astype(str) == str(token)].sort_values("bin_time")
+        g = g.sort_values("time").copy()
+        if t.empty:
+            for col in feature_cols:
+                g[col] = np.nan
+            parts.append(g)
+            continue
+        merged = pd.merge_asof(
+            g,
+            t.drop(columns=["token_id"]),
+            left_on="time",
+            right_on="bin_time",
+            direction="backward",
+            allow_exact_matches=False,
+        ).drop(columns=["bin_time"])
+        parts.append(merged)
+    return pd.concat(parts, ignore_index=True) if parts else frame
+
 def build_clock(
     event: str,
     regime: str,
@@ -826,6 +946,8 @@ def feature_family(name: str) -> str:
         return "MICROPRICE"
     if name.startswith(("depth_", "depth2_", "qbid", "qask")):
         return "DEPTH"
+    if name.startswith("trade_"):
+        return "TRADE_ACTIVITY"
     if name.startswith(("rv_", "activity_norm", "vol_of_vol", "abs_ret")):
         return "VOLATILITY"
     if "spread" in name:
@@ -901,6 +1023,79 @@ def screen_regression(
     return rows
 
 
+
+def screen_classification(
+    frame: pd.DataFrame,
+    dataset: str,
+    regime: str,
+    target_family: str,
+    target_col: str,
+    horizon: str,
+    base_cols: list[str],
+    candidates: list[str],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    needed_base = [c for c in base_cols if c in frame.columns]
+    for candidate in candidates:
+        if candidate not in frame.columns or candidate in needed_base:
+            continue
+        cols = ["split", "event", "token_id", "time", target_col, *needed_base, candidate]
+        x = frame[cols].replace([np.inf, -np.inf], np.nan).dropna()
+        tr = thin(x[x["split"] == "TRAIN"].sort_values(["time", "token_id"]))
+        dv = thin(x[x["split"] == "DEV"].sort_values(["time", "token_id"]))
+        if (
+            len(tr) < 500 or len(dv) < 200
+            or tr[target_col].nunique() < 2 or dv[target_col].nunique() < 2
+            or dv["token_id"].nunique() < 3
+        ):
+            continue
+        ytr = tr[target_col].to_numpy(int)
+        ydv = dv[target_col].to_numpy(int)
+
+        if needed_base:
+            sb = StandardScaler().fit(tr[needed_base])
+            Xtr_b, Xdv_b = sb.transform(tr[needed_base]), sb.transform(dv[needed_base])
+            base = LogisticRegression(C=1.0, max_iter=500, random_state=SEED).fit(Xtr_b, ytr)
+            pred_b = base.predict_proba(Xdv_b)[:, 1]
+        else:
+            pred_b = np.full(len(dv), ytr.mean())
+
+        all_cols = needed_base + [candidate]
+        sc = StandardScaler().fit(tr[all_cols])
+        Xtr, Xdv = sc.transform(tr[all_cols]), sc.transform(dv[all_cols])
+        model = LogisticRegression(C=1.0, max_iter=500, random_state=SEED).fit(Xtr, ytr)
+        pred = model.predict_proba(Xdv)[:, 1]
+        lb = (ydv - pred_b) ** 2
+        lc = (ydv - pred) ** 2
+        diff = lb - lc
+        tmp = dv[["event", "time"]].copy()
+        tmp["diff"] = diff
+        tmp["block"] = tmp["time"].dt.floor("30min")
+        blocks = tmp.groupby(["event", "block"], observed=True)["diff"].mean().to_numpy(float)
+        p = signflip_p(blocks, f"{dataset}|{regime}|{target_col}|{candidate}|hazard")
+        rows.append({
+            "dataset": dataset,
+            "regime": regime,
+            "target_family": target_family,
+            "target": target_col,
+            "horizon": horizon,
+            "feature": candidate,
+            "feature_family": feature_family(candidate),
+            "train_n": len(tr),
+            "dev_n": len(dv),
+            "markets": int(dv["token_id"].nunique()),
+            "events": int(dv["event"].nunique()),
+            "blocks": len(blocks),
+            "positive_blocks": int(np.sum(blocks > 0)),
+            "baseline_mse": float(np.mean(lb)),
+            "challenger_mse": float(np.mean(lc)),
+            "delta_mse": float(np.mean(diff)),
+            "coef_std": float(model.coef_[0, -1]),
+            "p_raw": p,
+            "loss_metric": "BRIER",
+        })
+    return rows
+
 def model_tournament(
     frame: pd.DataFrame,
     selected: list[dict[str, Any]],
@@ -972,6 +1167,7 @@ def main() -> None:
             empirical_end = bounds["DEV"][1]
             book_root = corpus / event / "books" / "book_changes"
             depth_root = corpus / event / "books" / "depth_snapshots"
+            trade_root = corpus / event / "books" / "trades"
             states, captures, audit = load_book_state(book_root, tokens, start, empirical_end)
             audits.append({
                 "event": event, "event_family": meta["family"], "regime": regime,
@@ -980,11 +1176,15 @@ def main() -> None:
             })
             if states.empty:
                 continue
+            trade_features = load_trade_features(trade_root, tokens, start, empirical_end, states)
             clock = build_clock(event, regime, states, captures, market_map, start, end)
             if not clock.empty:
+                clock = attach_trade_features(clock, trade_features)
+                clock["trade_vs_quote_60"] = clock.get("trade_count_60", np.nan) / np.maximum(clock["genuine_60"], 1.0)
                 all_clock.append(clock)
             ev = build_event_time(event, regime, states, market_map, start, end)
             if not ev.empty:
+                ev = attach_trade_features(ev, trade_features)
                 all_event.append(ev)
             depth = load_depth(depth_root, tokens, start, empirical_end)
             depth = attach_depth_targets(depth, states, event, regime, market_map, start, end)
@@ -1021,10 +1221,17 @@ def main() -> None:
         "repeated_15", "repeated_60", "genuine_15", "genuine_60", "genuine_300",
         "genuine_raw_ratio_15", "genuine_raw_ratio_60", "genuine_raw_ratio_300",
         "rv_60", "rv_300", "activity_norm_vol_60", "vol_of_vol_300", "jump_state",
+        "trade_count_15", "trade_count_60", "trade_count_300",
+        "trade_value_15", "trade_value_60", "trade_size_mean_60", "trade_size_max_60",
+        "trade_interarrival_median_60", "trade_burstiness_60", "trade_activity_accel",
+        "trade_abs_impact_60", "trade_vs_quote_60",
     ]
     event_candidates = [
         "spread", "inter_event_s", "ofi", "ofi_norm", "imbalance_top",
         "microprice_disp_over_spread", "qbid", "qask",
+        "trade_count_15", "trade_count_60", "trade_value_60",
+        "trade_interarrival_median_60", "trade_burstiness_60", "trade_activity_accel",
+        "trade_abs_impact_60",
     ]
     depth_candidates = [
         "spread", "imbalance_top", "microprice_disp_over_spread",
@@ -1040,6 +1247,7 @@ def main() -> None:
                 screen += screen_regression(f, "clock", regime, "PRICE", f"price_h{h}", str(h), ["ret_15", "ret_30", "ret_60"], clock_candidates)
                 screen += screen_regression(f, "clock", regime, "VOLATILITY", f"abs_h{h}", str(h), ["abs_ret_15", "rv_60"], clock_candidates)
                 screen += screen_regression(f, "clock", regime, "LIQUIDITY", f"spread_h{h}", str(h), ["spread", "ret_15"], clock_candidates)
+                screen += screen_classification(f, "clock", regime, "UPDATE_HAZARD", f"update_h{h}", str(h), ["genuine_15", "genuine_60"], clock_candidates)
         if not event_df.empty:
             f = event_df[event_df["regime"] == regime]
             for k in EVENT_H:
@@ -1132,12 +1340,13 @@ def main() -> None:
         "clock_candidates": clock_candidates,
         "event_candidates": event_candidates,
         "depth_candidates": depth_candidates,
+        "trade_features_enabled": True,
         "clock_horizons_seconds": CLOCK_H,
         "event_horizons": EVENT_H,
         "clock_grid_seconds": GRID_SECONDS,
     }, indent=2, sort_keys=True))
     (WORK / "target_atlas.json").write_text(json.dumps({
-        "clock": ["price_logit_change", "absolute_logit_change", "spread_change"],
+        "clock": ["price_logit_change", "absolute_logit_change", "spread_change", "genuine_update_hazard"],
         "event": ["event_logit_change", "event_absolute_logit_change", "event_spread_change"],
         "depth": ["future_logit_change", "future_absolute_logit_change", "observable_recovery_fraction"],
     }, indent=2, sort_keys=True))
