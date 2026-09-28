@@ -79,11 +79,11 @@ def locate_stage1() -> tuple[Path, dict[str, Any]]:
     if m.get("stage") != "A5_MAKER_LIQUIDITY_OBSERVED_AND_PANELS":
         raise RuntimeError(f"wrong A5 manifest: {m.get('stage')}")
     root = p.parent
-    for name, meta in m["maker_panel_outputs"].items():
+    for name, meta in m["maker_panels"].items():
         q = root / name
         if not q.exists() or q.stat().st_size != int(meta["bytes"]) or sha256(q) != meta["sha256"]:
             raise RuntimeError(f"maker panel mismatch: {name}")
-    for name, meta in m["liquidity_panel_outputs"].items():
+    for name, meta in m["liquidity_panels"].items():
         q = root / name
         if not q.exists() or q.stat().st_size != int(meta["bytes"]) or sha256(q) != meta["sha256"]:
             raise RuntimeError(f"liquidity panel mismatch: {name}")
