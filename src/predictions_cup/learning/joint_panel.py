@@ -268,28 +268,71 @@ def _rank(values: np.ndarray) -> np.ndarray:
     return ranks
 
 
+def _rowwise_ordinal_ranks(values: np.ndarray, valid: np.ndarray) -> np.ndarray:
+    """Stable ordinal ranks for valid cells; invalid cells sort last and are ignored."""
+    filled = np.where(valid, values, np.inf)
+    order = np.argsort(filled, axis=1, kind="stable")
+    ranks = np.empty(order.shape, dtype=np.float64)
+    positions = np.broadcast_to(
+        np.arange(values.shape[1], dtype=np.float64),
+        order.shape,
+    )
+    np.put_along_axis(ranks, order, positions, axis=1)
+    return ranks
+
+
 def predictive_ic(y: np.ndarray, pred: np.ndarray) -> tuple[float, float]:
     """Mean cross-sectional Spearman IC and median per-target time-series IC."""
     target = np.asarray(y, dtype=np.float64)
     forecast = np.asarray(pred, dtype=np.float64)
-    cross: list[float] = []
-    for row in range(target.shape[0]):
-        mask = np.isfinite(target[row]) & np.isfinite(forecast[row])
-        if int(mask.sum()) >= 3:
-            a = _rank(target[row, mask])
-            b = _rank(forecast[row, mask])
-            if a.std() > EPS and b.std() > EPS:
-                cross.append(float(np.corrcoef(a, b)[0, 1]))
+    if target.shape != forecast.shape or target.ndim != 2:
+        raise ValueError("y and pred must be same-shape matrices")
+
+    valid = np.isfinite(target) & np.isfinite(forecast)
+    count = valid.sum(axis=1)
+    eligible = count >= 3
+    cross_values = np.full(target.shape[0], np.nan, dtype=np.float64)
+
+    if eligible.any():
+        target_rank = _rowwise_ordinal_ranks(target, valid)
+        forecast_rank = _rowwise_ordinal_ranks(forecast, valid)
+        weight = valid.astype(np.float64)
+        denom = count.astype(np.float64)
+        target_mean = np.divide(
+            (target_rank * weight).sum(axis=1),
+            denom,
+            out=np.zeros(target.shape[0], dtype=np.float64),
+            where=denom > 0,
+        )
+        forecast_mean = np.divide(
+            (forecast_rank * weight).sum(axis=1),
+            denom,
+            out=np.zeros(target.shape[0], dtype=np.float64),
+            where=denom > 0,
+        )
+        target_centered = (target_rank - target_mean[:, None]) * weight
+        forecast_centered = (forecast_rank - forecast_mean[:, None]) * weight
+        covariance = (target_centered * forecast_centered).sum(axis=1)
+        target_ss = (target_centered**2).sum(axis=1)
+        forecast_ss = (forecast_centered**2).sum(axis=1)
+        scale = np.sqrt(target_ss * forecast_ss)
+        valid_cross = eligible & (scale > EPS)
+        cross_values[valid_cross] = (
+            covariance[valid_cross] / scale[valid_cross]
+        )
+
     temporal: list[float] = []
     for col in range(target.shape[1]):
-        mask = np.isfinite(target[:, col]) & np.isfinite(forecast[:, col])
+        mask = valid[:, col]
         if int(mask.sum()) >= 3:
             a = _rank(target[mask, col])
             b = _rank(forecast[mask, col])
             if a.std() > EPS and b.std() > EPS:
                 temporal.append(float(np.corrcoef(a, b)[0, 1]))
+
+    finite_cross = cross_values[np.isfinite(cross_values)]
     return (
-        float(np.mean(cross)) if cross else float("nan"),
+        float(np.mean(finite_cross)) if len(finite_cross) else float("nan"),
         float(np.median(temporal)) if temporal else float("nan"),
     )
 
