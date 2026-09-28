@@ -161,8 +161,14 @@ def build_report(
         f"- Feature count: **{freeze.get('feature_count', '—')}**.",
         f"- Target count: **{freeze.get('target_count', '—')}**.",
         f"- Redundancy clusters: **{freeze.get('redundancy_cluster_count', '—')}**.",
-        f"- Representative features after TRAIN-only collapse: **{freeze.get('representative_feature_count', '—')}**.",
-        f"- Feature-build rows: **{feature_build.get('totals', {}).get('rows', '—')}**.",
+        (
+            "- Representative features after TRAIN-only collapse: "
+            f"**{freeze.get('representative_feature_count', '—')}**."
+        ),
+        (
+            "- Feature-build rows: "
+            f"**{feature_build.get('totals', {}).get('rows', '—')}**."
+        ),
         "",
         "## TRAIN → DEV screen",
         "",
@@ -180,7 +186,10 @@ def build_report(
         "",
         "## Candidate registry",
         "",
-        "| Target | Scalar feature | Label | TRAIN ρ | DEV r | HOLDOUT ρ | Model | HOLDOUT model metric | Bootstrap interval |",
+        (
+            "| Target | Scalar feature | Label | TRAIN ρ | DEV r | HOLDOUT ρ | "
+            "Model | HOLDOUT model metric | Bootstrap interval |"
+        ),
         "|---|---|---|---:|---:|---:|---|---|---|",
     ]
     for row in registry:
