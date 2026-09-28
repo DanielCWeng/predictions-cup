@@ -156,8 +156,15 @@ class AccountRealtimeController:
             self._resyncing = True
             self._batch_seen_during_resync = False
             authoritative = await self._authoritative_resync()
-            self._state.apply_authoritative(authoritative)
+            self._state.apply_authoritative(
+                authoritative,
+                mark_trusted=False,
+            )
+            # Drain callbacks already queued by the subscribed socket while trust
+            # is still false. A batch seen here makes the REST snapshot ambiguous.
+            await asyncio.sleep(0)
             if not self._batch_seen_during_resync:
+                self._state.mark_trusted_after_reconciliation()
                 self._resyncing = False
                 return
             self._state.mark_untrusted(
