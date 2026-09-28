@@ -11,7 +11,7 @@ from pydantic import SecretStr
 from predictions_cup.config import AppSettings
 from predictions_cup.execution.interlocks import LiveInterlockError, assert_live_interlocks
 from predictions_cup.execution.models import ExecutionMode, OperationKind
-from predictions_cup.execution.planning import build_execution_plan
+from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.risk.core import (
     RiskContext,
     RiskLimits,
@@ -292,15 +292,13 @@ def test_shadow_and_live_share_identical_post_risk_intents() -> None:
         decision,
         mode=ExecutionMode.SHADOW,
         logical_operation_id="logical-1",
-        idempotency_key="key-1",
-        clock_ns=lambda: 123,
+        created_monotonic_ns=123,
     )
     live = build_execution_plan(
         decision,
         mode=ExecutionMode.LIVE,
         logical_operation_id="logical-1",
-        idempotency_key="key-1",
-        clock_ns=lambda: 123,
+        created_monotonic_ns=123,
     )
     assert shadow.intents == live.intents
     assert shadow.envelope.payload_json == live.envelope.payload_json
