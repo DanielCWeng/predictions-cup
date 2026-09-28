@@ -74,6 +74,13 @@
       "to": "context-qualified c.timestamp/c.p_yes references plus labelled AS c in the outer projection",
       "reason": "Kaggle version 4 reached panel export and DuckDB rejected the ambiguous references. The repair is SQL binding only.",
       "timing": "after an engineering binder failure and before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection"
+    },
+    {
+      "field": "HOLDOUT positive-evidence p-value gate",
+      "from": "bootstrap p-value retained only when the unweighted mean per-row loss gain was positive",
+      "to": "bootstrap p-value retained only when the preregistered hierarchical weighted MSE gain is positive",
+      "reason": "Static pre-HOLDOUT audit found the sign gate used a different estimand from the primary weighted MSE-gain statistic and the weighted bootstrap.",
+      "timing": "before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection; running TRAIN/DEV v5 is unaffected"
     }
   ],
   "local_frozen_source_commit": "567f364c5acf3825a940ea2220eac3cb511b9e6f",
@@ -152,5 +159,17 @@
     "runner_sha256": "4bfee0c72cdbd46e6854862c99d4b176b6dce36230cfc72cc114caa99726ee9e",
     "focused_tests": 11,
     "status": "READY_TO_LAUNCH"
+  },
+  "holdout_positive_gate_patch": {
+    "local_tested_commit": "cb3f74de35c949eb6bd51db83260477dfd6aa107",
+    "github_runner_commit": "3cc867634591f4344bc9575b65b3e5678ee62d79",
+    "runner_sha256": "d5553d445e3c87a94084931012645b418a7708c211eeb42474a67d28c7687a17",
+    "focused_tests": 11,
+    "scope": "HOLDOUT inference only; TRAIN/DEV v5 remains bound to e8c68c13ec65209507c22469cce1c7d8a75f14ee / runner 4bfee0c72cdbd46e6854862c99d4b176b6dce36230cfc72cc114caa99726ee9e"
+  },
+  "next_holdout_runner": {
+    "github_runner_commit": "3cc867634591f4344bc9575b65b3e5678ee62d79",
+    "runner_sha256": "d5553d445e3c87a94084931012645b418a7708c211eeb42474a67d28c7687a17",
+    "status": "PRE_RESULT_CANDIDATE_NOT_PACKAGED"
   }
 }
