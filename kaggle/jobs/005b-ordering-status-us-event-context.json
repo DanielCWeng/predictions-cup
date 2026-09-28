@@ -2,5 +2,5 @@
   "schema_version": 1,
   "action": "status",
   "kernel": "polyleviathan/005b-ordering-falsification-us-event-context",
-  "note": "Monitor corrected US continuation after migration to GitHub Actions."
+  "note": "Actions poll round 2 for corrected US continuation."
 }
