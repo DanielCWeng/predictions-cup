@@ -157,3 +157,42 @@ def test_fit_freeze_rejects_out_of_grid_hgb() -> None:
 
     with pytest.raises(ValueError):
         build_frozen_model("HGB_D7_LR0.03", classification=False, random_state=7)
+
+
+def test_holdout_evidence_primitives() -> None:
+    from predictions_cup.learning.microstructure_holdout import (
+        block_means,
+        leave_group_out_means,
+        moving_block_bootstrap_mean,
+        one_sided_signflip_p,
+        squared_loss_improvement,
+        stability_summary,
+    )
+
+    y = np.asarray([0.0, 1.0, 2.0, 3.0])
+    baseline = np.asarray([1.0, 2.0, 3.0, 4.0])
+    challenger = np.asarray([0.0, 1.0, 2.0, 3.0])
+    improvement = squared_loss_improvement(y, baseline, challenger)
+    assert np.all(improvement == 1.0)
+
+    _, means = block_means(
+        [0, NS, 1800 * NS, 1801 * NS],
+        [1.0, 3.0, 5.0, 7.0],
+    )
+    assert means.tolist() == [2.0, 6.0]
+    assert one_sided_signflip_p([1.0, 2.0, 3.0]) < 0.5
+
+    boot = moving_block_bootstrap_mean(
+        [1.0, 2.0, 3.0, 4.0],
+        block_length=2,
+        draws=100,
+        seed=7,
+    )
+    assert boot["mean"] == pytest.approx(2.5)
+    assert boot["lower"] <= boot["upper"]
+
+    loo = leave_group_out_means(["a", "a", "b", "b"], [1.0, 1.0, 2.0, 2.0])
+    assert loo["a"] == pytest.approx(2.0)
+    assert loo["b"] == pytest.approx(1.0)
+    stability = stability_summary(["a", "a", "b", "b"], [1.0, 1.0, 2.0, 2.0])
+    assert stability["all_positive"] is True
