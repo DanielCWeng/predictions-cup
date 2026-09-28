@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Any, cast
 
 FAMILIES = ("US_2024", "CAN_2025", "COL_2026", "HUN_2026", "PER_2026")
+FEATURE_TARGET_SPEC_REPO_PATH = (
+    "data/experiments/experiment_005b/feature_target_spec.json"
+)
 
 
 def load(path: Path) -> dict[str, Any]:
@@ -45,6 +48,15 @@ def main() -> None:
         ):
             if report[key] != reference[key]:
                 raise RuntimeError(f"schema/spec drift for {family}: {key}")
+        repo_path = report.get("feature_target_spec_repo_path")
+        if (
+            repo_path is not None
+            and repo_path != FEATURE_TARGET_SPEC_REPO_PATH
+        ):
+            raise RuntimeError(
+                f"schema/spec drift for {family}: "
+                "feature_target_spec_repo_path"
+            )
         reference_features = reference["feature_columns"]
         current_features = report["feature_columns"]
         if (
@@ -68,9 +80,7 @@ def main() -> None:
         "feature_target_spec_sha256": reference[
             "feature_target_spec_sha256"
         ],
-        "feature_target_spec_repo_path": reference[
-            "feature_target_spec_repo_path"
-        ],
+        "feature_target_spec_repo_path": FEATURE_TARGET_SPEC_REPO_PATH,
         "feature_count": reference["feature_count"],
         "target_count": reference["target_count"],
         "feature_columns": reference["feature_columns"],
