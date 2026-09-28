@@ -9,7 +9,7 @@ import pytest
 from pydantic import SecretStr
 
 from predictions_cup.config import AppSettings
-from predictions_cup.execution.interlocks import assert_live_interlocks
+from predictions_cup.execution.interlocks import LiveExecutionPermit, assert_live_interlocks
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import (
@@ -80,7 +80,7 @@ class FakeUncertainTradingClient(FakeTradingClient):
         )
 
 
-def _permit():
+def _permit() -> LiveExecutionPermit:
     settings = AppSettings(
         sig_trade_credential=SecretStr("trade-secret"),
         tournament_id="t1",
