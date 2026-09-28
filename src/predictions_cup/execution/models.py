@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass
 from enum import StrEnum
 
-from predictions_cup.runtime import OrderAction, OutcomeSide, ticks_to_limit_price
+from predictions_cup.runtime.models import OrderAction, OutcomeSide, ticks_to_limit_price
 
 
 class ExecutionMode(StrEnum):
