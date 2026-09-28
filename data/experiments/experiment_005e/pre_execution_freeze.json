@@ -34,5 +34,7 @@
     }
   ],
   "local_frozen_source_commit": "da64cece9ec2198113b5be7927952846e8b862cb",
-  "local_frozen_source_tree_note": "Exact EC2 source commit; GitHub branch is separately anchored by this hash freeze until byte-identical source files are persisted through the connector."
+  "local_frozen_source_tree_note": "Exact EC2 source commit; GitHub branch is separately anchored by this hash freeze until byte-identical source files are persisted through the connector.",
+  "github_frozen_source_commit": "4419ccdfc762ecaae1b302049e1b46a2a5fb85c1",
+  "github_source_equivalence": "GitHub source commit contains the byte-identical source files bound by hashes in this record."
 }
