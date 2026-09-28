@@ -1,200 +1,204 @@
 # Predictions Cup — Orchestrator
 
-This file is the durable project-level orchestration record. It captures intent, dependency order,
-review discipline and the reasons behind major decisions. It is not a substitute for the technical
-contracts or runbooks.
+## Role
+
+This repository is coordinated under:
+
+`Daniel → MASTER orchestrator → prompt/implementation orchestrator → specialist agents`
+
+The orchestrator converts MASTER decisions into bounded specialist work, coordinates implementation,
+and grades returned code/evidence. It does not invent new strategy families or redirect the research
+programme because one result looks interesting.
 
 ## Canonical read order
 
-A new orchestrator, reviewer or coding agent should read:
+1. `ORCHESTRATOR.md`
+2. `CURRENT_STATE.md`
+3. `BUILD_LEDGER.md`
+4. `EXPERIMENT_REGISTRY.md`
+5. `ARCHITECTURE.md`
+6. `DATA_CONTRACTS.md`
+7. `OPERATIONS.md`
+8. experiment-specific preregistrations, freezes and handoffs.
 
-1. `ORCHESTRATOR.md` — intent, priorities, dependencies and review rules;
-2. `CURRENT_STATE.md` — what is true on `main` now;
-3. `BUILD_LEDGER.md` — accepted build/experiment history;
-4. `ARCHITECTURE.md` — implemented technical architecture;
-5. `DATA_CONTRACTS.md` — data and semantic contracts;
-6. `OPERATIONS.md` — runtime/operator procedure;
-7. the relevant ticket, experiment or research document.
+GitHub merge state and actual `main` contents outrank stale documentation and chat memory.
 
-GitHub merge state and the actual contents of `main` outrank stale prose. Chat history is working
-context, not canonical project state.
+## Programme families
 
-## Mission
+The approved monetisation families are:
 
-Build a robust prediction-market trading/research system for the 2026 SIG Predictions Trading Cup,
-using SIG market state plus external prediction-market information to test simple, falsifiable
-sources of edge before introducing execution complexity.
+- `FV-TAKE`
+- `MAKE`
+- `STRUCT`
+- `PRED`
+- `EVENT`
+- `NO_TRADE`
 
-No empirical edge is assumed. The current project must earn each strategy step through replay,
-historical evidence, live paired capture and paper/shadow validation.
+Staleness, flow quality, volatility, liquidity, participant ecology and similar findings are normally
+features, controls or challengers inside these families. They are not standalone strategies unless
+MASTER explicitly changes the programme taxonomy.
 
-## Hard constraints
+## Current canonical posture — 28 September 2026
 
-- Trading capability remains **NONE** until separately approved execution work exists.
-- SIG REST is authoritative for SIG financial/state truth; realtime accelerates or invalidates state
-  but does not replace authoritative reconciliation.
-- Broad tournament Realtime does not imply broad resident full depth.
-- Production Polymarket capture must be bounded by the accepted SIG ↔ Polymarket crosswalk.
-- High-frequency Polymarket research history uses Parquet + ZSTD; SQLite is operational metadata /
-  health only.
-- Credentials never belong in GitHub, logs, prompts or screenshots.
-- Builders do not self-accept. Code review and live acceptance are separate gates when runtime
-  behavior matters.
-- Strategy claims require actual data; synthetic fixtures prove mechanics, not edge.
+Accepted live mapping exists on `main`: 237 SIG exchanges are classified as 140 EXACT, 87 DERIVED,
+4 NEAR and 6 NO_TRADE, with 693 unique Polymarket conditions / 1,386 token IDs.
 
-## Current strategic posture — 28 September 2026
+DATA-003 provides fresh actual-mapped-universe fills and is accepted.
 
-The repository now contains the completed EXPERIMENT-004C programme on canonical `main`.
+The broad 005 discovery programme is substantially closed:
 
-- 004C-A: `INCONCLUSIVE / NO PROMOTED EDGE`; generic pairwise internal lead-lag is demoted.
-- 004C-B: `SOFT_COMPETITIVE_EFFECT_ONLY`; one narrow Colombia PRE competitive-family effect survives, but no hard/exhaustive-family alpha promotes.
-- 004C-C: `INCONCLUSIVE / NO PROMOTED EDGE`; raw PM→SIG 30-second prediction fails mapping-specific falsification and executable crossing economics.
-- 004C-D: `NO_CONDITIONAL_EDGE`; frozen age-conditioned and genuine-renewal interactions do not achieve predictive-gain support in the adequately supported challenge cells.
+- 005A — narrow same-family PRE 5s effect only; no broad role-aware edge;
+- 005B — **BLOCKED / unmerged** pending causal same-block ordering falsification;
+- 005C — familywise null not rejected; shadow/research comparator only;
+- 005D — narrow LATE_COUNT structural-convergence evidence only;
+- 005E — no incremental evidence on the preregistered primary participant target;
+- 005F — persistent economic-BBO-age / renewal-hazard state is the strongest supported finding.
 
-Programme-level conclusion: **no robust executable alpha was established by 004C**. This is a statement about the tested mechanisms, not the complete predictive information set. Broad common-event state, other structural relationships, other external information and other state-dependent models remain open research families.
+No accepted execution path exists.
 
-The only positive 004C discovery worth carrying forward is the narrow 004C-B soft competitive-family structure, and it must not be treated as a general Cup edge without a separately frozen follow-up.
+## Current direction
 
-PR #38 / EXPERIMENT-005A remains draft/open and unmerged. Its empirical gate remains outside this 004C close-out. Any broader 005 discovery lane should follow `docs/research/005_DISCOVERY_PRIOR_WORK_BOUNDARY.md`: methodology and prior-work families may be inspected pre-freeze, but detailed prior outcome magnitudes/winners should remain embargoed until the new lane freezes its own feature universe, targets, validation rules, model ladder and screening policy.
+1. Finish the bounded 005B ordering falsification without redesign.
+2. Close broad predictive discovery.
+3. Establish simple baseline strategy engines for the approved families.
+4. Build common shadow/evaluation machinery shared by all families.
+5. Replicate important findings on DATA-003 / the actual 2026 mapped universe.
+6. Use live SIG evidence to promote/demote mechanisms.
+7. Iterate after launch without proliferating ad-hoc strategy families.
 
-The canonical 004C programme handoff is `docs/experiments/EXPERIMENT_004C_FINAL_HANDOFF.md`.
+## Delegation standard
 
-## Dependency graph
+Before writing a specialist task, establish only what is necessary:
 
-```text
-accepted SIG runtime (BUILD-006)
-            +
-accepted supervised runtime/storage (BUILD-007)
-            |
-            v
-LIVE-MAPPING-GATE-001
-accepted SIG <-> Polymarket crosswalk
-            |
-            v
-mapping-bounded paired live capture
-            |
-            +--> deterministic replay
-            |        |
-            |        v
-            |   EXPERIMENT-002 on real data
-            |        |
-            |        v
-            |   lead/lag / RV / LOO evidence
-            |
-            +--> production soak / runtime validation
-                     |
-                     v
-             paper/shadow strategy work
-                     |
-                     v
-          risk + execution only if justified
-```
+- objective;
+- repo / branch / base;
+- relevant prior evidence;
+- what may change;
+- what must remain frozen;
+- deliverables;
+- scientific or implementation boundaries;
+- stop condition / handoff.
 
-Historical research runs in parallel where it can answer the same hypotheses without weakening
-live-data priorities.
+Prompts should be as simple as the task permits.
+
+For scientific work, preserve preregistration, HOLDOUT discipline, provenance and contamination
+boundaries. A post-HOLDOUT follow-up may falsify or narrow an existing claim; it must not search for
+a replacement winner.
+
+## Kaggle — canonical execution path
+
+Routine compute uses:
+
+`Agent → GitHub → kaggle/jobs/*.json → GitHub Actions → Kaggle → artifacts/results → GitHub review`
+
+PR #47 is merged and this is the default Kaggle route.
+
+### Delegating a Kaggle job
+
+1. Commit experiment code and `kernel-metadata.json` to the owning branch.
+2. Create `kaggle/jobs/<descriptive-job-name>.json`.
+3. For new compute use `"action": "run"`.
+4. Specify only what the job needs, such as:
+   - `kernel_dir`;
+   - `kernel`;
+   - `poll_seconds`;
+   - `timeout_minutes`;
+   - output download behaviour;
+   - an output pattern for compact evidence.
+5. Commit and push the manifest.
+6. GitHub Actions authenticates through the existing `KAGGLE_API_TOKEN` secret.
+7. Up to five jobs may run concurrently.
+8. Monitor the GitHub Actions run and retrieve compact logs/evidence there.
+9. Keep large raw datasets and bulky outputs on Kaggle unless Git genuinely needs them.
+
+Other manifest actions:
+
+- `auth_check`
+- `status`
+- `output`
+
+Never request, print or commit Kaggle credentials.
+
+Use EC2 / Remote Desktop Commander only when genuinely required for persistent runtime, live SIG
+capture, EC2-resident data or capabilities unavailable through the GitHub→Kaggle path.
+
+Before declaring a Kaggle task complete, verify:
+
+- GitHub Actions succeeded;
+- the Kaggle kernel reached successful terminal state;
+- expected evidence/results were retrieved;
+- required compact result files/handoffs were committed to the owning branch.
+
+## Reviewing returned work
+
+For every specialist return:
+
+1. inspect the actual branch, diff, code and evidence;
+2. identify blockers first;
+3. distinguish result from interpretation;
+4. distinguish interesting from actionable;
+5. verify CI/runtime evidence where relevant;
+6. verify freeze/HOLDOUT provenance for scientific work;
+7. return a concise grade to MASTER;
+8. issue only the smallest bounded follow-up when needed.
+
+Never:
+
+- merge experimental work merely because CI is green;
+- permit HOLDOUT-driven redesign;
+- promote a secondary result into a primary claim;
+- create a new programme because one result looks exciting;
+- use EC2 as a Kaggle middleman without a genuine reason.
 
 ## Active workstreams
 
-### 1. LIVE-MAPPING-GATE-001 — primary gating work
+### 1. EXPERIMENT-005B ordering falsification
 
-Generate and independently accept the live SIG ↔ Polymarket crosswalk for the tournament universe.
-The mapping framework already exists; production IDs do not.
+PR #45 is blocked. The follow-up branch is `experiment/005b-ordering-falsification`.
 
-Acceptance requires live SIG enumeration, reviewer-owned promotion/overrides, exact coverage
-evidence, mapped-token CLOB availability and a deterministic acceptance artifact.
+The allowed task is narrowly defined:
 
-The observed SIG universe is roughly 237 exchanges. The exact number of Polymarket markets/tokens
-will be determined by the accepted crosswalk; it must not be guessed in runtime configuration.
+- recover true block/log observable order;
+- quantify the original pseudo-order impact;
+- rerun the exact frozen specification;
+- preserve the original sealed outputs;
+- classify corrected HOLDOUT analysis as `POST_HOC_FALSIFICATION_ONLY`;
+- no candidate/model/threshold redesign.
 
-### 2. Paired live capture
+### 2. Baseline strategy engines
 
-After mapping acceptance, supervise only mapped Polymarket counterparts. Broad Gamma metadata
-discovery may still support mapping/metadata maintenance, but broad 1 Hz WebSocket/depth capture is
-not the production lane.
+After broad discovery closes, implement simple baseline engines for the approved monetisation
+families. Keep fair value, opportunity generation, risk and execution boundaries explicit. Strategy
+code must not submit orders directly.
 
-Then run a mapping-bounded soak and complete the remaining production runtime checks, including
-SSH independence and reboot recovery.
+### 3. Common shadow/evaluation layer
 
-### 3. Replay + empirical experiments
+All candidate families should be comparable under one evaluation surface: common timestamps,
+observable inputs, execution assumptions, costs, latency/staleness controls, NO_TRADE decisions and
+attribution.
 
-The 004C identification programme is complete and frozen. Its four batteries tested internal
-propagation, structural family redistribution, mapped cross-venue price discovery and conditional
-age/activity/renewal response. No robust executable alpha promoted.
+### 4. Actual-universe replication
 
-Do not convert those negative results into blanket rejection of price information, structural
-models, external information or state-dependent prediction. The next research programme should
-broaden the predictor census under the contamination-control convention in
-`docs/research/005_DISCOVERY_PRIOR_WORK_BOUNDARY.md`.
+Use DATA-003 to test whether historically important mechanisms transfer to the real mapped 2026
+universe. Historical HOLDOUT success is not equivalent to Cup-universe validation.
 
-EXPERIMENT-005A remains a separate draft scaffold on PR #38 and must consume the final canonical
-004C freeze under its own owner/gates before empirical execution.
+### 5. Live runtime validation
 
-### 4. Historical data lane
+The crosswalk is accepted. Remaining operational work is the mapping-bounded paired capture soak and
+the final SSH/reboot recovery gate on accepted production IDs.
 
-Historical order-book/fill research remains useful for regime behavior and pre-competition
-falsification. HIST-DATA-001 / PR #17 was closed unmerged and should not be treated as accepted
-capability. A replacement historical lane should reuse accepted replay/data contracts rather than
-becoming a parallel architecture.
+## Accepted control decisions
 
-### 5. Monitoring UI
+- REST is authoritative for SIG financial/state truth.
+- Tournament-wide Realtime does not imply tournament-wide resident full depth.
+- Tracked depth fails closed when stale/untrusted.
+- Production Polymarket capture is mapping-bounded.
+- High-frequency Polymarket research history uses immutable Parquet + ZSTD; SQLite is operational.
+- Canonical numerics use `Decimal`; canonical timestamps are timezone-aware UTC.
+- Strategies may eventually propose `OrderIntent`; central Risk must mediate any future execution.
+- Trading configuration alone cannot place an order.
 
-A terminal-style operator/research UI is useful for visibility and competition operations, but it is
-non-gating. It should surface existing state, capture health, mapping, lag/edge diagnostics and later
-paper/live strategy state; it must not drive architecture ahead of the research path.
+## Immediate handoff rule
 
-## Accepted decisions
-
-### Mapping-bounded Polymarket capture
-
-The broad election heuristic selected 3,160 markets / 6,320 tokens in live testing. That was useful
-as a stress test but is not the competition production scope. The supervised service therefore
-requires explicit external IDs from the accepted mapping and fails closed on missing/unresolved IDs.
-
-See `docs/decisions/001-mapping-bounded-polymarket-capture.md`.
-
-### Parquet for high-frequency Polymarket research history
-
-The broad SQLite/WAL soak produced an operationally unacceptable storage shape on the ~30 GiB EC2
-host. The 1-second research cadence was retained, but the physical format changed to immutable
-ZSTD Parquet shards. SQLite remains for low-volume metadata/health.
-
-See `docs/decisions/002-polymarket-parquet-research-storage.md`.
-
-### SIG broad state vs tracked depth
-
-All tournament exchanges may be known and observed through Realtime/bulk scalar state while only an
-explicit subset has authoritative resident full depth. Untracked depth is not silently treated as
-trusted. BUILD-006 is the accepted contract.
-
-## Review / acceptance protocol
-
-For implementation work:
-
-1. define the ticket and explicit non-goals;
-2. coding agent implements on a branch;
-3. independent review checks the actual diff/tests, not only the handoff;
-4. **CODE GREEN** means repository correctness is accepted at an exact SHA;
-5. if runtime behavior matters, run the smallest meaningful live gate on that exact SHA;
-6. **LIVE GREEN** means the observed operational evidence satisfies the preregistered gate;
-7. only then merge;
-8. reconcile canonical state after merge.
-
-A passing CI run is necessary but not sufficient for venue/runtime-sensitive work.
-
-## Immediate next actions
-
-1. Treat `docs/experiments/EXPERIMENT_004C_FINAL_HANDOFF.md` as the canonical programme-level 004C interpretation.
-2. Keep PR #38 / EXPERIMENT-005A unmerged until its owner consumes the final 004C freeze SHA and satisfies its own empirical gate.
-3. For any 005B–005F discovery work, apply `docs/research/005_DISCOVERY_PRIOR_WORK_BOUNDARY.md` before inspecting detailed historical outcome tables.
-4. Continue the independent operational mapping/capture gates; no 004C result changes the prohibition on live execution.
-5. Record future negative evidence at the narrow specification level rather than rejecting broad mathematical families by association.
-
-## Open questions
-
-- How many SIG exchanges map EXACTLY, NEAR, DERIVED or not at all to Polymarket?
-- Which mappings are stable enough for direct external fair-value use?
-- What lead/lag horizon survives fees, queueing and SIG market microstructure?
-- Which market families provide useful cross-sectional constraints rather than correlated noise?
-- What local retention/compaction/object-storage policy is justified by measured mapping-bounded
-  Parquet growth?
-- What strategy/risk/execution architecture is warranted after evidence, rather than before it?
+When MASTER delegates work, return the specialist prompt and essential scope note. When work returns,
+grade the actual branch/evidence and state the exact next action.
