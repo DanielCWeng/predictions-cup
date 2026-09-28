@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from scripts.aggregate_experiment_005b_features import main
 
 
