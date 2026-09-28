@@ -43,7 +43,7 @@
   ],
   "local_frozen_source_commit": "567f364c5acf3825a940ea2220eac3cb511b9e6f",
   "local_frozen_source_tree_note": "Exact EC2 source commit; GitHub branch is separately anchored by this hash freeze until byte-identical source files are persisted through the connector.",
-  "github_source_equivalence": "GitHub source commit contains the byte-identical source files bound by hashes in this record.",
+  "github_source_equivalence": "GitHub source commit contains the byte-identical strict timestamp-batch source files bound by the current hashes in this record.",
   "github_previous_source_commit": "4419ccdfc762ecaae1b302049e1b46a2a5fb85c1",
   "failed_empirical_attempts": [
     {
@@ -53,5 +53,6 @@
       "failure": "DATA-002 manifest byte hash mismatch caused solely by CRLF transport line endings",
       "outcome_inspection": false
     }
-  ]
+  ],
+  "github_frozen_source_commit": "9ecdcca9a5f8c0b739917968d4a94ee66dc7e2c5"
 }
