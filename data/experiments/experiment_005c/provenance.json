@@ -1,0 +1,13 @@
+{
+  "experiment_id": "EXPERIMENT-005C",
+  "canonical_start_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+  "pre_freeze_hashes": {
+    "005_DISCOVERY_PRIOR_WORK_BOUNDARY.md": "57c18ed7d473b1d83d42987b8b80d3679d66994d9300168e03a88d94066f2f99",
+    "QUANT_COMPETITION_HISTORY_2021_2026.md": "e8fafbdd5ea76e3d7c9faf135b4252413a5e60e13761abf97cfbf88473da47ac",
+    "MATHS_LEDGER.md": "377cb29c6f684bf1bf10ebc062a09e06059690f9fba5d69305cd9f6dfc9a4e4a",
+    "DATA_001_HISTORICAL_REPLAY_CORPUS.md": "4c463822c226471ba67b1decf0b30301d49a8ee03a8b1d736584d4d7bfde5c42",
+    "DATA_002_POLYMARKET_FEES.md": "c895f14121ece15d72fd06f203a2f92b708e6557217d5fb7cedb0c4b434d29d5",
+    "data_001_corpus_manifest.json": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4"
+  },
+  "pre_freeze_statement": "No detailed outcome-ranked EXPERIMENT-003/004B/004C result table was intentionally inspected before this freeze. 005A was consulted only for OrderFilled reconstruction/role-quality semantics."
+}

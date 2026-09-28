@@ -1,0 +1,6 @@
+family,source_kind,source_file,total_rows,valid_key_rows,null_key_rows,unique_keys,duplicate_keys,duplicate_rows,duplicate_excess_rows,max_multiplicity,passes_frozen_identity_rule
+US_2024,DATA002_MATCHED_FILL_FALLBACK,fees_US_2024.parquet,14716540,14716540,0,14716540,0,0,0,1,True
+CAN_2025,DATA002_MATCHED_FILL_FALLBACK,fees_CAN_2025.parquet,854625,854625,0,854625,0,0,0,1,True
+COL_2026,DATA001_RAW_FILL,fills_COL_2026.parquet,693573,693573,0,693573,0,0,0,1,True
+HUN_2026,DATA001_RAW_FILL,fills_HUN_2026.parquet,840134,840134,0,840134,0,0,0,1,True
+PER_2026,DATA001_RAW_FILL,fills_PER_2026.parquet,1212643,1212643,0,1212643,0,0,0,1,True

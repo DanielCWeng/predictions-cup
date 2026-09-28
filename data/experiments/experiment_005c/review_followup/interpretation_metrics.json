@@ -1,0 +1,14 @@
+{
+  "cell": {
+    "family": "US_2024",
+    "grid_seconds": 15,
+    "horizon_seconds": 15,
+    "model": "M2",
+    "panel_id": "US_2024_event_6e91434eb80f"
+  },
+  "classification": "POST_HOC_INDEPENDENT_REVIEW_FALSIFICATION",
+  "cross_sectional_ic": -0.022093023255813957,
+  "interpretation": "Evidence is primarily per-market time-series forecasting through time, not contemporaneous cross-sectional ranking, if the reported IC signs and magnitudes remain as frozen.",
+  "median_time_series_ic": 0.20330126765314616,
+  "sign_accuracy": 0.5771812080536913
+}

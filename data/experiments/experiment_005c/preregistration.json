@@ -1,0 +1,279 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005C",
+  "title": "Joint Panel / Reduced-Rank Cross-Market Prediction",
+  "status": "FROZEN_BEFORE_PREDICTIVE_OUTCOME_INSPECTION",
+  "canonical_start_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+  "contamination_control": {
+    "boundary_path": "docs/research/005_DISCOVERY_PRIOR_WORK_BOUNDARY.md",
+    "boundary_sha256": "57c18ed7d473b1d83d42987b8b80d3679d66994d9300168e03a88d94066f2f99",
+    "detailed_prior_outcome_tables_inspected_before_freeze": false,
+    "005b_emerging_results_allowed": false,
+    "allowed_pre_freeze_material": [
+      "MATHS_LEDGER.md",
+      "docs/research/QUANT_COMPETITION_HISTORY_2021_2026.md",
+      "DATA-001/DATA-002 semantics and provenance",
+      "005A role-quality/reconstruction semantics only; no 005A price-response outcome used"
+    ]
+  },
+  "scope": {
+    "families": [
+      "US_2024",
+      "CAN_2025",
+      "COL_2026",
+      "HUN_2026",
+      "PER_2026"
+    ],
+    "predictors": "price/fill-derived panel returns plus missingness/age masks only",
+    "excluded": [
+      "fee variables",
+      "maker/taker flow as alpha",
+      "wallet/participant identity",
+      "book microstructure",
+      "semantic seat-surface constraints",
+      "execution/P&L optimization"
+    ]
+  },
+  "reconstruction": {
+    "source_dataset": "polyleviathan/sig-cup-polyleviathan-fills",
+    "source_files": "fills_<FAMILY>.parquet and markets_<FAMILY>.parquet",
+    "economic_subfill_rule": "retain passive OrderFilled rows (is_exchange_taker=false) as one row per matched passive subfill; active rows are audit-only",
+    "group_audit_key": [
+      "tx_hash",
+      "condition_id"
+    ],
+    "valid_group_rule": "at least one active row, at least one passive row, exactly one unique active signed-order owner",
+    "minimum_valid_group_notional_fraction_per_family": 0.99,
+    "source_identity_key": [
+      "tx_hash",
+      "log_index",
+      "token_id"
+    ],
+    "canonical_yes_price": "YES -> price; NO -> 1-price",
+    "binary_outcomes_only": true,
+    "same_condition_second_aggregation": "share-weighted canonical YES price across valid passive subfills",
+    "zero_size_rows": "exclude from price aggregation and report",
+    "duplicate_policy": "exact source identity duplicates fail audit; no multi-party OrderFilled row is treated as an independent economic trade beyond passive subfills",
+    "audit_before_prediction": true
+  },
+  "coordinates": {
+    "primary": "logit(canonical YES price)",
+    "robustness": "canonical YES probability",
+    "clip_epsilon": 0.0001,
+    "clip_rule": "clip p to [eps,1-eps] before logit only; preserve unclipped p for robustness and report clipping counts"
+  },
+  "panel_universe": {
+    "candidate_scopes": [
+      "event_id within family",
+      "family"
+    ],
+    "minimum_markets": 4,
+    "maximum_markets": 32,
+    "support_selection_prefix_fraction": 0.6,
+    "minimum_economic_observations_in_prefix": 250,
+    "minimum_distinct_5min_buckets_in_prefix": 50,
+    "ranking_for_cap": "descending prefix economic observation count, then condition_id ascending",
+    "selection_uses_predictive_outcomes": false,
+    "exclude_blank_event_id_from_event_panels": true,
+    "deduplicate_identical_market_sets": true,
+    "report_every_market_exclusion": true
+  },
+  "grid": {
+    "intervals_seconds": [
+      5,
+      15,
+      30,
+      60
+    ],
+    "decision_alignment": "UTC epoch integer multiples of grid interval",
+    "decision_candidate_rule": "grid instants adjacent to at least one panel economic observation; do not materialize all-empty clocks",
+    "feature_asof_rule": "strictly observed before decision second t",
+    "target_interval_rule": "[t,t+h); at least one new target-market economic observation is required",
+    "age_cap_rule": "min(300, 10*grid_seconds)",
+    "return_observed_rule": "at least one market observation in [t-grid,t) and valid as-of states at both endpoints",
+    "missing_feature_rule": "standardize observed TRAIN return values; impute missing standardized return to 0 only with explicit observed mask and normalized age feature",
+    "quiet_market_rule": "missing/unobserved is never silently converted to an observed zero return",
+    "minimum_current_market_fraction": 0.5,
+    "minimum_observed_return_markets": 3
+  },
+  "targets": {
+    "horizons_seconds": [
+      5,
+      15,
+      30,
+      60,
+      120
+    ],
+    "compatibility": "horizon >= grid and horizon % grid == 0",
+    "definition": "future as-of price minus decision as-of price, requiring >=1 new observation in [t,t+h)",
+    "minimum_train_targets_per_market": 100,
+    "minimum_dev_targets_per_market": 30,
+    "minimum_holdout_targets_per_market": 30
+  },
+  "splits": {
+    "geometry": "chronological shared panel timestamps",
+    "train_fraction": 0.6,
+    "dev_fraction": 0.2,
+    "holdout_fraction": 0.2,
+    "purge_embargo_seconds": 120,
+    "random_row_split": false,
+    "scaling_fit": "TRAIN only",
+    "pca_fit": "TRAIN only",
+    "covariance_fit": "TRAIN only",
+    "target_support_filter": "coverage-only, never predictive-performance based"
+  },
+  "lag_candidates": {
+    "depths": [
+      1,
+      3
+    ],
+    "meaning": {
+      "1": "r_t only",
+      "3": "r_t,r_{t-1},r_{t-2} on the frozen grid"
+    },
+    "pair_specific_lags": false
+  },
+  "baselines": {
+    "B0": "zero future return",
+    "B1": "target own-history return/mask/age features only",
+    "B2": "B1 plus leave-target-out contemporaneous cross-market mean return, observed fraction, and mean age"
+  },
+  "models": {
+    "M1": {
+      "name": "full OLS",
+      "eligibility": "per target n_train >= 2*(p+1); reference only"
+    },
+    "M2": {
+      "name": "ridge full cross-market",
+      "alpha_grid": [
+        0.1,
+        1,
+        10,
+        100
+      ]
+    },
+    "M3": {
+      "name": "TRAIN-only PCA factor prediction",
+      "rank_grid": [
+        1,
+        2,
+        4,
+        8,
+        16,
+        32
+      ],
+      "regression": "OLS on retained factor scores"
+    },
+    "M4": {
+      "name": "reduced-rank predictive matrix",
+      "base": "M2 coefficient matrix",
+      "rank_grid": [
+        1,
+        2,
+        4,
+        8,
+        16,
+        32
+      ],
+      "construction": "SVD of TRAIN-fitted coefficient matrix B; truncate to B_k=U_k Sigma_k V_k^T"
+    },
+    "rank_cap": "min(candidate rank, feature dimension, evaluable target dimension)"
+  },
+  "dev_selection": {
+    "primary_metric": "pooled observed-cell vector MSE",
+    "tie_breakers": [
+      "median per-target MSE improvement",
+      "cross-sectional predictive IC"
+    ],
+    "joint_candidate_requirements": [
+      "positive pooled MSE improvement versus selected B2",
+      "positive median per-target MSE improvement versus selected B2",
+      "at least 50% of evaluable targets helped",
+      "positive improvement in at least 3 of 5 contiguous DEV time blocks"
+    ],
+    "no_second_place_after_holdout_failure": true
+  },
+  "evaluation_metrics": [
+    "pooled/vector observed-cell MSE improvement",
+    "per-market MSE improvement distribution",
+    "cross-sectional predictive IC",
+    "per-market time-series IC",
+    "sign accuracy on nonzero observed targets",
+    "explained predictive variance",
+    "fraction of markets helped",
+    "gain concentration",
+    "5-block temporal stability",
+    "panel/event/family performance"
+  ],
+  "uncertainty": {
+    "row_iid_assumption": false,
+    "block_bootstrap_draws": 1000,
+    "block_unit": "contiguous decision-time blocks; aggregate losses before resampling",
+    "panel_weighting": "equal panel weight for cross-panel summaries",
+    "seed": 20260928005
+  },
+  "singular_spectrum": {
+    "TRAIN_only": true,
+    "objects": [
+      "return covariance",
+      "predictive cross-covariance",
+      "fitted predictive coefficient matrix"
+    ],
+    "report": [
+      "singular values",
+      "cumulative energy",
+      "effective rank"
+    ],
+    "holdout_rank_selection": false
+  },
+  "ablations": [
+    "remove own-history terms",
+    "remove common mean/factor terms",
+    "remove strongest source market one at a time based on TRAIN coefficient norm",
+    "remove highest-activity source market based on TRAIN observation count",
+    "remove one metadata subgroup/event where feasible",
+    "delayed-panel placebo by one full target horizon",
+    "circular/block-shift predictor null"
+  ],
+  "source_concentration": {
+    "metrics": [
+      "source-market grouped coefficient norms",
+      "target coefficient norms",
+      "singular-vector concentration",
+      "effective number of source markets",
+      "effective number of target markets"
+    ],
+    "dense_claim_requires_effective_sources_at_least": 3
+  },
+  "promotion_labels": [
+    "NO JOINT PREDICTIVE STRUCTURE",
+    "WEAK / CONCENTRATED",
+    "COMMON-STATE ONLY",
+    "WITHIN-FAMILY JOINT CANDIDATE",
+    "REGIME-SPECIFIC JOINT CANDIDATE",
+    "CROSS-FAMILY JOINT CANDIDATE"
+  ],
+  "holdout_freeze": {
+    "required_file": "data/experiments/experiment_005c/results/PRE_HOLDOUT_FREEZE.json",
+    "fields": [
+      "model",
+      "rank",
+      "alpha",
+      "grid_seconds",
+      "horizon_seconds",
+      "lag_depth",
+      "panel_id",
+      "market_ids",
+      "scaling",
+      "evaluation_metrics"
+    ],
+    "write_before_holdout_metrics": true,
+    "immutable_after_write": true
+  },
+  "kaggle": {
+    "shared_capacity": 3,
+    "namespace": "005c_joint_panel_prediction",
+    "empirical_compute_only_on_kaggle": true,
+    "ec2_real_data_analysis_forbidden": true
+  }
+}

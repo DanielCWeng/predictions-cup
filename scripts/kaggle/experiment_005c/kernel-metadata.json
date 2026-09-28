@@ -1,0 +1,18 @@
+{
+  "id": "polyleviathan/005c-joint-panel-prediction",
+  "title": "005C Joint Panel Prediction",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [
+    "polyleviathan/sig-cup-polyleviathan-fills",
+    "polyleviathan/sig-cup-data-002-polymarket-fees",
+    "polyleviathan/sig-cup-005c-code"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}
