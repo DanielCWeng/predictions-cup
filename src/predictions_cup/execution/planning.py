@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from time import monotonic_ns
-from typing import Callable
 
 from predictions_cup.execution.models import ExecutionEnvelope, ExecutionMode
 from predictions_cup.execution.sinks import ExecutionPlan
