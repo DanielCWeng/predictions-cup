@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from predictions_cup.config import AppSettings
 
 
@@ -9,13 +11,28 @@ class LiveInterlockError(RuntimeError):
     pass
 
 
+_PERMIT_MARKER = object()
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class LiveExecutionPermit:
+    """Capability issued only after every configured LIVE interlock passes."""
+
+    tournament_id: str
+
+    def __init__(self, tournament_id: str, marker: object) -> None:
+        if marker is not _PERMIT_MARKER:
+            raise LiveInterlockError("LIVE execution permit cannot be constructed directly")
+        object.__setattr__(self, "tournament_id", tournament_id)
+
+
 def assert_live_interlocks(
     settings: AppSettings,
     *,
     explicit_live_invocation: bool,
     account_trusted: bool,
-) -> None:
-    """Require every independent LIVE gate before a network-capable sink is used."""
+) -> LiveExecutionPermit:
+    """Require every independent LIVE gate and return the network-sink permit."""
     failures: list[str] = []
     if not explicit_live_invocation:
         failures.append("explicit_live_invocation")
@@ -45,3 +62,6 @@ def assert_live_interlocks(
         raise LiveInterlockError(
             "LIVE execution interlocks failed: " + ",".join(failures)
         )
+
+    assert settings.tournament_id is not None
+    return LiveExecutionPermit(settings.tournament_id, _PERMIT_MARKER)
