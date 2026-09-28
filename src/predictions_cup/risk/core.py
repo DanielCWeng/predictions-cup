@@ -71,6 +71,12 @@ def evaluate_risk(
     if isinstance(proposal, NoTrade):
         return _deny(proposal.reason)
     opportunity: Opportunity = proposal
+    execution_tournament_id = execution_tournament_id
+    if any(
+        leg.tournament_id != execution_tournament_id
+        for leg in opportunity.legs
+    ):
+        return _deny("mixed_tournament_operation")
 
     if context.mode is ExecutionMode.LIVE:
         if context.kill_switch:
@@ -164,14 +170,14 @@ def evaluate_risk(
                 for position in snapshot.portfolio.positions
                 if (
                     position.market_id == market_id
-                    and position.tournament_id == opportunity.legs[0].tournament_id
+                    and position.tournament_id == execution_tournament_id
                 )
             ) + sum(
                 order.reserved_exposure
                 for order in snapshot.portfolio.orders
                 if (
                     order.market_id == market_id
-                    and order.tournament_id == opportunity.legs[0].tournament_id
+                    and order.tournament_id == execution_tournament_id
                     and (order.open or order.uncertain)
                 )
             )
