@@ -16,7 +16,7 @@ Role, fee and participant fields are reconstruction/audit metadata only. They ar
 
 ## Features and targets
 
-Backward price/movement/activity windows are 5, 15, 30, 60, 120, 300 and 900 seconds. The atlas covers price/logit history, momentum and reversal, streak/acceleration/jumps, high-low distance, slopes, realised movement/stasis/change state, anonymous count/notional/share/size/inter-arrival/burst state, plus mechanically target-excluding event activity/movement/dispersion/direction aggregates.
+Backward price/movement/activity windows are 5, 15, 30, 60, 120, 300 and 900 seconds. The atlas covers price/logit history, momentum and reversal, streak/acceleration/jumps, high-low distance, slopes, realised movement/stasis/change state, anonymous count/notional/share/size/inter-arrival/burst state, plus mechanically target-excluding election-family and event activity/movement/dispersion/direction aggregates.
 
 Large-trade thresholds and normal-activity references are TRAIN-only.
 
@@ -38,4 +38,4 @@ TRAIN-only redundancy uses absolute Spearman >= 0.95 plus explicit algebraic equ
 
 ## Compute discipline
 
-The empirical namespace is `005b_historical_predictive_atlas`. Kaggle has three shared concurrent slots; 005B may launch while fewer than three jobs are running or queued. EC2 is limited to Git/repository work, hashes, packaging, Kaggle CLI and synthetic/unit tests. Historical feature census, target generation, model fitting and statistics do not run on EC2.
+The empirical namespace is `005b_historical_predictive_atlas`. Kaggle has five shared concurrent batch-CPU slots; 005B may launch while fewer than five jobs are running or queued. EC2 is limited to Git/repository work, hashes, packaging, Kaggle CLI and synthetic/unit tests. Historical feature census, target generation, model fitting and statistics do not run on EC2.
