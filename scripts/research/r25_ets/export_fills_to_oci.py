@@ -19,7 +19,7 @@ import shutil
 import sys
 import tempfile
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -209,10 +209,22 @@ def main() -> None:
         # Missing creation timestamps disable source pruning; no inferred time window is used.
         first_expected_day = min(trade_objects)
         days = sorted(trade_objects)
-    if not days:
-        raise RuntimeError("no dates have both trades and custody source objects")
     if args.max_dates:
         days = days[: args.max_dates]
+    if not days:
+        raise RuntimeError("no dates have both trades and custody source objects")
+    scan_start_day = first_expected_day
+    scan_end_day = days[-1]
+    first_day_dt = datetime.strptime(scan_start_day, "%Y-%m-%d").date()
+    last_day_dt = datetime.strptime(scan_end_day, "%Y-%m-%d").date()
+    listed_trade_days = set(trade_objects)
+    missing_trade_object_days = []
+    cursor_day = first_day_dt
+    while cursor_day <= last_day_dt:
+        day_key = cursor_day.isoformat()
+        if day_key not in listed_trade_days:
+            missing_trade_object_days.append(day_key)
+        cursor_day += timedelta(days=1)
 
     output_files: list[dict[str, Any]] = []
     day_coverage: list[dict[str, Any]] = []
@@ -451,6 +463,13 @@ def main() -> None:
         dates = [parse_date(r.get("start_date")) for r in token_rows] + [parse_date(r.get("created_at")) for r in token_rows]
         starts = [value for value in dates if value]
         expected_start = min(starts).isoformat().replace("+00:00", "Z") if starts else None
+        condition_start = min(starts).date().isoformat() if starts else scan_start_day
+        condition_known_gaps = list(gaps_by_condition.get(condition_id, []))
+        condition_known_gaps.extend({
+            "date": gap_day,
+            "reason": "trade source object absent within expected scan range",
+            "unexported_fill_rows": None,
+        } for gap_day in missing_trade_object_days if gap_day >= condition_start)
         condition_summary[condition_id] = {
             "market_id": token_rows[0].get("market_id") if token_rows else None,
             "expected_start": expected_start,
@@ -462,9 +481,14 @@ def main() -> None:
             "available_end": max((r["last_timestamp"] for r in matching), default=None),
             "first_block_number": min((r["first_block_number"] for r in matching), default=None),
             "last_block_number": max((r["last_block_number"] for r in matching), default=None),
-            "complete_to_source_bounds": not gaps_by_condition.get(condition_id),
-            "known_gaps": gaps_by_condition.get(condition_id, []),
+            "complete_to_source_bounds": not condition_known_gaps,
+            "known_gaps": condition_known_gaps,
         }
+    source_object_gaps = [
+        {"date": gap_day, "reason": "trade source object absent within expected scan range", "unexported_fill_rows": None}
+        for gap_day in missing_trade_object_days
+    ]
+    all_known_gaps = [*known_gaps, *source_object_gaps]
     manifest = {
         "schema_version": 1,
         "dataset_id": "POLYLEVIATHAN_R25_ETS_FILLS",
@@ -492,6 +516,10 @@ def main() -> None:
         "condition_count_attempted": len(by_condition),
         "token_count_attempted": len(by_token),
         "source_date_count": len(days),
+        "source_trade_object_count": len(days),
+        "source_scan_first_expected_day": scan_start_day,
+        "source_scan_last_available_trade_day": scan_end_day,
+        "missing_trade_object_days": missing_trade_object_days,
         "earliest_expected_market_created_at": min(creation_times).isoformat().replace("+00:00", "Z") if creation_times and all(creation_times) else None,
         "source_pruning_basis": "earliest accepted Gamma created_at; if any are unavailable, all source dates are scanned",
         "source_date_first": days[0], "source_date_last": days[-1],
@@ -509,8 +537,8 @@ def main() -> None:
             "source_trade_etag", "source_trade_sha256", "source_trade_bytes", "source_custody_object",
             "source_custody_etag", "source_custody_sha256", "source_custody_bytes",
         ],
-        "status": "PARTIAL_BLOCKED" if known_gaps else "COMPLETE",
-        "known_gaps": known_gaps,
+        "status": "PARTIAL_BLOCKED" if all_known_gaps else "COMPLETE",
+        "known_gaps": all_known_gaps,
     }
     manifest_payload = json_bytes(manifest)
     manifest_sha = hashlib.sha256(manifest_payload).hexdigest()
