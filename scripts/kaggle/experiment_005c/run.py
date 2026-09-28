@@ -216,6 +216,15 @@ class PreparedFeatures:
     scaling: dict[str, Any]
 
 
+@dataclass
+class Stage1GridContext:
+    train_q: np.ndarray
+    dev_q: np.ndarray
+    hold_q: np.ndarray
+    boundaries: tuple[int, int]
+    features: dict[int, PreparedFeatures]
+
+
 def reconstruction_family(
     family: str,
 ) -> tuple[dict[str, MarketSeries], pd.DataFrame, dict[str, Any]]:
@@ -766,6 +775,48 @@ def prepare_features(
     )
 
 
+def build_stage1_grid_context(
+    panel: Panel,
+    series: dict[str, MarketSeries],
+    grid: int,
+) -> Stage1GridContext | None:
+    q = decision_times(panel, series, grid)
+    train_mask, dev_mask, hold_mask, boundaries = split_masks(q)
+    train_q = q[train_mask]
+    dev_q = q[dev_mask]
+    hold_q = q[hold_mask]
+    if min(len(train_q), len(dev_q), len(hold_q)) < 30:
+        return None
+
+    features: dict[int, PreparedFeatures] = {}
+    for lag in LAG_DEPTHS:
+        raw_train = raw_cube(
+            panel,
+            series,
+            train_q,
+            grid,
+            lag,
+            "logit",
+        )
+        raw_dev = raw_cube(
+            panel,
+            series,
+            dev_q,
+            grid,
+            lag,
+            "logit",
+        )
+        features[lag] = prepare_features(raw_train, raw_dev)
+
+    return Stage1GridContext(
+        train_q=train_q,
+        dev_q=dev_q,
+        hold_q=hold_q,
+        boundaries=boundaries,
+        features=features,
+    )
+
+
 def common_features(
     prepared: PreparedFeatures,
     target: int,
@@ -1040,37 +1091,17 @@ def candidate_row(
 
 
 def best_baseline(
-    panel: Panel,
-    series: dict[str, MarketSeries],
-    train_q: np.ndarray,
-    dev_q: np.ndarray,
+    feature_cache: dict[int, PreparedFeatures],
     y_train: np.ndarray,
     y_dev: np.ndarray,
     target_indices: list[int],
-    grid: int,
     kind: str,
 ) -> tuple[dict[str, Any], np.ndarray]:
     best: dict[str, Any] | None = None
     best_pred: np.ndarray | None = None
 
     for lag in LAG_DEPTHS:
-        raw_train = raw_cube(
-            panel,
-            series,
-            train_q,
-            grid,
-            lag,
-            "logit",
-        )
-        raw_dev = raw_cube(
-            panel,
-            series,
-            dev_q,
-            grid,
-            lag,
-            "logit",
-        )
-        prepared = prepare_features(raw_train, raw_dev)
+        prepared = feature_cache[lag]
 
         for alpha in RIDGE_ALPHAS:
             pred = baseline_predictions(
@@ -1202,6 +1233,7 @@ def cell_stage1(
     series: dict[str, MarketSeries],
     grid: int,
     horizon: int,
+    context: Stage1GridContext,
 ) -> tuple[
     dict[str, Any] | None,
     list[dict[str, Any]],
@@ -1210,13 +1242,11 @@ def cell_stage1(
     if horizon < grid or horizon % grid:
         return None, [], None
 
-    q = decision_times(panel, series, grid)
-    train_mask, dev_mask, hold_mask, boundaries = split_masks(q)
-    train_q = q[train_mask]
-    dev_q = q[dev_mask]
-    hold_q = q[hold_mask]
-    if min(len(train_q), len(dev_q), len(hold_q)) < 30:
-        return None, [], None
+    train_q = context.train_q
+    dev_q = context.dev_q
+    hold_q = context.hold_q
+    boundaries = context.boundaries
+    feature_cache = context.features
 
     y_train_full = target_matrix(
         panel,
@@ -1265,25 +1295,17 @@ def cell_stage1(
     y_dev = y_dev_full[:, targets]
 
     b1_cfg, b1_pred = best_baseline(
-        panel,
-        series,
-        train_q,
-        dev_q,
+        feature_cache,
         y_train,
         y_dev,
         targets,
-        grid,
         "B1",
     )
     b2_cfg, b2_pred = best_baseline(
-        panel,
-        series,
-        train_q,
-        dev_q,
+        feature_cache,
         y_train,
         y_dev,
         targets,
-        grid,
         "B2",
     )
     baseline_summary = {
@@ -1298,27 +1320,9 @@ def cell_stage1(
     }
 
     rows: list[dict[str, Any]] = []
-    feature_cache: dict[int, PreparedFeatures] = {}
 
     for lag in LAG_DEPTHS:
-        raw_train = raw_cube(
-            panel,
-            series,
-            train_q,
-            grid,
-            lag,
-            "logit",
-        )
-        raw_dev = raw_cube(
-            panel,
-            series,
-            dev_q,
-            grid,
-            lag,
-            "logit",
-        )
-        prepared = prepare_features(raw_train, raw_dev)
-        feature_cache[lag] = prepared
+        prepared = feature_cache[lag]
 
         p = prepared.train_x.shape[1]
         if len(train_q) >= 2 * (p + 1):
@@ -1345,13 +1349,13 @@ def cell_stage1(
             )
 
         for alpha in RIDGE_ALPHAS:
-            pred, _, _, _ = fit_candidate(
-                "M2",
-                prepared,
+            base_model = fit_masked_multioutput(
+                prepared.train_x,
                 y_train,
                 alpha=alpha,
-                rank=None,
+                minimum_support=MIN_TRAIN_TARGET,
             )
+            pred = base_model.predict(prepared.other_x)
             rows.append(
                 candidate_row(
                     panel,
@@ -1367,12 +1371,6 @@ def cell_stage1(
                 )
             )
 
-            base_model = fit_masked_multioutput(
-                prepared.train_x,
-                y_train,
-                alpha=alpha,
-                minimum_support=MIN_TRAIN_TARGET,
-            )
             for rank in RANKS:
                 k = min(
                     rank,
@@ -1404,18 +1402,28 @@ def cell_stage1(
             prepared.train_r.shape[0],
             -1,
         )
+        xr_dev = prepared.other_r.reshape(
+            prepared.other_r.shape[0],
+            -1,
+        )
         max_rank = min(xr_train.shape)
+        pca_full = fit_pca(xr_train, max_rank)
+        centered_train = xr_train - pca_full.mean
+        centered_dev = xr_dev - pca_full.mean
         for rank in RANKS:
             k = min(rank, max_rank, len(targets))
             if k < 1:
                 continue
-            pred, _, _, _ = fit_candidate(
-                "M3",
-                prepared,
+            components = pca_full.components[:k]
+            z_train = centered_train @ components.T
+            z_dev = centered_dev @ components.T
+            pca_model = fit_masked_multioutput(
+                z_train,
                 y_train,
-                alpha=None,
-                rank=k,
+                alpha=0.0,
+                minimum_support=MIN_TRAIN_TARGET,
             )
+            pred = pca_model.predict(z_dev)
             rows.append(
                 candidate_row(
                     panel,
@@ -2192,6 +2200,13 @@ def main() -> None:
         )
         series = family_series[panel.family]
         for grid in GRIDS:
+            context = build_stage1_grid_context(
+                panel,
+                series,
+                grid,
+            )
+            if context is None:
+                continue
             for horizon in HORIZONS:
                 if (
                     horizon < grid
@@ -2203,6 +2218,7 @@ def main() -> None:
                     series,
                     grid,
                     horizon,
+                    context,
                 )
                 dev_rows.extend(rows)
                 if selection is None:
