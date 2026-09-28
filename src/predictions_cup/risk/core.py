@@ -114,7 +114,10 @@ def evaluate_risk(
             book = snapshot.book(leg.exchange_id)
             if book is None or not book.trusted_depth:
                 return _deny("trusted_depth_required")
-            if snapshot.observation_monotonic_ns - book.observed_monotonic_ns > context.max_state_age_ns:
+            state_age_ns = (
+                snapshot.observation_monotonic_ns - book.observed_monotonic_ns
+            )
+            if state_age_ns > context.max_state_age_ns:
                 return _deny("depth_state_stale")
 
         intent_id = f"{opportunity.strategy_id}:{opportunity.decision_observation_ns}:{index}"
