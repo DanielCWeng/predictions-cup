@@ -1757,6 +1757,9 @@ def holdout_analysis(
     full = freeze["model_specs"].get("full_behavior")
     if full is not None and "alpha" in full and "full_behavior" in prediction_cache:
         full_features = list(full["features"])
+        participant_only_features = [
+            feature for feature in full_features if feature not in BASELINE
+        ]
         full_pred = prediction_cache["full_behavior"]
         observed_loss_gain = (y - baseline_pred) ** 2 - (y - full_pred) ** 2
         _, beta, prep = fixed_ridge_prediction(
@@ -1770,12 +1773,13 @@ def holdout_analysis(
 
         for mode in ("market_time", "frequency_matched"):
             placebo_frame, coverage = participant_state_permutation(
-                holdout, full_features, mode=mode
+                holdout, participant_only_features, mode=mode
             )
             placebo_x = impute_standardize_apply(placebo_frame, full_features, prep)
             placebo_pred = ridge_predict(beta, placebo_x)
             falsification[f"participant_state_{mode}_permutation"] = {
                 "permuted_row_share": coverage,
+                "permuted_features": participant_only_features,
                 "mse": mse(y, placebo_pred, w_holdout),
                 "gain_vs_baseline": float(baseline_mse - mse(y, placebo_pred, w_holdout)),
                 "observed_full_behavior_gain": float(results["full_behavior"]["weighted_mse_gain"]),
