@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any, cast
 
 import numpy as np
 
@@ -63,8 +64,8 @@ def _as_ns(value: object) -> int:
 
 def _valid_state(bid: object, ask: object) -> tuple[float, float] | None:
     try:
-        b = float(bid)
-        a = float(ask)
+        b = float(cast(Any, bid))
+        a = float(cast(Any, ask))
     except (TypeError, ValueError):
         return None
     if not np.isfinite(b) or not np.isfinite(a) or not (0.0 < b <= a < 1.0):
@@ -321,7 +322,8 @@ def equal_hierarchical_weights(
                     / len(target_vals)
                     / int(tm.sum())
                 )
-    return out * n / out.sum()
+    result: np.ndarray = out * n / out.sum()
+    return result
 
 
 def residualize_added_feature(x: np.ndarray, z: np.ndarray) -> np.ndarray:
@@ -329,7 +331,8 @@ def residualize_added_feature(x: np.ndarray, z: np.ndarray) -> np.ndarray:
         raise ValueError("invalid residualization inputs")
     design = np.column_stack([np.ones(len(x)), x])
     beta, *_ = np.linalg.lstsq(design, z, rcond=1e-10)
-    return z - design @ beta
+    residual: np.ndarray = z - design @ beta
+    return residual
 
 
 def support_gate(
