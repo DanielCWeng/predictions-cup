@@ -85,13 +85,15 @@ def test_order_input_enforces_documented_tick_and_market_semantics() -> None:
         )
 
     with pytest.raises(ValidationError, match="market orders cannot have expirationDate"):
-        OrderInputDto(
-            exchangeId="36",
-            side="yes",
-            action="buy",
-            quantity=1,
-            price=Decimal("1"),
-            expirationDate="2026-10-01T00:00:00Z",
+        OrderInputDto.model_validate(
+            {
+                "exchangeId": "36",
+                "side": "yes",
+                "action": "buy",
+                "quantity": 1,
+                "price": Decimal("1"),
+                "expirationDate": "2026-10-01T00:00:00Z",
+            }
         )
 
 
