@@ -134,7 +134,7 @@ def full_support(
             [
                 f"SUM(CASE WHEN {valid} THEN 1 ELSE 0 END) AS n__{key}",
                 f"COUNT(DISTINCT CASE WHEN {valid} THEN market_id END) AS m__{key}",
-                f"COUNT(DISTINCT CASE WHEN {valid} THEN CAST(timestamp/86400 AS BIGINT) END) AS b__{key}",
+                f"COUNT(DISTINCT CASE WHEN {valid} THEN CAST(FLOOR(timestamp/86400.0) AS BIGINT) END) AS b__{key}",
             ]
         )
     row = con.execute(
