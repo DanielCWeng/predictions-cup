@@ -22,8 +22,16 @@
       "runner_status": "INVALIDATED_PRE_EVIDENCE",
       "reason": "Pre-outcome implementation audit found DATA-001 structural targets lacked the preregistered 1/2/5/10 economic-trade labels and wrapped historical catalogue parsing embedded zero USA_2024/CAN_2025 rows.",
       "remediation": "Added DATA-001 economic-trade target evaluation and robust wrapped-catalogue parsing before reading any version-4 empirical output."
+    },
+    {
+      "kaggle_version": 6,
+      "runner_sha256": "0692a6499ce1daa384165c2f6da58c30de305325b6abc0e35f750a13208b2e28",
+      "runner_status": "INVALIDATED_PRE_EVIDENCE",
+      "reason": "Pre-output audit found the HOLDOUT path emitted bootstrap confidence intervals but did not apply the preregistered confirmatory FDR across the bounded predictive shortlist.",
+      "evidence_boundary": "No version-6 empirical output or kernel log was opened or downloaded after launch. Only worker status was queried.",
+      "remediation": "Add null-centered 300-second moving-block bootstrap p-values, BH q-values across the 13 predictive cells, frozen 60-second delayed-state control diagnostics, and holdout response diagnostics. Shortlist, fitted parameters, horizons and data split remain unchanged."
     }
   ],
-  "current_runner_sha256": "a92a0a40c8655e0c88c60e1d02f24b009cdad30d39356222715ce0ed18970457",
-  "next_attempt": "Launch only when Kaggle concurrency is within the project limit."
+  "current_runner_sha256": "e65c961b73c56e26b322c8336944ea2fbc048ccf53bdd645cdaf77c53caef7ce",
+  "next_attempt": "Launch the corrected HOLDOUT runner only after version 6 reaches a terminal state; inspect only the corrected run's outputs."
 }
