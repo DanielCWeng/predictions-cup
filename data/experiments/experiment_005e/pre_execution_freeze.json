@@ -92,7 +92,7 @@
   ],
   "local_frozen_source_commit": "567f364c5acf3825a940ea2220eac3cb511b9e6f",
   "local_frozen_source_tree_note": "Exact EC2 source commit; GitHub branch is separately anchored by this hash freeze until byte-identical source files are persisted through the connector.",
-  "github_source_equivalence": "Current GitHub runner is byte-identical to local tested commit 096772f8b11c74e7c9f223ee1456c8e2f702e433, including final newline, with SHA-256 3679292adf3e66916fe37ae854e0dc79d0fde5f701c28c738af9066be6f2d8f6.",
+  "github_source_equivalence": "Phase-specific provenance is authoritative: TRAIN/DEV v5 is GitHub runner commit e8c68c13ec65209507c22469cce1c7d8a75f14ee with SHA-256 4bfee0c72cdbd46e6854862c99d4b176b6dce36230cfc72cc114caa99726ee9e; later HOLDOUT-only inference patches are tracked separately and do not retroactively alter that TRAIN/DEV bundle.",
   "github_previous_source_commit": "4419ccdfc762ecaae1b302049e1b46a2a5fb85c1",
   "failed_empirical_attempts": [
     {
@@ -134,7 +134,7 @@
   ],
   "github_frozen_source_commit": "9ecdcca9a5f8c0b739917968d4a94ee66dc7e2c5",
   "local_current_source_commit": "096772f8b11c74e7c9f223ee1456c8e2f702e433",
-  "github_current_source_commit": "b84e64dbf6b839954e63197edede4f903d94769d",
+  "github_current_source_commit": "e8c68c13ec65209507c22469cce1c7d8a75f14ee",
   "github_current_runner_commit": "e8c68c13ec65209507c22469cce1c7d8a75f14ee",
   "train_dev_runner": {
     "implementation_commit": "e82bc3a60a50ceff74f04b4a3a69abe1c0919aa1",
@@ -180,5 +180,6 @@
     "runner_sha256": "d5553d445e3c87a94084931012645b418a7708c211eeb42474a67d28c7687a17",
     "status": "PRE_RESULT_CANDIDATE_NOT_PACKAGED",
     "focused_tests": 12
-  }
+  },
+  "phase_split_note": "Generic current-source fields refer to the immutable TRAIN/DEV v5 runner. The later next_holdout_runner record is the authority for HOLDOUT packaging."
 }
