@@ -107,6 +107,16 @@ def test_effective_number() -> None:
     assert effective_number([4.0, 0.0, 0.0, 0.0]) == pytest.approx(1.0)
 
 
+def test_holdout_participant_permutation_preserves_baseline_features() -> None:
+    runner = Path("scripts/kaggle/experiment_005e/run.py").read_text()
+    start = runner.index("def holdout_analysis(")
+    code = runner[start:]
+    assert "participant_only_features = [" in code
+    assert "if feature not in BASELINE" in code
+    assert "holdout, participant_only_features, mode=mode" in code
+    assert "holdout, full_features, mode=mode" not in code
+
+
 def test_kaggle_runner_uses_strict_timestamp_batch_history() -> None:
     runner = Path("scripts/kaggle/experiment_005e/run.py").read_text()
     start = runner.index("def create_participant_features(")
