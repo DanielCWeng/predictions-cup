@@ -2,5 +2,5 @@
   "schema_version": 1,
   "action": "status",
   "kernel": "polyleviathan/005b-ordering-falsification-us-family-context",
-  "note": "Actions poll round 3 for corrected US continuation."
+  "note": "Actions spot check before corrected US merge."
 }
