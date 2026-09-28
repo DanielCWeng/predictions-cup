@@ -9,7 +9,7 @@
     "experiment_doc": "939aa27bf2e6d4fdeac3b75d913784ce2fe1efd2085a231693bf2c8b57037a27",
     "participant_ecology_py": "5d9bad89065811e141a9e4138b30c390222e4d06beab1260e7986cc4a1e9e2ff",
     "participant_ecology_tests": "f3502e271312bea633451ef3aad94e0a3a61b04102a4018469e51752046678c7",
-    "kaggle_runner_py": "595b0ac30e25658afb38c7c15e4231a5b399ac6ef75f33f5b004da7316a07449",
+    "kaggle_runner_py": "fdddc853a064f9e609064ac8038128140cc2c7914c599b91efc8c87b4eeb0f1f",
     "kaggle_prepare_py": "d39e5f971d526083a769eb0d4e181b2b6e31cc4a694c1bb033ab391cf55c24a5",
     "kernel_metadata": "f188ae51b0cf120c30a5f2c8ebe7a1b0d53f57dbdaf0a3211dd5c98aae6d7c72",
     "infra_registry": "839f62b62c6b2e3d3b7a44d200c2d4b949c35de8e7dea006e9a2f2c8426959e8",
@@ -39,11 +39,18 @@
       "to": "strict timestamp-prior history; equal timestamp-batch evidence weighting; whole-latest-second TRAIN fingerprint aggregation",
       "reason": "DATA-002 fill timestamps are one-second block-time proxies and do not justify within-second tx/log information ordering.",
       "timing": "before any successful 005E empirical processing; synthetic same-second and fingerprint batch smoke passed"
+    },
+    {
+      "field": "Kaggle source-view SQL aliases",
+      "from": "DuckDB bare SELECT aliases in the DATA-002 source view",
+      "to": "explicit AS aliases; no feature, target, split, model, screening, falsification, or disposition rule changed",
+      "reason": "Kaggle version 2 exited at CREATE TEMP VIEW src because DuckDB rejects the bare alias form for family.",
+      "timing": "after a parser-only failure and before any 005E TRAIN/DEV outcome inspection"
     }
   ],
   "local_frozen_source_commit": "567f364c5acf3825a940ea2220eac3cb511b9e6f",
   "local_frozen_source_tree_note": "Exact EC2 source commit; GitHub branch is separately anchored by this hash freeze until byte-identical source files are persisted through the connector.",
-  "github_source_equivalence": "GitHub source commit contains the byte-identical strict timestamp-batch source files bound by the current hashes in this record.",
+  "github_source_equivalence": "Current GitHub runner blob is byte-identical to the version-3 Kaggle runner bound by hashes.kaggle_runner_py; the parser-only repair changes SQL alias syntax only.",
   "github_previous_source_commit": "4419ccdfc762ecaae1b302049e1b46a2a5fb85c1",
   "failed_empirical_attempts": [
     {
@@ -52,7 +59,16 @@
       "disposition": "ENGINEERING_FAILURE_BEFORE_EMPIRICAL_PROCESSING",
       "failure": "DATA-002 manifest byte hash mismatch caused solely by CRLF transport line endings",
       "outcome_inspection": false
+    },
+    {
+      "kaggle_kernel": "polyleviathan/005e-participant-ecology-train-dev",
+      "version": 2,
+      "disposition": "ENGINEERING_FAILURE_BEFORE_EMPIRICAL_PROCESSING",
+      "failure": "DuckDB ParserException at CREATE TEMP VIEW src caused by bare alias syntax for family",
+      "outcome_inspection": false
     }
   ],
-  "github_frozen_source_commit": "9ecdcca9a5f8c0b739917968d4a94ee66dc7e2c5"
+  "github_frozen_source_commit": "9ecdcca9a5f8c0b739917968d4a94ee66dc7e2c5",
+  "local_current_source_commit": "266a1b83f888e06ed8d3e2792d88078d4f05fe0f",
+  "github_current_source_commit": "b84e64dbf6b839954e63197edede4f903d94769d"
 }
