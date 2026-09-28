@@ -71,7 +71,7 @@ def evaluate_risk(
     if isinstance(proposal, NoTrade):
         return _deny(proposal.reason)
     opportunity: Opportunity = proposal
-    execution_tournament_id = execution_tournament_id
+    execution_tournament_id = opportunity.legs[0].tournament_id
     if any(
         leg.tournament_id != execution_tournament_id
         for leg in opportunity.legs
