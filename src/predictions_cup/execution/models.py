@@ -131,6 +131,48 @@ class ExecutionEnvelope:
         )
 
     @classmethod
+    def cancellation(
+        cls,
+        *,
+        logical_operation_id: str,
+        operation_kind: OperationKind,
+        sink_mode: ExecutionMode,
+        created_monotonic_ns: int,
+        order_id: int | None = None,
+        tournament_id: str | None = None,
+        exchange_id: str | None = None,
+        market_id: str | None = None,
+    ) -> ExecutionEnvelope:
+        if operation_kind is OperationKind.SINGLE_CANCELLATION:
+            if order_id is None or order_id <= 0:
+                raise ValueError("single cancellation requires a positive order_id")
+            payload: dict[str, object] = {"orderId": order_id}
+        elif operation_kind is OperationKind.CANCEL_ALL:
+            if exchange_id is not None and market_id is not None:
+                raise ValueError("exchange_id and market_id are mutually exclusive")
+            payload = {}
+            if tournament_id is not None:
+                payload["tournamentId"] = tournament_id
+            if exchange_id is not None:
+                payload["exchangeId"] = exchange_id
+            if market_id is not None:
+                payload["marketId"] = market_id
+        else:
+            raise ValueError("cancellation factory requires a cancellation operation kind")
+        payload_json = json.dumps(payload, separators=(",", ":"), ensure_ascii=True)
+        return cls(
+            logical_operation_id=logical_operation_id,
+            operation_kind=operation_kind,
+            sink_mode=sink_mode,
+            idempotency_key=None,
+            payload_json=payload_json,
+            payload_sha256=hashlib.sha256(payload_json.encode("utf-8")).hexdigest(),
+            intent_ids=(),
+            lifecycle_state=LifecycleState.CANCEL_PENDING,
+            created_monotonic_ns=created_monotonic_ns,
+        )
+
+    @classmethod
     def persisted(
         cls,
         *,
