@@ -68,8 +68,9 @@ The synchronous calculation modules use compact immutable dataclasses and intege
 The hot path performs no network call, filesystem access, database access, Parquet work, blocking
 I/O or Pydantic model construction.
 
-Time is supplied by the caller through snapshot/operation timestamps. Strategies do not call wall
-clock time or randomness implicitly.
+Strategies receive explicit snapshot/observation time and do not call wall clock time or randomness
+implicitly. The runtime shell samples monotonic decision/submission/dispatch/ack timestamps for
+latency attribution without introducing time dependence into strategy math.
 
 The hot path terminates at a shared `ExecutionPlan`; durable journaling and network dispatch live in
 the I/O shell.
@@ -286,12 +287,17 @@ Every approved execution plan carries a non-wire `ExecutionAudit` containing:
 - decision observation monotonic timestamp.
 
 Before the first LIVE network write, the durable `SUBMISSION` journal event records that metadata
-alongside logical intent identity, exchange identity and submission time. Subsequent ACK, fill,
-Realtime order/fill and terminal reconciliation events share the same logical operation/order
-identity. The audit keeps distinct monotonic timestamps for source observation, approved decision/plan
-creation, pre-network submission, and local acknowledgement/fill observation. This is sufficient to
-reconstruct signal -> decision -> submission -> acknowledgement/fill timing without putting
-analytics metadata into SIG order payloads.
+alongside logical intent identity and exchange identity. Its timestamp is sampled before the
+durable WAL write. After that write completes, `NETWORK_DISPATCH` is sampled immediately before the
+HTTP call; the event is persisted after the network outcome so benchmark/audit I/O does not sit
+between the dispatch timestamp and the actual request. Subsequent ACK, fill, Realtime order/fill and
+terminal reconciliation events share the same logical operation/order identity.
+
+The audit therefore keeps distinct monotonic timestamps for source observation, approved
+decision/plan creation, durable-submission start, logical network dispatch, and local
+acknowledgement/fill observation. This is sufficient to reconstruct
+signal -> decision -> durable submission -> network dispatch -> acknowledgement/fill timing without
+putting analytics metadata into SIG order payloads.
 
 The SQLite journal performs a forward-compatible column check on startup so branch-created
 pre-audit journals acquire the new structured fields rather than silently losing attribution.
@@ -371,31 +377,102 @@ Required BUILD-009 acceptance runs are:
 The EC2 host is used only for these speed measurements. Repository edits and correctness CI are
 performed directly on the GitHub branch.
 
-Benchmark result tables are added to this document after the final CI-clean code revision is pulled
-for measurement.
+### Final acceptance evidence
 
-CI smoke command:
+Benchmarked code SHA:
 
-`python -m predictions_cup.benchmarks --smoke`
+`2ae4e24c9c85fd5d51aee6e491b14ae4c9434184`
 
-Target-host evidence commands:
+That exact SHA passed GitHub CI run #2344:
+
+- Ruff: pass;
+- shell validation: pass;
+- mypy strict: pass across 179 source files;
+- pytest: **532 passed, 2 skipped**;
+- application smoke: pass;
+- BUILD-009 benchmark smoke: pass.
+
+Target host:
+
+- AWS EC2 `t4g.small`;
+- availability zone `us-east-1f`;
+- ARM64 / `aarch64`;
+- Python 3.12.14;
+- process affinity CPUs 0 and 1;
+- normal always-on Polymarket and SIG capture remained running;
+- the heavy 005B reconstruction job and duplicate BUILD-009 benchmark were not running during the
+  final clean 3k and 1m batteries.
+
+Commands used:
 
 ```bash
-python -m predictions_cup.benchmarks --calls 100000 --warmup 3000 --repeats 3 --include-journal
-python -m predictions_cup.benchmarks --calls 1000000 --warmup 3000 --repeats 3
+python -m predictions_cup.benchmarks \
+  --calls 3000 --warmup 3000 --repeats 3 \
+  --include-journal --journal-calls 1000
+
+python -m predictions_cup.benchmarks \
+  --calls 1000000 --warmup 3000 --repeats 3
 ```
+
+All figures below are the **median across the three independent repeats**. Percentiles are the
+median of the per-repeat percentile estimates.
+
+#### Correctness
+
+| Check | Maximum absolute error | Acceptance tolerance | Result |
+|---|---:|---:|---|
+| SIG tick round-trip | 0 | exact | PASS |
+| M-038 ratio vs `log1p` logit | 8.88e-16 | 1e-12 | PASS |
+| M-041 stable vs naive exact CARA | 1.73e-18 | 1e-12 | PASS |
+
+#### Representative 3k + durable-journal battery
+
+| Component | Mean | p50 | p95 | p99 | Throughput |
+|---|---:|---:|---:|---:|---:|
+| M-038 reference logit | 0.200 us | 0.177 us | 0.178 us | 0.182 us | ~5.00m/s |
+| M-041 exact CARA | 0.435 us | 0.406 us | 0.409 us | 0.411 us | ~2.30m/s |
+| Strategy evaluation | 4.510 us | 4.445 us | 4.522 us | 4.672 us | ~221k/s |
+| Central Risk | 7.136 us | 7.019 us | 7.257 us | 7.431 us | ~140k/s |
+| Execution-plan construction | 18.031 us | 17.733 us | 18.647 us | 18.649 us | ~55.5k/s |
+| Decision -> null sink | **35.698 us** | **35.766 us** | **36.887 us** | **37.326 us** | **~28.0k/s** |
+| SQLite/WAL pre-dispatch durability | **1.536 ms** | **1.224 ms** | **2.341 ms** | **2.514 ms** | **~651/s** |
+
+The WAL cost is intentionally outside the calculation hot path. It is the measured price of
+persisting execution identity with `synchronous=FULL` before a LIVE network write.
+
+#### Clean million-call stability battery
+
+| Component | Mean | p50 | p95 | p99 | Throughput |
+|---|---:|---:|---:|---:|---:|
+| M-038 reference logit | 0.202 us | 0.178 us | 0.180 us | 0.190 us | ~4.94m/s |
+| M-041 exact CARA | 0.434 us | 0.395 us | 0.399 us | 0.437 us | ~2.31m/s |
+| Strategy evaluation | 4.569 us | 4.477 us | 4.824 us | 5.220 us | ~219k/s |
+| Central Risk | 7.127 us | 6.947 us | 7.409 us | 7.996 us | ~140k/s |
+| Execution-plan construction | 18.169 us | 18.172 us | 19.456 us | 20.643 us | ~55.0k/s |
+| Decision -> null sink | **36.414 us** | **35.855 us** | **37.449 us** | **39.246 us** | **~27.5k/s** |
+
+The three million-call end-to-end means were **36.333 us, 37.133 us and 36.414 us**. The
+peak-to-peak spread was ~0.80 us (~2.2% of the median run), so the internal path was stable under
+the target-host background load.
+
+SIG's documented ~250 ms Realtime batching remains an upstream feed property and is not included in
+these internal processing figures. Likewise, these benchmarks do not claim Internet/SIG HTTP
+round-trip latency.
 
 The million-call run is deliberately not a generic GitHub-hosted hard latency gate.
 
 ## Remaining acceptance work
 
-Before merge:
+Technical BUILD-009 acceptance is complete on the benchmarked code SHA above:
 
-- CI must pass lint, type check, tests and application smoke;
-- duplicate branch-concurrent implementation surfaces must be reconciled to one canonical path;
-- startup recovery regressions must pass;
-- final 3k and 1m benchmark reports must be committed or summarized with exact SHA/host metadata;
-- PR remains draft until independent review.
+- canonical decision/execution path reconciled;
+- lint/type/test/application/benchmark smoke green;
+- startup and account-stream recovery regressions green;
+- 3k representative/journal and repeated 1m target-host benchmarks complete;
+- real SIG orders sent: **NO**.
+
+The PR remains **draft** until independent review. A bounded real placement/cancel smoke is a
+separate MASTER-authorized gate and was not performed as part of BUILD-009 implementation.
 
 ## Scope exclusions
 
