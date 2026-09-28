@@ -155,14 +155,27 @@ The summary is computed from the validated document and reports SIG market/excha
 mapping-class counts, direct Polymarket market count, unique CIDs, unique CLOB token IDs,
 unmapped/ambiguous records, and duplicate/conflicting mappings.
 
-## Acceptance note
+## Acceptance status — complete
 
-The repository code can be reviewed and tested without a credential, but the final 2026 live
-crosswalk itself can only be accepted after a credentialed run against the explicit SIG tournament
-and current Gamma/CLOB metadata. Historical pasted catalogues are sanity checks only and must not
-be promoted into the canonical artifact.
+The final 2026 live crosswalk is accepted and committed on `main`.
 
-Before MAPPING-001 can leave draft/block status, the existing branch must contain the reviewed
-override artifact, canonical JSON/CSV/summary, and generated acceptance evidence from the same live
-run. The acceptance evidence is intentionally impossible to emit from an unresolved mapping or a
-run that skipped the mapped-token CLOB smoke.
+Canonical accepted scope:
+
+- 237 SIG exchanges / records;
+- 140 `EXACT`;
+- 87 `DERIVED`;
+- 4 `NEAR`;
+- 6 `NO_TRADE`;
+- 0 `MODEL_ONLY`;
+- 693 unique Polymarket condition IDs;
+- 1,386 aligned CLOB token IDs;
+- zero conflicting duplicate mappings.
+
+`data/mappings/sig_polymarket_2026_acceptance.json` records
+`all_records_verified=true` and binds the reviewed overrides plus canonical JSON/CSV/summary
+hashes. The acceptance run also completed the mapped-token CLOB smoke.
+
+These artifacts are the production identity boundary and must not be hand-edited. Future
+regeneration must repeat live SIG enumeration, reviewer-owned override validation, Gamma identity
+validation, complete coverage checks and mapped-token CLOB smoke before replacement artifacts are
+accepted.
