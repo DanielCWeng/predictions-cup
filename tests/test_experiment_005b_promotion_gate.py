@@ -118,3 +118,33 @@ def test_holdout_uses_only_promoted_scalar_candidate() -> None:
     cols = selected["target_clock_price_change_30"]
     assert "trade_count_30" in cols
     assert "price_change_30" in cols
+
+
+def test_holdout_target_gate_requires_promotion() -> None:
+    target = "target_clock_price_change_30"
+    freeze = {
+        "shortlist": {
+            target: [
+                {
+                    "feature": "price_change_30",
+                    "stable_train_dev": True,
+                    "promoted_candidate": False,
+                }
+            ]
+        },
+        "model_selection": {
+            target: {
+                "status": "OK",
+                "promotion_eligible": False,
+                "features": ["price_change_30"],
+            }
+        },
+    }
+    assert not HOLDOUT.target_has_holdout_evidence(freeze, target)
+
+    freeze["shortlist"][target][0]["promoted_candidate"] = True
+    assert HOLDOUT.target_has_holdout_evidence(freeze, target)
+
+    freeze["shortlist"][target][0]["promoted_candidate"] = False
+    freeze["model_selection"][target]["promotion_eligible"] = True
+    assert HOLDOUT.target_has_holdout_evidence(freeze, target)
