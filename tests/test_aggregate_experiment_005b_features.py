@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 from scripts.aggregate_experiment_005b_features import main
@@ -21,7 +22,7 @@ def _report(family: str) -> dict[str, object]:
     }
 
 
-def test_aggregate_reports(tmp_path, monkeypatch) -> None:
+def test_aggregate_reports(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     families = ("US_2024", "CAN_2025", "COL_2026", "HUN_2026", "PER_2026")
     for family in families:
         path = tmp_path / f"feature_target_build_report_{family}.json"
@@ -38,7 +39,7 @@ def test_aggregate_reports(tmp_path, monkeypatch) -> None:
     assert payload["totals"]["split_counts"]["TRAIN"] == 30
 
 
-def test_aggregate_refuses_schema_drift(tmp_path, monkeypatch) -> None:
+def test_aggregate_refuses_schema_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     families = ("US_2024", "CAN_2025", "COL_2026", "HUN_2026", "PER_2026")
     for family in families:
         report = _report(family)
