@@ -2364,5 +2364,3 @@ def fit_freeze_main() -> None:
 
 if __name__ == "__main__":
     fit_freeze_main()
-
-[executed on device: ip-172-31-73-211.ec2.internal (c5706598-02ec-4925-9d6e-43e31c32d097)]
