@@ -290,7 +290,7 @@ def main() -> None:
             {"type": "source_coverage", "note": "PMXT is snapshot-grade and does not provide exact queue/cancel sequencing or live receive timestamps for V1"},
         ],
         "shards": [
-            {"kernel_id": row["kernel_id"], "shard": row["shard"], "archive_source_bounds": row.get("archive_source_bounds"),
+            {"kernel_id": row["kernel_id"], "created_at": row.get("created_at"), "shard": row["shard"], "archive_source_bounds": row.get("archive_source_bounds"),
              "repository_commit": row.get("repository_commit"), "acquisition_script_sha256": row.get("acquisition_script_sha256"),
              "pipeline_wheel_commit": row.get("pipeline_wheel_commit"), "file_count": row.get("file_count"), "bytes": row.get("bytes")}
             for row in shards
