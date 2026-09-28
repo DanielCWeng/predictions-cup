@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import math
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,78 @@ META = {
 }
 LABEL_PREFIXES = ("clock_label_end_", "event_label_end_")
 EMBARGO = 300
+REGIME_FEATURES = (
+    "regime_pre_election",
+    "regime_election_day_pre_results",
+    "regime_active_results",
+    "regime_late_count",
+    "regime_post_resolution_diagnostic",
+)
+REGIME_WINDOWS = {
+    "COL_2026": (
+        ("regime_pre_election", "2026-05-29T00:00:00+00:00", "2026-05-31T13:00:00+00:00"),
+        ("regime_election_day_pre_results", "2026-05-31T13:00:00+00:00", "2026-05-31T21:11:00+00:00"),
+        ("regime_active_results", "2026-05-31T21:11:00+00:00", "2026-06-01T03:11:00+00:00"),
+        ("regime_late_count", "2026-06-01T03:11:00+00:00", "2026-06-05T05:00:00+00:00"),
+        ("regime_pre_election", "2026-06-19T00:00:00+00:00", "2026-06-21T13:00:00+00:00"),
+        ("regime_election_day_pre_results", "2026-06-21T13:00:00+00:00", "2026-06-21T21:11:00+00:00"),
+        ("regime_active_results", "2026-06-21T21:11:00+00:00", "2026-06-22T03:11:00+00:00"),
+        ("regime_late_count", "2026-06-22T03:11:00+00:00", "2026-06-25T05:00:00+00:00"),
+    ),
+    "HUN_2026": (
+        ("regime_pre_election", "2026-04-05T00:00:00+00:00", "2026-04-12T04:00:00+00:00"),
+        ("regime_election_day_pre_results", "2026-04-12T04:00:00+00:00", "2026-04-12T18:18:00+00:00"),
+        ("regime_active_results", "2026-04-12T18:18:00+00:00", "2026-04-13T00:18:00+00:00"),
+        ("regime_late_count", "2026-04-13T00:18:00+00:00", "2026-04-18T22:00:00+00:00"),
+        ("regime_post_resolution_diagnostic", "2026-04-18T22:00:00+00:00", "2026-05-07T12:00:00+00:00"),
+    ),
+    "PER_2026": (
+        ("regime_pre_election", "2026-04-10T00:00:00+00:00", "2026-04-12T12:00:00+00:00"),
+        ("regime_election_day_pre_results", "2026-04-12T12:00:00+00:00", "2026-04-12T23:00:00+00:00"),
+        ("regime_active_results", "2026-04-12T23:00:00+00:00", "2026-04-13T05:00:00+00:00"),
+        ("regime_late_count", "2026-04-13T05:00:00+00:00", "2026-05-15T15:04:00+00:00"),
+        ("regime_post_resolution_diagnostic", "2026-05-15T15:04:00+00:00", "2026-05-17T17:03:00+00:00"),
+        ("regime_pre_election", "2026-06-05T00:00:00+00:00", "2026-06-07T12:00:00+00:00"),
+        ("regime_election_day_pre_results", "2026-06-07T12:00:00+00:00", "2026-06-07T23:12:00+00:00"),
+        ("regime_active_results", "2026-06-07T23:12:00+00:00", "2026-06-08T05:12:00+00:00"),
+        ("regime_late_count", "2026-06-08T05:12:00+00:00", "2026-06-29T19:50:00+00:00"),
+        ("regime_post_resolution_diagnostic", "2026-06-29T19:50:00+00:00", "2026-07-03T21:05:00+00:00"),
+    ),
+}
+
+
+def epoch(value: str) -> int:
+    return int(datetime.fromisoformat(value).timestamp())
+
+
+REGIME_WINDOWS_EPOCH = {
+    family: tuple(
+        (name, epoch(start), epoch(end))
+        for name, start, end in windows
+    )
+    for family, windows in REGIME_WINDOWS.items()
+}
+
+
+def apply_documented_regimes(frame: pd.DataFrame) -> pd.DataFrame:
+    result = frame.copy()
+    for feature in REGIME_FEATURES:
+        result[feature] = np.nan
+    families = result["family"].astype(str).to_numpy()
+    timestamps = result["timestamp"].to_numpy(dtype=np.int64)
+    for family, windows in REGIME_WINDOWS_EPOCH.items():
+        family_mask = families == family
+        documented = np.zeros(len(result), dtype=bool)
+        for feature, start, end in windows:
+            mask = family_mask & (timestamps >= start) & (timestamps < end)
+            if mask.any():
+                result.loc[mask, feature] = 1.0
+                documented |= mask
+        for feature in REGIME_FEATURES:
+            missing = documented & result[feature].isna().to_numpy()
+            if missing.any():
+                result.loc[missing, feature] = 0.0
+    return result
 
 
 def locate_files() -> dict[str, Path]:
@@ -51,6 +124,8 @@ def label_for_target(target: str) -> str:
 
 
 def feature_group(name: str) -> str:
+    if name.startswith("regime_"):
+        return "regime_state"
     if name.startswith("loo_family_"):
         return "family_context"
     if name.startswith(("loo_event_", "common_event_", "market_minus_event_")):
@@ -263,20 +338,26 @@ def rank_matrix(df: pd.DataFrame, features: list[str]) -> np.ndarray:
     return ranked.to_numpy(dtype=np.float64, copy=False)
 
 
-def feature_market_concentration(
-    markets: np.ndarray,
+def feature_support_diagnostics(
+    market_keys: np.ndarray,
+    block_keys: np.ndarray,
     feature_values: np.ndarray,
     target_values: np.ndarray,
-) -> tuple[float, float]:
+) -> tuple[float, float, int, int]:
     valid = (
         np.isfinite(feature_values)
         & np.isfinite(target_values)
     )
     if not valid.any():
-        return math.nan, math.nan
-    _, counts = np.unique(markets[valid], return_counts=True)
+        return math.nan, math.nan, 0, 0
+    _, counts = np.unique(market_keys[valid], return_counts=True)
     shares = counts.astype(float) / counts.sum()
-    return float(np.sum(shares * shares)), float(shares.max())
+    return (
+        float(np.sum(shares * shares)),
+        float(shares.max()),
+        int(len(counts)),
+        int(np.unique(block_keys[valid]).size),
+    )
 
 
 def market_time_groups(df: pd.DataFrame) -> list[np.ndarray]:
@@ -637,8 +718,13 @@ def main() -> None:
             deterministic_sample(con, files[family], "DEV", 50000)
         )
     con.close()
-    train = pd.concat(train_parts, ignore_index=True)
-    dev = pd.concat(dev_parts, ignore_index=True)
+    train = apply_documented_regimes(
+        pd.concat(train_parts, ignore_index=True)
+    )
+    dev = apply_documented_regimes(
+        pd.concat(dev_parts, ignore_index=True)
+    )
+    features = features + list(REGIME_FEATURES)
 
     x_train = numeric_matrix(train, features)
     x_dev = numeric_matrix(dev, features)
@@ -856,6 +942,16 @@ def main() -> None:
     model_selection: dict[str, dict[str, Any]] = {}
     negative_controls: dict[str, dict[str, Any]] = {}
     dev_market_groups = market_time_groups(dev)
+    train_market_keys = (
+        train["family"].astype(str)
+        + ":"
+        + train["market_id"].astype(str)
+    ).to_numpy()
+    train_block_keys = (
+        train["family"].astype(str)
+        + ":"
+        + (train["timestamp"] // 86400).astype(str)
+    ).to_numpy()
     activity_index = features.index("trade_count_30")
     contemporaneous_index = features.index("absolute_return_30")
     contemporaneous_corr, _ = corr_columns(
@@ -885,8 +981,7 @@ def main() -> None:
             for row in rows
             if row["feature"] in reps
             and row["full_target_support"] >= 1000
-            and row["full_market_count_sum"] >= 3
-            and row["full_time_block_count_sum"] >= 4
+            and row["sample_support"] >= 1000
             and row["spearman"] is not None
         ]
         eligible.sort(
@@ -910,17 +1005,25 @@ def main() -> None:
         )
         target_train[~target_valid] = np.nan
         train_markets = train["market_id"].astype(str).to_numpy()
-        for row in eligible[:8]:
+        for row in eligible:
             dev_stats = dev_metrics[target].get(row["feature"], {})
             dev_pearson = dev_stats.get("pearson")
             dev_spearman = dev_stats.get("spearman")
             train_r = row["spearman"]
             feature_index = features.index(row["feature"])
-            feature_hhi, feature_max_share = feature_market_concentration(
-                train_markets,
+            (
+                feature_hhi,
+                feature_max_share,
+                feature_market_count,
+                feature_block_count,
+            ) = feature_support_diagnostics(
+                train_market_keys,
+                train_block_keys,
                 x_train[:, feature_index],
                 target_train,
             )
+            if feature_market_count < 3 or feature_block_count < 4:
+                continue
             stable = (
                 dev_spearman is not None
                 and train_r * dev_spearman > 0
@@ -951,10 +1054,14 @@ def main() -> None:
                         if not np.isfinite(feature_max_share)
                         else feature_max_share
                     ),
+                    "candidate_market_count_sample": feature_market_count,
+                    "candidate_time_block_count_sample": feature_block_count,
                     "selection_label": label_name,
                     "stable_train_dev": stable,
                 }
             )
+            if len(chosen) >= 8:
+                break
         shortlist[target] = chosen[:12]
         primary_control_feature = None
         for candidate in chosen:
