@@ -89,7 +89,6 @@ class EventDrivenCoordinator:
                 risk_context=self._risk_context,
                 logical_operation_id=f"{change.event_id}:{binding.strategy_id}",
                 mode=self._mode,
-                created_monotonic_ns=change.observed_monotonic_ns,
             )
             if outcome.execution_plan is None:
                 continue
