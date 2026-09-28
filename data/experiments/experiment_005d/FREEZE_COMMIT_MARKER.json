@@ -3,27 +3,28 @@
   "stage": "PRE_OUTCOME_DESIGN_FREEZE",
   "base_sha": "ba938bedcf63f562be8b26c9502e828391123867",
   "branch": "experiment/005d-structural-rv-atlas",
-  "freeze_parent_sha": "9719f6e2f9cbbd6085ccfa9732f1221c749f642a",
+  "freeze_parent_sha": "37b98713bbdc97919f3ed7a8df82ac5ab002fba6",
   "artifacts": {
     "docs/experiments/EXPERIMENT_005D_STRUCTURAL_RV_ATLAS.md": "6a699406887bbcc551913d712166ae376d63c798cfe86b008f8ba5927d9ec3ed",
     "data/experiments/experiment_005d/preregistration.json": "d43a75ff8e0b5df6c717f37721e339116a6297b299c4e26d8b9a5f242b9c7a51",
     "data/experiments/experiment_005d/prior_exposure_manifest.json": "19fd15b77063f9f5d5c43fa02da37bb2bcc6dd9ac04f5fd1325f1220a9e199c3",
-    "src/predictions_cup/learning/structural_atlas.py": "386c3461ee8889bde9e35ba89d14c59dde244fa440c5bebfee5b49cdb3b46064",
+    "src/predictions_cup/learning/structural_atlas.py": "3de4316cc5acda7c52832060c4983822f8d289583ae31cbe733a71eed5067566",
     "tests/test_structural_atlas.py": "31beebf56af4cd3e05735ab247ee77bad7781f4e8ebdf14942c2f0952111b312",
     "scripts/prepare_experiment_005d_kaggle.py": "837873366458ed6e571dc3ec608258fbee68c5bb08ed522061dd116c2ec0046a",
-    "scripts/kaggle/experiment_005d/run_body.py.txt": "88358c9cadb7b92294c90dcd38f11891fe389d70a55d5bfd4c01f500e491184b",
-    "scripts/kaggle/experiment_005d/kernel-metadata.json": "dc4d099eb0728c39ae98858164c5e6708073256d1f838bccd08fda1e72784fae"
+    "scripts/kaggle/experiment_005d/run_body.py.txt": "2d99cb24f8f13c90ccd5f5ce9c3e1b75b66d68fd515c5b4df36cfd264a7a0aaa",
+    "scripts/kaggle/experiment_005d/kernel-metadata.json": "214984c92ded0b37d2be064dfe32223e0e2cfd5ca2a6dc8b12fa7a41751456b3"
   },
   "generated_runner": {
-    "sha256": "527099f03af824d1f58ae98cb6cd5d261349a872ceef40bb6dadf6d4a739d831",
-    "bytes": 275367,
+    "sha256": "04e0cb109fac7858c065630951660a51c59ee6e2922d46c5492cc1343da1f5d3",
+    "bytes": 284154,
     "phase": "TRAIN_DEV",
     "generator_rule": "regenerate from the frozen prep script + frozen semantic inputs; generated run.py need not be hand-edited"
   },
   "validation": {
     "unit_tests": "9 passed",
     "generated_runner_py_compile": "PASS",
-    "holdout_status": "SEALED_NOT_INSPECTED"
+    "holdout_status": "SEALED_NOT_INSPECTED",
+    "ruff": "PASS"
   },
   "post_freeze_rule": "No model/target/horizon/split/screening additions after this marker. DEV may only remove/select among frozen candidates."
 }
