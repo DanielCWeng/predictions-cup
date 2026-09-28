@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "amendment_id": "provenance_metadata_amendment_011",
+  "classification": "ENGINEERING_ONLY",
+  "trigger": "The completed US_2024 merge report carried the frozen feature_target_spec_sha256 but omitted the redundant feature_target_spec_repo_path field present in the four earlier family reports.",
+  "observed_state": {
+    "feature_target_spec_sha256": "47dc9c9a678f58558aba7e4bc282103cacbc0836f08018a79d4197487d689cf7",
+    "canonical_feature_target_spec_repo_path": "data/experiments/experiment_005b/feature_target_spec.json",
+    "us_rows": 7890463,
+    "us_feature_count": 226,
+    "us_target_count": 47,
+    "us_output_sha256": "0f28fce1f2dd75227a37876ed378e49d163fd91f46a8451def6b8304b3ae074f"
+  },
+  "change": {
+    "aggregate_provenance": "Use the canonical repo path constant in the aggregate report. A family report may omit the redundant repo-path field, but any provided conflicting value remains a hard failure."
+  },
+  "scientific_effect": "NONE",
+  "unchanged": [
+    "feature definitions and values",
+    "target definitions and values",
+    "feature_target_spec_sha256",
+    "time splits and embargoes",
+    "screening/model specification",
+    "negative controls",
+    "promotion thresholds",
+    "HOLDOUT protocol and gate"
+  ],
+  "holdout_status": "CLOSED",
+  "note": "This amendment normalizes provenance metadata only and does not modify the completed US matrix or any empirical result."
+}
