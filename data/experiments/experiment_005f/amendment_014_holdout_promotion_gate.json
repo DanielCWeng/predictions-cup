@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "amendment_id": "005F-AMENDMENT-014",
+  "status": "PRE_HOLDOUT_PROMOTION_GATE",
+  "reason": "Freeze exact HOLDOUT support/promotion rules before any HOLDOUT access.",
+  "confirmatory_gate": {
+    "eligibility": "selection_class must equal CONFIRMATORY_ELIGIBLE; SHADOW_ONLY_NO_FDR can never promote.",
+    "minimum_support": {
+      "markets": 10,
+      "event_windows": 2
+    },
+    "primary_loss_improvement": "baseline minus challenger mean squared loss must be > 0 on the frozen HOLDOUT complete-case row universe.",
+    "block_randomisation": "one-sided 30-minute event-block sign-flip p <= 0.05.",
+    "block_bootstrap": "equal-event moving-block 95% percentile interval lower bound must be > 0 using the TRAIN-frozen block length.",
+    "leave_event_out": "all finite leave-one-event-out mean loss improvements must be > 0.",
+    "leave_market_out": "all finite leave-one-market-out mean loss improvements must be > 0.",
+    "leave_family_out": "when at least two election families are represented, all finite leave-one-family-out mean loss improvements must be > 0.",
+    "high_activity_removal": "mean loss improvement after removal of markets at or above the HOLDOUT row-count 90th percentile must be > 0 when rows remain.",
+    "capture_falsification": "where amendment-012 capture models are supported, capture-only loss minus selected-plus-capture loss must be > 0; otherwise label capture-confounded.",
+    "alternate_freshness": "where raw_capture_bin_age_s is available and the <=300s subset has at least 10 markets and 2 event windows, its mean loss improvement must be > 0.",
+    "continuity": "primary labels must have zero reconstructed cross-segment transitions by construction."
+  },
+  "diagnostics_not_promotion_gates": [
+    "300-second delayed-feature placebo",
+    "1800-second time-shift placebo",
+    "sign inversion where applicable",
+    "depth-matched permutation null",
+    "source-version stratification"
+  ],
+  "disposition_labels": [
+    "HOLDOUT_SUPPORTED",
+    "HOLDOUT_NOT_SUPPORTED",
+    "LOW_HOLDOUT_SUPPORT",
+    "SHADOW_ONLY",
+    "CAPTURE_CONFOUNDED"
+  ],
+  "candidate_set_changed": false,
+  "selected_models_changed": false,
+  "selection_rule_changed": false,
+  "holdout_accessed": false
+}
