@@ -52,7 +52,7 @@ class SigLiveSink:
             raise ValueError("placement dispatch requires a placement operation kind")
 
         # Safety-critical ordering: durable identity precedes network dispatch.
-        self._journal.record_before_dispatch(envelope, plan.intents)
+        self._journal.record_before_dispatch(envelope, plan.intents, audit=plan.audit)
 
         try:
             raw = json.loads(envelope.payload_json)
