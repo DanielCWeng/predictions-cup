@@ -93,6 +93,12 @@ mapping evidence and must not be promoted into production configuration.
 - DATA-001 / PR #23 is the current historical replay-corpus candidate and is **not yet accepted**.
   Independent review found one blocking source-routing decision around the 13-Apr-2026 PMXT V1/V2
   overlap; the affected corpus evidence must be rebuilt/reproduced before acceptance.
+- DATA-002 (`data/002-polymarket-fees`) is a new, separate, **not yet accepted** candidate: frozen
+  fee/refund/rebate evidence for the same five families, joined to DATA-001 only by
+  `condition_id`/`token_id`/`tx_hash`/`participant_address`. It ships raw attribution evidence
+  (`fee_evidence`, `order_is_match_taker_order`, ambiguity flags) rather than a derived
+  maker/taker label, and does not mutate DATA-001. See
+  `docs/implementation/DATA_002_POLYMARKET_FEES.md`.
 
 ## Not implemented on main
 

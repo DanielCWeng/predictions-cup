@@ -1,0 +1,11 @@
+{
+  "command": "kaggle datasets create -p sig-cup-data-002-polymarket-fees -r zip",
+  "dataset": "polyleviathan/sig-cup-data-002-polymarket-fees",
+  "visibility": "private",
+  "dataset_url": "https://www.kaggle.com/datasets/polyleviathan/sig-cup-data-002-polymarket-fees",
+  "note": "Static upload, not a Kaggle-kernel build like DATA-001's sig-cup-data-001-build. The package was assembled locally from the internal trades/+custody/ Parquet lake (_work/stage.py, _work/preera.py, _work/assemble.py; no source_commit recorded, see data_002_manifest.json) and uploaded as-is; per-file identity (bytes/rows/sha256) for all 13 constituent files is the citable record in data_002_manifest.json, not a hash of the upload zip itself.",
+  "upload_size_bytes": 721776003,
+  "upload_first_confirmed": "2026-09-27T23:54:21Z",
+  "kaggle_datasets_create_output": "Upload successful: schema_version=1.zip (688MB); Your private Dataset is being created.",
+  "verification": "kaggle datasets status / datasets files both returned 403 for this account immediately after creation (same 403 reproduced against the pre-existing sig-cup-polyleviathan-fills dataset, so it looks like an account/API-permission limitation rather than a sign this upload failed); confirmed live instead via `kaggle datasets list --user polyleviathan --sort-by updated`, which showed the dataset at 721776003 bytes."
+}
