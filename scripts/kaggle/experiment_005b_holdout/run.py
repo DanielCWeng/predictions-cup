@@ -693,7 +693,7 @@ def main() -> None:
     results = []
     for target in sorted(columns):
         has_scalar = any(
-            row.get("stable_train_dev")
+            row.get("promoted_candidate")
             for row in freeze["shortlist"].get(target, [])
         )
         has_model = freeze["model_selection"].get(target, {}).get("promotion_eligible") is True
