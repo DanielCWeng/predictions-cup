@@ -1,7 +1,21 @@
+import importlib.util
 from pathlib import Path
 
 import pytest
-from scripts.experiment_005a.verify_result_package import audit_bh, parse_bool
+
+SCRIPT = (
+    Path(__file__).resolve().parents[1]
+    / "scripts"
+    / "experiment_005a"
+    / "verify_result_package.py"
+)
+SPEC = importlib.util.spec_from_file_location("verify_result_package", SCRIPT)
+if SPEC is None or SPEC.loader is None:
+    raise RuntimeError("could not load EXPERIMENT-005A result verifier")
+MODULE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(MODULE)
+audit_bh = MODULE.audit_bh
+parse_bool = MODULE.parse_bool
 
 
 def test_parse_bool() -> None:
