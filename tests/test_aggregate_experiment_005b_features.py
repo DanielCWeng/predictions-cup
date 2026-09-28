@@ -1,10 +1,31 @@
 from __future__ import annotations
 
+import importlib.util
 import json
+from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
+from typing import cast
 
 import pytest
-from scripts.aggregate_experiment_005b_features import main
+
+
+def _load_module(name: str, path: Path) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"unable to load {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+MODULE = _load_module(
+    "aggregate_experiment_005b_features",
+    Path(__file__).resolve().parents[1]
+    / "scripts"
+    / "aggregate_experiment_005b_features.py",
+)
+MAIN = cast(Callable[[], None], getattr(MODULE, "main"))
 
 
 def _report(family: str) -> dict[str, object]:
@@ -22,8 +43,17 @@ def _report(family: str) -> dict[str, object]:
     }
 
 
-def test_aggregate_reports(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    families = ("US_2024", "CAN_2025", "COL_2026", "HUN_2026", "PER_2026")
+def test_aggregate_reports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    families = (
+        "US_2024",
+        "CAN_2025",
+        "COL_2026",
+        "HUN_2026",
+        "PER_2026",
+    )
     for family in families:
         path = tmp_path / f"feature_target_build_report_{family}.json"
         path.write_text(json.dumps(_report(family)))
@@ -31,7 +61,7 @@ def test_aggregate_reports(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         "sys.argv",
         ["aggregate", "--root", str(tmp_path)],
     )
-    main()
+    MAIN()
     payload = json.loads(
         (tmp_path / "feature_target_build_report.json").read_text()
     )
@@ -39,8 +69,17 @@ def test_aggregate_reports(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert payload["totals"]["split_counts"]["TRAIN"] == 30
 
 
-def test_aggregate_refuses_schema_drift(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    families = ("US_2024", "CAN_2025", "COL_2026", "HUN_2026", "PER_2026")
+def test_aggregate_refuses_schema_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    families = (
+        "US_2024",
+        "CAN_2025",
+        "COL_2026",
+        "HUN_2026",
+        "PER_2026",
+    )
     for family in families:
         report = _report(family)
         if family == "PER_2026":
@@ -52,4 +91,4 @@ def test_aggregate_refuses_schema_drift(tmp_path: Path, monkeypatch: pytest.Monk
         ["aggregate", "--root", str(tmp_path)],
     )
     with pytest.raises(RuntimeError, match="schema/spec drift"):
-        main()
+        MAIN()
