@@ -106,12 +106,15 @@ def test_live_sink_records_observation_decision_dispatch_and_ack_clocks(
         )
         ack = next(item for item in events if item.event_type == "ACK")
 
+        assert submission.tournament_id == "t1"
         assert submission.decision_observation_ns == 100
         assert submission.decision_monotonic_ns == 150
         assert submission.observed_monotonic_ns == 200
         assert submission.signal_value == 0.025
         assert submission.fair_value == 0.55
+        assert dispatch.tournament_id == "t1"
         assert dispatch.observed_monotonic_ns == 300
+        assert ack.tournament_id == "t1"
         assert ack.observed_monotonic_ns == 400
     finally:
         journal.close()
@@ -146,8 +149,11 @@ def test_cancel_dispatch_timestamp_is_sampled_after_durable_identity(
         )
         ack = next(item for item in events if item.event_type == "CANCEL_ACK")
 
+        assert submission.tournament_id == "t1"
         assert submission.observed_monotonic_ns == 600
+        assert cancel_submitted.tournament_id == "t1"
         assert cancel_submitted.observed_monotonic_ns == 700
+        assert ack.tournament_id == "t1"
         assert ack.observed_monotonic_ns == 800
     finally:
         journal.close()
