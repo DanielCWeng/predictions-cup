@@ -6,6 +6,7 @@ import hashlib
 import json
 import math
 import sys
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -49,9 +50,41 @@ def sha256(path: Path) -> str:
 
 def one(pattern: str) -> Path:
     matches = sorted(INPUT.rglob(pattern))
-    if len(matches) != 1:
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
         raise RuntimeError(f"expected exactly one {pattern}, got {matches}")
-    return matches[0]
+
+    # Kaggle may expose the historical fills dataset as an archive rather than loose files.
+    # Extract only the requested member, preserving the same source bytes and filenames.
+    cache = WORK / "_input_cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    archived: list[tuple[Path, str]] = []
+    for archive_path in sorted(INPUT.rglob("*.zip")):
+        try:
+            with zipfile.ZipFile(archive_path) as archive:
+                for name in archive.namelist():
+                    if Path(name).name == pattern:
+                        archived.append((archive_path, name))
+        except zipfile.BadZipFile:
+            continue
+    if len(archived) != 1:
+        sample = [str(path.relative_to(INPUT)) for path in sorted(INPUT.rglob("*"))[:80]]
+        raise RuntimeError(
+            f"expected exactly one {pattern}; loose={matches}, archived={archived}, "
+            f"input_sample={sample}"
+        )
+    archive_path, member = archived[0]
+    target = cache / pattern
+    if not target.exists():
+        with zipfile.ZipFile(archive_path) as archive, archive.open(member) as source:
+            with target.open("wb") as output:
+                while True:
+                    chunk = source.read(1 << 20)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+    return target
 
 
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
