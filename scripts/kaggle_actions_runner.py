@@ -123,6 +123,12 @@ def wait_for_kernel(data: dict[str, Any], kernel: str, output_dir: Path) -> None
             check=False,
         )
         last_status = ((result.stdout or "") + (result.stderr or "")).strip()
+        if result.returncode != 0:
+            if bool(data.get("allow_missing", False)):
+                time.sleep(poll_seconds)
+                continue
+            terminal = "failed"
+            break
         lowered = last_status.lower()
         if "complete" in lowered:
             terminal = "complete"
