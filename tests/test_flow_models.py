@@ -51,3 +51,54 @@ def test_chronological_split_applies_embargo() -> None:
     assert np.all(times[train] <= 35)
     assert np.all(times[validation] >= 55)
     assert not np.any(train & validation)
+
+
+def test_chronological_split_by_group_does_not_split_on_global_calendar() -> None:
+    from predictions_cup.learning.flow_models import chronological_split_by_group
+
+    times = np.array([0, 10, 20, 1000, 1010, 1020], dtype=np.int64)
+    groups = np.array(["A", "A", "A", "B", "B", "B"], object)
+    train, validation = chronological_split_by_group(
+        times,
+        groups,
+        train_fraction=2 / 3,
+        embargo_ns=0,
+    )
+    assert train.tolist() == [True, True, False, True, True, False]
+    assert validation.tolist() == [False, False, True, False, False, True]
+
+
+def test_joint_circular_shift_preserves_rows_and_feature_pairing() -> None:
+    from predictions_cup.learning.flow_models import circular_shift_feature_columns
+
+    values = np.column_stack([np.arange(20, dtype=float), 10 * np.arange(20, dtype=float)])
+    groups = np.array(["A"] * 10 + ["B"] * 10, object)
+    shifted = circular_shift_feature_columns(
+        values,
+        groups,
+        minimum_shift_rows=2,
+        seed=123,
+    )
+    for start, end in ((0, 10), (10, 20)):
+        assert sorted(map(tuple, shifted[start:end].tolist())) == sorted(
+            map(tuple, values[start:end].tolist())
+        )
+        assert np.allclose(shifted[start:end, 1], 10 * shifted[start:end, 0])
+
+
+def test_signed_row_permutation_preserves_group_multiset() -> None:
+    from predictions_cup.learning.flow_models import permute_signed_feature_rows
+
+    values = np.array([[1.0, 2.0], [-3.0, -4.0], [5.0, 6.0], [-7.0, -8.0]])
+    groups = np.array(["A", "A", "B", "B"], object)
+    permuted = permute_signed_feature_rows(values, groups, seed=9)
+    assert sorted(map(tuple, permuted[:2].tolist())) == sorted(map(tuple, values[:2].tolist()))
+    assert sorted(map(tuple, permuted[2:].tolist())) == sorted(map(tuple, values[2:].tolist()))
+
+
+def test_empirical_upper_p_uses_plus_one_correction() -> None:
+    from predictions_cup.learning.flow_models import empirical_upper_p
+
+    null = np.array([-1.0, 0.0, 0.1, 0.2])
+    assert empirical_upper_p(1.0, null) == 0.2
+    assert empirical_upper_p(0.1, null) == 0.6

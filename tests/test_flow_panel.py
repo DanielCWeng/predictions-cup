@@ -60,7 +60,8 @@ def test_future_moves_are_canonical_midpoint_differences() -> None:
         [_row(0, "0.4", "0.5"), _row(30, "0.5", "0.6")]
     )
     start = int(datetime(2026, 1, 1, tzinfo=UTC).timestamp() * NS)
-    result = future_moves(series, np.array([start]), horizon_seconds=30)
+    collector = series.times_ns.copy()
+    result = future_moves(series, np.array([start]), collector, horizon_seconds=30)
     assert np.isclose(result[0], 0.1)
 
 
@@ -79,3 +80,19 @@ def test_common_event_move_excludes_requested_token() -> None:
     }
     common = common_event_move(grids, exclude_tokens=frozenset({"a"}))
     assert np.isclose(common[0], 0.02)
+
+
+def test_future_moves_fail_closed_when_collector_gap_hides_interval() -> None:
+    series = reconstruct_genuine_bbo(
+        [_row(0, "0.4", "0.5"), _row(30, "0.5", "0.6"), _row(60, "0.5", "0.6")]
+    )
+    start = int(datetime(2026, 1, 1, tzinfo=UTC).timestamp() * NS)
+    sparse_collector = np.array([start, start + 60 * NS], dtype=np.int64)
+    result = future_moves(
+        series,
+        np.array([start]),
+        sparse_collector,
+        horizon_seconds=30,
+        max_collector_gap_seconds=10,
+    )
+    assert np.isnan(result[0])

@@ -70,10 +70,9 @@ def test_asof_and_future_move_fail_closed_on_staleness() -> None:
     )
     start = int(datetime(2026, 1, 1, tzinfo=UTC).timestamp() * NS)
     assert asof_index(series, start + 10 * NS, freshness_seconds=30) == 1
-    assert np.isclose(
-        future_mid_move(series, start + 10 * NS, 10, freshness_seconds=30),
-        0.1,
-    )
+    move = future_mid_move(series, start + 10 * NS, 10, freshness_seconds=30)
+    assert move is not None
+    assert np.isclose(move, 0.1)
     assert asof_index(series, start + 400 * NS, freshness_seconds=30) is None
 
 
@@ -92,3 +91,22 @@ def test_block_permutation_keeps_rows_within_contiguous_blocks() -> None:
     assert abs(positions[0] - positions[1]) == 1
     assert abs(positions[1] - positions[2]) == 1
     assert abs(positions[3] - positions[4]) == 1
+
+
+def test_observation_exposure_requires_collector_continuity_and_target_confirmation() -> None:
+    from predictions_cup.learning.flow_response import observation_exposure_valid
+
+    series = reconstruct_genuine_bbo(
+        [_row(0, "0.4", "0.5"), _row(10, "0.4", "0.5"), _row(20, "0.4", "0.5")]
+    )
+    start = int(datetime(2026, 1, 1, tzinfo=UTC).timestamp() * NS)
+    collector = np.array([start + second * NS for second in (0, 5, 10, 15, 20)])
+    assert observation_exposure_valid(series, start + NS, start + 15 * NS, collector)
+    sparse = np.array([start, start + 100 * NS])
+    assert not observation_exposure_valid(
+        series,
+        start + NS,
+        start + 15 * NS,
+        sparse,
+        max_collector_gap_seconds=30,
+    )

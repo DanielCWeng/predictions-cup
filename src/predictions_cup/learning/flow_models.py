@@ -181,3 +181,112 @@ def chronological_split(
     high = int(times.max())
     cut = low + int((high - low) * train_fraction)
     return times <= cut - embargo_ns, times >= cut + embargo_ns
+
+
+def chronological_split_by_group(
+    times_ns: np.ndarray,
+    groups: np.ndarray,
+    *,
+    train_fraction: float = 2 / 3,
+    embargo_ns: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Apply the frozen chronological split independently inside each event/regime group."""
+
+    times = np.asarray(times_ns, np.int64)
+    group_values = np.asarray(groups, object)
+    if len(times) != len(group_values):
+        raise ValueError("times_ns and groups lengths differ")
+    train = np.zeros(len(times), bool)
+    validation = np.zeros(len(times), bool)
+    string_groups = np.asarray([str(value) for value in group_values], object)
+    for group in sorted(set(map(str, group_values))):
+        index = np.flatnonzero(string_groups == group)
+        local_train, local_validation = chronological_split(
+            times[index],
+            train_fraction=train_fraction,
+            embargo_ns=embargo_ns,
+        )
+        train[index[local_train]] = True
+        validation[index[local_validation]] = True
+    return train, validation
+
+
+def deterministic_seed(master: int, component: str) -> int:
+    import hashlib
+
+    digest = hashlib.sha256(f"{master}|{component}".encode()).digest()
+    return int.from_bytes(digest[:8], "big")
+
+
+def circular_shift_feature_columns(
+    frame_values: np.ndarray,
+    groups: np.ndarray,
+    *,
+    minimum_shift_rows: int,
+    seed: int,
+) -> np.ndarray:
+    """Jointly circular-shift feature columns inside each source group.
+
+    Missing rows remain missing because whole rows are shifted together. Groups too
+    short to support the declared minimum shift are left unchanged and should be
+    diagnosed by callers rather than treated as valid null draws.
+    """
+
+    values = np.asarray(frame_values, float)
+    group_values = np.asarray(groups, object)
+    if values.ndim != 2:
+        raise ValueError("frame_values must be two-dimensional")
+    if len(values) != len(group_values):
+        raise ValueError("frame_values and groups lengths differ")
+    if minimum_shift_rows < 1:
+        raise ValueError("minimum_shift_rows must be positive")
+
+    result = values.copy()
+    strings = np.asarray([str(value) for value in group_values], object)
+    rng = np.random.default_rng(seed)
+    for group in sorted(set(map(str, group_values))):
+        index = np.flatnonzero(strings == group)
+        n = len(index)
+        if n <= 2 * minimum_shift_rows:
+            continue
+        shift = int(rng.integers(minimum_shift_rows, n - minimum_shift_rows + 1))
+        result[index] = np.roll(values[index], shift, axis=0)
+    return result
+
+
+def permute_signed_feature_rows(
+    signed_values: np.ndarray,
+    groups: np.ndarray,
+    *,
+    seed: int,
+) -> np.ndarray:
+    """Permute signed-flow rows within frozen groups while preserving joint magnitudes."""
+
+    values = np.asarray(signed_values, float)
+    group_values = np.asarray(groups, object)
+    if values.ndim != 2:
+        raise ValueError("signed_values must be two-dimensional")
+    if len(values) != len(group_values):
+        raise ValueError("signed_values and groups lengths differ")
+    result = values.copy()
+    strings = np.asarray([str(value) for value in group_values], object)
+    rng = np.random.default_rng(seed)
+    for group in sorted(set(map(str, group_values))):
+        index = np.flatnonzero(strings == group)
+        if len(index) < 2:
+            continue
+        order = np.arange(len(index))
+        rng.shuffle(order)
+        result[index] = values[index[order]]
+    return result
+
+
+def empirical_upper_p(observed: float, null_values: np.ndarray) -> float:
+    """Plus-one upper-tail p-value for a positive incremental-loss-gain alternative."""
+
+    null = np.asarray(null_values, float)
+    null = null[np.isfinite(null)]
+    if not np.isfinite(observed) or len(null) == 0:
+        return 1.0
+    exceed = int(np.sum(null >= float(observed)))
+    return float((1 + exceed) / (len(null) + 1))
