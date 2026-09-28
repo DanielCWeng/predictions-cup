@@ -1,0 +1,20 @@
+{
+  "eval_code_dataset": "polyleviathan/sig-cup-005e-holdout-eval-code",
+  "eval_code_dataset_version": 2,
+  "eval_implementation_commit": "055fb09bca8e1271b466cb3dc3252cdef4e678c2",
+  "experiment_id": "EXPERIMENT-005E",
+  "final_disposition": "NO_INCREMENTAL_EVIDENCE",
+  "kaggle_kernel": "polyleviathan/005e-participant-ecology-holdout-eval",
+  "kaggle_kernel_version": 2,
+  "output_sha256": {
+    "exact_kaggle_provenance.json": "500a12bfcccccd289a46a365511661f5932dae2f7d24f1ed5a462174471c5cb8",
+    "falsification_concentration_report.json": "68cfdf38b605ce7cb0d1394bf96586d7ab934fceb282f47a29fd167ffbe89670",
+    "holdout_evaluation.json": "bed51f27130e9cae1a5862e78f49e367c7a8bec51a6cfd5470547304258408d2",
+    "salvage_panel_audit.json": "b0cf9d00dfe02925c5207da2f2706792ea667cd18cef731c3e934e4d541d486d"
+  },
+  "panel_dataset": "polyleviathan/sig-cup-005e-holdout-v2-panels",
+  "panel_dataset_version": 2,
+  "pre_holdout_freeze_sha256": "60f642ec50a1a9ffa5aebfba73d8a66960f6afb2c318e7d747e584df81ca6de1",
+  "runner_sha256": "ff881d9dfc1e8744be4fc94723536ad85322ba857cd43c571150e40a801728cd",
+  "schema_version": 1
+}
