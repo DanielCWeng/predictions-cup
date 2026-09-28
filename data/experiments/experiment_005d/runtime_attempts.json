@@ -15,8 +15,15 @@
       "reason": "Kaggle rewrote DATA-002 manifest JSON formatting, so raw-byte SHA verification falsely raised DATA-002 manifest drift before empirical computation.",
       "evidence": "Local extracted Kaggle manifest parsed identically to the accepted repo manifest although raw-byte hashes differed.",
       "remediation": "Require semantic JSON payload equality and verify each consumed DATA-002 Parquet against the accepted per-file SHA-256."
+    },
+    {
+      "kaggle_version": 4,
+      "runner_sha256": "9811da8682e4cf94cd3c4bc330b685d4f21aaeaf1a860dcd2b4980165c567b8c",
+      "runner_status": "INVALIDATED_PRE_EVIDENCE",
+      "reason": "Pre-outcome implementation audit found DATA-001 structural targets lacked the preregistered 1/2/5/10 economic-trade labels and wrapped historical catalogue parsing embedded zero USA_2024/CAN_2025 rows.",
+      "remediation": "Added DATA-001 economic-trade target evaluation and robust wrapped-catalogue parsing before reading any version-4 empirical output."
     }
   ],
-  "current_runner_sha256": "c597bba58f04dbb0af35ec0f2239cb009e1256cf737b6617ae35331887400dd2",
+  "current_runner_sha256": "a92a0a40c8655e0c88c60e1d02f24b009cdad30d39356222715ce0ed18970457",
   "next_attempt": "Launch only when Kaggle concurrency is within the project limit."
 }
