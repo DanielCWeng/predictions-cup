@@ -111,6 +111,45 @@ def test_reduced_rank_truncates_coefficient_matrix() -> None:
     assert np.linalg.matrix_rank(reduced.coef, tol=1e-9) <= 2
 
 
+def test_predictive_ic_matches_reference_with_missingness_and_ties() -> None:
+    rng = np.random.default_rng(20260928)
+    y = rng.integers(-3, 4, size=(400, 12)).astype(np.float64)
+    pred = rng.integers(-3, 4, size=(400, 12)).astype(np.float64)
+    y[rng.random(y.shape) < 0.18] = np.nan
+    pred[rng.random(pred.shape) < 0.16] = np.nan
+
+    def rank(values: np.ndarray) -> np.ndarray:
+        order = np.argsort(values, kind="mergesort")
+        ranks = np.empty(len(values), dtype=np.float64)
+        ranks[order] = np.arange(len(values), dtype=np.float64)
+        return ranks
+
+    cross: list[float] = []
+    for row in range(y.shape[0]):
+        mask = np.isfinite(y[row]) & np.isfinite(pred[row])
+        if int(mask.sum()) >= 3:
+            a = rank(y[row, mask])
+            b = rank(pred[row, mask])
+            if a.std() > 1e-12 and b.std() > 1e-12:
+                cross.append(float(np.corrcoef(a, b)[0, 1]))
+    temporal: list[float] = []
+    for col in range(y.shape[1]):
+        mask = np.isfinite(y[:, col]) & np.isfinite(pred[:, col])
+        if int(mask.sum()) >= 3:
+            a = rank(y[mask, col])
+            b = rank(pred[mask, col])
+            if a.std() > 1e-12 and b.std() > 1e-12:
+                temporal.append(float(np.corrcoef(a, b)[0, 1]))
+
+    expected = (
+        float(np.mean(cross)) if cross else float("nan"),
+        float(np.median(temporal)) if temporal else float("nan"),
+    )
+    actual = predictive_ic(y, pred)
+    assert actual[0] == pytest.approx(expected[0], abs=1e-12)
+    assert actual[1] == pytest.approx(expected[1], abs=1e-12)
+
+
 def test_metrics_and_concentration() -> None:
     y = np.array([[1.0, 2.0, 3.0], [2.0, 3.0, 4.0], [3.0, 4.0, 5.0]])
     pred = y.copy()
