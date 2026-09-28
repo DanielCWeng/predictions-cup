@@ -259,6 +259,24 @@
     "eval_implementation_commit": "055fb09bca8e1271b466cb3dc3252cdef4e678c2",
     "eval_runner_sha256": "ff881d9dfc1e8744be4fc94723536ad85322ba857cd43c571150e40a801728cd",
     "pre_holdout_freeze_sha256": "60f642ec50a1a9ffa5aebfba73d8a66960f6afb2c318e7d747e584df81ca6de1",
-    "status": "EVAL_V2_RUNNING_BEFORE_RESULT_INSPECTION"
+    "status": "COMPLETE",
+    "final_disposition": "NO_INCREMENTAL_EVIDENCE",
+    "valid_result_kernel_version": 2,
+    "holdout_result_inspected_once": true,
+    "final_run_manifest": "data/experiments/experiment_005e/results/final_run_manifest.json"
+  },
+  "final_scientific_disposition": {
+    "primary_target": "y_60",
+    "disposition": "NO_INCREMENTAL_EVIDENCE",
+    "selected_behavior_holdout_gain": 0.00012483727619483354,
+    "selected_behavior_bootstrap_p": 0.776,
+    "selected_behavior_fdr_q": 1,
+    "full_behavior_holdout_gain": -0.0004317159840001583,
+    "secondary_followup_only": [
+      "signed_60",
+      "signed_300",
+      "next_price_change_sign"
+    ],
+    "note": "Secondary positives are hypothesis-generating only and do not override the preregistered primary disposition."
   }
 }
