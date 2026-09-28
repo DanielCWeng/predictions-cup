@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "phase": "TRAIN_DEV_PRE_CLOCK_FREEZE",
+  "claim_regime": "PRE_ELECTION",
+  "dataset_scope": [
+    "clock"
+  ],
+  "source_kernel": "polyleviathan/005f-pre-clock-train-dev",
+  "source_kernel_version": 1,
+  "source_runner_sha256": "a7a6611ebf62bb70c04764b2c29f31d018fd0a595a49c7e4ffd9eb04bebed652",
+  "design_freeze_commit": "b5bf4cfe7482a58161523b66097910903050fc6b",
+  "execution_freeze_commit": "9ec9511536514bbaa97929a4b88d701cbc09987c",
+  "governing_amendments": [
+    "005F-AMENDMENT-003",
+    "005F-AMENDMENT-005",
+    "005F-AMENDMENT-006"
+  ],
+  "holdout_read": false,
+  "data_manifest_sha256": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+  "identity_sha256": "e89fe8e25dcc494dad3ed96fe6672ab9f247c01eb70d4c0270a913f18a200a72",
+  "quality_sha256": "354801b67b9c32ae82d419f8a6198b7fd814923e8c424ac8716862b47907ccb5",
+  "raw_output_sha256": {
+    "book_state_capture_audit_csv": "b7e33f5862a7db35319dc5a66282dd1084a0c386a1b001cb9d4f260585f063d4",
+    "dev_model_tournament_csv": "3e3bcaef4f6e0726edaf725fdd073e3555f8110bff518a3041b25c71dcd48c00",
+    "dev_selection_json": "7c002a8ee3ec90e3f6449b212731c8cba3471d968ac438e087e3a2316bc053af",
+    "feature_atlas_json": "c3654773a798d9134c8ecec895a007c1cd010357e31b4e7214ba50080a123264",
+    "provenance_json": "be885d253b14f7f0504e49f1058c5020de43ecaf6b52028e992ea3a0901469ca",
+    "resilience_summary_csv": "712b9991cdc983b91e536de00a603aea04bb24ed99fa5005455451c1b2ad3ad4",
+    "target_atlas_json": "f7f4c63545d8b88ba1d96036cfcc68b20671f458a6b836e3bf21ed51b937bc99",
+    "train_dev_feature_screen_csv": "f674047a65d5e862878665d9ed3e94fba3cd588c4a101127aa2fdf29f9dd4225",
+    "train_dev_summary_json": "145783d41bb285102618cb008ef65b38f243045bc77a274eb7cf3bfc07888d3c"
+  },
+  "summary": {
+    "clock_rows": 1907945,
+    "event_rows": 0,
+    "depth_rows": 0,
+    "screen_cells": 868,
+    "selected_coordinates": 4,
+    "confirmatory_candidates": 4,
+    "shadow_only_candidates": 0
+  },
+  "selection_integrity": {
+    "deterministic_recompute_exact_match": true,
+    "expected_coordinates": 4,
+    "frozen_coordinates": 4,
+    "unique_groups": true
+  },
+  "classification_crosscheck": {
+    "kernel": "polyleviathan/005f-pre-clock-classification",
+    "freeze_file": "data/experiments/experiment_005f/pre_clock_classification_train_dev_freeze.json",
+    "update_hazard_coordinate_exact_match": true,
+    "monolith_selected_jump_hazard": false
+  },
+  "candidates": [
+    {
+      "blocks": 167,
+      "dataset": "clock",
+      "dev_delta_mse": 0.000032302796158321856,
+      "dev_p_bh": 0.0854283622162558,
+      "dev_p_raw": 0.0122040517451794,
+      "events": 5,
+      "feature": "rv_60",
+      "feature_family": "VOLATILITY",
+      "horizon": "300",
+      "markets": 129,
+      "model": "RIDGE_10.0",
+      "model_dev_mse": 0.004853728530594327,
+      "regime": "PRE_ELECTION",
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "price_h300",
+      "target_family": "PRICE"
+    },
+    {
+      "blocks": 167,
+      "dataset": "clock",
+      "dev_delta_mse": 0.00032907464230877865,
+      "dev_p_bh": 0.02255308762509153,
+      "dev_p_raw": 0.010739565535757872,
+      "events": 5,
+      "feature": "rv_300",
+      "feature_family": "VOLATILITY",
+      "horizon": "300",
+      "markets": 129,
+      "model": "OLS",
+      "model_dev_mse": 0.00432796234066078,
+      "regime": "PRE_ELECTION",
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "abs_h300",
+      "target_family": "VOLATILITY"
+    },
+    {
+      "blocks": 74,
+      "dataset": "clock",
+      "dev_delta_mse": 2.672134591463433e-8,
+      "dev_p_bh": 0.01594662761370108,
+      "dev_p_raw": 0.000976324139614352,
+      "events": 3,
+      "feature": "trade_abs_impact_60",
+      "feature_family": "TRADE_ACTIVITY",
+      "horizon": "15",
+      "markets": 55,
+      "model": "HGB_D3_LR0.03",
+      "model_dev_mse": 0.000013597929853197555,
+      "regime": "PRE_ELECTION",
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "spread_h15",
+      "target_family": "LIQUIDITY"
+    },
+    {
+      "blocks": 167,
+      "dataset": "clock",
+      "dev_delta_mse": 0.036235622649057164,
+      "dev_p_bh": 0.0003015118666456087,
+      "dev_p_raw": 0.000244081034903588,
+      "events": 5,
+      "feature": "genuine_age_s",
+      "feature_family": "BBO_AGE",
+      "horizon": "300",
+      "markets": 103,
+      "model": "HGB_D3_LR0.03",
+      "model_dev_mse": 0.08759374372392721,
+      "regime": "PRE_ELECTION",
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "update_h300",
+      "target_family": "UPDATE_HAZARD"
+    }
+  ]
+}
