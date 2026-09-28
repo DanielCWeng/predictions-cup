@@ -43,3 +43,11 @@ Positive results face participant-state permutation/pseudo-state controls, infra
 ## Interpretation
 
 Allowed scientific handoff labels are `NO_INCREMENTAL_EVIDENCE`, `REGIME_SPECIFIC_CANDIDATE`, `CROSS_FAMILY_CANDIDATE`, or `INCONCLUSIVE`. None means a named wallet is "smart" and none authorizes live orders.
+
+## Final empirical disposition
+
+The sealed HOLDOUT disposition is **NO_INCREMENTAL_EVIDENCE** for the primary 60-second future own-market logit target. DEV-selected specialisation + network/cross-market breadth produced HOLDOUT weighted MSE gain `+0.0001248373`, bootstrap `p=0.776`, BH-FDR `q=1.0`, with positive gains in 3/5 families but negative Hungary and US_2024 contributions. Full behaviour, identity-history, HGB and archetype challengers were all worse than baseline on the primary target.
+
+The only follow-up evidence is secondary: participant-direction-signed markout improved at 60s (`+0.00924532`) and 300s (`+0.01231031`) in all five families, and next-change classification improved log loss (`0.677277 -> 0.666661`). These are hypothesis-generating only and require a fresh preregistered participant-flow-quality experiment; they are not promoted by 005E.
+
+Canonical outputs are under `data/experiments/experiment_005e/results/`, including `FINAL_REPORT_005E.md`, `candidate_list.json`, sealed HOLDOUT evidence and `MASTER_HANDOFF_005E.md`.
