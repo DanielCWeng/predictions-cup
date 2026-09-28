@@ -1,0 +1,682 @@
+from datetime import timezone
+
+
+REVIEW_DESIGN = REVIEW_EMBEDDED["design"]
+FIXED_KEYS = SHORTLIST["selected_predictive_candidate_keys"]
+ORIGINAL_ROWS = {
+    row["candidate_key"]: row
+    for row in REVIEW_EMBEDDED["original_holdout_rows"]
+    if row.get("target_kind") == "future_probability_change"
+}
+BLOCK_SECONDS = tuple(
+    REVIEW_DESIGN["dependence_sensitivity"]["block_seconds"]
+)
+HOUR_NS = 3_600 * 1_000_000_000
+
+
+def ns_iso(value: int | float | np.integer) -> str:
+    return (
+        datetime.fromtimestamp(int(value) / 1e9, tz=timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+
+
+def parse_bool(value: Any) -> bool:
+    return str(value).strip().lower() in {"true", "1", "yes"}
+
+
+def numeric(row: dict[str, Any], key: str) -> float | None:
+    value = row.get(key)
+    if value in (None, ""):
+        return None
+    return float(value)
+
+
+def build_event_tokens() -> dict[str, set[str]]:
+    event_tokens: dict[str, set[str]] = defaultdict(set)
+    for family in EMBEDDED["families"]:
+        if family.get("validation_status") != "MECHANICALLY_PROVEN":
+            continue
+        if family.get("relation_type") not in {
+            "EXHAUSTIVE_PARTITION",
+            "CONDITIONAL_STAGED",
+        }:
+            continue
+        for member in family.get("members", []):
+            for event in member.get("present_in_events", []):
+                event_tokens[event].add(member["canonical_token_id"])
+    for row in EMBEDDED["relationships"]:
+        if row.get("leakage_class") != "INDIRECT":
+            continue
+        event = row["regime_id"]
+        event_tokens[event].add(row["target_token_id"])
+        event_tokens[event].add(row["reference_token_id"])
+    return event_tokens
+
+
+def frozen_fair_value(
+    representation: str,
+    params: dict[str, Any],
+    panel: np.ndarray,
+    index: dict[str, int],
+) -> np.ndarray:
+    refs = [str(value) for value in params.get("refs", [])]
+    if not refs:
+        raise SystemExit(f"missing frozen refs for {representation}")
+    missing = [ref for ref in refs if ref not in index]
+    if missing:
+        raise SystemExit(f"missing reference tokens in event panel: {missing}")
+    rp = panel[:, [index[ref] for ref in refs]]
+    if representation == "RAW_INDIRECT_PROB_MEAN":
+        return np.nanmean(rp, axis=1)
+    if representation == "AFFINE_INDIRECT_PROBABILITY":
+        comp = np.nanmean(rp, axis=1)
+        return np.clip(
+            float(params["intercept"]) + float(params["slope"]) * comp,
+            1e-6,
+            1.0 - 1e-6,
+        )
+    if representation == "AFFINE_INDIRECT_LOGIT":
+        comp = np.nanmean(logit(rp), axis=1)
+        return logistic(
+            float(params["intercept"]) + float(params["slope"]) * comp
+        )
+    raise SystemExit(f"unexpected frozen representation {representation}")
+
+
+def generalized_bootstrap(
+    values: np.ndarray,
+    candidate_key: str,
+    block_seconds: int,
+) -> tuple[float, float, float, float]:
+    x = np.asarray(values, float)
+    if len(x) < 50:
+        return float(np.mean(x)), float("nan"), float("nan"), 1.0
+    block = max(1, block_seconds // STEP_SECONDS)
+    component = (
+        candidate_key
+        if block_seconds == PURGE_SECONDS
+        else f"{candidate_key}|POST_HOC_BLOCK|{block_seconds}"
+    )
+    rng = np.random.default_rng(seed(component))
+    observed = float(np.mean(x))
+    centered = x - observed
+    blocks = [
+        x[start : min(len(x), start + block)]
+        for start in range(0, len(x), block)
+    ]
+    null_blocks = [
+        centered[start : min(len(centered), start + block)]
+        for start in range(0, len(centered), block)
+    ]
+    means: list[float] = []
+    null_means: list[float] = []
+    for _ in range(HOLDOUT_BOOTSTRAP_DRAWS):
+        pieces: list[np.ndarray] = []
+        null_pieces: list[np.ndarray] = []
+        count = 0
+        while count < len(x):
+            idx = int(rng.integers(0, len(blocks)))
+            piece = blocks[idx]
+            pieces.append(piece)
+            null_pieces.append(null_blocks[idx])
+            count += len(piece)
+        sample = np.concatenate(pieces)[: len(x)]
+        null_sample = np.concatenate(null_pieces)[: len(x)]
+        means.append(float(np.mean(sample)))
+        null_means.append(float(np.mean(null_sample)))
+    p_value = (1.0 + sum(value >= observed for value in null_means)) / (
+        1.0 + len(null_means)
+    )
+    return (
+        observed,
+        float(np.quantile(means, 0.025)),
+        float(np.quantile(means, 0.975)),
+        float(p_value),
+    )
+
+
+def bh_qvalues(rows: list[dict[str, Any]], p_field: str, q_field: str) -> None:
+    ranked = sorted(
+        (float(row[p_field]), index)
+        for index, row in enumerate(rows)
+        if row.get(p_field) is not None
+    )
+    previous = 1.0
+    m = len(ranked)
+    for rank in range(m, 0, -1):
+        p_value, index = ranked[rank - 1]
+        q_value = min(previous, p_value * m / rank, 1.0)
+        rows[index][q_field] = q_value
+        previous = q_value
+
+
+def regime_map() -> dict[str, list[dict[str, Any]]]:
+    output: dict[str, list[dict[str, Any]]] = {}
+    for event in REVIEW_EMBEDDED["regime_definitions"]["events"]:
+        rows = []
+        for regime in event["regimes"]:
+            if regime.get("enabled") is False:
+                continue
+            if not regime.get("start_utc") or not regime.get("end_utc"):
+                continue
+            rows.append({
+                "name": regime["name"],
+                "start_ns": iso_ns(regime["start_utc"]),
+                "end_ns": iso_ns(regime["end_utc"]),
+            })
+        output[event["regime_id"]] = rows
+    return output
+
+
+REGIMES = regime_map()
+
+
+def assign_regime(event: str, timestamp_ns: int) -> str:
+    for regime in REGIMES.get(event, []):
+        if regime["start_ns"] <= timestamp_ns < regime["end_ns"]:
+            return str(regime["name"])
+    return "OUTSIDE_ALL_CANONICAL_WINDOWS"
+
+
+def reconstruct_cell(
+    key: str,
+    grid: np.ndarray,
+    panel: np.ndarray,
+    tokens: list[str],
+) -> dict[str, Any]:
+    event, family_id, representation, target, horizon_kind, horizon_raw = key.split("|")
+    if horizon_kind != "CLOCK":
+        raise SystemExit(f"review expected CLOCK cell, got {key}")
+    horizon = int(horizon_raw)
+    params = SHORTLIST["candidate_params"][key]
+    index = {token: idx for idx, token in enumerate(tokens)}
+    if target not in index:
+        raise SystemExit(f"target missing from event panel: {target}")
+    ti = index[target]
+    target_price = panel[:, ti]
+    fair_value = frozen_fair_value(representation, params, panel, index)
+    signal = fair_value - target_price
+    broad = broad_move(panel, ti)
+    own_lag = np.full(len(target_price), np.nan)
+    own_lag[1:] = target_price[1:] - target_price[:-1]
+    steps = horizon // STEP_SECONDS
+    y = np.full(len(target_price), np.nan)
+    y[:-steps] = target_price[steps:] - target_price[:-steps]
+    controls = np.column_stack([own_lag, broad])
+    valid = (
+        np.isfinite(signal)
+        & np.isfinite(y)
+        & np.all(np.isfinite(controls), axis=1)
+    )
+    train, dev, hold, train_boundary, dev_boundary = split_masks(grid)
+    hold_valid = valid & hold
+    by = np.asarray(params["control_y"], float)
+    bs = np.asarray(params["control_signal"], float)
+    hold_times = grid[hold_valid]
+    yr = y[hold_valid] - apply_control(controls[hold_valid], by)
+    sr = signal[hold_valid] - apply_control(controls[hold_valid], bs)
+    contribution = sr * yr
+    score = float(np.mean(contribution))
+    denom = float(sr @ sr)
+    beta = None if denom <= 0 else float((sr @ yr) / denom)
+    delayed_full = np.full(len(signal), np.nan)
+    delay_steps = 60 // STEP_SECONDS
+    delayed_full[delay_steps:] = signal[:-delay_steps]
+    delayed_valid = hold_valid & np.isfinite(delayed_full)
+    delayed_score = None
+    delayed_ratio = None
+    if int(delayed_valid.sum()) >= 50:
+        dyr = y[delayed_valid] - apply_control(controls[delayed_valid], by)
+        dsr = delayed_full[delayed_valid] - apply_control(
+            controls[delayed_valid], bs
+        )
+        delayed_score = float(np.mean(dsr * dyr))
+        if abs(score) > 1e-18:
+            delayed_ratio = abs(delayed_score) / abs(score)
+    original = ORIGINAL_ROWS.get(key)
+    if original is None:
+        raise SystemExit(f"fixed key missing from accepted HOLDOUT output: {key}")
+    checks = {
+        "holdout_n": (int(original["holdout_n"]), int(hold_valid.sum())),
+        "holdout_score": (float(original["holdout_score"]), score),
+        "holdout_beta": (float(original["holdout_beta"]), beta),
+    }
+    for name, (expected, actual) in checks.items():
+        if name == "holdout_n":
+            if expected != actual:
+                raise SystemExit(f"{key}: {name} mismatch {expected} != {actual}")
+        elif actual is None or not np.isclose(
+            float(expected), float(actual), rtol=1e-11, atol=1e-15
+        ):
+            raise SystemExit(f"{key}: {name} mismatch {expected} != {actual}")
+    expected_delay = numeric(original, "holdout_delayed_60s_effect_ratio")
+    if expected_delay is not None and (
+        delayed_ratio is None
+        or not np.isclose(expected_delay, delayed_ratio, rtol=1e-11, atol=1e-15)
+    ):
+        raise SystemExit(
+            f"{key}: delayed ratio mismatch {expected_delay} != {delayed_ratio}"
+        )
+    purge_ns = PURGE_SECONDS * 1_000_000_000
+    return {
+        "candidate_key": key,
+        "event": event,
+        "family_id": family_id,
+        "representation": representation,
+        "target": target,
+        "horizon_seconds": horizon,
+        "grid": grid,
+        "target_price": target_price,
+        "signal": signal,
+        "controls": controls,
+        "hold_valid": hold_valid,
+        "hold_times": hold_times,
+        "signal_residual": sr,
+        "future_response_residual": yr,
+        "contribution": contribution,
+        "holdout_score": score,
+        "holdout_beta": beta,
+        "delayed_60s_effect_ratio": delayed_ratio,
+        "original": original,
+        "panel_start_ns": int(grid[0]),
+        "panel_end_ns": int(grid[-1]),
+        "train_start_ns": int(grid[0]),
+        "train_end_exclusive_ns": int(train_boundary - purge_ns),
+        "train_dev_gap_start_ns": int(train_boundary - purge_ns),
+        "train_dev_gap_end_ns": int(train_boundary + purge_ns),
+        "dev_start_ns": int(train_boundary + purge_ns),
+        "dev_end_exclusive_ns": int(dev_boundary - purge_ns),
+        "dev_hold_gap_start_ns": int(dev_boundary - purge_ns),
+        "dev_hold_gap_end_ns": int(dev_boundary + purge_ns),
+        "holdout_start_ns": int(dev_boundary + purge_ns),
+        "holdout_end_ns": int(grid[-1]),
+    }
+
+
+def identity_map(path: Path) -> dict[str, dict[str, str]]:
+    with path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    return {str(row["token_id"]): row for row in rows}
+
+
+def temporal_concentration(cell: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    times = cell["hold_times"]
+    contribution = cell["contribution"]
+    buckets = (times // HOUR_NS) * HOUR_NS
+    unique = sorted(int(value) for value in np.unique(buckets))
+    periods = 0
+    previous = None
+    for value in unique:
+        if previous is None or value - previous > HOUR_NS:
+            periods += 1
+        previous = value
+    hourly_rows: list[dict[str, Any]] = []
+    positive_by_hour: list[tuple[int, float]] = []
+    absolute_by_hour: list[tuple[int, float]] = []
+    for hour in unique:
+        mask = buckets == hour
+        values = contribution[mask]
+        positive = float(np.sum(np.clip(values, 0.0, None)))
+        absolute = float(np.sum(np.abs(values)))
+        positive_by_hour.append((hour, positive))
+        absolute_by_hour.append((hour, absolute))
+        hourly_rows.append({
+            "candidate_key": cell["candidate_key"],
+            "event": cell["event"],
+            "representation": cell["representation"],
+            "target": cell["target"],
+            "horizon_seconds": cell["horizon_seconds"],
+            "hour_start_utc": ns_iso(hour),
+            "n": int(mask.sum()),
+            "contribution_sum": float(np.sum(values)),
+            "mean_contribution": float(np.mean(values)),
+            "positive_contribution_sum": positive,
+            "absolute_contribution_sum": absolute,
+        })
+    positive_total = sum(value for _, value in positive_by_hour)
+    absolute_total = sum(value for _, value in absolute_by_hour)
+    ranked_positive = sorted(positive_by_hour, key=lambda item: item[1], reverse=True)
+    ranked_absolute = sorted(absolute_by_hour, key=lambda item: item[1], reverse=True)
+
+    def top_share(rows: list[tuple[int, float]], total: float, n: int) -> float | None:
+        if total <= 0:
+            return None
+        return float(sum(value for _, value in rows[:n]) / total)
+
+    midpoint = (cell["holdout_start_ns"] + cell["holdout_end_ns"]) // 2
+    first = times < midpoint
+    second = times >= midpoint
+    first_score = float(np.mean(contribution[first])) if np.any(first) else None
+    second_score = float(np.mean(contribution[second])) if np.any(second) else None
+    top_hour = ranked_positive[0][0] if ranked_positive else None
+    if top_hour is None:
+        removal_score = None
+        removal_sign_survives = None
+    else:
+        keep = buckets != top_hour
+        removal_score = float(np.mean(contribution[keep])) if np.any(keep) else None
+        removal_sign_survives = (
+            None
+            if removal_score is None
+            else bool(np.sign(removal_score) == np.sign(cell["holdout_score"]))
+        )
+    summary = {
+        "candidate_key": cell["candidate_key"],
+        "event": cell["event"],
+        "representation": cell["representation"],
+        "target": cell["target"],
+        "horizon_seconds": cell["horizon_seconds"],
+        "distinct_utc_hours": len(unique),
+        "contiguous_active_hour_periods": periods,
+        "positive_share_top_1_hour": top_share(ranked_positive, positive_total, 1),
+        "positive_share_top_3_hours": top_share(ranked_positive, positive_total, 3),
+        "positive_share_top_6_hours": top_share(ranked_positive, positive_total, 6),
+        "absolute_share_top_1_hour": top_share(ranked_absolute, absolute_total, 1),
+        "absolute_share_top_3_hours": top_share(ranked_absolute, absolute_total, 3),
+        "absolute_share_top_6_hours": top_share(ranked_absolute, absolute_total, 6),
+        "first_temporal_half_score": first_score,
+        "second_temporal_half_score": second_score,
+        "removed_highest_positive_hour_utc": (
+            None if top_hour is None else ns_iso(top_hour)
+        ),
+        "score_after_removing_highest_positive_hour": removal_score,
+        "sign_survives_highest_positive_hour_removal": removal_sign_survives,
+    }
+    return summary, hourly_rows
+
+
+def main_review() -> None:
+    if len(FIXED_KEYS) != 13:
+        raise SystemExit(f"expected 13 fixed predictive cells, got {len(FIXED_KEYS)}")
+    manifest1 = one_any("data_001_corpus_manifest.json", "corpus_manifest.json")
+    identity1 = one_any("data_001_market_identity.csv", "market_identity.csv")
+    if (
+        sha(manifest1) != EXPECTED["data_001_manifest"]
+        or sha(identity1) != EXPECTED["data_001_identity"]
+    ):
+        raise SystemExit("DATA-001 identity drift")
+    corpus = manifest1.parent.parent
+    names = identity_map(identity1)
+    event_tokens = build_event_tokens()
+    needed_events = sorted({key.split("|")[0] for key in FIXED_KEYS})
+    panels: dict[str, tuple[np.ndarray, np.ndarray, list[str]]] = {}
+    for event in needed_events:
+        grid, panel, _, tokens = event_panel(
+            corpus, event, sorted(event_tokens[event])
+        )
+        if len(grid) == 0:
+            raise SystemExit(f"empty event panel {event}")
+        panels[event] = (grid, panel, tokens)
+
+    cells: list[dict[str, Any]] = []
+    for key in FIXED_KEYS:
+        event = key.split("|")[0]
+        grid, panel, tokens = panels[event]
+        cells.append(reconstruct_cell(key, grid, panel, tokens))
+
+    dependence_rows: list[dict[str, Any]] = []
+    for block_seconds in BLOCK_SECONDS:
+        block_rows: list[dict[str, Any]] = []
+        for cell in cells:
+            mean, lo, hi, p_value = generalized_bootstrap(
+                cell["contribution"],
+                cell["candidate_key"],
+                int(block_seconds),
+            )
+            original = cell["original"]
+            row = {
+                "candidate_key": cell["candidate_key"],
+                "event": cell["event"],
+                "representation": cell["representation"],
+                "target": cell["target"],
+                "horizon_seconds": cell["horizon_seconds"],
+                "block_seconds": int(block_seconds),
+                "block_label": {
+                    300: "5m_original",
+                    1800: "30m_post_hoc",
+                    3600: "1h_post_hoc",
+                    14400: "4h_post_hoc",
+                    28800: "8h_post_hoc",
+                }[int(block_seconds)],
+                "bootstrap_mean": mean,
+                "bootstrap_ci_low": lo,
+                "bootstrap_ci_high": hi,
+                "p_value": p_value,
+                "q_value": None,
+                "original_5m_p_value": float(original["p_value"]),
+                "original_5m_q_value": float(original["q_value"]),
+                "original_5m_ci_low": float(original["bootstrap_ci_low"]),
+                "original_5m_ci_high": float(original["bootstrap_ci_high"]),
+                "original_confirmatory_pass": parse_bool(
+                    original["holdout_confirmatory_pass"]
+                ),
+                "delayed_60s_effect_ratio": cell["delayed_60s_effect_ratio"],
+            }
+            block_rows.append(row)
+        bh_qvalues(block_rows, "p_value", "q_value")
+        dependence_rows.extend(block_rows)
+
+    original_5m = [
+        row for row in dependence_rows if row["block_seconds"] == 300
+    ]
+    for row in original_5m:
+        if not np.isclose(
+            row["p_value"], row["original_5m_p_value"], rtol=0.0, atol=1e-15
+        ):
+            raise SystemExit(
+                f"5m p-value mismatch for {row['candidate_key']}: "
+                f"{row['p_value']} vs {row['original_5m_p_value']}"
+            )
+        if not np.isclose(
+            row["q_value"], row["original_5m_q_value"], rtol=0.0, atol=1e-15
+        ):
+            raise SystemExit(
+                f"5m q-value mismatch for {row['candidate_key']}: "
+                f"{row['q_value']} vs {row['original_5m_q_value']}"
+            )
+        if not np.isclose(
+            row["bootstrap_ci_low"], row["original_5m_ci_low"], rtol=1e-12, atol=1e-15
+        ) or not np.isclose(
+            row["bootstrap_ci_high"], row["original_5m_ci_high"], rtol=1e-12, atol=1e-15
+        ):
+            raise SystemExit(f"5m CI mismatch for {row['candidate_key']}")
+
+    regime_rows: list[dict[str, Any]] = []
+    regime_summary: dict[str, Any] = {}
+    regime_order = [
+        "PRE_ELECTION",
+        "ELECTION_DAY_PRE_RESULTS",
+        "ACTIVE_RESULTS",
+        "LATE_COUNT",
+        "POST_RESOLUTION_DIAGNOSTIC",
+        "OUTSIDE_ALL_CANONICAL_WINDOWS",
+    ]
+    for cell in cells:
+        labels = np.asarray(
+            [assign_regime(cell["event"], int(t)) for t in cell["hold_times"]],
+            dtype=object,
+        )
+        future_labels = np.asarray(
+            [
+                assign_regime(
+                    cell["event"],
+                    int(t + cell["horizon_seconds"] * 1_000_000_000),
+                )
+                for t in cell["hold_times"]
+            ],
+            dtype=object,
+        )
+        total_abs = float(np.sum(np.abs(cell["contribution"])))
+        total_positive = float(np.sum(np.clip(cell["contribution"], 0.0, None)))
+        cell_rows = []
+        for regime in regime_order:
+            mask = labels == regime
+            values = cell["contribution"][mask]
+            positive = float(np.sum(np.clip(values, 0.0, None))) if np.any(mask) else 0.0
+            absolute = float(np.sum(np.abs(values))) if np.any(mask) else 0.0
+            row = {
+                "candidate_key": cell["candidate_key"],
+                "event": cell["event"],
+                "representation": cell["representation"],
+                "target": cell["target"],
+                "horizon_seconds": cell["horizon_seconds"],
+                "regime": regime,
+                "valid_holdout_observations": int(len(cell["hold_times"])),
+                "regime_observations": int(mask.sum()),
+                "regime_observation_pct": (
+                    float(mask.mean()) if len(mask) else None
+                ),
+                "regime_contribution_sum": (
+                    float(np.sum(values)) if np.any(mask) else 0.0
+                ),
+                "regime_mean_contribution": (
+                    float(np.mean(values)) if np.any(mask) else None
+                ),
+                "regime_absolute_contribution_share": (
+                    None if total_abs <= 0 else absolute / total_abs
+                ),
+                "regime_positive_contribution_share": (
+                    None if total_positive <= 0 else positive / total_positive
+                ),
+                "response_crosses_regime_count": int(
+                    np.sum(mask & (future_labels != labels))
+                ),
+                "panel_start_utc": ns_iso(cell["panel_start_ns"]),
+                "panel_end_utc": ns_iso(cell["panel_end_ns"]),
+                "train_start_utc": ns_iso(cell["train_start_ns"]),
+                "train_end_exclusive_utc": ns_iso(cell["train_end_exclusive_ns"]),
+                "train_dev_gap_start_utc": ns_iso(cell["train_dev_gap_start_ns"]),
+                "train_dev_gap_end_utc": ns_iso(cell["train_dev_gap_end_ns"]),
+                "dev_start_utc": ns_iso(cell["dev_start_ns"]),
+                "dev_end_exclusive_utc": ns_iso(cell["dev_end_exclusive_ns"]),
+                "dev_hold_gap_start_utc": ns_iso(cell["dev_hold_gap_start_ns"]),
+                "dev_hold_gap_end_utc": ns_iso(cell["dev_hold_gap_end_ns"]),
+                "holdout_start_utc": ns_iso(cell["holdout_start_ns"]),
+                "holdout_end_utc": ns_iso(cell["holdout_end_ns"]),
+                "first_valid_holdout_observation_utc": ns_iso(
+                    int(cell["hold_times"][0])
+                ),
+                "last_valid_holdout_observation_utc": ns_iso(
+                    int(cell["hold_times"][-1])
+                ),
+            }
+            regime_rows.append(row)
+            cell_rows.append(row)
+        regime_summary[cell["candidate_key"]] = {
+            row["regime"]: {
+                "count": row["regime_observations"],
+                "pct": row["regime_observation_pct"],
+                "contribution_sum": row["regime_contribution_sum"],
+                "absolute_contribution_share": row[
+                    "regime_absolute_contribution_share"
+                ],
+                "positive_contribution_share": row[
+                    "regime_positive_contribution_share"
+                ],
+            }
+            for row in cell_rows
+        }
+
+    concentration_summary: list[dict[str, Any]] = []
+    hourly_rows: list[dict[str, Any]] = []
+    effect_rows: list[dict[str, Any]] = []
+    for cell in cells:
+        original = cell["original"]
+        if not parse_bool(original["holdout_confirmatory_pass"]):
+            continue
+        summary, hours = temporal_concentration(cell)
+        concentration_summary.append(summary)
+        hourly_rows.extend(hours)
+        target_row = names.get(cell["target"], {})
+        refs = SHORTLIST["candidate_params"][cell["candidate_key"]].get(
+            "refs", []
+        )
+        reference_questions = [
+            names.get(str(ref), {}).get("question", str(ref))
+            for ref in refs
+        ]
+        beta = float(cell["holdout_beta"])
+        effect_rows.append({
+            "candidate_key": cell["candidate_key"],
+            "event": cell["event"],
+            "representation": cell["representation"],
+            "target": cell["target"],
+            "target_question": target_row.get("question"),
+            "reference_questions": reference_questions,
+            "horizon_seconds": cell["horizon_seconds"],
+            "holdout_beta": beta,
+            "response_pp_for_1pp_residual": beta * 1.0,
+            "response_pp_for_5pp_residual": beta * 5.0,
+            "response_pp_for_10pp_residual": beta * 10.0,
+            "standardized_effect": float(
+                original["holdout_standardized_effect"]
+            ),
+            "quantile_monotone": parse_bool(
+                original["holdout_quantile_monotone"]
+            ),
+            "delayed_60s_effect_ratio": cell[
+                "delayed_60s_effect_ratio"
+            ],
+            "interpretation": (
+                "Local descriptive translation of the frozen residualized "
+                "regression relationship; not PnL or executable edge."
+            ),
+        })
+
+    write_csv(WORK / "regime_attribution.csv", regime_rows)
+    write_csv(WORK / "dependence_sensitivity.csv", dependence_rows)
+    write_csv(WORK / "time_concentration_by_hour.csv", hourly_rows)
+    write_csv(WORK / "effect_scale.csv", effect_rows)
+
+    compact_dependence: dict[str, Any] = defaultdict(dict)
+    for row in dependence_rows:
+        compact_dependence[row["candidate_key"]][row["block_label"]] = {
+            "p": row["p_value"],
+            "q": row["q_value"],
+            "ci": [row["bootstrap_ci_low"], row["bootstrap_ci_high"]],
+        }
+    review = {
+        "experiment_id": "EXPERIMENT-005D",
+        "followup_id": "EXPERIMENT-005D-REVIEW-FOLLOWUP",
+        "label": "POST_HOC_INDEPENDENT_REVIEW_FALSIFICATION",
+        "original_empirical_output_changed": False,
+        "fixed_predictive_cells": len(cells),
+        "design_sha256": REVIEW_EMBEDDED["design_sha256"],
+        "regime_definitions_sha256": REVIEW_EMBEDDED[
+            "regime_definitions_sha256"
+        ],
+        "accepted_holdout_runner_sha256": REVIEW_EMBEDDED[
+            "accepted_holdout_runner_sha256"
+        ],
+        "accepted_holdout_results_sha256": REVIEW_EMBEDDED[
+            "original_holdout_results_sha256"
+        ],
+        "regime_attribution": regime_summary,
+        "dependence_sensitivity": compact_dependence,
+        "time_concentration": concentration_summary,
+        "effect_scale": effect_rows,
+        "aggregation_policy": REVIEW_DESIGN["temporal_concentration"],
+        "dependence_policy": REVIEW_DESIGN["dependence_sensitivity"],
+    }
+    (WORK / "review_followup_raw.json").write_text(
+        json.dumps(review, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    print(json.dumps({
+        "status": "POST_HOC_INDEPENDENT_REVIEW_FALSIFICATION_COMPLETE",
+        "fixed_cells": len(cells),
+        "original_passing_cells": len(concentration_summary),
+        "outputs": [
+            "review_followup_raw.json",
+            "regime_attribution.csv",
+            "dependence_sensitivity.csv",
+            "time_concentration_by_hour.csv",
+            "effect_scale.csv",
+        ],
+    }, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main_review()
