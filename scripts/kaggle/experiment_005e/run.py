@@ -807,30 +807,30 @@ def export_panel(
         c.*,
         e2.timestamp event2_end_raw,e2.p_yes event2_p,
         e10.timestamp event10_end_raw,e10.p_yes event10_p,
-        CASE WHEN f15_ts>timestamp THEN
+        CASE WHEN c.f15_ts>c.timestamp THEN
           LN(LEAST(GREATEST(f15_p,1e-6),1-1e-6)/
              (1-LEAST(GREATEST(f15_p,1e-6),1-1e-6))) - current_logit END y_15,
-        CASE WHEN f60_ts>timestamp THEN
+        CASE WHEN c.f60_ts>c.timestamp THEN
           LN(LEAST(GREATEST(f60_p,1e-6),1-1e-6)/
              (1-LEAST(GREATEST(f60_p,1e-6),1-1e-6))) - current_logit END y_60,
-        CASE WHEN f300_ts>timestamp THEN
+        CASE WHEN c.f300_ts>c.timestamp THEN
           LN(LEAST(GREATEST(f300_p,1e-6),1-1e-6)/
              (1-LEAST(GREATEST(f300_p,1e-6),1-1e-6))) - current_logit END y_300,
-        CASE WHEN f60_ts>timestamp THEN pressure * (
+        CASE WHEN c.f60_ts>c.timestamp THEN pressure * (
           LN(LEAST(GREATEST(f60_p,1e-6),1-1e-6)/
              (1-LEAST(GREATEST(f60_p,1e-6),1-1e-6))) - current_logit
         ) END signed_60,
-        CASE WHEN f300_ts>timestamp THEN pressure * (
+        CASE WHEN c.f300_ts>c.timestamp THEN pressure * (
           LN(LEAST(GREATEST(f300_p,1e-6),1-1e-6)/
              (1-LEAST(GREATEST(f300_p,1e-6),1-1e-6))) - current_logit
         ) END signed_300,
-        CASE WHEN f60_ts>timestamp THEN ABS(
+        CASE WHEN c.f60_ts>c.timestamp THEN ABS(
           LN(LEAST(GREATEST(f60_p,1e-6),1-1e-6)/
              (1-LEAST(GREATEST(f60_p,1e-6),1-1e-6))) - current_logit
         ) END abs_60,
         CAST(future_econ_count_60 AS DOUBLE) activity_60,
-        CASE WHEN first_future_ts>timestamp
-             THEN SIGN(first_future_p-p_yes) END next_price_change_sign
+        CASE WHEN c.first_future_ts>c.timestamp
+             THEN SIGN(c.first_future_p-c.p_yes) END next_price_change_sign
       FROM context c
       LEFT JOIN econ e2
         ON e2.condition_id=c.condition_id
@@ -847,16 +847,16 @@ def export_panel(
       CASE WHEN event10_end_raw IS NOT NULL THEN
         LN(LEAST(GREATEST(event10_p,1e-6),1-1e-6)/
            (1-LEAST(GREATEST(event10_p,1e-6),1-1e-6))) - current_logit END event_10,
-      CASE WHEN f15_ts>timestamp THEN f15_ts END y15_end,
-      CASE WHEN f60_ts>timestamp THEN f60_ts END y60_end,
-      CASE WHEN f300_ts>timestamp THEN f300_ts END y300_end,
+      CASE WHEN c.f15_ts>c.timestamp THEN f15_ts END y15_end,
+      CASE WHEN c.f60_ts>c.timestamp THEN f60_ts END y60_end,
+      CASE WHEN c.f300_ts>c.timestamp THEN f300_ts END y300_end,
       timestamp+60 activity60_end,
       event2_end_raw event2_end,
       event10_end_raw event10_end,
       COALESCE(prior_mean_log_value,0) prior_mean_log_value_clean,
       COALESCE(prior_std_log_value,0) prior_std_log_value_clean,
       COALESCE(prior_pressure_balance,0) prior_pressure_balance_clean
-    FROM labelled
+    FROM labelled c
     """
     con.execute(
         f"COPY ({query}) TO '{q(output)}' (FORMAT PARQUET,COMPRESSION ZSTD,ROW_GROUP_SIZE 200000)"
