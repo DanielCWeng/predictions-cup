@@ -57,23 +57,27 @@ class SigLiveSink:
         try:
             raw = json.loads(envelope.payload_json)
             if envelope.operation_kind is OperationKind.SINGLE_PLACEMENT:
-                response = await self._client.place_order(
+                single_response = await self._client.place_order(
                     SingleOrderRequestDto.model_validate(raw)
                 )
-                state = LifecycleState.OPEN if response.open else LifecycleState.FILLED
-                response_json = response.model_dump_json(by_alias=True)
+                state = (
+                    LifecycleState.OPEN
+                    if single_response.open
+                    else LifecycleState.FILLED
+                )
+                response_json = single_response.model_dump_json(by_alias=True)
             elif envelope.operation_kind is OperationKind.BEST_EFFORT_BATCH:
-                response = await self._client.place_batch(
+                batch_response = await self._client.place_batch(
                     BatchOrderRequestDto.model_validate(raw)
                 )
                 state = LifecycleState.ACKED
-                response_json = response.model_dump_json(by_alias=True)
+                response_json = batch_response.model_dump_json(by_alias=True)
             else:
-                response = await self._client.place_multi_leg(
+                multi_response = await self._client.place_multi_leg(
                     MultiLegOrderRequestDto.model_validate(raw)
                 )
                 state = LifecycleState.ACKED
-                response_json = response.model_dump_json(by_alias=True)
+                response_json = multi_response.model_dump_json(by_alias=True)
         except SigExecutionUncertainError:
             observed = self._clock_ns()
             self._journal.mark_state(
