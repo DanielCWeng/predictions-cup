@@ -36,7 +36,7 @@ from predictions_cup.runtime import (
     limit_price_to_ticks,
     ticks_to_limit_price,
 )
-from predictions_cup.runtime.orchestrator import DecisionCore
+from predictions_cup.runtime.engine import DecisionRuntime
 from predictions_cup.strategy.core import StrategyRegistry, synthetic_threshold_strategy
 from predictions_cup.strategy.kernels import (
     KernelRegistry,
@@ -227,30 +227,31 @@ def _decision_benchmark_function(registry: KernelRegistry) -> ZeroArgFn:
         portfolio=RuntimePortfolio(account_trusted=False),
         observation_monotonic_ns=1_000_000,
     )
-    core = DecisionCore(
+    runtime = DecisionRuntime(
         strategies=strategies,
         kernels=registry,
-        risk_context=RiskContext(
-            mode=ExecutionMode.SHADOW,
-            kill_switch=False,
-            limits=None,
-            max_state_age_ns=1_000_000_000,
-        ),
+    )
+    risk_context = RiskContext(
+        mode=ExecutionMode.SHADOW,
+        kill_switch=False,
+        limits=None,
+        max_state_age_ns=1_000_000_000,
     )
     sink = NullSink()
 
     def run() -> object:
-        prepared = core.prepare(
+        outcome = runtime.decide(
             strategy_id="synthetic-threshold",
             snapshot=snapshot,
             strategy_config={"threshold": 0.01, "edge": 0.02},
-            mode=ExecutionMode.SHADOW,
+            risk_context=risk_context,
             logical_operation_id="bench-op",
-            idempotency_key="bench-key",
+            mode=ExecutionMode.SHADOW,
+            created_monotonic_ns=1_000_001,
         )
-        if prepared.plan is None:
+        if outcome.execution_plan is None:
             raise AssertionError("synthetic benchmark unexpectedly returned NO_TRADE")
-        return sink.dispatch(prepared.plan, snapshot)
+        return sink.dispatch(outcome.execution_plan, snapshot)
 
     return run
 
