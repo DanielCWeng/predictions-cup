@@ -6,10 +6,9 @@ ExecutionPlan boundary so SHADOW and LIVE differ only at the sink.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from time import monotonic_ns
-from typing import Callable
 
 from predictions_cup.execution.models import ExecutionMode
 from predictions_cup.execution.planning import build_execution_plan
