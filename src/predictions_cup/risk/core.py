@@ -162,11 +162,18 @@ def evaluate_risk(
             current_market = sum(
                 abs(position.gross_exposure)
                 for position in snapshot.portfolio.positions
-                if position.market_id == market_id
+                if (
+                    position.market_id == market_id
+                    and position.tournament_id == opportunity.legs[0].tournament_id
+                )
             ) + sum(
                 order.reserved_exposure
                 for order in snapshot.portfolio.orders
-                if order.market_id == market_id and (order.open or order.uncertain)
+                if (
+                    order.market_id == market_id
+                    and order.tournament_id == opportunity.legs[0].tournament_id
+                    and (order.open or order.uncertain)
+                )
             )
             if current_market + additional > limits.max_per_market_exposure:
                 return _deny("max_per_market_exposure")
