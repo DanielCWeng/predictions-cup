@@ -1,0 +1,14 @@
+{
+  "id": "polyleviathan/005b-reconstruction-conservation-audit",
+  "title": "005B Reconstruction Conservation Audit",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": ["polyleviathan/sig-cup-data-002-polymarket-fees"],
+  "competition_sources": [],
+  "kernel_sources": []
+}
