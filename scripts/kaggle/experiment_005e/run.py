@@ -2064,6 +2064,37 @@ def main() -> None:
     evaluation = holdout_analysis(panel, cuts, freeze)
     write_json(WORK / "holdout_evaluation.json", evaluation)
     write_json(
+        WORK / "falsification_concentration_report.json",
+        {
+            "schema_version": 1,
+            "experiment_id": "EXPERIMENT-005E",
+            "phase": "HOLDOUT",
+            "primary_target": evaluation["primary_target"],
+            "disposition": evaluation["disposition"],
+            "primary_variants": {
+                name: {
+                    key: row.get(key)
+                    for key in (
+                        "weighted_mse_gain",
+                        "bootstrap_p",
+                        "bootstrap_ci95",
+                        "fdr",
+                        "family_gains",
+                        "positive_families",
+                        "concentration",
+                        "slices",
+                    )
+                }
+                for name, row in evaluation["primary_variants"].items()
+            },
+            "falsification": evaluation["falsification"],
+            "family_local_history_boundary": (
+                "participant histories are constructed independently inside each family file; "
+                "cross-family evidence is model transfer/stability, not a globally continuous wallet ledger"
+            ),
+        },
+    )
+    write_json(
         WORK / "exact_kaggle_provenance.json",
         {
             "experiment_id": "EXPERIMENT-005E",
