@@ -183,6 +183,16 @@ def build_family(family: str) -> dict[str, object]:
         own = window("condition_id", "market_order_us", seconds)
         fam = window("family", "family_order_us", seconds)
         evt = window("event_id", "event_order_us", seconds)
+        family_own = window(
+            "family, condition_id",
+            "family_order_us",
+            seconds,
+        )
+        event_own = window(
+            "event_id, condition_id",
+            "event_order_us",
+            seconds,
+        )
         suffix = str(seconds)
 
         rolling.extend(
@@ -209,15 +219,20 @@ def build_family(family: str) -> dict[str, object]:
                 f"STDDEV_POP(interarrival_seconds) OVER ({own})/(AVG(interarrival_seconds) OVER ({own})+1e-9) AS burstiness_{suffix}",
             ]
         )
-        own_aux.extend(
-            [
-                f"SUM(one_trade_change) OVER ({own}) AS own_delta_sum_{suffix}",
-                f"SUM(POWER(one_trade_change,2)) OVER ({own}) AS own_delta_sq_sum_{suffix}",
-                f"COUNT(one_trade_change) OVER ({own}) AS own_delta_count_{suffix}",
-                f"SUM(CASE WHEN one_trade_change>0 THEN 1 ELSE 0 END) OVER ({own}) AS own_up_{suffix}",
-                f"SUM(CASE WHEN one_trade_change<0 THEN 1 ELSE 0 END) OVER ({own}) AS own_down_{suffix}",
-            ]
-        )
+        for own_prefix, own_frame in (
+            ("family", family_own),
+            ("event", event_own),
+        ):
+            own_aux.extend(
+                [
+                    f"SUM(one_trade_change) OVER ({own_frame}) AS {own_prefix}_own_delta_sum_{suffix}",
+                    f"SUM(POWER(one_trade_change,2)) OVER ({own_frame}) AS {own_prefix}_own_delta_sq_sum_{suffix}",
+                    f"COUNT(one_trade_change) OVER ({own_frame}) AS {own_prefix}_own_delta_count_{suffix}",
+                    f"COUNT(*) OVER ({own_frame}) AS {own_prefix}_own_activity_count_{suffix}",
+                    f"SUM(CASE WHEN one_trade_change>0 THEN 1 ELSE 0 END) OVER ({own_frame}) AS {own_prefix}_own_up_{suffix}",
+                    f"SUM(CASE WHEN one_trade_change<0 THEN 1 ELSE 0 END) OVER ({own_frame}) AS {own_prefix}_own_down_{suffix}",
+                ]
+            )
         for prefix, frame in (("family", fam), ("event", evt)):
             context_raw.extend(
                 [
@@ -328,12 +343,30 @@ def build_family(family: str) -> dict[str, object]:
             ]
         )
         for prefix in ("family","event"):
-            count_expr=f"{prefix}_delta_count_{suffix}-own_delta_count_{suffix}"
-            sum_expr=f"{prefix}_delta_sum_{suffix}-own_delta_sum_{suffix}"
-            sq_expr=f"{prefix}_delta_sq_sum_{suffix}-own_delta_sq_sum_{suffix}"
-            activity_expr=f"{prefix}_activity_count_{suffix}-trade_count_{suffix}"
-            up_expr=f"{prefix}_up_{suffix}-own_up_{suffix}"
-            down_expr=f"{prefix}_down_{suffix}-own_down_{suffix}"
+            count_expr = (
+                f"{prefix}_delta_count_{suffix}"
+                f"-{prefix}_own_delta_count_{suffix}"
+            )
+            sum_expr = (
+                f"{prefix}_delta_sum_{suffix}"
+                f"-{prefix}_own_delta_sum_{suffix}"
+            )
+            sq_expr = (
+                f"{prefix}_delta_sq_sum_{suffix}"
+                f"-{prefix}_own_delta_sq_sum_{suffix}"
+            )
+            activity_expr = (
+                f"{prefix}_activity_count_{suffix}"
+                f"-{prefix}_own_activity_count_{suffix}"
+            )
+            up_expr = (
+                f"{prefix}_up_{suffix}"
+                f"-{prefix}_own_up_{suffix}"
+            )
+            down_expr = (
+                f"{prefix}_down_{suffix}"
+                f"-{prefix}_own_down_{suffix}"
+            )
             final_features.extend(
                 [
                     f"{safe_ratio(sum_expr,count_expr)} AS loo_{prefix}_price_movement_{suffix}",
