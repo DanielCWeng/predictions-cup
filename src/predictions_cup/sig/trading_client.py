@@ -6,6 +6,7 @@ import asyncio
 import json
 import random
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from decimal import Decimal
 from types import TracebackType
 from typing import TypeVar
@@ -37,6 +38,25 @@ from predictions_cup.sig.trading_dto import (
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 SleepFn = Callable[[float], Awaitable[None]]
+
+
+
+def _wire_json_value(value: object) -> object:
+    """Convert exact domain values to JSON-native SIG wire scalars."""
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, datetime):
+        return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+    if isinstance(value, dict):
+        return {str(key): _wire_json_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_wire_json_value(item) for item in value]
+    return value
+
+
+def _request_wire_payload(model: BaseModel) -> dict[str, object]:
+    raw = model.model_dump(mode="python", by_alias=True, exclude_none=True)
+    return {key: _wire_json_value(value) for key, value in raw.items()}
 
 
 class SigTradingClient:
@@ -95,7 +115,7 @@ class SigTradingClient:
             "POST",
             "orders",
             route_template="/orders",
-            resolved_payload=request.model_dump(mode="json", by_alias=True, exclude_none=True),
+            resolved_payload=_request_wire_payload(request),
             accepted_statuses=frozenset({200}),
             execution_can_be_uncertain=True,
         )
@@ -107,7 +127,7 @@ class SigTradingClient:
             "POST",
             "orders/batch",
             route_template="/orders/batch",
-            resolved_payload=request.model_dump(mode="json", by_alias=True, exclude_none=True),
+            resolved_payload=_request_wire_payload(request),
             accepted_statuses=frozenset({200, 207, 422}),
             execution_can_be_uncertain=True,
             resume_incomplete_batch=True,
@@ -121,7 +141,7 @@ class SigTradingClient:
             "POST",
             "orders/multi-leg",
             route_template="/orders/multi-leg",
-            resolved_payload=request.model_dump(mode="json", by_alias=True, exclude_none=True),
+            resolved_payload=_request_wire_payload(request),
             accepted_statuses=frozenset({200}),
             execution_can_be_uncertain=True,
         )
