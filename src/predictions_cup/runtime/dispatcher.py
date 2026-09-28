@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 
 from predictions_cup.execution.models import ExecutionEvent, ExecutionMode
+from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.risk.core import RiskContext
 from predictions_cup.runtime.engine import DecisionRuntime
@@ -55,7 +57,7 @@ class StrategyBinding:
 
 
 class EventDrivenCoordinator:
-    """Evaluate only strategies affected by an actual state change or schedule trigger."""
+    """Evaluate affected strategies against a synchronously reserved risk state."""
 
     def __init__(
         self,
@@ -63,34 +65,71 @@ class EventDrivenCoordinator:
         runtime: DecisionRuntime,
         bindings: tuple[StrategyBinding, ...],
         risk_context: RiskContext,
-        mode: ExecutionMode,
         dispatch: PlanDispatcher,
+        reservations: ExecutionReservationBook | None = None,
     ) -> None:
+        if risk_context.mode is ExecutionMode.LIVE and reservations is None:
+            raise ValueError("LIVE coordinator requires an execution reservation book")
         self._runtime = runtime
         self._bindings = bindings
         self._risk_context = risk_context
-        self._mode = mode
         self._dispatch = dispatch
+        self._reservations = reservations
 
     async def on_state_change(
         self,
         change: StateChange,
         snapshot: RuntimeSnapshot,
     ) -> tuple[ExecutionEvent, ...]:
-        events: list[ExecutionEvent] = []
+        approved: list[tuple[ExecutionPlan, RuntimeSnapshot]] = []
+
+        # Decision order is deterministic. Each approval is reserved before the
+        # next strategy is evaluated, so all bindings see the worst-case effect
+        # of earlier approvals even though the exchange has not reported them yet.
         for binding in self._bindings:
             if not binding.affected_by(change):
                 continue
 
+            decision_snapshot = (
+                snapshot
+                if self._reservations is None
+                else self._reservations.overlay_snapshot(snapshot)
+            )
             outcome = self._runtime.decide(
                 strategy_id=binding.strategy_id,
-                snapshot=snapshot,
+                snapshot=decision_snapshot,
                 strategy_config=binding.config,
                 risk_context=self._risk_context,
                 logical_operation_id=f"{change.event_id}:{binding.strategy_id}",
-                mode=self._mode,
             )
-            if outcome.execution_plan is None:
+            plan = outcome.execution_plan
+            if plan is None:
                 continue
-            events.append(await self._dispatch(outcome.execution_plan, snapshot))
-        return tuple(events)
+            if self._reservations is not None:
+                self._reservations.reserve(
+                    plan.envelope.logical_operation_id,
+                    plan.intents,
+                )
+            approved.append((plan, decision_snapshot))
+
+        if not approved:
+            return ()
+
+        # Once every approval is synchronously reserved, network dispatches no
+        # longer need to serialize behind one another. Wait for every dispatch so
+        # a failed sibling cannot silently orphan another in-flight operation.
+        results = await asyncio.gather(
+            *(self._dispatch(plan, state) for plan, state in approved),
+            return_exceptions=True,
+        )
+        failures = [result for result in results if isinstance(result, BaseException)]
+        if failures:
+            raise ExceptionGroup(
+                "one or more execution dispatches failed",
+                [failure for failure in failures if isinstance(failure, Exception)],
+            )
+        return tuple(
+            result
+            for result in results
+            if isinstance(result, ExecutionEvent)
+        )
