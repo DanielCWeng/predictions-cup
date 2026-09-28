@@ -1,0 +1,85 @@
+{
+  "all_pass": true,
+  "audit": "POST_RUN_FROZEN_SOURCE_IDENTITY_RULE_VERIFICATION",
+  "experiment_id": "EXPERIMENT-005C",
+  "families": [
+    {
+      "duplicate_excess_rows": 0,
+      "duplicate_keys": 0,
+      "duplicate_rows": 0,
+      "family": "US_2024",
+      "max_multiplicity": 1,
+      "null_key_rows": 0,
+      "passes_frozen_identity_rule": true,
+      "source_file": "fees_US_2024.parquet",
+      "source_kind": "DATA002_MATCHED_FILL_FALLBACK",
+      "total_rows": 14716540,
+      "unique_keys": 14716540,
+      "valid_key_rows": 14716540
+    },
+    {
+      "duplicate_excess_rows": 0,
+      "duplicate_keys": 0,
+      "duplicate_rows": 0,
+      "family": "CAN_2025",
+      "max_multiplicity": 1,
+      "null_key_rows": 0,
+      "passes_frozen_identity_rule": true,
+      "source_file": "fees_CAN_2025.parquet",
+      "source_kind": "DATA002_MATCHED_FILL_FALLBACK",
+      "total_rows": 854625,
+      "unique_keys": 854625,
+      "valid_key_rows": 854625
+    },
+    {
+      "duplicate_excess_rows": 0,
+      "duplicate_keys": 0,
+      "duplicate_rows": 0,
+      "family": "COL_2026",
+      "max_multiplicity": 1,
+      "null_key_rows": 0,
+      "passes_frozen_identity_rule": true,
+      "source_file": "fills_COL_2026.parquet",
+      "source_kind": "DATA001_RAW_FILL",
+      "total_rows": 693573,
+      "unique_keys": 693573,
+      "valid_key_rows": 693573
+    },
+    {
+      "duplicate_excess_rows": 0,
+      "duplicate_keys": 0,
+      "duplicate_rows": 0,
+      "family": "HUN_2026",
+      "max_multiplicity": 1,
+      "null_key_rows": 0,
+      "passes_frozen_identity_rule": true,
+      "source_file": "fills_HUN_2026.parquet",
+      "source_kind": "DATA001_RAW_FILL",
+      "total_rows": 840134,
+      "unique_keys": 840134,
+      "valid_key_rows": 840134
+    },
+    {
+      "duplicate_excess_rows": 0,
+      "duplicate_keys": 0,
+      "duplicate_rows": 0,
+      "family": "PER_2026",
+      "max_multiplicity": 1,
+      "null_key_rows": 0,
+      "passes_frozen_identity_rule": true,
+      "source_file": "fills_PER_2026.parquet",
+      "source_kind": "DATA001_RAW_FILL",
+      "total_rows": 1212643,
+      "unique_keys": 1212643,
+      "valid_key_rows": 1212643
+    }
+  ],
+  "key": [
+    "tx_hash",
+    "log_index",
+    "token_id"
+  ],
+  "note": "This post-run audit enforces the exact source-identity rule already frozen in preregistration; it does not introduce or select any predictive hypothesis.",
+  "predictive_outcomes_used_to_define_audit": false,
+  "scientific_design_changed": false
+}
