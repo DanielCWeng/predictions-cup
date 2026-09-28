@@ -1,0 +1,167 @@
+{
+  "experiment_id": "EXPERIMENT-005D",
+  "phase": "HOLDOUT_REVIEW",
+  "base_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+  "preregistration_sha256": "d43a75ff8e0b5df6c717f37721e339116a6297b299c4e26d8b9a5f242b9c7a51",
+  "train_dev_runner_sha256": "525f4678565d80cbceddd7ede298c7f810fc41c4b94652dec34f08cd63ccaa5f",
+  "pre_holdout_freeze_sha256": "6ac0f6ea27b5553267d8fa94a9f5bca906680f18d03de45480269da8b9b21cbe",
+  "holdout_runner_sha256": "e65c961b73c56e26b322c8336944ea2fbc048ccf53bdd645cdaf77c53caef7ce",
+  "output_hashes": {
+    "holdout_candidate_results_csv": "610e4b6bd0ed199c63cc2543206ce70c4900e7cb1b84a24bf0e572f4f975920b",
+    "holdout_summary_json": "0b2ae7c40ce78872caf0e7d01069b383a439bddbd0051ccf700d50b484094673",
+    "structural_inventory_json": "1c35a094fbad3b1ab2b9e91bc9376826e4175de0da1bf094105856e8026da1a2"
+  },
+  "holdout_counts": {
+    "frozen_predictive_cells": 13,
+    "evaluated_predictive_cells": 13,
+    "confirmatory_pass_cells": 3,
+    "unique_confirmatory_relationships": 2,
+    "frozen_reconstruction_cells": 25,
+    "evaluated_reconstruction_cells": 22,
+    "unavailable_reconstruction_cells": 3
+  },
+  "confirmatory_relationships": [
+    {
+      "event": "colombia_runoff",
+      "target": "Abelardo de la Espriella Antioquia second-round first-place",
+      "reference": "Abelardo de la Espriella overall presidential winner",
+      "representation": "AFFINE_INDIRECT_LOGIT",
+      "horizon_seconds": 5,
+      "q_value": 0.006493506493506494,
+      "bootstrap_ci": [
+        2.3789586144568784e-10,
+        6.674618783926831e-10
+      ],
+      "holdout_score": 4.4926792689621803e-10,
+      "standardized_effect": 0.00391646229315697,
+      "positive_contribution_fraction": 0.978841221730007,
+      "delayed_60s_effect_ratio": 0.4436208672644359,
+      "quantile_monotone": false,
+      "disposition": "CONFIRMATORY_PASS_BUT_ECONOMICALLY_TINY_SECONDARY_CHALLENGER"
+    },
+    {
+      "event": "peru_first_round",
+      "target": "Fuerza Popular Chamber most-seats",
+      "reference": "Fuerza Popular Senate most-seats",
+      "representation": "RAW_INDIRECT_PROB_MEAN",
+      "horizon_seconds": 5,
+      "q_value": 0.012987012987012988,
+      "bootstrap_ci": [
+        1.55606093672871e-8,
+        7.259187976213755e-8
+      ],
+      "holdout_score": 4.082559394078419e-8,
+      "standardized_effect": 0.02849876730835665,
+      "positive_contribution_fraction": 0.7915321464809519,
+      "delayed_60s_effect_ratio": 0.6203972007085433,
+      "quantile_monotone": false,
+      "disposition": "PRIMARY_STRUCTURAL_TOURNAMENT_CANDIDATE"
+    },
+    {
+      "event": "peru_first_round",
+      "target": "Fuerza Popular Chamber most-seats",
+      "reference": "Fuerza Popular Senate most-seats",
+      "representation": "RAW_INDIRECT_PROB_MEAN",
+      "horizon_seconds": 60,
+      "q_value": 0.01818181818181818,
+      "bootstrap_ci": [
+        1.2057383171999193e-8,
+        3.226882460753945e-7
+      ],
+      "holdout_score": 1.8279273743821206e-7,
+      "standardized_effect": 0.05950181414089358,
+      "positive_contribution_fraction": 0.7536712935023134,
+      "delayed_60s_effect_ratio": 0.7726126457083266,
+      "quantile_monotone": false,
+      "disposition": "PRIMARY_STRUCTURAL_TOURNAMENT_CANDIDATE_SAME_MECHANISM"
+    }
+  ],
+  "notable_falsifications": [
+    {
+      "relationship": "Juntos por el Peru Chamber -> Senate most-seats",
+      "horizon_seconds": 5,
+      "q_value": 0.006493506493506494,
+      "delayed_60s_effect_ratio": 1.0430873277303876,
+      "disposition": "REJECTED_BY_DELAYED_STATE_CONTROL"
+    },
+    {
+      "relationship": "Fuerza Popular Senate -> Chamber most-seats",
+      "horizons_seconds": [
+        15,
+        30
+      ],
+      "q_values": [
+        0.019480519480519484,
+        0.008658008658008658
+      ],
+      "delayed_60s_effect_ratios": [
+        0.8849001350858877,
+        0.8638496923372678
+      ],
+      "disposition": "REJECTED_BY_DELAYED_STATE_CONTROL_DESPITE_FDR"
+    },
+    {
+      "relationship": "Abelardo first-round -> overall winner",
+      "horizons_seconds": [
+        30,
+        60,
+        120
+      ],
+      "disposition": "HOLDOUT_SIGN_REVERSED_OR_NULL"
+    },
+    {
+      "relationship": "Ivan Cepeda overall winner -> Antioquia runoff",
+      "horizon_seconds": 5,
+      "disposition": "HOLDOUT_NEGATIVE_OR_NULL"
+    }
+  ],
+  "structural_census": {
+    "inventory_records": 239,
+    "hard": 9,
+    "soft": 215,
+    "unknown": 15,
+    "hardlike_train_dev_rows": 953,
+    "hardlike_predictive_unavailable": 948,
+    "hard_top_of_book_diagnostics": 5,
+    "depth_certified_hard_arbitrage_claims": 0
+  },
+  "persistence": {
+    "dev_frozen_cells": 13,
+    "train_ar1_range": [
+      0.9972583547866744,
+      0.9999429083516704
+    ],
+    "train_half_life_seconds_range": [
+      1262.3744323254766,
+      60703.04625932325
+    ],
+    "train_half_life_seconds_median": 14729.172338581246,
+    "dev_quantile_monotone_cells": 4
+  },
+  "reconstruction_holdout": {
+    "evaluated": 22,
+    "note": "LOO-PRICE / same-event reconstruction only; not indirect alpha.",
+    "family_median_rmse_improvement": {
+      "CAN_2025": 0.47029306595968856,
+      "COL_2026": 0.9625392801826433,
+      "HUN_2026": 0.997585372098437,
+      "PER_2026": 0.9778202630651871,
+      "US_2024": 0.9595419523597414
+    },
+    "unavailable_peru_keys": [
+      "PER_2026:106520|GENERIC_EVENT::PER_2026::106520|GENERIC_EVENT_EQUAL_LOGIT|947275|EVENT|0",
+      "PER_2026:106520|GENERIC_EVENT::PER_2026::106520|GENERIC_EVENT_EQUAL_LOGIT|947278|EVENT|0",
+      "PER_2026:106520|GENERIC_EVENT::PER_2026::106520|GENERIC_EVENT_EQUAL_LOGIT|947279|EVENT|0"
+    ]
+  },
+  "central_model_tournament": {
+    "primary_candidate": "PER_2026 Fuerza Popular Senate->Chamber RAW_INDIRECT_PROB_MEAN; treat 5s and 60s as one correlated mechanism family, not independent alphas.",
+    "secondary_candidate": "COL_2026 Abelardo overall->Antioquia runoff AFFINE_INDIRECT_LOGIT 5s; statistical pass but effect size is very small and signal-strength response is non-monotone.",
+    "exclude_from_predictive_tournament": [
+      "hard/coherent projections and threshold surfaces: insufficient usable support for predictive promotion",
+      "generic same-event reconstruction: reconstruction-only",
+      "all other frozen indirect relationships: failed confirmatory or negative-control gate"
+    ],
+    "live_trading_status": "DISABLED"
+  }
+}

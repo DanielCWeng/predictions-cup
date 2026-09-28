@@ -1,0 +1,2363 @@
+from __future__ import annotations
+
+import csv
+import hashlib
+import json
+import math
+import re
+from collections import defaultdict
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pyarrow as pa
+import pyarrow.compute as pc
+import pyarrow.dataset as pads
+import pyarrow.parquet as pq
+
+INPUT = Path("/kaggle/input")
+WORK = Path("/kaggle/working")
+STEP_SECONDS = 5
+FRESHNESS_SECONDS = 300
+PURGE_SECONDS = 300
+DEV_NULL_DRAWS = 200
+HOLDOUT_BOOTSTRAP_DRAWS = 1000
+MASTER_SEED = 20260928005
+CLOCK_HORIZONS = (5, 15, 30, 60, 120, 300)
+EVENT_HORIZONS = (1, 2, 5, 10)
+EXPECTED = EMBEDDED["expected_hashes"]
+PREREG = EMBEDDED["preregistration"]
+PHASE = EMBEDDED["phase"]
+SHORTLIST = EMBEDDED.get("pre_holdout_freeze")
+DATA2_MANIFEST_PAYLOAD = EMBEDDED["data2_manifest_payload"]
+UTC_US = pa.timestamp("us", tz="UTC")
+
+
+def sha(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def one_any(*names: str) -> Path:
+    matches: list[Path] = []
+    for name in names:
+        matches.extend(INPUT.rglob(name))
+    unique = sorted(set(matches))
+    if len(unique) != 1:
+        raise SystemExit(f"expected exactly one of {names}, got {unique}")
+    return unique[0]
+
+
+def seed(component: str) -> int:
+    return int.from_bytes(
+        hashlib.sha256(f"{MASTER_SEED}|{component}".encode()).digest()[:8], "big"
+    )
+
+
+def iso_ns(value: Any) -> int:
+    if isinstance(value, datetime):
+        return int(value.timestamp() * 1_000_000_000)
+    if isinstance(value, np.datetime64):
+        return int(value.astype("datetime64[ns]").astype(np.int64))
+    return int(datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp() * 1e9)
+
+
+def clip_prob(x: np.ndarray | float, eps: float = 1e-6):
+    return np.clip(x, eps, 1.0 - eps)
+
+
+def logit(x: np.ndarray | float):
+    p = clip_prob(x)
+    return np.log(p / (1.0 - p))
+
+
+def logistic(x: np.ndarray | float):
+    a = np.asarray(x, dtype=float)
+    out = np.empty_like(a)
+    pos = a >= 0
+    out[pos] = 1.0 / (1.0 + np.exp(-a[pos]))
+    ex = np.exp(a[~pos])
+    out[~pos] = ex / (1.0 + ex)
+    return out
+
+
+def project_simplex(v: np.ndarray) -> np.ndarray:
+    x = np.asarray(v, dtype=float)
+    u = np.sort(x)[::-1]
+    cssv = np.cumsum(u) - 1.0
+    rho = np.flatnonzero(u - cssv / (np.arange(len(u)) + 1.0) > 0)
+    if len(rho) == 0:
+        return np.full_like(x, 1.0 / len(x))
+    j = int(rho[-1])
+    theta = cssv[j] / (j + 1.0)
+    return np.maximum(x - theta, 0.0)
+
+
+def weighted_partition(v: np.ndarray, w: np.ndarray) -> np.ndarray:
+    x = np.asarray(v, dtype=float)
+    weights = np.asarray(w, dtype=float)
+    lo, hi = -4.0 * float(weights.max()), 4.0 * float(weights.max())
+    for _ in range(80):
+        lam = (lo + hi) / 2.0
+        p = np.clip(x - lam / (2.0 * weights), 0.0, 1.0)
+        if float(p.sum()) > 1.0:
+            lo = lam
+        else:
+            hi = lam
+    p = np.clip(x - hi / (2.0 * weights), 0.0, 1.0)
+    total = float(p.sum())
+    return p / total if total > 0 else np.full_like(x, 1.0 / len(x))
+
+
+def kl_partition(v: np.ndarray, w: np.ndarray) -> np.ndarray:
+    q = clip_prob(np.asarray(v, dtype=float))
+    weights = np.asarray(w, dtype=float)
+    z = logit(q)
+    lo, hi = -80.0 * float(weights.max()), 80.0 * float(weights.max())
+    for _ in range(100):
+        lam = (lo + hi) / 2.0
+        p = logistic(z - lam / weights)
+        if float(p.sum()) > 1.0:
+            lo = lam
+        else:
+            hi = lam
+    p = logistic(z - hi / weights)
+    return p / float(p.sum())
+
+
+def isotonic_nonincreasing(v: np.ndarray, w: np.ndarray | None = None) -> np.ndarray:
+    y = np.clip(np.asarray(v, dtype=float), 0.0, 1.0)
+    weights = np.ones(len(y), dtype=float) if w is None else np.asarray(w, dtype=float)
+    means: list[float] = []
+    masses: list[float] = []
+    counts: list[int] = []
+    for value, mass in zip(-y, weights, strict=True):
+        means.append(float(value))
+        masses.append(float(mass))
+        counts.append(1)
+        while len(means) >= 2 and means[-2] > means[-1]:
+            nm = masses[-2] + masses[-1]
+            nv = (means[-2] * masses[-2] + means[-1] * masses[-1]) / nm
+            nc = counts[-2] + counts[-1]
+            means[-2:] = [nv]
+            masses[-2:] = [nm]
+            counts[-2:] = [nc]
+    out = np.empty(len(y))
+    k = 0
+    for mean, count in zip(means, counts, strict=True):
+        out[k : k + count] = -mean
+        k += count
+    return np.clip(out, 0.0, 1.0)
+
+
+def fit_affine(x: np.ndarray, y: np.ndarray, ridge: float = 0.0) -> tuple[float, float]:
+    xc = x - float(np.mean(x))
+    yc = y - float(np.mean(y))
+    denom = float(xc @ xc) + ridge
+    slope = 0.0 if denom <= 0 else float((xc @ yc) / denom)
+    return float(np.mean(y) - slope * np.mean(x)), slope
+
+
+def fit_huber(x: np.ndarray, y: np.ndarray, delta: float = 1.5) -> tuple[float, float]:
+    intercept, slope = fit_affine(x, y)
+    for _ in range(20):
+        resid = y - (intercept + slope * x)
+        med = float(np.median(resid))
+        mad = float(np.median(np.abs(resid - med)))
+        scale = max(1.4826 * mad, 1e-8)
+        u = np.abs(resid) / (delta * scale)
+        weight = np.ones_like(u)
+        mask = u > 1.0
+        weight[mask] = 1.0 / u[mask]
+        xbar = float(np.average(x, weights=weight))
+        ybar = float(np.average(y, weights=weight))
+        xc = x - xbar
+        yc = y - ybar
+        denom = float(np.sum(weight * xc * xc))
+        slope = 0.0 if denom <= 0 else float(np.sum(weight * xc * yc) / denom)
+        intercept = ybar - slope * xbar
+    return intercept, slope
+
+
+def fit_ridge_matrix(x: np.ndarray, y: np.ndarray, ridge: float) -> tuple[np.ndarray, float]:
+    mu = np.mean(x, axis=0)
+    ym = float(np.mean(y))
+    xc = x - mu
+    yc = y - ym
+    gram = xc.T @ xc + ridge * np.eye(x.shape[1])
+    beta = np.linalg.solve(gram, xc.T @ yc)
+    intercept = ym - float(mu @ beta)
+    return beta, intercept
+
+
+def kalman_reference_filter(
+    measurements: np.ndarray, process_var: float, measurement_var: float
+) -> np.ndarray:
+    z = np.asarray(measurements, float)
+    out = np.full(len(z), np.nan)
+    state: float | None = None
+    variance = max(measurement_var, 1e-8)
+    q = max(process_var, 1e-8)
+    r = max(measurement_var, 1e-8)
+    for i, value in enumerate(z):
+        if state is not None:
+            variance += q
+        if not np.isfinite(value):
+            continue
+        if state is None:
+            state = float(value)
+            variance = r
+        else:
+            gain = variance / (variance + r)
+            state = state + gain * (float(value) - state)
+            variance = (1.0 - gain) * variance
+        out[i] = state
+    return out
+
+
+def threshold_pmf(surface: np.ndarray) -> np.ndarray:
+    s = np.asarray(surface, float)
+    if s.ndim != 2 or s.shape[1] < 2:
+        raise ValueError("threshold surface must be 2-D with >=2 thresholds")
+    pmf = np.empty((s.shape[0], s.shape[1] + 1), float)
+    pmf[:, 0] = 1.0 - s[:, 0]
+    pmf[:, 1:-1] = s[:, :-1] - s[:, 1:]
+    pmf[:, -1] = s[:, -1]
+    pmf = np.clip(pmf, 0.0, None)
+    total = pmf.sum(axis=1, keepdims=True)
+    return np.divide(
+        pmf,
+        total,
+        out=np.full_like(pmf, np.nan),
+        where=total > 0,
+    )
+
+
+def survival_from_pmf(pmf: np.ndarray) -> np.ndarray:
+    p = np.asarray(pmf, float)
+    return 1.0 - np.cumsum(p[:, :-1], axis=1)
+
+
+def smooth_pmf(pmf: np.ndarray, lam: float) -> np.ndarray:
+    base = np.asarray(pmf, float)
+    out = base.copy()
+    for _ in range(8):
+        neighbor = out.copy()
+        neighbor[:, 0] = out[:, 1]
+        neighbor[:, -1] = out[:, -2]
+        if out.shape[1] > 2:
+            neighbor[:, 1:-1] = (out[:, :-2] + out[:, 2:]) / 2.0
+        out = (base + lam * neighbor) / (1.0 + lam)
+        out = np.clip(out, 0.0, None)
+        out /= np.clip(out.sum(axis=1, keepdims=True), 1e-12, None)
+    return out
+
+
+def entropy_shrink_pmf(pmf: np.ndarray, lam: float) -> np.ndarray:
+    p = np.asarray(pmf, float)
+    uniform = np.full_like(p, 1.0 / p.shape[1])
+    out = (p + lam * uniform) / (1.0 + lam)
+    return out / np.clip(out.sum(axis=1, keepdims=True), 1e-12, None)
+
+
+def logconcave_pmf_challenger(pmf: np.ndarray) -> np.ndarray:
+    out = np.clip(np.asarray(pmf, float), 1e-12, None)
+    for _ in range(8):
+        if out.shape[1] <= 2:
+            break
+        floor = np.sqrt(out[:, :-2] * out[:, 2:])
+        out[:, 1:-1] = np.maximum(out[:, 1:-1], floor)
+        out /= np.clip(out.sum(axis=1, keepdims=True), 1e-12, None)
+    return out
+
+
+def ar1_half_life(values: np.ndarray, step_seconds: float) -> tuple[float | None, float | None]:
+    x = values[np.isfinite(values)]
+    if len(x) < 20:
+        return None, None
+    a, b = x[:-1], x[1:]
+    ac = a - a.mean()
+    denom = float(ac @ ac)
+    if denom <= 0:
+        return None, None
+    phi = float(ac @ (b - b.mean()) / denom)
+    if 0.0 < abs(phi) < 1.0:
+        half = -math.log(2.0) / math.log(abs(phi)) * step_seconds
+    else:
+        half = None
+    return phi, half
+
+
+def split_boundaries(times_ns: np.ndarray) -> tuple[int, int]:
+    finite = times_ns[np.isfinite(times_ns)]
+    start, end = int(finite.min()), int(finite.max())
+    span = end - start
+    return start + int(0.60 * span), start + int(0.80 * span)
+
+
+def split_masks(times_ns: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, int, int]:
+    train_end, dev_end = split_boundaries(times_ns)
+    purge = PURGE_SECONDS * 1_000_000_000
+    train = times_ns < train_end - purge
+    dev = (times_ns >= train_end + purge) & (times_ns < dev_end - purge)
+    hold = times_ns >= dev_end + purge
+    return train, dev, hold, train_end, dev_end
+
+
+def bh(rows: list[dict[str, Any]]) -> None:
+    groups: dict[str, list[int]] = defaultdict(list)
+    for i, row in enumerate(rows):
+        if row.get("p_value") is not None:
+            groups[row["fdr_group"]].append(i)
+    for idxs in groups.values():
+        ranked = sorted((float(rows[i]["p_value"]), i) for i in idxs)
+        prev = 1.0
+        m = len(ranked)
+        for rank in range(m, 0, -1):
+            p, i = ranked[rank - 1]
+            q = min(prev, p * m / rank, 1.0)
+            rows[i]["q_value"] = q
+            prev = q
+
+
+def circular_shift_p(signal: np.ndarray, y: np.ndarray, component: str, block: int = 60) -> float:
+    observed = float(np.mean(signal * y))
+    n = len(signal)
+    if n < max(50, block * 2):
+        return 1.0
+    rng = np.random.default_rng(seed(component))
+    exceed = 0
+    valid = 0
+    lo = min(block, max(1, n // 4))
+    hi = max(lo + 1, n - lo)
+    for _ in range(DEV_NULL_DRAWS):
+        shift = int(rng.integers(lo, hi))
+        stat = float(np.mean(np.roll(signal, shift) * y))
+        exceed += stat >= observed
+        valid += 1
+    return (1.0 + exceed) / (1.0 + valid)
+
+
+def fit_control(train_controls: np.ndarray, train_y: np.ndarray) -> np.ndarray:
+    x = np.column_stack([np.ones(len(train_controls)), train_controls])
+    return np.linalg.lstsq(x, train_y, rcond=None)[0]
+
+
+def apply_control(controls: np.ndarray, beta: np.ndarray) -> np.ndarray:
+    return np.column_stack([np.ones(len(controls)), controls]) @ beta
+
+
+def response_metrics(signal: np.ndarray, response: np.ndarray) -> dict[str, Any]:
+    contribution = np.asarray(signal, float) * np.asarray(response, float)
+    finite = np.isfinite(contribution) & np.isfinite(signal)
+    if int(finite.sum()) == 0:
+        return {
+            "hit_rate": None,
+            "standardized_effect": None,
+            "signal_quantile_scores": [],
+            "quantile_monotone": None,
+        }
+    contribution = contribution[finite]
+    magnitude = np.abs(np.asarray(signal, float)[finite])
+    mean = float(np.mean(contribution))
+    std = float(np.std(contribution))
+    quantiles = np.quantile(magnitude, [0.25, 0.50, 0.75])
+    bucket = np.digitize(magnitude, quantiles, right=True)
+    scores = [
+        float(np.mean(contribution[bucket == q]))
+        if np.any(bucket == q) else None
+        for q in range(4)
+    ]
+    comparable = [value for value in scores if value is not None]
+    monotone = (
+        all(b >= a for a, b in zip(comparable, comparable[1:], strict=False))
+        if len(comparable) >= 2 else None
+    )
+    return {
+        "hit_rate": float(np.mean(contribution > 0.0)),
+        "standardized_effect": None if std <= 1e-18 else mean / std,
+        "signal_quantile_scores": scores,
+        "quantile_monotone": monotone,
+    }
+
+
+def candidate_eval(
+    *,
+    event: str,
+    family_id: str,
+    leakage_mode: str,
+    representation_family: str,
+    representation: str,
+    target: str,
+    times_ns: np.ndarray,
+    target_price: np.ndarray,
+    signal: np.ndarray,
+    broad_move: np.ndarray,
+    model_params: dict[str, Any],
+    source_kind: str = "DATA-001",
+    trade_stream: tuple[np.ndarray, np.ndarray] | None = None,
+) -> list[dict[str, Any]]:
+    train, dev, hold, _, _ = split_masks(times_ns)
+    rows: list[dict[str, Any]] = []
+    own_lag = np.full(len(target_price), np.nan)
+    own_lag[1:] = target_price[1:] - target_price[:-1]
+    for horizon in CLOCK_HORIZONS:
+        steps = horizon // STEP_SECONDS
+        if steps < 1 or steps >= len(target_price):
+            continue
+        y = np.full(len(target_price), np.nan)
+        y[:-steps] = target_price[steps:] - target_price[:-steps]
+        controls = np.column_stack([own_lag, broad_move])
+        valid = np.isfinite(signal) & np.isfinite(y) & np.all(np.isfinite(controls), axis=1)
+        train_valid = valid & train
+        dev_valid = valid & dev
+        if PHASE == "TRAIN_DEV":
+            if int(train_valid.sum()) < 100 or int(dev_valid.sum()) < 50:
+                rows.append({
+                    "event": event,
+                    "family_id": family_id,
+                    "leakage_mode": leakage_mode,
+                    "representation_family": representation_family,
+                    "representation": representation,
+                    "target": target,
+                    "target_kind": "future_probability_change",
+                    "horizon_kind": "CLOCK",
+                    "horizon": horizon,
+                    "status": "UNAVAILABLE",
+                    "train_n": int(train_valid.sum()),
+                    "dev_n": int(dev_valid.sum()),
+                    "p_value": None,
+                    "q_value": None,
+                    "fdr_group": f"{leakage_mode}|{representation_family}|future_probability_change|CLOCK",
+                    "model_params": model_params,
+                })
+                continue
+            by = fit_control(controls[train_valid], y[train_valid])
+            bs = fit_control(controls[train_valid], signal[train_valid])
+            yr_train = y[train_valid] - apply_control(controls[train_valid], by)
+            sr_train = signal[train_valid] - apply_control(controls[train_valid], bs)
+            yr = y[dev_valid] - apply_control(controls[dev_valid], by)
+            sr = signal[dev_valid] - apply_control(controls[dev_valid], bs)
+            score = float(np.mean(sr * yr))
+            denom = float(sr @ sr)
+            beta = None if denom <= 0 else float((sr @ yr) / denom)
+            mid = len(sr) // 2
+            half1 = float(np.mean(sr[:mid] * yr[:mid])) if mid >= 25 else None
+            half2 = float(np.mean(sr[mid:] * yr[mid:])) if len(sr) - mid >= 25 else None
+            p = circular_shift_p(
+                sr, yr, f"{event}|{family_id}|{representation}|{target}|{horizon}"
+            )
+            delayed_full = np.full(len(signal), np.nan)
+            delay_steps = 60 // STEP_SECONDS
+            delayed_full[delay_steps:] = signal[:-delay_steps]
+            delayed_valid = dev_valid & np.isfinite(delayed_full)
+            delayed_score = None
+            delayed_ratio = None
+            if int(delayed_valid.sum()) >= 50:
+                dyr = y[delayed_valid] - apply_control(controls[delayed_valid], by)
+                dsr = delayed_full[delayed_valid] - apply_control(controls[delayed_valid], bs)
+                delayed_score = float(np.mean(dsr * dyr))
+                if abs(score) > 1e-18:
+                    delayed_ratio = abs(delayed_score) / abs(score)
+            phi, half_life = ar1_half_life(signal[train_valid], STEP_SECONDS)
+            metrics = response_metrics(sr, yr)
+            rows.append({
+                "event": event,
+                "family_id": family_id,
+                "leakage_mode": leakage_mode,
+                "representation_family": representation_family,
+                "representation": representation,
+                "target": target,
+                "target_kind": "future_probability_change",
+                "horizon_kind": "CLOCK",
+                "horizon": horizon,
+                "status": "OK",
+                "train_n": int(train_valid.sum()),
+                "dev_n": int(dev_valid.sum()),
+                "train_score": float(np.mean(sr_train * yr_train)),
+                "dev_score": score,
+                "dev_beta": beta,
+                "dev_hit_rate": metrics["hit_rate"],
+                "dev_standardized_effect": metrics["standardized_effect"],
+                "dev_signal_quantile_scores": metrics["signal_quantile_scores"],
+                "dev_quantile_monotone": metrics["quantile_monotone"],
+                "dev_half1_score": half1,
+                "dev_half2_score": half2,
+                "p_value": p,
+                "q_value": None,
+                "delayed_60s_score": delayed_score,
+                "delayed_60s_effect_ratio": delayed_ratio,
+                "fdr_group": f"{leakage_mode}|{representation_family}|future_probability_change|CLOCK",
+                "train_signal_ar1": phi,
+                "train_signal_half_life_seconds": half_life,
+                "model_params": {
+                    **model_params,
+                    "control_y": by.tolist(),
+                    "control_signal": bs.tolist(),
+                },
+                "source_kind": source_kind,
+            })
+        else:
+            key = f"{event}|{family_id}|{representation}|{target}|CLOCK|{horizon}"
+            frozen = SHORTLIST["candidate_params"].get(key) if SHORTLIST else None
+            if frozen is None:
+                continue
+            hold_valid = valid & hold
+            if int(hold_valid.sum()) < 50:
+                rows.append({
+                    "candidate_key": key,
+                    "status": "UNAVAILABLE_HOLDOUT",
+                    "holdout_n": int(hold_valid.sum()),
+                })
+                continue
+            by = np.asarray(frozen["control_y"], float)
+            bs = np.asarray(frozen["control_signal"], float)
+            yr = y[hold_valid] - apply_control(controls[hold_valid], by)
+            sr = signal[hold_valid] - apply_control(controls[hold_valid], bs)
+            score = float(np.mean(sr * yr))
+            denom = float(sr @ sr)
+            beta = None if denom <= 0 else float((sr @ yr) / denom)
+            metrics = response_metrics(sr, yr)
+            delayed_full = np.full(len(signal), np.nan)
+            delay_steps = 60 // STEP_SECONDS
+            delayed_full[delay_steps:] = signal[:-delay_steps]
+            delayed_valid = hold_valid & np.isfinite(delayed_full)
+            delayed_score = None
+            delayed_ratio = None
+            if int(delayed_valid.sum()) >= 50:
+                dyr = y[delayed_valid] - apply_control(controls[delayed_valid], by)
+                dsr = delayed_full[delayed_valid] - apply_control(
+                    controls[delayed_valid], bs
+                )
+                delayed_score = float(np.mean(dsr * dyr))
+                if abs(score) > 1e-18:
+                    delayed_ratio = abs(delayed_score) / abs(score)
+            rows.append({
+                "candidate_key": key,
+                "event": event,
+                "family_id": family_id,
+                "leakage_mode": leakage_mode,
+                "representation_family": representation_family,
+                "representation": representation,
+                "target": target,
+                "target_kind": "future_probability_change",
+                "horizon_kind": "CLOCK",
+                "horizon": horizon,
+                "status": "OK",
+                "holdout_n": int(hold_valid.sum()),
+                "holdout_score": score,
+                "holdout_beta": beta,
+                "holdout_hit_rate": metrics["hit_rate"],
+                "holdout_standardized_effect": metrics["standardized_effect"],
+                "holdout_signal_quantile_scores": metrics["signal_quantile_scores"],
+                "holdout_quantile_monotone": metrics["quantile_monotone"],
+                "holdout_delayed_60s_score": delayed_score,
+                "holdout_delayed_60s_effect_ratio": delayed_ratio,
+                "p_value": None,
+                "q_value": None,
+                "fdr_group": "HOLDOUT|PREDICTIVE_ALL",
+                "_bootstrap_values": (sr * yr).tolist(),
+            })
+    if PHASE == "TRAIN_DEV":
+        fair_value = target_price + signal
+        fair_value = np.where(
+            np.isfinite(fair_value), np.clip(fair_value, 1e-6, 1 - 1e-6), np.nan
+        )
+        target_logit = logit(target_price)
+        fair_logit = logit(fair_value)
+        logit_signal = fair_logit - target_logit
+        for horizon in CLOCK_HORIZONS:
+            steps = horizon // STEP_SECONDS
+            if steps < 1 or steps >= len(target_price):
+                continue
+            prob_change = np.full(len(target_price), np.nan)
+            logit_change = np.full(len(target_price), np.nan)
+            residual_change = np.full(len(target_price), np.nan)
+            abs_shrink = np.full(len(target_price), np.nan)
+            prob_change[:-steps] = target_price[steps:] - target_price[:-steps]
+            logit_change[:-steps] = target_logit[steps:] - target_logit[:-steps]
+            residual_change[:-steps] = signal[steps:] - signal[:-steps]
+            abs_shrink[:-steps] = np.abs(signal[:-steps]) - np.abs(signal[steps:])
+            diagnostics = (
+                (
+                    "future_logit_change",
+                    logit_signal,
+                    logit_change,
+                    lambda s, y: s * y,
+                ),
+                (
+                    "future_structural_residual_change",
+                    signal,
+                    residual_change,
+                    lambda s, y: -(s * y),
+                ),
+                (
+                    "absolute_residual_shrinkage",
+                    np.abs(signal),
+                    abs_shrink,
+                    lambda s, y: y,
+                ),
+                (
+                    "family_surface_repair_direction",
+                    signal,
+                    prob_change,
+                    lambda s, y: np.sign(s) * y,
+                ),
+            )
+            for target_kind, diag_signal, diag_y, score_fn in diagnostics:
+                valid_diag = np.isfinite(diag_signal) & np.isfinite(diag_y)
+                train_diag = valid_diag & train
+                dev_diag = valid_diag & dev
+                if int(train_diag.sum()) < 100 or int(dev_diag.sum()) < 50:
+                    continue
+                train_metric = float(
+                    np.mean(score_fn(diag_signal[train_diag], diag_y[train_diag]))
+                )
+                dev_metric = float(
+                    np.mean(score_fn(diag_signal[dev_diag], diag_y[dev_diag]))
+                )
+                rows.append({
+                    "event": event,
+                    "family_id": family_id,
+                    "leakage_mode": leakage_mode,
+                    "representation_family": representation_family,
+                    "representation": representation,
+                    "target": target,
+                    "target_kind": target_kind,
+                    "horizon_kind": "CLOCK",
+                    "horizon": horizon,
+                    "status": "DIAGNOSTIC_ONLY",
+                    "train_n": int(train_diag.sum()),
+                    "dev_n": int(dev_diag.sum()),
+                    "train_score": train_metric,
+                    "dev_score": dev_metric,
+                    "p_value": None,
+                    "q_value": None,
+                    "fdr_group": (
+                        f"DESCRIPTIVE_ONLY|{leakage_mode}|{representation_family}|"
+                        f"{target_kind}|CLOCK"
+                    ),
+                    "model_params": model_params,
+                    "source_kind": source_kind,
+                })
+    if trade_stream is not None:
+        trade_times, trade_prices = trade_stream
+        if len(trade_times) >= max(EVENT_HORIZONS) + 2:
+            event_train, event_dev, event_hold, _, _ = split_masks(trade_times)
+            state_idx = np.searchsorted(times_ns, trade_times, side="right") - 1
+            state_ok = state_idx >= 0
+            safe_idx = np.maximum(state_idx, 0)
+            event_signal = np.full(len(trade_times), np.nan)
+            event_broad = np.full(len(trade_times), np.nan)
+            event_signal[state_ok] = signal[safe_idx[state_ok]]
+            event_broad[state_ok] = broad_move[safe_idx[state_ok]]
+            event_own = np.full(len(trade_times), np.nan)
+            event_own[1:] = trade_prices[1:] - trade_prices[:-1]
+            delayed_idx = np.searchsorted(
+                times_ns,
+                trade_times - 60 * 1_000_000_000,
+                side="right",
+            ) - 1
+            delayed_ok = delayed_idx >= 0
+            delayed_safe = np.maximum(delayed_idx, 0)
+            delayed_signal = np.full(len(trade_times), np.nan)
+            delayed_signal[delayed_ok] = signal[delayed_safe[delayed_ok]]
+            event_controls = np.column_stack([event_own, event_broad])
+
+            for event_horizon in EVENT_HORIZONS:
+                event_y = np.full(len(trade_prices), np.nan)
+                event_y[:-event_horizon] = (
+                    trade_prices[event_horizon:] - trade_prices[:-event_horizon]
+                )
+                valid_event = (
+                    np.isfinite(event_signal)
+                    & np.isfinite(event_y)
+                    & np.all(np.isfinite(event_controls), axis=1)
+                )
+                train_event = valid_event & event_train
+                dev_event = valid_event & event_dev
+                key = (
+                    f"{event}|{family_id}|{representation}|{target}|"
+                    f"EVENT|{event_horizon}"
+                )
+                if PHASE == "TRAIN_DEV":
+                    if int(train_event.sum()) < 100 or int(dev_event.sum()) < 50:
+                        rows.append({
+                            "event": event,
+                            "family_id": family_id,
+                            "leakage_mode": leakage_mode,
+                            "representation_family": representation_family,
+                            "representation": representation,
+                            "target": target,
+                            "target_kind": "future_probability_change",
+                            "horizon_kind": "EVENT",
+                            "horizon": event_horizon,
+                            "status": "UNAVAILABLE",
+                            "train_n": int(train_event.sum()),
+                            "dev_n": int(dev_event.sum()),
+                            "p_value": None,
+                            "q_value": None,
+                            "fdr_group": (
+                                f"{leakage_mode}|{representation_family}|"
+                                "future_probability_change|EVENT"
+                            ),
+                            "model_params": model_params,
+                            "source_kind": source_kind,
+                        })
+                        continue
+                    by = fit_control(
+                        event_controls[train_event], event_y[train_event]
+                    )
+                    bs = fit_control(
+                        event_controls[train_event], event_signal[train_event]
+                    )
+                    train_yr = (
+                        event_y[train_event]
+                        - apply_control(event_controls[train_event], by)
+                    )
+                    train_sr = (
+                        event_signal[train_event]
+                        - apply_control(event_controls[train_event], bs)
+                    )
+                    yr = (
+                        event_y[dev_event]
+                        - apply_control(event_controls[dev_event], by)
+                    )
+                    sr = (
+                        event_signal[dev_event]
+                        - apply_control(event_controls[dev_event], bs)
+                    )
+                    score = float(np.mean(sr * yr))
+                    denom = float(sr @ sr)
+                    beta = None if denom <= 0 else float((sr @ yr) / denom)
+                    mid = len(sr) // 2
+                    half1 = (
+                        float(np.mean(sr[:mid] * yr[:mid]))
+                        if mid >= 25 else None
+                    )
+                    half2 = (
+                        float(np.mean(sr[mid:] * yr[mid:]))
+                        if len(sr) - mid >= 25 else None
+                    )
+                    p = circular_shift_p(
+                        sr,
+                        yr,
+                        f"{event}|{family_id}|{representation}|{target}|"
+                        f"EVENT|{event_horizon}",
+                    )
+                    delayed_valid = (
+                        dev_event
+                        & np.isfinite(delayed_signal)
+                    )
+                    delayed_score = None
+                    delayed_ratio = None
+                    if int(delayed_valid.sum()) >= 50:
+                        dyr = (
+                            event_y[delayed_valid]
+                            - apply_control(event_controls[delayed_valid], by)
+                        )
+                        dsr = (
+                            delayed_signal[delayed_valid]
+                            - apply_control(event_controls[delayed_valid], bs)
+                        )
+                        delayed_score = float(np.mean(dsr * dyr))
+                        if abs(score) > 1e-18:
+                            delayed_ratio = abs(delayed_score) / abs(score)
+                    metrics = response_metrics(sr, yr)
+                    rows.append({
+                        "event": event,
+                        "family_id": family_id,
+                        "leakage_mode": leakage_mode,
+                        "representation_family": representation_family,
+                        "representation": representation,
+                        "target": target,
+                        "target_kind": "future_probability_change",
+                        "horizon_kind": "EVENT",
+                        "horizon": event_horizon,
+                        "status": "OK",
+                        "train_n": int(train_event.sum()),
+                        "dev_n": int(dev_event.sum()),
+                        "train_score": float(np.mean(train_sr * train_yr)),
+                        "dev_score": score,
+                        "dev_beta": beta,
+                        "dev_hit_rate": metrics["hit_rate"],
+                        "dev_standardized_effect": metrics["standardized_effect"],
+                        "dev_signal_quantile_scores": metrics["signal_quantile_scores"],
+                        "dev_quantile_monotone": metrics["quantile_monotone"],
+                        "dev_half1_score": half1,
+                        "dev_half2_score": half2,
+                        "p_value": p,
+                        "q_value": None,
+                        "delayed_60s_score": delayed_score,
+                        "delayed_60s_effect_ratio": delayed_ratio,
+                        "fdr_group": (
+                            f"{leakage_mode}|{representation_family}|"
+                            "future_probability_change|EVENT"
+                        ),
+                        "model_params": {
+                            **model_params,
+                            "control_y": by.tolist(),
+                            "control_signal": bs.tolist(),
+                        },
+                        "source_kind": source_kind,
+                    })
+                else:
+                    frozen = (
+                        SHORTLIST["candidate_params"].get(key)
+                        if SHORTLIST else None
+                    )
+                    if frozen is None:
+                        continue
+                    hold_event = valid_event & event_hold
+                    if int(hold_event.sum()) < 50:
+                        rows.append({
+                            "candidate_key": key,
+                            "status": "UNAVAILABLE_HOLDOUT",
+                            "holdout_n": int(hold_event.sum()),
+                        })
+                        continue
+                    by = np.asarray(frozen["control_y"], float)
+                    bs = np.asarray(frozen["control_signal"], float)
+                    yr = (
+                        event_y[hold_event]
+                        - apply_control(event_controls[hold_event], by)
+                    )
+                    sr = (
+                        event_signal[hold_event]
+                        - apply_control(event_controls[hold_event], bs)
+                    )
+                    score = float(np.mean(sr * yr))
+                    denom = float(sr @ sr)
+                    beta = None if denom <= 0 else float((sr @ yr) / denom)
+                    rows.append({
+                        "candidate_key": key,
+                        "event": event,
+                        "family_id": family_id,
+                        "leakage_mode": leakage_mode,
+                        "representation_family": representation_family,
+                        "representation": representation,
+                        "target": target,
+                        "target_kind": "future_probability_change",
+                        "horizon_kind": "EVENT",
+                        "horizon": event_horizon,
+                        "status": "OK",
+                        "holdout_n": int(hold_event.sum()),
+                        "holdout_score": score,
+                        "holdout_beta": beta,
+                        "_bootstrap_values": (sr * yr).tolist(),
+                    })
+    return rows
+
+
+def files(root: Path) -> list[str]:
+    return [str(p) for p in sorted(root.rglob("*.parquet"))]
+
+
+def quote_series(corpus: Path, event: str, tokens: list[str]) -> dict[str, dict[str, np.ndarray]]:
+    root = corpus / "schema_version=1" / event / "books" / "book_changes"
+    fs = files(root)
+    if not fs:
+        return {}
+    ds = pads.dataset(fs, format="parquet")
+    expr = pads.field("token_id").isin(tokens)
+    tbl = ds.to_table(
+        columns=["token_id", "observed_at", "best_bid", "best_ask"],
+        filter=expr,
+    )
+    if tbl.num_rows == 0:
+        return {}
+    order = pc.sort_indices(
+        tbl,
+        sort_keys=[
+            ("token_id", "ascending"),
+            ("observed_at", "ascending"),
+            ("best_bid", "ascending"),
+            ("best_ask", "ascending"),
+        ],
+    )
+    tbl = pc.take(tbl, order)
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in tbl.to_pylist():
+        grouped[str(row["token_id"])].append(row)
+    out: dict[str, dict[str, np.ndarray]] = {}
+    for token, vals in grouped.items():
+        tt: list[int] = []
+        pp: list[float] = []
+        ss: list[float] = []
+        i = 0
+        while i < len(vals):
+            j = i + 1
+            while j < len(vals) and vals[j]["observed_at"] == vals[i]["observed_at"]:
+                j += 1
+            states = {
+                (float(v["best_bid"]), float(v["best_ask"]))
+                for v in vals[i:j]
+                if v["best_bid"] is not None and v["best_ask"] is not None
+            }
+            tt.append(iso_ns(vals[i]["observed_at"]))
+            if len(states) == 1:
+                b, a = next(iter(states))
+                if 0 < b <= a < 1:
+                    pp.append((b + a) / 2.0)
+                    ss.append(a - b)
+                else:
+                    pp.append(np.nan)
+                    ss.append(np.nan)
+            else:
+                pp.append(np.nan)
+                ss.append(np.nan)
+            i = j
+        out[token] = {
+            "t": np.asarray(tt, np.int64),
+            "p": np.asarray(pp, float),
+            "spread": np.asarray(ss, float),
+        }
+    return out
+
+
+def economic_trade_series(
+    corpus: Path, event: str, tokens: list[str]
+) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    root = corpus / "schema_version=1" / event / "books" / "trades"
+    fs = files(root)
+    if not fs:
+        return {}
+    ds = pads.dataset(fs, format="parquet")
+    expr = pads.field("token_id").isin(tokens)
+    table = ds.to_table(
+        columns=[
+            "token_id",
+            "observed_at",
+            "source_timestamp",
+            "transaction_hash",
+            "price",
+            "size",
+        ],
+        filter=expr,
+    )
+    if table.num_rows == 0:
+        return {}
+    order = pc.sort_indices(
+        table,
+        sort_keys=[
+            ("token_id", "ascending"),
+            ("observed_at", "ascending"),
+            ("source_timestamp", "ascending"),
+            ("transaction_hash", "ascending"),
+            ("price", "ascending"),
+            ("size", "ascending"),
+        ],
+    )
+    rows = pc.take(table, order).to_pylist()
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[str(row["token_id"])].append(row)
+    out: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    for token, values in grouped.items():
+        unique: dict[tuple[Any, ...], tuple[int, float] | None] = {}
+        for row in values:
+            try:
+                price = float(row["price"])
+            except (TypeError, ValueError):
+                continue
+            if not (0.0 < price < 1.0):
+                continue
+            observed = iso_ns(row["observed_at"])
+            tx = str(row.get("transaction_hash") or "").strip()
+            if tx:
+                key: tuple[Any, ...] = ("TX", tx)
+            else:
+                key = (
+                    "FALLBACK",
+                    observed,
+                    price,
+                    str(row.get("size") or ""),
+                )
+            prior = unique.get(key)
+            if prior is None and key in unique:
+                continue
+            if prior is not None:
+                if abs(prior[1] - price) > 1e-9:
+                    unique[key] = None
+                continue
+            unique[key] = (observed, price)
+        clean = sorted(
+            (value for value in unique.values() if value is not None),
+            key=lambda item: (item[0], item[1]),
+        )
+        if clean:
+            out[token] = (
+                np.asarray([item[0] for item in clean], dtype=np.int64),
+                np.asarray([item[1] for item in clean], dtype=float),
+            )
+    return out
+
+
+def sample_series(
+    series: dict[str, np.ndarray], grid: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    idx = np.searchsorted(series["t"], grid, side="right") - 1
+    valid = idx >= 0
+    safe = np.maximum(idx, 0)
+    age = (grid - series["t"][safe]) / 1e9
+    valid &= (age >= 0) & (age <= FRESHNESS_SECONDS)
+    p = series["p"][safe].copy()
+    spread = series["spread"][safe].copy()
+    p[~valid] = np.nan
+    spread[~valid] = np.nan
+    return p, spread
+
+
+def event_panel(
+    corpus: Path, event: str, tokens: list[str]
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[str]]:
+    unique = sorted(set(tokens))
+    series = quote_series(corpus, event, unique)
+    if not series:
+        return np.asarray([], np.int64), np.empty((0, 0)), np.empty((0, 0)), []
+    valid_tokens = [t for t in unique if t in series]
+    start = min(int(series[t]["t"].min()) for t in valid_tokens)
+    end = max(int(series[t]["t"].max()) for t in valid_tokens)
+    step = STEP_SECONDS * 1_000_000_000
+    grid = np.arange(start, end + 1, step, dtype=np.int64)
+    p = np.full((len(grid), len(valid_tokens)), np.nan)
+    spread = np.full_like(p, np.nan)
+    for j, token in enumerate(valid_tokens):
+        p[:, j], spread[:, j] = sample_series(series[token], grid)
+    return grid, p, spread, valid_tokens
+
+
+def broad_move(panel: np.ndarray, target_index: int) -> np.ndarray:
+    moves = np.full_like(panel, np.nan)
+    moves[1:] = panel[1:] - panel[:-1]
+    refs = np.delete(moves, target_index, axis=1)
+    count = np.sum(np.isfinite(refs), axis=1)
+    total = np.nansum(refs, axis=1)
+    out = np.full(len(panel), np.nan)
+    ok = count >= 1
+    out[ok] = total[ok] / count[ok]
+    return out
+
+
+def hard_family_candidates(
+    family: dict[str, Any],
+    event: str,
+    grid: np.ndarray,
+    panel: np.ndarray,
+    spreads: np.ndarray,
+    tokens: list[str],
+    trade_streams: dict[str, tuple[np.ndarray, np.ndarray]],
+) -> list[dict[str, Any]]:
+    index = {t: i for i, t in enumerate(tokens)}
+    members = [
+        m
+        for m in family["members"]
+        if event in m.get("present_in_events", [])
+        and m["canonical_token_id"] in index
+    ]
+    expected = [
+        m for m in family["members"] if event in m.get("present_in_events", [])
+    ]
+    if len(members) != len(expected) or len(members) < 2:
+        return []
+    cols = [index[m["canonical_token_id"]] for m in members]
+    values = panel[:, cols]
+    train, dev, _, _, _ = split_masks(grid)
+    train_spread = np.nanmedian(spreads[train][:, cols], axis=0)
+    reliability = 1.0 / np.clip(
+        np.where(np.isfinite(train_spread), train_spread, 0.05), 0.005, 0.25
+    )
+    result: list[dict[str, Any]] = []
+    if family["relation_type"] == "EXHAUSTIVE_PARTITION" and family.get("complete"):
+        valid = np.all(np.isfinite(values), axis=1)
+        family_spread = spreads[:, cols]
+        tob_valid = valid & np.all(np.isfinite(family_spread), axis=1)
+        bids = values - family_spread / 2.0
+        asks = values + family_spread / 2.0
+        bid_sum = np.nansum(bids, axis=1)
+        ask_sum = np.nansum(asks, axis=1)
+        train_tob = tob_valid & train
+        dev_tob = tob_valid & dev
+        result.append({
+            "event": event,
+            "family_id": family["family_id"],
+            "leakage_mode": "DIRECT_PROJECTION",
+            "representation_family": "HARD_COHERENCE_DIAGNOSTIC",
+            "representation": "PARTITION_TOP_OF_BOOK_FEASIBILITY",
+            "target": "__FAMILY__",
+            "target_kind": "hard_top_of_book_coherence",
+            "horizon_kind": "CURRENT",
+            "horizon": 0,
+            "status": "DIAGNOSTIC_ONLY",
+            "train_n": int(train_tob.sum()),
+            "dev_n": int(dev_tob.sum()),
+            "train_underpriced_count": int(
+                np.sum(train_tob & (ask_sum < 1.0 - 1e-12))
+            ),
+            "train_overpriced_count": int(
+                np.sum(train_tob & (bid_sum > 1.0 + 1e-12))
+            ),
+            "dev_underpriced_count": int(
+                np.sum(dev_tob & (ask_sum < 1.0 - 1e-12))
+            ),
+            "dev_overpriced_count": int(
+                np.sum(dev_tob & (bid_sum > 1.0 + 1e-12))
+            ),
+            "dev_best_underpricing_gross": (
+                float(np.max(1.0 - ask_sum[dev_tob]))
+                if np.any(dev_tob) else None
+            ),
+            "dev_best_overpricing_gross": (
+                float(np.max(bid_sum[dev_tob] - 1.0))
+                if np.any(dev_tob) else None
+            ),
+            "depth_certified": False,
+            "arbitrage_claim": False,
+            "note": (
+                "BBO feasibility only. No hard-arbitrage claim without depth, "
+                "fees/costs, all-leg size and settlement verification."
+            ),
+            "p_value": None,
+            "q_value": None,
+            "fdr_group": "DESCRIPTIVE_ONLY|HARD_PARTITION|BBO",
+            "model_params": {"method": "M-020 top-of-book feasibility"},
+            "source_kind": "DATA-001",
+        })
+        qp = np.full_like(values, np.nan)
+        kl = np.full_like(values, np.nan)
+        wqp = np.full_like(values, np.nan)
+        for r in np.flatnonzero(valid):
+            qp[r] = project_simplex(values[r])
+            kl[r] = kl_partition(values[r], np.ones(len(cols)))
+            wqp[r] = weighted_partition(values[r], reliability)
+        for k, member in enumerate(members):
+            target = values[:, k]
+            exact = np.full(len(grid), np.nan)
+            exact[valid] = np.clip(
+                1.0 - (np.sum(values[valid], axis=1) - target[valid]), 0.0, 1.0
+            )
+            variants = [
+                (
+                    "HARD_PARTITION_LOO_EXACT",
+                    "PARTITION_RECONSTRUCTION",
+                    exact - target,
+                    {"method": "exact_partition_loo"},
+                    "LOO-PRICE",
+                ),
+                (
+                    "HARD_PARTITION_QP",
+                    "COHERENT_PROJECTION",
+                    qp[:, k] - target,
+                    {"method": "quadratic_equal"},
+                    "DIRECT_PROJECTION",
+                ),
+                (
+                    "HARD_PARTITION_QP_RELIABILITY",
+                    "COHERENT_PROJECTION",
+                    wqp[:, k] - target,
+                    {
+                        "method": "quadratic_train_spread",
+                        "weights": reliability.tolist(),
+                    },
+                    "DIRECT_PROJECTION",
+                ),
+                (
+                    "HARD_PARTITION_KL",
+                    "COHERENT_PROJECTION",
+                    kl[:, k] - target,
+                    {"method": "bernoulli_kl"},
+                    "DIRECT_PROJECTION",
+                ),
+            ]
+            for name, rep_family, signal, params, leakage in variants:
+                result.extend(
+                    candidate_eval(
+                        event=event,
+                        family_id=family["family_id"],
+                        leakage_mode=leakage,
+                        representation_family=rep_family,
+                        representation=name,
+                        target=member["canonical_token_id"],
+                        times_ns=grid,
+                        target_price=target,
+                        signal=signal,
+                        broad_move=broad_move(panel, cols[k]),
+                        model_params=params,
+                        trade_stream=trade_streams.get(
+                            member["canonical_token_id"]
+                        ),
+                    )
+                )
+    elif family["relation_type"] == "CONDITIONAL_STAGED":
+        ordered = sorted(
+            members,
+            key=lambda m: int(
+                re.search(
+                    r"at least\s+(\d+)",
+                    m["exact_outcome_semantics"],
+                    re.I,
+                ).group(1)
+            ),
+        )
+        cols2 = [index[m["canonical_token_id"]] for m in ordered]
+        values2 = panel[:, cols2]
+        spread2 = spreads[:, cols2]
+        valid = np.all(np.isfinite(values2), axis=1)
+        tob_valid = valid & np.all(np.isfinite(spread2), axis=1)
+        bid2 = values2 - spread2 / 2.0
+        ask2 = values2 + spread2 / 2.0
+        pair_edges = (
+            bid2[:, 1:] - ask2[:, :-1]
+            if values2.shape[1] >= 2
+            else np.empty((len(values2), 0))
+        )
+        max_edge = (
+            np.nanmax(pair_edges, axis=1)
+            if pair_edges.shape[1]
+            else np.full(len(values2), np.nan)
+        )
+        train_tob = tob_valid & train
+        dev_tob = tob_valid & dev
+        result.append({
+            "event": event,
+            "family_id": family["family_id"],
+            "leakage_mode": "DIRECT_PROJECTION",
+            "representation_family": "HARD_COHERENCE_DIAGNOSTIC",
+            "representation": "THRESHOLD_TOP_OF_BOOK_DOMINANCE",
+            "target": "__FAMILY__",
+            "target_kind": "hard_top_of_book_coherence",
+            "horizon_kind": "CURRENT",
+            "horizon": 0,
+            "status": "DIAGNOSTIC_ONLY",
+            "train_n": int(train_tob.sum()),
+            "dev_n": int(dev_tob.sum()),
+            "train_violation_count": int(
+                np.sum(train_tob & (max_edge > 1e-12))
+            ),
+            "dev_violation_count": int(
+                np.sum(dev_tob & (max_edge > 1e-12))
+            ),
+            "dev_best_gross_edge": (
+                float(np.nanmax(max_edge[dev_tob]))
+                if np.any(dev_tob) else None
+            ),
+            "depth_certified": False,
+            "arbitrage_claim": False,
+            "note": (
+                "Adjacent threshold BBO dominance only. No hard-arbitrage claim "
+                "without depth, fees/costs and executable all-leg size."
+            ),
+            "p_value": None,
+            "q_value": None,
+            "fdr_group": "DESCRIPTIVE_ONLY|HARD_THRESHOLD|BBO",
+            "model_params": {"method": "M-002/M-008 top-of-book dominance"},
+            "source_kind": "DATA-001",
+        })
+        train_spread2 = np.nanmedian(spreads[train][:, cols2], axis=0)
+        reliability2 = 1.0 / np.clip(
+            np.where(np.isfinite(train_spread2), train_spread2, 0.05),
+            0.005,
+            0.25,
+        )
+        iso = np.full_like(values2, np.nan)
+        iso_weighted = np.full_like(values2, np.nan)
+        for r in np.flatnonzero(valid):
+            iso[r] = isotonic_nonincreasing(values2[r])
+            iso_weighted[r] = isotonic_nonincreasing(
+                values2[r], reliability2
+            )
+        pmf = np.full((len(values2), values2.shape[1] + 1), np.nan)
+        pmf_weighted = np.full_like(pmf, np.nan)
+        if np.any(valid):
+            pmf[valid] = threshold_pmf(iso[valid])
+            pmf_weighted[valid] = threshold_pmf(iso_weighted[valid])
+        surfaces: list[tuple[str, np.ndarray, dict[str, Any]]] = [
+            (
+                "THRESHOLD_ISOTONIC_EQUAL",
+                iso,
+                {"method": "weighted_isotonic", "weights": "equal"},
+            ),
+            (
+                "THRESHOLD_ISOTONIC_RELIABILITY",
+                iso_weighted,
+                {
+                    "method": "weighted_isotonic",
+                    "weights": reliability2.tolist(),
+                },
+            ),
+        ]
+        for lam in (0.1, 1.0):
+            smooth = np.full_like(values2, np.nan)
+            entropy = np.full_like(values2, np.nan)
+            if np.any(valid):
+                smooth[valid] = survival_from_pmf(
+                    smooth_pmf(pmf_weighted[valid], lam)
+                )
+                entropy[valid] = survival_from_pmf(
+                    entropy_shrink_pmf(pmf_weighted[valid], lam)
+                )
+            surfaces.extend([
+                (
+                    f"THRESHOLD_SMOOTHNESS_{lam:g}",
+                    smooth,
+                    {
+                        "method": "pmf_neighbor_smoothness_challenger",
+                        "lambda": lam,
+                    },
+                ),
+                (
+                    f"THRESHOLD_ENTROPY_{lam:g}",
+                    entropy,
+                    {
+                        "method": "maximum_entropy_shrinkage_challenger",
+                        "lambda": lam,
+                    },
+                ),
+            ])
+        logconcave = np.full_like(values2, np.nan)
+        if np.any(valid):
+            logconcave[valid] = survival_from_pmf(
+                logconcave_pmf_challenger(pmf_weighted[valid])
+            )
+        surfaces.append(
+            (
+                "THRESHOLD_LOGCONCAVE_DIAGNOSTIC",
+                logconcave,
+                {
+                    "method": "iterative_logconcavity_challenger",
+                    "diagnostic_only": True,
+                },
+            )
+        )
+        if np.any(valid & train) or np.any(valid & dev):
+            train_pmf = pmf_weighted[valid & train]
+            dev_pmf = pmf_weighted[valid & dev]
+            result.append({
+                "event": event,
+                "family_id": family["family_id"],
+                "leakage_mode": "DIRECT_PROJECTION",
+                "representation_family": "THRESHOLD_DISTRIBUTION",
+                "representation": "THRESHOLD_IMPLIED_PMF",
+                "target": "__FAMILY__",
+                "target_kind": "implied_distribution",
+                "horizon_kind": "CURRENT",
+                "horizon": 0,
+                "status": "DIAGNOSTIC_ONLY",
+                "train_n": int(len(train_pmf)),
+                "dev_n": int(len(dev_pmf)),
+                "train_mean_entropy": (
+                    float(np.mean(-np.sum(
+                        train_pmf * np.log(np.clip(train_pmf, 1e-12, 1.0)),
+                        axis=1,
+                    ))) if len(train_pmf) else None
+                ),
+                "dev_mean_entropy": (
+                    float(np.mean(-np.sum(
+                        dev_pmf * np.log(np.clip(dev_pmf, 1e-12, 1.0)),
+                        axis=1,
+                    ))) if len(dev_pmf) else None
+                ),
+                "p_value": None,
+                "q_value": None,
+                "fdr_group": "DESCRIPTIVE_ONLY|THRESHOLD_PMF",
+                "model_params": {
+                    "method": "isotonic_implied_pmf",
+                    "weights": reliability2.tolist(),
+                },
+                "source_kind": "DATA-001",
+            })
+        for name, surface, params in surfaces:
+            for k, member in enumerate(ordered):
+                target = values2[:, k]
+                signal = surface[:, k] - target
+                result.extend(
+                    candidate_eval(
+                        event=event,
+                        family_id=family["family_id"],
+                        leakage_mode="DIRECT_PROJECTION",
+                        representation_family="THRESHOLD_SURFACE",
+                        representation=name,
+                        target=member["canonical_token_id"],
+                        times_ns=grid,
+                        target_price=target,
+                        signal=signal,
+                        broad_move=broad_move(panel, cols2[k]),
+                        model_params=params,
+                        trade_stream=trade_streams.get(
+                            member["canonical_token_id"]
+                        ),
+                    )
+                )
+    return result
+
+
+def indirect_graph_candidates(
+    event: str,
+    rels: list[dict[str, str]],
+    grid: np.ndarray,
+    panel: np.ndarray,
+    tokens: list[str],
+    trade_streams: dict[str, tuple[np.ndarray, np.ndarray]],
+) -> list[dict[str, Any]]:
+    index = {t: i for i, t in enumerate(tokens)}
+    grouped: dict[str, list[str]] = defaultdict(list)
+    for row in rels:
+        if row["regime_id"] == event and row["leakage_class"] == "INDIRECT":
+            if (
+                row["target_token_id"] in index
+                and row["reference_token_id"] in index
+            ):
+                grouped[row["target_token_id"]].append(row["reference_token_id"])
+    out: list[dict[str, Any]] = []
+    train, _, _, _, _ = split_masks(grid)
+    for target, refs0 in grouped.items():
+        refs = sorted(set(refs0))
+        if not refs:
+            continue
+        ti = index[target]
+        rj = [index[r] for r in refs]
+        tp = panel[:, ti]
+        rp = panel[:, rj]
+        complete = np.isfinite(tp) & np.all(np.isfinite(rp), axis=1)
+        train_ok = complete & train
+        if int(train_ok.sum()) < 100:
+            continue
+        comp_prob = np.nanmean(rp, axis=1)
+        comp = np.nanmean(logit(rp), axis=1)
+        tx = comp[train_ok]
+        ty = logit(tp[train_ok])
+        pa0, pa1 = fit_affine(comp_prob[train_ok], tp[train_ok])
+        ia, sa = fit_affine(tx, ty)
+        ih, sh = fit_huber(tx, ty)
+        ref_logit_train = logit(rp[train_ok])
+        ref_rmse = np.sqrt(
+            np.mean((ref_logit_train - ty[:, None]) ** 2, axis=0)
+        )
+        reliability = 1.0 / np.clip(ref_rmse, 1e-4, None)
+        rel_prob = np.full(len(grid), np.nan)
+        rel_logit = np.full(len(grid), np.nan)
+        allok = np.all(np.isfinite(rp), axis=1)
+        rel_prob[allok] = (
+            rp[allok] @ reliability / float(reliability.sum())
+        )
+        rel_logit[allok] = logistic(
+            logit(rp[allok]) @ reliability / float(reliability.sum())
+        )
+        q = (
+            float(np.var(np.diff(tx)))
+            if len(tx) > 2 else 1e-4
+        )
+        r = float(np.var(ty - tx)) if len(tx) > 1 else 1e-3
+        kalman_logit = kalman_reference_filter(comp, q, r)
+        variants: list[tuple[str, str, np.ndarray, dict[str, Any]]] = [
+            (
+                "RAW_INDIRECT_PROB_MEAN",
+                "RAW_RV",
+                comp_prob,
+                {"method": "raw_probability_mean", "refs": refs},
+            ),
+            (
+                "RAW_INDIRECT_RELIABILITY_PROB",
+                "RAW_RV",
+                rel_prob,
+                {
+                    "method": "train_reliability_probability_mean",
+                    "weights": reliability.tolist(),
+                    "refs": refs,
+                },
+            ),
+            (
+                "RAW_INDIRECT_RELIABILITY_LOGIT",
+                "RAW_RV",
+                rel_logit,
+                {
+                    "method": "train_reliability_logit_mean",
+                    "weights": reliability.tolist(),
+                    "refs": refs,
+                },
+            ),
+            (
+                "AFFINE_INDIRECT_PROBABILITY",
+                "CALIBRATED_RV",
+                np.clip(pa0 + pa1 * comp_prob, 1e-6, 1 - 1e-6),
+                {
+                    "method": "affine_probability",
+                    "intercept": pa0,
+                    "slope": pa1,
+                    "refs": refs,
+                },
+            ),
+            (
+                "KALMAN_INDIRECT_LOGIT",
+                "STATE_SPACE_RV",
+                logistic(kalman_logit),
+                {
+                    "method": "scalar_kalman_reference_logit",
+                    "process_variance": q,
+                    "measurement_variance": r,
+                    "refs": refs,
+                },
+            ),
+            (
+                "RAW_INDIRECT_LOGIT_MEAN",
+                "RAW_RV",
+                logistic(comp),
+                {"method": "raw_logit_mean", "refs": refs},
+            ),
+            (
+                "AFFINE_INDIRECT_LOGIT",
+                "CALIBRATED_RV",
+                logistic(ia + sa * comp),
+                {
+                    "method": "affine_logit",
+                    "intercept": ia,
+                    "slope": sa,
+                    "refs": refs,
+                },
+            ),
+            (
+                "HUBER_INDIRECT_LOGIT",
+                "CALIBRATED_RV",
+                logistic(ih + sh * comp),
+                {
+                    "method": "huber_logit",
+                    "intercept": ih,
+                    "slope": sh,
+                    "refs": refs,
+                },
+            ),
+        ]
+        xtrain = logit(rp[train_ok])
+        ytrain = ty
+        for ridge in (0.1, 1.0, 10.0):
+            beta, intercept = fit_ridge_matrix(xtrain, ytrain, ridge)
+            pred = np.full(len(grid), np.nan)
+            allok = np.all(np.isfinite(rp), axis=1)
+            pred[allok] = logistic(intercept + logit(rp[allok]) @ beta)
+            variants.append(
+                (
+                    f"RIDGE_GRAPH_LOGIT_{ridge:g}",
+                    "SPARSE_STRUCTURAL_GRAPH",
+                    pred,
+                    {
+                        "method": "ridge_graph_logit",
+                        "ridge": ridge,
+                        "intercept": intercept,
+                        "beta": beta.tolist(),
+                        "refs": refs,
+                    },
+                )
+            )
+        for name, rep_family, fair_value, params in variants:
+            signal = fair_value - tp
+            out.extend(
+                candidate_eval(
+                    event=event,
+                    family_id=f"INDIRECT_GRAPH::{event}",
+                    leakage_mode="LOO-FAMILY",
+                    representation_family=rep_family,
+                    representation=name,
+                    target=target,
+                    times_ns=grid,
+                    target_price=tp,
+                    signal=signal,
+                    broad_move=broad_move(panel, ti),
+                    model_params=params,
+                    trade_stream=trade_streams.get(target),
+                )
+            )
+    return out
+
+
+def build_data1_inventory() -> list[dict[str, Any]]:
+    inv: list[dict[str, Any]] = []
+    for family in EMBEDDED["families"]:
+        if (
+            family.get("validation_status") == "MECHANICALLY_PROVEN"
+            and family.get("mechanically_enforceable")
+        ):
+            cls = "HARD"
+        elif family.get("relation_type") == "SEMANTIC_COMPETITION_ONLY":
+            cls = "SOFT"
+        else:
+            cls = "UNKNOWN"
+        inv.append({
+            "inventory_id": family["family_id"],
+            "source": "accepted_structural_family_registry",
+            "class": cls,
+            "relation_type": family.get("relation_type"),
+            "member_count": len(family.get("members", [])),
+            "semantic_basis": family.get("rule_summary") or family.get("semantic_basis"),
+            "loo_permission": (
+                "LOO-PRICE"
+                if cls == "HARD"
+                else ("SOFT_STATISTICAL" if cls == "SOFT" else "NONE")
+            ),
+        })
+    for i, row in enumerate(EMBEDDED["relationships"]):
+        inv.append({
+            "inventory_id": f"INDIRECT::{i:04d}",
+            "source": "accepted_relationship_inventory",
+            "class": "SOFT" if row.get("leakage_class") == "INDIRECT" else "UNKNOWN",
+            "relation_type": row.get("relationship_type"),
+            "member_count": 2,
+            "semantic_basis": row.get("semantic_basis"),
+            "loo_permission": (
+                "LOO-FAMILY" if row.get("leakage_class") == "INDIRECT" else "NONE"
+            ),
+            "event": row.get("regime_id"),
+            "target_token_id": row.get("target_token_id"),
+            "reference_token_id": row.get("reference_token_id"),
+        })
+    for row in EMBEDDED.get("historical_catalogue", []):
+        if (
+            row.get("election_id") in {"USA_2024_GENERAL", "CAN_2025_FEDERAL"}
+            and not row.get("market_id")
+        ):
+            inv.append({
+                "inventory_id": f"UNKNOWN_CROSS_EVENT::{row.get('catalogue_row_id')}",
+                "source": "historical_market_catalogue",
+                "class": "UNKNOWN",
+                "relation_type": row.get("target_role") or row.get("market_role"),
+                "member_count": None,
+                "semantic_basis": "family-level topology exists but exact market identity/mapping is absent",
+                "loo_permission": "NONE",
+            })
+    return inv
+
+
+def data2_file(root: Path, family: str) -> Path | None:
+    matches = list(root.rglob(f"fees_{family}.parquet"))
+    if len(matches) != 1:
+        return None
+    path = matches[0]
+    expected = [
+        row
+        for row in DATA2_MANIFEST_PAYLOAD.get("files", [])
+        if Path(row.get("path", "")).name == path.name
+    ]
+    if len(expected) != 1:
+        raise RuntimeError(f"DATA-002 manifest missing unique record for {path.name}")
+    actual_sha = sha(path)
+    if actual_sha != expected[0].get("sha256"):
+        raise RuntimeError(
+            f"DATA-002 parquet drift for {path.name}: {actual_sha} != "
+            f"{expected[0].get('sha256')}"
+        )
+    return path
+
+
+def generic_event_inventory_and_eval(
+    data2_root: Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    inventory: list[dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
+    for row in EMBEDDED.get("historical_catalogue", []):
+        exact_market = str(row.get("market_id") or "").strip()
+        exact_condition = str(row.get("condition_id") or "").strip()
+        inventory.append({
+            "inventory_id": f"HISTORICAL_CATALOGUE::{row.get('catalogue_row_id')}",
+            "source": "RESEARCH-PACKAGE-001 market catalogue",
+            "class": "SOFT",
+            "relation_type": row.get("structural_role") or row.get("role") or "HISTORICAL_STRUCTURAL_NODE",
+            "semantic_basis": row.get("semantic_analogue") or row.get("question") or row.get("title"),
+            "family": row.get("election_id"),
+            "exact_identity_available": bool(exact_market or exact_condition),
+            "test_status": (
+                "ELIGIBLE_FOR_GENERIC_DATA002_EVENT_CENSUS"
+                if exact_market or exact_condition
+                else "SEMANTIC_NODE_ONLY_NO_EXACT_ID"
+            ),
+            "hard_identity": False,
+        })
+    import pandas as pd
+
+    for family in PREREG["data_sources"]["DATA-002"]["families"]:
+        path = data2_file(data2_root, family)
+        if path is None:
+            continue
+        table = pq.read_table(
+            path,
+            columns=[
+                "event_id",
+                "market_id",
+                "token_id",
+                "outcome_side",
+                "timestamp",
+                "tx_hash",
+                "price",
+                "value_usd",
+            ],
+        )
+        outcome = pc.cast(table["outcome_side"], pa.string())
+        mask = pc.equal(pc.utf8_upper(outcome), pa.scalar("YES"))
+        table = table.filter(mask)
+        if table.num_rows == 0:
+            continue
+        df = table.to_pandas()
+        df = df.dropna(
+            subset=[
+                "event_id",
+                "market_id",
+                "token_id",
+                "timestamp",
+                "tx_hash",
+                "price",
+            ]
+        )
+        df["event_id"] = df["event_id"].astype(str)
+        df["market_id"] = df["market_id"].astype(str)
+        df["token_id"] = df["token_id"].astype(str)
+        agg = (
+            df.groupby(
+                ["event_id", "market_id", "token_id", "tx_hash"],
+                sort=False,
+                observed=True,
+            )
+            .agg(
+                timestamp=("timestamp", "min"),
+                price_min=("price", "min"),
+                price_max=("price", "max"),
+                value_usd=("value_usd", "sum"),
+            )
+            .reset_index()
+        )
+        agg = agg[np.isclose(agg["price_min"], agg["price_max"], atol=1e-9)]
+        agg["price"] = agg["price_min"].astype(float)
+        if np.issubdtype(agg["timestamp"].dtype, np.number):
+            agg["timestamp_ns"] = pd.to_datetime(
+                agg["timestamp"], unit="s", utc=True
+            ).astype("int64")
+        else:
+            agg["timestamp_ns"] = pd.to_datetime(
+                agg["timestamp"], utc=True
+            ).astype("int64")
+        del df
+        for event_id, group in agg.groupby("event_id", sort=False):
+            counts = group.groupby("market_id", observed=True).size()
+            markets = sorted(counts[counts >= 100].index.astype(str))
+            inv_id = f"GENERIC_EVENT::{family}::{event_id}"
+            inventory.append({
+                "inventory_id": inv_id,
+                "source": "DATA-002 shared event_id",
+                "class": "SOFT",
+                "relation_type": "SAME_EVENT_GENERIC",
+                "member_count": len(markets),
+                "semantic_basis": "shared event_id only; no hard identity inferred",
+                "loo_permission": "LOO-PRICE_ONLY",
+                "family": family,
+                "event_id": event_id,
+            })
+            if len(markets) < 3:
+                continue
+            streams: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+            for market in markets:
+                gm = group[group["market_id"].astype(str) == market].sort_values(
+                    "timestamp_ns"
+                )
+                token = gm.groupby("token_id", observed=True).size().idxmax()
+                gm = gm[gm["token_id"] == token]
+                streams[market] = (
+                    gm["timestamp_ns"].to_numpy(np.int64),
+                    gm["price"].to_numpy(float),
+                )
+            for target in markets:
+                tt, tp = streams[target]
+                if len(tt) < 150:
+                    continue
+                train, dev, hold, _, _ = split_masks(tt)
+                if PHASE == "TRAIN_DEV":
+                    if int(train.sum()) < 100 or int(dev.sum()) < 50:
+                        continue
+                elif int(hold.sum()) < 50:
+                    continue
+                ref_markets = [m for m in markets if m != target]
+                sampled: list[np.ndarray] = []
+                for market in ref_markets:
+                    rt, rp = streams[market]
+                    idx = np.searchsorted(rt, tt, side="right") - 1
+                    valid = idx >= 0
+                    arr = np.full(len(tt), np.nan)
+                    arr[valid] = rp[np.maximum(idx[valid], 0)]
+                    sampled.append(arr)
+                refs = np.column_stack(sampled)
+                valid_refs = np.sum(np.isfinite(refs), axis=1) >= 2
+                comp_prob = np.nanmean(refs, axis=1)
+                comp_logit = logistic(np.nanmean(logit(refs), axis=1))
+                train_fit = (
+                    train
+                    & valid_refs
+                    & np.isfinite(tp)
+                    & np.isfinite(comp_logit)
+                )
+                if PHASE == "TRAIN_DEV" and int(train_fit.sum()) < 100:
+                    continue
+                if PHASE == "TRAIN_DEV":
+                    ia, sa = fit_affine(
+                        logit(comp_logit[train_fit]), logit(tp[train_fit])
+                    )
+                    affine = logistic(ia + sa * logit(comp_logit))
+                else:
+                    ia = sa = float("nan")
+                    affine = np.full(len(tp), np.nan)
+                baseline_mask = (
+                    (dev if PHASE == "TRAIN_DEV" else hold)
+                    & valid_refs
+                    & np.isfinite(tp)
+                )
+                if int(baseline_mask.sum()) < 50:
+                    continue
+                baseline_rmse = float(
+                    np.sqrt(
+                        np.mean(
+                            (comp_prob[baseline_mask] - tp[baseline_mask]) ** 2
+                        )
+                    )
+                )
+                base_variants = [
+                    (
+                        "GENERIC_EVENT_EQUAL_PROB",
+                        comp_prob,
+                        {"method": "equal_prob", "refs": ref_markets},
+                    ),
+                    (
+                        "GENERIC_EVENT_EQUAL_LOGIT",
+                        comp_logit,
+                        {"method": "equal_logit", "refs": ref_markets},
+                    ),
+                    (
+                        "GENERIC_EVENT_AFFINE_LOGIT",
+                        affine,
+                        {
+                            "method": "affine_logit",
+                            "intercept": ia,
+                            "slope": sa,
+                            "refs": ref_markets,
+                        },
+                    ),
+                ]
+                if PHASE == "TRAIN_DEV":
+                    train_anchor_logit = float(np.nanmean(logit(tp[train_fit])))
+                else:
+                    train_anchor_logit = float("nan")
+                for slack_lambda in (0.25, 1.0, 4.0):
+                    soft = logistic(
+                        (train_anchor_logit + slack_lambda * logit(comp_logit))
+                        / (1.0 + slack_lambda)
+                    )
+                    base_variants.append(
+                        (
+                            f"GENERIC_EVENT_SOFT_SLACK_{slack_lambda:g}",
+                            soft,
+                            {
+                                "method": "soft_slack_logit_mean",
+                                "lambda": slack_lambda,
+                                "anchor_logit": train_anchor_logit,
+                                "refs": ref_markets,
+                            },
+                        )
+                    )
+                for rep, fair_value, params in base_variants:
+                    candidate_key = (
+                        f"{family}:{event_id}|{inv_id}|{rep}|{target}|EVENT|0"
+                    )
+                    if PHASE == "HOLDOUT":
+                        frozen_params = (
+                            SHORTLIST.get("reconstruction_candidate_params", {})
+                            .get(candidate_key)
+                            if SHORTLIST
+                            else None
+                        )
+                        if frozen_params is None:
+                            continue
+                        method = frozen_params.get("method")
+                        if method == "affine_logit":
+                            fair_value = logistic(
+                                float(frozen_params["intercept"])
+                                + float(frozen_params["slope"]) * logit(comp_logit)
+                            )
+                            params = frozen_params
+                        elif method == "soft_slack_logit_mean":
+                            lam = float(frozen_params["lambda"])
+                            anchor = float(frozen_params["anchor_logit"])
+                            fair_value = logistic(
+                                (anchor + lam * logit(comp_logit)) / (1.0 + lam)
+                            )
+                            params = frozen_params
+                    valid = (
+                        (dev if PHASE == "TRAIN_DEV" else hold)
+                        & valid_refs
+                        & np.isfinite(fair_value)
+                        & np.isfinite(tp)
+                    )
+                    rmse = (
+                        float(
+                            np.sqrt(
+                                np.mean(
+                                    (fair_value[valid] - tp[valid]) ** 2
+                                )
+                            )
+                        )
+                        if int(valid.sum()) >= 50
+                        else None
+                    )
+                    improve = (
+                        None
+                        if rmse is None or baseline_rmse <= 0
+                        else 1.0 - rmse / baseline_rmse
+                    )
+                    phi, half = ar1_half_life(
+                        fair_value[train_fit] - tp[train_fit], 1.0
+                    )
+                    if PHASE == "HOLDOUT":
+                        results.append({
+                            "candidate_key": candidate_key,
+                            "event": f"{family}:{event_id}",
+                            "family_id": inv_id,
+                            "leakage_mode": "LOO-PRICE",
+                            "representation_family": "GENERIC_EVENT_RECONSTRUCTION",
+                            "representation": rep,
+                            "target": target,
+                            "target_kind": "current_price_reconstruction",
+                            "horizon_kind": "EVENT",
+                            "horizon": 0,
+                            "status": "OK",
+                            "holdout_n": int(valid.sum()),
+                            "holdout_rmse": rmse,
+                            "baseline_rmse": baseline_rmse,
+                            "rmse_improvement": improve,
+                            "model_params": params,
+                            "source_kind": "DATA-002",
+                        })
+                        continue
+                    results.append({
+                        "event": f"{family}:{event_id}",
+                        "family_id": inv_id,
+                        "leakage_mode": "LOO-PRICE",
+                        "representation_family": "GENERIC_EVENT_RECONSTRUCTION",
+                        "representation": rep,
+                        "target": target,
+                        "target_kind": "current_price_reconstruction",
+                        "horizon_kind": "EVENT",
+                        "horizon": 0,
+                        "status": "OK",
+                        "train_n": int(train_fit.sum()),
+                        "dev_n": int(valid.sum()),
+                        "dev_rmse": rmse,
+                        "baseline_rmse": baseline_rmse,
+                        "rmse_improvement": improve,
+                        "train_signal_ar1": phi,
+                        "train_signal_half_life_trades": half,
+                        "p_value": None,
+                        "q_value": None,
+                        "fdr_group": "LOO-PRICE|GENERIC_EVENT_RECONSTRUCTION|current_price_reconstruction|EVENT",
+                        "model_params": params,
+                        "source_kind": "DATA-002",
+                    })
+                    signal = fair_value - tp
+                    own = np.full(len(tp), np.nan)
+                    own[1:] = tp[1:] - tp[:-1]
+                    broad = np.nanmean(
+                        np.diff(refs, axis=0, prepend=np.nan), axis=1
+                    )
+                    for event_horizon in EVENT_HORIZONS:
+                        y = np.full(len(tp), np.nan)
+                        if event_horizon < len(tp):
+                            y[:-event_horizon] = (
+                                tp[event_horizon:] - tp[:-event_horizon]
+                            )
+                        valid_all = train_fit | (
+                            dev & valid_refs & np.isfinite(tp)
+                        )
+                        trainv = (
+                            train
+                            & valid_all
+                            & np.isfinite(signal)
+                            & np.isfinite(y)
+                            & np.isfinite(own)
+                            & np.isfinite(broad)
+                        )
+                        devv = (
+                            dev
+                            & valid_all
+                            & np.isfinite(signal)
+                            & np.isfinite(y)
+                            & np.isfinite(own)
+                            & np.isfinite(broad)
+                        )
+                        if int(trainv.sum()) < 100 or int(devv.sum()) < 50:
+                            continue
+                        controls = np.column_stack([own, broad])
+                        by = fit_control(controls[trainv], y[trainv])
+                        bs = fit_control(controls[trainv], signal[trainv])
+                        yr = y[devv] - apply_control(controls[devv], by)
+                        sr = signal[devv] - apply_control(controls[devv], bs)
+                        score = float(np.mean(sr * yr))
+                        results.append({
+                            "event": f"{family}:{event_id}",
+                            "family_id": inv_id,
+                            "leakage_mode": "LOO-PRICE",
+                            "representation_family": "GENERIC_EVENT_RECONSTRUCTION",
+                            "representation": rep,
+                            "target": target,
+                            "target_kind": "future_probability_change",
+                            "horizon_kind": "EVENT",
+                            "horizon": event_horizon,
+                            "status": "DIAGNOSTIC_ONLY",
+                            "train_n": int(trainv.sum()),
+                            "dev_n": int(devv.sum()),
+                            "dev_score": score,
+                            "p_value": None,
+                            "q_value": None,
+                            "fdr_group": "LOO-PRICE|GENERIC_EVENT_RECONSTRUCTION|future_probability_change|EVENT",
+                            "model_params": {
+                                **params,
+                                "control_y": by.tolist(),
+                                "control_signal": bs.tolist(),
+                            },
+                            "source_kind": "DATA-002",
+                        })
+        del agg
+    return inventory, results
+
+
+def select_shortlist(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    bh(rows)
+    groups: dict[tuple[str, ...], list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        if row.get("status") == "OK" and row.get("dev_score") is not None:
+            key = (
+                row["event"],
+                row["family_id"],
+                row["leakage_mode"],
+                row["representation"],
+                row["target_kind"],
+                row["horizon_kind"],
+                str(row["horizon"]),
+            )
+            groups[key].append(row)
+    selected: list[str] = []
+    candidate_params: dict[str, Any] = {}
+    for members in groups.values():
+        contributions = [
+            abs(float(r["dev_score"])) * max(int(r.get("dev_n", 0)), 1)
+            for r in members
+        ]
+        total = sum(contributions)
+        concentration = max(contributions) / total if total > 0 else 1.0
+        for row in members:
+            row["group_target_concentration"] = concentration
+            stable = (
+                row.get("dev_half1_score") is not None
+                and row.get("dev_half2_score") is not None
+                and row["dev_half1_score"] > 0
+                and row["dev_half2_score"] > 0
+            )
+            pass_dev = (
+                row["leakage_mode"] == "LOO-FAMILY"
+                and float(row.get("dev_score") or 0) > 0
+                and row.get("q_value") is not None
+                and float(row["q_value"]) <= 0.10
+                and stable
+                and concentration <= 0.70
+                and (
+                    row.get("delayed_60s_effect_ratio") is None
+                    or float(row["delayed_60s_effect_ratio"]) < 0.80
+                )
+            )
+            if pass_dev:
+                candidate_key = (
+                    f"{row['event']}|{row['family_id']}|{row['representation']}|"
+                    f"{row['target']}|{row['horizon_kind']}|{row['horizon']}"
+                )
+                selected.append(candidate_key)
+                candidate_params[candidate_key] = row["model_params"]
+    recon_groups: dict[tuple[str, ...], list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        if (
+            row.get("status") == "OK"
+            and row.get("target_kind") == "current_price_reconstruction"
+            and row.get("rmse_improvement") is not None
+        ):
+            recon_groups[
+                (row["event"], row["family_id"], row["representation"])
+            ].append(row)
+    reconstruction = []
+    reconstruction_candidate_params: dict[str, Any] = {}
+    for key, members in recon_groups.items():
+        passed = [
+            row
+            for row in members
+            if float(row["rmse_improvement"]) >= 0.05
+            and int(row.get("dev_n", 0)) >= 50
+        ]
+        if passed:
+            reconstruction.append({
+                "group": "|".join(key),
+                "targets": [row["target"] for row in passed],
+                "median_rmse_improvement": float(
+                    np.median([row["rmse_improvement"] for row in passed])
+                ),
+            })
+            for row in passed:
+                candidate_key = (
+                    f"{row['event']}|{row['family_id']}|{row['representation']}|"
+                    f"{row['target']}|EVENT|0"
+                )
+                reconstruction_candidate_params[candidate_key] = row["model_params"]
+    return {
+        "experiment_id": "EXPERIMENT-005D",
+        "selection_policy_sha256": hashlib.sha256(
+            json.dumps(PREREG["dev_selection"], sort_keys=True).encode()
+        ).hexdigest(),
+        "selected_predictive_candidate_keys": sorted(set(selected)),
+        "candidate_params": candidate_params,
+        "reconstruction_survivors": reconstruction,
+        "reconstruction_candidate_params": reconstruction_candidate_params,
+        "holdout_status": "SEALED_NOT_INSPECTED",
+    }
+
+
+def bootstrap_ci(
+    values: list[float], component: str
+) -> tuple[float, float, float, float]:
+    x = np.asarray(values, float)
+    if len(x) < 50:
+        return float(np.mean(x)), float("nan"), float("nan"), 1.0
+    block = max(1, PURGE_SECONDS // STEP_SECONDS)
+    rng = np.random.default_rng(seed(component))
+    observed = float(np.mean(x))
+    centered = x - observed
+    blocks = [x[s : min(len(x), s + block)] for s in range(0, len(x), block)]
+    null_blocks = [
+        centered[s : min(len(centered), s + block)]
+        for s in range(0, len(centered), block)
+    ]
+    means = []
+    null_means = []
+    for _ in range(HOLDOUT_BOOTSTRAP_DRAWS):
+        pieces: list[np.ndarray] = []
+        null_pieces: list[np.ndarray] = []
+        count = 0
+        while count < len(x):
+            idx = int(rng.integers(0, len(blocks)))
+            piece = blocks[idx]
+            pieces.append(piece)
+            null_pieces.append(null_blocks[idx])
+            count += len(piece)
+        sample = np.concatenate(pieces)[: len(x)]
+        null_sample = np.concatenate(null_pieces)[: len(x)]
+        means.append(float(np.mean(sample)))
+        null_means.append(float(np.mean(null_sample)))
+    one_sided_p = (1.0 + sum(value >= observed for value in null_means)) / (
+        1.0 + len(null_means)
+    )
+    return (
+        observed,
+        float(np.quantile(means, 0.025)),
+        float(np.quantile(means, 0.975)),
+        float(one_sided_p),
+    )
+
+
+def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        path.write_text("", encoding="utf-8")
+        return
+    fields = sorted({k for row in rows for k in row if not k.startswith("_")})
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer.writeheader()
+        for row in rows:
+            out = {}
+            for key in fields:
+                value = row.get(key)
+                out[key] = (
+                    json.dumps(value, sort_keys=True)
+                    if isinstance(value, (dict, list, tuple))
+                    else value
+                )
+            writer.writerow(out)
+
+
+def main() -> None:
+    manifest1 = one_any("data_001_corpus_manifest.json", "corpus_manifest.json")
+    identity1 = one_any("data_001_market_identity.csv", "market_identity.csv")
+    manifest2 = one_any("data_002_manifest.json")
+    if (
+        sha(manifest1) != EXPECTED["data_001_manifest"]
+        or sha(identity1) != EXPECTED["data_001_identity"]
+    ):
+        raise SystemExit("DATA-001 identity drift")
+    mounted_data2_manifest = json.loads(manifest2.read_text(encoding="utf-8"))
+    if mounted_data2_manifest != DATA2_MANIFEST_PAYLOAD:
+        raise SystemExit("DATA-002 manifest semantic drift")
+    corpus = manifest1.parent.parent
+    data2_root = (
+        manifest2.parent.parent
+        if manifest2.parent.name == "schema_version=1"
+        else manifest2.parent
+    )
+    inventory = build_data1_inventory()
+    results: list[dict[str, Any]] = []
+
+    event_tokens: dict[str, set[str]] = defaultdict(set)
+    hard_by_event: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for family in EMBEDDED["families"]:
+        if family.get("validation_status") != "MECHANICALLY_PROVEN":
+            continue
+        if family.get("relation_type") not in {
+            "EXHAUSTIVE_PARTITION",
+            "CONDITIONAL_STAGED",
+        }:
+            continue
+        for member in family.get("members", []):
+            for event in member.get("present_in_events", []):
+                event_tokens[event].add(member["canonical_token_id"])
+                if family not in hard_by_event[event]:
+                    hard_by_event[event].append(family)
+
+    rel_by_event: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for row in EMBEDDED["relationships"]:
+        if row.get("leakage_class") != "INDIRECT":
+            continue
+        event = row["regime_id"]
+        rel_by_event[event].append(row)
+        event_tokens[event].add(row["target_token_id"])
+        event_tokens[event].add(row["reference_token_id"])
+
+    for event in sorted(event_tokens):
+        grid, panel, spreads, tokens = event_panel(
+            corpus, event, sorted(event_tokens[event])
+        )
+        trade_streams = economic_trade_series(
+            corpus, event, sorted(event_tokens[event])
+        )
+        if len(grid) < 100:
+            continue
+        for family in hard_by_event.get(event, []):
+            results.extend(
+                hard_family_candidates(
+                    family, event, grid, panel, spreads, tokens, trade_streams
+                )
+            )
+        results.extend(
+            indirect_graph_candidates(
+                event,
+                rel_by_event.get(event, []),
+                grid,
+                panel,
+                tokens,
+                trade_streams,
+            )
+        )
+
+    generic_inventory, generic_results = generic_event_inventory_and_eval(data2_root)
+    inventory.extend(generic_inventory)
+    results.extend(generic_results)
+
+    if PHASE == "TRAIN_DEV":
+        freeze = select_shortlist(results)
+        freeze["preregistration_sha256"] = EMBEDDED["preregistration_sha256"]
+        freeze["inventory_sha256"] = hashlib.sha256(
+            json.dumps(inventory, sort_keys=True, default=str).encode()
+        ).hexdigest()
+        freeze["generated_by_run_sha256"] = sha(Path(__file__))
+        (WORK / "structural_inventory.json").write_text(
+            json.dumps(inventory, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        (WORK / "proposed_pre_holdout_freeze.json").write_text(
+            json.dumps(freeze, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        write_csv(WORK / "train_dev_candidate_results.csv", results)
+        summary = {
+            "phase": "TRAIN_DEV",
+            "inventory_records": len(inventory),
+            "candidate_rows": len(results),
+            "predictive_shortlist_count": len(
+                freeze["selected_predictive_candidate_keys"]
+            ),
+            "reconstruction_survivor_groups": len(
+                freeze["reconstruction_survivors"]
+            ),
+            "holdout_status": "SEALED_NOT_INSPECTED",
+        }
+        (WORK / "train_dev_summary.json").write_text(
+            json.dumps(summary, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+    else:
+        if SHORTLIST is None:
+            raise SystemExit("HOLDOUT requires embedded PRE_HOLDOUT_FREEZE")
+        hold = [row for row in results if row.get("candidate_key")]
+        for row in hold:
+            values = row.pop("_bootstrap_values", None)
+            if values:
+                mean, lo, hi, bootstrap_p = bootstrap_ci(
+                    values, row["candidate_key"]
+                )
+                row["bootstrap_mean"] = mean
+                row["bootstrap_ci_low"] = lo
+                row["bootstrap_ci_high"] = hi
+                row["bootstrap_excludes_zero"] = bool(lo > 0 or hi < 0)
+                row["p_value"] = bootstrap_p
+                row["fdr_group"] = "HOLDOUT|PREDICTIVE_ALL"
+        bh(hold)
+        for row in hold:
+            if row.get("target_kind") != "future_probability_change":
+                continue
+            delayed_ratio = row.get("holdout_delayed_60s_effect_ratio")
+            row["holdout_confirmatory_pass"] = bool(
+                row.get("holdout_score") is not None
+                and float(row["holdout_score"]) > 0.0
+                and row.get("bootstrap_excludes_zero") is True
+                and row.get("q_value") is not None
+                and float(row["q_value"]) <= 0.10
+                and (
+                    delayed_ratio is None
+                    or float(delayed_ratio) < 0.80
+                )
+            )
+        write_csv(WORK / "holdout_candidate_results.csv", hold)
+        (WORK / "holdout_summary.json").write_text(
+            json.dumps(
+                {
+                    "phase": "HOLDOUT",
+                    "frozen_candidate_count": len(
+                        SHORTLIST.get(
+                            "selected_predictive_candidate_keys", []
+                        )
+                    ),
+                    "evaluated_rows": len(hold),
+                    "predictive_evaluated_rows": sum(
+                        row.get("target_kind") == "future_probability_change"
+                        for row in hold
+                    ),
+                    "confirmatory_pass_rows": sum(
+                        row.get("holdout_confirmatory_pass") is True
+                        for row in hold
+                    ),
+                    "confirmatory_fdr_alpha": 0.10,
+                    "holdout_inspected_once": True,
+                },
+                indent=2,
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+    print(
+        json.dumps(
+            {"phase": PHASE, "results": len(results), "inventory": len(inventory)},
+            sort_keys=True,
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()

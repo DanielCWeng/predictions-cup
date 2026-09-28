@@ -1,0 +1,33 @@
+{
+  "experiment_id": "EXPERIMENT-005D",
+  "base_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+  "boundary": "docs/research/005_DISCOVERY_PRIOR_WORK_BOUNDARY.md",
+  "permitted_pre_freeze_sources": [
+    "MATHS_LEDGER.md",
+    "CURRENT_STATE.md high-level dispositions only",
+    "docs/implementation/EXPERIMENT_002_RELATIONSHIP_EXPERIMENTS.md",
+    "src/predictions_cup/learning/relationships.py",
+    "src/predictions_cup/learning/research_spec.py",
+    "src/predictions_cup/learning/evaluation_harness.py",
+    "src/predictions_cup/replay/splits.py",
+    "data/experiments/experiment_003/relationship_inventory.csv",
+    "data/experiments/experiment_004c_b/family_registry.json semantic/topology fields only",
+    "data/manifests/historical/data_001_corpus_manifest.json semantics/limitations only",
+    "data/manifests/historical/data_001_market_identity.csv",
+    "data/manifests/fees/data_002_manifest.json",
+    "docs/implementation/DATA_002_POLYMARKET_FEES.md data semantics only",
+    "data/research/historical_elections/market_catalogue.csv",
+    "data/research/historical_elections/README.md",
+    "docs/research/HISTORICAL_ELECTION_ANALOGUES_2024_2026.md topology/data-readiness statements only"
+  ],
+  "embargoed_sources_intentionally_inspected": [],
+  "incidental_exposure": [
+    {
+      "source": "GitHub broad code-search response",
+      "file": "data/experiments/experiment_004b/review/structural_core_findings.md",
+      "detail": "A short search excerpt exposed aggregate semantic-edge counts plus event-specific availability commentary.",
+      "mitigation": "No model, target, horizon, split, threshold, candidate family or screening rule was chosen from the excerpt. 005D's frozen design was derived from the user brief, MATHS_LEDGER, audited semantic inventories and data contracts. The excerpt is not used by the runner."
+    }
+  ],
+  "attestation": "No result-ranked 004B/004C tables, prior coefficients, best horizons, prior winner rankings or post-hoc candidate lists were intentionally inspected before the 005D design freeze."
+}

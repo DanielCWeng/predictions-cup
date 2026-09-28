@@ -1,0 +1,49 @@
+{
+  "experiment_id": "EXPERIMENT-005D",
+  "holdout_status": "INSPECTED_ONCE_CORRECTED_RUN_ONLY",
+  "attempts": [
+    {
+      "kaggle_version": 2,
+      "runner_status": "INVALIDATED_PRE_EVIDENCE",
+      "reason": "Runner generation was scientifically identical but byte-nondeterministic because sanitized semantic field names were iterated from Python sets. No outputs were used.",
+      "remediation": "Changed sanitizer field containers to deterministic tuples and verified two clean generations produce identical runner SHA-256."
+    },
+    {
+      "kaggle_version": 3,
+      "runner_sha256": "871e642011a88d19e05e8fe29823af3f4fe6716d68e36cedee6f37804a6c6d96",
+      "runner_status": "FAILED_PRE_EVIDENCE",
+      "reason": "Kaggle rewrote DATA-002 manifest JSON formatting, so raw-byte SHA verification falsely raised DATA-002 manifest drift before empirical computation.",
+      "evidence": "Local extracted Kaggle manifest parsed identically to the accepted repo manifest although raw-byte hashes differed.",
+      "remediation": "Require semantic JSON payload equality and verify each consumed DATA-002 Parquet against the accepted per-file SHA-256."
+    },
+    {
+      "kaggle_version": 4,
+      "runner_sha256": "9811da8682e4cf94cd3c4bc330b685d4f21aaeaf1a860dcd2b4980165c567b8c",
+      "runner_status": "INVALIDATED_PRE_EVIDENCE",
+      "reason": "Pre-outcome implementation audit found DATA-001 structural targets lacked the preregistered 1/2/5/10 economic-trade labels and wrapped historical catalogue parsing embedded zero USA_2024/CAN_2025 rows.",
+      "remediation": "Added DATA-001 economic-trade target evaluation and robust wrapped-catalogue parsing before reading any version-4 empirical output."
+    },
+    {
+      "kaggle_version": 6,
+      "runner_sha256": "0692a6499ce1daa384165c2f6da58c30de305325b6abc0e35f750a13208b2e28",
+      "runner_status": "INVALIDATED_PRE_EVIDENCE",
+      "reason": "Pre-output audit found the HOLDOUT path emitted bootstrap confidence intervals but did not apply the preregistered confirmatory FDR across the bounded predictive shortlist.",
+      "evidence_boundary": "No version-6 empirical output or kernel log was opened or downloaded after launch. Only worker status was queried.",
+      "remediation": "Add null-centered 300-second moving-block bootstrap p-values, BH q-values across the 13 predictive cells, frozen 60-second delayed-state control diagnostics, and holdout response diagnostics. Shortlist, fitted parameters, horizons and data split remain unchanged."
+    },
+    {
+      "kaggle_version": 7,
+      "runner_sha256": "e65c961b73c56e26b322c8336944ea2fbc048ccf53bdd645cdaf77c53caef7ce",
+      "runner_status": "COMPLETE_SINGLE_INSPECTION",
+      "reason": "Corrected HOLDOUT runner completed after version 6 reached terminal state; only this corrected run's empirical outputs were downloaded and inspected.",
+      "output_hashes": {
+        "holdout_candidate_results_csv": "610e4b6bd0ed199c63cc2543206ce70c4900e7cb1b84a24bf0e572f4f975920b",
+        "holdout_summary_json": "0b2ae7c40ce78872caf0e7d01069b383a439bddbd0051ccf700d50b484094673",
+        "structural_inventory_json": "1c35a094fbad3b1ab2b9e91bc9376826e4175de0da1bf094105856e8026da1a2"
+      },
+      "evidence_boundary": "The invalidated version-6 output remained unopened. The corrected run is the single empirical HOLDOUT inspection."
+    }
+  ],
+  "current_runner_sha256": "e65c961b73c56e26b322c8336944ea2fbc048ccf53bdd645cdaf77c53caef7ce",
+  "next_attempt": "NONE — EXPERIMENT-005D HOLDOUT is complete; no reruns or post-HOLDOUT rescue are permitted."
+}

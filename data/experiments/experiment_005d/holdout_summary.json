@@ -1,0 +1,9 @@
+{
+  "confirmatory_fdr_alpha": 0.1,
+  "confirmatory_pass_rows": 3,
+  "evaluated_rows": 35,
+  "frozen_candidate_count": 13,
+  "holdout_inspected_once": true,
+  "phase": "HOLDOUT",
+  "predictive_evaluated_rows": 13
+}

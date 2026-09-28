@@ -1,0 +1,15 @@
+{
+  "experiment_id": "EXPERIMENT-005D",
+  "stage": "PRE_HOLDOUT_FREEZE",
+  "branch": "experiment/005d-structural-rv-atlas",
+  "base_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+  "preregistration_sha256": "d43a75ff8e0b5df6c717f37721e339116a6297b299c4e26d8b9a5f242b9c7a51",
+  "train_dev_runner_sha256": "525f4678565d80cbceddd7ede298c7f810fc41c4b94652dec34f08cd63ccaa5f",
+  "pre_holdout_freeze_sha256": "6ac0f6ea27b5553267d8fa94a9f5bca906680f18d03de45480269da8b9b21cbe",
+  "holdout_runner_sha256": "0692a6499ce1daa384165c2f6da58c30de305325b6abc0e35f750a13208b2e28",
+  "holdout_runner_bytes": 350564,
+  "selected_predictive_cells": 13,
+  "selected_reconstruction_cells": 25,
+  "holdout_status": "SEALED_READY_FOR_SINGLE_INSPECTION",
+  "launch_rule": "No edits to preregistration, frozen candidate keys, fitted parameters, horizons or selection policy after this marker. Any implementation failure before empirical output may be repaired only if the failed output is not inspected; otherwise the affected holdout is contaminated."
+}

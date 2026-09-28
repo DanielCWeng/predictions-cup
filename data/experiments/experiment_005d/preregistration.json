@@ -1,0 +1,244 @@
+{
+  "experiment_id": "EXPERIMENT-005D",
+  "title": "Structural / Relative-Value / Coherent Surface Atlas",
+  "base_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+  "branch": "experiment/005d-structural-rv-atlas",
+  "namespace": "005d_structural_rv_atlas",
+  "design_status": "PRE_OUTCOME_FROZEN",
+  "contamination_boundary": "docs/research/005_DISCOVERY_PRIOR_WORK_BOUNDARY.md",
+  "data_sources": {
+    "DATA-001": {
+      "role": "2026 as-of book midpoint, book trades, fills and executable book diagnostics where present",
+      "families": [
+        "COL_2026",
+        "HUN_2026",
+        "PER_2026"
+      ],
+      "limitations": [
+        "no full event replay",
+        "same-millisecond BBO order ambiguity",
+        "archive receive time is not project possession time"
+      ]
+    },
+    "DATA-002": {
+      "role": "economic fill/price stream and generic same-event family census across five families",
+      "families": [
+        "US_2024",
+        "CAN_2025",
+        "COL_2026",
+        "HUN_2026",
+        "PER_2026"
+      ],
+      "economic_print_identity": "deduplicate outcome_side=YES on (family, token_id, tx_hash); inconsistent duplicate prices fail closed",
+      "limitations": [
+        "not a resting-book replay",
+        "US_2024/CAN_2025 have no fee-role meaning pre-fee; fees are not used by 005D"
+      ]
+    },
+    "semantic_sources": [
+      "data/experiments/experiment_003/relationship_inventory.csv",
+      "data/experiments/experiment_004c_b/family_registry.json",
+      "data/manifests/historical/data_001_market_identity.csv",
+      "data/research/historical_elections/market_catalogue.csv",
+      "MATHS_LEDGER.md"
+    ]
+  },
+  "inventory_policy": {
+    "HARD": [
+      "true complement",
+      "implication",
+      "mutual exclusion",
+      "exhaustive partition",
+      "nested threshold",
+      "exact count/threshold relation",
+      "exact joint/intersection"
+    ],
+    "SOFT": [
+      "same-event candidate/party/chamber family",
+      "audited indirect relationship",
+      "race-to-aggregate relation",
+      "correlated regional relation",
+      "seat-distribution relation"
+    ],
+    "UNKNOWN": "anything lacking sufficient semantic proof or stable metadata; fail closed",
+    "hard_edge_gate": "explicit semantic proof/accepted audited family only; same event_id or title similarity is never sufficient",
+    "generic_event_groups": "SOFT and LOO-PRICE/reconstruction-only until semantic audit proves the leakage class",
+    "yes_no_same_market": "HARD complement but DIRECT_EQUIVALENT; eligible for reconstruction diagnostics only and excluded from LOO-FAMILY"
+  },
+  "representations": {
+    "raw": [
+      "probability spread",
+      "logit spread",
+      "target-minus-equal-family-mean",
+      "target-minus-TRAIN-reliability-weighted-family-mean",
+      "target-minus-leave-target-out aggregate",
+      "target-minus-leave-target-out common event factor"
+    ],
+    "calibrated": [
+      "TRAIN affine probability mapping",
+      "TRAIN affine logit mapping",
+      "TRAIN ridge logit mapping ridge={0.1,1.0,10.0}",
+      "TRAIN Huber logit mapping delta=1.5",
+      "error-correction residual from the frozen TRAIN mapping"
+    ],
+    "coherent": [
+      "equal-weight quadratic hard projection",
+      "TRAIN reliability-weighted quadratic hard projection",
+      "Bernoulli-KL hard projection",
+      "bid/ask interval diagnostic where DATA-001 book evidence exists",
+      "soft/slack projection lambda={0.25,1.0,4.0} for SOFT constraints only"
+    ],
+    "threshold": [
+      "raw monotonicity residual",
+      "weighted isotonic repair",
+      "implied PMF",
+      "smoothness challenger lambda={0.1,1.0}",
+      "entropy challenger lambda={0.1,1.0}",
+      "log-concavity challenger diagnostic only"
+    ],
+    "seat_chamber": [
+      "independence baseline when exact constituent-to-count topology is proven",
+      "one-factor logistic challenger when target-excluded race topology is proven",
+      "joint-market-implied dependence when exact joint semantics are proven",
+      "leave-one-race inverse structural objective when topology is proven"
+    ],
+    "graph": [
+      "explicit audited INDIRECT-edge target-excluded ridge graph",
+      "hard deterministic factors plus soft statistical factors; no generic reduced-rank panel model"
+    ]
+  },
+  "leakage_modes": {
+    "LOO-PRICE": "target direct quote removed; mechanically equivalent/sibling information may remain; reconstruction diagnostic",
+    "LOO-FAMILY": "target, direct equivalent, complement, duplicate, NegRisk/mechanical sibling and other direct information family removed; clean indirect-alpha lane"
+  },
+  "targets": {
+    "clock": [
+      "future_probability_change",
+      "future_logit_change",
+      "future_structural_residual_change",
+      "absolute_residual_shrinkage",
+      "family_surface_repair_direction"
+    ],
+    "clock_horizons_seconds": [
+      5,
+      15,
+      30,
+      60,
+      120,
+      300
+    ],
+    "event_time": [
+      "next_1_economic_trade",
+      "next_2_economic_trades",
+      "next_5_economic_trades",
+      "next_10_economic_trades"
+    ],
+    "economic_trade_definition": "unique deduplicated target-token economic print in DATA-001 books/trades or DATA-002 (token_id,tx_hash)"
+  },
+  "splits": {
+    "method": "per structural family × stream chronological 60/20/20 by timestamp span",
+    "train_fraction": 0.6,
+    "dev_fraction": 0.2,
+    "holdout_fraction": 0.2,
+    "purge_seconds": 300,
+    "embargo_seconds": 300,
+    "sequence": [
+      "TRAIN",
+      "DEV",
+      "PRE_HOLDOUT_FREEZE",
+      "HOLDOUT"
+    ],
+    "holdout_rule": "phase-1 may inspect identity/activity metadata and load source files, but HOLDOUT price/target rows are masked before any feature fitting, scoring, aggregation, logging or output; phase-2 requires an immutable shortlist hash",
+    "small_support": "cells with fewer than 100 valid target observations in TRAIN or 50 in DEV are UNAVAILABLE, not rescued by changing splits"
+  },
+  "train_discovery": {
+    "allowed": "broad descriptive census and TRAIN-only fitting",
+    "report": [
+      "reconstruction error",
+      "residual distribution",
+      "persistence",
+      "AR1 descriptive persistence proxy",
+      "half-life when stable",
+      "conditional future response",
+      "quantile response",
+      "monotonicity",
+      "support",
+      "temporal stability",
+      "concentration",
+      "missingness"
+    ],
+    "claim_policy": "TRAIN discoveries are never called alpha"
+  },
+  "dev_selection": {
+    "fdr_alpha": 0.1,
+    "fdr_grouping": "leakage_mode × representation_family × target_kind × horizon_kind",
+    "primary_statistic": "signed response toward frozen fair value / coherent repair after own-target-lag and broad-event controls",
+    "minimum_support": {
+      "train": 100,
+      "dev": 50
+    },
+    "survival_rules": [
+      "declared DEV statistic finite with predeclared direction",
+      "BH q <= 0.10 within declared family OR reconstruction RMSE improves by >=5% for RECONSTRUCTION_ONLY",
+      "same sign in both DEV halves when each half has >=25 observations",
+      "not entirely dependent on one target market (>70% absolute score contribution)",
+      "delayed-state or block-shift control does not reproduce >=80% of the observed absolute effect",
+      "LOO-FAMILY survivor remains after direct/mechanical family exclusion"
+    ],
+    "labels": [
+      "RECONSTRUCTION_ONLY",
+      "HARD_COHERENCE_DIAGNOSTIC",
+      "SOFT_RV_CANDIDATE",
+      "REGIME_SPECIFIC_STRUCTURAL_CANDIDATE",
+      "CROSS_FAMILY_STRUCTURAL_CANDIDATE"
+    ]
+  },
+  "holdout": {
+    "single_inspection": true,
+    "confirmatory_fdr_alpha": 0.1,
+    "bootstrap_draws": 1000,
+    "block_seconds": 300,
+    "pass_policy": "report evidence; do not auto-promote to live trading. A model deserves tournament entry only if effect direction survives, uncertainty excludes zero for its primary score, controls do not explain it, and scope is honestly labelled.",
+    "no_post_holdout_rescue": true
+  },
+  "falsification": [
+    "target-family exclusion",
+    "60-second delayed structural state",
+    "unrelated-family matched control",
+    "relationship-label permutation",
+    "300-second temporal block shift/permutation",
+    "equal vs TRAIN-reliability weighting",
+    "leave-one-market-out",
+    "leave-one-family-out",
+    "remove dominant contract",
+    "raw-vs-coherent comparison"
+  ],
+  "hard_arbitrage": {
+    "separate_lane": true,
+    "requirements": [
+      "semantic proof",
+      "valid payoff states",
+      "executable bid/ask",
+      "all required legs",
+      "depth",
+      "costs",
+      "no missing outcome",
+      "settlement/void compatibility"
+    ],
+    "methods": [
+      "M-019 depth-aware max-min LP when depth exists",
+      "M-020 bid/ask feasibility",
+      "M-136 partition-derived executable interval"
+    ],
+    "midpoint_only_never_arbitrage": true
+  },
+  "ownership_exclusions": [
+    "005A fee/taker flow",
+    "005B generic price/fill mining",
+    "005C generic reduced-rank forecasting",
+    "005E participant ecology",
+    "005F generic book microstructure"
+  ],
+  "researcher_discretion": "only before this freeze; post-freeze changes require explicit amendment and invalidate untouched-holdout status for affected cells",
+  "orders_enabled": false
+}

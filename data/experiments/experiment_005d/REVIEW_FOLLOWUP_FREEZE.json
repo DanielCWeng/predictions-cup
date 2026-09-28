@@ -1,0 +1,28 @@
+{
+  "experiment_id": "EXPERIMENT-005D",
+  "followup_id": "EXPERIMENT-005D-REVIEW-FOLLOWUP",
+  "stage": "POST_HOC_REVIEW_PRE_EXECUTION_FREEZE",
+  "label": "POST_HOC_INDEPENDENT_REVIEW_FALSIFICATION",
+  "branch": "experiment/005d-structural-rv-atlas",
+  "source_head": "094ff968ec3697224ab67ebd5c53114456a1c635",
+  "design_sha256": "5ba931cea50108ab6f8eab319d7f4078a7cb8f4d5ca7a4a3dcabfb8c007039a9",
+  "accepted_holdout_runner_sha256": "e65c961b73c56e26b322c8336944ea2fbc048ccf53bdd645cdaf77c53caef7ce",
+  "accepted_holdout_results_sha256": "610e4b6bd0ed199c63cc2543206ce70c4900e7cb1b84a24bf0e572f4f975920b",
+  "review_runner_sha256": "b394bce34097a228281599862799837fb501bb5c9a30cf63c7583c061b2dad9f",
+  "review_runner_bytes": 438520,
+  "fixed_predictive_cells": 13,
+  "dependence_blocks_seconds": [
+    300,
+    1800,
+    3600,
+    14400,
+    28800
+  ],
+  "temporal_aggregation": "UTC clock-hour bins aligned to top of hour",
+  "empirical_change_policy": "No original empirical output changes; follow-up can only retain, weaken, downgrade, or reject.",
+  "holdout_status": "ALREADY_EXPOSED_POST_HOC_REVIEW_ONLY",
+  "orders_enabled": false,
+  "regime_definitions_sha256": "9d7d76e15b9bf15603836641a5f9d09902a910b7e3d9ef043445cab32bc90df5",
+  "event_timeline_sha256": "2e2d3c4441d331f2de15350ff24fb31d605aa3c080c818b898c01e8e78090e7d",
+  "deterministic_regeneration": "PASS — two clean generations produced identical review runner SHA-256"
+}
