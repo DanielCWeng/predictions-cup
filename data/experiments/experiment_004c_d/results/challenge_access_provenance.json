@@ -1,0 +1,10 @@
+{
+  "challenge_events": [
+    "colombia_first_round",
+    "peru_runoff",
+    "colombia_runoff"
+  ],
+  "discovery_models_frozen_before_challenge_load": true,
+  "implementation_commit": "1e308d7cf16cdf17fcf8ca247000c14b758a7316",
+  "terminal_freeze": "6adb6c2746fdba1453a5f845a515c9f56b5dab3b"
+}
