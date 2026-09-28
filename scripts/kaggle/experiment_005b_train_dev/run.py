@@ -22,7 +22,7 @@ from sklearn.preprocessing import StandardScaler
 FAMILIES = ("US_2024", "CAN_2025", "COL_2026", "HUN_2026", "PER_2026")
 OUT = Path("/kaggle/working/005b_historical_predictive_atlas/train_dev")
 OUT.mkdir(parents=True, exist_ok=True)
-SCREENING_MODEL_SPEC_SHA256 = "fea0821b58fbd841e05b7326a48b9ca94d502e2168bbc079b8d9bd6bcbae597a"
+SCREENING_MODEL_SPEC_SHA256 = "1fc782b8edf9dbdcf1b3fc90f271c140a05499e9f081ac116764d44cb5dcd96a"
 SCREENING_MODEL_SPEC_REPO_PATH = "data/experiments/experiment_005b/screening_model_spec.json"
 META = {
     "family", "event_id", "market_id", "condition_id", "timestamp", "tx_hash", "log_index",
@@ -357,6 +357,126 @@ def feature_support_diagnostics(
         float(shares.max()),
         int(len(counts)),
         int(np.unique(block_keys[valid]).size),
+    )
+
+
+def pair_spearman(
+    x: np.ndarray,
+    y: np.ndarray,
+) -> float | None:
+    valid = np.isfinite(x) & np.isfinite(y)
+    if valid.sum() < 3:
+        return None
+    xr = (
+        pd.Series(x[valid])
+        .rank(pct=True, method="average")
+        .to_numpy(dtype=float)
+    )
+    yr = (
+        pd.Series(y[valid])
+        .rank(pct=True, method="average")
+        .to_numpy(dtype=float)
+    )
+    if np.nanstd(xr) <= 0 or np.nanstd(yr) <= 0:
+        return None
+    value = float(np.corrcoef(xr, yr)[0, 1])
+    return value if np.isfinite(value) else None
+
+
+def directional_response_at_threshold(
+    x: np.ndarray,
+    y: np.ndarray,
+    threshold: float,
+) -> float | None:
+    valid = np.isfinite(x) & np.isfinite(y)
+    high = valid & (x >= threshold)
+    low = valid & (x < threshold)
+    if high.sum() < 20 or low.sum() < 20:
+        return None
+    value = float(np.nanmean(y[high]) - np.nanmean(y[low]))
+    return value if np.isfinite(value) else None
+
+
+def group_sign_diagnostics(
+    feature_values: np.ndarray,
+    target_values: np.ndarray,
+    groups: np.ndarray,
+    reference_sign: float,
+    *,
+    minimum_rows: int = 100,
+) -> dict[str, Any]:
+    associations: dict[str, float] = {}
+    supports: dict[str, int] = {}
+    for group in sorted(set(str(value) for value in groups if str(value))):
+        mask = groups.astype(str) == group
+        valid = (
+            mask
+            & np.isfinite(feature_values)
+            & np.isfinite(target_values)
+        )
+        support = int(valid.sum())
+        if support < minimum_rows:
+            continue
+        rho = pair_spearman(
+            feature_values[valid],
+            target_values[valid],
+        )
+        if rho is None:
+            continue
+        associations[group] = rho
+        supports[group] = support
+    supported = len(associations)
+    if (
+        supported == 0
+        or not np.isfinite(reference_sign)
+        or reference_sign == 0
+    ):
+        consistency = None
+    else:
+        consistency = float(
+            np.mean(
+                [
+                    np.sign(value) == np.sign(reference_sign)
+                    for value in associations.values()
+                ]
+            )
+        )
+    return {
+        "associations": associations,
+        "supports": supports,
+        "support_count": supported,
+        "sign_consistency": consistency,
+    }
+
+
+def model_improvement_passes(
+    target: str,
+    model: dict[str, Any],
+) -> bool:
+    if model.get("status") != "OK":
+        return False
+    best = model.get("best", {})
+    rows = model.get("all", [])
+    if "_sign_" in target:
+        baseline = next(
+            (
+                row
+                for row in rows
+                if row.get("name") == "majority_baseline"
+                and "brier" in row
+            ),
+            None,
+        )
+        return bool(
+            baseline is not None
+            and best.get("name") != "majority_baseline"
+            and best.get("brier") is not None
+            and float(best["brier"]) < float(baseline["brier"])
+        )
+    return bool(
+        best.get("name") != "persistence_baseline"
+        and best.get("mae_improvement") is not None
+        and float(best["mae_improvement"]) > 0.0
     )
 
 
@@ -945,6 +1065,17 @@ def main() -> None:
     model_selection: dict[str, dict[str, Any]] = {}
     negative_controls: dict[str, dict[str, Any]] = {}
     dev_market_groups = market_time_groups(dev)
+    dev_family_labels = dev["family"].astype(str).to_numpy()
+    dev_regime_labels = np.full(len(dev), "", dtype=object)
+    for regime_feature in REGIME_FEATURES:
+        active = (
+            pd.to_numeric(
+                dev[regime_feature],
+                errors="coerce",
+            ).to_numpy(dtype=float)
+            == 1.0
+        )
+        dev_regime_labels[active] = regime_feature
     train_market_keys = (
         train["family"].astype(str)
         + ":"
@@ -1007,6 +1138,18 @@ def main() -> None:
             )
         )
         target_train[~target_valid] = np.nan
+        target_dev = pd.to_numeric(
+            dev[target],
+            errors="coerce",
+        ).to_numpy(dtype=float)
+        dev_target_valid = (
+            dev[target_label].notna().to_numpy()
+            & (
+                dev[target_label].to_numpy()
+                < dev["dev_end_timestamp"].to_numpy()
+            )
+        )
+        target_dev[~dev_target_valid] = np.nan
         for row in eligible:
             dev_stats = dev_metrics[target].get(row["feature"], {})
             dev_pearson = dev_stats.get("pearson")
@@ -1034,21 +1177,68 @@ def main() -> None:
                     or feature_max_share <= 0.50
                 )
             )
-            label_name = "DISCOVERY_ONLY"
-            if stable:
-                label_name = (
-                    "CROSS_FAMILY_CANDIDATE"
-                    if (
-                        (row["family_sign_consistency"] or 0) >= 0.8
-                        and row["family_support_count"] >= 2
-                    )
-                    else "WITHIN_FAMILY_STABLE"
-                )
+            train_threshold = float(
+                np.nanmedian(x_train[:, feature_index])
+            )
+            train_effect = directional_response_at_threshold(
+                x_train[:, feature_index],
+                target_train,
+                train_threshold,
+            )
+            dev_effect = directional_response_at_threshold(
+                x_dev[:, feature_index],
+                target_dev,
+                train_threshold,
+            )
+            effect_sign_persistence = bool(
+                train_effect is not None
+                and dev_effect is not None
+                and train_effect != 0
+                and dev_effect != 0
+                and train_effect * dev_effect > 0
+            )
+            family_diag = group_sign_diagnostics(
+                x_dev[:, feature_index],
+                target_dev,
+                dev_family_labels,
+                train_r,
+                minimum_rows=100,
+            )
+            regime_diag = group_sign_diagnostics(
+                x_dev[:, feature_index],
+                target_dev,
+                dev_regime_labels,
+                train_r,
+                minimum_rows=100,
+            )
+            family_stability_ok = bool(
+                family_diag["support_count"] >= 2
+                and family_diag["sign_consistency"] is not None
+                and family_diag["sign_consistency"] >= 0.60
+            )
+            regime_stability_ok = bool(
+                regime_diag["support_count"] >= 2
+                and regime_diag["sign_consistency"] is not None
+                and regime_diag["sign_consistency"] >= 0.60
+            )
             chosen.append(
                 {
                     **row,
                     "dev_pearson": dev_pearson,
                     "dev_spearman": dev_spearman,
+                    "train_directional_response_promotion": train_effect,
+                    "dev_directional_response_promotion": dev_effect,
+                    "effect_sign_persistence": effect_sign_persistence,
+                    "dev_family_associations": family_diag["associations"],
+                    "dev_family_supports": family_diag["supports"],
+                    "dev_family_support_count": family_diag["support_count"],
+                    "dev_family_sign_consistency": family_diag["sign_consistency"],
+                    "dev_regime_associations": regime_diag["associations"],
+                    "dev_regime_supports": regime_diag["supports"],
+                    "dev_regime_support_count": regime_diag["support_count"],
+                    "dev_regime_sign_consistency": regime_diag["sign_consistency"],
+                    "family_stability_ok": family_stability_ok,
+                    "regime_stability_ok": regime_stability_ok,
                     "candidate_market_concentration_hhi_sample": (
                         None
                         if not np.isfinite(feature_hhi)
@@ -1061,8 +1251,10 @@ def main() -> None:
                     ),
                     "candidate_market_count_sample": feature_market_count,
                     "candidate_time_block_count_sample": feature_block_count,
-                    "selection_label": label_name,
+                    "selection_label": "DISCOVERY_ONLY",
                     "stable_train_dev": stable,
+                    "model_improvement_ok": False,
+                    "promoted_candidate": False,
                 }
             )
             if len(chosen) >= 8:
@@ -1184,6 +1376,39 @@ def main() -> None:
             **fitted,
         }
 
+    for target, rows in shortlist.items():
+        model_ok = model_improvement_passes(
+            target,
+            model_selection.get(target, {}),
+        )
+        if model_selection.get(target, {}).get("status") == "OK":
+            model_selection[target]["promotion_eligible"] = model_ok
+        else:
+            model_selection[target]["promotion_eligible"] = False
+        for row in rows:
+            row["model_improvement_ok"] = model_ok
+            promoted = bool(
+                row["stable_train_dev"]
+                and row["effect_sign_persistence"]
+                and row["family_stability_ok"]
+                and row["regime_stability_ok"]
+                and model_ok
+            )
+            row["promoted_candidate"] = promoted
+            if not promoted:
+                row["selection_label"] = "DISCOVERY_ONLY"
+                continue
+            row["selection_label"] = (
+                "CROSS_FAMILY_CANDIDATE"
+                if (
+                    (row["family_sign_consistency"] or 0) >= 0.8
+                    and row["family_support_count"] >= 2
+                    and (row["dev_family_sign_consistency"] or 0) >= 0.8
+                    and row["dev_family_support_count"] >= 2
+                )
+                else "WITHIN_FAMILY_STABLE"
+            )
+
     atlas_rows = []
     for target, rows in per_target.items():
         for row in rows:
@@ -1241,6 +1466,10 @@ def main() -> None:
     summary = {
         "targets_with_stable_candidate": sum(
             any(row["stable_train_dev"] for row in rows)
+            for rows in shortlist.values()
+        ),
+        "targets_with_promoted_candidate": sum(
+            any(row["promoted_candidate"] for row in rows)
             for rows in shortlist.values()
         ),
         "targets_with_model_candidate": sum(
