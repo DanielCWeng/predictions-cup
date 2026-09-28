@@ -162,3 +162,129 @@ def stability_summary(
         "min_leave_one_out": float(np.min(finite)) if len(finite) else np.nan,
         "max_leave_one_out": float(np.max(finite)) if len(finite) else np.nan,
     }
+
+def event_block_means(
+    events: Sequence[object],
+    times_ns: Sequence[int],
+    values: Sequence[float],
+    *,
+    block_seconds: int = DEFAULT_BLOCK_SECONDS,
+) -> np.ndarray:
+    """Mean values in event-local wall-clock blocks for sign-flip inference."""
+    e = np.asarray(events, dtype=object)
+    t = np.asarray(times_ns, dtype=np.int64)
+    x = np.asarray(values, dtype=float)
+    if not (len(e) == len(t) == len(x)):
+        raise ValueError("events/times/values mismatch")
+    if block_seconds <= 0:
+        raise ValueError("block_seconds must be positive")
+    buckets: dict[tuple[str, int], list[float]] = {}
+    width = block_seconds * NS
+    for event, ts, value in zip(e, t, x, strict=True):
+        if not np.isfinite(value):
+            continue
+        key = (str(event), int(ts) // width)
+        buckets.setdefault(key, []).append(float(value))
+    return np.asarray(
+        [float(np.mean(buckets[key])) for key in sorted(buckets)],
+        dtype=float,
+    )
+
+
+def equal_event_time_block_bootstrap(
+    events: Sequence[object],
+    times_ns: Sequence[int],
+    values: Sequence[float],
+    *,
+    block_length_minutes: int,
+    draws: int = 2000,
+    seed: int = 0,
+    alpha: float = 0.05,
+) -> dict[str, float | int]:
+    """Moving-block bootstrap on one-minute event grids with equal event weighting.
+
+    Each event is expanded to a one-minute wall-clock grid. Missing minutes remain
+    missing and are carried through block resampling, so a block never jumps across
+    an unobserved wall-clock gap. Event means are weighted equally per draw.
+    """
+    e = np.asarray(events, dtype=object)
+    t = np.asarray(times_ns, dtype=np.int64)
+    x = np.asarray(values, dtype=float)
+    if not (len(e) == len(t) == len(x)):
+        raise ValueError("events/times/values mismatch")
+    if block_length_minutes <= 0 or draws <= 0:
+        raise ValueError("block length and draws must be positive")
+    if not 0.0 < alpha < 1.0:
+        raise ValueError("alpha must be in (0,1)")
+
+    minute_ns = 60 * NS
+    grids: list[np.ndarray] = []
+    event_means: list[float] = []
+    for event in sorted({str(v) for v in e}):
+        mask = np.asarray([str(v) == event for v in e], dtype=bool) & np.isfinite(x)
+        if not np.any(mask):
+            continue
+        mins = t[mask] // minute_ns
+        vals = x[mask]
+        unique = np.unique(mins)
+        lo = int(unique.min())
+        hi = int(unique.max())
+        grid = np.full(hi - lo + 1, np.nan, dtype=float)
+        for minute in unique:
+            m = mins == minute
+            grid[int(minute) - lo] = float(np.mean(vals[m]))
+        grids.append(grid)
+        event_means.append(float(np.nanmean(grid)))
+
+    finite_raw = x[np.isfinite(x)]
+    if not grids:
+        return {
+            "event_equal_mean": np.nan,
+            "raw_observation_mean": np.nan,
+            "lower": np.nan,
+            "upper": np.nan,
+            "events": 0,
+            "draws": draws,
+        }
+
+    rng = np.random.default_rng(seed)
+    draw_means = np.empty(draws, dtype=float)
+    for draw in range(draws):
+        sampled_event_means: list[float] = []
+        for grid in grids:
+            n = len(grid)
+            block = min(int(block_length_minutes), n)
+            max_start = max(1, n - block + 1)
+            sampled: list[float] = []
+            while len(sampled) < n:
+                start = int(rng.integers(0, max_start))
+                sampled.extend(grid[start : start + block].tolist())
+            sample = np.asarray(sampled[:n], dtype=float)
+            if np.any(np.isfinite(sample)):
+                sampled_event_means.append(float(np.nanmean(sample)))
+        draw_means[draw] = (
+            float(np.mean(sampled_event_means))
+            if sampled_event_means
+            else np.nan
+        )
+
+    finite_draws = draw_means[np.isfinite(draw_means)]
+    return {
+        "event_equal_mean": float(np.mean(event_means)),
+        "raw_observation_mean": (
+            float(np.mean(finite_raw)) if len(finite_raw) else np.nan
+        ),
+        "lower": (
+            float(np.quantile(finite_draws, alpha / 2))
+            if len(finite_draws)
+            else np.nan
+        ),
+        "upper": (
+            float(np.quantile(finite_draws, 1 - alpha / 2))
+            if len(finite_draws)
+            else np.nan
+        ),
+        "events": len(grids),
+        "draws": draws,
+    }
+
