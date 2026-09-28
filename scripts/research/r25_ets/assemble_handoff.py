@@ -467,6 +467,10 @@ def main() -> None:
             family_market_counts["Pivotal races"] += 1
         if "multi_race_combo" in classes:
             family_market_counts["Multi-race combinations"] += 1
+        if "same_state_related" in classes:
+            family_market_counts["Same-state related races"] += 1
+        if "other_economically_linked" in classes:
+            family_market_counts["Other economically linked"] += 1
     family_lines = [f"- {label}: {count} markets" for label, count in sorted(family_market_counts.items())]
     handoff = [
         f"SIG anchors: {freeze['sig_anchor_count']}",
