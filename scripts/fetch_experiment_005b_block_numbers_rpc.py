@@ -12,9 +12,9 @@ not change the 005B economic population, feature/target definitions, model
 specification, thresholds, splits, shortlist, or parent PR #45 artefacts.
 """
 
-from __future__ import annotations
-
 # ruff: noqa: UP047
+
+from __future__ import annotations
 
 import argparse
 import asyncio
