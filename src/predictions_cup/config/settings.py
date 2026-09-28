@@ -9,6 +9,7 @@ from pydantic import AnyHttpUrl, AnyUrl, Field, SecretStr, field_validator, mode
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+ExecutionModeSetting = Literal["SHADOW", "LIVE"]
 PolymarketUniverse = Literal["us_elections_2026"]
 
 
@@ -32,6 +33,15 @@ class AppSettings(BaseSettings):
     tournament_id: str | None = None
     tournament_slug: str | None = None
     trading_enabled: bool = False
+    execution_mode: ExecutionModeSetting = "SHADOW"
+    global_kill_switch: bool = True
+    execution_journal_path: Path = Path("data/execution_journal.sqlite3")
+    risk_max_order_size: int | None = Field(default=None, gt=0, le=2_147_483_647)
+    risk_max_gross_exposure: float | None = Field(default=None, gt=0.0)
+    risk_max_per_market_exposure: float | None = Field(default=None, gt=0.0)
+    risk_max_open_order_exposure: float | None = Field(default=None, gt=0.0)
+    risk_max_concurrent_open_orders: int | None = Field(default=None, gt=0)
+    risk_max_state_age_ms: int = Field(default=1_000, gt=0)
 
     sig_realtime_storage_path: Path = Path("data/sig_realtime.sqlite3")
     sig_realtime_book_depth: int = Field(default=20, ge=1, le=200)
@@ -74,6 +84,7 @@ class AppSettings(BaseSettings):
         "polymarket_storage_path",
         "polymarket_research_path",
         "sig_realtime_storage_path",
+        "execution_journal_path",
     )
     @classmethod
     def reject_blank_storage_path(cls, value: Path) -> Path:
@@ -99,6 +110,22 @@ class AppSettings(BaseSettings):
     def fail_closed_trading_configuration(self) -> Self:
         if self.trading_enabled and self.sig_trade_credential is None:
             raise ValueError("trading_enabled requires an explicitly supplied trade credential")
+        if self.execution_mode == "LIVE":
+            if not self.trading_enabled:
+                raise ValueError("LIVE execution requires trading_enabled=true")
+            if self.sig_trade_credential is None:
+                raise ValueError("LIVE execution requires an explicit trade credential")
+            if self.tournament_id is None or self.tournament_slug is None:
+                raise ValueError("LIVE execution requires explicit tournament_id and tournament_slug")
+            limits = (
+                self.risk_max_order_size,
+                self.risk_max_gross_exposure,
+                self.risk_max_per_market_exposure,
+                self.risk_max_open_order_exposure,
+                self.risk_max_concurrent_open_orders,
+            )
+            if any(value is None for value in limits):
+                raise ValueError("LIVE execution requires every central risk cap")
         return self
 
     def diagnostic_fields(self) -> dict[str, str | bool | int | float | None]:
@@ -110,6 +137,15 @@ class AppSettings(BaseSettings):
             "tournament_id": self.tournament_id,
             "tournament_slug": self.tournament_slug,
             "trading_enabled": self.trading_enabled,
+            "execution_mode": self.execution_mode,
+            "global_kill_switch": self.global_kill_switch,
+            "execution_journal_path": str(self.execution_journal_path),
+            "risk_max_order_size": self.risk_max_order_size,
+            "risk_max_gross_exposure": self.risk_max_gross_exposure,
+            "risk_max_per_market_exposure": self.risk_max_per_market_exposure,
+            "risk_max_open_order_exposure": self.risk_max_open_order_exposure,
+            "risk_max_concurrent_open_orders": self.risk_max_concurrent_open_orders,
+            "risk_max_state_age_ms": self.risk_max_state_age_ms,
             "sig_read_credential_configured": self.sig_read_credential is not None,
             "sig_trade_credential_configured": self.sig_trade_credential is not None,
             "sig_realtime_storage_path": str(self.sig_realtime_storage_path),
