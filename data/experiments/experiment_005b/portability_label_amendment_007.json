@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "amendment_id": "PORTABILITY_LABEL_007",
+  "type": "pre_predictive_label_semantics_clarification",
+  "predictive_results_seen": false,
+  "predictive_design_changed": false,
+  "rule": "CROSS_FAMILY_CANDIDATE requires TRAIN->DEV sign persistence, concentration gate, family sign consistency >=0.8, and finite feature-target association in at least two election families. Otherwise a stable candidate is WITHIN_FAMILY_STABLE.",
+  "reason": "A consistency ratio computed from only one supported family must not be described as cross-family portability evidence.",
+  "selection_effect": "This changes only the descriptive portability label; it does not alter shortlist membership, model features or hyperparameter selection."
+}
