@@ -1,0 +1,371 @@
+from __future__ import annotations
+
+import ast
+from decimal import Decimal
+from pathlib import Path
+
+import pytest
+from pydantic import SecretStr
+
+from predictions_cup.config import AppSettings
+from predictions_cup.execution.interlocks import LiveInterlockError, assert_live_interlocks
+from predictions_cup.execution.models import ExecutionMode, OperationKind
+from predictions_cup.execution.planning import build_execution_plan
+from predictions_cup.risk.core import (
+    RiskContext,
+    RiskLimits,
+    evaluate_risk,
+)
+from predictions_cup.runtime import (
+    OrderAction,
+    OutcomeSide,
+    RuntimeBook,
+    RuntimeLevel,
+    RuntimeMarket,
+    RuntimeOrderState,
+    RuntimePortfolio,
+    RuntimeSnapshot,
+    limit_price_to_ticks,
+    ticks_to_limit_price,
+)
+from predictions_cup.runtime.telemetry import HotPathTelemetry
+from predictions_cup.strategy.core import (
+    CandidateLeg,
+    NoTrade,
+    Opportunity,
+    StrategyFamily,
+    StrategyRegistry,
+)
+from predictions_cup.strategy.kernels import default_kernel_registry
+
+
+def _snapshot(
+    *,
+    account_trusted: bool = True,
+    trusted_depth: bool = True,
+    observed_ns: int = 1_000_000,
+    orders: tuple[RuntimeOrderState, ...] = (),
+) -> RuntimeSnapshot:
+    return RuntimeSnapshot(
+        markets=(
+            RuntimeMarket(
+                market_id="m1",
+                status="open",
+                exchange_ids=("36", "37"),
+                tournament_id="t1",
+                mapping_accepted=True,
+                tradeable=True,
+            ),
+        ),
+        books=(
+            RuntimeBook(
+                exchange_id="36",
+                market_id="m1",
+                tournament_id="t1",
+                bids=(RuntimeLevel(price_ticks=99, quantity=20.0),),
+                asks=(RuntimeLevel(price_ticks=101, quantity=20.0),),
+                trusted_depth=trusted_depth,
+                observed_monotonic_ns=observed_ns,
+            ),
+        ),
+        portfolio=RuntimePortfolio(
+            orders=orders,
+            account_trusted=account_trusted,
+        ),
+        observation_monotonic_ns=observed_ns,
+    )
+
+
+def _opportunity(
+    *,
+    quantity: int = 1,
+    atomic: bool = False,
+    relationship_id: str | None = None,
+    requires_depth: bool = False,
+) -> Opportunity:
+    legs = (
+        CandidateLeg(
+            exchange_id="36",
+            market_id="m1",
+            tournament_id="t1",
+            outcome_side=OutcomeSide.YES,
+            action=OrderAction.BUY,
+            quantity=quantity,
+            limit_price_ticks=100,
+        ),
+    )
+    if atomic:
+        legs = legs + (
+            CandidateLeg(
+                exchange_id="37",
+                market_id="m1",
+                tournament_id="t1",
+                outcome_side=OutcomeSide.NO,
+                action=OrderAction.BUY,
+                quantity=quantity,
+                limit_price_ticks=100,
+            ),
+        )
+    return Opportunity(
+        family=StrategyFamily.STRUCT if relationship_id is not None else StrategyFamily.FV_TAKE,
+        strategy_id="test-strategy",
+        legs=legs,
+        gross_edge=0.02,
+        fair_value=0.55,
+        decision_observation_ns=1_000_000,
+        requires_trusted_depth=requires_depth,
+        atomic=atomic,
+        relationship_id=relationship_id,
+    )
+
+
+def _limits(**overrides: float | int) -> RiskLimits:
+    values: dict[str, float | int] = {
+        "max_order_size": 10,
+        "max_gross_exposure": 100.0,
+        "max_per_market_exposure": 100.0,
+        "max_open_order_exposure": 100.0,
+        "max_concurrent_open_orders": 10,
+    }
+    values.update(overrides)
+    return RiskLimits(
+        max_order_size=int(values["max_order_size"]),
+        max_gross_exposure=float(values["max_gross_exposure"]),
+        max_per_market_exposure=float(values["max_per_market_exposure"]),
+        max_open_order_exposure=float(values["max_open_order_exposure"]),
+        max_concurrent_open_orders=int(values["max_concurrent_open_orders"]),
+    )
+
+
+def test_all_legal_sig_ticks_round_trip_exactly() -> None:
+    for ticks in range(1, 200):
+        price = ticks_to_limit_price(ticks)
+        assert limit_price_to_ticks(price) == ticks
+        assert price == Decimal(ticks) * Decimal("0.005")
+
+    with pytest.raises(ValueError):
+        limit_price_to_ticks(Decimal("0.501"))
+    with pytest.raises(ValueError):
+        ticks_to_limit_price(0)
+    with pytest.raises(ValueError):
+        ticks_to_limit_price(200)
+
+
+def test_strategy_extension_does_not_touch_execution_core() -> None:
+    registry = StrategyRegistry()
+
+    def extra_strategy(snapshot: RuntimeSnapshot, kernels: object, config: object) -> NoTrade:
+        del snapshot, kernels, config
+        return NoTrade(reason="fixture")
+
+    registry.register("extra", extra_strategy)  # type: ignore[arg-type]
+    result = registry.evaluate("extra", _snapshot(), default_kernel_registry(), {})
+    assert isinstance(result, NoTrade)
+    assert result.family is StrategyFamily.NO_TRADE
+
+
+def test_risk_fails_closed_on_live_limits_and_account_trust() -> None:
+    decision = evaluate_risk(
+        _opportunity(),
+        _snapshot(account_trusted=False),
+        RiskContext(
+            mode=ExecutionMode.LIVE,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=1_000_000,
+        ),
+    )
+    assert decision.approved is False
+    assert decision.reason == "live_limits_not_configured"
+
+    decision = evaluate_risk(
+        _opportunity(),
+        _snapshot(account_trusted=False),
+        RiskContext(
+            mode=ExecutionMode.LIVE,
+            kill_switch=False,
+            limits=_limits(),
+            max_state_age_ns=1_000_000,
+        ),
+    )
+    assert decision.approved is False
+    assert decision.reason == "account_state_untrusted"
+
+
+def test_depth_sensitive_opportunity_rejects_untrusted_or_stale_depth() -> None:
+    context = RiskContext(
+        mode=ExecutionMode.SHADOW,
+        kill_switch=False,
+        limits=None,
+        max_state_age_ns=100,
+    )
+    decision = evaluate_risk(
+        _opportunity(requires_depth=True),
+        _snapshot(trusted_depth=False),
+        context,
+    )
+    assert decision.reason == "trusted_depth_required"
+
+    stale = _snapshot(observed_ns=1_000)
+    stale_book = RuntimeBook(
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        bids=stale.books[0].bids,
+        asks=stale.books[0].asks,
+        trusted_depth=True,
+        observed_monotonic_ns=1,
+    )
+    stale = RuntimeSnapshot(
+        markets=stale.markets,
+        books=(stale_book,),
+        portfolio=stale.portfolio,
+        observation_monotonic_ns=1_000,
+    )
+    decision = evaluate_risk(_opportunity(requires_depth=True), stale, context)
+    assert decision.reason == "depth_state_stale"
+
+
+def test_uncertain_orders_continue_to_consume_open_order_risk() -> None:
+    uncertain = RuntimeOrderState(
+        logical_intent_id="old",
+        exchange_id="36",
+        market_id="m1",
+        reserved_exposure=9.0,
+        open=False,
+        uncertain=True,
+    )
+    decision = evaluate_risk(
+        _opportunity(quantity=2),
+        _snapshot(orders=(uncertain,)),
+        RiskContext(
+            mode=ExecutionMode.LIVE,
+            kill_switch=False,
+            limits=_limits(max_open_order_exposure=10.0),
+            max_state_age_ns=1_000_000,
+        ),
+    )
+    assert decision.approved is False
+    assert decision.reason == "max_open_order_exposure"
+
+
+def test_atomic_relationship_is_risked_as_one_execution_operation() -> None:
+    decision = evaluate_risk(
+        _opportunity(
+            quantity=2,
+            atomic=True,
+            relationship_id="22222222-2222-2222-2222-222222222222",
+        ),
+        _snapshot(),
+        RiskContext(
+            mode=ExecutionMode.LIVE,
+            kill_switch=False,
+            limits=_limits(),
+            max_state_age_ns=1_000_000,
+        ),
+    )
+    assert decision.approved is True
+    assert decision.operation_kind is OperationKind.ATOMIC_MULTI_LEG
+    assert len(decision.intents) == 2
+    assert decision.relationship_constraint == "22222222-2222-2222-2222-222222222222"
+
+
+def test_shadow_and_live_share_identical_post_risk_intents() -> None:
+    decision = evaluate_risk(
+        _opportunity(),
+        _snapshot(),
+        RiskContext(
+            mode=ExecutionMode.LIVE,
+            kill_switch=False,
+            limits=_limits(),
+            max_state_age_ns=1_000_000,
+        ),
+    )
+    assert decision.approved
+
+    shadow = build_execution_plan(
+        decision,
+        mode=ExecutionMode.SHADOW,
+        logical_operation_id="logical-1",
+        idempotency_key="key-1",
+        clock_ns=lambda: 123,
+    )
+    live = build_execution_plan(
+        decision,
+        mode=ExecutionMode.LIVE,
+        logical_operation_id="logical-1",
+        idempotency_key="key-1",
+        clock_ns=lambda: 123,
+    )
+    assert shadow.intents == live.intents
+    assert shadow.envelope.payload_json == live.envelope.payload_json
+    assert shadow.envelope.payload_sha256 == live.envelope.payload_sha256
+    assert shadow.envelope.sink_mode is ExecutionMode.SHADOW
+    assert live.envelope.sink_mode is ExecutionMode.LIVE
+
+
+def test_live_interlocks_require_explicit_invocation_and_trusted_account() -> None:
+    settings = AppSettings(
+        sig_trade_credential=SecretStr("trade-secret"),
+        tournament_id="t1",
+        tournament_slug="cup",
+        trading_enabled=True,
+        execution_mode="LIVE",
+        global_kill_switch=False,
+        risk_max_order_size=10,
+        risk_max_gross_exposure=100.0,
+        risk_max_per_market_exposure=100.0,
+        risk_max_open_order_exposure=100.0,
+        risk_max_concurrent_open_orders=10,
+    )
+    with pytest.raises(LiveInterlockError):
+        assert_live_interlocks(
+            settings,
+            explicit_live_invocation=False,
+            account_trusted=True,
+        )
+    with pytest.raises(LiveInterlockError):
+        assert_live_interlocks(
+            settings,
+            explicit_live_invocation=True,
+            account_trusted=False,
+        )
+
+    assert_live_interlocks(
+        settings,
+        explicit_live_invocation=True,
+        account_trusted=True,
+    )
+
+
+def test_hot_path_telemetry_is_bounded_and_counts_drops() -> None:
+    telemetry = HotPathTelemetry(capacity=2)
+    telemetry.observe("a", 1)
+    telemetry.observe("b", 2)
+    telemetry.observe("c", 3)
+    telemetry.increment("approved")
+    snapshot = telemetry.snapshot()
+    assert tuple(item.name for item in snapshot.observations) == ("b", "c")
+    assert snapshot.dropped_observations == 1
+    assert snapshot.counters == {"approved": 1}
+
+
+def test_hot_path_modules_do_not_import_io_heavy_dependencies() -> None:
+    forbidden = {"httpx", "aiohttp", "sqlite3", "pyarrow", "supabase"}
+    root = Path(__file__).resolve().parents[1] / "src" / "predictions_cup"
+    paths = (
+        root / "runtime" / "models.py",
+        root / "runtime" / "orchestrator.py",
+        root / "strategy" / "core.py",
+        root / "strategy" / "kernels.py",
+        root / "risk" / "core.py",
+    )
+    imported: set[str] = set()
+    for path in paths:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name.split(".", 1)[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module.split(".", 1)[0])
+    assert imported.isdisjoint(forbidden)
