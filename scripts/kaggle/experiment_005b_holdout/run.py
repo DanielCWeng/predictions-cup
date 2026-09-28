@@ -305,7 +305,6 @@ def comparator_predictions(
     ytr = pd.to_numeric(train[target], errors="coerce").to_numpy(dtype=float)
     valid = np.isfinite(ytr)
     if classification:
-        classes = np.array(sorted(set(ytr[valid].astype(int))))
         counts = pd.Series(ytr[valid].astype(int)).value_counts()
         majority = int(counts.index[0])
         result["persistence"] = np.full(len(hold), majority, dtype=float)
@@ -588,7 +587,6 @@ def evaluate_target(
 
 def main() -> None:
     gate, freeze, freeze_sha = load_gate()
-    protocol = json.loads(PROTOCOL_PATH.read_text())
     columns = selected_columns(freeze)
     results = []
     for target in sorted(columns):
