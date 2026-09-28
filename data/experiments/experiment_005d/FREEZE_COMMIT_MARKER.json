@@ -3,20 +3,20 @@
   "stage": "PRE_OUTCOME_DESIGN_FREEZE",
   "base_sha": "ba938bedcf63f562be8b26c9502e828391123867",
   "branch": "experiment/005d-structural-rv-atlas",
-  "freeze_parent_sha": "ee4db88b476f6e80bdffe30dff58347d284471fe",
+  "freeze_parent_sha": "65113ac40d53154c5a96c0b561c6a4633e2ac8ee",
   "artifacts": {
     "docs/experiments/EXPERIMENT_005D_STRUCTURAL_RV_ATLAS.md": "6a699406887bbcc551913d712166ae376d63c798cfe86b008f8ba5927d9ec3ed",
     "data/experiments/experiment_005d/preregistration.json": "d43a75ff8e0b5df6c717f37721e339116a6297b299c4e26d8b9a5f242b9c7a51",
     "data/experiments/experiment_005d/prior_exposure_manifest.json": "19fd15b77063f9f5d5c43fa02da37bb2bcc6dd9ac04f5fd1325f1220a9e199c3",
     "src/predictions_cup/learning/structural_atlas.py": "3de4316cc5acda7c52832060c4983822f8d289583ae31cbe733a71eed5067566",
     "tests/test_structural_atlas.py": "31beebf56af4cd3e05735ab247ee77bad7781f4e8ebdf14942c2f0952111b312",
-    "scripts/prepare_experiment_005d_kaggle.py": "ca91d1c7c8bd68c5234d1633f8ade735504e7578eadd1726c3848beee0f01760",
-    "scripts/kaggle/experiment_005d/run_body.py.txt": "2d99cb24f8f13c90ccd5f5ce9c3e1b75b66d68fd515c5b4df36cfd264a7a0aaa",
+    "scripts/prepare_experiment_005d_kaggle.py": "e369906d1a5ea1474c620a30f49885dfca0918b948d46ac9a36ecc4cfc8cc0eb",
+    "scripts/kaggle/experiment_005d/run_body.py.txt": "fbd8fbe32a66c0535b40946c9ef1ee268935211c9ea250b7586ee7b30cb59c12",
     "scripts/kaggle/experiment_005d/kernel-metadata.json": "214984c92ded0b37d2be064dfe32223e0e2cfd5ca2a6dc8b12fa7a41751456b3"
   },
   "generated_runner": {
-    "sha256": "871e642011a88d19e05e8fe29823af3f4fe6716d68e36cedee6f37804a6c6d96",
-    "bytes": 284154,
+    "sha256": "c597bba58f04dbb0af35ec0f2239cb009e1256cf737b6617ae35331887400dd2",
+    "bytes": 288059,
     "phase": "TRAIN_DEV",
     "generator_rule": "regenerate from the frozen prep script + frozen semantic inputs; generated run.py need not be hand-edited",
     "deterministic_regeneration": "PASS: two clean generations produced identical SHA-256"
@@ -25,7 +25,8 @@
     "unit_tests": "9 passed",
     "generated_runner_py_compile": "PASS",
     "holdout_status": "SEALED_NOT_INSPECTED",
-    "ruff": "PASS"
+    "ruff": "PASS",
+    "data_002_mount_policy": "semantic JSON equality + per-Parquet SHA-256"
   },
   "post_freeze_rule": "No model/target/horizon/split/screening additions after this marker. DEV may only remove/select among frozen candidates."
 }
