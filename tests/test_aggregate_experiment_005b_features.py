@@ -25,7 +25,7 @@ MODULE = _load_module(
     / "scripts"
     / "aggregate_experiment_005b_features.py",
 )
-MAIN = cast(Callable[[], None], getattr(MODULE, "main"))
+MAIN = cast(Callable[[], None], MODULE.__dict__["main"])
 
 
 def _report(family: str) -> dict[str, object]:
