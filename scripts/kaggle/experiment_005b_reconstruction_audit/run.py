@@ -1,5 +1,7 @@
 """Bounded schema audit for 005B reconstruction conservation failures."""
 
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 import json
