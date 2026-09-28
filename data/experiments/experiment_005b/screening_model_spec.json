@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "spec_id": "TRAIN_DEV_SCREEN_MODEL_V1",
+  "feature_target_spec_sha256": "47dc9c9a678f58558aba7e4bc282103cacbc0836f08018a79d4197487d689cf7",
+  "holdout_access": false,
+  "sample_policy": {
+    "train_rows_per_family": 80000,
+    "dev_rows_per_family": 50000,
+    "rank_rows_per_family": 40000,
+    "bucket_rows_per_family": 10000,
+    "redundancy_rows_per_family": 5000,
+    "model_train_rows_total": 150000,
+    "model_dev_rows_total": 100000,
+    "selection": "deterministic hash(condition_id, tx_hash, log_index); never target value"
+  },
+  "split_policy": {
+    "embargo_seconds": 300,
+    "train": "timestamp < train_end-300 and target label_end < train_end",
+    "dev": "timestamp >= train_end+300 and timestamp < dev_end-300 and target label_end < dev_end",
+    "holdout": "not queried by this stage"
+  },
+  "census": {
+    "required_metrics": [
+      "pearson",
+      "spearman",
+      "directional_response",
+      "decile_response",
+      "monotonicity",
+      "standardized_effect",
+      "support",
+      "market_count",
+      "time_block_count",
+      "market_concentration_hhi",
+      "family_sign_consistency"
+    ],
+    "pearson_directional": "deterministic TRAIN sample",
+    "spearman": "deterministic rank sample; ranks are computed before correlation",
+    "deciles": "deterministic bucket sample; buckets are TRAIN feature deciles",
+    "full_support": "full TRAIN rows via wide aggregate per family",
+    "minimum_support_rows": 1000,
+    "minimum_markets": 3,
+    "minimum_time_blocks": 4
+  },
+  "redundancy": {
+    "absolute_spearman_threshold": 0.95,
+    "sample": "deterministic redundancy sample",
+    "clustering": "connected components under absolute Spearman threshold",
+    "representative": "highest median absolute TRAIN Spearman across supported targets; lexical tie-break"
+  },
+  "dev_selection": {
+    "train_top_representatives_per_target": 8,
+    "shortlist_cap_per_target": 12,
+    "sign_persistence_required": true,
+    "single_market_share_max": 0.5,
+    "model_gate_abs_train_association": 0.01
+  },
+  "model_eligibility": {
+    "atlas_only_target_fragments": [
+      "logit_change",
+      "absolute_change"
+    ],
+    "model_targets": [
+      "price_change",
+      "sign",
+      "realised_movement"
+    ],
+    "regression_models": [
+      "persistence_baseline",
+      "own_history_linear",
+      "univariate_linear",
+      "ols",
+      "ridge",
+      "elastic_net",
+      "hist_gradient_boosting"
+    ],
+    "classification_models": [
+      "majority_baseline",
+      "logistic_l2"
+    ],
+    "ridge_alpha": [
+      0.1,
+      1,
+      10
+    ],
+    "elastic_net_alpha": [
+      0.001,
+      0.01,
+      0.1
+    ],
+    "elastic_net_l1_ratio": [
+      0.1,
+      0.5,
+      0.9
+    ],
+    "logistic_C": [
+      0.1,
+      1,
+      10
+    ],
+    "hist_gradient_boosting": {
+      "learning_rate": 0.05,
+      "max_iter": 100,
+      "max_leaf_nodes": 15,
+      "l2_regularization": 1
+    },
+    "regression_selection": "highest DEV MAE improvement versus persistence baseline",
+    "classification_selection": "lowest DEV multiclass Brier score, then highest accuracy"
+  },
+  "shortlist_freeze_requirement": "Stage output must be committed and hash-bound before any HOLDOUT query."
+}
