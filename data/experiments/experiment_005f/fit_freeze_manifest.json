@@ -1,0 +1,1091 @@
+{
+  "candidate_count": 17,
+  "candidates": [
+    {
+      "artifact_directory": "b09244c1e8f344e9",
+      "artifact_sha256": {
+        "baseline_model.joblib": "91b9313b5920c41907ae8ac304fa4aac39e460ad6505a5798add2cb80156eca7",
+        "baseline_scaler.joblib": "4df0e930c56d07d243b92a4a353f17fc3007e20dd5c8b3f74905125316e3054d",
+        "capture_only_model.joblib": "8553bd13e4e91dd465305801c78cffe2be8113235e05d3ef9bd743121b772bb9",
+        "capture_only_scaler.joblib": "18181f6b1334ba1a1a0b4980bdbc6b8c0e684e22b13c944356a55da436a16d12",
+        "challenger_model.joblib": "c4052781fca57915b3beed594aacd9cba3619c12d70426d1f3454539a8413a8d",
+        "challenger_scaler.joblib": "6a094fe82bd5fc55aa41da0b3964627fc7b68f7e08433f4ac53272c42ce3f4f9",
+        "selected_plus_capture_model.joblib": "e4f14d1c950e026389264fd18ae98167f7ac98afade4a2abc6d4526bdfc03b90",
+        "selected_plus_capture_scaler.joblib": "458cd0d2044301bef1c2e0beb74949a05d3578e4df0705f556e6f67af97d0f28"
+      },
+      "baseline_columns": [
+        "abs_ret_15",
+        "rv_60"
+      ],
+      "block_length_minutes": 14,
+      "candidate_id": "ACTIVE_RESULTS|clock|JUMP_HAZARD",
+      "capture_falsification": {
+        "capture_columns": [
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "capture_only_columns": [
+          "abs_ret_15",
+          "rv_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "dev_complete_rows": 11300,
+        "dev_fit_rows": 11300,
+        "fit_rows": 41813,
+        "selected_plus_capture_columns": [
+          "abs_ret_15",
+          "rv_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60",
+          "genuine_age_s"
+        ],
+        "supported": true,
+        "train_complete_rows": 30513,
+        "train_fit_rows": 30513
+      },
+      "challenger_columns": [
+        "abs_ret_15",
+        "rv_60",
+        "genuine_age_s"
+      ],
+      "classification": true,
+      "dataset": "clock",
+      "dev_complete_rows": 11300,
+      "dev_fit_rows": 11300,
+      "feature": "genuine_age_s",
+      "feature_family": "BBO_AGE",
+      "fit_rows": 41813,
+      "horizon": "300",
+      "model": "HGB_D2_LR0.03",
+      "regime": "ACTIVE_RESULTS",
+      "seed": 2114599513,
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "jump_h300",
+      "target_family": "JUMP_HAZARD",
+      "train_complete_rows": 30513,
+      "train_fit_rows": 30513
+    },
+    {
+      "artifact_directory": "0417ccedf0fec774",
+      "artifact_sha256": {
+        "baseline_model.joblib": "e08c49a82cb0f3040a262b8311b7d0ce84cae997469f401953d98675354f5bf5",
+        "baseline_scaler.joblib": "f06aaaf9bac579d45f78541e07f93e6150046ec5ef234b75e1155870177eb81e",
+        "capture_only_model.joblib": "1a8e3c4e87fa5b0811abd6a57a5ab53db178592b370e1c4f2f7bb79b4118059e",
+        "capture_only_scaler.joblib": "4e4371907539d1e24fed51343be291495d8200a48b950bb9189585364a0c4ddd",
+        "challenger_model.joblib": "e14a6ac8f4f57af1442eaac6b0950bbaabca8b7d4bf5513d981fdb488b53b6ce",
+        "challenger_scaler.joblib": "cd504fcfe116f39703de5bb7172337851cb3c1a415b4988d34f766dcc353b0bf",
+        "selected_plus_capture_model.joblib": "a6ea9938f0afa603edfa93181dba7d7da635a116e7b5a974940679fd7184d912",
+        "selected_plus_capture_scaler.joblib": "645faee25b32dbbf7bafa9c53addfa7bb634f075996faed89eb139728849265c"
+      },
+      "baseline_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60"
+      ],
+      "block_length_minutes": 5,
+      "candidate_id": "ACTIVE_RESULTS|clock|LIQUIDITY",
+      "capture_falsification": {
+        "capture_columns": [
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "capture_only_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "dev_complete_rows": 2380,
+        "dev_fit_rows": 2380,
+        "fit_rows": 7447,
+        "selected_plus_capture_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60",
+          "trade_burstiness_60"
+        ],
+        "supported": true,
+        "train_complete_rows": 5067,
+        "train_fit_rows": 5067
+      },
+      "challenger_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60",
+        "trade_burstiness_60"
+      ],
+      "classification": false,
+      "dataset": "clock",
+      "dev_complete_rows": 2380,
+      "dev_fit_rows": 2380,
+      "feature": "trade_burstiness_60",
+      "feature_family": "TRADE_ACTIVITY",
+      "fit_rows": 7447,
+      "horizon": "300",
+      "model": "HGB_D2_LR0.03",
+      "regime": "ACTIVE_RESULTS",
+      "seed": 1612597859,
+      "selection_class": "SHADOW_ONLY_NO_FDR",
+      "target": "spread_h300",
+      "target_family": "LIQUIDITY",
+      "train_complete_rows": 5067,
+      "train_fit_rows": 5067
+    },
+    {
+      "artifact_directory": "adda477f8e826d92",
+      "artifact_sha256": {
+        "baseline_model.joblib": "5f356d89248b13f31c196272e0f71c42c6d14a2779685c0626beb550ea370416",
+        "baseline_scaler.joblib": "bc2d5acfd132ad40bca7c4b84102ea537d1552132e60515375a538a09c783a49",
+        "capture_only_model.joblib": "daf450cb7070ad14e6bbe60dd81b0d799cacee5d5e7bd07a77bfaaf1e7d01708",
+        "capture_only_scaler.joblib": "f95567f3471916a5a2f61fc75e4d5ae6013df353d41c3adc24eca2de8736208e",
+        "challenger_model.joblib": "7b9589b56f87243e71902c2f71711bd1da0bf9b62357e9ca505b37b1e0688295",
+        "challenger_scaler.joblib": "4e26f4e30f7ed8e5ab1d1c298d7ae2afffdd712a2a6b67247aedbc41a29f2240",
+        "selected_plus_capture_model.joblib": "c9f2f5b4b475183f5f00f57f58672ac3902dcfa66e48c5556f51485f7635fffe",
+        "selected_plus_capture_scaler.joblib": "b56e704f2eef006e81a7023f7fa7c3f09a3a8afe3a57268f534acff9166a9efb"
+      },
+      "baseline_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60"
+      ],
+      "block_length_minutes": 11,
+      "candidate_id": "ACTIVE_RESULTS|clock|PRICE",
+      "capture_falsification": {
+        "capture_columns": [
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "capture_only_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "dev_complete_rows": 10959,
+        "dev_fit_rows": 10959,
+        "fit_rows": 40247,
+        "selected_plus_capture_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60",
+          "genuine_age_s"
+        ],
+        "supported": true,
+        "train_complete_rows": 29288,
+        "train_fit_rows": 29288
+      },
+      "challenger_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60",
+        "genuine_age_s"
+      ],
+      "classification": false,
+      "dataset": "clock",
+      "dev_complete_rows": 10959,
+      "dev_fit_rows": 10959,
+      "feature": "genuine_age_s",
+      "feature_family": "BBO_AGE",
+      "fit_rows": 40247,
+      "horizon": "300",
+      "model": "HGB_D2_LR0.1",
+      "regime": "ACTIVE_RESULTS",
+      "seed": 971339424,
+      "selection_class": "SHADOW_ONLY_NO_FDR",
+      "target": "price_h300",
+      "target_family": "PRICE",
+      "train_complete_rows": 29288,
+      "train_fit_rows": 29288
+    },
+    {
+      "artifact_directory": "e375e5264684fed8",
+      "artifact_sha256": {
+        "baseline_model.joblib": "f2ceec54d4039882419de5e4fd4f56b5cca918998dd2735eba19554c8dc7c073",
+        "baseline_scaler.joblib": "354a6af4f80d3c5b18030822b42e3173fcc17a604fc38b59c0c9f52ba26ad15e",
+        "capture_only_model.joblib": "bbd6d90ead2abf04bd62ea3c501403ab22152c6573cc5d6336a78f0fea7f68be",
+        "capture_only_scaler.joblib": "2bf29c46679a3957eaa18ee5c901da8133a60dafde5326fb61f640b2b6fc6acb",
+        "challenger_model.joblib": "a5302b9760e9d6763e6a3ac6894b417942a453a3c4f7f883afced1f178f24b12",
+        "challenger_scaler.joblib": "42dfd8404467053bdde5bfb4dca30bc3e928f190a4f52f8d98ab0a76da48fe69",
+        "selected_plus_capture_model.joblib": "00176a99769bc4bccb72129d1ba1ee5607d1f0b7256825c0495e3874e7b0964a",
+        "selected_plus_capture_scaler.joblib": "a65b381d5fb993f029d61b10bfcca79bf435b23384f7f5e4dd0bcaf9f2e26187"
+      },
+      "baseline_columns": [
+        "genuine_15",
+        "genuine_60"
+      ],
+      "block_length_minutes": 54,
+      "candidate_id": "ACTIVE_RESULTS|clock|UPDATE_HAZARD",
+      "capture_falsification": {
+        "capture_columns": [
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "capture_only_columns": [
+          "genuine_15",
+          "genuine_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "dev_complete_rows": 19297,
+        "dev_fit_rows": 19297,
+        "fit_rows": 83678,
+        "selected_plus_capture_columns": [
+          "genuine_15",
+          "genuine_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60",
+          "genuine_age_s"
+        ],
+        "supported": true,
+        "train_complete_rows": 64381,
+        "train_fit_rows": 64381
+      },
+      "challenger_columns": [
+        "genuine_15",
+        "genuine_60",
+        "genuine_age_s"
+      ],
+      "classification": true,
+      "dataset": "clock",
+      "dev_complete_rows": 19297,
+      "dev_fit_rows": 19297,
+      "feature": "genuine_age_s",
+      "feature_family": "BBO_AGE",
+      "fit_rows": 83678,
+      "horizon": "300",
+      "model": "HGB_D2_LR0.1",
+      "regime": "ACTIVE_RESULTS",
+      "seed": 2742022934,
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "update_h300",
+      "target_family": "UPDATE_HAZARD",
+      "train_complete_rows": 64381,
+      "train_fit_rows": 64381
+    },
+    {
+      "artifact_directory": "d3da7b5b8e78f44c",
+      "artifact_sha256": {
+        "baseline_model.joblib": "117a3a1ee5940edecc6e02060e990c94c13f961136bbd7f948ccdd3917144c5b",
+        "baseline_scaler.joblib": "63280c8818903201c550d3cce21e1310ded414e8cdb108e5060638fa55dec48a",
+        "capture_only_model.joblib": "4acf1df6c7b7b274869069f767756d9378c15b43025962531759b4f0c9c1035a",
+        "capture_only_scaler.joblib": "a2fae2eedbcb0bb4474410a6b4f702b6914c4510f535b529e68ea73bcf46265b",
+        "challenger_model.joblib": "85d99c6bcc0cfef83f041fef001adc06db0139b0a97ab40d599f43b2ef872b22",
+        "challenger_scaler.joblib": "08b305ea8d44352ee488d8edbdc93642db1a71386e4dc68899aeeb25b22ee8b3",
+        "selected_plus_capture_model.joblib": "f1d76e134721f6bc25ba9a7f99f9f6a3e25b525e93fac59e485a7bc09b7899f5",
+        "selected_plus_capture_scaler.joblib": "878c6deaf8a54ab434ac02e84bb44a8841981e0bed823375153aea7552b31960"
+      },
+      "baseline_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60"
+      ],
+      "block_length_minutes": 19,
+      "candidate_id": "ACTIVE_RESULTS|clock|VOLATILITY",
+      "capture_falsification": {
+        "capture_columns": [
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "capture_only_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "dev_complete_rows": 18110,
+        "dev_fit_rows": 18110,
+        "fit_rows": 73173,
+        "selected_plus_capture_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60",
+          "rv_300"
+        ],
+        "supported": true,
+        "train_complete_rows": 55063,
+        "train_fit_rows": 55063
+      },
+      "challenger_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60",
+        "rv_300"
+      ],
+      "classification": false,
+      "dataset": "clock",
+      "dev_complete_rows": 18110,
+      "dev_fit_rows": 18110,
+      "feature": "rv_300",
+      "feature_family": "VOLATILITY",
+      "fit_rows": 73173,
+      "horizon": "300",
+      "model": "HGB_D3_LR0.03",
+      "regime": "ACTIVE_RESULTS",
+      "seed": 3061393235,
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "abs_h300",
+      "target_family": "VOLATILITY",
+      "train_complete_rows": 55063,
+      "train_fit_rows": 55063
+    },
+    {
+      "artifact_directory": "fe2390ae76a4cfcb",
+      "artifact_sha256": {
+        "baseline_model.joblib": "5d9a847655350d4ea34f9c21b3e0a9b9735f72e0e63e697afbcf0554139e4d22",
+        "baseline_scaler.joblib": "2c5b51d7e3b4a15632e39125e13f2eeba6a62644e2fc5734bf52c3af7c7db309",
+        "capture_only_model.joblib": "415630e1cd59fa8d11ada6fedcc665e21d30ac5ad4a9902cba6e4e9bbe47dc9a",
+        "capture_only_scaler.joblib": "2b08bf73488fa75c6c321f21281db50c5de1f9488aff322d64bbc8fbb3f33675",
+        "challenger_model.joblib": "415630e1cd59fa8d11ada6fedcc665e21d30ac5ad4a9902cba6e4e9bbe47dc9a",
+        "challenger_scaler.joblib": "523bbf57a0b10d5955a34541bbdb8c5ef96b519b62bbbd0449bca2bbba098ded",
+        "selected_plus_capture_model.joblib": "2e872b6c085bed4973d16789d708d0a6b397143c7edcca1b0879ae81d07ac2ff",
+        "selected_plus_capture_scaler.joblib": "e3d0fa4d1aaf118bb7f649a20be4f87a26906fccb622f302002dde6679617a82"
+      },
+      "baseline_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60"
+      ],
+      "block_length_minutes": 16,
+      "candidate_id": "ACTIVE_RESULTS|depth|DEPTH_VOL",
+      "capture_falsification": {
+        "capture_columns": [
+          "snapshot_interval_s"
+        ],
+        "capture_only_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "snapshot_interval_s"
+        ],
+        "dev_complete_rows": 1253,
+        "dev_fit_rows": 1253,
+        "fit_rows": 9274,
+        "selected_plus_capture_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "snapshot_interval_s",
+          "snapshot_ofi_norm"
+        ],
+        "supported": true,
+        "train_complete_rows": 8021,
+        "train_fit_rows": 8021
+      },
+      "challenger_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60",
+        "snapshot_ofi_norm"
+      ],
+      "classification": false,
+      "dataset": "depth",
+      "dev_complete_rows": 1253,
+      "dev_fit_rows": 1253,
+      "feature": "snapshot_ofi_norm",
+      "feature_family": "OFI",
+      "fit_rows": 9274,
+      "horizon": "5",
+      "model": "ENET_0.01_0.9",
+      "regime": "ACTIVE_RESULTS",
+      "seed": 782349813,
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "depth_abs_h5",
+      "target_family": "DEPTH_VOL",
+      "train_complete_rows": 8021,
+      "train_fit_rows": 8021
+    },
+    {
+      "artifact_directory": "56dc9cdc3d8ac938",
+      "artifact_sha256": {
+        "baseline_model.joblib": "a98f2c82ff6b39c7abb9759fedf0353b9fe9e4ae47fbd2f4080a14fd35f54011",
+        "baseline_scaler.joblib": "c42cc705a15a206a85d89d4bd3e5d58b40491c7131ad160bc2881770642026ca",
+        "capture_only_model.joblib": "8c75baa713474945b5fd74a1e9fabb734e90dd4d6e22324af51c6903b716f906",
+        "capture_only_scaler.joblib": "9e14b00983b114ea63561447e908c6415980365afc3493e8f1677ac8343cda55",
+        "challenger_model.joblib": "8c75baa713474945b5fd74a1e9fabb734e90dd4d6e22324af51c6903b716f906",
+        "challenger_scaler.joblib": "801eeafb2bf76cee5d8eecc18f08e1102f03ce72e3975f96b9211a6681389e48",
+        "selected_plus_capture_model.joblib": "ba126286ef28208841add3f5a7a5915afa1c97e4e9b33932b835ea12541c02e5",
+        "selected_plus_capture_scaler.joblib": "8d827d3a527ec596361874f8d8c8611c0ac7d4cd57e36591e0558b69610ca04d"
+      },
+      "baseline_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60"
+      ],
+      "block_length_minutes": 5,
+      "candidate_id": "ACTIVE_RESULTS|depth|MICRO_FV",
+      "capture_falsification": {
+        "capture_columns": [
+          "snapshot_interval_s"
+        ],
+        "capture_only_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "snapshot_interval_s"
+        ],
+        "dev_complete_rows": 980,
+        "dev_fit_rows": 980,
+        "fit_rows": 7006,
+        "selected_plus_capture_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "snapshot_interval_s",
+          "snapshot_ofi_norm"
+        ],
+        "supported": true,
+        "train_complete_rows": 6026,
+        "train_fit_rows": 6026
+      },
+      "challenger_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60",
+        "snapshot_ofi_norm"
+      ],
+      "classification": false,
+      "dataset": "depth",
+      "dev_complete_rows": 980,
+      "dev_fit_rows": 980,
+      "feature": "snapshot_ofi_norm",
+      "feature_family": "OFI",
+      "fit_rows": 7006,
+      "horizon": "60",
+      "model": "ENET_0.01_0.5",
+      "regime": "ACTIVE_RESULTS",
+      "seed": 2739596209,
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "depth_price_h60",
+      "target_family": "MICRO_FV",
+      "train_complete_rows": 6026,
+      "train_fit_rows": 6026
+    },
+    {
+      "artifact_directory": "247a670567546b06",
+      "artifact_sha256": {
+        "baseline_model.joblib": "226f3499e1fe4fb68adaa9d1e2ffa0f19ed16df22fd452a55fbdc228ceddfe8e",
+        "baseline_scaler.joblib": "bae65bf3a4b45bb78acfde8c9d01e39c924e264675c0226d9549e8b44ff717c1",
+        "challenger_model.joblib": "85da129cec1665d7a72aed07e17df4fa1a4480e0e4db19f96ef8a4e5c275dc1e",
+        "challenger_scaler.joblib": "d107e4dc10e602b5320a568dcd3210493c2bdf40ecf2ef27da2315c2e4ecf2eb"
+      },
+      "baseline_columns": [
+        "event_ret1",
+        "event_ret2"
+      ],
+      "block_length_minutes": 5,
+      "candidate_id": "ACTIVE_RESULTS|event|PRICE_EVENT",
+      "capture_falsification": {
+        "capture_columns": [],
+        "reason": "event_panel_has_no_raw_capture_controls",
+        "supported": false
+      },
+      "challenger_columns": [
+        "event_ret1",
+        "event_ret2",
+        "qbid"
+      ],
+      "classification": false,
+      "dataset": "event",
+      "dev_complete_rows": 2439,
+      "dev_fit_rows": 2439,
+      "feature": "qbid",
+      "feature_family": "DEPTH",
+      "fit_rows": 10071,
+      "horizon": "2",
+      "model": "HGB_D2_LR0.03",
+      "regime": "ACTIVE_RESULTS",
+      "seed": 2245981019,
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "event_price_k2",
+      "target_family": "PRICE_EVENT",
+      "train_complete_rows": 7632,
+      "train_fit_rows": 7632
+    },
+    {
+      "artifact_directory": "c07f982cbf75e822",
+      "artifact_sha256": {
+        "baseline_model.joblib": "e035f052def247b224d95453602c4fcef519e585b11384fdacaa7a7abbb50af2",
+        "baseline_scaler.joblib": "a26fb43a67ebf16fcfafbbd08b9376b01f95bc9ebc267c49a1e8617e3a867acb",
+        "challenger_model.joblib": "be5cbe896380af15e674505194b328f757bdad68e5ff450924755a677cedd8bd",
+        "challenger_scaler.joblib": "1d141283104648f2918095c0e4241cc528bcec9c80926064c62e40e3576262f4"
+      },
+      "baseline_columns": [
+        "event_ret1",
+        "event_ret2"
+      ],
+      "block_length_minutes": 11,
+      "candidate_id": "ACTIVE_RESULTS|event|VOL_EVENT",
+      "capture_falsification": {
+        "capture_columns": [],
+        "reason": "event_panel_has_no_raw_capture_controls",
+        "supported": false
+      },
+      "challenger_columns": [
+        "event_ret1",
+        "event_ret2",
+        "qbid"
+      ],
+      "classification": false,
+      "dataset": "event",
+      "dev_complete_rows": 2916,
+      "dev_fit_rows": 2916,
+      "feature": "qbid",
+      "feature_family": "DEPTH",
+      "fit_rows": 12939,
+      "horizon": "1",
+      "model": "HGB_D2_LR0.1",
+      "regime": "ACTIVE_RESULTS",
+      "seed": 4052135887,
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "event_abs_k1",
+      "target_family": "VOL_EVENT",
+      "train_complete_rows": 10023,
+      "train_fit_rows": 10023
+    },
+    {
+      "artifact_directory": "c66cb7f6853631c4",
+      "artifact_sha256": {
+        "baseline_model.joblib": "56e0156bb6af562ac5482c858d4cec09a24d13a41df7583005a13794e10d5a5d",
+        "baseline_scaler.joblib": "c76fb9fd840a7e17eb94515d9e2870af9e89a83d5afcffecb42134d7cb39bcdf",
+        "capture_only_model.joblib": "f2ed6a80affa852720e4cbe679bd38392d52904bb7c6f0ce4155da6c500dc8fd",
+        "capture_only_scaler.joblib": "9f2d212270b329d28942b2250689f45f6a45685c02e184d7ddc34f4b5976e29f",
+        "challenger_model.joblib": "37e2ed4ca1ccf73fbbf4c42bb85d6695d6099214b30252580aeeea5f80abdadb",
+        "challenger_scaler.joblib": "fbca5966daf50e4ea026f986646f25fb53af8aad8e4ecfeba88baa603d229767",
+        "selected_plus_capture_model.joblib": "e028b3d21167a66314706c2de2e8eddf7c1a5dab9eda97a6daf2214c953c48f2",
+        "selected_plus_capture_scaler.joblib": "599aec57d179ddb029011c5efbb275cbd7939de6979685d46d3227426ca49cdb"
+      },
+      "baseline_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60"
+      ],
+      "block_length_minutes": 5,
+      "candidate_id": "PRE_ELECTION|clock|LIQUIDITY",
+      "capture_falsification": {
+        "capture_columns": [
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "capture_only_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "dev_complete_rows": 70647,
+        "dev_fit_rows": 70647,
+        "fit_rows": 116844,
+        "selected_plus_capture_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60",
+          "trade_abs_impact_60"
+        ],
+        "supported": true,
+        "train_complete_rows": 46197,
+        "train_fit_rows": 46197
+      },
+      "challenger_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60",
+        "trade_abs_impact_60"
+      ],
+      "classification": false,
+      "dataset": "clock",
+      "dev_complete_rows": 70647,
+      "dev_fit_rows": 70647,
+      "feature": "trade_abs_impact_60",
+      "feature_family": "TRADE_ACTIVITY",
+      "fit_rows": 116844,
+      "horizon": "15",
+      "model": "HGB_D3_LR0.03",
+      "regime": "PRE_ELECTION",
+      "seed": 2896089704,
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "spread_h15",
+      "target_family": "LIQUIDITY",
+      "train_complete_rows": 46197,
+      "train_fit_rows": 46197
+    },
+    {
+      "artifact_directory": "0287a884f4381b94",
+      "artifact_sha256": {
+        "baseline_model.joblib": "180c3a7ee8c8b8dcddfbce0bf6f04b122fa2a25c6ade66a367197ba7e69448c3",
+        "baseline_scaler.joblib": "4270c8be572f61e84f0a479fb73827509caddc4709f8b1d4eac7555358972713",
+        "capture_only_model.joblib": "4a49f33f116036801910e26ee92c05ec98dfcbfa557ead3b0493250f0836dde7",
+        "capture_only_scaler.joblib": "5569777f936646a678c34573f60f5164f388a12f22480b4f9312fd851e214e45",
+        "challenger_model.joblib": "c95311a8b23ebf84ed0f82e8203da3497b8f7a85855dec6158025b5fac28b7e8",
+        "challenger_scaler.joblib": "2ef49e4c302ac5cf0a26aa88ee77573b5f48579ff840e81eb5bc3e06383f7a6f",
+        "selected_plus_capture_model.joblib": "9f0d471cf24a732ad38850463c59f2b4dae7ab0f0eed952dc9e2f3178e8f8839",
+        "selected_plus_capture_scaler.joblib": "31baceb0d3eac9736234925278c1c3659a797d78f208398376e91dc214eadbdf"
+      },
+      "baseline_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60"
+      ],
+      "block_length_minutes": 5,
+      "candidate_id": "PRE_ELECTION|clock|PRICE",
+      "capture_falsification": {
+        "capture_columns": [
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "capture_only_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "dev_complete_rows": 385411,
+        "dev_fit_rows": 192706,
+        "fit_rows": 397587,
+        "selected_plus_capture_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60",
+          "rv_60"
+        ],
+        "supported": true,
+        "train_complete_rows": 1024403,
+        "train_fit_rows": 204881
+      },
+      "challenger_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60",
+        "rv_60"
+      ],
+      "classification": false,
+      "dataset": "clock",
+      "dev_complete_rows": 385411,
+      "dev_fit_rows": 192706,
+      "feature": "rv_60",
+      "feature_family": "VOLATILITY",
+      "fit_rows": 397587,
+      "horizon": "300",
+      "model": "RIDGE_10.0",
+      "regime": "PRE_ELECTION",
+      "seed": 2652121797,
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "price_h300",
+      "target_family": "PRICE",
+      "train_complete_rows": 1024403,
+      "train_fit_rows": 204881
+    },
+    {
+      "artifact_directory": "32655ef6a0483dd5",
+      "artifact_sha256": {
+        "baseline_model.joblib": "32a79668c10c845a43c6ac3145a19a3ad8374c864699c5f99a2c761aebf73e5d",
+        "baseline_scaler.joblib": "ba5f07f9d354ff895010c999aa31323b234aa9fed8bdf710bc9767ba53a4947f",
+        "capture_only_model.joblib": "b251fec0ed341363c5a0cf28bd747ec4346c108d0ac55167caf8362ad1d5c2fa",
+        "capture_only_scaler.joblib": "3d797f7e666f3cde71188c1855add2fdce90d89ade8fcd9e9e672096444b516f",
+        "challenger_model.joblib": "222fc36ae35d9dbc8f2bcb489e9a353d2efe5b06ebcfb9d8edb410a60829213c",
+        "challenger_scaler.joblib": "2a33de93b14e7f130894b2f496ba0be11d1e5b11840f8dd2e1f91c37e24d064e",
+        "selected_plus_capture_model.joblib": "30e99a4d501a27457dd78b45d8a90f3f8ee063977b3e973e113aad74fa398b22",
+        "selected_plus_capture_scaler.joblib": "4407375aaf4c065ecca37b6d730a810ff28cddd14b0f19cd341e8d817f963114"
+      },
+      "baseline_columns": [
+        "genuine_15",
+        "genuine_60"
+      ],
+      "block_length_minutes": 60,
+      "candidate_id": "PRE_ELECTION|clock|UPDATE_HAZARD",
+      "capture_falsification": {
+        "capture_columns": [
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "capture_only_columns": [
+          "genuine_15",
+          "genuine_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "dev_complete_rows": 393658,
+        "dev_fit_rows": 196829,
+        "fit_rows": 411600,
+        "selected_plus_capture_columns": [
+          "genuine_15",
+          "genuine_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60",
+          "genuine_age_s"
+        ],
+        "supported": true,
+        "train_complete_rows": 1073851,
+        "train_fit_rows": 214771
+      },
+      "challenger_columns": [
+        "genuine_15",
+        "genuine_60",
+        "genuine_age_s"
+      ],
+      "classification": true,
+      "dataset": "clock",
+      "dev_complete_rows": 393658,
+      "dev_fit_rows": 196829,
+      "feature": "genuine_age_s",
+      "feature_family": "BBO_AGE",
+      "fit_rows": 411600,
+      "horizon": "300",
+      "model": "HGB_D3_LR0.03",
+      "regime": "PRE_ELECTION",
+      "seed": 419671054,
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "update_h300",
+      "target_family": "UPDATE_HAZARD",
+      "train_complete_rows": 1073851,
+      "train_fit_rows": 214771
+    },
+    {
+      "artifact_directory": "c7f0a65f57c8a3b9",
+      "artifact_sha256": {
+        "baseline_model.joblib": "59bee79729b87d90bbff1692fb38cfd4cc709dd1579ca8cae52df5940ec0b441",
+        "baseline_scaler.joblib": "4270c8be572f61e84f0a479fb73827509caddc4709f8b1d4eac7555358972713",
+        "capture_only_model.joblib": "e018083de333e97f096b063dde17194fb74fe615bba3514b396d48300e8d383b",
+        "capture_only_scaler.joblib": "5569777f936646a678c34573f60f5164f388a12f22480b4f9312fd851e214e45",
+        "challenger_model.joblib": "ad457ed96ef42c904c187e8a7b7c6db1b9ba9731246c829ba2ebf7c88253604b",
+        "challenger_scaler.joblib": "88476ff8b909a48b1283cd992960505d9b5522f233b7b74509aebee7d1a0171f",
+        "selected_plus_capture_model.joblib": "0068f9a079ce110091a41e67047b78aa37f671aeeb552b40c2c5775ab062346d",
+        "selected_plus_capture_scaler.joblib": "6fc14e10cc515acd3bb0a867b0d6368c396a69773364624efb81547040480af0"
+      },
+      "baseline_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60"
+      ],
+      "block_length_minutes": 10,
+      "candidate_id": "PRE_ELECTION|clock|VOLATILITY",
+      "capture_falsification": {
+        "capture_columns": [
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "capture_only_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60"
+        ],
+        "dev_complete_rows": 385411,
+        "dev_fit_rows": 192706,
+        "fit_rows": 397587,
+        "selected_plus_capture_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "raw_capture_bin_age_s",
+          "raw_60",
+          "repeated_60",
+          "rv_300"
+        ],
+        "supported": true,
+        "train_complete_rows": 1024403,
+        "train_fit_rows": 204881
+      },
+      "challenger_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60",
+        "rv_300"
+      ],
+      "classification": false,
+      "dataset": "clock",
+      "dev_complete_rows": 385411,
+      "dev_fit_rows": 192706,
+      "feature": "rv_300",
+      "feature_family": "VOLATILITY",
+      "fit_rows": 397587,
+      "horizon": "300",
+      "model": "OLS",
+      "regime": "PRE_ELECTION",
+      "seed": 1767729384,
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "abs_h300",
+      "target_family": "VOLATILITY",
+      "train_complete_rows": 1024403,
+      "train_fit_rows": 204881
+    },
+    {
+      "artifact_directory": "6c42efc91b092725",
+      "artifact_sha256": {
+        "baseline_model.joblib": "bbc904384d8881008d959d65d3a71bed8a3f554ecd57ec39a818d7f8ec336b48",
+        "baseline_scaler.joblib": "a15dbc164e22a4a7aa74e734d078e009014904622dca95a7a5d187404001ee69",
+        "capture_only_model.joblib": "d2150928e3fd7f973728e0511159afbd78907811e00715b9eb48eb755266aceb",
+        "capture_only_scaler.joblib": "76c5ca3c404c46edf326607024b4a89709f483973486d224d6d43fab48bb808a",
+        "challenger_model.joblib": "a6000a7ff8fc995df01a8d79722d90b9031a5e671669abcdfd49c6d35ebadf92",
+        "challenger_scaler.joblib": "81d4d6bf1951d6575346741b8485070eacf65f46b39accd0e442030a1c6f3fbd",
+        "selected_plus_capture_model.joblib": "91e621df5e29d67bb6a9177a55ae64d05a9464ac853041f451f626526e2de271",
+        "selected_plus_capture_scaler.joblib": "14bda175537a612026fa2508c1381541116bf3186a6d327b51cf8d90dd3b1a05"
+      },
+      "baseline_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60"
+      ],
+      "block_length_minutes": 5,
+      "candidate_id": "PRE_ELECTION|depth|DEPTH_VOL",
+      "capture_falsification": {
+        "capture_columns": [
+          "snapshot_interval_s"
+        ],
+        "capture_only_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "snapshot_interval_s"
+        ],
+        "dev_complete_rows": 9211,
+        "dev_fit_rows": 9211,
+        "fit_rows": 29870,
+        "selected_plus_capture_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "snapshot_interval_s",
+          "depth_slope_1c_5c"
+        ],
+        "supported": true,
+        "train_complete_rows": 20659,
+        "train_fit_rows": 20659
+      },
+      "challenger_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60",
+        "depth_slope_1c_5c"
+      ],
+      "classification": false,
+      "dataset": "depth",
+      "dev_complete_rows": 9211,
+      "dev_fit_rows": 9211,
+      "feature": "depth_slope_1c_5c",
+      "feature_family": "DEPTH",
+      "fit_rows": 29952,
+      "horizon": "300",
+      "model": "HGB_D2_LR0.1",
+      "regime": "PRE_ELECTION",
+      "seed": 3476700989,
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "depth_abs_h300",
+      "target_family": "DEPTH_VOL",
+      "train_complete_rows": 20741,
+      "train_fit_rows": 20741
+    },
+    {
+      "artifact_directory": "3e19c70cb0854869",
+      "artifact_sha256": {
+        "baseline_model.joblib": "923d23b3d9d8eb054303c9bd76a28e5eea16d10ef65bb8c056c008708a39c06b",
+        "baseline_scaler.joblib": "a15dbc164e22a4a7aa74e734d078e009014904622dca95a7a5d187404001ee69",
+        "capture_only_model.joblib": "c17e931e80a26145936ae5db8314ebb139f187e5bb3d991b96b609338159628a",
+        "capture_only_scaler.joblib": "76c5ca3c404c46edf326607024b4a89709f483973486d224d6d43fab48bb808a",
+        "challenger_model.joblib": "1fce86ab917f362ffdc502e7ae80ffd982fa626eb02008bf0eb59433c027ce56",
+        "challenger_scaler.joblib": "762d2730d951aa210667adcd23e0c4470836a7946d441343831a68c69cde6c46",
+        "selected_plus_capture_model.joblib": "037e638003b98f69c4df2c8811b114949da98409bfa8ed8295f6a0baef88dbb4",
+        "selected_plus_capture_scaler.joblib": "0904c8a2aeae4e1887ad8aa5fbd1696b9532a1be183d979edd54af38c9da6d5c"
+      },
+      "baseline_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60"
+      ],
+      "block_length_minutes": 5,
+      "candidate_id": "PRE_ELECTION|depth|MICRO_FV",
+      "capture_falsification": {
+        "capture_columns": [
+          "snapshot_interval_s"
+        ],
+        "capture_only_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "snapshot_interval_s"
+        ],
+        "dev_complete_rows": 9211,
+        "dev_fit_rows": 9211,
+        "fit_rows": 29870,
+        "selected_plus_capture_columns": [
+          "ret_15",
+          "ret_30",
+          "ret_60",
+          "snapshot_interval_s",
+          "imbalance_top"
+        ],
+        "supported": true,
+        "train_complete_rows": 20659,
+        "train_fit_rows": 20659
+      },
+      "challenger_columns": [
+        "ret_15",
+        "ret_30",
+        "ret_60",
+        "imbalance_top"
+      ],
+      "classification": false,
+      "dataset": "depth",
+      "dev_complete_rows": 9211,
+      "dev_fit_rows": 9211,
+      "feature": "imbalance_top",
+      "feature_family": "MICROPRICE",
+      "fit_rows": 29952,
+      "horizon": "300",
+      "model": "ENET_0.001_0.5",
+      "regime": "PRE_ELECTION",
+      "seed": 2670578487,
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "depth_price_h300",
+      "target_family": "MICRO_FV",
+      "train_complete_rows": 20741,
+      "train_fit_rows": 20741
+    },
+    {
+      "artifact_directory": "a685dc45af8d2128",
+      "artifact_sha256": {
+        "baseline_model.joblib": "1b95eddd2a19439cce13144ca1883e2d8e40782dcb2bc604c1796fefed747049",
+        "baseline_scaler.joblib": "34b76f50294742cc7e89d4b0bc8768445c86c1209b63cf60e7ed93cf1b773b03",
+        "challenger_model.joblib": "4c0eaaff47bafd4ee6287af5c012afa156825d62d7b5f981d556b23f9ed32b0b",
+        "challenger_scaler.joblib": "27744d88f54c31ee2069b176ae77f9b7b1b3c3f86b7ead522fd4b54bc77ddbda"
+      },
+      "baseline_columns": [
+        "event_ret1",
+        "event_ret2"
+      ],
+      "block_length_minutes": 5,
+      "candidate_id": "PRE_ELECTION|event|PRICE_EVENT",
+      "capture_falsification": {
+        "capture_columns": [],
+        "reason": "event_panel_has_no_raw_capture_controls",
+        "supported": false
+      },
+      "challenger_columns": [
+        "event_ret1",
+        "event_ret2",
+        "imbalance_top"
+      ],
+      "classification": false,
+      "dataset": "event",
+      "dev_complete_rows": 11152,
+      "dev_fit_rows": 11152,
+      "feature": "imbalance_top",
+      "feature_family": "MICROPRICE",
+      "fit_rows": 48868,
+      "horizon": "1",
+      "model": "HGB_D3_LR0.1",
+      "regime": "PRE_ELECTION",
+      "seed": 2523894232,
+      "selection_class": "SHADOW_ONLY_NO_FDR",
+      "target": "event_price_k1",
+      "target_family": "PRICE_EVENT",
+      "train_complete_rows": 37716,
+      "train_fit_rows": 37716
+    },
+    {
+      "artifact_directory": "701acdf3d3f5551a",
+      "artifact_sha256": {
+        "baseline_model.joblib": "ba3306be7f470327a74cff9cabbff2264f6729f1fbf96a4986f4174436588480",
+        "baseline_scaler.joblib": "f1c3bdaf14a0d0b2361f3a78047cf8b83b7990e075053bc3d842acbc58cf9507",
+        "challenger_model.joblib": "65264f33960ae0ab84eef17ce334d3183ed0bba15050ff8a55a0efe24dae6daf",
+        "challenger_scaler.joblib": "a6fd7ba93f7e5dd84bf8922b62648e5104bfe93fe8555c6973baa9923e34be8b"
+      },
+      "baseline_columns": [
+        "event_ret1",
+        "event_ret2"
+      ],
+      "block_length_minutes": 60,
+      "candidate_id": "PRE_ELECTION|event|VOL_EVENT",
+      "capture_falsification": {
+        "capture_columns": [],
+        "reason": "event_panel_has_no_raw_capture_controls",
+        "supported": false
+      },
+      "challenger_columns": [
+        "event_ret1",
+        "event_ret2",
+        "qask"
+      ],
+      "classification": false,
+      "dataset": "event",
+      "dev_complete_rows": 27681,
+      "dev_fit_rows": 27681,
+      "feature": "qask",
+      "feature_family": "DEPTH",
+      "fit_rows": 146279,
+      "horizon": "2",
+      "model": "HGB_D3_LR0.03",
+      "regime": "PRE_ELECTION",
+      "seed": 2512868721,
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "event_abs_k2",
+      "target_family": "VOL_EVENT",
+      "train_complete_rows": 118598,
+      "train_fit_rows": 118598
+    }
+  ],
+  "canonical_train_dev_freeze_sha256": "0543d94700f5ab9b00e4565411d9a61bd52066140e80001e96b61bdfa42270b0",
+  "data_manifest_sha256": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+  "design_freeze_commit": "b5bf4cfe7482a58161523b66097910903050fc6b",
+  "execution_freeze_commit": "9ec9511536514bbaa97929a4b88d701cbc09987c",
+  "experiment": "EXPERIMENT-005F",
+  "holdout_read": false,
+  "identity_sha256": "e89fe8e25dcc494dad3ed96fe6672ab9f247c01eb70d4c0270a913f18a200a72",
+  "jump_threshold_abs_logit15": {
+    "ACTIVE_RESULTS": 0.008159896766890874,
+    "PRE_ELECTION": 0.0
+  },
+  "phase": "FIT_FREEZE",
+  "quality_sha256": "354801b67b9c32ae82d419f8a6198b7fd814923e8c424ac8716862b47907ccb5",
+  "runner_sha256": "baf03cf18c9d78a80b287127d3144b3f12543a25c566de841c4a40e0f71d0b19",
+  "versions": {
+    "joblib": "1.5.3",
+    "numpy": "2.0.2",
+    "pandas": "2.3.3",
+    "pyarrow": "24.0.0",
+    "python": "3.12.13",
+    "sklearn": "1.6.1"
+  }
+}
