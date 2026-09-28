@@ -1,12 +1,16 @@
 # EXPERIMENT-005C — Joint Panel / Reduced-Rank Cross-Market Prediction
 
+> **POST-HOLDOUT INDEPENDENT REVIEW UPDATE:** The original frozen HOLDOUT result remains unchanged, but the bounded review in `docs/experiments/EXPERIMENT_005C_REVIEW_FOLLOWUP.md` downgrades the strongest US cell to **DISCOVERY ONLY — FAMILYWISE NULL NOT REJECTED**. The 15s/15s model beats both frozen B1 and B2, but its correlation-aware 35-cell max-t adjusted p-value is ~0.892; its 15-minute moving-block CI also crosses zero, and positive loss advantage is concentrated in a small number of election-night UTC hours. It should not be treated as a validated central alpha candidate or promoted into EXPERIMENT-006.
+
+
 ## Disposition
 
 **Runner label:** `REGIME-SPECIFIC JOINT CANDIDATE`.
 
-**Independent mapping:** **WITHIN-FAMILY JOINT CANDIDATE — event-concentrated, not cross-family.**
+**Original pre-review mapping:** **WITHIN-FAMILY JOINT CANDIDATE — event-concentrated, not cross-family.**  
+**Post-HOLDOUT review mapping:** **DISCOVERY ONLY — FAMILYWISE NULL NOT REJECTED.**
 
-005C establishes that a synchronized multi-market price panel can add out-of-sample predictive information beyond target-only history and a leave-target-out common-state baseline in at least one historical election event. The strongest evidence is confined to one US_2024 event panel. It is not evidence for a broad, universal low-rank election-market factor.
+The original frozen HOLDOUT showed that a synchronized multi-market price panel improved prediction beyond target-only history and a leave-target-out common-state baseline in one US_2024 event panel. The post-HOLDOUT falsification review confirms the B1/B2 improvement but finds that the result does not survive the preregistered correlation-aware 35-cell familywise max-t challenge. It therefore remains a discovery result rather than validated promoted evidence.
 
 The task remained research-only. No execution or P&L inference is made here.
 
@@ -144,11 +148,13 @@ The successful US cells beat B2 on HOLDOUT. This matters because the result is i
 
 ## Final research label
 
-**WITHIN-FAMILY JOINT CANDIDATE — event-concentrated.**
+**DISCOVERY ONLY — FAMILYWISE NULL NOT REJECTED.**
+
+The earlier **WITHIN-FAMILY JOINT CANDIDATE — event-concentrated** label describes the original frozen HOLDOUT before the required post-HOLDOUT multiplicity/dependence review. It is superseded for promotion decisions by the bounded falsification result.
 
 This maps the runner's `REGIME-SPECIFIC JOINT CANDIDATE` label into the requested 005C taxonomy.
 
-Do **not** promote the stronger `CROSS-FAMILY JOINT CANDIDATE` claim. The evidence does not survive broadly enough across families.
+Do **not** promote either the stronger `CROSS-FAMILY JOINT CANDIDATE` claim or the US 15s/15s model as a validated central candidate. The result may remain a research/shadow comparator, but it does not pass the final promotion bar.
 
 ## Follow-up boundary
 
