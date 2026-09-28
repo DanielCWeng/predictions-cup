@@ -131,9 +131,13 @@ def parse_bool(value: str) -> bool:
     raise RuntimeError(f"invalid boolean {value!r}")
 
 
-def audit_bh(path: Path) -> dict[str, Any]:
+def audit_bh(path: Path, *, expected_rows: int | None = None) -> dict[str, Any]:
     with path.open(newline="") as handle:
         rows = list(csv.DictReader(handle))
+    if expected_rows is not None and len(rows) != expected_rows:
+        raise RuntimeError(
+            f"{path}: expected {expected_rows} summary rows, found {len(rows)}"
+        )
     rejects = 0
     for row in rows:
         if "bh_q" not in row or "bh_reject_5pct" not in row:
@@ -193,14 +197,22 @@ def main() -> None:
         raise RuntimeError("N5: wrong A5 implementation")
 
     summaries = {
-        "n23": audit_bh(nulls["n23"][0].parent / "null_summary.csv"),
-        "n4": audit_bh(nulls["n4"][0].parent / "participant_null_summary.csv"),
-        "n5_maker": audit_bh(nulls["n5"][0].parent / "maker_null_summary.csv"),
+        "n23": audit_bh(
+            nulls["n23"][0].parent / "null_summary.csv", expected_rows=30
+        ),
+        "n4": audit_bh(
+            nulls["n4"][0].parent / "participant_null_summary.csv", expected_rows=10
+        ),
+        "n5_maker": audit_bh(
+            nulls["n5"][0].parent / "maker_null_summary.csv", expected_rows=10
+        ),
         "n5_liquidity": audit_bh(
-            nulls["n5"][0].parent / "liquidity_primary_null_summary.csv"
+            nulls["n5"][0].parent / "liquidity_primary_null_summary.csv",
+            expected_rows=30,
         ),
         "n5_capture_placebo": audit_bh(
-            nulls["n5"][0].parent / "capture_placebo_null_summary.csv"
+            nulls["n5"][0].parent / "capture_placebo_null_summary.csv",
+            expected_rows=30,
         ),
     }
 
