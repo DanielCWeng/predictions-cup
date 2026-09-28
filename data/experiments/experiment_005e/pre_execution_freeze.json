@@ -1,208 +1,225 @@
 {
-  "schema_version": 1,
-  "experiment_id": "EXPERIMENT-005E",
-  "freeze_kind": "PRE_EMPIRICAL_SOURCE_HASH_FREEZE",
   "canonical_start": "ba938bedcf63f562be8b26c9502e828391123867",
   "created_before_any_005e_train_dev_or_holdout_outcome_inspection": true,
-  "hashes": {
-    "preregistration_json": "548868f418f8d6f1645cde33f9698e8d031839327623a6ca1d0e595de1d764da",
-    "experiment_doc": "939aa27bf2e6d4fdeac3b75d913784ce2fe1efd2085a231693bf2c8b57037a27",
-    "participant_ecology_py": "5d9bad89065811e141a9e4138b30c390222e4d06beab1260e7986cc4a1e9e2ff",
-    "participant_ecology_tests": "f3502e271312bea633451ef3aad94e0a3a61b04102a4018469e51752046678c7",
-    "kaggle_runner_py": "4bfee0c72cdbd46e6854862c99d4b176b6dce36230cfc72cc114caa99726ee9e",
-    "kaggle_prepare_py": "d39e5f971d526083a769eb0d4e181b2b6e31cc4a694c1bb033ab391cf55c24a5",
-    "kernel_metadata": "f188ae51b0cf120c30a5f2c8ebe7a1b0d53f57dbdaf0a3211dd5c98aae6d7c72",
-    "infra_registry": "839f62b62c6b2e3d3b7a44d200c2d4b949c35de8e7dea006e9a2f2c8426959e8",
-    "data002_manifest": "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c",
-    "data002_manifest_kaggle_transport": "2d496514c9307a31d8864ac9deeb2ef2ad781fb6fabe894714cbdf00c7244f7a",
-    "maths_ledger": "544aef74cf8c7d1763add1c0ef97f77fab6e6e59dacec46c88168ce7fa094b79"
-  },
-  "rule": "Any source uploaded or committed after empirical execution must byte-match these hashes unless an explicit pre-outcome amendment is separately frozen first. No outcome-driven source changes are permitted.",
-  "pre_outcome_amendments": [
-    {
-      "field": "compute.kaggle_max_sessions",
-      "from": 3,
-      "to": 5,
-      "reason": "User clarified the shared Kaggle concurrency limit is five sessions.",
-      "timing": "before any 005E TRAIN/DEV or HOLDOUT empirical outcome inspection"
-    },
-    {
-      "field": "DATA-002 manifest transport hash / runner provenance gate",
-      "from": "canonical LF byte hash only",
-      "to": "canonical LF hash plus Kaggle CRLF transport hash, with mandatory parsed JSON equality",
-      "reason": "First Kaggle attempt exited before empirical processing because the mounted manifest differs bytewise only by CRLF line endings.",
-      "timing": "before any 005E TRAIN/DEV or HOLDOUT empirical outcome inspection"
-    },
-    {
-      "field": "participant history / evidence weighting / TRAIN archetype timestamp semantics",
-      "from": "lexical row ordering within one-second DATA-002 timestamps",
-      "to": "strict timestamp-prior history; equal timestamp-batch evidence weighting; whole-latest-second TRAIN fingerprint aggregation",
-      "reason": "DATA-002 fill timestamps are one-second block-time proxies and do not justify within-second tx/log information ordering.",
-      "timing": "before any successful 005E empirical processing; synthetic same-second and fingerprint batch smoke passed"
-    },
-    {
-      "field": "Kaggle source-view SQL aliases",
-      "from": "DuckDB bare SELECT aliases in the DATA-002 source view",
-      "to": "explicit AS aliases; no feature, target, split, model, screening, falsification, or disposition rule changed",
-      "reason": "Kaggle version 2 exited at CREATE TEMP VIEW src because DuckDB rejects the bare alias form for family.",
-      "timing": "after a parser-only failure and before any 005E TRAIN/DEV outcome inspection"
-    },
-    {
-      "field": "deterministic participant sampling / DuckDB temp lifetime",
-      "from": "global ROW_NUMBER ORDER BY HASH over the full wide p4 table; large intermediates retained",
-      "to": "deterministic hash-threshold sampling with a 740000-row target and 750000 hard cap, plus dropping superseded audit/feature/markout intermediates as soon as downstream tables are materialized",
-      "reason": "Version 3 exhausted Kaggle's 17.5 GiB DuckDB temp limit before creating any outcome panel. This is a resource-equivalent implementation change; the sample remains outcome-independent and hash-deterministic, and all features/targets/splits/models/DEV gates remain unchanged.",
-      "timing": "before any 005E TRAIN/DEV outcome inspection"
-    },
-    {
-      "field": "Kaggle resource execution strategy",
-      "from": "global ROW_NUMBER ordering over all eligible participant rows before applying the deterministic 750000-row cap; wide audit intermediates retained through participant feature construction",
-      "to": "deterministic 1e6-bucket hash-threshold sampling targeting 740000 rows with the same 750000 hard cap; full eligible history remains upstream of sampling; no-longer-needed audit/window intermediates are dropped as soon as their frozen outputs are materialized",
-      "reason": "Kaggle version 3 exhausted the 17.5 GiB DuckDB temporary-disk allowance while creating the deterministic sample on US_2024. The amendment removes the global hash sort and frees dead intermediates without thinning participant history or changing features, targets, splits, model grids, screening, falsification, or disposition rules.",
-      "timing": "after an engineering resource failure and before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection"
-    },
-    {
-      "field": "HOLDOUT bootstrap estimand alignment",
-      "from": "calendar-day block resampling with unweighted block averaging",
-      "to": "family -> calendar-day block resampling with each sampled block carrying the original hierarchical family -> market -> timestamp-batch -> participant-row weighted numerator and denominator",
-      "reason": "Static pre-HOLDOUT audit found the bootstrap helper did not exactly target the preregistered weighted MSE-gain estimand. TRAIN/DEV does not call this helper.",
-      "timing": "before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection"
-    },
-    {
-      "field": "panel export SQL qualification",
-      "from": "unqualified timestamp and p_yes references inside the labelled CTE after joining event-trade rows",
-      "to": "context-qualified c.timestamp/c.p_yes references plus labelled AS c in the outer projection",
-      "reason": "Kaggle version 4 reached panel export and DuckDB rejected the ambiguous references. The repair is SQL binding only.",
-      "timing": "after an engineering binder failure and before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection"
-    },
-    {
-      "field": "HOLDOUT positive-evidence p-value gate",
-      "from": "bootstrap p-value retained only when the unweighted mean per-row loss gain was positive",
-      "to": "bootstrap p-value retained only when the preregistered hierarchical weighted MSE gain is positive",
-      "reason": "Static pre-HOLDOUT audit found the sign gate used a different estimand from the primary weighted MSE-gain statistic and the weighted bootstrap.",
-      "timing": "before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection; running TRAIN/DEV v5 is unaffected"
-    },
-    {
-      "field": "participant history scope clarification",
-      "from": "cross-event recurrence wording without an explicit cross-family state boundary",
-      "to": "participant history is family-local; recurrence may span event_id/markets inside a family, while cross-family evidence refers model transfer/stability rather than a globally continuous wallet ledger",
-      "reason": "DATA-002 family files overlap in calendar time and the frozen runner builds each family independently; this is an interpretation clarification, not a computational change",
-      "timing": "before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection"
-    },
-    {
-      "field": "HOLDOUT falsification/concentration artifact",
-      "from": "falsification and concentration evidence nested only inside holdout_evaluation.json",
-      "to": "also emit falsification_concentration_report.json on Kaggle from the same frozen evaluation object",
-      "reason": "Original 005E brief requires a standalone falsification/concentration report; this is output packaging only and introduces no new metric, model, threshold, or selection.",
-      "timing": "before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection; running TRAIN/DEV v5 is unaffected"
-    },
-    {
-      "field": "HOLDOUT market/event transfer summaries",
-      "from": "unweighted per-market mean row loss-gain diagnostic and no explicit event-level transfer summary",
-      "to": "hierarchically weighted per-market and per-event loss-gain summaries using the frozen HOLDOUT row weights",
-      "reason": "Original 005E brief explicitly asks whether anything transfers across markets/events; the prior per-market diagnostic targeted a different unweighted estimand. This adds reporting only and leaves true leave-family-out retraining as the stronger frozen transfer test.",
-      "timing": "before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection; running TRAIN/DEV v5 is unaffected"
-    }
-  ],
-  "local_frozen_source_commit": "567f364c5acf3825a940ea2220eac3cb511b9e6f",
-  "local_frozen_source_tree_note": "Exact EC2 source commit; GitHub branch is separately anchored by this hash freeze until byte-identical source files are persisted through the connector.",
-  "github_source_equivalence": "Phase-specific provenance is authoritative: TRAIN/DEV v5 is GitHub runner commit e8c68c13ec65209507c22469cce1c7d8a75f14ee with SHA-256 4bfee0c72cdbd46e6854862c99d4b176b6dce36230cfc72cc114caa99726ee9e; later HOLDOUT-only inference patches are tracked separately and do not retroactively alter that TRAIN/DEV bundle.",
-  "github_previous_source_commit": "4419ccdfc762ecaae1b302049e1b46a2a5fb85c1",
+  "experiment_id": "EXPERIMENT-005E",
   "failed_empirical_attempts": [
     {
-      "kaggle_kernel": "polyleviathan/005e-participant-ecology-train-dev",
-      "version": 1,
       "disposition": "ENGINEERING_FAILURE_BEFORE_EMPIRICAL_PROCESSING",
       "failure": "DATA-002 manifest byte hash mismatch caused solely by CRLF transport line endings",
-      "outcome_inspection": false
+      "kaggle_kernel": "polyleviathan/005e-participant-ecology-train-dev",
+      "outcome_inspection": false,
+      "version": 1
     },
     {
-      "kaggle_kernel": "polyleviathan/005e-participant-ecology-train-dev",
-      "version": 2,
       "disposition": "ENGINEERING_FAILURE_BEFORE_EMPIRICAL_PROCESSING",
       "failure": "DuckDB ParserException at CREATE TEMP VIEW src caused by bare alias syntax for family",
-      "outcome_inspection": false
+      "kaggle_kernel": "polyleviathan/005e-participant-ecology-train-dev",
+      "outcome_inspection": false,
+      "version": 2
     },
     {
-      "kaggle_kernel": "polyleviathan/005e-participant-ecology-train-dev",
-      "version": 3,
       "disposition": "ENGINEERING_RESOURCE_FAILURE_BEFORE_OUTCOME_PANEL",
       "failure": "DuckDB temp spill limit exhausted (17.5 GiB) while globally sorting wide US_2024 p4 rows for deterministic hash rank in sample_base",
+      "kaggle_kernel": "polyleviathan/005e-participant-ecology-train-dev",
       "outcome_inspection": false,
-      "produced_train_dev_report": false
+      "produced_train_dev_report": false,
+      "version": 3
     },
     {
-      "kaggle_kernel": "polyleviathan/005e-participant-ecology-train-dev",
-      "version": 3,
       "disposition": "ENGINEERING_RESOURCE_FAILURE_BEFORE_RESULT_EMISSION",
       "failure": "DuckDB exhausted Kaggle's 17.5 GiB max_temp_directory_size during US_2024 sample construction; no DEV metrics, candidate ranking, or holdout output was emitted",
-      "outcome_inspection": false
+      "kaggle_kernel": "polyleviathan/005e-participant-ecology-train-dev",
+      "outcome_inspection": false,
+      "version": 3
     },
     {
-      "kaggle_kernel": "polyleviathan/005e-participant-ecology-train-dev",
-      "version": 4,
       "disposition": "ENGINEERING_BINDER_FAILURE_BEFORE_RESULT_EMISSION",
       "failure": "US_2024 cleared the prior 17.5 GiB sample-sort bottleneck, then export_panel failed because timestamp/p_yes label references were unqualified after joining econ e2/e10",
-      "outcome_inspection": false
+      "kaggle_kernel": "polyleviathan/005e-participant-ecology-train-dev",
+      "outcome_inspection": false,
+      "version": 4
     }
   ],
-  "github_frozen_source_commit": "9ecdcca9a5f8c0b739917968d4a94ee66dc7e2c5",
-  "local_current_source_commit": "096772f8b11c74e7c9f223ee1456c8e2f702e433",
-  "github_current_source_commit": "e8c68c13ec65209507c22469cce1c7d8a75f14ee",
+  "feature_fingerprint_spec": {
+    "github_commit": "67f690f927e2db5e39f29c5340d60f3d5f41d9fe",
+    "path": "data/experiments/experiment_005e/feature_fingerprint_spec.json",
+    "sha256": "869e45f2cbc0732890a3fb2da58fab251a88ed8438e9dfc11e0ebb4213907718",
+    "status": "FROZEN_BEFORE_OUTCOME_INSPECTION"
+  },
+  "freeze_kind": "PRE_EMPIRICAL_SOURCE_HASH_FREEZE",
   "github_current_runner_commit": "e8c68c13ec65209507c22469cce1c7d8a75f14ee",
-  "train_dev_runner": {
-    "implementation_commit": "e82bc3a60a50ceff74f04b4a3a69abe1c0919aa1",
-    "runner_sha256": "3679292adf3e66916fe37ae854e0dc79d0fde5f701c28c738af9066be6f2d8f6",
-    "kaggle_version": 4,
-    "status_at_patch_time": "RUNNING",
-    "note": "immutable TRAIN/DEV bundle; unaffected by later HOLDOUT-only bootstrap patch",
-    "status": "ERROR",
-    "failure": "DuckDB BinderException during US_2024 panel export: unqualified timestamp/p_yes became ambiguous after event-trade joins; no DEV metric or candidate ranking emitted"
+  "github_current_source_commit": "e8c68c13ec65209507c22469cce1c7d8a75f14ee",
+  "github_frozen_source_commit": "9ecdcca9a5f8c0b739917968d4a94ee66dc7e2c5",
+  "github_previous_source_commit": "4419ccdfc762ecaae1b302049e1b46a2a5fb85c1",
+  "github_source_equivalence": "Phase-specific provenance is authoritative: TRAIN/DEV v5 is GitHub runner commit e8c68c13ec65209507c22469cce1c7d8a75f14ee with SHA-256 4bfee0c72cdbd46e6854862c99d4b176b6dce36230cfc72cc114caa99726ee9e; later HOLDOUT-only inference patches are tracked separately and do not retroactively alter that TRAIN/DEV bundle.",
+  "hashes": {
+    "data002_manifest": "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c",
+    "data002_manifest_kaggle_transport": "2d496514c9307a31d8864ac9deeb2ef2ad781fb6fabe894714cbdf00c7244f7a",
+    "experiment_doc": "939aa27bf2e6d4fdeac3b75d913784ce2fe1efd2085a231693bf2c8b57037a27",
+    "infra_registry": "839f62b62c6b2e3d3b7a44d200c2d4b949c35de8e7dea006e9a2f2c8426959e8",
+    "kaggle_prepare_py": "d39e5f971d526083a769eb0d4e181b2b6e31cc4a694c1bb033ab391cf55c24a5",
+    "kaggle_runner_py": "4bfee0c72cdbd46e6854862c99d4b176b6dce36230cfc72cc114caa99726ee9e",
+    "kernel_metadata": "f188ae51b0cf120c30a5f2c8ebe7a1b0d53f57dbdaf0a3211dd5c98aae6d7c72",
+    "maths_ledger": "544aef74cf8c7d1763add1c0ef97f77fab6e6e59dacec46c88168ce7fa094b79",
+    "participant_ecology_py": "5d9bad89065811e141a9e4138b30c390222e4d06beab1260e7986cc4a1e9e2ff",
+    "participant_ecology_tests": "f3502e271312bea633451ef3aad94e0a3a61b04102a4018469e51752046678c7",
+    "preregistration_json": "548868f418f8d6f1645cde33f9698e8d031839327623a6ca1d0e595de1d764da"
   },
   "holdout_inference_patch": {
-    "local_tested_commit": "c2b0f64eb8a5e749f73c41fce794554ba5bcea6e",
+    "focused_tests": 11,
     "github_file_commits": [
       "0301e4690e3503ac379564c5b179232bddf95d10",
       "1de72c99575259a18ee10c851474db8080940f74",
       "86984a15e631b1a779e0fe9963396333502b71ae"
     ],
-    "runner_sha256": "4bfee0c72cdbd46e6854862c99d4b176b6dce36230cfc72cc114caa99726ee9e",
+    "local_tested_commit": "c2b0f64eb8a5e749f73c41fce794554ba5bcea6e",
     "module_sha256": "60cca41c5a70bd6fe9b2398ed4ce3b914fa39c5f69484392e668ca0a69c1eb5a",
-    "tests_sha256": "b9bc0bea2e663e7f213b3e8446ba22ab743963af1ce4b320827124fd5dfc9f68",
-    "focused_tests": 11,
-    "scope": "HOLDOUT inference only; no feature, target, split, model, DEV selection, falsification, or disposition rule changed",
-    "note": "Runner hash includes the separate SQL binder repair; holdout inference logic remains the pre-result weighted-estimand patch."
-  },
-  "next_train_dev_runner": {
-    "kaggle_version": 5,
-    "github_runner_commit": "e8c68c13ec65209507c22469cce1c7d8a75f14ee",
-    "local_tested_commit": "9dc8a964c83e69d8dfd5d6f9499ae555eb64f545",
+    "note": "Runner hash includes the separate SQL binder repair; holdout inference logic remains the pre-result weighted-estimand patch.",
     "runner_sha256": "4bfee0c72cdbd46e6854862c99d4b176b6dce36230cfc72cc114caa99726ee9e",
-    "focused_tests": 11,
-    "status": "READY_TO_LAUNCH"
+    "scope": "HOLDOUT inference only; no feature, target, split, model, DEV selection, falsification, or disposition rule changed",
+    "tests_sha256": "b9bc0bea2e663e7f213b3e8446ba22ab743963af1ce4b320827124fd5dfc9f68"
   },
   "holdout_positive_gate_patch": {
-    "local_tested_commit": "cb3f74de35c949eb6bd51db83260477dfd6aa107",
-    "github_runner_commit": "3cc867634591f4344bc9575b65b3e5678ee62d79",
-    "runner_sha256": "d5553d445e3c87a94084931012645b418a7708c211eeb42474a67d28c7687a17",
     "focused_tests": 12,
+    "github_runner_commit": "3cc867634591f4344bc9575b65b3e5678ee62d79",
+    "local_tested_commit": "cb3f74de35c949eb6bd51db83260477dfd6aa107",
+    "runner_sha256": "d5553d445e3c87a94084931012645b418a7708c211eeb42474a67d28c7687a17",
     "scope": "HOLDOUT inference only; TRAIN/DEV v5 remains bound to e8c68c13ec65209507c22469cce1c7d8a75f14ee / runner 4bfee0c72cdbd46e6854862c99d4b176b6dce36230cfc72cc114caa99726ee9e",
     "tests_sha256": "11471206fca5a1f71129ebdbb275c28ae5f00e12ca37223fe2e23590ff908ec6"
   },
+  "invalidated_holdout_attempts": [
+    {
+      "action": "do not inspect/download v1 output; launch corrected v2 from separately hash-bound code",
+      "disposition": "INVALIDATED_PRE_RESULT_STATIC_AUDIT",
+      "failure": "participant-state permutation shuffled generic baseline features together with participant state",
+      "kaggle_kernel": "polyleviathan/005e-participant-ecology-holdout",
+      "result_inspected": false,
+      "version": 1
+    }
+  ],
+  "local_current_source_commit": "096772f8b11c74e7c9f223ee1456c8e2f702e433",
+  "local_frozen_source_commit": "567f364c5acf3825a940ea2220eac3cb511b9e6f",
+  "local_frozen_source_tree_note": "Exact EC2 source commit; GitHub branch is separately anchored by this hash freeze until byte-identical source files are persisted through the connector.",
   "next_holdout_runner": {
+    "focused_tests": 14,
     "github_runner_commit": "b3937e1376a0593ea7913c0341a9dd4704502134",
     "github_tests_commit": "d9864f4595d9cc878d59da08e7ad3622ba535ae4",
+    "note": "Includes weighted bootstrap/sign gate, standalone falsification/concentration artifact, and weighted market/event transfer. TRAIN/DEV v5 remains immutable.",
     "runner_sha256": "5da22f6ac05e200ea25389aa6322bde2ef8fa16c1c86cd134e58877f668f05de",
-    "tests_sha256": "b3ff71526ebbb7787e55d05b67cdb6f2c7ebc559c13f73510ff58d9cfcb32231",
-    "focused_tests": 14,
     "status": "PRE_RESULT_CANDIDATE_NOT_PACKAGED",
-    "note": "Includes weighted bootstrap/sign gate, standalone falsification/concentration artifact, and weighted market/event transfer. TRAIN/DEV v5 remains immutable."
+    "tests_sha256": "b3ff71526ebbb7787e55d05b67cdb6f2c7ebc559c13f73510ff58d9cfcb32231"
+  },
+  "next_train_dev_runner": {
+    "focused_tests": 11,
+    "github_runner_commit": "e8c68c13ec65209507c22469cce1c7d8a75f14ee",
+    "kaggle_version": 5,
+    "local_tested_commit": "9dc8a964c83e69d8dfd5d6f9499ae555eb64f545",
+    "runner_sha256": "4bfee0c72cdbd46e6854862c99d4b176b6dce36230cfc72cc114caa99726ee9e",
+    "status": "READY_TO_LAUNCH"
   },
   "phase_split_note": "Generic current-source fields refer to the immutable TRAIN/DEV v5 runner. The later next_holdout_runner record is the authority for HOLDOUT packaging.",
-  "feature_fingerprint_spec": {
-    "path": "data/experiments/experiment_005e/feature_fingerprint_spec.json",
-    "sha256": "869e45f2cbc0732890a3fb2da58fab251a88ed8438e9dfc11e0ebb4213907718",
-    "github_commit": "67f690f927e2db5e39f29c5340d60f3d5f41d9fe",
-    "status": "FROZEN_BEFORE_OUTCOME_INSPECTION"
+  "pre_outcome_amendments": [
+    {
+      "field": "compute.kaggle_max_sessions",
+      "from": 3,
+      "reason": "User clarified the shared Kaggle concurrency limit is five sessions.",
+      "timing": "before any 005E TRAIN/DEV or HOLDOUT empirical outcome inspection",
+      "to": 5
+    },
+    {
+      "field": "DATA-002 manifest transport hash / runner provenance gate",
+      "from": "canonical LF byte hash only",
+      "reason": "First Kaggle attempt exited before empirical processing because the mounted manifest differs bytewise only by CRLF line endings.",
+      "timing": "before any 005E TRAIN/DEV or HOLDOUT empirical outcome inspection",
+      "to": "canonical LF hash plus Kaggle CRLF transport hash, with mandatory parsed JSON equality"
+    },
+    {
+      "field": "participant history / evidence weighting / TRAIN archetype timestamp semantics",
+      "from": "lexical row ordering within one-second DATA-002 timestamps",
+      "reason": "DATA-002 fill timestamps are one-second block-time proxies and do not justify within-second tx/log information ordering.",
+      "timing": "before any successful 005E empirical processing; synthetic same-second and fingerprint batch smoke passed",
+      "to": "strict timestamp-prior history; equal timestamp-batch evidence weighting; whole-latest-second TRAIN fingerprint aggregation"
+    },
+    {
+      "field": "Kaggle source-view SQL aliases",
+      "from": "DuckDB bare SELECT aliases in the DATA-002 source view",
+      "reason": "Kaggle version 2 exited at CREATE TEMP VIEW src because DuckDB rejects the bare alias form for family.",
+      "timing": "after a parser-only failure and before any 005E TRAIN/DEV outcome inspection",
+      "to": "explicit AS aliases; no feature, target, split, model, screening, falsification, or disposition rule changed"
+    },
+    {
+      "field": "deterministic participant sampling / DuckDB temp lifetime",
+      "from": "global ROW_NUMBER ORDER BY HASH over the full wide p4 table; large intermediates retained",
+      "reason": "Version 3 exhausted Kaggle's 17.5 GiB DuckDB temp limit before creating any outcome panel. This is a resource-equivalent implementation change; the sample remains outcome-independent and hash-deterministic, and all features/targets/splits/models/DEV gates remain unchanged.",
+      "timing": "before any 005E TRAIN/DEV outcome inspection",
+      "to": "deterministic hash-threshold sampling with a 740000-row target and 750000 hard cap, plus dropping superseded audit/feature/markout intermediates as soon as downstream tables are materialized"
+    },
+    {
+      "field": "Kaggle resource execution strategy",
+      "from": "global ROW_NUMBER ordering over all eligible participant rows before applying the deterministic 750000-row cap; wide audit intermediates retained through participant feature construction",
+      "reason": "Kaggle version 3 exhausted the 17.5 GiB DuckDB temporary-disk allowance while creating the deterministic sample on US_2024. The amendment removes the global hash sort and frees dead intermediates without thinning participant history or changing features, targets, splits, model grids, screening, falsification, or disposition rules.",
+      "timing": "after an engineering resource failure and before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection",
+      "to": "deterministic 1e6-bucket hash-threshold sampling targeting 740000 rows with the same 750000 hard cap; full eligible history remains upstream of sampling; no-longer-needed audit/window intermediates are dropped as soon as their frozen outputs are materialized"
+    },
+    {
+      "field": "HOLDOUT bootstrap estimand alignment",
+      "from": "calendar-day block resampling with unweighted block averaging",
+      "reason": "Static pre-HOLDOUT audit found the bootstrap helper did not exactly target the preregistered weighted MSE-gain estimand. TRAIN/DEV does not call this helper.",
+      "timing": "before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection",
+      "to": "family -> calendar-day block resampling with each sampled block carrying the original hierarchical family -> market -> timestamp-batch -> participant-row weighted numerator and denominator"
+    },
+    {
+      "field": "panel export SQL qualification",
+      "from": "unqualified timestamp and p_yes references inside the labelled CTE after joining event-trade rows",
+      "reason": "Kaggle version 4 reached panel export and DuckDB rejected the ambiguous references. The repair is SQL binding only.",
+      "timing": "after an engineering binder failure and before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection",
+      "to": "context-qualified c.timestamp/c.p_yes references plus labelled AS c in the outer projection"
+    },
+    {
+      "field": "HOLDOUT positive-evidence p-value gate",
+      "from": "bootstrap p-value retained only when the unweighted mean per-row loss gain was positive",
+      "reason": "Static pre-HOLDOUT audit found the sign gate used a different estimand from the primary weighted MSE-gain statistic and the weighted bootstrap.",
+      "timing": "before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection; running TRAIN/DEV v5 is unaffected",
+      "to": "bootstrap p-value retained only when the preregistered hierarchical weighted MSE gain is positive"
+    },
+    {
+      "field": "participant history scope clarification",
+      "from": "cross-event recurrence wording without an explicit cross-family state boundary",
+      "reason": "DATA-002 family files overlap in calendar time and the frozen runner builds each family independently; this is an interpretation clarification, not a computational change",
+      "timing": "before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection",
+      "to": "participant history is family-local; recurrence may span event_id/markets inside a family, while cross-family evidence refers model transfer/stability rather than a globally continuous wallet ledger"
+    },
+    {
+      "field": "HOLDOUT falsification/concentration artifact",
+      "from": "falsification and concentration evidence nested only inside holdout_evaluation.json",
+      "reason": "Original 005E brief requires a standalone falsification/concentration report; this is output packaging only and introduces no new metric, model, threshold, or selection.",
+      "timing": "before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection; running TRAIN/DEV v5 is unaffected",
+      "to": "also emit falsification_concentration_report.json on Kaggle from the same frozen evaluation object"
+    },
+    {
+      "field": "HOLDOUT market/event transfer summaries",
+      "from": "unweighted per-market mean row loss-gain diagnostic and no explicit event-level transfer summary",
+      "reason": "Original 005E brief explicitly asks whether anything transfers across markets/events; the prior per-market diagnostic targeted a different unweighted estimand. This adds reporting only and leaves true leave-family-out retraining as the stronger frozen transfer test.",
+      "timing": "before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection; running TRAIN/DEV v5 is unaffected",
+      "to": "hierarchically weighted per-market and per-event loss-gain summaries using the frozen HOLDOUT row weights"
+    },
+    {
+      "field": "HOLDOUT participant-state permutation nuisance preservation",
+      "from": "participant_state_permutation received the full_behavior feature list, which included the frozen generic baseline columns",
+      "reason": "Static audit after HOLDOUT v1 launch but before any v1 output/result inspection found that shuffling baseline controls would make the nuisance-preserving placebo too destructive and could bias the falsification in favor of participant behaviour.",
+      "timing": "before any EXPERIMENT-005E HOLDOUT output/result inspection; v1 output is invalidated and must not be inspected",
+      "to": "permute only participant-added behaviour features while leaving the generic price/size/activity baseline columns fixed"
+    }
+  ],
+  "rule": "Any source uploaded or committed after empirical execution must byte-match these hashes unless an explicit pre-outcome amendment is separately frozen first. No outcome-driven source changes are permitted.",
+  "schema_version": 1,
+  "train_dev_runner": {
+    "failure": "DuckDB BinderException during US_2024 panel export: unqualified timestamp/p_yes became ambiguous after event-trade joins; no DEV metric or candidate ranking emitted",
+    "implementation_commit": "e82bc3a60a50ceff74f04b4a3a69abe1c0919aa1",
+    "kaggle_version": 4,
+    "note": "immutable TRAIN/DEV bundle; unaffected by later HOLDOUT-only bootstrap patch",
+    "runner_sha256": "3679292adf3e66916fe37ae854e0dc79d0fde5f701c28c738af9066be6f2d8f6",
+    "status": "ERROR",
+    "status_at_patch_time": "RUNNING"
   }
 }
