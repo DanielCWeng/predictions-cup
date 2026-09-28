@@ -1,0 +1,17 @@
+{
+  "id": "polyleviathan/005e-participant-ecology-holdout-eval",
+  "title": "005E Participant Ecology HOLDOUT Eval",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [
+    "polyleviathan/sig-cup-005e-holdout-v2-panels",
+    "polyleviathan/sig-cup-005e-holdout-eval-code"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}
