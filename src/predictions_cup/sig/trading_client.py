@@ -18,6 +18,7 @@ from predictions_cup.config import AppSettings
 from predictions_cup.sig.client import RetryPolicy
 from predictions_cup.sig.errors import (
     SigApiError,
+    SigConflictError,
     SigExecutionUncertainError,
     SigMalformedResponseError,
     SigRateLimitError,
@@ -129,14 +130,28 @@ class SigTradingClient:
     async def cancel_order(self, order_id: int) -> object:
         if order_id <= 0:
             raise ValueError("order_id must be positive")
-        _, payload = await self._request_json(
-            "DELETE",
-            f"orders/{order_id}",
-            route_template="/orders/{id}",
-            resolved_payload=None,
-            accepted_statuses=frozenset({200}),
-            execution_can_be_uncertain=True,
-        )
+        try:
+            _, payload = await self._request_json(
+                "DELETE",
+                f"orders/{order_id}",
+                route_template="/orders/{id}",
+                resolved_payload=None,
+                accepted_statuses=frozenset({200}),
+                execution_can_be_uncertain=True,
+            )
+        except SigConflictError as exc:
+            # api-1.json documents 409 here as "already closed because filled or
+            # cancelled by a concurrent request". That is economic state, not a
+            # rejected cancellation; the caller must reconcile order + fills.
+            raise SigExecutionUncertainError(
+                status_code=409,
+                code=exc.code,
+                safe_message=(
+                    "SIG order is already closed; reconcile order/fills before "
+                    "classifying the cancellation"
+                ),
+                details=exc.details,
+            ) from exc
         return payload
 
     async def cancel_all(
