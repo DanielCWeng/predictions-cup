@@ -71,6 +71,36 @@ def test_aggregate_reports(
 
 
 
+def test_aggregate_accepts_missing_spec_repo_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    families = (
+        "US_2024",
+        "CAN_2025",
+        "COL_2026",
+        "HUN_2026",
+        "PER_2026",
+    )
+    for family in families:
+        report = _report(family)
+        if family == "US_2024":
+            report.pop("feature_target_spec_repo_path")
+        path = tmp_path / f"feature_target_build_report_{family}.json"
+        path.write_text(json.dumps(report))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["aggregate", "--root", str(tmp_path)],
+    )
+    MAIN()
+    payload = json.loads(
+        (tmp_path / "feature_target_build_report.json").read_text()
+    )
+    assert payload["feature_target_spec_repo_path"] == (
+        "data/experiments/experiment_005b/feature_target_spec.json"
+    )
+
+
 def test_aggregate_accepts_feature_order_only(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
