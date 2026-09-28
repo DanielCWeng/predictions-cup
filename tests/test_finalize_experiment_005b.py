@@ -205,3 +205,27 @@ def test_validation_tables_flatten_frozen_evidence() -> None:
         "dev_selected_model",
         "baseline",
     ]
+
+
+def test_holdout_validation_keeps_model_only_target() -> None:
+    holdout = {
+        "results": [
+            {
+                "target": "target_clock_price_change_60",
+                "holdout_rows": 50,
+                "holdout_market_count": 2,
+                "scalar_candidates": [],
+                "model": {
+                    "dev_selected": {"name": "ridge"},
+                    "holdout_metrics": {
+                        "mae_improvement_vs_persistence": 0.02,
+                    },
+                    "hierarchical_market_bootstrap": {},
+                },
+            }
+        ]
+    }
+    rows = BUILD_HOLDOUT_VALIDATION(holdout)
+    assert len(rows) == 1
+    assert rows[0]["feature"] is None
+    assert rows[0]["dev_selected_model"] == "ridge"
