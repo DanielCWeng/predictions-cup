@@ -30,6 +30,19 @@ BUILD_REGISTRY = cast(
     MODULE.__dict__["build_registry"],
 )
 
+BUILD_DEV_VALIDATION = cast(
+    Callable[[dict[str, Any]], list[dict[str, Any]]],
+    MODULE.__dict__["build_dev_validation_table"],
+)
+BUILD_HOLDOUT_VALIDATION = cast(
+    Callable[[dict[str, Any]], list[dict[str, Any]]],
+    MODULE.__dict__["build_holdout_validation_table"],
+)
+BUILD_MODEL_COMPARISON = cast(
+    Callable[[dict[str, Any]], list[dict[str, Any]]],
+    MODULE.__dict__["build_model_comparison_table"],
+)
+
 
 def test_registry_preserves_targets_without_candidates() -> None:
     freeze = {
@@ -127,3 +140,68 @@ def test_registry_preserves_all_promoted_candidates() -> None:
     ]
     assert [row["candidate_rank"] for row in rows] == [1, 2]
 
+
+
+def test_validation_tables_flatten_frozen_evidence() -> None:
+    freeze = {
+        "shortlist": {
+            "target_a": [
+                {
+                    "feature": "price_change_30",
+                    "feature_group": "price_history",
+                    "selection_label": "WITHIN_FAMILY_STABLE",
+                    "promoted_candidate": True,
+                    "stable_train_dev": True,
+                    "spearman": 0.10,
+                    "dev_spearman": 0.06,
+                    "dev_pearson": 0.05,
+                    "model_improvement_ok": True,
+                }
+            ]
+        }
+    }
+    holdout = {
+        "results": [
+            {
+                "target": "target_a",
+                "holdout_rows": 200,
+                "holdout_market_count": 4,
+                "scalar_candidates": [
+                    {
+                        "feature": "price_change_30",
+                        "selection_label": "WITHIN_FAMILY_STABLE",
+                        "holdout": {
+                            "support": 190,
+                            "pearson": 0.01,
+                            "spearman": 0.02,
+                            "directional_response": 0.003,
+                        },
+                    }
+                ],
+                "model": {
+                    "dev_selected": {"name": "ridge"},
+                    "holdout_metrics": {
+                        "mae": 0.02,
+                        "mse": 0.001,
+                        "mae_improvement_vs_persistence": 0.05,
+                    },
+                    "baseline_metrics": {
+                        "persistence": {"mae": 0.021, "mse": 0.0011}
+                    },
+                    "hierarchical_market_bootstrap": {
+                        "lower_2_5": -0.001,
+                        "upper_97_5": 0.002,
+                    },
+                },
+            }
+        ]
+    }
+    dev_rows = BUILD_DEV_VALIDATION(freeze)
+    holdout_rows = BUILD_HOLDOUT_VALIDATION(holdout)
+    model_rows = BUILD_MODEL_COMPARISON(holdout)
+    assert dev_rows[0]["promoted_candidate"] is True
+    assert holdout_rows[0]["holdout_spearman"] == 0.02
+    assert [row["kind"] for row in model_rows] == [
+        "dev_selected_model",
+        "baseline",
+    ]
