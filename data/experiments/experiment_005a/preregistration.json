@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005A",
+  "title": "Fee-Inferred Maker/Taker & Participant Structure Discovery",
+  "namespace": "005a_fee_role_discovery",
+  "status": "EMPIRICAL_COMPLETE_DESIGN_FROZEN",
+  "base_main_sha": "69cb1924751515a495bf99556819147ad090d67d",
+  "real_order_placement": false,
+  "strategy_pnl": false,
+  "threshold_optimization": false,
+  "best_market_selection": false,
+  "best_wallet_selection": false,
+  "gate_policy": {
+    "data_002_merged": true,
+    "experiment_004c_fully_frozen": true,
+    "empirical_execution_allowed": true,
+    "freeze_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+    "unlock_rule": "MASTER creates data/experiments/experiment_005a/empirical_gate.json after full 004C freeze and preflight --empirical passes"
+  },
+  "datasets": {
+    "data_001_manifest_sha256": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+    "data_001_quality_sha256": "354801b67b9c32ae82d419f8a6198b7fd814923e8c424ac8716862b47907ccb5",
+    "data_002_manifest_sha256": "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c",
+    "data_002_quality_sha256": "fc9fae5000c680d8e8aec649fdfa767203f68bcd3f055998ff9b9faa2fc09ba9",
+    "data_002_source_commit": null,
+    "data_002_pipeline_commit": null,
+    "infra_registry_sha256": "839f62b62c6b2e3d3b7a44d200c2d4b949c35de8e7dea006e9a2f2c8426959e8"
+  },
+  "role_policy": {
+    "classes": [
+      "TAKER_HIGH_CONFIDENCE",
+      "MAKER_HIGH_CONFIDENCE",
+      "TAKER_SUPPORTIVE",
+      "MAKER_SUPPORTIVE",
+      "AMBIGUOUS",
+      "UNKNOWN"
+    ],
+    "pre_fee": {
+      "fee_absence_informative": false,
+      "order_role_only": "supportive semantic role, explicitly non-fee-inferred",
+      "no_order_role": "UNKNOWN"
+    },
+    "v1": {
+      "gross_fee_is_taker_label": false,
+      "positive_net_fee_plus_active_order_role": "TAKER_HIGH_CONFIDENCE",
+      "active_order_role_without_positive_net": "TAKER_SUPPORTIVE",
+      "passive_order_role_without_positive_net": "MAKER_SUPPORTIVE",
+      "passive_order_role_plus_positive_net": "AMBIGUOUS"
+    },
+    "v2": {
+      "active_order_role_plus_positive_fee_clean": "TAKER_HIGH_CONFIDENCE",
+      "active_order_role_without_fee": "TAKER_SUPPORTIVE",
+      "passive_order_role_plus_scanned_zero_fee_clean": "MAKER_HIGH_CONFIDENCE",
+      "passive_order_role_plus_fee": "AMBIGUOUS",
+      "fee_only_positive_without_order_role": "TAKER_SUPPORTIVE",
+      "zero_fee_without_order_role": "UNKNOWN"
+    },
+    "ambiguity": "never coerced; attribution and fee-enablement conflicts fail closed",
+    "multiple_fee_records": "prevents high-confidence upgrade; retained for audit",
+    "paired_fill_upgrade": "not implemented until exact match segmentation is validated; transaction grouping alone is insufficient"
+  },
+  "signed_flow": {
+    "provenance": "participant_address is the signed order owner; upstream side parser is owner-relative and custody-validated",
+    "canonical_direction": "YES probability",
+    "truth_table": {
+      "YES_BUY": 1,
+      "YES_SELL": -1,
+      "NO_BUY": -1,
+      "NO_SELL": 1
+    },
+    "other_outcome": "fail closed",
+    "primary_confidence": "TAKER_HIGH_CONFIDENCE only",
+    "supportive_confidence": "reported separately; never pooled silently with primary"
+  },
+  "regimes": [
+    "PRE_FEE",
+    "V1",
+    "V2"
+  ],
+  "event_regimes": [
+    "PRE_ELECTION",
+    "ACTIVE_RESULTS"
+  ],
+  "horizons_seconds": [
+    1,
+    5,
+    30,
+    60,
+    300
+  ],
+  "discovery_families": {
+    "own_market_flow_response": {
+      "primary_question": "incremental subsequent markout after controlling already-observed source price movement",
+      "controls": [
+        "source_recent_price_move",
+        "pre_trade_midpoint",
+        "spread",
+        "quote_age",
+        "activity",
+        "volatility",
+        "depth_when_valid",
+        "probability_level",
+        "regime",
+        "common_event_movement"
+      ],
+      "separate": [
+        "mechanical_or_contemporaneous_impact",
+        "subsequent_informational_markout"
+      ]
+    },
+    "family_cross_market_flow_response": {
+      "primary_comparison": "B_future ~ B_history + common_event + A_price_move versus same + A_signed_aggressive_flow",
+      "mandatory_controls": [
+        "source_price_move",
+        "source_freshness",
+        "target_freshness",
+        "source_activity",
+        "target_activity",
+        "common_event",
+        "spread_liquidity",
+        "regime"
+      ],
+      "pair_selection": "frozen verified economic-family metadata only; never observed 005A performance"
+    },
+    "participant_role_structure": {
+      "features": [
+        "historical_taker_markout",
+        "historical_maker_markout",
+        "taker_frequency",
+        "maker_frequency",
+        "rebate_frequency",
+        "historical_size_activity"
+      ],
+      "encoding": "TRAIN-only or leave-future-out cross-fitted with shrinkage and unknown-wallet fallback",
+      "leaderboard": false
+    },
+    "maker_adverse_selection": {
+      "response": "post-fill markout from passive maker economic perspective",
+      "separate": [
+        "immediate_spread_capture_descriptive",
+        "subsequent_adverse_price_movement"
+      ],
+      "profitability_claim": false
+    },
+    "liquidity_renewal_response": {
+      "genuine_change": "deduplicate unchanged BBO states; actual bid/ask change only",
+      "responses": [
+        "spread_change",
+        "maker_replenishment_proxy",
+        "maker_withdrawal_proxy",
+        "depth_change_when_valid",
+        "genuine_quote_update_intensity"
+      ],
+      "capture_placebo": true
+    }
+  },
+  "nulls": {
+    "market_time_block_flow_shift": "within market/event/regime preserving bursts, size, role composition and missingness",
+    "sign_null": "preserve timestamps, unsigned volume, market, regime and activity only where mechanical side constraints permit",
+    "cross_market_matched_control": "same-family versus activity/liquidity/probability-matched unrelated markets",
+    "participant_role_null": "preserve market/time/role/activity while breaking participant identity",
+    "capture_placebo": "archive/depth-record cadence for liquidity-response claims"
+  },
+  "multiplicity": {
+    "families": [
+      "own_market_flow_response",
+      "family_cross_market_flow_response",
+      "participant_role_structure",
+      "maker_adverse_selection",
+      "liquidity_renewal_response"
+    ],
+    "method": "Benjamini-Hochberg/FDR within declared family where valid",
+    "mechanism_class_not_winning_cell": true
+  },
+  "independence": {
+    "row_iid_assumption": false,
+    "dependence_levels": [
+      "transaction",
+      "participant",
+      "market",
+      "event",
+      "time_burst",
+      "election_family"
+    ],
+    "inference": "cluster/block/event aware; raw rows reported separately from effective evidence"
+  },
+  "infrastructure": {
+    "registry_path": "data/reference/polymarket_infrastructure/infra_registry.json",
+    "registry_sha256": "839f62b62c6b2e3d3b7a44d200c2d4b949c35de8e7dea006e9a2f2c8426959e8",
+    "participant_rule": "exclude confirmed infra/exchange/system entities from trader-behaviour analysis or model explicitly as nuisance/system entities"
+  },
+  "exposure_ledger": {
+    "hungary_election": {
+      "003": true,
+      "004a": true,
+      "004b": "DISCOVERY",
+      "004c": "DISCOVERY/FINAL_FROZEN"
+    },
+    "peru_first_round": {
+      "003": true,
+      "004a": true,
+      "004b": "DISCOVERY",
+      "004c": "DISCOVERY/FINAL_FROZEN"
+    },
+    "colombia_first_round": {
+      "003": true,
+      "004a": true,
+      "004b": "SEALED",
+      "004c": "CHALLENGE/FINAL_FROZEN"
+    },
+    "peru_runoff": {
+      "003": true,
+      "004a": true,
+      "004b": "SEALED",
+      "004c": "CHALLENGE/FINAL_FROZEN"
+    },
+    "colombia_runoff": {
+      "003": true,
+      "004a": true,
+      "004b": "SEALED",
+      "004c": "CHALLENGE/FINAL_FROZEN"
+    },
+    "holdout_claim": "none of the historical election families is globally pristine; future 005B evidence must account for exposure"
+  },
+  "primary_promotion_interpretation": {
+    "cross_market": "role-aware A flow must add information beyond A's actual price move; otherwise it is not a new mechanism",
+    "participant": "identity must add information specifically in taker role using strictly cross-fitted history",
+    "maker": "adverse-selection state must survive realistic null/FDR/stability checks",
+    "alpha_claim": false
+  }
+}

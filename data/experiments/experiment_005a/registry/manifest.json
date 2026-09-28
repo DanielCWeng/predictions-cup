@@ -1,0 +1,27 @@
+{
+  "counts": {
+    "condition_regime_rows": 122,
+    "same_family_directed_pairs": 1268,
+    "semantic_directed_pairs": 38
+  },
+  "experiment_id": "EXPERIMENT-005A",
+  "inputs": {
+    "data/experiments/experiment_003/relationship_inventory.csv": "e93033568ac3d3045399e6b630d37bb30a829c9c2fad3ef5da8ac31a7516732e",
+    "data/experiments/experiment_004a2/condition_usability_matrix.csv": "00aab4db6343467a5dc986a559a1dd81c4f8f758185df1ae2cb870d6d0bde9ce"
+  },
+  "outputs": {
+    "conditions.csv": {
+      "bytes": 35167,
+      "sha256": "d67db2bc097573a5d697f44c9767a490e0fb4d91bbac726f680772ad68effdfb"
+    },
+    "same_family_pairs.csv": {
+      "bytes": 488795,
+      "sha256": "25d74294c09cdcbddd234766acbabb11d2c529f5a97c811cce5ee7716c51e407"
+    },
+    "semantic_pairs.csv": {
+      "bytes": 15749,
+      "sha256": "4b6d7498a775f589679e787d67f9aedfadcfdd03103d0813b89a73c355cdae97"
+    }
+  },
+  "selection_rule": "FROZEN_METADATA_ONLY_NO_005A_PERFORMANCE"
+}

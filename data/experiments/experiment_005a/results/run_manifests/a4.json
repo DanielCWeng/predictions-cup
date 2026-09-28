@@ -1,0 +1,84 @@
+{
+  "code_manifest": {
+    "empirical_gate_sha256": "d08da00fa20e8e424e0ac06179dcb853f68e85f7e0cd9efba4d6b6c526462fae",
+    "execution_spec_sha256": "f3c7daa2efc0d112a38eddb12434fbfb243a81b659777866b1ea65579047eef8",
+    "experiment_id": "EXPERIMENT-005A",
+    "files": {
+      "conditions.csv": "d67db2bc097573a5d697f44c9767a490e0fb4d91bbac726f680772ad68effdfb",
+      "data_002_manifest_expected.json": "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c",
+      "empirical_gate.json": "d08da00fa20e8e424e0ac06179dcb853f68e85f7e0cd9efba4d6b6c526462fae",
+      "execution_spec.json": "f3c7daa2efc0d112a38eddb12434fbfb243a81b659777866b1ea65579047eef8",
+      "infra_registry.json": "839f62b62c6b2e3d3b7a44d200c2d4b949c35de8e7dea006e9a2f2c8426959e8",
+      "predictions_cup_005a.bundle/predictions_cup/__init__.py": "bb675035d8c391e5920ff2dc1c479746c4c74cac0f77032b83766d85fc08fe12",
+      "predictions_cup_005a.bundle/predictions_cup/learning/__init__.py": "67226e2a3476e6dc11b15c74c8083a570c3da68d2264390a463eb266310c35ec",
+      "predictions_cup_005a.bundle/predictions_cup/learning/fee_role_data.py": "60a0b8fcbbf4d535771fcc8dfeb79479a334c7f7ec2afd92230250cf77008dd3",
+      "predictions_cup_005a.bundle/predictions_cup/learning/fee_role_registry.py": "3311ae531519b92b45c65b3753fa34361bfe17bee88e9cf588991eee581bd54b",
+      "predictions_cup_005a.bundle/predictions_cup/learning/fee_role_structure.py": "77fa872c681284e898c3623a048a24ee9d60aa1c4b920b9a36f8d93e96998fd7",
+      "predictions_cup_005a.bundle/predictions_cup/learning/flow_models.py": "4fcf6036807050ff2a6ddd31ed1d839a5629f2ce8b07a9a357ea7522cd0121a4",
+      "predictions_cup_005a.bundle/predictions_cup/learning/flow_panel.py": "2220b8806f7428eb607368eadde3539a95d3993773afe5aa1f0e1be32dd8620f",
+      "predictions_cup_005a.bundle/predictions_cup/learning/flow_response.py": "b9b3fa02d8654cde7d08c14685c2343bcbdbf976c37a2aff8e8a312ac230225f",
+      "predictions_cup_005a.bundle/predictions_cup/learning/liquidity_response.py": "0dedb514a1c9af00fee8c9917df8e0c5fe1d03d1e93cd8d0a562e6312bbdcc20",
+      "predictions_cup_005a.bundle/predictions_cup/learning/participant_role.py": "f7634f7cdcdaa34ed39ea982699bdef572a8a8c9783ac3b61369c41a0e70c61d",
+      "predictions_cup_005a.bundle/predictions_cup/learning/role_markouts.py": "5910d9eb8c7cc82eb2297df4956906633f144ca62b25f69a06c1e9b76796942f",
+      "preregistration.json": "4dabed87aff3d9267e9c57cd1477b5f755f01ecee8762575f53dc27168346839",
+      "regime_definitions.json": "9d7d76e15b9bf15603836641a5f9d09902a910b7e3d9ef043445cab32bc90df5"
+    },
+    "implementation_commit": "a0217eed5f775735d5ad01edf3141963be7b1787",
+    "preregistration_sha256": "4dabed87aff3d9267e9c57cd1477b5f755f01ecee8762575f53dc27168346839",
+    "stage": "A4_A5_CODE"
+  },
+  "data_checks": {
+    "data001": {
+      "files_checked": 64,
+      "rows_checked": 98444876
+    },
+    "data002": {
+      "files_checked": 13,
+      "rows_checked": 18415247
+    }
+  },
+  "execution_spec_sha256": "f3c7daa2efc0d112a38eddb12434fbfb243a81b659777866b1ea65579047eef8",
+  "experiment_id": "EXPERIMENT-005A",
+  "gate": {
+    "authorization_basis": "PR #40 merged canonical EXPERIMENT-004C programme freeze on main; all four 004C lane PRs merged with final handoffs present.",
+    "data_002_main_sha": "69cb1924751515a495bf99556819147ad090d67d",
+    "data_002_merged": true,
+    "experiment_004c_freeze_pr": 40,
+    "experiment_004c_freeze_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+    "experiment_004c_fully_frozen": true,
+    "experiment_004c_integration_base_sha": "6aa6a6c9f4108e582584bc141cc68fa5383e522c",
+    "experiment_004c_lane_merge_commits": {
+      "A": "117a584c990c2a5488094200c1522de4261b66be",
+      "B": "777354f9aa6b56012b193853a2ae544e08be5ce3",
+      "C": "751118f3edc818a113656e9a9f31951d29d195d3",
+      "D": "6aa6a6c9f4108e582584bc141cc68fa5383e522c"
+    },
+    "experiment_id": "EXPERIMENT-005A",
+    "master_authorized": true,
+    "schema_version": 1,
+    "scientific_design_change_after_004c_results": false
+  },
+  "panel_outputs": {
+    "panel_1s.parquet": {
+      "bytes": 1495427,
+      "sha256": "769bbb4d9d5c0f92f48b5a35803313cf1910905b6e8d34a2a19b0069d65f1732"
+    },
+    "panel_300s.parquet": {
+      "bytes": 1496554,
+      "sha256": "287e6e0953d61d10ed09dfdcc4b9a5b76701f2fba13835c26159565f7dcc7ec8"
+    },
+    "panel_30s.parquet": {
+      "bytes": 1505228,
+      "sha256": "1c849ad276f888a52580d1bba30004b965686114105d3149f27cb134b250b7a4"
+    },
+    "panel_5s.parquet": {
+      "bytes": 1503222,
+      "sha256": "30cba2fbde8b7b784d014e6aba8cedc2a845cdc2d42982bfcbd0bac732c16542"
+    },
+    "panel_60s.parquet": {
+      "bytes": 1505356,
+      "sha256": "7a5cc5c0688fb2d94474702530b84280a094c59f2869e75b61ea76761010096b"
+    }
+  },
+  "stage": "A4_PARTICIPANT_OBSERVED_AND_PANELS"
+}

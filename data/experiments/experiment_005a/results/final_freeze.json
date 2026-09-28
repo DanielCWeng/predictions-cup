@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005A",
+  "status": "TERMINAL_FREEZE",
+  "disposition": "NARROW_SAME_FAMILY_5S_EFFECT_ONLY_NO_BROAD_ROLE_AWARE_EDGE",
+  "executable_alpha_claim": false,
+  "package_commit_sha": "a6363ad3247e7e5a3530e4183cf6f0d27715f8e4",
+  "canonical_004c_freeze_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+  "observed_implementation_commit": "a0217eed5f775735d5ad01edf3141963be7b1787",
+  "canonical_verification_sha256": "61267d65e115a5e7c34b8c627b3cbdea76a9ee94ffc763b3690b0dc640fab993",
+  "artifact_hashes_sha256": "445ac60c177a0270f5539df40bfb9e4a12d0f1840a4768fa13faf9cb92a8e451",
+  "final_report_sha256": "f72d9edb3e06201b86dea2244fb6b3afe1adea79419b1aafc0cdcc78126f41af",
+  "master_handoff_sha256": "b82185dd42a9b9c3f731beaeb0125f9946aa3be822652d49d11c5d85ff8ed358",
+  "canonical_verifier_status": "CANONICAL_RESULT_PACKAGE_VERIFIED",
+  "primary_bh_rejections": 1,
+  "carry_forward": "Same-family PRE_ELECTION 5s signed aggressive flow only, as a replication candidate; no neighboring-cell mining."
+}

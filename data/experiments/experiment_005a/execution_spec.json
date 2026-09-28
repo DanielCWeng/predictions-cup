@@ -1,0 +1,223 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005A",
+  "status": "FROZEN_BEFORE_PRICE_RESPONSE_ACCESS",
+  "role_quality_a1_can_change_response_spec": false,
+  "clock": {
+    "decision_grid_seconds": 30,
+    "grid_alignment": "event-regime start plus integer multiples of 30s",
+    "flow_interval": "strictly after t-30s and strictly before decision second t under second-granular fill timestamps",
+    "fill_timestamp_precision_note": "DATA-001 fill observed_at is second-granular",
+    "same_second_rule": "a fill timestamp equal to decision second is excluded from the t decision; it first becomes eligible at the next grid point",
+    "quote_asof_rule": "latest valid observable BBO with observed_at <= query time",
+    "quote_freshness_seconds": 300,
+    "genuine_change": "bid and/or ask changes from previous valid contiguous BBO; repeated identical rows are observation-only",
+    "same_timestamp_conflict": "fail timestamp closed and reset continuity",
+    "continuity_gap_seconds": 300,
+    "future_markout_exposure_rule": "future markout is available only when the target interval contains no invalid BBO barrier, event-level collector cadence has no gap above 30s, and a valid target observation confirms the state within 300s after the horizon; otherwise target is missing, never zero",
+    "max_collector_gap_seconds": 30,
+    "target_confirmation_seconds": 300,
+    "flow_interval_boundary_note": "the human shorthand (t-30,t] is implemented fail-closed: fills timestamped exactly at t are excluded and first become eligible at the next 30s decision"
+  },
+  "primary_surface": {
+    "fee_regime": "V2",
+    "role_confidence": "HIGH_CONFIDENCE_ONLY",
+    "outcome": "canonical YES pressure",
+    "event_regimes": [
+      "PRE_ELECTION",
+      "ACTIVE_RESULTS"
+    ],
+    "pool_pre_active": false,
+    "pre_fee_v1": "secondary robustness/coverage only"
+  },
+  "horizons_seconds": [
+    1,
+    5,
+    30,
+    60,
+    300
+  ],
+  "discovery_split": {
+    "purpose": "model sanity and predictive increment inside 005A discovery; not pristine replication",
+    "type": "chronological per event-regime",
+    "train_fraction": 0.6666666666666666,
+    "validation_fraction": 0.3333333333333333,
+    "purge_embargo_seconds": 300,
+    "hyperparameter_search": false
+  },
+  "a2_own_market": {
+    "target": "canonical YES midpoint(t+h)-midpoint(t)",
+    "baseline": [
+      "own_price_move_t_minus_30_to_t",
+      "midpoint_t",
+      "spread_t",
+      "quote_age_t",
+      "abs_own_price_move_300s",
+      "genuine_bbo_changes_30s",
+      "fill_count_30s",
+      "unsigned_fill_value_30s",
+      "common_event_move_ex_target"
+    ],
+    "challenger_adds": [
+      "signed_taker_value_30s",
+      "signed_taker_shares_30s"
+    ],
+    "separate_contemporaneous_impact": true,
+    "no_directional_claim_from_contemporaneous_impact": true
+  },
+  "a3_cross_market": {
+    "target": "target_B canonical YES midpoint(t+h)-midpoint(t)",
+    "source_pairs": [
+      "all frozen directed same-family pairs",
+      "accepted semantic pairs"
+    ],
+    "baseline": [
+      "B_recent_move",
+      "B_midpoint",
+      "B_spread",
+      "B_quote_age",
+      "B_activity",
+      "A_price_move_t_minus_30_to_t",
+      "A_midpoint",
+      "A_spread",
+      "A_quote_age",
+      "A_activity",
+      "common_event_move_ex_A_B"
+    ],
+    "challenger_adds": [
+      "A_signed_taker_value_30s",
+      "A_signed_taker_shares_30s"
+    ],
+    "aggregation": "relationship_class then event/regime; never best edge",
+    "mandatory_interpretation": "effect must add beyond A contemporaneous price move"
+  },
+  "a4_participant_role": {
+    "historical_score_target": "signed owner YES-pressure direction times subsequent own-market canonical YES move",
+    "encoding": "expanding past-only participant\u00d7role score",
+    "shrinkage_prior_mean": 0,
+    "shrinkage_prior_count": 20,
+    "minimum_history": 20,
+    "embargo_seconds": 300,
+    "unseen_wallet_fallback": 0,
+    "infrastructure_excluded": true,
+    "challenger": "generic signed taker flow plus signed taker flow \u00d7 cross-fitted historical taker score",
+    "null": "participant identity permutation within event/regime/market-family/300s-block/role",
+    "concentration_checks": [
+      "one-wallet ablation",
+      "top-1 top-5 top-10 volume wallet removal"
+    ]
+  },
+  "a5_maker_liquidity": {
+    "maker_markout": "maker canonical YES-pressure sign \u00d7 future canonical YES midpoint move",
+    "maker_primary_role": "MAKER_HIGH_CONFIDENCE",
+    "conditioning": [
+      "signed aggressive flow",
+      "cross-fitted taker history",
+      "spread",
+      "quote_age",
+      "probability_level",
+      "volatility",
+      "liquidity_when_valid",
+      "event_regime",
+      "family_activity"
+    ],
+    "liquidity_responses": [
+      "genuine_bbo_renewal",
+      "spread_change",
+      "depth_change_when_valid",
+      "genuine_quote_update_intensity"
+    ],
+    "capture_placebo": "raw/repeated-identical record intensity and depth snapshot cadence",
+    "no_maker_pnl_claim": true
+  },
+  "models": {
+    "family": "weighted ridge linear for continuous targets; ridge alpha fixed 1.0",
+    "standardization": "training-fold weighted mean/std only",
+    "loss": "weighted squared error",
+    "minimum_effect_primary": "positive out-of-sample loss improvement; effect magnitude reported, no discovered threshold",
+    "row_iid_assumption": false
+  },
+  "weighting": {
+    "hierarchy": "equal election family -> event -> 300s block -> market/pair -> row",
+    "raw_fill_counts_not_effective_n": true
+  },
+  "nulls": {
+    "circular_shift": {
+      "unit": "source market within event/regime",
+      "minimum_absolute_shift_seconds": 300,
+      "draws": 999
+    },
+    "block_shift": {
+      "block_seconds": 300,
+      "preserve": [
+        "event",
+        "regime",
+        "market",
+        "role composition",
+        "unsigned flow bursts",
+        "missingness"
+      ],
+      "draws": 999
+    },
+    "sign_permutation": {
+      "preserve": [
+        "timestamps",
+        "unsigned flow",
+        "activity",
+        "market",
+        "event",
+        "regime"
+      ],
+      "condition": "only where mechanical token-side constraints permit",
+      "draws": 999
+    },
+    "matched_unrelated_family": {
+      "matching": [
+        "probability level",
+        "activity",
+        "spread/liquidity",
+        "quote age"
+      ],
+      "target_excluded": true
+    },
+    "participant_identity": {
+      "strata": [
+        "event",
+        "regime",
+        "market_family",
+        "300s_time_block",
+        "role"
+      ],
+      "draws": 999
+    }
+  },
+  "multiplicity": {
+    "method": "Benjamini-Hochberg",
+    "families": [
+      "A2_OWN_MARKET",
+      "A3_SAME_FAMILY",
+      "A3_SEMANTIC",
+      "A4_PARTICIPANT",
+      "A5_MAKER",
+      "A5_LIQUIDITY"
+    ],
+    "horizons_are_members_of_family": true,
+    "pair_or_wallet_level_winners_do_not_promote_mechanism": true
+  },
+  "reporting": {
+    "mechanism_labels": [
+      "STRONG DISCOVERY EVIDENCE",
+      "WEAK / CONCENTRATED",
+      "EXPLAINED BY CONTROLS",
+      "FAILED NULLS",
+      "COVERAGE-LIMITED",
+      "NO EVIDENCE"
+    ],
+    "no_strategy_pnl": true,
+    "no_live_orders": true
+  },
+  "implementation_clarifications": {
+    "future_exposure_rule_added_before_price_response_access": true,
+    "reason": "enforce preregistered supported-horizon/capture-cadence fail-closed policy; not informed by response outcomes"
+  }
+}

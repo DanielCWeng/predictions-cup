@@ -1,0 +1,36 @@
+{
+  "experiment_id": "EXPERIMENT-005A-A1",
+  "generated_at_utc": "2026-09-28T00:57:12.296777+00:00",
+  "inputs": {
+    "data001_manifest_sha256": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+    "data002_manifest_sha256": "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c",
+    "infra_registry_sha256": "839f62b62c6b2e3d3b7a44d200c2d4b949c35de8e7dea006e9a2f2c8426959e8"
+  },
+  "outputs": {
+    "fee_evidence_counts.csv": {
+      "bytes": 1886,
+      "sha256": "95673c66b7ac8bc2a9e609397d0f4297729176bd1e3620ffd364bbaebea1f817"
+    },
+    "join_audit.csv": {
+      "bytes": 1573,
+      "sha256": "0cdd8ca9e1e7244847acf96f4c396238d383ff4f654c6d00f39cca023d9389b6"
+    },
+    "paired_attribution_conflicts.csv": {
+      "bytes": 1166,
+      "sha256": "5769d3bb24aaf0ba574a2683081f9267cd77e68abe28f039bf066c94ff943d81"
+    },
+    "role_class_counts.csv": {
+      "bytes": 3696,
+      "sha256": "a78b859346286caf4ac14bdcec5d4fe2a059ed1cf4bc31f4540fab70d3ec6f50"
+    },
+    "transaction_condition_audit.csv": {
+      "bytes": 1296,
+      "sha256": "c57b9bccb628bb3149e2169842f2e5597192a5487dba60f58b108868f1f789e2"
+    },
+    "v2_agreement_cells.csv": {
+      "bytes": 2659,
+      "sha256": "88c4899b64ea3d75a1a2378ebe5f78c94ad6c55289f71ad866e8e4aca8d68122"
+    }
+  },
+  "scope": "ROLE_QUALITY_ONLY_NO_PRICE_RESPONSE"
+}

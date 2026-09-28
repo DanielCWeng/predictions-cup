@@ -1,0 +1,20 @@
+{
+  "id": "polyleviathan/005a-n4-participant-identity-null",
+  "title": "005A N4 Participant Identity Null",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [
+    "polyleviathan/sig-cup-exp005a-a45-code-v1"
+  ],
+  "competition_sources": [],
+  "kernel_sources": [
+    "polyleviathan/005a-fee-role-discovery",
+    "polyleviathan/005a-a4-participant-role",
+    "polyleviathan/sig-cup-data-001-build"
+  ]
+}

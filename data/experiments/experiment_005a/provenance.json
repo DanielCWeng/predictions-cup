@@ -1,0 +1,43 @@
+{
+  "branch": "experiment/005a-fee-role-structure-discovery",
+  "data_002_corpus_byte_check": {
+    "kaggle_dataset": "polyleviathan/sig-cup-data-002-polymarket-fees",
+    "manifest_files_total": 13,
+    "manifest_files_verified": 13,
+    "note": "Kaggle download strips the outer schema_version=1 path prefix; bytes and sizes match every frozen manifest entry.",
+    "status": "PASS"
+  },
+  "data_002_merge_pr": 36,
+  "data_002_merge_sha": "69cb1924751515a495bf99556819147ad090d67d",
+  "data_002_pipeline_commit": null,
+  "data_002_source_commit": null,
+  "experiment_id": "EXPERIMENT-005A",
+  "external_side_semantics_provenance": {
+    "REPORT_M2MAKER.md_blob_sha": "95fd3c77e233bd297baeeec1dc48c1a2fb54d7de",
+    "Sonar/side_attribution.py_blob_sha": "76c33702bc44fd322527cd1b877bfa5764971a4d",
+    "default_branch_observed_commit": "a38df098809032eae6f770ccf579a5fb56b7b36a",
+    "finding": "side is signed-order-owner relative; buy increases owner outcome shares and sell decreases them",
+    "repository": "DanielCWeng/polymarketwhale"
+  },
+  "frozen_file_sha256": {
+    "DATA_CONTRACTS.md": "71f32e192e97c1d610ee4fb24a0fd3617e2a4f17cba6d719b2d7ff0b38dbb028",
+    "data/manifests/fees/data_002_fee_regimes.csv": "8ded772f413585914e18a4e34e778f7da7fe55b2647f3799a6e5312abc6a1d5b",
+    "data/manifests/fees/data_002_manifest.json": "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c",
+    "data/manifests/fees/data_002_quality.json": "fc9fae5000c680d8e8aec649fdfa767203f68bcd3f055998ff9b9faa2fc09ba9",
+    "data/manifests/historical/data_001_corpus_manifest.json": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+    "data/manifests/historical/data_001_corpus_quality.json": "354801b67b9c32ae82d419f8a6198b7fd814923e8c424ac8716862b47907ccb5",
+    "data/reference/polymarket_infrastructure/infra_addresses.md": "3ae2902d75c50d6268499feaeaf015d8c749f4d95c7e0e67c7937de99db2b098",
+    "data/reference/polymarket_infrastructure/infra_registry.json": "839f62b62c6b2e3d3b7a44d200c2d4b949c35de8e7dea006e9a2f2c8426959e8",
+    "data/reference/polymarket_infrastructure/provenance.json": "765f6757a883f5a5513889da2d1563cd7dda039bc974b9628d46245a86049cf8",
+    "docs/implementation/DATA_002_POLYMARKET_FEES.md": "c895f14121ece15d72fd06f203a2f92b708e6557217d5fb7cedb0c4b434d29d5"
+  },
+  "gate_2": {
+    "empirical_work_performed": true,
+    "experiment_004c_fully_frozen": true,
+    "experiment_004c_freeze_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+    "experiment_004c_freeze_pr": 40,
+    "integration_base_sha": "6aa6a6c9f4108e582584bc141cc68fa5383e522c",
+    "reason": "Canonical EXPERIMENT-004C programme freeze merged to main via PR #40; Gate 2 may open."
+  },
+  "status": "EMPIRICAL_COMPLETE_CANONICAL_RESULT_VERIFIED"
+}

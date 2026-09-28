@@ -1,0 +1,19 @@
+{
+  "a4_stage1_implementation_commit": "a0217eed5f775735d5ad01edf3141963be7b1787",
+  "a4_stage1_manifest_sha256": "7ccdf02a1f2b6ec4ea4558d765967c06123e7d83e856a59e7dd47da4627d933d",
+  "code_bundle_implementation_commit": "a0217eed5f775735d5ad01edf3141963be7b1787",
+  "data001": {
+    "files_checked": 64,
+    "rows_checked": 98444876
+  },
+  "draws": 999,
+  "experiment_id": "EXPERIMENT-005A",
+  "main_stage1_manifest_sha256": "ab0db1b56c754ac4ccb20cc668209106e40c2c369bb989f3de31b54db6f8e59c",
+  "master_seed": 20260928005,
+  "outputs": {
+    "concentration_ablations.csv": "9ccb233309912940e93d3fa5eee74c60d3644821a6e2572a0aa04bc0a978a4f6",
+    "identity_null_draws.csv": "8a5c71f2ea64b44080224e9f5ea24b3d7d726adc19d403e3be65db2c7cf79183",
+    "participant_null_summary.csv": "87c12d3fafbddcdc17dafe12ab5f1484550b68afb45d24a60bb3cb4603c27e5c"
+  },
+  "stage": "N4_PARTICIPANT_IDENTITY_NULL"
+}

@@ -1,0 +1,49 @@
+{
+  "capture_placebo_bh_rejections": 0,
+  "experiment_004c_freeze_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+  "experiment_id": "EXPERIMENT-005A",
+  "manifest_sha256": {
+    "a23": "ab0db1b56c754ac4ccb20cc668209106e40c2c369bb989f3de31b54db6f8e59c",
+    "a4": "7ccdf02a1f2b6ec4ea4558d765967c06123e7d83e856a59e7dd47da4627d933d",
+    "a5": "c9ace53fece580f4181516e7360df924f4a39418063d0d825b2d6520c3d81214",
+    "n23": "8f172a2231bf23ea90792b0c849812aebab8c5dfa26c0c5930dc6ae9abf9db1d",
+    "n4": "ec2b448b53b3995354575d75088b17f6d4a34f378d217fb891e9c9de6e865bfa",
+    "n5": "445a70ee8277e89fcf427c6a47c7f747b3a92d1e669c20cfe23b52c1fe58395c"
+  },
+  "null_summaries": {
+    "n23": {
+      "bh_rejections": 1,
+      "rows": 30,
+      "sha256": "d43b39b470813bebaf231636c1902d3e60edbb971e51147060ee23cedbce8217"
+    },
+    "n4": {
+      "bh_rejections": 0,
+      "rows": 10,
+      "sha256": "87c12d3fafbddcdc17dafe12ab5f1484550b68afb45d24a60bb3cb4603c27e5c"
+    },
+    "n5_capture_placebo": {
+      "bh_rejections": 0,
+      "rows": 30,
+      "sha256": "9cdd6a61cf517d0eeb47f7f7f3b5705466c8b70ece1ba1dca8f7fe6da9ddccdc"
+    },
+    "n5_liquidity": {
+      "bh_rejections": 0,
+      "rows": 30,
+      "sha256": "33370e4b9c93a455183f3ffa357fc95f4b3b0a7da15f038a0bee57239e957d9a"
+    },
+    "n5_maker": {
+      "bh_rejections": 0,
+      "rows": 10,
+      "sha256": "b8279641ba0cc0be716c284c4e585c74e64bf102d8f896b8da03e2f6ab6eb356"
+    }
+  },
+  "observed_implementation_commit": "a0217eed5f775735d5ad01edf3141963be7b1787",
+  "observed_summary_sha256": {
+    "a23": "b178cdecbedeb30f64d143c1a610f4f115bf471410eb524436d2dfc8dfc27521",
+    "a4": "adaeebc0595009bb2c5cfd67b1c044f91419324cd621e9a36b3d81da9f7b4171",
+    "a5_liquidity": "f42088398be0c658d66a6ea9d8f8d915aacc4c2187a2847277f3933ca234adc1",
+    "a5_maker": "a3defc07cc5da2cb00f9e1874987b3fa2c5f6de747cf02bd97cf300d8fa8d592"
+  },
+  "status": "CANONICAL_RESULT_PACKAGE_VERIFIED",
+  "total_primary_bh_rejections": 1
+}
