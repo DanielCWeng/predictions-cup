@@ -198,5 +198,11 @@
     "status": "PRE_RESULT_CANDIDATE_NOT_PACKAGED",
     "note": "Includes weighted bootstrap/sign gate, standalone falsification/concentration artifact, and weighted market/event transfer. TRAIN/DEV v5 remains immutable."
   },
-  "phase_split_note": "Generic current-source fields refer to the immutable TRAIN/DEV v5 runner. The later next_holdout_runner record is the authority for HOLDOUT packaging."
+  "phase_split_note": "Generic current-source fields refer to the immutable TRAIN/DEV v5 runner. The later next_holdout_runner record is the authority for HOLDOUT packaging.",
+  "feature_fingerprint_spec": {
+    "path": "data/experiments/experiment_005e/feature_fingerprint_spec.json",
+    "sha256": "869e45f2cbc0732890a3fb2da58fab251a88ed8438e9dfc11e0ebb4213907718",
+    "github_commit": "67f690f927e2db5e39f29c5340d60f3d5f41d9fe",
+    "status": "FROZEN_BEFORE_OUTCOME_INSPECTION"
+  }
 }
