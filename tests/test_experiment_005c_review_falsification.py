@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import math
+import sys
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -16,6 +17,7 @@ RUNNER_PATH = (
 
 
 def load_runner() -> ModuleType:
+    sys.modules.setdefault("duckdb", ModuleType("duckdb"))
     spec = importlib.util.spec_from_file_location("review_005c_runner_test", RUNNER_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
