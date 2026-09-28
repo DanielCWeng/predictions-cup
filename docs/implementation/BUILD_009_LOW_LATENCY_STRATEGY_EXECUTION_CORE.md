@@ -131,6 +131,13 @@ LIVE fails closed when any required fact is absent or untrusted. Controls includ
 
 Uncertain orders continue consuming risk capacity until authoritative reconciliation resolves them.
 
+Tournament scope is first-class in the BUILD-009 runtime: `RuntimePosition`,
+`RuntimeOrderState`, `RuntimeOrderIntent`, `ExecutionEnvelope` and
+`ExecutionJournalEvent` all carry explicit `tournament_id`. A logical execution operation may
+not mix tournaments. Journal migration backfills tournament identity only when it is
+deterministically recoverable from the stored payload; an ambiguous legacy execution row remains
+fail-closed rather than inheriting a default tournament.
+
 Atomic structural bundles are risked as one `ATOMIC_MULTI_LEG` operation. Partial success is not
 silently treated as acceptable for an atomic opportunity.
 
