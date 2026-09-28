@@ -59,6 +59,7 @@ def test_journal_persists_identity_before_dispatch_and_restores_unresolved(
     decision = RiskDecision(
         approved=True,
         reason="approved",
+        execution_mode=ExecutionMode.LIVE,
         operation_kind=OperationKind.SINGLE_PLACEMENT,
         intents=(intent,),
         relationship_constraint=None,
@@ -70,7 +71,6 @@ def test_journal_persists_identity_before_dispatch_and_restores_unresolved(
     )
     plan = build_execution_plan(
         decision,
-        mode=ExecutionMode.LIVE,
         logical_operation_id="logical-1",
         created_monotonic_ns=456,
     )
