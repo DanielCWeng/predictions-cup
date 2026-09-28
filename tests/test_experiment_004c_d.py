@@ -182,3 +182,14 @@ def test_raw_record_placebo_is_distinct_from_genuine_change_count() -> None:
     assert count_events(series, 0, 3 * NS, kind="raw") == 3
     assert count_events(series, 0, 3 * NS, kind="genuine") == 1
     assert count_events(series, 0, 3 * NS, kind="unchanged") == 1
+
+
+def test_discovery_residual_pool_resets_filtered_dataframe_index() -> None:
+    runner = (
+        ROOT / "scripts/kaggle/experiment_004c_d/run.py"
+    ).read_text()
+    expected = (
+        'finite_model_frame(frame, D1_BASE, "z_d1", "y_d1_30")'
+        '.reset_index(drop=True)'
+    )
+    assert expected in runner
