@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "amendment_id": "005F-AMENDMENT-013",
+  "status": "PRE_HOLDOUT_FALSIFICATION_CLARIFICATION",
+  "reason": "Operationalize the remaining predeclared HOLDOUT falsifications before any HOLDOUT access.",
+  "diagnostics": {
+    "delayed_feature_placebo": {
+      "rule": "For every challenger-only feature column, replace its HOLDOUT value with the last same-token observable value at or before t-300 seconds; keep frozen baseline columns current. Rows without causal lag support are excluded from this placebo only.",
+      "model": "Use the already-frozen challenger scaler/model without refitting."
+    },
+    "block_time_shift_placebo": {
+      "rule": "Replace challenger-only feature columns with the last same-token observable value at or before t-1800 seconds. No circular wrap is used; unsupported leading rows are excluded.",
+      "model": "Use the already-frozen challenger scaler/model without refitting."
+    },
+    "sign_inversion": {
+      "applies_when": "Frozen selected feature name contains 'ofi' or 'imbalance'.",
+      "rule": "Multiply challenger-only signed feature columns containing 'ofi' or 'imbalance' by -1 and evaluate the frozen challenger model. No refit."
+    },
+    "high_activity_removal": {
+      "rule": "Within each coordinate's HOLDOUT evaluation rows, count rows per market and remove markets with count >= the empirical 90th percentile. This threshold uses support only, never outcomes."
+    },
+    "source_version": {
+      "rule": "Where source_version is carried by the frozen panel, report observation count and baseline-minus-challenger loss improvement separately by source_version."
+    },
+    "continuity": {
+      "rule": "All primary labels already require the same reconstructed continuity segment. Report zero cross-segment primary labels as an invariant; do not manufacture gap-spanning targets."
+    },
+    "alternate_freshness": {
+      "rule": "Where raw_capture_bin_age_s exists, separately report evidence restricted to raw_capture_bin_age_s <= 300 seconds. Where unavailable, report unsupported rather than proxying another field."
+    },
+    "depth_matched_null": {
+      "applies_when": "Dataset is depth and depth_2c is available on the evaluation row universe.",
+      "rule": "Bin depth_2c into event-local deciles using feature values only, then deterministically permute challenger-only columns within event x depth-decile using the frozen candidate seed. Evaluate the frozen challenger model without refitting."
+    }
+  },
+  "inference_role": "All are falsification/sensitivity diagnostics. Primary HOLDOUT evidence remains the unchanged baseline-vs-selected challenger comparison on the frozen complete-case row universe.",
+  "candidate_set_changed": false,
+  "selected_models_changed": false,
+  "model_grid_changed": false,
+  "selection_rule_changed": false,
+  "holdout_accessed": false
+}
