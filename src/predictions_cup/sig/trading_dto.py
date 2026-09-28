@@ -196,3 +196,31 @@ class PositionSummaryDto(TransportModel):
 class PositionsResponseDto(TransportModel):
     positions: tuple[PositionReadDto, ...]
     summary: PositionSummaryDto
+
+
+class FillReadDto(TransportModel):
+    id: int
+    order_id: int | None = Field(alias="orderId")
+    exchange_id: str = Field(alias="exchangeId")
+    market_id: str = Field(alias="marketId")
+    price: WireProbability | None
+    quantity: WireDecimal
+    side: OrderOutcomeSide
+    filled_at: WireDateTime = Field(alias="filledAt")
+
+
+class PortfolioFillPageDto(TransportModel):
+    data: tuple[FillReadDto, ...]
+    pagination: CursorPaginationDto
+    coverage: CoverageDto | None = None
+
+
+class OrderFillsResponseDto(TransportModel):
+    order_id: int = Field(alias="orderId")
+    exchange_id: str = Field(alias="exchangeId")
+    tournament_id: str | None = Field(alias="tournamentId")
+    data: tuple[FillReadDto, ...]
+    pagination: CursorPaginationDto
+    coverage: CoverageDto
+    total_quantity_filled: WireDecimal = Field(alias="totalQuantityFilled")
+    avg_fill_price: WireProbability | None = Field(alias="avgFillPrice")
