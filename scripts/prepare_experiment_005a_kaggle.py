@@ -53,9 +53,8 @@ def main() -> None:
         shutil.rmtree(OUT)
     (BUNDLE / "predictions_cup/learning").mkdir(parents=True)
     shutil.copy2(ROOT / "src/predictions_cup/__init__.py", BUNDLE / "predictions_cup/__init__.py")
-    shutil.copy2(
-        ROOT / "src/predictions_cup/learning/__init__.py",
-        BUNDLE / "predictions_cup/learning/__init__.py",
+    (BUNDLE / "predictions_cup/learning/__init__.py").write_text(
+        '"""Minimal EXPERIMENT-005A Kaggle learning package."""\n'
     )
     for name in MODULES:
         shutil.copy2(
