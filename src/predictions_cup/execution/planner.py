@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 
-from predictions_cup.execution.models import ExecutionEnvelope, ExecutionMode
+from predictions_cup.execution.models import ExecutionAudit, ExecutionEnvelope, ExecutionMode
 from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.risk.core import RiskDecision
 
@@ -28,6 +28,20 @@ def build_execution_plan(
 ) -> ExecutionPlan:
     if not decision.approved or decision.operation_kind is None or not decision.intents:
         raise ValueError("only approved risk decisions can become execution plans")
+    if (
+        decision.strategy_family is None
+        or decision.strategy_id is None
+        or decision.signal_value is None
+        or decision.decision_observation_ns is None
+    ):
+        raise ValueError("approved RiskDecision is missing decision audit metadata")
+    audit = ExecutionAudit(
+        strategy_family=decision.strategy_family,
+        strategy_id=decision.strategy_id,
+        signal_value=decision.signal_value,
+        fair_value=decision.fair_value,
+        decision_observation_ns=decision.decision_observation_ns,
+    )
     idempotency_key = deterministic_idempotency_key(
         logical_operation_id,
         decision.operation_kind.value,
@@ -41,4 +55,8 @@ def build_execution_plan(
         created_monotonic_ns=created_monotonic_ns,
         relationship_constraint=decision.relationship_constraint,
     )
-    return ExecutionPlan(envelope=envelope, intents=decision.intents)
+    return ExecutionPlan(
+        envelope=envelope,
+        intents=decision.intents,
+        audit=audit,
+    )
