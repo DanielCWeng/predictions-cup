@@ -6,14 +6,18 @@
   "clock": {
     "decision_grid_seconds": 30,
     "grid_alignment": "event-regime start plus integer multiples of 30s",
-    "flow_interval": "(t-30s,t]",
+    "flow_interval": "strictly after t-30s and strictly before decision second t under second-granular fill timestamps",
     "fill_timestamp_precision_note": "DATA-001 fill observed_at is second-granular",
     "same_second_rule": "a fill timestamp equal to decision second is excluded from the t decision; it first becomes eligible at the next grid point",
     "quote_asof_rule": "latest valid observable BBO with observed_at <= query time",
     "quote_freshness_seconds": 300,
     "genuine_change": "bid and/or ask changes from previous valid contiguous BBO; repeated identical rows are observation-only",
     "same_timestamp_conflict": "fail timestamp closed and reset continuity",
-    "continuity_gap_seconds": 300
+    "continuity_gap_seconds": 300,
+    "future_markout_exposure_rule": "future markout is available only when the target interval contains no invalid BBO barrier, event-level collector cadence has no gap above 30s, and a valid target observation confirms the state within 300s after the horizon; otherwise target is missing, never zero",
+    "max_collector_gap_seconds": 30,
+    "target_confirmation_seconds": 300,
+    "flow_interval_boundary_note": "the human shorthand (t-30,t] is implemented fail-closed: fills timestamped exactly at t are excluded and first become eligible at the next 30s decision"
   },
   "primary_surface": {
     "fee_regime": "V2",
@@ -89,14 +93,14 @@
   },
   "a4_participant_role": {
     "historical_score_target": "signed owner YES-pressure direction times subsequent own-market canonical YES move",
-    "encoding": "expanding past-only participant×role score",
+    "encoding": "expanding past-only participant\u00d7role score",
     "shrinkage_prior_mean": 0,
     "shrinkage_prior_count": 20,
     "minimum_history": 20,
     "embargo_seconds": 300,
     "unseen_wallet_fallback": 0,
     "infrastructure_excluded": true,
-    "challenger": "generic signed taker flow plus signed taker flow × cross-fitted historical taker score",
+    "challenger": "generic signed taker flow plus signed taker flow \u00d7 cross-fitted historical taker score",
     "null": "participant identity permutation within event/regime/market-family/300s-block/role",
     "concentration_checks": [
       "one-wallet ablation",
@@ -104,7 +108,7 @@
     ]
   },
   "a5_maker_liquidity": {
-    "maker_markout": "maker canonical YES-pressure sign × future canonical YES midpoint move",
+    "maker_markout": "maker canonical YES-pressure sign \u00d7 future canonical YES midpoint move",
     "maker_primary_role": "MAKER_HIGH_CONFIDENCE",
     "conditioning": [
       "signed aggressive flow",
@@ -211,5 +215,9 @@
     ],
     "no_strategy_pnl": true,
     "no_live_orders": true
+  },
+  "implementation_clarifications": {
+    "future_exposure_rule_added_before_price_response_access": true,
+    "reason": "enforce preregistered supported-horizon/capture-cadence fail-closed policy; not informed by response outcomes"
   }
 }
