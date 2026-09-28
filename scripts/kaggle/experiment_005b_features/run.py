@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """EXPERIMENT-005B Stage 2: causal feature and target matrix construction on Kaggle only."""
 
 from __future__ import annotations
