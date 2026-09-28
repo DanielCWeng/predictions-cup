@@ -102,3 +102,27 @@ def test_empirical_upper_p_uses_plus_one_correction() -> None:
     null = np.array([-1.0, 0.0, 0.1, 0.2])
     assert empirical_upper_p(1.0, null) == 0.2
     assert empirical_upper_p(0.1, null) == 0.6
+
+def test_ridge_prediction_delta_matches_full_replacement() -> None:
+    rng = np.random.default_rng(20260928)
+    x = rng.normal(size=(500, 6))
+    y = rng.normal(size=500)
+    w = rng.uniform(0.1, 1.0, size=500)
+    w /= w.sum()
+    names = tuple(f"x{i}" for i in range(x.shape[1]))
+    model = fit_weighted_ridge(x, y, w, feature_names=names, alpha=1.0)
+
+    observed = predict_ridge(model, x)
+    positions = np.array([1, 4])
+    transformed = x[:, positions].copy()
+    transformed = np.roll(transformed, 37, axis=0)
+
+    full = x.copy()
+    full[:, positions] = transformed
+    full_prediction = predict_ridge(model, full)
+
+    slopes = model.coefficient[positions] / model.scale[positions]
+    delta_prediction = observed + (transformed - x[:, positions]) @ slopes
+
+    assert np.allclose(full_prediction, delta_prediction, rtol=0.0, atol=2e-15)
+    assert weighted_mse(y, full_prediction, w) == weighted_mse(y, delta_prediction, w)
