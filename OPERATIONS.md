@@ -7,9 +7,27 @@
 - Normal application startup remains finite, network-free and non-trading.
 - The accepted repository includes a separate, explicitly invoked public read-only Polymarket research recorder.
 - BUILD-006 SIG live REST governance/tracked-depth correction is accepted on `main`; its accepted 60-second credentialed smoke passed at the merged head.
-- BUILD-007 / PR #20 is merged/accepted. Its ARM64 EC2 PyArrow/Parquet runtime/storage gate passed on 26 September 2026; the later production mapping-bounded SSH/reboot gate remains downstream of LIVE-MAPPING-GATE-001.
+- BUILD-007 / PR #20 is merged/accepted. Its ARM64 EC2 PyArrow/Parquet runtime/storage gate passed on 26 September 2026.
+- The live 2026 SIG ↔ Polymarket crosswalk is accepted on `main`; the remaining production-runtime gate is the mapping-bounded paired soak plus SSH independence/reboot recovery using accepted IDs.
+- PR #47 is merged; routine Kaggle work uses the GitHub Actions manifest runner rather than EC2.
 
 The accepted EXPERIMENT-001A baseline used local SQLite/WAL research persistence. BUILD-007, now accepted on `main`, changes the live/supervised storage shape after the EC2 soak: market/token metadata and health remain in a small operational SQLite, while high-frequency panel/book-change/trade/depth history is written as immutable ZSTD Parquet shards.
+
+## Kaggle execution — canonical GitHub Actions route
+
+Routine batch compute is repository-controlled:
+
+1. commit the owning experiment code and `kernel-metadata.json`;
+2. add or update `kaggle/jobs/<job>.json`;
+3. use `"action": "run"` for new compute;
+4. push the manifest and monitor the **Kaggle Runner** GitHub Action;
+5. retrieve compact logs/status/results through Actions/GitHub;
+6. keep bulky raw outputs on Kaggle unless Git needs them.
+
+Supported manifest actions are `auth_check`, `run`, `status`, and `output`. The workflow uses
+the repository `KAGGLE_API_TOKEN` secret and permits up to five concurrent jobs. Never print,
+request or commit Kaggle credentials. EC2 is reserved for persistent runtime, live capture,
+EC2-resident datasets or tasks unavailable through this path.
 
 ## EXPERIMENT-001A operation
 
@@ -234,20 +252,21 @@ high-frequency SQLite as an always-on design for the roughly 30 GiB EC2 root vol
 Do not reduce the 1-second cadence to accommodate SQLite. BUILD-007 instead requires the intended
 competition universe and Parquet storage.
 
-### Before the accepted mapping crosswalk exists
+### Accepted mapping runtime configuration
 
-For ordinary operation, keep SIG running and leave Polymarket disabled:
+The production crosswalk now exists. When Polymarket supervised capture is enabled, populate
+`PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS` only from the accepted crosswalk artifacts under
+`data/mappings/`.
+
+If the production IDs have not yet been installed on a host, leave Polymarket disabled rather than
+using guessed, temporary or heuristic IDs:
 
 ```text
 PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=false
 ```
 
-Then rerun the installer. It will install but disable/stop the Polymarket unit and keep SIG
-enabled. Do not populate `PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS` with guessed or heuristic
-IDs simply to make the service start.
-
 The legacy broad-soak database/WAL should be preserved unless an operator deliberately archives or
-removes it after extracting any needed evidence. BUILD-007 performs no destructive cleanup.
+removes it after extracting needed evidence. BUILD-007 performs no destructive cleanup.
 
 ### Accepted ARM64 Parquet smoke/soak — 26 September 2026
 
@@ -273,11 +292,10 @@ Observed acceptance evidence:
 - manual Polymarket service restart succeeded;
 - the post-restart process returned connected and continued writing new readable shards.
 
-After acceptance, the temporary test universe should not be treated as a production default.
-Polymarket may remain disabled/stopped until LIVE-MAPPING-GATE-001 provides the accepted production
-crosswalk. The accepted BUILD-007 service/runtime capability remains available on `main`.
+The temporary test universe must not be treated as a production default. The accepted crosswalk is
+now the only production identity source.
 
-### After LIVE-MAPPING-GATE-001 is independently accepted
+### Mapping-bounded production soak — still required
 
 Populate `runtime.env` from the accepted crosswalk:
 
@@ -326,9 +344,8 @@ may source `trade.env`.
 ## Eventual operating expectations
 
 BUILD-007 / PR #20 is accepted on `main` as the supervised-process and automatic-restart collector
-layer. The ARM64 runtime/storage gate is live-validated. The remaining production claim is narrower:
-after LIVE-MAPPING-GATE-001, the mapping-bounded deployment still needs the final SSH
-independence/reboot recovery run with accepted production IDs. Collector-native reconciliation and
+layer. The ARM64 runtime/storage gate is live-validated. The remaining production claim is narrower: the mapping-bounded deployment still needs the final
+paired soak plus SSH independence/reboot recovery run with accepted production IDs. Collector-native reconciliation and
 journald visibility remain authoritative; BUILD-007 does not introduce a separate logging daemon or
 trading service.
 
