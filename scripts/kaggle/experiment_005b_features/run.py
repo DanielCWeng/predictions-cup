@@ -17,7 +17,8 @@ EPS = 1e-6
 JUMP = 0.02
 OUT = Path("/kaggle/working/005b_historical_predictive_atlas/features_targets")
 OUT.mkdir(parents=True, exist_ok=True)
-SPEC_PATH = Path(__file__).with_name("feature_target_spec.json")
+FEATURE_TARGET_SPEC_SHA256 = "47dc9c9a678f58558aba7e4bc282103cacbc0836f08018a79d4197487d689cf7"
+FEATURE_TARGET_SPEC_REPO_PATH = "data/experiments/experiment_005b/feature_target_spec.json"
 
 
 def sha256(path: Path) -> str:
@@ -459,7 +460,6 @@ def build_family(family: str) -> dict[str, object]:
 
 
 def main() -> None:
-    spec=json.loads(SPEC_PATH.read_text())
     reports=[]
     for family in FAMILIES:
         print(f"BUILD {family}", flush=True)
@@ -468,8 +468,8 @@ def main() -> None:
         "schema_version":1,
         "experiment_id":"EXPERIMENT-005B",
         "stage":"features_targets",
-        "feature_target_spec_sha256":sha256(SPEC_PATH),
-        "spec":spec,
+        "feature_target_spec_sha256": FEATURE_TARGET_SPEC_SHA256,
+        "feature_target_spec_repo_path": FEATURE_TARGET_SPEC_REPO_PATH,
         "families":reports,
         "totals":{
             "rows":sum(int(item["rows"]) for item in reports),
