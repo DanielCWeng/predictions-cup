@@ -136,7 +136,7 @@
   },
   "kaggle": {
     "namespace": "005c_review_falsification",
-    "max_shared_sessions": 3,
+    "max_shared_sessions": 5,
     "empirical_compute_only_on_kaggle": true,
     "ec2_real_data_analysis_forbidden": true
   }
