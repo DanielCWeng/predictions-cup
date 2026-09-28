@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import cast
 
+import pytest
 from pydantic import SecretStr
 
 from predictions_cup.config import AppSettings
@@ -22,6 +23,7 @@ from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.risk.core import RiskDecision
 from predictions_cup.runtime import OrderAction, OutcomeSide
+from predictions_cup.sig.errors import SigExecutionUncertainError
 from predictions_cup.sig.trading_client import SigTradingClient
 from predictions_cup.sig.trading_dto import (
     SingleOrderRequestDto,
@@ -63,6 +65,19 @@ class FakeTradingClient:
     async def cancel_order(self, order_id: int) -> object:
         assert order_id == 91
         return {"cancelled": True}
+
+
+class FakeUncertainTradingClient(FakeTradingClient):
+    async def place_order_payload(
+        self,
+        payload_json: str,
+    ) -> SingleOrderResponseDto:
+        del payload_json
+        raise SigExecutionUncertainError(
+            status_code=None,
+            code="TRANSPORT_OUTCOME_UNKNOWN",
+            safe_message="fixture uncertain",
+        )
 
 
 def _permit():
@@ -197,3 +212,82 @@ def test_cancel_dispatch_timestamp_is_sampled_after_durable_identity(
         assert ack.observed_monotonic_ns == 800
     finally:
         journal.close()
+
+def test_live_sink_rejects_unreserved_plan_before_network_dispatch(
+    tmp_path: Path,
+) -> None:
+    intent = _intent()
+    decision = RiskDecision(
+        approved=True,
+        reason="approved",
+        execution_mode=ExecutionMode.LIVE,
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        intents=(intent,),
+        strategy_family="FV-TAKE",
+        strategy_id="fixture",
+        signal_value=0.025,
+        fair_value=0.55,
+        decision_observation_ns=100,
+    )
+    plan = build_execution_plan(
+        decision,
+        logical_operation_id="op-unreserved",
+        created_monotonic_ns=150,
+    )
+    journal = ExecutionJournal(tmp_path / "unreserved.sqlite3")
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, FakeTradingClient()),
+        journal=journal,
+        permit=_permit(),
+        reservations=ExecutionReservationBook(),
+    )
+    try:
+        with pytest.raises(ValueError, match="missing its synchronous reservation"):
+            asyncio.run(sink.dispatch(plan))
+        assert journal.unresolved() == ()
+    finally:
+        journal.close()
+
+
+def test_uncertain_dispatch_keeps_local_reservation_until_reconciliation(
+    tmp_path: Path,
+) -> None:
+    intent = _intent()
+    decision = RiskDecision(
+        approved=True,
+        reason="approved",
+        execution_mode=ExecutionMode.LIVE,
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        intents=(intent,),
+        strategy_family="FV-TAKE",
+        strategy_id="fixture",
+        signal_value=0.025,
+        fair_value=0.55,
+        decision_observation_ns=100,
+    )
+    plan = build_execution_plan(
+        decision,
+        logical_operation_id="op-uncertain",
+        created_monotonic_ns=150,
+    )
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    ticks = iter((200, 300, 400))
+    journal = ExecutionJournal(tmp_path / "uncertain.sqlite3")
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, FakeUncertainTradingClient()),
+        journal=journal,
+        permit=_permit(),
+        reservations=reservations,
+        clock_ns=lambda: next(ticks),
+    )
+    try:
+        with pytest.raises(SigExecutionUncertainError):
+            asyncio.run(sink.dispatch(plan))
+        assert reservations.intent_ids() == frozenset({"intent-91"})
+        unresolved = journal.unresolved()
+        assert len(unresolved) == 1
+        assert unresolved[0].lifecycle_state is LifecycleState.UNCERTAIN
+    finally:
+        journal.close()
+
