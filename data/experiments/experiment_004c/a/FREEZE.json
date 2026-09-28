@@ -1,0 +1,18 @@
+{
+  "experiment_id": "EXPERIMENT-004C-A",
+  "freeze_status": "FROZEN_BEFORE_CHALLENGE_EMPIRICAL_ACCESS",
+  "base_sha": "4e094d13b06d9e558cbc404cc4d472316d7d5bbb",
+  "pair_rows": 38,
+  "universe_rows": 122,
+  "pair_counts": {
+    "colombia_first_round|ACTIVE_RESULTS": 4,
+    "colombia_first_round|PRE_ELECTION": 6,
+    "colombia_runoff|ACTIVE_RESULTS": 4,
+    "colombia_runoff|PRE_ELECTION": 2,
+    "peru_first_round|ACTIVE_RESULTS": 18,
+    "peru_first_round|PRE_ELECTION": 2,
+    "peru_runoff|ACTIVE_RESULTS": 2
+  },
+  "challenge_empirical_outcomes_accessed_before_freeze": false,
+  "note": "This marker commit is the preregistration freeze point. Any empirical challenge access must occur strictly after this commit."
+}

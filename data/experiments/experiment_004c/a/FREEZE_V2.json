@@ -1,0 +1,13 @@
+{
+  "experiment_id": "EXPERIMENT-004C-A",
+  "freeze_version": 2,
+  "freeze_status": "FINAL_FROZEN_BEFORE_CHALLENGE_EMPIRICAL_ACCESS",
+  "supersedes_freeze_commit": "813bd7b468cf333e95698a635b543c30da1dcb0f",
+  "base_sha": "4e094d13b06d9e558cbc404cc4d472316d7d5bbb",
+  "pair_rows": 38,
+  "universe_rows": 122,
+  "primary_horizon_seconds": 30,
+  "stochastic_null_draws": 250,
+  "challenge_empirical_outcomes_accessed_before_freeze": false,
+  "note": "This commit is the final preregistration freeze. Challenge empirical access is permitted only after it."
+}

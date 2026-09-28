@@ -1,0 +1,262 @@
+{
+  "experiment_id": "EXPERIMENT-004C-A",
+  "title": "Information Propagation / Freshness",
+  "status": "FROZEN_BEFORE_CHALLENGE_EMPIRICAL_ACCESS",
+  "base_sha": "4e094d13b06d9e558cbc404cc4d472316d7d5bbb",
+  "upstream": {
+    "004b_merge_sha": "7fd19a1e4259e01a30d172475184d15cf45f8725",
+    "004b_integration_sha": "5b49d2ad13ea538fe9222a41643af7cf7d477c86",
+    "004b_frozen_implementation_sha": "e9a95fb2092c7e7385ecf27f6972b8d8921c1f72",
+    "004b_discovery_spec_sha256": "409512367f59fefa861df89c57b96586d30e28d205f60e306b20a5e64935b504",
+    "data001_manifest_sha256": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+    "004c_research_merge_sha": "4e094d13b06d9e558cbc404cc4d472316d7d5bbb",
+    "opus_hypothesis_sha256": "9b1e3521e97b91a4e0955bf8071329f9aa2dd0b357b1b2c3c8a69535b8629947",
+    "astra_prior_sha256": "3c8403c8a69d46486aa60074a89349afc1625abb02db47f694ad14f183fd7a93",
+    "sol_hypothesis_sha256": "339ed6f3380e26aec61396a709efd96f9099f7ee44894f9c51ecbefaa18bcd27"
+  },
+  "scientific_question": "After controlling for target history, actual quote freshness, update timing, common-event movement and activity/liquidity, does source-market information observable at t improve the target forecast?",
+  "primary_horizon_seconds": 30,
+  "secondary_horizons_seconds": [
+    60,
+    120
+  ],
+  "panel_resolution_seconds": 30,
+  "quote_freshness_seconds": 300,
+  "regimes": [
+    "PRE_ELECTION",
+    "ACTIVE_RESULTS"
+  ],
+  "regime_pooling": false,
+  "discovery_events": [
+    "hungary_election",
+    "peru_first_round"
+  ],
+  "challenge_events": [
+    "colombia_first_round",
+    "peru_runoff",
+    "colombia_runoff"
+  ],
+  "challenge_label": "004B_SEALED_PRIOR_EXPERIMENT_EXPOSED",
+  "pair_universe_rule": {
+    "source": "data/experiments/experiment_003/relationship_inventory.csv",
+    "relationship_type": "MANUAL_INDIRECT",
+    "leakage_class": "INDIRECT",
+    "required_eligible_family": "LEADLAG",
+    "discovery_eligibility": "both conditions admitted by frozen EXPERIMENT-004B market_universe for the same event/regime",
+    "challenge_eligibility": "both conditions are canonical Yes conditions usable in the same 004A.2 event/regime",
+    "direction": "reference_condition_id -> target_condition_id exactly as frozen in the inventory",
+    "effect_size_selection": "FORBIDDEN",
+    "per_edge_leaderboard": "FORBIDDEN"
+  },
+  "asof_rules": {
+    "clock": "observed_at; depth snapshots use recorded_at",
+    "feature_rule": "information_time <= decision_time",
+    "same_timestamp_conflict": "conflicting valid BBO states at one observed_at are invalid until a later unambiguous state",
+    "quote_age": "decision_time - last valid unambiguous BBO observed_at; never inferred from compressed row position",
+    "activity_window": "(t-30s,t]",
+    "future_window": "(t,t+h]",
+    "future_asof_state": "latest valid unambiguous BBO at or before t+h; never borrow a later quote backward",
+    "depth_policy": "full-depth values only when a valid full snapshot exists in the immediately preceding 30s feature window; missing remains missing",
+    "common_factor": "equal-weight target-and-source-excluded mean of contemporaneous 30s innovations; no future smoothing or future-fitted loadings",
+    "common_factor_min_markets": 2,
+    "common_factor_weighting": "equal weight across currently valid other markets"
+  },
+  "baseline_features": [
+    "target_midpoint",
+    "target_return_30s",
+    "target_abs_return_30s",
+    "target_quote_age_seconds",
+    "target_time_since_any_bbo_update_seconds",
+    "target_bbo_update_count_30s",
+    "target_spread",
+    "target_log1p_depth_total",
+    "target_depth_missing",
+    "target_fill_count_30s",
+    "target_depth_update_count_30s",
+    "common_excl_pair_return_30s",
+    "common_excl_pair_abs_return_30s",
+    "common_excl_pair_bbo_update_count_30s",
+    "common_excl_pair_fill_count_30s",
+    "common_excl_pair_depth_update_count_30s"
+  ],
+  "challenger_additions": [
+    "source_return_30s",
+    "source_abs_return_30s",
+    "source_quote_age_seconds",
+    "relative_target_minus_source_quote_age_seconds",
+    "source_time_since_any_bbo_update_seconds",
+    "source_bbo_update_count_30s",
+    "source_fill_count_30s",
+    "source_depth_update_count_30s",
+    "source_spread",
+    "source_log1p_depth_total",
+    "source_depth_missing",
+    "source_return_30s_x_relative_staleness_scaled"
+  ],
+  "source_information_in_baseline": false,
+  "models": {
+    "preprocessing": "training-only median imputation, then training-only mean/std scaling; explicit depth-missing indicators retained",
+    "ridge_penalty": 1,
+    "logistic_l2_penalty": 1,
+    "hyperparameter_search": "NONE",
+    "fit_scope": "separate model per regime; pooled across frozen source-target pairs; no pair identity feature",
+    "discovery_split": {
+      "train_fraction": 0.6,
+      "development_fraction": 0.2,
+      "holdout_fraction": 0.2,
+      "purge_seconds": 30,
+      "embargo_seconds": 30
+    },
+    "challenge_fit": "refit the frozen formula on all valid discovery rows in the same regime, then score challenge events without refitting or threshold changes",
+    "row_weighting": "within each event/regime, each frozen source-target edge receives equal total model weight regardless of valid row count",
+    "purge_rule": "for each horizon, prior-fold rows with label_end_time >= next-fold start are purged; an additional 30s pre-boundary embargo is applied",
+    "challenge_outcomes_used_for_fit": false
+  },
+  "decomposition": {
+    "A1": {
+      "target": "indicator that the target receives at least one valid unambiguous BBO update in (t,t+30s]",
+      "model": "ridge-penalized logistic regression",
+      "metrics": [
+        "brier_score",
+        "log_loss"
+      ],
+      "headline": false
+    },
+    "A2": {
+      "target": "signed midpoint change from state at t to the first valid unambiguous target BBO update in (t,t+30s]",
+      "conditioning": "target updated within 30s",
+      "model": "ridge regression",
+      "metrics": [
+        "mse",
+        "mae"
+      ],
+      "headline": false,
+      "selection_bias_warning": true
+    },
+    "A3": {
+      "target": "target midpoint at t+30s as-of minus target midpoint at t, including zero movement when no update occurs",
+      "model": "ridge regression",
+      "metrics": [
+        "mse",
+        "rmse",
+        "mae"
+      ],
+      "headline": true
+    },
+    "event_time_secondary": "A2 first-next-target-update representation plus update latency diagnostics; it cannot replace the 30s full-grid primary"
+  },
+  "nulls": {
+    "stochastic_draws_per_null": 250,
+    "minimum_valid_draws": 250,
+    "master_seed": 202609270041,
+    "grid_rule": "all source timing transforms operate on the full regular 30s event/regime grid before selecting valid target rows; never shift compressed valid-row positions",
+    "fitted_model_rule": "fit the frozen baseline/challenger once on real discovery data; timing nulls transform only OOS source primitives and recompute relative-staleness/interaction features while target/common baseline and fitted coefficients remain fixed",
+    "valid_draw_rule": "a stochastic draw is valid only if every observed challenge event in that regime retains at least 80% of its observed rows and at least 30 rows after the source transform; otherwise the draw is invalid",
+    "fail_closed_rule": "if fewer than 250 valid draws are produced for a declared stochastic null, its inference is INCONCLUSIVE and the denominator is not reduced",
+    "NULL_A_CIRCULAR_SHIFT": "independently circularly shift each source token's complete primitive feature series within event/regime by at least 10 regular 30s bins (300s), preserving its serial order and missingness",
+    "NULL_B_BLOCK_TIME_PERMUTATION": "independently permute contiguous 10-bin (300s) blocks of each source token's primitive feature series within event/regime, preserving within-block order, missingness and the fixed target process",
+    "CONTROL_C_MATCHED_UNRELATED": "deterministically replace the source with an unrelated condition in the frozen same-event/regime universe; exclude any condition linked to the target in the frozen pair registry, prefer the same source market_family, then lexical condition_id; no performance matching",
+    "CONTROL_D_DELAYED_SOURCE": "replace source primitives by the same source's past-only values exactly 10 regular bins (300s) earlier; no future borrowing"
+  },
+  "multiple_testing": {
+    "alpha": 0.05,
+    "method": "Benjamini-Hochberg via BUILD-008",
+    "families": {
+      "A3_FULL_GRID_PRIMARY": "2 regimes x 2 stochastic timing nulls = 4 declared tests",
+      "A1_UPDATE_HAZARD_DIAGNOSTIC": "2 regimes x 2 stochastic timing nulls = 4 declared tests",
+      "A2_MARK_RESPONSE_DIAGNOSTIC": "2 regimes x 2 stochastic timing nulls = 4 declared tests"
+    },
+    "per_edge_tests": "not performed for headline inference; any edge summaries are descriptive only",
+    "deterministic_controls": "matched-unrelated and delayed-source controls are named falsification controls and receive no fabricated p-values"
+  },
+  "bootstrap": {
+    "implementation": "BUILD-008 deterministic moving-block/event bootstrap",
+    "draws": 5000,
+    "block_size_bins": 10,
+    "block_seconds": 300,
+    "event_weighting": "EQUAL_EVENT",
+    "independence_warning": "event bootstrap is an uncertainty diagnostic; rows and blocks do not manufacture independent elections"
+  },
+  "smallest_meaningful_effect": {
+    "A3_relative_mse_improvement_min": 0.01,
+    "A3_absolute_rmse_improvement_probability_min": 0.00025,
+    "interpretation": "at least 1% lower MSE and at least 2.5 probability-bp lower RMSE versus the target/event-only baseline"
+  },
+  "collapse_measure": "report 1 - abs(controlled standardized source-return coefficient) / abs(naive standardized source-return coefficient), with undefined/near-zero naive denominator reported as unavailable rather than forced",
+  "promotion_policy": {
+    "TRANSMISSION_SURVIVES": [
+      "A3 observed challenge improvement is positive and meets the smallest-meaningful-effect rule in at least one regime",
+      "the passing regime survives BH against NULL_A_CIRCULAR_SHIFT and NULL_B_BLOCK_TIME_PERMUTATION and is not contradicted by the unrelated or delayed-source controls",
+      "positive A3 improvement appears in challenge windows spanning both COL_2026 and PER_2026 event families where eligible coverage exists",
+      "source-return coefficient is directionally stable enough that no single event supplies the entire system-level result"
+    ],
+    "STALENESS_EXPLAINS_STRUCTURE": [
+      "A3 challenger fails to improve materially beyond the baseline after freshness/update/common-event/activity controls",
+      "naive source association materially collapses after controls",
+      "real challenger is not distinguishable from the frozen timing/source nulls"
+    ],
+    "INCONCLUSIVE": [
+      "coverage, event-family count, invalid null draws, instability or numerical failure prevents either conclusion",
+      "secondary horizons or subgroups may not rescue a failed 30s primary"
+    ]
+  },
+  "economic_interpretation": {
+    "no_trading": true,
+    "no_order_placement": true,
+    "no_execution_claim": true,
+    "economically_meaningful_means": "predictive improvement clears the frozen smallest-meaningful-effect rule; statistical detectability alone is insufficient"
+  },
+  "complexity_gate": {
+    "allowed": [
+      "fixed linear ridge",
+      "fixed logistic ridge"
+    ],
+    "forbidden_primary": [
+      "Hawkes",
+      "neural networks",
+      "graph neural networks",
+      "transfer entropy search",
+      "leader centrality ranking",
+      "latent-state search"
+    ],
+    "reduced_rank_secondary": "only permissible after primary source information survives; not enabled in this preregistration"
+  },
+  "feature_formulae": {
+    "relative_staleness_seconds": "target_quote_age_seconds - source_quote_age_seconds; positive means target is staler",
+    "source_return_x_relative_staleness_scaled": "source_return_30s * relative_staleness_seconds / 300",
+    "log1p_depth_total": "log(1 + top_bid_size + top_ask_size) from the last valid full-depth snapshot inside (t-30s,t]; no carry across feature windows"
+  },
+  "system_aggregation": {
+    "row_to_edge": "metric computed on the common valid row set for that edge",
+    "edge_to_event": "equal weight across frozen source-target edges",
+    "event_to_family": "equal weight across events in the event family",
+    "family_to_system": "equal weight across represented event families",
+    "replication_gate": "TRANSMISSION_SURVIVES requires positive primary challenge evidence in both COL_2026 and PER_2026 in the passing regime; a regime without eligible coverage in both families is INCONCLUSIVE_FOR_REPLICATION, not repaired by adding pairs"
+  },
+  "control_comparability": {
+    "minimum_row_retention_fraction": 0.8,
+    "minimum_rows_per_event": 30,
+    "baseline_rule": "baseline predictions are recomputed on exactly the same retained rows as each source null/control; baseline features themselves are unchanged"
+  },
+  "data_sufficiency": {
+    "training_min_rows_A3": 200,
+    "training_min_rows_A1": 200,
+    "training_min_rows_A2": 100,
+    "training_min_directed_edges": 2,
+    "hazard_min_positive": 20,
+    "hazard_min_negative": 20,
+    "per_edge_evaluation_min_rows": 30,
+    "event_replication_min_valid_directed_edges": 2,
+    "rule": "insufficient cells are reported as INCONCLUSIVE and are not pooled to manufacture evidence"
+  },
+  "parameter_stability": {
+    "champion_penalty": 1,
+    "diagnostic_penalties": [
+      0.5,
+      1,
+      2
+    ],
+    "tolerance_relative_to_best": 0.1,
+    "selection_rule": "champion remains 1.0 regardless of diagnostic; stability grid is evaluated on discovery OOS only and never selects challenge parameters"
+  }
+}

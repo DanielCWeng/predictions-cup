@@ -1,0 +1,21 @@
+{
+  "experiment_id": "EXPERIMENT-004C-A",
+  "branch": "experiment/004c-a-information-freshness",
+  "base_sha": "4e094d13b06d9e558cbc404cc4d472316d7d5bbb",
+  "terminal_preregistration_freeze": "4aafab4bd77d58fd82a510fa2b95842689f49ba2",
+  "implementation_commit": "5fb423fa2cc811d2ba58c236254ebe4c54fb5df8",
+  "raw_artifact_commit": "3494dfee9202eab75b38292252b14baff81012d1",
+  "kaggle": {
+    "kernel": "polyleviathan/sig-cup-exp004c-a-information-freshness",
+    "kernel_version": 7,
+    "output_namespace": "004c_a_freshness",
+    "code_dataset": "polyleviathan/sig-cup-004c-a-code",
+    "status": "COMPLETE"
+  },
+  "data001_manifest_sha256": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+  "raw_artifact_path": "data/experiments/experiment_004c/a/kaggle_v7/",
+  "raw_artifact_hash_verification": "PASS_16_OF_16",
+  "stochastic_null_draws": "PASS_250_OF_250_FOR_ALL_12_DECLARED_TASK_REGIME_NULL_CELLS",
+  "formal_disposition": "INCONCLUSIVE",
+  "real_order_placement": false
+}
