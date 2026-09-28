@@ -22,6 +22,8 @@ WORK = Path("/kaggle/working/005a_n4_participant_null")
 WORK.mkdir(parents=True, exist_ok=True)
 
 MASTER_SEED = 20260928005
+EXPECTED_STAGE1_IMPLEMENTATION = "a0217eed5f775735d5ad01edf3141963be7b1787"
+EXPECTED_004C_FREEZE = "ba938bedcf63f562be8b26c9502e828391123867"
 DRAWS = 999
 NS = 1_000_000_000
 UTC_US = pa.timestamp("us", tz="UTC")
