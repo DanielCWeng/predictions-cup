@@ -10,9 +10,10 @@
   "enable_internet": false,
   "dataset_sources": [
     "polyleviathan/sig-cup-exp005a-code",
-    "polyleviathan/sig-cup-data-001-build",
     "polyleviathan/sig-cup-data-002-polymarket-fees"
   ],
   "competition_sources": [],
-  "kernel_sources": []
+  "kernel_sources": [
+    "polyleviathan/sig-cup-data-001-build"
+  ]
 }
