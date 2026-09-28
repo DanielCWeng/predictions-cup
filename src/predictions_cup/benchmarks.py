@@ -25,8 +25,9 @@ from predictions_cup.execution.models import (
     OperationKind,
     RuntimeOrderIntent,
 )
+from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.sinks import NullSink
-from predictions_cup.risk.core import RiskContext
+from predictions_cup.risk.core import RiskContext, evaluate_risk
 from predictions_cup.runtime import (
     OrderAction,
     OutcomeSide,
@@ -42,6 +43,7 @@ from predictions_cup.strategy.kernels import (
     KernelRegistry,
     binary_cara_reservation_exact,
     binary_cara_reservation_first_order,
+    binary_cara_reservation_naive,
     default_kernel_registry,
     logit,
     logit_log1p,
@@ -209,10 +211,8 @@ def _tick_correctness() -> CorrectnessResult:
     )
 
 
-def _decision_benchmark_function(registry: KernelRegistry) -> ZeroArgFn:
-    strategies = StrategyRegistry()
-    strategies.register("synthetic-threshold", synthetic_threshold_strategy)
-    snapshot = RuntimeSnapshot(
+def _benchmark_snapshot() -> RuntimeSnapshot:
+    return RuntimeSnapshot(
         markets=(
             RuntimeMarket(
                 market_id="m1",
@@ -227,16 +227,87 @@ def _decision_benchmark_function(registry: KernelRegistry) -> ZeroArgFn:
         portfolio=RuntimePortfolio(account_trusted=False),
         observation_monotonic_ns=1_000_000,
     )
-    runtime = DecisionRuntime(
-        strategies=strategies,
-        kernels=registry,
-    )
-    risk_context = RiskContext(
+
+
+def _benchmark_strategies() -> StrategyRegistry:
+    strategies = StrategyRegistry()
+    strategies.register("synthetic-threshold", synthetic_threshold_strategy)
+    return strategies
+
+
+def _benchmark_risk_context() -> RiskContext:
+    return RiskContext(
         mode=ExecutionMode.SHADOW,
         kill_switch=False,
         limits=None,
         max_state_age_ns=1_000_000_000,
     )
+
+
+def _strategy_benchmark_function(registry: KernelRegistry) -> ZeroArgFn:
+    strategies = _benchmark_strategies()
+    snapshot = _benchmark_snapshot()
+
+    def run() -> object:
+        return strategies.evaluate(
+            "synthetic-threshold",
+            snapshot,
+            registry,
+            {"threshold": 0.01, "edge": 0.02},
+        )
+
+    return run
+
+
+def _risk_benchmark_function(registry: KernelRegistry) -> ZeroArgFn:
+    strategies = _benchmark_strategies()
+    snapshot = _benchmark_snapshot()
+    proposal = strategies.evaluate(
+        "synthetic-threshold",
+        snapshot,
+        registry,
+        {"threshold": 0.01, "edge": 0.02},
+    )
+    context = _benchmark_risk_context()
+
+    def run() -> object:
+        return evaluate_risk(proposal, snapshot, context)
+
+    return run
+
+
+def _plan_benchmark_function(registry: KernelRegistry) -> ZeroArgFn:
+    strategies = _benchmark_strategies()
+    snapshot = _benchmark_snapshot()
+    proposal = strategies.evaluate(
+        "synthetic-threshold",
+        snapshot,
+        registry,
+        {"threshold": 0.01, "edge": 0.02},
+    )
+    decision = evaluate_risk(proposal, snapshot, _benchmark_risk_context())
+    if not decision.approved:
+        raise AssertionError("synthetic benchmark unexpectedly failed Risk")
+
+    def run() -> object:
+        return build_execution_plan(
+            decision,
+            logical_operation_id="bench-op",
+            mode=ExecutionMode.SHADOW,
+            created_monotonic_ns=1_000_001,
+        )
+
+    return run
+
+
+def _decision_benchmark_function(registry: KernelRegistry) -> ZeroArgFn:
+    strategies = _benchmark_strategies()
+    snapshot = _benchmark_snapshot()
+    runtime = DecisionRuntime(
+        strategies=strategies,
+        kernels=registry,
+    )
+    risk_context = _benchmark_risk_context()
     sink = NullSink()
 
     def run() -> object:
@@ -354,9 +425,9 @@ def benchmark_report(
             tolerance_relative=1e-12,
         ),
         compare_float_functions(
-            "M-041 exact vs M-042 first-order",
+            "M-041 stable vs naive equivalent",
             binary_cara_reservation_exact,
-            binary_cara_reservation_first_order,
+            binary_cara_reservation_naive,
             (
                 (0.01, 0.01, 0.0),
                 (0.1, 0.05, 1.0),
@@ -364,8 +435,8 @@ def benchmark_report(
                 (0.9, 0.05, -1.0),
                 (0.99, 0.01, 0.0),
             ),
-            tolerance_absolute=0.01,
-            tolerance_relative=0.05,
+            tolerance_absolute=1e-12,
+            tolerance_relative=1e-12,
         ),
     )
 
@@ -410,6 +481,27 @@ def benchmark_report(
         benchmark_callable(
             "M-042 cara_first_order",
             lambda: binary_cara_reservation_first_order(0.61, 0.1, 1.0),
+            calls=calls,
+            warmup_calls=warmup_calls,
+            allocation_profile=allocation_profile,
+        ),
+        benchmark_callable(
+            "strategy_evaluation_only",
+            _strategy_benchmark_function(registry),
+            calls=calls,
+            warmup_calls=warmup_calls,
+            allocation_profile=allocation_profile,
+        ),
+        benchmark_callable(
+            "central_risk_only",
+            _risk_benchmark_function(registry),
+            calls=calls,
+            warmup_calls=warmup_calls,
+            allocation_profile=allocation_profile,
+        ),
+        benchmark_callable(
+            "execution_plan_only",
+            _plan_benchmark_function(registry),
             calls=calls,
             warmup_calls=warmup_calls,
             allocation_profile=allocation_profile,
