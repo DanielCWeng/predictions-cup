@@ -63,7 +63,7 @@ def test_journal_persists_identity_before_dispatch_and_restores_unresolved(
         relationship_constraint=None,
     )
     plan = build_execution_plan(
-        decision
+        decision,
         mode=ExecutionMode.LIVE,
         logical_operation_id="logical-1",
         created_monotonic_ns=456,
