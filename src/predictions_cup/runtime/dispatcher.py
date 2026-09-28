@@ -124,12 +124,8 @@ class EventDrivenCoordinator:
         )
         failures = [result for result in results if isinstance(result, BaseException)]
         if failures:
-            raise ExceptionGroup(
+            raise BaseExceptionGroup(
                 "one or more execution dispatches failed",
-                [failure for failure in failures if isinstance(failure, Exception)],
+                failures,
             )
-        return tuple(
-            result
-            for result in results
-            if isinstance(result, ExecutionEvent)
-        )
+        return tuple(result for result in results if isinstance(result, ExecutionEvent))
