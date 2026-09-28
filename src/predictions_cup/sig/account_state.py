@@ -9,7 +9,7 @@ from enum import StrEnum
 
 from pydantic import ValidationError
 
-from predictions_cup.runtime import RuntimeOrderState, RuntimePortfolio, RuntimePosition
+from predictions_cup.runtime.models import RuntimeOrderState, RuntimePortfolio, RuntimePosition
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
 from predictions_cup.sig.realtime_models import AccountBatchDto
 
