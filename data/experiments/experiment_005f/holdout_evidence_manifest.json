@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "phase": "FINAL_HOLDOUT_EVIDENCE",
+  "status": "SEALED",
+  "holdout_kernel": "polyleviathan/005f-holdout",
+  "holdout_kernel_version": 1,
+  "first_and_only_holdout_run": true,
+  "pre_holdout_freeze_commit": "0f2c65c08c80c734cdbb0c92e60db7656719b9dd",
+  "holdout_runner_sha256": "73ddd72a4e7cc5d369d425fff7dc211b15f230eb9249cf5d43fc95e1ddcf2ff4",
+  "fit_manifest_sha256": "b6375379b5c2bc47ac29407436edfbbb7e4810dc558b8af08f59de26823c8363",
+  "data_manifest_sha256": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+  "identity_sha256": "e89fe8e25dcc494dad3ed96fe6672ab9f247c01eb70d4c0270a913f18a200a72",
+  "quality_sha256": "354801b67b9c32ae82d419f8a6198b7fd814923e8c424ac8716862b47907ccb5",
+  "raw_output_sha256": {
+    "book_state_capture_audit_csv": "3e445ea271265b30b0435666b8f0268e6405077a3f59d16f52b2e5cb7a091dde",
+    "holdout_candidate_results_csv": "1b70f4fa96e6ba9c325eae6837ea22783a1c4fd1ef06b8b7c4932221c8938eb5",
+    "holdout_capture_falsification_csv": "801fd2d3d18b036108abc1ea626779e8fbbc9603bbdfc5943f3b4726d53788ab",
+    "holdout_placebos_csv": "3f33d12a4ab89b2625e75095ad971742ec6c5b45f4a556d934b366f891f1cb72",
+    "holdout_source_version_csv": "f0c6cdcea122e1347a622ba575dc2b906e57a2f12d8296e7ad35cdde5b7e0d89",
+    "holdout_stability_csv": "ba5cb3de09b10b581327bfc7ef6cdec087e2b8869059a41f1ab164afb7dd187e",
+    "holdout_summary_json": "a1345e0d4c950cbcdd9dbe00f67ab8cf509f928e51d224886a73ae89f91021b8"
+  },
+  "transfer_integrity": {
+    "committed_raw_outputs_byte_match_kaggle": true,
+    "files_verified": 7
+  },
+  "disposition_integrity": {
+    "frozen_candidates": 17,
+    "confirmatory_eligible": 14,
+    "holdout_supported": 4,
+    "confirmatory_not_supported": 10,
+    "shadow_only": 3,
+    "independent_disposition_recompute_exact_match": true,
+    "cross_segment_primary_labels_zero_for_all": true
+  },
+  "supported": [
+    {
+      "candidate_id": "ACTIVE_RESULTS|clock|JUMP_HAZARD",
+      "feature": "genuine_age_s",
+      "target": "jump_h300",
+      "model": "HGB_D2_LR0.03",
+      "observations": 14037,
+      "markets": 61,
+      "events": 5,
+      "families": 3,
+      "baseline_mse": 0.08805451499821637,
+      "challenger_mse": 0.07393007925696798,
+      "relative_mse_improvement_pct": 16.040558217298102,
+      "mean_loss_improvement": 0.014124435741248383,
+      "signflip_p": 0.011474609375,
+      "bootstrap_95": [
+        0.004234600298594992,
+        0.03247421009670018
+      ],
+      "capture_incremental_mean": 0.01374020239952751,
+      "capture_signflip_p": 0.023651123046875,
+      "mechanism_note": "Current genuine-change age materially outperforms 1800-second shifted age; 300-second delayed age retains some value. Interpret as a freshness/staleness-conditioned jump-hazard signal, not proof of causal quote renewal."
+    },
+    {
+      "candidate_id": "ACTIVE_RESULTS|clock|UPDATE_HAZARD",
+      "feature": "genuine_age_s",
+      "target": "update_h300",
+      "model": "HGB_D2_LR0.1",
+      "observations": 14177,
+      "markets": 61,
+      "events": 5,
+      "families": 3,
+      "baseline_mse": 0.16015554055390904,
+      "challenger_mse": 0.10384508160620246,
+      "relative_mse_improvement_pct": 35.15985694466327,
+      "mean_loss_improvement": 0.05631045894770659,
+      "signflip_p": 0.0004425048828125,
+      "bootstrap_95": [
+        0.041245118230584354,
+        0.045816261292948086
+      ],
+      "capture_incremental_mean": 0.052932096788657415,
+      "capture_signflip_p": 0.00064849853515625,
+      "mechanism_note": "Robust economic-state staleness/renewal-hazard prediction. Positive 300s and 1800s delayed placebos show persistence, so this is not a short-lived lead-lag effect."
+    },
+    {
+      "candidate_id": "PRE_ELECTION|clock|LIQUIDITY",
+      "feature": "trade_abs_impact_60",
+      "target": "spread_h15",
+      "model": "HGB_D3_LR0.03",
+      "observations": 91739,
+      "markets": 60,
+      "events": 3,
+      "families": 2,
+      "baseline_mse": 0.00003114034260698265,
+      "challenger_mse": 0.0000309105276373839,
+      "relative_mse_improvement_pct": 0.7379975631585349,
+      "mean_loss_improvement": 2.29814969598739e-7,
+      "signflip_p": 0.000976324139614352,
+      "bootstrap_95": [
+        5.4893212360495524e-8,
+        1.3278159755121137e-7
+      ],
+      "capture_incremental_mean": 2.598989098764959e-7,
+      "capture_signflip_p": 0.001464486209421528,
+      "mechanism_note": "Predictive but economically small. Delayed 300s/1800s placebos retain nearly all primary lift, so treat as a persistent activity/liquidity-regime proxy rather than a fresh 60-second trade-impact impulse."
+    },
+    {
+      "candidate_id": "PRE_ELECTION|clock|UPDATE_HAZARD",
+      "feature": "genuine_age_s",
+      "target": "update_h300",
+      "model": "HGB_D3_LR0.03",
+      "observations": 297384,
+      "markets": 108,
+      "events": 5,
+      "families": 3,
+      "baseline_mse": 0.08306220867470587,
+      "challenger_mse": 0.05369941514352497,
+      "relative_mse_improvement_pct": 35.350364503517554,
+      "mean_loss_improvement": 0.029362793531180882,
+      "signflip_p": 0.000244081034903588,
+      "bootstrap_95": [
+        0.027634117283242304,
+        0.03291840764757432
+      ],
+      "capture_incremental_mean": 0.027299911997320486,
+      "capture_signflip_p": 0.000244081034903588,
+      "mechanism_note": "Strong cross-regime replication of economic-state staleness/renewal-hazard prediction. Positive long-delay placebos imply a persistent state variable rather than a transient shock."
+    }
+  ],
+  "non_supported_summary": {
+    "active_results": [
+      "VOLATILITY: positive raw mean, but sign-flip/bootstrap/family stability fail.",
+      "DEPTH_VOL and MICRO_FV: zero incremental HOLDOUT loss improvement and capture-confounded.",
+      "PRICE_EVENT and VOL_EVENT: negative incremental HOLDOUT performance."
+    ],
+    "pre_election": [
+      "PRICE: negative incremental performance and capture-confounded.",
+      "VOLATILITY: positive raw mean but bootstrap lower bound crosses zero.",
+      "DEPTH_VOL: sign-flip and bootstrap fail.",
+      "MICRO_FV: positive raw mean but sign-flip fails.",
+      "VOL_EVENT: positive aggregate mean but leave-market/event/family stability fail."
+    ]
+  },
+  "shadow_only": [
+    "ACTIVE_RESULTS|clock|LIQUIDITY",
+    "ACTIVE_RESULTS|clock|PRICE",
+    "PRE_ELECTION|event|PRICE_EVENT"
+  ],
+  "interpretation_boundary": [
+    "HOLDOUT_SUPPORTED means the candidate passed the predeclared predictive evidence gates; it does not establish causality or executable trading profit.",
+    "No participant skill, maker/taker role, queue position, passive fill probability, or exact cancellation timing is inferred.",
+    "PRE liquidity's mechanism is specifically weakened by long-delay placebos despite its formal predictive support.",
+    "The strongest reusable 005F finding is the persistent update-hazard signal from genuine economic BBO age in both claim regimes."
+  ],
+  "real_order_placement": false
+}
