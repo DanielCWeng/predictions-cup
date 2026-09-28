@@ -2,8 +2,8 @@
 
 ## Current state
 
-- No production deployment exists.
-- No production trading daemon exists.
+- Read-only SIG/Polymarket collector deployment capability exists and has been live-validated on EC2.
+- No production trading daemon or autonomous execution deployment exists.
 - Normal application startup remains finite, network-free and non-trading.
 - The accepted repository includes a separate, explicitly invoked public read-only Polymarket research recorder.
 - BUILD-006 SIG live REST governance/tracked-depth correction is accepted on `main`; its accepted 60-second credentialed smoke passed at the merged head.
