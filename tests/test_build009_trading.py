@@ -229,7 +229,12 @@ def test_batch_503_incomplete_resumes_with_same_key_and_ordered_payload() -> Non
     assert attempts == 2
     assert bodies[0] == bodies[1]
     assert bodies[0]["idempotencyKey"] == "batch-1"
-    assert [order["exchangeId"] for order in bodies[0]["orders"]] == ["36", "37"]
+    orders = bodies[0]["orders"]
+    assert isinstance(orders, list)
+    assert [order["exchangeId"] for order in orders if isinstance(order, dict)] == [
+        "36",
+        "37",
+    ]
 
 
 def test_exhausted_incomplete_batch_becomes_explicitly_uncertain() -> None:
