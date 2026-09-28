@@ -1223,8 +1223,15 @@ def generic_event_inventory_and_eval(
                         },
                     ),
                 ]
+                if PHASE == "TRAIN_DEV":
+                    train_anchor_logit = float(np.nanmean(logit(tp[train_fit])))
+                else:
+                    train_anchor_logit = float("nan")
                 for slack_lambda in (0.25, 1.0, 4.0):
-                    soft = (tp + slack_lambda * comp_logit) / (1.0 + slack_lambda)
+                    soft = logistic(
+                        (train_anchor_logit + slack_lambda * logit(comp_logit))
+                        / (1.0 + slack_lambda)
+                    )
                     base_variants.append(
                         (
                             f"GENERIC_EVENT_SOFT_SLACK_{slack_lambda:g}",
@@ -1232,6 +1239,7 @@ def generic_event_inventory_and_eval(
                             {
                                 "method": "soft_slack_logit_mean",
                                 "lambda": slack_lambda,
+                                "anchor_logit": train_anchor_logit,
                                 "refs": ref_markets,
                             },
                         )
@@ -1258,7 +1266,10 @@ def generic_event_inventory_and_eval(
                             params = frozen_params
                         elif method == "soft_slack_logit_mean":
                             lam = float(frozen_params["lambda"])
-                            fair_value = (tp + lam * comp_logit) / (1.0 + lam)
+                            anchor = float(frozen_params["anchor_logit"])
+                            fair_value = logistic(
+                                (anchor + lam * logit(comp_logit)) / (1.0 + lam)
+                            )
                             params = frozen_params
                     valid = (
                         (dev if PHASE == "TRAIN_DEV" else hold)
