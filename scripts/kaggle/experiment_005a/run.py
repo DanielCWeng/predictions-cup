@@ -24,6 +24,7 @@ WORK.mkdir(parents=True, exist_ok=True)
 DATA001_SHA = "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4"
 DATA002_REPO_MANIFEST_SHA = "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c"
 BASE_MAIN_SHA = "69cb1924751515a495bf99556819147ad090d67d"
+EXPERIMENT_004C_FREEZE_SHA = "ba938bedcf63f562be8b26c9502e828391123867"
 REGIMES = ("PRE_ELECTION", "ACTIVE_RESULTS")
 PRIMARY_EVENTS = ("colombia_first_round", "peru_runoff", "colombia_runoff")
 EVENT_FAMILY = {
@@ -130,8 +131,8 @@ def load_code_bundle() -> tuple[Path, dict[str, Any]]:
         raise RuntimeError(f"EMPIRICAL BLOCKED: invalid gate flags {gate}")
     if gate.get("data_002_main_sha") != BASE_MAIN_SHA:
         raise RuntimeError("EMPIRICAL BLOCKED: DATA-002 canonical main SHA mismatch")
-    if not gate.get("experiment_004c_freeze_sha"):
-        raise RuntimeError("EMPIRICAL BLOCKED: 004C freeze SHA absent")
+    if gate.get("experiment_004c_freeze_sha") != EXPERIMENT_004C_FREEZE_SHA:
+        raise RuntimeError("EMPIRICAL BLOCKED: 004C canonical freeze SHA mismatch")
 
     bundle = root / "predictions_cup_005a.bundle"
     sys.path.insert(0, str(bundle))
