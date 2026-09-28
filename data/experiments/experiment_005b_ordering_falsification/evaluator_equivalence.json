@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B-ORDERING-FALSIFICATION",
+  "classification": "POST_HOC_FALSIFICATION_ONLY",
+  "check": "original_holdout_vs_corrected_evaluator_core_equivalence",
+  "original_executable": {
+    "repository": "DanielCWeng/predictions-cup",
+    "commit": "76a52913f3a38a7c573ee7f9f53db6d651f301b1",
+    "path": "scripts/kaggle/experiment_005b_holdout/run.py"
+  },
+  "corrected_executable": {
+    "branch": "experiment/005b-ordering-falsification",
+    "path": "scripts/kaggle/experiment_005b_ordering_falsification_eval/run.py"
+  },
+  "normalized_non_scientific_differences": [
+    "module docstring",
+    "output directory",
+    "HOLDOUT progress label -> POST_HOC",
+    "final output payload envelope/provenance fields"
+  ],
+  "evaluation_core_exact_match": true,
+  "implications": [
+    "candidate eligibility is read only from the original TRAIN/DEV freeze",
+    "scalar candidates are only original promoted_candidate=true rows",
+    "models are only original promotion_eligible=true selections",
+    "original DEV-selected model names, hyperparameters and feature lists are reused",
+    "no corrected-data candidate search or reselection is present"
+  ]
+}
