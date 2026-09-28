@@ -236,9 +236,7 @@ def _benchmark_strategies() -> StrategyRegistry:
 
 
 def _benchmark_risk_context() -> RiskContext:
-    return RiskContext(
-        mode=ExecutionMode.SHADOW,
-        kill_switch=False,
+    return RiskContext(        kill_switch=False,
         limits=None,
         max_state_age_ns=1_000_000_000,
     )
@@ -292,9 +290,7 @@ def _plan_benchmark_function(registry: KernelRegistry) -> ZeroArgFn:
     def run() -> object:
         return build_execution_plan(
             decision,
-            logical_operation_id="bench-op",
-            mode=ExecutionMode.SHADOW,
-            created_monotonic_ns=1_000_001,
+            logical_operation_id="bench-op",            created_monotonic_ns=1_000_001,
         )
 
     return run
@@ -316,9 +312,7 @@ def _decision_benchmark_function(registry: KernelRegistry) -> ZeroArgFn:
             snapshot=snapshot,
             strategy_config={"threshold": 0.01, "edge": 0.02},
             risk_context=risk_context,
-            logical_operation_id="bench-op",
-            mode=ExecutionMode.SHADOW,
-            created_monotonic_ns=1_000_001,
+            logical_operation_id="bench-op",            created_monotonic_ns=1_000_001,
         )
         if outcome.execution_plan is None:
             raise AssertionError("synthetic benchmark unexpectedly returned NO_TRADE")
