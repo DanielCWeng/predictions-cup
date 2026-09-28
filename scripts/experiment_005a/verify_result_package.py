@@ -79,6 +79,8 @@ def verify_observed(
     if gate.get("experiment_004c_freeze_sha") != EXPECTED_004C_FREEZE:
         raise RuntimeError(f"{stage}: wrong 004C freeze")
 
+    maps: tuple[str, ...]
+    required_csv: tuple[str, ...]
     if stage == "A2_A3_OBSERVED_AND_PANELS":
         maps = ("outputs",)
         required_csv = ("coverage.csv", "observed_incremental_models.csv")
@@ -142,7 +144,7 @@ def audit_bh(path: Path) -> dict[str, Any]:
         for key in ("circular_p", "block_p", "intersection_p", "identity_p"):
             raw = row.get(key)
             if raw not in (None, "", "NONPOSITIVE_STAGE1"):
-                p = float(raw)
+                p = float(str(raw))
                 if not 0.0 <= p <= 1.0:
                     raise RuntimeError(f"{path}: invalid {key}={p}")
         reject = parse_bool(row["bh_reject_5pct"])
