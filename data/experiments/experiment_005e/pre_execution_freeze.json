@@ -9,7 +9,7 @@
     "experiment_doc": "939aa27bf2e6d4fdeac3b75d913784ce2fe1efd2085a231693bf2c8b57037a27",
     "participant_ecology_py": "5d9bad89065811e141a9e4138b30c390222e4d06beab1260e7986cc4a1e9e2ff",
     "participant_ecology_tests": "f3502e271312bea633451ef3aad94e0a3a61b04102a4018469e51752046678c7",
-    "kaggle_runner_py": "fdddc853a064f9e609064ac8038128140cc2c7914c599b91efc8c87b4eeb0f1f",
+    "kaggle_runner_py": "3679292adf3e66916fe37ae854e0dc79d0fde5f701c28c738af9066be6f2d8f6",
     "kaggle_prepare_py": "d39e5f971d526083a769eb0d4e181b2b6e31cc4a694c1bb033ab391cf55c24a5",
     "kernel_metadata": "f188ae51b0cf120c30a5f2c8ebe7a1b0d53f57dbdaf0a3211dd5c98aae6d7c72",
     "infra_registry": "839f62b62c6b2e3d3b7a44d200c2d4b949c35de8e7dea006e9a2f2c8426959e8",
@@ -53,11 +53,18 @@
       "to": "deterministic hash-threshold sampling with a 740000-row target and 750000 hard cap, plus dropping superseded audit/feature/markout intermediates as soon as downstream tables are materialized",
       "reason": "Version 3 exhausted Kaggle's 17.5 GiB DuckDB temp limit before creating any outcome panel. This is a resource-equivalent implementation change; the sample remains outcome-independent and hash-deterministic, and all features/targets/splits/models/DEV gates remain unchanged.",
       "timing": "before any 005E TRAIN/DEV outcome inspection"
+    },
+    {
+      "field": "Kaggle resource execution strategy",
+      "from": "global ROW_NUMBER ordering over all eligible participant rows before applying the deterministic 750000-row cap; wide audit intermediates retained through participant feature construction",
+      "to": "deterministic 1e6-bucket hash-threshold sampling targeting 740000 rows with the same 750000 hard cap; full eligible history remains upstream of sampling; no-longer-needed audit/window intermediates are dropped as soon as their frozen outputs are materialized",
+      "reason": "Kaggle version 3 exhausted the 17.5 GiB DuckDB temporary-disk allowance while creating the deterministic sample on US_2024. The amendment removes the global hash sort and frees dead intermediates without thinning participant history or changing features, targets, splits, model grids, screening, falsification, or disposition rules.",
+      "timing": "after an engineering resource failure and before any 005E TRAIN/DEV metric, candidate ranking, or HOLDOUT outcome inspection"
     }
   ],
   "local_frozen_source_commit": "567f364c5acf3825a940ea2220eac3cb511b9e6f",
   "local_frozen_source_tree_note": "Exact EC2 source commit; GitHub branch is separately anchored by this hash freeze until byte-identical source files are persisted through the connector.",
-  "github_source_equivalence": "Current GitHub runner blob is byte-identical to the version-3 Kaggle runner bound by hashes.kaggle_runner_py; the parser-only repair changes SQL alias syntax only.",
+  "github_source_equivalence": "Current GitHub runner blob is byte-identical to the resource-bounded Kaggle runner bound by hashes.kaggle_runner_py. Full participant history remains upstream of deterministic row sampling.",
   "github_previous_source_commit": "4419ccdfc762ecaae1b302049e1b46a2a5fb85c1",
   "failed_empirical_attempts": [
     {
@@ -81,9 +88,17 @@
       "failure": "DuckDB temp spill limit exhausted (17.5 GiB) while globally sorting wide US_2024 p4 rows for deterministic hash rank in sample_base",
       "outcome_inspection": false,
       "produced_train_dev_report": false
+    },
+    {
+      "kaggle_kernel": "polyleviathan/005e-participant-ecology-train-dev",
+      "version": 3,
+      "disposition": "ENGINEERING_RESOURCE_FAILURE_BEFORE_RESULT_EMISSION",
+      "failure": "DuckDB exhausted Kaggle's 17.5 GiB max_temp_directory_size during US_2024 sample construction; no DEV metrics, candidate ranking, or holdout output was emitted",
+      "outcome_inspection": false
     }
   ],
   "github_frozen_source_commit": "9ecdcca9a5f8c0b739917968d4a94ee66dc7e2c5",
-  "local_current_source_commit": "266a1b83f888e06ed8d3e2792d88078d4f05fe0f",
-  "github_current_source_commit": "b84e64dbf6b839954e63197edede4f903d94769d"
+  "local_current_source_commit": "096772f8b11c74e7c9f223ee1456c8e2f702e433",
+  "github_current_source_commit": "b84e64dbf6b839954e63197edede4f903d94769d",
+  "github_current_runner_commit": "9299611238ef44b2834e55e52c3b4c3e8cd60688"
 }
