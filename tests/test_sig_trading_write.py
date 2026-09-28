@@ -357,3 +357,158 @@ def test_unknown_open_order_update_requires_authoritative_reconciliation() -> No
     )
     assert result.requires_reconciliation is True
     assert engine.transition is AccountTrustTransition.UNTRUSTED_UNKNOWN_OPEN_ORDER
+
+@pytest.mark.parametrize(
+    ("status_code", "operation"),
+    (
+        (200, "single"),
+        (207, "batch"),
+        (422, "cancel_all"),
+    ),
+)
+def test_malformed_accepted_execution_response_is_uncertain(
+    status_code: int,
+    operation: str,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(status_code, json={"unexpected": True})
+
+    async def scenario() -> None:
+        governor = SigRestGovernor(rate_per_second=1_000_000_000)
+        try:
+            async with SigTradingClient(
+                _settings(),
+                governor=governor,
+                transport=httpx.MockTransport(handler),
+                retry_policy=RetryPolicy(max_attempts=1),
+            ) as client:
+                with pytest.raises(SigExecutionUncertainError) as caught:
+                    if operation == "single":
+                        await client.place_order(
+                            SingleOrderRequestDto(
+                                exchangeId="36",
+                                side="yes",
+                                action="buy",
+                                quantity=1,
+                                price=Decimal("0.42"),
+                                idempotencyKey="malformed-single",
+                            )
+                        )
+                    elif operation == "batch":
+                        await client.place_batch(
+                            BatchOrderRequestDto(
+                                idempotencyKey="malformed-batch",
+                                orders=(
+                                    OrderInputDto(
+                                        exchangeId="36",
+                                        side="yes",
+                                        action="buy",
+                                        quantity=1,
+                                        price=Decimal("0.42"),
+                                    ),
+                                ),
+                            )
+                        )
+                    else:
+                        await client.cancel_all(tournament_id="tournament-1")
+                assert caught.value.status_code == status_code
+        finally:
+            await governor.aclose()
+
+    asyncio.run(scenario())
+
+
+def test_invalid_json_after_accepted_execution_is_uncertain() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(200, content=b"{not-json")
+
+    async def scenario() -> None:
+        governor = SigRestGovernor(rate_per_second=1_000_000_000)
+        try:
+            async with SigTradingClient(
+                _settings(),
+                governor=governor,
+                transport=httpx.MockTransport(handler),
+                retry_policy=RetryPolicy(max_attempts=1),
+            ) as client:
+                with pytest.raises(SigExecutionUncertainError) as caught:
+                    await client.place_order(
+                        SingleOrderRequestDto(
+                            exchangeId="36",
+                            side="yes",
+                            action="buy",
+                            quantity=1,
+                            price=Decimal("0.42"),
+                            idempotencyKey="invalid-json",
+                        )
+                    )
+                assert caught.value.status_code == 200
+        finally:
+            await governor.aclose()
+
+    asyncio.run(scenario())
+
+
+def test_pre_resolved_payload_bytes_are_sent_exactly() -> None:
+    expected = (
+        b'{"idempotencyKey":"wire-1","exchangeId":"36","side":"yes",'
+        b'"action":"buy","quantity":1,"price":0.42,"tournamentId":"t1"}'
+    )
+    seen: list[bytes] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.content)
+        return httpx.Response(200, json=_single_response())
+
+    async def scenario() -> None:
+        governor = SigRestGovernor(rate_per_second=1_000_000_000)
+        try:
+            async with SigTradingClient(
+                _settings(),
+                governor=governor,
+                transport=httpx.MockTransport(handler),
+            ) as client:
+                result = await client.place_order_payload(expected.decode("utf-8"))
+                assert result.order_id == 1001
+        finally:
+            await governor.aclose()
+
+    asyncio.run(scenario())
+    assert seen == [expected]
+
+
+def test_realtime_fill_never_mutates_position_without_direction() -> None:
+    engine = AccountRealtimeStateEngine(tournament_id="tournament-1")
+    engine.trusted = True
+    result = engine.handle_raw_batch(
+        {
+            "fills": [
+                {
+                    "orderId": 1001,
+                    "exchangeId": "36",
+                    "marketId": "26",
+                    "price": "0.42",
+                    "quantity": "5",
+                    "executedAt": "2026-09-28T20:00:00Z",
+                    "tournamentId": "tournament-1",
+                }
+            ],
+            "orderUpdates": [],
+            "settlements": [],
+            "refunds": [],
+            "collateralChanges": [],
+            "delivery": _delivery(1, 0),
+        },
+        observed_at=datetime(2026, 9, 28, 20, 0, tzinfo=UTC),
+    )
+    assert result.requires_reconciliation is True
+    assert result.accepted is False
+    assert engine.trusted is False
+    assert (
+        engine.transition
+        is AccountTrustTransition.UNTRUSTED_FILL_REQUIRES_RECONCILIATION
+    )
+    assert engine.runtime_portfolio().positions == ()
+
