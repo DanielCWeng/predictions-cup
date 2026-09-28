@@ -181,11 +181,12 @@ The latest market-equivalence research materially expands the set of external st
 | M-143 | Participant ecology | [x] | Shrunk past-only participant markout | `score_t = (Σ_{j:available_j<t} m_j)/(n_t+λ)`, with `λ=20` and neutral score 0 for unseen participants | Encode historical participant outcome behaviour without full-history leakage or sparse-wallet overfit | ESTIMATOR | READY_FOR_EXPERIMENT | Incremental OOS value beyond generic activity; shuffled/delayed-score placebo; concentration audit | EXPERIMENT-005E | `available_j` is label completion time, not fill time; current/future labels never enter current score. |
 | M-144 | Participant ecology | [x] | Incremental behavioural-state hypothesis | Compare `E[Δlogit_{t→t+h} | generic market/activity controls, participant state]` against the same model without participant state | Test whether participant ecology contains information beyond active-market tagging | TRADING HYPOTHESIS | READY_FOR_EXPERIMENT | TRAIN→DEV→FREEZE→HOLDOUT; BH-controlled loss improvement; family/market transfer and permutation falsification | EXPERIMENT-005E | Predictive object is past-observable behavioural state, not a named-wallet leaderboard. |
 | M-145 | Participant ecology | [x] | Effective contributing participants | For nonnegative contribution shares `s_i`, `N_eff=1/Σ_i s_i²` | Distinguish broad ecology effects from one/few-wallet concentration | ESTIMATOR | READY_FOR_EXPERIMENT | Report beside top-1/top-5/top-10/top-1% contribution shares on frozen HOLDOUT | EXPERIMENT-005E | Low `N_eff` does not invalidate operational interest, but forbids a broad-ecology interpretation. |
+| M-146 | Participant ecology | [x] | Hierarchical timestamp-batch weight | `w_i ∝ [F·M_f·B_{fm}·R_{fmt}]^{-1}`, normalized to mean 1 | Equalise family → market → observable timestamp batch → row so one-second multi-fill bursts do not dominate evidence | ESTIMATOR | READY_FOR_EXPERIMENT | Compare weighted DEV/HOLDOUT loss; collapse inference to market-timestamp batch before family/day bootstrap | EXPERIMENT-005E | Required because DATA-002 fill timestamps are one-second block-time proxies with no valid within-second ordering. |
 
 ## Current ledger snapshot
 
-- **Total mathematical / quantitative objects captured:** 145
-- **Capture checkboxes:** 145 / 145
+- **Total mathematical / quantitative objects captured:** 146
+- **Capture checkboxes:** 146 / 146
 - **Checkbox meaning:** captured in canonical memory, not validated
 - **Empirically supported:** 0
 - **Implemented:** 0

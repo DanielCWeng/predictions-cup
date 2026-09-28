@@ -54,8 +54,8 @@ FEATURE_FAMILIES = {
         "log_prior_active_days",
         "log_recency_seconds",
         "log_lifetime_seconds",
-        "session_fill_count",
-        "log_session_age_seconds",
+        "log_recent_fill_count_300s",
+        "log_recent_fill_count_1800s",
     ),
     "specialisation": (
         "log_prior_same_market_count",
@@ -63,8 +63,8 @@ FEATURE_FAMILIES = {
         "market_history_share",
         "log_unique_events_prior",
         "event_history_share",
-        "switch_rate",
-        "same_event_switch_rate",
+        "current_market_novelty",
+        "current_event_novelty",
     ),
     "size_behaviour": (
         "prior_mean_log_value",
@@ -74,10 +74,11 @@ FEATURE_FAMILIES = {
     ),
     "directional_behaviour": (
         "prior_pressure_balance",
-        "direction_run_length",
+        "prior_pressure_abs",
+        "current_prior_direction_alignment",
     ),
     "timing_behaviour": (
-        "hour_hhi_prior",
+        "prior_same_hour_share",
         "activity_acceleration",
     ),
     "historical_markout": (
@@ -89,7 +90,7 @@ FEATURE_FAMILIES = {
         "log_market_participant_degree",
         "log_unique_markets_prior",
         "log_unique_events_prior",
-        "same_event_switch_rate",
+        "current_market_novelty",
     ),
 }
 IDENTITY_HISTORY = (
@@ -361,6 +362,12 @@ def create_source_and_reconstruction(
 
 
 def create_participant_features(con: duckdb.DuckDBPyConnection) -> tuple[int, int]:
+    """Build strictly timestamp-prior participant state.
+
+    DATA-002 timestamps are one-second block-time proxies. History therefore
+    excludes the entire current timestamp batch; lexical tx/log order is never
+    treated as observable sequencing within a second.
+    """
     cuts = con.execute(
         """
         SELECT
@@ -379,182 +386,122 @@ def create_participant_features(con: duckdb.DuckDBPyConnection) -> tuple[int, in
           p.*,
           CAST(FLOOR(timestamp/86400) AS BIGINT) day_bucket,
           CAST(FLOOR((timestamp%86400)/3600) AS BIGINT) hour_bucket,
-          ROW_NUMBER() OVER w_p - 1 prior_fill_count,
-          ROW_NUMBER() OVER w_pm - 1 prior_same_market_count,
-          ROW_NUMBER() OVER w_pe - 1 prior_same_event_count,
-          ROW_NUMBER() OVER w_ph - 1 prior_same_hour_count,
-          ROW_NUMBER() OVER w_mp - 1 prior_participant_market_count,
-          LAG(timestamp) OVER w_p participant_prev_ts,
-          LAG(condition_id) OVER w_p participant_prev_condition,
-          LAG(event_id) OVER w_p participant_prev_event,
-          LAG(pressure) OVER w_p participant_prev_pressure,
-          MIN(timestamp) OVER (PARTITION BY participant_address) participant_first_ts,
+          COUNT(*) OVER w_p_prior prior_fill_count,
+          COUNT(*) OVER w_pm_prior prior_same_market_count,
+          COUNT(*) OVER w_pe_prior prior_same_event_count,
+          COUNT(*) OVER w_ph_prior prior_same_hour_count,
+          COUNT(*) OVER w_p_300 recent_fill_count_300s,
+          COUNT(*) OVER w_p_1800 recent_fill_count_1800s,
+          MAX(timestamp) OVER w_p_prior participant_prev_ts,
+          MIN(timestamp) OVER w_p_seen participant_first_ts,
+          COUNT(DISTINCT CAST(FLOOR(timestamp/86400) AS BIGINT))
+            OVER w_p_prior prior_active_days,
+          COUNT(DISTINCT condition_id) OVER w_p_prior unique_markets_prior,
+          COUNT(DISTINCT event_id) OVER w_p_prior unique_events_prior,
           AVG(log_value) OVER w_p_prior prior_mean_log_value,
           STDDEV_SAMP(log_value) OVER w_p_prior prior_std_log_value,
           AVG(pressure) OVER w_p_prior prior_pressure_balance,
           AVG(log_value) OVER w_m_prior market_prior_mean_log_value,
-          STDDEV_SAMP(log_value) OVER w_m_prior market_prior_std_log_value
+          STDDEV_SAMP(log_value) OVER w_m_prior market_prior_std_log_value,
+          COUNT(DISTINCT participant_address)
+            OVER w_m_prior market_participant_degree_prior
         FROM participant_eligible p
         WINDOW
-          w_p AS (
-            PARTITION BY participant_address
-            ORDER BY timestamp,tx_hash,log_index
+          w_p_prior AS (
+            PARTITION BY participant_address ORDER BY timestamp
+            RANGE BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
           ),
-          w_pm AS (
-            PARTITION BY participant_address,condition_id
-            ORDER BY timestamp,tx_hash,log_index
+          w_pm_prior AS (
+            PARTITION BY participant_address,condition_id ORDER BY timestamp
+            RANGE BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
           ),
-          w_pe AS (
-            PARTITION BY participant_address,event_id
-            ORDER BY timestamp,tx_hash,log_index
+          w_pe_prior AS (
+            PARTITION BY participant_address,event_id ORDER BY timestamp
+            RANGE BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
           ),
-          w_ph AS (
+          w_ph_prior AS (
             PARTITION BY participant_address,
               CAST(FLOOR((timestamp%86400)/3600) AS BIGINT)
-            ORDER BY timestamp,tx_hash,log_index
+            ORDER BY timestamp
+            RANGE BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
           ),
-          w_mp AS (
-            PARTITION BY condition_id,participant_address
-            ORDER BY timestamp,tx_hash,log_index
+          w_p_300 AS (
+            PARTITION BY participant_address ORDER BY timestamp
+            RANGE BETWEEN 300 PRECEDING AND 1 PRECEDING
           ),
-          w_p_prior AS (
-            PARTITION BY participant_address
-            ORDER BY timestamp,tx_hash,log_index
-            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+          w_p_1800 AS (
+            PARTITION BY participant_address ORDER BY timestamp
+            RANGE BETWEEN 1800 PRECEDING AND 1 PRECEDING
+          ),
+          w_p_seen AS (
+            PARTITION BY participant_address ORDER BY timestamp
+            RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
           ),
           w_m_prior AS (
-            PARTITION BY condition_id
-            ORDER BY timestamp,tx_hash,log_index,participant_address
-            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+            PARTITION BY condition_id ORDER BY timestamp
+            RANGE BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
           )
-        """
-    )
-    con.execute(
-        """
-        CREATE TEMP TABLE p1 AS
-        SELECT *,
-          CASE
-            WHEN participant_prev_ts IS NULL
-              OR CAST(FLOOR(participant_prev_ts/86400) AS BIGINT)<>day_bucket
-            THEN 1 ELSE 0
-          END new_day,
-          CASE
-            WHEN participant_prev_ts IS NULL OR timestamp-participant_prev_ts>1800
-            THEN 1 ELSE 0
-          END new_session,
-          CASE
-            WHEN participant_prev_condition IS NOT NULL
-              AND participant_prev_condition<>condition_id
-            THEN 1 ELSE 0
-          END switch_flag,
-          CASE
-            WHEN participant_prev_event=event_id
-              AND participant_prev_condition IS NOT NULL
-              AND participant_prev_condition<>condition_id
-            THEN 1 ELSE 0
-          END same_event_switch_flag,
-          CASE
-            WHEN participant_prev_pressure IS NULL OR pressure IS NULL
-              OR participant_prev_pressure<>pressure
-            THEN 1 ELSE 0
-          END direction_run_break,
-          CASE WHEN prior_same_market_count=0 THEN 1 ELSE 0 END first_market_flag,
-          CASE WHEN prior_same_event_count=0 THEN 1 ELSE 0 END first_event_flag,
-          CASE WHEN prior_participant_market_count=0 THEN 1 ELSE 0 END first_market_participant_flag,
-          2*prior_same_hour_count+1 hour_s2_increment
-        FROM p0
-        """
-    )
-    con.execute(
-        """
-        CREATE TEMP TABLE p2 AS
-        SELECT *,
-          COALESCE(SUM(new_day) OVER w_prior,0) prior_active_days,
-          COALESCE(SUM(first_market_flag) OVER w_prior,0) unique_markets_prior,
-          COALESCE(SUM(first_event_flag) OVER w_prior,0) unique_events_prior,
-          SUM(switch_flag) OVER w_current switches_so_far,
-          SUM(same_event_switch_flag) OVER w_current same_event_switches_so_far,
-          COALESCE(SUM(hour_s2_increment) OVER w_prior,0) prior_hour_s2,
-          SUM(new_session) OVER w_current session_id,
-          SUM(direction_run_break) OVER w_current direction_run_id,
-          COALESCE(
-            SUM(first_market_participant_flag) OVER (
-              PARTITION BY condition_id
-              ORDER BY timestamp,tx_hash,log_index,participant_address
-              ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-            ),0
-          ) market_participant_degree_prior
-        FROM p1
-        WINDOW
-          w_prior AS (
-            PARTITION BY participant_address
-            ORDER BY timestamp,tx_hash,log_index
-            ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
-          ),
-          w_current AS (
-            PARTITION BY participant_address
-            ORDER BY timestamp,tx_hash,log_index
-            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-          )
-        """
-    )
-    con.execute(
-        """
-        CREATE TEMP TABLE p3 AS
-        SELECT *,
-          ROW_NUMBER() OVER (
-            PARTITION BY participant_address,session_id
-            ORDER BY timestamp,tx_hash,log_index
-          ) session_fill_count,
-          timestamp-MIN(timestamp) OVER (
-            PARTITION BY participant_address,session_id
-          ) session_age_seconds,
-          ROW_NUMBER() OVER (
-            PARTITION BY participant_address,direction_run_id
-            ORDER BY timestamp,tx_hash,log_index
-          ) direction_run_length
-        FROM p2
         """
     )
     con.execute(
         """
         CREATE TEMP TABLE p4 AS
         SELECT *,
-          LN(1+prior_fill_count) log_prior_fill_count,
-          LN(1+prior_active_days) log_prior_active_days,
+          LN(1+COALESCE(prior_fill_count,0)) log_prior_fill_count,
+          LN(1+COALESCE(prior_active_days,0)) log_prior_active_days,
           LN(1+COALESCE(timestamp-participant_prev_ts,0)) log_recency_seconds,
           LN(1+GREATEST(timestamp-participant_first_ts,0)) log_lifetime_seconds,
-          LN(1+session_age_seconds) log_session_age_seconds,
-          LN(1+prior_same_market_count) log_prior_same_market_count,
-          LN(1+unique_markets_prior) log_unique_markets_prior,
-          LN(1+unique_events_prior) log_unique_events_prior,
-          CASE WHEN prior_fill_count>0
-               THEN prior_same_market_count::DOUBLE/prior_fill_count ELSE 0 END market_history_share,
-          CASE WHEN prior_fill_count>0
-               THEN prior_same_event_count::DOUBLE/prior_fill_count ELSE 0 END event_history_share,
-          CASE WHEN prior_fill_count>0
-               THEN switches_so_far::DOUBLE/prior_fill_count ELSE 0 END switch_rate,
-          CASE WHEN prior_fill_count>0
-               THEN same_event_switches_so_far::DOUBLE/prior_fill_count ELSE 0 END same_event_switch_rate,
+          LN(1+COALESCE(recent_fill_count_300s,0)) log_recent_fill_count_300s,
+          LN(1+COALESCE(recent_fill_count_1800s,0)) log_recent_fill_count_1800s,
+          LN(1+COALESCE(prior_same_market_count,0)) log_prior_same_market_count,
+          LN(1+COALESCE(unique_markets_prior,0)) log_unique_markets_prior,
+          LN(1+COALESCE(unique_events_prior,0)) log_unique_events_prior,
+          CASE WHEN COALESCE(prior_fill_count,0)>0
+               THEN prior_same_market_count::DOUBLE/prior_fill_count
+               ELSE 0 END market_history_share,
+          CASE WHEN COALESCE(prior_fill_count,0)>0
+               THEN prior_same_event_count::DOUBLE/prior_fill_count
+               ELSE 0 END event_history_share,
+          CASE WHEN COALESCE(prior_same_market_count,0)=0
+               THEN 1.0 ELSE 0.0 END current_market_novelty,
+          CASE WHEN COALESCE(prior_same_event_count,0)=0
+               THEN 1.0 ELSE 0.0 END current_event_novelty,
           COALESCE(prior_mean_log_value,0) prior_mean_log_value_f,
           COALESCE(prior_std_log_value,0) prior_std_log_value_f,
           CASE WHEN COALESCE(prior_std_log_value,0)>1e-12
-               THEN (log_value-prior_mean_log_value)/prior_std_log_value ELSE 0 END current_size_z,
+               THEN (log_value-prior_mean_log_value)/prior_std_log_value
+               ELSE 0 END current_size_z,
           CASE WHEN COALESCE(market_prior_std_log_value,0)>1e-12
-               THEN 1/(1+EXP(-(log_value-market_prior_mean_log_value)/market_prior_std_log_value))
+               THEN 1/(1+EXP(
+                    -(log_value-market_prior_mean_log_value)
+                    /market_prior_std_log_value
+               ))
                ELSE 0.5 END market_size_percentile_proxy,
           COALESCE(prior_pressure_balance,0) prior_pressure_balance_f,
-          CASE WHEN prior_fill_count>0
-               THEN prior_hour_s2::DOUBLE/(prior_fill_count*prior_fill_count) ELSE 0 END hour_hhi_prior,
+          ABS(COALESCE(prior_pressure_balance,0)) prior_pressure_abs,
+          COALESCE(pressure,0)*COALESCE(prior_pressure_balance,0)
+            current_prior_direction_alignment,
+          CASE WHEN COALESCE(prior_fill_count,0)>0
+               THEN prior_same_hour_count::DOUBLE/prior_fill_count
+               ELSE 0 END prior_same_hour_share,
           CASE
-            WHEN prior_fill_count>0 AND timestamp-participant_first_ts>0
+            WHEN COALESCE(prior_fill_count,0)>0
+             AND timestamp-participant_first_ts>0
             THEN
-              (session_fill_count/GREATEST(session_age_seconds/60.0,1.0))
-              / GREATEST(prior_fill_count/GREATEST((timestamp-participant_first_ts)/60.0,1.0),1e-9)
+              (COALESCE(recent_fill_count_1800s,0)/30.0)
+              / GREATEST(
+                  prior_fill_count
+                  / GREATEST(
+                      (timestamp-participant_first_ts)/60.0,
+                      1.0
+                    ),
+                  1e-9
+                )
             ELSE 1.0
           END activity_acceleration,
-          LN(1+market_participant_degree_prior) log_market_participant_degree
-        FROM p3
+          LN(1+COALESCE(market_participant_degree_prior,0))
+            log_market_participant_degree
+        FROM p0
         """
     )
     return train_end, dev_end
@@ -662,17 +609,12 @@ def create_sample_and_markout_history(
     con.execute(
         """
         CREATE TEMP TABLE train_last_raw AS
-        SELECT * EXCLUDE(rn)
-        FROM (
-          SELECT p4.*,
-            ROW_NUMBER() OVER (
-              PARTITION BY participant_address
-              ORDER BY timestamp DESC,tx_hash DESC,log_index DESC
-            ) rn
-          FROM p4
-          WHERE timestamp<? - ?
+        SELECT p4.*
+        FROM p4
+        WHERE timestamp<? - ?
+        QUALIFY timestamp=MAX(timestamp) OVER (
+          PARTITION BY participant_address
         )
-        WHERE rn=1
         """,
         [train_end, EMBARGO_SECONDS],
     )
@@ -747,19 +689,17 @@ def export_train_fingerprint(
     con: duckdb.DuckDBPyConnection,
     output: Path,
 ) -> None:
-    cols = ",".join(
-        [
-            "family",
-            "participant_address",
-            "timestamp",
-            "prior_fill_count",
-            "prior_active_days",
-            *FINGERPRINT,
-        ]
-    )
+    feature_cols = ",\n".join(f"AVG({name}) AS {name}" for name in FINGERPRINT)
     query = f"""
-      SELECT {cols}
+      SELECT
+        family,
+        participant_address,
+        timestamp,
+        MAX(prior_fill_count) AS prior_fill_count,
+        MAX(prior_active_days) AS prior_active_days,
+        {feature_cols}
       FROM train_fingerprint
+      GROUP BY family,participant_address,timestamp
     """
     con.execute(f"COPY ({query}) TO '{q(output)}' (FORMAT PARQUET,COMPRESSION ZSTD)")
 
@@ -1016,13 +956,29 @@ def impute_standardize_apply(
 
 
 def hierarchical_weights(frame: pd.DataFrame) -> np.ndarray:
-    keys = frame[["family", "condition_id"]].astype(str)
-    market_size = keys.groupby(["family", "condition_id"], sort=False)["condition_id"].transform(
-        "size"
+    """Equalise family -> market -> observable timestamp batch -> row."""
+    keys = pd.DataFrame(
+        {
+            "family": frame["family"].astype(str),
+            "condition_id": frame["condition_id"].astype(str),
+            "timestamp": pd.to_numeric(frame["timestamp"], errors="raise").astype(np.int64),
+        },
+        index=frame.index,
     )
+    rows_per_batch = keys.groupby(["family", "condition_id", "timestamp"], sort=False)[
+        "timestamp"
+    ].transform("size")
+    batches_per_market = keys.groupby(["family", "condition_id"], sort=False)[
+        "timestamp"
+    ].transform("nunique")
     markets_per_family = keys.groupby("family", sort=False)["condition_id"].transform("nunique")
     n_families = max(1, keys["family"].nunique())
-    w = 1.0 / (n_families * markets_per_family.to_numpy(float) * market_size.to_numpy(float))
+    w = 1.0 / (
+        n_families
+        * markets_per_family.to_numpy(float)
+        * batches_per_market.to_numpy(float)
+        * rows_per_batch.to_numpy(float)
+    )
     return w / np.mean(w)
 
 
@@ -1167,7 +1123,11 @@ def family_gains(
         mask = families == family
         if mask.sum() < 2:
             continue
-        out[family] = mse(y[mask], baseline_pred[mask]) - mse(y[mask], challenger_pred[mask])
+        scoped = dev.loc[mask]
+        weight = hierarchical_weights(scoped)
+        out[family] = mse(y[mask], baseline_pred[mask], weight) - mse(
+            y[mask], challenger_pred[mask], weight
+        )
     return out
 
 
@@ -1480,11 +1440,18 @@ def block_bootstrap_p(
     work = pd.DataFrame(
         {
             "family": frame["family"].astype(str).to_numpy(),
-            "day": (pd.to_numeric(frame["timestamp"]).to_numpy(np.int64) // 86400),
+            "condition_id": frame["condition_id"].astype(str).to_numpy(),
+            "timestamp": pd.to_numeric(frame["timestamp"]).to_numpy(np.int64),
             "gain": loss_gain,
         }
     )
-    blocks = work.groupby(["family", "day"], sort=False)["gain"].mean().reset_index()
+    batches = (
+        work.groupby(["family", "condition_id", "timestamp"], sort=False)["gain"]
+        .mean()
+        .reset_index()
+    )
+    batches["day"] = batches["timestamp"].to_numpy(np.int64) // 86400
+    blocks = batches.groupby(["family", "day"], sort=False)["gain"].mean().reset_index()
     families = sorted(blocks["family"].unique())
     rng = np.random.default_rng(SEED)
     draws: list[float] = []
@@ -1507,13 +1474,16 @@ def block_bootstrap_p(
 def concentration_report(
     frame: pd.DataFrame,
     loss_gain: np.ndarray,
+    weight: np.ndarray,
 ) -> dict[str, Any]:
     from predictions_cup.learning.participant_ecology import effective_number
 
+    row_gain = np.asarray(loss_gain, dtype=float)
+    row_weight = np.asarray(weight, dtype=float)
     work = pd.DataFrame(
         {
             "participant": frame["participant_address"].astype(str).to_numpy(),
-            "gain": np.asarray(loss_gain, dtype=float),
+            "gain": row_gain * row_weight,
         }
     )
     grouped = work.groupby("participant", sort=False)["gain"].sum()
@@ -1536,7 +1506,7 @@ def concentration_report(
         keep = ~work["participant"].isin(addresses).to_numpy()
         if not np.any(keep):
             return None
-        return float(np.mean(np.asarray(loss_gain, float)[keep]))
+        return float(np.average(row_gain[keep], weights=row_weight[keep]))
 
     activity_one_pct = max(1, int(np.ceil(len(activity) * 0.01))) if len(activity) else 0
     return {
@@ -1557,13 +1527,20 @@ def slice_gain(
     frame: pd.DataFrame,
     loss_gain: np.ndarray,
     mask: np.ndarray,
+    weight: np.ndarray,
 ) -> dict[str, float | int | None]:
+    del frame
     selected = np.asarray(mask, dtype=bool)
     if int(selected.sum()) == 0:
         return {"rows": 0, "mean_loss_gain": None}
     return {
         "rows": int(selected.sum()),
-        "mean_loss_gain": float(np.mean(np.asarray(loss_gain, float)[selected])),
+        "mean_loss_gain": float(
+            np.average(
+                np.asarray(loss_gain, float)[selected],
+                weights=np.asarray(weight, float)[selected],
+            )
+        ),
     }
 
 
@@ -1761,11 +1738,11 @@ def holdout_analysis(
             "bootstrap_ci95": [float(np.quantile(draws, 0.025)), float(np.quantile(draws, 0.975))],
             "family_gains": family_gain,
             "positive_families": int(sum(value > 0 for value in family_gain.values())),
-            "concentration": concentration_report(holdout, loss_gain),
+            "concentration": concentration_report(holdout, loss_gain, w_holdout),
             "slices": {
-                "unseen": slice_gain(holdout, loss_gain, unseen),
-                "sparse": slice_gain(holdout, loss_gain, sparse),
-                "repeat": slice_gain(holdout, loss_gain, ~sparse),
+                "unseen": slice_gain(holdout, loss_gain, unseen, w_holdout),
+                "sparse": slice_gain(holdout, loss_gain, sparse, w_holdout),
+                "repeat": slice_gain(holdout, loss_gain, ~sparse, w_holdout),
             },
         }
     fdr = bh_adjust(raw_p, alpha=0.05)

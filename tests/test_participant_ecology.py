@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -84,3 +86,26 @@ def test_effective_number() -> None:
     assert effective_number([]) == 0.0
     assert effective_number([1.0, 1.0, 1.0, 1.0]) == pytest.approx(4.0)
     assert effective_number([4.0, 0.0, 0.0, 0.0]) == pytest.approx(1.0)
+
+
+def test_kaggle_runner_uses_strict_timestamp_batch_history() -> None:
+    runner = Path("scripts/kaggle/experiment_005e/run.py").read_text()
+    start = runner.index("def create_participant_features(")
+    end = runner.index("def create_sample_and_markout_history(")
+    feature_code = runner[start:end]
+    assert "RANGE BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING" in feature_code
+    assert "RANGE BETWEEN 300 PRECEDING AND 1 PRECEDING" in feature_code
+    assert "RANGE BETWEEN 1800 PRECEDING AND 1 PRECEDING" in feature_code
+    assert "ORDER BY timestamp,tx_hash,log_index" not in feature_code
+    assert "session_fill_count" not in feature_code
+    assert "direction_run_length" not in feature_code
+    snapshot_start = runner.index("CREATE TEMP TABLE train_last_raw AS")
+    snapshot_end = runner.index("def create_cumulative_market_state(")
+    snapshot_code = runner[snapshot_start:snapshot_end]
+    assert "QUALIFY timestamp=MAX(timestamp)" in snapshot_code
+    assert "ORDER BY timestamp DESC,tx_hash" not in snapshot_code
+    export_start = runner.index("def export_train_fingerprint(")
+    export_end = runner.index("def export_panel(")
+    export_code = runner[export_start:export_end]
+    assert "AVG({name}) AS {name}" in export_code
+    assert "GROUP BY family,participant_address,timestamp" in export_code
