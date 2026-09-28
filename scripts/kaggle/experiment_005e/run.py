@@ -216,20 +216,20 @@ def create_source_and_reconstruction(
         f"""
         CREATE TEMP VIEW src AS
         SELECT
-            CAST(family AS VARCHAR) family,
-            COALESCE(CAST(event_id AS VARCHAR), CAST(condition_id AS VARCHAR)) event_id,
-            CAST(market_id AS VARCHAR) market_id,
-            CAST(condition_id AS VARCHAR) condition_id,
-            CAST(timestamp AS BIGINT) timestamp,
-            CAST(tx_hash AS VARCHAR) tx_hash,
-            CAST(log_index AS BIGINT) log_index,
-            LOWER(CAST(participant_address AS VARCHAR)) participant_address,
-            UPPER(CAST(participant_side AS VARCHAR)) participant_side,
-            CAST(order_is_match_taker_order AS BOOLEAN) is_active,
-            UPPER(CAST(outcome_side AS VARCHAR)) outcome_side,
-            CAST(price AS DOUBLE) price,
-            CAST(size_shares AS DOUBLE) size_shares,
-            CAST(value_usd AS DOUBLE) value_usd
+            CAST(family AS VARCHAR) AS family,
+            COALESCE(CAST(event_id AS VARCHAR), CAST(condition_id AS VARCHAR)) AS event_id,
+            CAST(market_id AS VARCHAR) AS market_id,
+            CAST(condition_id AS VARCHAR) AS condition_id,
+            CAST(timestamp AS BIGINT) AS timestamp,
+            CAST(tx_hash AS VARCHAR) AS tx_hash,
+            CAST(log_index AS BIGINT) AS log_index,
+            LOWER(CAST(participant_address AS VARCHAR)) AS participant_address,
+            UPPER(CAST(participant_side AS VARCHAR)) AS participant_side,
+            CAST(order_is_match_taker_order AS BOOLEAN) AS is_active,
+            UPPER(CAST(outcome_side AS VARCHAR)) AS outcome_side,
+            CAST(price AS DOUBLE) AS price,
+            CAST(size_shares AS DOUBLE) AS size_shares,
+            CAST(value_usd AS DOUBLE) AS value_usd
         FROM read_parquet('{q(source)}')
         """
     )
