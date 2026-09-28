@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from time import monotonic_ns
 
@@ -13,7 +13,12 @@ from predictions_cup.execution.models import (
     LifecycleState,
     RuntimeOrderIntent,
 )
-from predictions_cup.runtime.models import OrderAction, OutcomeSide, RuntimeSnapshot
+from predictions_cup.runtime.models import (
+    OrderAction,
+    OutcomeSide,
+    RuntimeLevel,
+    RuntimeSnapshot,
+)
 
 ClockNs = Callable[[], int]
 
@@ -52,7 +57,10 @@ class ShadowSink:
         states = tuple(self._intent_state(intent, snapshot) for intent in plan.intents)
         if states and all(state is LifecycleState.FILLED for state in states):
             state = LifecycleState.FILLED
-        elif any(state is LifecycleState.FILLED for state in states):
+        elif any(
+            state in {LifecycleState.FILLED, LifecycleState.PARTIALLY_FILLED}
+            for state in states
+        ):
             state = LifecycleState.PARTIALLY_FILLED
         else:
             state = LifecycleState.OPEN
@@ -65,40 +73,68 @@ class ShadowSink:
         )
 
     @staticmethod
+    def _fill_state(quantity: int, observable_quantity: float) -> LifecycleState:
+        if observable_quantity <= 0:
+            return LifecycleState.OPEN
+        if observable_quantity + 1e-12 >= float(quantity):
+            return LifecycleState.FILLED
+        return LifecycleState.PARTIALLY_FILLED
+
+    @staticmethod
+    def _sum_levels(levels: Iterable[RuntimeLevel]) -> float:
+        return sum(max(0.0, level.quantity) for level in levels)
+
+    @classmethod
     def _intent_state(
+        cls,
         intent: RuntimeOrderIntent,
         snapshot: RuntimeSnapshot,
     ) -> LifecycleState:
         book = snapshot.book(intent.exchange_id)
         if book is None or not book.trusted_depth:
             return LifecycleState.OPEN
+
+        if intent.outcome_side is OutcomeSide.YES:
+            executable_levels = book.asks if intent.action is OrderAction.BUY else book.bids
+            if intent.is_market:
+                return cls._fill_state(
+                    intent.quantity,
+                    cls._sum_levels(executable_levels),
+                )
+
+            assert intent.limit_price_ticks is not None
+            ticks = intent.limit_price_ticks
+            if intent.action is OrderAction.BUY:
+                matching = (
+                    level for level in book.asks if level.price_ticks <= ticks
+                )
+            else:
+                matching = (
+                    level for level in book.bids if level.price_ticks >= ticks
+                )
+            return cls._fill_state(intent.quantity, cls._sum_levels(matching))
+
+        # SIG books are YES-denominated. Buying NO is economically equivalent to
+        # selling YES at the complementary threshold; selling NO is buying YES.
         if intent.is_market:
-            return LifecycleState.FILLED if (book.bids or book.asks) else LifecycleState.OPEN
+            executable_levels = book.bids if intent.action is OrderAction.BUY else book.asks
+            return cls._fill_state(
+                intent.quantity,
+                cls._sum_levels(executable_levels),
+            )
 
         assert intent.limit_price_ticks is not None
-        ticks = intent.limit_price_ticks
-        if intent.outcome_side is OutcomeSide.YES:
-            if intent.action is OrderAction.BUY:
-                return (
-                    LifecycleState.FILLED
-                    if book.asks and ticks >= book.asks[0].price_ticks
-                    else LifecycleState.OPEN
-                )
-            return (
-                LifecycleState.FILLED
-                if book.bids and ticks <= book.bids[0].price_ticks
-                else LifecycleState.OPEN
-            )
-
-        yes_complement_ticks = 200 - ticks
+        yes_complement_ticks = 200 - intent.limit_price_ticks
         if intent.action is OrderAction.BUY:
-            return (
-                LifecycleState.FILLED
-                if book.bids and book.bids[0].price_ticks >= yes_complement_ticks
-                else LifecycleState.OPEN
+            matching = (
+                level
+                for level in book.bids
+                if level.price_ticks >= yes_complement_ticks
             )
-        return (
-            LifecycleState.FILLED
-            if book.asks and book.asks[0].price_ticks <= yes_complement_ticks
-            else LifecycleState.OPEN
-        )
+        else:
+            matching = (
+                level
+                for level in book.asks
+                if level.price_ticks <= yes_complement_ticks
+            )
+        return cls._fill_state(intent.quantity, cls._sum_levels(matching))
