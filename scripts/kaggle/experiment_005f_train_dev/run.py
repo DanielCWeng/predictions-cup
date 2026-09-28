@@ -698,7 +698,7 @@ def build_event_time(
             future = g.shift(-k)
             same = (
                 (future["segment"].to_numpy() == g["segment"].to_numpy())
-                & (future["split"].to_numpy(object) == g["split"].to_numpy(object))
+                & (future["split"].fillna("__NONE__").to_numpy(object) == g["split"].fillna("__NONE__").to_numpy(object))
             )
             y = future["logit_mid"].to_numpy(float) - g["logit_mid"].to_numpy(float)
             y[~same] = np.nan
