@@ -145,12 +145,14 @@ def test_fit_freeze_model_semantics() -> None:
     assert base == ("ret_15", "ret_30", "ret_60")
     assert full == ("ret_15", "ret_30", "ret_60", "snapshot_ofi_norm", "depth_2c")
 
+    pytest.importorskip("sklearn")
     assert build_frozen_model("RIDGE_1.0", classification=False, random_state=7).alpha == 1.0
     assert build_frozen_model("LOGIT_C0.1", classification=True, random_state=7).C == 0.1
     assert build_frozen_model("HGB_D2_LR0.03", classification=False, random_state=7).max_depth == 2
 
 
 def test_fit_freeze_rejects_out_of_grid_hgb() -> None:
+    pytest.importorskip("sklearn")
     from predictions_cup.learning.microstructure_fit import build_frozen_model
 
     with pytest.raises(ValueError):
