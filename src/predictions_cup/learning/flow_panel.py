@@ -8,7 +8,12 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 
-from predictions_cup.learning.flow_response import NS, BBOReconstruction, asof_index
+from predictions_cup.learning.flow_response import (
+    NS,
+    BBOReconstruction,
+    asof_index,
+    observation_exposure_valid,
+)
 
 
 @dataclass(frozen=True)
@@ -195,9 +200,12 @@ def build_quote_grid(
 def future_moves(
     series: BBOReconstruction,
     grid_ns: np.ndarray,
+    collector_times_ns: np.ndarray,
     *,
     horizon_seconds: int,
     freshness_seconds: int = 300,
+    max_collector_gap_seconds: int = 30,
+    target_confirm_seconds: int = 300,
 ) -> np.ndarray:
     grid = np.asarray(grid_ns, np.int64)
     result = np.full(len(grid), np.nan, np.float64)
@@ -209,6 +217,15 @@ def future_moves(
             freshness_seconds=freshness_seconds,
         )
         if current is None or future is None:
+            continue
+        if not observation_exposure_valid(
+            series,
+            int(decision),
+            int(decision + horizon_seconds * NS),
+            collector_times_ns,
+            max_collector_gap_seconds=max_collector_gap_seconds,
+            target_confirm_seconds=target_confirm_seconds,
+        ):
             continue
         result[index] = float(series.mid[future] - series.mid[current])
     return result
