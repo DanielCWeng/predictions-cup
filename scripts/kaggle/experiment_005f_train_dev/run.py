@@ -1106,13 +1106,19 @@ def model_tournament(
         regime = sel["regime"]
         candidate = sel["feature"]
         dataset = sel["dataset"]
-        sub = frame[(frame["regime"] == regime)].copy()
-        if dataset == "clock":
+        sub = frame[frame["regime"] == regime].copy()
+        if dataset == "clock" and str(target).startswith("update_h"):
+            base_cols = ["genuine_15", "genuine_60"]
+            classification = True
+        elif dataset == "clock":
             base_cols = ["ret_15", "ret_30", "ret_60"]
+            classification = False
         elif dataset == "event":
             base_cols = ["event_ret1", "event_ret2"]
+            classification = False
         else:
             base_cols = ["ret_15", "ret_30", "ret_60"]
+            classification = False
         cols = [c for c in base_cols if c in sub.columns] + [candidate]
         x = sub[["split", target, *cols]].replace([np.inf, -np.inf], np.nan).dropna()
         tr = thin(x[x["split"] == "TRAIN"])
@@ -1121,21 +1127,43 @@ def model_tournament(
             continue
         scaler = StandardScaler().fit(tr[cols])
         Xtr, Xdv = scaler.transform(tr[cols]), scaler.transform(dv[cols])
-        ytr, ydv = tr[target].to_numpy(float), dv[target].to_numpy(float)
-        configs: list[tuple[str, Any]] = [("OLS", LinearRegression())]
-        configs += [(f"RIDGE_{a}", Ridge(alpha=a)) for a in (0.1, 1.0, 10.0)]
-        for a in (0.001, 0.01, 0.1):
-            for l1 in (0.1, 0.5, 0.9):
-                configs.append((f"ENET_{a}_{l1}", ElasticNet(alpha=a, l1_ratio=l1, max_iter=2000)))
-        for name, model in configs:
-            model.fit(Xtr, ytr)
-            pred = model.predict(Xdv)
-            rows.append({
-                "dataset": dataset, "regime": regime, "target": target,
-                "feature": candidate, "model": name,
-                "dev_mse": float(np.mean((ydv - pred) ** 2)),
-                "dev_mae": float(np.mean(np.abs(ydv - pred))),
-            })
+        if classification:
+            ytr = tr[target].to_numpy(int)
+            ydv = dv[target].to_numpy(int)
+            if len(np.unique(ytr)) < 2 or len(np.unique(ydv)) < 2:
+                continue
+            configs: list[tuple[str, Any]] = [
+                (f"LOGIT_C{value}", LogisticRegression(C=value, max_iter=500, random_state=SEED))
+                for value in (0.1, 1.0, 10.0)
+            ]
+            for name, model in configs:
+                model.fit(Xtr, ytr)
+                pred = model.predict_proba(Xdv)[:, 1]
+                rows.append({
+                    "dataset": dataset, "regime": regime, "target": target,
+                    "feature": candidate, "model": name,
+                    "dev_mse": float(np.mean((ydv - pred) ** 2)),
+                    "dev_mae": float(np.mean(np.abs(ydv - pred))),
+                    "loss_metric": "BRIER",
+                })
+        else:
+            ytr = tr[target].to_numpy(float)
+            ydv = dv[target].to_numpy(float)
+            configs = [("OLS", LinearRegression())]
+            configs += [(f"RIDGE_{a}", Ridge(alpha=a)) for a in (0.1, 1.0, 10.0)]
+            for a in (0.001, 0.01, 0.1):
+                for l1 in (0.1, 0.5, 0.9):
+                    configs.append((f"ENET_{a}_{l1}", ElasticNet(alpha=a, l1_ratio=l1, max_iter=2000)))
+            for name, model in configs:
+                model.fit(Xtr, ytr)
+                pred = model.predict(Xdv)
+                rows.append({
+                    "dataset": dataset, "regime": regime, "target": target,
+                    "feature": candidate, "model": name,
+                    "dev_mse": float(np.mean((ydv - pred) ** 2)),
+                    "dev_mae": float(np.mean(np.abs(ydv - pred))),
+                    "loss_metric": "MSE",
+                })
     return rows
 
 
