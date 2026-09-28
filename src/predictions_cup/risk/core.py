@@ -49,6 +49,7 @@ class RiskContext:
 class RiskDecision:
     approved: bool
     reason: str
+    execution_mode: ExecutionMode | None = None
     operation_kind: OperationKind | None = None
     intents: tuple[RuntimeOrderIntent, ...] = ()
     relationship_constraint: str | None = None
@@ -132,7 +133,10 @@ def evaluate_risk(
                 return _deny("depth_state_stale")
 
         intent_id = f"{opportunity.strategy_id}:{opportunity.decision_observation_ns}:{index}"
-        if intent_id in context.existing_logical_intent_ids:
+        known_intent_ids = context.existing_logical_intent_ids.union(
+            order.logical_intent_id for order in snapshot.portfolio.orders
+        )
+        if intent_id in known_intent_ids:
             return _deny("duplicate_logical_intent")
         intents.append(
             RuntimeOrderIntent(
@@ -159,7 +163,12 @@ def evaluate_risk(
         if any(intent.quantity > limits.max_order_size for intent in intents):
             return _deny("max_order_size")
 
-        current_gross = snapshot.portfolio.gross_exposure
+        # Worst-case gross assumes every currently open/uncertain reservation
+        # can become a position before the next authoritative account refresh.
+        current_gross = (
+            snapshot.portfolio.gross_exposure
+            + snapshot.portfolio.open_order_exposure
+        )
         new_gross = sum(new_exposure_by_market.values())
         if current_gross + new_gross > limits.max_gross_exposure:
             return _deny("max_gross_exposure")
@@ -197,6 +206,7 @@ def evaluate_risk(
     return RiskDecision(
         approved=True,
         reason="approved",
+        execution_mode=context.mode,
         operation_kind=operation_kind,
         intents=tuple(intents),
         relationship_constraint=opportunity.relationship_id,
