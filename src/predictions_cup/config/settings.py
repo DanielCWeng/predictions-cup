@@ -116,7 +116,9 @@ class AppSettings(BaseSettings):
             if self.sig_trade_credential is None:
                 raise ValueError("LIVE execution requires an explicit trade credential")
             if self.tournament_id is None or self.tournament_slug is None:
-                raise ValueError("LIVE execution requires explicit tournament_id and tournament_slug")
+                raise ValueError(
+                    "LIVE execution requires explicit tournament_id and tournament_slug"
+                )
             limits = (
                 self.risk_max_order_size,
                 self.risk_max_gross_exposure,
