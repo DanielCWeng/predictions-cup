@@ -1,0 +1,7 @@
+{
+  "equal_contract_mean_ae_improvement": -1.1788267639260878e-05,
+  "equal_contract_mean_markout_1s": -0.07998439782144831,
+  "equal_contract_mean_markout_250ms": -0.0799823519949344,
+  "oos_contracts": 52,
+  "oos_rows": 1386
+}

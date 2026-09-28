@@ -1,0 +1,43 @@
+{
+  "delayed_pm_seconds": 30,
+  "equal_contract_current_core_ae_improvement": 0.0020131820430401223,
+  "equal_contract_delayed_pm_ae_improvement": -0.001539826130471862,
+  "equal_contract_wrong_contract_ae_improvement": 0.011843802655703443,
+  "horizon_5s": {
+    "equal_contract_mean_ae_improvement": -0.0011222532005649136,
+    "oos_contracts": 24,
+    "oos_rows": 3252
+  },
+  "next_sig_update": {
+    "equal_contract_mean_ae_improvement": -0.002177955518839182,
+    "oos_contracts": 24,
+    "oos_rows": 3252
+  },
+  "pm_time_shift_null": {
+    "draws": 1000,
+    "eligible_contracts": 15,
+    "null_p05": -0.00018091027534314878,
+    "null_p50": 1.7303574514043063e-05,
+    "null_p95": 8.802074742687022e-05,
+    "observed_equal_contract_covariance": 3.736227062300124e-05,
+    "p_value": 0.3696303696303696
+  },
+  "reverse_sig_to_pm": {
+    "equal_contract_mean_ae_improvement": null,
+    "oos_contracts": 0,
+    "oos_rows": 0
+  },
+  "timestamp_sensitivity_pm_delay_ms": {
+    "1000": {
+      "equal_contract_mean_ae_improvement": 0.0014194497971828067,
+      "oos_contracts": 24,
+      "oos_rows": 3250
+    },
+    "250": {
+      "equal_contract_mean_ae_improvement": 0.0019818320880813406,
+      "oos_contracts": 24,
+      "oos_rows": 3252
+    }
+  },
+  "wrong_contract_feature_availability_rate": 1.0
+}

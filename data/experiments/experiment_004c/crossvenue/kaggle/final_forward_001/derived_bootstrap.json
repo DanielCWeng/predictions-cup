@@ -1,0 +1,18 @@
+{
+  "absolute_error_improvement": {
+    "block_seconds": 300,
+    "contracts": 52,
+    "draws": 1000,
+    "lower_95": -1.6601762360367105e-05,
+    "point_estimate": -1.1788267639260878e-05,
+    "upper_95": -9.020687086988223e-06
+  },
+  "markout_250ms": {
+    "block_seconds": 300,
+    "contracts": 52,
+    "draws": 1000,
+    "lower_95": -0.0800117773232535,
+    "point_estimate": -0.0799823519949344,
+    "upper_95": -0.07995493557345672
+  }
+}
