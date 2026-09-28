@@ -1,0 +1,22 @@
+{
+  "experiment_id": "EXPERIMENT-005D",
+  "stage": "HOLDOUT_REPLACEMENT_FREEZE",
+  "base_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+  "branch": "experiment/005d-structural-rv-atlas",
+  "preregistration_sha256": "d43a75ff8e0b5df6c717f37721e339116a6297b299c4e26d8b9a5f242b9c7a51",
+  "pre_holdout_freeze_sha256": "6ac0f6ea27b5553267d8fa94a9f5bca906680f18d03de45480269da8b9b21cbe",
+  "invalidated_version": 6,
+  "invalidated_runner_sha256": "0692a6499ce1daa384165c2f6da58c30de305325b6abc0e35f750a13208b2e28",
+  "invalidation": "PRE_EVIDENCE",
+  "replacement_runner_sha256": "e65c961b73c56e26b322c8336944ea2fbc048ccf53bdd645cdaf77c53caef7ce",
+  "replacement_runner_bytes": 353733,
+  "scientific_changes": "NONE",
+  "implementation_changes": [
+    "null-centered moving-block bootstrap p-value for positive repair-direction score",
+    "Benjamini-Hochberg q-values over the fixed 13 predictive HOLDOUT cells",
+    "HOLDOUT hit rate, standardized effect, quantile response diagnostics",
+    "HOLDOUT 60-second delayed-state control and effect ratio"
+  ],
+  "shortlist_unchanged": true,
+  "holdout_output_inspected": false
+}
