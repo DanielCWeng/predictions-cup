@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.dataset as pads
+from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 from sklearn.linear_model import ElasticNet, LinearRegression, LogisticRegression, Ridge
 from sklearn.preprocessing import StandardScaler
 
@@ -116,6 +117,26 @@ def safe_float(x: Any) -> float:
 def logit_array(p: np.ndarray) -> np.ndarray:
     x = np.clip(p.astype(float), 1e-6, 1 - 1e-6)
     return np.log(x / (1.0 - x))
+
+
+def irregular_ewma(values: np.ndarray, times_ns: np.ndarray, half_life_s: float) -> np.ndarray:
+    out = np.full(len(values), np.nan, float)
+    state = np.nan
+    last_t: int | None = None
+    rate = math.log(2.0) / float(half_life_s)
+    for i, value in enumerate(values.astype(float)):
+        if not np.isfinite(value):
+            out[i] = state
+            continue
+        if not np.isfinite(state) or last_t is None:
+            state = value
+        else:
+            dt_s = max(0.0, (int(times_ns[i]) - int(last_t)) / NS)
+            weight = 1.0 - math.exp(-rate * dt_s)
+            state = state + weight * (value - state)
+        out[i] = state
+        last_t = int(times_ns[i])
+    return out
 
 
 def split_bounds(start: pd.Timestamp, end: pd.Timestamp) -> dict[str, tuple[pd.Timestamp, pd.Timestamp]]:
@@ -597,11 +618,14 @@ def build_clock(
         mid, seg, state_ns = asof_from_states(s, qns, "midpoint")
         spread, _, _ = asof_from_states(s, qns, "spread")
         logmid = logit_array(mid)
+        last_genuine, _, _ = asof_from_states(s, qns, "last_genuine_ns")
+        genuine_age = np.where(last_genuine >= 0, (qns - last_genuine) / NS, np.nan)
         frame = pd.DataFrame({
             "event": event, "regime": regime, "token_id": str(token),
             "market_id": market_map.get(str(token), ""), "time": grid,
             "midpoint": mid, "logit_mid": logmid, "spread": spread,
             "segment": seg, "state_age_s": (qns - state_ns) / NS,
+            "genuine_age_s": genuine_age,
         })
         for w in (1, 5, 15, 30, 60, 120, 300):
             past, past_seg, _ = asof_from_states(s, qns - w * NS, "midpoint")
@@ -612,6 +636,11 @@ def build_clock(
         cap = captures[captures["token_id"].astype(str) == str(token)].sort_values("bin_time")
         if not cap.empty:
             bt = datetime_ns(cap["bin_time"])
+            last_bin_idx = np.searchsorted(bt, qns, side="right") - 1
+            raw_bin_age = np.full(len(qns), np.nan, float)
+            has_bin = last_bin_idx >= 0
+            raw_bin_age[has_bin] = (qns[has_bin] - bt[last_bin_idx[has_bin]]) / NS
+            frame["raw_capture_bin_age_s"] = raw_bin_age
             for w in WINDOWS:
                 for col, name in (
                     ("raw_rows", "raw"),
@@ -626,6 +655,7 @@ def build_clock(
                     )
                 frame[f"genuine_raw_ratio_{w}"] = frame[f"genuine_{w}"] / np.maximum(frame[f"raw_{w}"], 1.0)
         else:
+            frame["raw_capture_bin_age_s"] = np.nan
             for w in WINDOWS:
                 for name in ("raw", "record", "repeated", "genuine", "ambiguous", "top_depth"):
                     frame[f"{name}_{w}"] = 0.0
@@ -693,6 +723,12 @@ def build_event_time(
         depth = g["qbid"] + g["qask"]
         g["ofi_norm"] = g["ofi"] / depth.replace(0, np.nan)
         g["imbalance_top"] = (g["qbid"] - g["qask"]) / depth.replace(0, np.nan)
+        indexed_ofi = g.set_index("time")["ofi"]
+        g["ofi_sum_5s"] = indexed_ofi.rolling("5s").sum().to_numpy()
+        g["ofi_sum_30s"] = indexed_ofi.rolling("30s").sum().to_numpy()
+        event_times_ns = datetime_ns(g["time"])
+        g["ofi_ewma_5s"] = irregular_ewma(g["ofi"].to_numpy(float), event_times_ns, 5.0)
+        g["ofi_ewma_30s"] = irregular_ewma(g["ofi"].to_numpy(float), event_times_ns, 30.0)
         micro = (g["best_ask"] * g["qbid"] + g["best_bid"] * g["qask"]) / depth.replace(0, np.nan)
         g["microprice_disp_over_spread"] = (micro - g["midpoint"]) / g["spread"].replace(0, np.nan)
         g["split"] = assign_split(g["time"], bounds)
@@ -740,6 +776,26 @@ def level_pairs(raw: Any) -> list[tuple[float, float]]:
     return out
 
 
+def level_vwap_impact(
+    levels: list[tuple[float, float]], quantity: float, midpoint: float, *, buy: bool
+) -> float:
+    ordered = sorted(levels, key=lambda x: x[0], reverse=not buy)
+    remaining = float(quantity)
+    notional = 0.0
+    filled = 0.0
+    for price, size in ordered:
+        take = min(remaining, size)
+        notional += take * price
+        filled += take
+        remaining -= take
+        if remaining <= 1e-12:
+            break
+    if remaining > 1e-12 or filled <= 0:
+        return np.nan
+    vwap = notional / filled
+    return float(vwap - midpoint if buy else midpoint - vwap)
+
+
 def snapshot_metrics(row: dict[str, Any]) -> dict[str, float]:
     bids = level_pairs(row.get("bids"))
     asks = level_pairs(row.get("asks"))
@@ -770,6 +826,10 @@ def snapshot_metrics(row: dict[str, Any]) -> dict[str, float]:
         np.nan if out["depth_5c"] <= 0 else out["depth_1c"] / out["depth_5c"]
     )
     out["depth_slope_1c_5c"] = (out["depth_5c"] - out["depth_1c"]) / 0.04
+    for quantity in (10.0, 50.0, 100.0, 500.0):
+        label = int(quantity)
+        out[f"buy_impact_q{label}"] = level_vwap_impact(asks, quantity, midpoint, buy=True)
+        out[f"sell_impact_q{label}"] = level_vwap_impact(bids, quantity, midpoint, buy=False)
     return out
 
 
@@ -875,6 +935,21 @@ def attach_depth_targets(
         depth2 = d["depth_2c"].to_numpy(float)
         pre = d["pre_shock_depth2"].to_numpy(float)
         shock = d["large_depth_shock"].to_numpy(bool)
+        half_life = np.full(len(d), np.nan)
+        split_values = d["split"].fillna("__NONE__").astype(str).to_numpy()
+        shock_indices = np.flatnonzero(shock)
+        for i in shock_indices:
+            denom = pre[i] - depth2[i]
+            if not np.isfinite(denom) or denom <= 0:
+                continue
+            for j in range(i + 1, len(d)):
+                if split_values[j] != split_values[i]:
+                    break
+                recovery_fraction = (depth2[j] - depth2[i]) / denom
+                if np.isfinite(recovery_fraction) and recovery_fraction >= 0.5:
+                    half_life[i] = (times[j] - times[i]) / NS
+                    break
+        d["replenishment_half_life_s"] = half_life
         for h in CLOCK_H:
             target = times + h * NS
             idx = np.searchsorted(times, target, side="right") - 1
@@ -1124,6 +1199,9 @@ def model_tournament(
         if dataset == "clock" and str(target).startswith("update_h"):
             base_cols = ["genuine_15", "genuine_60"]
             classification = True
+        elif dataset == "clock" and str(target).startswith("jump_h"):
+            base_cols = ["abs_ret_15", "rv_60"]
+            classification = True
         elif dataset == "clock":
             base_cols = ["ret_15", "ret_30", "ret_60"]
             classification = False
@@ -1150,6 +1228,15 @@ def model_tournament(
                 (f"LOGIT_C{value}", LogisticRegression(C=value, max_iter=500, random_state=SEED))
                 for value in (0.1, 1.0, 10.0)
             ]
+            configs += [
+                (
+                    f"HGB_D{depth}_LR{lr}",
+                    HistGradientBoostingClassifier(
+                        max_depth=depth, learning_rate=lr, max_iter=200, random_state=SEED
+                    ),
+                )
+                for depth in (2, 3) for lr in (0.03, 0.1)
+            ]
             for name, model in configs:
                 model.fit(Xtr, ytr)
                 pred = model.predict_proba(Xdv)[:, 1]
@@ -1168,6 +1255,15 @@ def model_tournament(
             for a in (0.001, 0.01, 0.1):
                 for l1 in (0.1, 0.5, 0.9):
                     configs.append((f"ENET_{a}_{l1}", ElasticNet(alpha=a, l1_ratio=l1, max_iter=2000)))
+            configs += [
+                (
+                    f"HGB_D{depth}_LR{lr}",
+                    HistGradientBoostingRegressor(
+                        max_depth=depth, learning_rate=lr, max_iter=200, random_state=SEED
+                    ),
+                )
+                for depth in (2, 3) for lr in (0.03, 0.1)
+            ]
             for name, model in configs:
                 model.fit(Xtr, ytr)
                 pred = model.predict(Xdv)
@@ -1256,10 +1352,16 @@ def main() -> None:
             mask = clock["regime"] == regime
             clock.loc[mask, "jump_state"] = (clock.loc[mask, "abs_ret_15"] >= threshold).astype(float)
             audits.append({"event": "__ALL__", "regime": regime, "metric": "train_jump_threshold_abs_logit15", "value": threshold})
+            regime_mask = clock["regime"] == regime
+            for h in CLOCK_H:
+                source = clock.loc[regime_mask, f"abs_h{h}"]
+                clock.loc[regime_mask, f"jump_h{h}"] = np.where(
+                    source.notna(), (source >= threshold).astype(float), np.nan
+                )
 
     screen: list[dict[str, Any]] = []
     clock_candidates = [
-        "spread", "state_age_s", "raw_15", "raw_60", "raw_300",
+        "spread", "state_age_s", "genuine_age_s", "raw_capture_bin_age_s", "raw_15", "raw_60", "raw_300",
         "repeated_15", "repeated_60", "genuine_15", "genuine_60", "genuine_300",
         "genuine_raw_ratio_15", "genuine_raw_ratio_60", "genuine_raw_ratio_300",
         "rv_60", "rv_300", "activity_norm_vol_60", "vol_of_vol_300", "jump_state",
@@ -1269,7 +1371,7 @@ def main() -> None:
         "trade_abs_impact_60", "trade_vs_quote_60",
     ]
     event_candidates = [
-        "spread", "inter_event_s", "ofi", "ofi_norm", "imbalance_top",
+        "spread", "inter_event_s", "ofi", "ofi_norm", "ofi_sum_5s", "ofi_sum_30s", "ofi_ewma_5s", "ofi_ewma_30s", "imbalance_top",
         "microprice_disp_over_spread", "qbid", "qask",
         "trade_count_15", "trade_count_60", "trade_value_60",
         "trade_interarrival_median_60", "trade_burstiness_60", "trade_activity_accel",
@@ -1281,6 +1383,8 @@ def main() -> None:
         "depth_1c", "depth_2c", "depth_5c",
         "depth_imbalance_1c", "depth_imbalance_2c", "depth_imbalance_5c",
         "depth_concentration_1c_5c", "depth_slope_1c_5c", "depth2_log_change",
+        "buy_impact_q10", "sell_impact_q10", "buy_impact_q50", "sell_impact_q50",
+        "buy_impact_q100", "sell_impact_q100", "buy_impact_q500", "sell_impact_q500",
     ]
     for regime in CLAIM_REGIMES:
         if not clock.empty:
@@ -1290,6 +1394,7 @@ def main() -> None:
                 screen += screen_regression(f, "clock", regime, "VOLATILITY", f"abs_h{h}", str(h), ["abs_ret_15", "rv_60"], clock_candidates)
                 screen += screen_regression(f, "clock", regime, "LIQUIDITY", f"spread_h{h}", str(h), ["spread", "ret_15"], clock_candidates)
                 screen += screen_classification(f, "clock", regime, "UPDATE_HAZARD", f"update_h{h}", str(h), ["genuine_15", "genuine_60"], clock_candidates)
+                screen += screen_classification(f, "clock", regime, "JUMP_HAZARD", f"jump_h{h}", str(h), ["abs_ret_15", "rv_60"], clock_candidates)
         if not event_df.empty:
             f = event_df[event_df["regime"] == regime]
             for k in EVENT_H:
@@ -1361,7 +1466,9 @@ def main() -> None:
             "markets": sel["markets"],
             "events": sel["events"],
             "blocks": sel["blocks"],
-            "model": best_model["model"] if best_model else "RIDGE_1.0",
+            "model": best_model["model"] if best_model else (
+                "LOGIT_C1.0" if str(sel["target"]).startswith(("update_h", "jump_h")) else "RIDGE_1.0"
+            ),
             "model_dev_mse": best_model["dev_mse"] if best_model else sel["challenger_mse"],
         })
 
