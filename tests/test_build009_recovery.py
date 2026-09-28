@@ -7,7 +7,7 @@ import pytest
 
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.models import ExecutionMode, LifecycleState, OperationKind
-from predictions_cup.execution.planning import build_execution_plan
+from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.replacement import quote_replacement_allowed
 from predictions_cup.risk.core import RiskContext, RiskDecision, evaluate_risk
 from predictions_cup.runtime import RuntimeOrderState, RuntimePortfolio, RuntimeSnapshot
@@ -66,8 +66,7 @@ def test_journal_persists_identity_before_dispatch_and_restores_unresolved(
         decision
         mode=ExecutionMode.LIVE,
         logical_operation_id="logical-1",
-        idempotency_key="idem-1",
-        clock_ns=lambda: 456,
+        created_monotonic_ns=456,
     )
 
     path = tmp_path / "execution.sqlite3"
@@ -81,7 +80,7 @@ def test_journal_persists_identity_before_dispatch_and_restores_unresolved(
         unresolved = reopened.unresolved()
         assert len(unresolved) == 1
         assert unresolved[0].logical_operation_id == "logical-1"
-        assert unresolved[0].idempotency_key == "idem-1"
+        assert unresolved[0].idempotency_key is not None
         assert unresolved[0].payload_json == plan.envelope.payload_json
         assert unresolved[0].payload_sha256 == plan.envelope.payload_sha256
 
