@@ -1,0 +1,6 @@
+family,source_kind,raw_orderfilled_rows,active_rows,passive_rows_after_role_audit,transaction_condition_groups_with_passive,invalid_role_structure_groups,valid_passive_notional_fraction,rejected_nonbinary_or_numeric_passive_rows,economic_condition_second_observations,conditions_with_economic_observations,logit_clipped_low,logit_clipped_high,source_identity_uniqueness
+US_2024,DATA002_MATCHED_FILL_FALLBACK,14716540,6823114,7893426,6823114,0,1.0,0,4468573,551,0,0,"inherited from frozen DATA-001 source-export audit: 0 duplicate (tx_hash,log_index,token_id) keys"
+CAN_2025,DATA002_MATCHED_FILL_FALLBACK,854625,340975,513650,340975,0,1.0,0,297906,209,0,0,"inherited from frozen DATA-001 source-export audit: 0 duplicate (tx_hash,log_index,token_id) keys"
+COL_2026,DATA001_RAW_FILL,693573,279952,413621,279952,0,1.0,0,239771,216,0,0,"inherited from frozen DATA-001 source-export audit: 0 duplicate (tx_hash,log_index,token_id) keys"
+HUN_2026,DATA001_RAW_FILL,840134,333588,506546,333588,0,1.0,0,260802,99,0,0,"inherited from frozen DATA-001 source-export audit: 0 duplicate (tx_hash,log_index,token_id) keys"
+PER_2026,DATA001_RAW_FILL,1212643,461076,751567,461076,0,1.0,0,346114,217,0,0,"inherited from frozen DATA-001 source-export audit: 0 duplicate (tx_hash,log_index,token_id) keys"

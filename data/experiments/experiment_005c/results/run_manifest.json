@@ -1,0 +1,54 @@
+{
+  "code_manifest_sha256": "f805a4bdd7ff7a34b1b38524b0720edb0cb76edc6b3c1ca7ef68fc72cda23796",
+  "dev_candidate_rows": 16006,
+  "dev_promoted_selections": 35,
+  "eligible_panels": 45,
+  "experiment_id": "EXPERIMENT-005C",
+  "families": [
+    "US_2024",
+    "CAN_2025",
+    "COL_2026",
+    "HUN_2026",
+    "PER_2026"
+  ],
+  "final_research_label": "REGIME-SPECIFIC JOINT CANDIDATE",
+  "freeze_commit": "ea7ed06dd47cb8240cc8a1e5dedabf00d009843f",
+  "holdout_rows": 35,
+  "implementation_commit": "94512d3c9b785efcbf04bcabc5c57c416e5ad524",
+  "outputs": {
+    "PRE_HOLDOUT_FREEZE.json": {
+      "bytes": 639859,
+      "sha256": "20f977ffb64a56ecfe230ba45d9d0021dcc97e5218b13eb307db896d14c87933"
+    },
+    "ablation_null_results.csv": {
+      "bytes": 56155,
+      "sha256": "95b9069cf9bdef86431493ffb3f4ecdf643733cfcd91f371d8a00a5c0de6c8ef"
+    },
+    "dev_model_candidates.csv": {
+      "bytes": 3820112,
+      "sha256": "01191b267d39d3a0d44dbcae5ea63bb355689b252141e4353622adb5feabd405"
+    },
+    "holdout_results.csv": {
+      "bytes": 13367,
+      "sha256": "69ded820bdb336aa4cda16d432c79d51aae017c89fcdb71ed5afe344a60114a9"
+    },
+    "panel_coverage.csv": {
+      "bytes": 468285,
+      "sha256": "47af352604cacc5842bc2940b9127cb13bbea057fb89c13e206c66b440706bb5"
+    },
+    "probability_coordinate_robustness.csv": {
+      "bytes": 4822,
+      "sha256": "4caedf85d8e05a6af078b2bd906613fbe50a12fd0c0e6fb887ec5d2b77255ada"
+    },
+    "reconstruction_audit.csv": {
+      "bytes": 1286,
+      "sha256": "76d4083a0c0ab081e0a56f0068ecba7ae88c12e6e13289b5bfd53f430aa92411"
+    },
+    "train_singular_spectra.json": {
+      "bytes": 88371,
+      "sha256": "3eea3eca2c292321120617669389ae459cfa52f8c4d52ed15e5db6bf4aa5140c"
+    }
+  },
+  "pre_holdout_freeze_sha256": "20f977ffb64a56ecfe230ba45d9d0021dcc97e5218b13eb307db896d14c87933",
+  "preregistration_sha256": "b6505f8b07dd064cb1e4133a660c5d1f43864823b696539aa60e474eb9b8b6f5"
+}
