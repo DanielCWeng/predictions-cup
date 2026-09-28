@@ -35,6 +35,24 @@ HOLDOUT = _load(
 )
 
 
+def test_schema_validation_accepts_feature_order_only() -> None:
+    TRAIN_DEV.validate_schema_columns(
+        ["a", "b"],
+        ["target"],
+        ["b", "a"],
+        ["target"],
+        "CAN_2025",
+    )
+    with pytest.raises(RuntimeError, match="schema drift"):
+        TRAIN_DEV.validate_schema_columns(
+            ["a", "b"],
+            ["target"],
+            ["a", "c"],
+            ["target"],
+            "CAN_2025",
+        )
+
+
 def test_directional_effect_persistence_helper() -> None:
     x = np.array([0.0, 0.1, 0.2, 0.8, 0.9, 1.0] * 10)
     y = np.array([0.0, 0.0, 0.1, 1.0, 1.1, 1.2] * 10)
