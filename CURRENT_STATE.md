@@ -60,8 +60,8 @@ EC2 is not the default Kaggle middleman.
 ## Active implementation lane — BUILD-009
 
 Draft PR #50 on `build/009-low-latency-strategy-execution-core` now has its technical BUILD-009
-gates complete on benchmarked code SHA `2ae4e24c9c85fd5d51aee6e491b14ae4c9434184`. GitHub CI
-#2344 passed lint, strict mypy, 532 tests with 2 skips, application smoke and benchmark smoke.
+gates complete on benchmarked code SHA `8a56dec7ed2c0992ed9c86a911edf3a82786cc74`. GitHub CI
+#2380 passed lint, strict mypy, 533 tests with 2 skips, application smoke and benchmark smoke.
 Target-host 3k/journal and repeated 1m hot-path evidence is recorded in the BUILD-009 implementation
 handoff. It is still **not accepted capability on `main`** because independent review/merge has
 not occurred.
