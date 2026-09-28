@@ -190,10 +190,17 @@ class AccountRealtimeController:
             self._resync_generation += 1
             return
         result = self._state.handle_raw_batch(payload, observed_at=observed_at)
+        if self._execution_journal is not None and (
+            result.accepted
+            or result.transition
+            is AccountTrustTransition.UNTRUSTED_FILL_REQUIRES_RECONCILIATION
+        ):
+            # Valid fill payloads remain useful audit evidence even though they
+            # are not safe to mutate exposure from without direction/recovery
+            # fencing.
+            self._record_execution_events(AccountBatchDto.model_validate(payload))
         if result.requires_reconciliation:
             raise AccountResyncRequired
-        if result.accepted and self._execution_journal is not None:
-            self._record_execution_events(AccountBatchDto.model_validate(payload))
 
     def _record_execution_events(self, batch: AccountBatchDto) -> None:
         journal = self._execution_journal
