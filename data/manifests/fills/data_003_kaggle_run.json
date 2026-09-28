@@ -1,0 +1,13 @@
+{
+  "dataset_ref": "polyleviathan/sig-cup-data-003-sig-actual-fills",
+  "url": "https://www.kaggle.com/datasets/polyleviathan/sig-cup-data-003-sig-actual-fills",
+  "visibility": "private",
+  "upload_method": "kaggle datasets create -p sigfills_20260928 --dir-mode zip",
+  "note": "static upload; per-directory zip (fees.zip, fills.zip, rebates.zip, unattributed_fee_legs.zip) plus loose top-level files (README.md, COVERAGE.md, MANIFEST.json, coverage CSVs, fee regime CSV/Parquet); no Kaggle-kernel build",
+  "source_archive": "sigfills_20260928.tar.zst",
+  "source_archive_bytes": 16205119,
+  "uncompressed_bytes": 24250196,
+  "file_count": 341,
+  "status_after_create": "ready",
+  "uploaded_utc": "2026-09-28"
+}

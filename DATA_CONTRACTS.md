@@ -188,3 +188,22 @@ does not modify DATA-001 or define a competing fills schema:
   `data/manifests/fees/`.
 
 See `docs/implementation/DATA_002_POLYMARKET_FEES.md`.
+
+## SIG actual-market fills / DATA-002 fee evidence — DATA-003 (PROPOSED, under review; not accepted)
+
+DATA-003 is a separate, immutable dataset scoped to the accepted SIG↔Polymarket mapping
+(`data/mappings/sig_polymarket_2026.json`), not the five broad DATA-001/DATA-002 election
+families — the manifest confirms zero condition/token overlap between the two populations:
+
+- **fill-complete:** every scoped fill has a row, including zero-fee fills (`fee_evidence`
+  explains why); 132,928 fee rows for 132,928 fills;
+- fee/refund/rebate attribution reuses the DATA-002 method and regime table unchanged against the
+  same transaction hashes as the scoped fills, rather than redefining attribution semantics;
+- a custody gap (no object for 2026-09-20 / 2026-09-21) is carried as
+  `fee_evidence=custody_not_ingested` with null amounts, never imputed;
+- rebates remain wallet-day evidence in a separate file, never used to manufacture a fill-level
+  maker attribution;
+- the corpus lives outside Git, on Kaggle (`polyleviathan/sig-cup-data-003-sig-actual-fills`,
+  private); its manifest, hashes and quality evidence live under `data/manifests/fills/`.
+
+See `docs/implementation/DATA_003_SIG_ACTUAL_FILLS.md`.
