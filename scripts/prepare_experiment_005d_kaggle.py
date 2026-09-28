@@ -30,7 +30,7 @@ def sha(path: Path) -> str:
 
 def sanitized_families() -> list[dict[str, Any]]:
     data = json.loads(FAMILY_REGISTRY.read_text(encoding="utf-8"))
-    keep_family = {
+    keep_family = (
         "family_id",
         "relation_type",
         "formula",
@@ -42,8 +42,8 @@ def sanitized_families() -> list[dict[str, Any]]:
         "validation_status",
         "permitted_transformation",
         "members",
-    }
-    keep_member = {
+    )
+    keep_member = (
         "condition_id",
         "canonical_token_id",
         "canonical_outcome",
@@ -53,7 +53,7 @@ def sanitized_families() -> list[dict[str, Any]]:
         "member_market_ids",
         "present_in_events",
         "source_event_id",
-    }
+    )
     out: list[dict[str, Any]] = []
     for family in data.get("families", []):
         row = {key: family.get(key) for key in keep_family if key != "members"}
