@@ -1,0 +1,115 @@
+{
+  "experiment_id": "EXPERIMENT-005D",
+  "phase": "TRAIN_DEV_REVIEW",
+  "source_runner_sha256": "525f4678565d80cbceddd7ede298c7f810fc41c4b94652dec34f08cd63ccaa5f",
+  "preregistration_sha256": "d43a75ff8e0b5df6c717f37721e339116a6297b299c4e26d8b9a5f242b9c7a51",
+  "holdout_status": "SEALED_NOT_INSPECTED",
+  "output_hashes": {
+    "train_dev_summary_json": "6c85751bf272accd82c23fabec5c3c93f896ae83e83128e9c6d36402dc94e7d8",
+    "proposed_pre_holdout_freeze_json": "14d2440650d8caabfa7bb16b36bd9521a097993b058e0d0b9bcb19cdae4dd993",
+    "structural_inventory_json": "1c35a094fbad3b1ab2b9e91bc9376826e4175de0da1bf094105856e8026da1a2",
+    "train_dev_candidate_results_csv": "cccac4cc3e23af89d5cf71fd96905acac248226d3908d7aa9cae131baea40d03"
+  },
+  "atlas_counts": {
+    "inventory_records": 239,
+    "candidate_rows": 17967,
+    "raw_predictive_dev_survivor_keys": 145,
+    "reconstruction_survivor_groups": 354
+  },
+  "predictive_interpretation": {
+    "independent_discovery_count": "145 keys collapse to 7 target contracts across 3 event windows; they are not 145 independent discoveries.",
+    "surviving_lane": "LOO-FAMILY indirect structural graph only",
+    "event_windows": {
+      "colombia_first_round": 15,
+      "colombia_runoff": 46,
+      "peru_first_round": 84
+    },
+    "distinct_target_relationships": 7,
+    "mechanism_summary": [
+      "staged presidential relationship: first-round/overall and overall/regional-runoff links in Colombia",
+      "same-party Senate↔Chamber most-seats relationships in Peru"
+    ],
+    "non_promotions": [
+      "No hard-coherence/projection cell is promoted as predictive alpha from DEV.",
+      "Generic same-event reconstruction is not promoted as predictive alpha.",
+      "No midpoint-only incoherence is treated as arbitrage."
+    ]
+  },
+  "bounded_selection": {
+    "policy": "For each DEV-surviving target relationship, retain the simplest passing representation in the frozen model ladder and all of that representation's passing horizons. No effect-size ranking. Reconstruction: one broad survivor group per DATA-002 family, at most five lexicographically selected targets.",
+    "predictive_cells": 13,
+    "reconstruction_holdout_cells": 25,
+    "pre_holdout_freeze_sha256": "6ac0f6ea27b5553267d8fa94a9f5bca906680f18d03de45480269da8b9b21cbe"
+  },
+  "selected_relationships": [
+    {
+      "event": "colombia_first_round",
+      "target": "overall presidential winner market for Abelardo de la Espriella",
+      "reference": "first-round winner market for same candidate",
+      "representation": "AFFINE_INDIRECT_PROBABILITY",
+      "horizons_seconds": [
+        30,
+        60,
+        120
+      ]
+    },
+    {
+      "event": "colombia_runoff",
+      "target": "Antioquia second-round first-place market for Abelardo de la Espriella",
+      "reference": "overall presidential winner market for same candidate",
+      "representation": "AFFINE_INDIRECT_LOGIT",
+      "horizons_seconds": [
+        5
+      ]
+    },
+    {
+      "event": "colombia_runoff",
+      "target": "Antioquia second-round first-place market for Iván Cepeda Castro",
+      "reference": "overall presidential winner market for same candidate",
+      "representation": "RAW_INDIRECT_PROB_MEAN",
+      "horizons_seconds": [
+        5
+      ]
+    },
+    {
+      "event": "peru_first_round",
+      "target": "Juntos por el Perú Senate most-seats market",
+      "reference": "Juntos por el Perú Chamber most-seats market",
+      "representation": "RAW_INDIRECT_PROB_MEAN",
+      "horizons_seconds": [
+        5
+      ]
+    },
+    {
+      "event": "peru_first_round",
+      "target": "Renovación Popular Chamber most-seats market",
+      "reference": "Renovación Popular Senate most-seats market",
+      "representation": "RAW_INDIRECT_PROB_MEAN",
+      "horizons_seconds": [
+        15,
+        30
+      ]
+    },
+    {
+      "event": "peru_first_round",
+      "target": "Fuerza Popular Chamber most-seats market",
+      "reference": "Fuerza Popular Senate most-seats market",
+      "representation": "RAW_INDIRECT_PROB_MEAN",
+      "horizons_seconds": [
+        5,
+        15,
+        30,
+        60
+      ]
+    },
+    {
+      "event": "peru_first_round",
+      "target": "Juntos por el Perú Chamber most-seats market",
+      "reference": "Juntos por el Perú Senate most-seats market",
+      "representation": "AFFINE_INDIRECT_PROBABILITY",
+      "horizons_seconds": [
+        5
+      ]
+    }
+  ]
+}
