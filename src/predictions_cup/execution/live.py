@@ -59,6 +59,7 @@ class SigLiveSink:
             audit=plan.audit,
             submitted_monotonic_ns=submitted,
         )
+        network_dispatch_ns = self._clock_ns()
 
         try:
             raw = json.loads(envelope.payload_json)
@@ -86,6 +87,11 @@ class SigLiveSink:
                 response_json = multi_response.model_dump_json(by_alias=True)
         except SigExecutionUncertainError:
             observed = self._clock_ns()
+            self._journal.record_event(
+                logical_operation_id=envelope.logical_operation_id,
+                event_type="NETWORK_DISPATCH",
+                observed_monotonic_ns=network_dispatch_ns,
+            )
             self._journal.mark_state(
                 envelope.logical_operation_id,
                 LifecycleState.UNCERTAIN,
@@ -100,6 +106,11 @@ class SigLiveSink:
             raise
         except SigApiError:
             observed = self._clock_ns()
+            self._journal.record_event(
+                logical_operation_id=envelope.logical_operation_id,
+                event_type="NETWORK_DISPATCH",
+                observed_monotonic_ns=network_dispatch_ns,
+            )
             self._journal.mark_state(
                 envelope.logical_operation_id,
                 LifecycleState.REJECTED,
@@ -114,6 +125,11 @@ class SigLiveSink:
             raise
 
         observed = self._clock_ns()
+        self._journal.record_event(
+            logical_operation_id=envelope.logical_operation_id,
+            event_type="NETWORK_DISPATCH",
+            observed_monotonic_ns=network_dispatch_ns,
+        )
         if envelope.operation_kind is OperationKind.SINGLE_PLACEMENT:
             intent = plan.intents[0] if plan.intents else None
             self._journal.record_event(
@@ -255,17 +271,7 @@ class SigLiveSink:
             submitted_monotonic_ns=submitted,
         )
         raw = json.loads(envelope.payload_json)
-        self._journal.record_event(
-            logical_operation_id=envelope.logical_operation_id,
-            event_type="CANCEL_SUBMITTED",
-            observed_monotonic_ns=envelope.created_monotonic_ns,
-            exchange_order_id=(
-                str(raw["orderId"])
-                if isinstance(raw.get("orderId"), (int, str))
-                else None
-            ),
-            detail_json=envelope.payload_json,
-        )
+        network_dispatch_ns = self._clock_ns()
 
         try:
             if envelope.operation_kind is OperationKind.SINGLE_CANCELLATION:
@@ -298,6 +304,17 @@ class SigLiveSink:
                 )
         except SigExecutionUncertainError:
             observed = self._clock_ns()
+            self._journal.record_event(
+                logical_operation_id=envelope.logical_operation_id,
+                event_type="CANCEL_SUBMITTED",
+                observed_monotonic_ns=network_dispatch_ns,
+                exchange_order_id=(
+                    str(raw["orderId"])
+                    if isinstance(raw.get("orderId"), (int, str))
+                    else None
+                ),
+                detail_json=envelope.payload_json,
+            )
             self._journal.mark_state(
                 envelope.logical_operation_id,
                 LifecycleState.UNCERTAIN,
@@ -317,6 +334,17 @@ class SigLiveSink:
             raise
         except SigApiError:
             observed = self._clock_ns()
+            self._journal.record_event(
+                logical_operation_id=envelope.logical_operation_id,
+                event_type="CANCEL_SUBMITTED",
+                observed_monotonic_ns=network_dispatch_ns,
+                exchange_order_id=(
+                    str(raw["orderId"])
+                    if isinstance(raw.get("orderId"), (int, str))
+                    else None
+                ),
+                detail_json=envelope.payload_json,
+            )
             self._journal.mark_state(
                 envelope.logical_operation_id,
                 LifecycleState.REJECTED,
@@ -336,6 +364,17 @@ class SigLiveSink:
             raise
 
         observed = self._clock_ns()
+            self._journal.record_event(
+                logical_operation_id=envelope.logical_operation_id,
+                event_type="CANCEL_SUBMITTED",
+                observed_monotonic_ns=network_dispatch_ns,
+                exchange_order_id=(
+                    str(raw["orderId"])
+                    if isinstance(raw.get("orderId"), (int, str))
+                    else None
+                ),
+                detail_json=envelope.payload_json,
+            )
         self._journal.record_event(
             logical_operation_id=envelope.logical_operation_id,
             event_type="CANCEL_ACK",
