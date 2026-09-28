@@ -95,6 +95,12 @@
       "kaggle_kernel": "polyleviathan/005e-participant-ecology-holdout",
       "result_inspected": false,
       "version": 1
+    },
+    {
+      "kernel": "polyleviathan/005e-participant-ecology-holdout-v2",
+      "status": "ENGINEERING_MEMORY_FAILURE_BEFORE_EVALUATION_OUTPUT",
+      "outcome_inspection": false,
+      "note": "All five frozen HOLDOUT panels completed and were preserved; process was killed after panel construction and before holdout_evaluation.json or any model result was emitted."
     }
   ],
   "local_current_source_commit": "096772f8b11c74e7c9f223ee1456c8e2f702e433",
@@ -209,6 +215,13 @@
       "reason": "Static audit after HOLDOUT v1 launch but before any v1 output/result inspection found that shuffling baseline controls would make the nuisance-preserving placebo too destructive and could bias the falsification in favor of participant behaviour.",
       "timing": "before any EXPERIMENT-005E HOLDOUT output/result inspection; v1 output is invalidated and must not be inspected",
       "to": "permute only participant-added behaviour features while leaving the generic price/size/activity baseline columns fixed"
+    },
+    {
+      "field": "HOLDOUT evaluation-only panel salvage",
+      "from": "rebuild five DATA-002 family panels and then eagerly load all wide panel columns into pandas before evaluation",
+      "to": "reuse byte-verified Kaggle-built HOLDOUT v2 panel Parquets and load only columns referenced by the immutable DEV freeze and preregistered diagnostics in a separate Kaggle evaluation kernel",
+      "reason": "HOLDOUT v2 was killed after all five panel builds but before any evaluation output. The salvage changes execution/memory only: identical panel bytes, split cuts, selected models, targets, weights, bootstrap, falsifications, and disposition thresholds are preserved.",
+      "timing": "after two engineering-only HOLDOUT failures and before any EXPERIMENT-005E HOLDOUT metric/result inspection"
     }
   ],
   "rule": "Any source uploaded or committed after empirical execution must byte-match these hashes unless an explicit pre-outcome amendment is separately frozen first. No outcome-driven source changes are permitted.",
@@ -221,5 +234,24 @@
     "runner_sha256": "3679292adf3e66916fe37ae854e0dc79d0fde5f701c28c738af9066be6f2d8f6",
     "status": "ERROR",
     "status_at_patch_time": "RUNNING"
+  },
+  "holdout_eval_salvage": {
+    "panel_dataset": "polyleviathan/sig-cup-005e-holdout-v2-panels",
+    "source_kernel": "polyleviathan/005e-participant-ecology-holdout-v2",
+    "source_status": "ERROR / killed after panel build",
+    "outcome_inspection_before_salvage": false,
+    "panel_hashes": {
+      "US_2024": "86be3d32961dc0929715ba456f5cbd55d14d4ac3e1b07b0027e7346db1558fcd",
+      "CAN_2025": "d4afc9448f8755f9295d778a7b53a647ec58faa585574d398d0390b26a94aa26",
+      "COL_2026": "b01a89e6ce2d7a8b230332c54ab4b218e5e69b9a29a6daa1b80dfadda58ca4b0",
+      "HUN_2026": "4d1b3c53af5235b23cf0c92185f26a06f520793a306ff51cece188c55fb0d10d",
+      "PER_2026": "288e6abee2a5686cce743808a44d5f06062a1cd801b526c8815bbf966759ddb6"
+    },
+    "eval_code_dataset": "polyleviathan/sig-cup-005e-holdout-eval-code",
+    "eval_kernel": "polyleviathan/005e-participant-ecology-holdout-eval",
+    "eval_implementation_commit": "16569df83708b97b2dbdaa040b54c70284d866ac",
+    "eval_runner_sha256": "4e2f81e16702a2f6cb12bc96d59b9e467f8c95ab0d8bbef236ea66f2129dd882",
+    "pre_holdout_freeze_sha256": "60f642ec50a1a9ffa5aebfba73d8a66960f6afb2c318e7d747e584df81ca6de1",
+    "status": "LAUNCHED_BEFORE_RESULT_INSPECTION"
   }
 }
