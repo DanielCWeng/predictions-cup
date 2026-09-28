@@ -1721,7 +1721,8 @@ def holdout_analysis(
         challenger_mse = mse(y, pred, w_holdout)
         loss_gain = (y - baseline_pred) ** 2 - (y - pred) ** 2
         p_value, draws = block_bootstrap_p(holdout, loss_gain)
-        raw_p[name] = p_value if float(np.mean(loss_gain)) > 0 else 1.0
+        weighted_gain = float(baseline_mse - challenger_mse)
+        raw_p[name] = p_value if weighted_gain > 0 else 1.0
         family_gain = family_gains(holdout, y, baseline_pred, pred)
         unseen = (
             pd.to_numeric(holdout["prior_fill_count"], errors="coerce").fillna(0).to_numpy() == 0
@@ -1734,7 +1735,7 @@ def holdout_analysis(
             "rows_holdout": int(len(holdout)),
             "baseline_mse": baseline_mse,
             "challenger_mse": challenger_mse,
-            "weighted_mse_gain": float(baseline_mse - challenger_mse),
+            "weighted_mse_gain": weighted_gain,
             "mean_row_loss_gain": float(np.mean(loss_gain)),
             "bootstrap_p": raw_p[name],
             "bootstrap_ci95": [float(np.quantile(draws, 0.025)), float(np.quantile(draws, 0.975))],
