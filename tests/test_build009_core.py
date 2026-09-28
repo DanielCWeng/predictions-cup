@@ -365,7 +365,7 @@ def test_hot_path_modules_do_not_import_io_heavy_dependencies() -> None:
     root = Path(__file__).resolve().parents[1] / "src" / "predictions_cup"
     paths = (
         root / "runtime" / "models.py",
-        root / "runtime" / "orchestrator.py",
+        root / "runtime" / "engine.py",
         root / "strategy" / "core.py",
         root / "strategy" / "kernels.py",
         root / "risk" / "core.py",
