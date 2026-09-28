@@ -57,6 +57,22 @@ Routine Kaggle compute now uses:
 
 EC2 is not the default Kaggle middleman.
 
+## Active implementation lane — BUILD-009
+
+Draft PR #50 on `build/009-low-latency-strategy-execution-core` is implementing the common
+low-latency SHADOW/LIVE strategy and execution core. It is **not accepted capability on `main`**.
+
+The branch is intentionally fail-closed: SHADOW remains the default, and LIVE requires explicit
+enablement, trade credential, tournament identity, configured central risk caps, kill-switch
+release, trusted account state, durable operation identity and authoritative recovery.
+
+No 005 research finding is promoted by this implementation ticket. EXPERIMENT-005B remains frozen
+and separate.
+
+Until PR #50 is independently accepted and merged, the canonical statement remains:
+
+> **main has no order-submission/cancellation capability and no autonomous LIVE trading runtime.**
+
 ## DATA-003 — mapped 2026 universe
 
 DATA-003 is accepted on `main` through PR #48.
