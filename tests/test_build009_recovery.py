@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+import sqlite3
 
 import pytest
 
@@ -102,6 +103,50 @@ def test_journal_persists_identity_before_dispatch_and_restores_unresolved(
         assert reopened.unresolved() == ()
     finally:
         reopened.close()
+
+
+def test_journal_upgrades_pre_audit_event_schema(tmp_path: Path) -> None:
+    path = tmp_path / "legacy.sqlite3"
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(
+            """
+            CREATE TABLE execution_events (
+                event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                logical_operation_id TEXT NOT NULL,
+                logical_intent_id TEXT,
+                event_type TEXT NOT NULL,
+                observed_monotonic_ns INTEGER NOT NULL,
+                source_timestamp TEXT,
+                decision_observation_ns INTEGER,
+                exchange_id TEXT,
+                exchange_order_id TEXT,
+                fill_id TEXT,
+                quantity TEXT,
+                price TEXT,
+                terminal_status TEXT,
+                detail_json TEXT
+            )
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    journal = ExecutionJournal(path)
+    journal.close()
+
+    connection = sqlite3.connect(path)
+    try:
+        columns = {
+            str(row[1])
+            for row in connection.execute(
+                "PRAGMA table_info(execution_events)"
+            ).fetchall()
+        }
+    finally:
+        connection.close()
+    assert {"strategy_family", "strategy_id", "signal_value", "fair_value"} <= columns
 
 
 def test_journal_rejects_changed_payload_under_same_logical_operation(
