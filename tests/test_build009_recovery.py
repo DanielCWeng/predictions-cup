@@ -254,6 +254,7 @@ def test_quote_replacement_requires_trusted_authoritative_absence() -> None:
         logical_intent_id="old-quote",
         exchange_id="36",
         market_id="m1",
+        tournament_id="t1",
         reserved_exposure=5.0,
         open=False,
         uncertain=True,
