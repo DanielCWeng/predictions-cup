@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 from pathlib import Path
@@ -22,21 +21,14 @@ from sklearn.preprocessing import StandardScaler
 FAMILIES = ("US_2024", "CAN_2025", "COL_2026", "HUN_2026", "PER_2026")
 OUT = Path("/kaggle/working/005b_historical_predictive_atlas/train_dev")
 OUT.mkdir(parents=True, exist_ok=True)
-SPEC_PATH = Path(__file__).with_name("screening_model_spec.json")
+SCREENING_MODEL_SPEC_SHA256 = "1f0e48fba4e974075da0be0b5d51834d3f30ad3a0af71c6e2851d00069f1078a"
+SCREENING_MODEL_SPEC_REPO_PATH = "data/experiments/experiment_005b/screening_model_spec.json"
 META = {
     "family", "event_id", "market_id", "condition_id", "timestamp", "tx_hash", "log_index",
     "market_order_us", "raw_split", "train_end_timestamp", "dev_end_timestamp",
 }
 LABEL_PREFIXES = ("clock_label_end_", "event_label_end_")
 EMBARGO = 300
-
-
-def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def locate_files() -> dict[str, Path]:
@@ -984,7 +976,8 @@ def main() -> None:
         "schema_version": 1,
         "experiment_id": "EXPERIMENT-005B",
         "stage": "TRAIN_DEV_FREEZE",
-        "screening_model_spec_sha256": sha256(SPEC_PATH),
+        "screening_model_spec_sha256": SCREENING_MODEL_SPEC_SHA256,
+        "screening_model_spec_repo_path": SCREENING_MODEL_SPEC_REPO_PATH,
         "feature_count": len(features),
         "target_count": len(targets),
         "redundancy_cluster_count": len(clusters),
