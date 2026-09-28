@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "phase": "TRAIN_DEV",
+  "status": "TERMINAL_SCIENTIFIC_IMPLEMENTATION_FREEZE",
+  "scientific_implementation_commit": "9ec9511536514bbaa97929a4b88d701cbc09987c",
+  "starting_main_commit": "ba938bedcf63f562be8b26c9502e828391123867",
+  "design_freeze_commit": "b5bf4cfe7482a58161523b66097910903050fc6b",
+  "preregistration_sha256": "21860af0e0538259bf60e9edbc234e431edc9cf9a88bb1760925b1dc6d54d73b",
+  "design_document_sha256": "9dfb7261e14670c2617acc2caad9f136b7cf030cea8a9b55501dff93b4a7c96e",
+  "scientific_runner_sha256": "732a08648b76c222c46ce1117abfb26a4e2086985431ffedb6985f4bf88a0b10",
+  "kernel_metadata_sha256": "c6fca23ac1099941b9fd8dbb85de8ba0fb6a1f2dc43bc2e3f5459f8b43ba13d1",
+  "holdout_read": false,
+  "permitted_after_freeze": [
+    "runtime compatibility repair",
+    "resource/serialization repair",
+    "provenance binding",
+    "tests that do not alter scientific choices"
+  ],
+  "forbidden_after_freeze": [
+    "new feature family",
+    "new target family",
+    "new horizon",
+    "new selection rule",
+    "new model class or hyperparameter search",
+    "outcome-driven threshold change"
+  ]
+}
