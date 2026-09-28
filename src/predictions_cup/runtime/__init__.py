@@ -1,5 +1,6 @@
 """Lightweight in-memory runtime contracts for the live decision loop."""
 
+from predictions_cup.runtime.engine import DecisionOutcome, DecisionRuntime
 from predictions_cup.runtime.models import (
     OrderAction,
     OutcomeSide,
@@ -15,6 +16,8 @@ from predictions_cup.runtime.models import (
 )
 
 __all__ = [
+    "DecisionOutcome",
+    "DecisionRuntime",
     "OrderAction",
     "OutcomeSide",
     "RuntimeBook",
