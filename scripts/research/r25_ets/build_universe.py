@@ -23,6 +23,12 @@ DEFAULT_MAPPING = ROOT / "data/mappings/sig_polymarket_2026.json"
 DEFAULT_ACCEPTANCE = ROOT / "data/mappings/sig_polymarket_2026_acceptance.json"
 OUT_DIR = ROOT / "data/research/ets_universe"
 TRADEABLE_CLASSES = {"EXACT", "DERIVED", "NEAR"}
+RELATIONSHIP_CLASSES = {
+    "CHAMBER_CONTROL", "JOINT_CHAMBER", "SEAT_EXACT", "SEAT_RANGE", "SEAT_THRESHOLD",
+    "AGGREGATE_CONTAINS_TARGET", "TARGET_CONSTITUENT_OF_AGGREGATE", "MUTUALLY_EXCLUSIVE_SIBLING",
+    "JOINT_OUTCOME", "MULTI_RACE_COMBO", "PIVOTAL_RACE", "SAME_STATE_RELATED",
+    "CONDITIONAL_OUTCOME", "OTHER_ECONOMICALLY_LINKED",
+}
 EDGE_FIELDS = [
     "source_type", "source_id", "target_type", "target_id", "relationship_class",
     "relationship_direction", "economic_rationale", "review_status", "confidence",
@@ -169,6 +175,7 @@ def command_finalize(args: argparse.Namespace) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     mapping = read_json(args.mapping)
     acceptance = read_json(args.acceptance)
+    gamma_metadata = Path(args.gamma_metadata)
     candidates = read_csv(args.candidates)
     reviewed_edges = read_csv(args.review_edges)
     anchor_rows = make_anchor_rows(mapping)
@@ -179,7 +186,7 @@ def command_finalize(args: argparse.Namespace) -> None:
     for candidate in candidates:
         market_id = str(candidate.get("market_id") or "").strip()
         cid = str(candidate.get("condition_id") or "").strip()
-        if not market_id or not cid:
+        if not market_id:
             continue
         old = by_market.get(market_id)
         if old and old.get("condition_id") != cid:
@@ -193,19 +200,29 @@ def command_finalize(args: argparse.Namespace) -> None:
     for edge in reviewed_edges:
         market_id = str(edge.get("market_id") or "").strip()
         sig_id = str(edge.get("sig_market_id") or "").strip()
-        if not market_id or sig_id not in anchors_by_id:
-            raise ValueError(f"review edge points to unknown market/anchor: {market_id} -> {sig_id}")
+        if not market_id or market_id not in by_market:
+            raise ValueError(f"review decision points to unknown candidate market: {market_id}")
         if market_id in direct_market_ids:
             raise ValueError(f"direct mapping market cannot enter adjacent ETS review: {market_id}")
         status = edge.get("review_status", "").strip()
+        if status not in {"SEMANTIC_REVIEWED_ACCEPTED", "REJECTED", "PENDING_REVIEW"}:
+            raise ValueError(f"invalid review status {status!r} for market {market_id}")
+        if status == "SEMANTIC_REVIEWED_ACCEPTED" and sig_id not in anchors_by_id:
+            raise ValueError(f"accepted edge points to unknown SIG anchor: {market_id} -> {sig_id}")
+        if status != "SEMANTIC_REVIEWED_ACCEPTED" and sig_id and sig_id not in anchors_by_id:
+            raise ValueError(f"review decision points to unknown SIG anchor: {market_id} -> {sig_id}")
         decisions_by_market[market_id].append(edge)
         if status != "SEMANTIC_REVIEWED_ACCEPTED":
             continue
         for field in ("relationship_class", "relationship_direction", "economic_rationale", "confidence"):
             if not edge.get(field, "").strip():
                 raise ValueError(f"accepted edge missing {field}: market={market_id} SIG={sig_id}")
+        if edge["relationship_class"] not in RELATIONSHIP_CLASSES:
+            raise ValueError(f"accepted edge uses undocumented relationship class: {edge['relationship_class']}")
         if market_id not in by_market:
             raise ValueError(f"accepted market absent from Gamma candidate inventory: {market_id}")
+        if not by_market[market_id].get("condition_id"):
+            raise ValueError(f"accepted candidate has no canonical condition ID: {market_id}")
         edges.append({
             "source_type": "SIG_ANCHOR", "source_id": sig_id,
             "target_type": "ETS_MARKET", "target_id": market_id,
@@ -364,8 +381,8 @@ def command_finalize(args: argparse.Namespace) -> None:
         cid = str(row["condition_id"])
         prior = cid_rows.get(cid)
         tokens = _json_field(row, "clob_token_ids", [])
-        if prior and prior["token_ids"] != tokens:
-            raise ValueError(f"condition ID has conflicting CLOB tokens: {cid}")
+        if prior and (prior["token_ids"] != tokens or prior["market_id"] != str(row["market_id"])):
+            raise ValueError(f"condition ID resolves to conflicting market/token identity: {cid}")
         cid_rows[cid] = {"condition_id": cid, "market_id": str(row["market_id"]), "token_ids": tokens}
     (OUT_DIR / "ETS_CONDITION_IDS.txt").write_text("".join(f"{cid}\n" for cid in sorted(cid_rows)), encoding="utf-8")
     all_tokens = sorted({str(t["token_id"]) for t in token_rows})
@@ -389,9 +406,21 @@ def command_finalize(args: argparse.Namespace) -> None:
         "freeze_timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "sig_anchor_count": len(anchor_rows),
         "candidate_ets_market_count": sum(1 for r in candidate_rows if r["market_id"] not in direct_market_ids and r.get("condition_id") not in direct_cids),
+        "discovered_market_count_including_direct": len(candidate_rows),
         "accepted_ets_market_count": len(market_rows),
-        "rejected_candidate_count": len(rejection_rows),
-        "pending_candidate_count": sum(r["candidate_status"] == "PENDING_REVIEW" for r in candidate_rows),
+        "rejected_candidate_count": sum(
+            r["candidate_status"] == "REJECTED" and r["market_id"] not in direct_market_ids and r.get("condition_id") not in direct_cids
+            for r in candidate_rows
+        ),
+        "rejected_direct_duplicate_count": sum(
+            r["candidate_status"] == "REJECTED" and (r["market_id"] in direct_market_ids or r.get("condition_id") in direct_cids)
+            for r in candidate_rows
+        ),
+        "pending_candidate_count": sum(
+            r["candidate_status"] == "PENDING_REVIEW" and r["market_id"] not in direct_market_ids and r.get("condition_id") not in direct_cids
+            for r in candidate_rows
+        ),
+        "pending_relationship_review_count": sum(e.get("review_status") == "PENDING_REVIEW" for e in reviewed_edges),
         "unique_cid_count": len(cid_rows),
         "unique_token_count": len(all_tokens),
         "relationship_class_counts": dict(sorted(relationship_counts.items())),
@@ -406,10 +435,15 @@ def command_finalize(args: argparse.Namespace) -> None:
             "token_ids": sha256(OUT_DIR / "ETS_TOKEN_IDS.txt"),
             "condition_token_map": sha256(OUT_DIR / "ETS_CONDITION_TOKEN_MAP.json"),
             "relationship_graph": sha256(graph_path),
+            "gamma_metadata": sha256(gamma_metadata),
         },
     }
-    if freeze["pending_candidate_count"]:
-        raise ValueError(f"cannot freeze with {freeze['pending_candidate_count']} unresolved candidates")
+    if freeze["pending_candidate_count"] or freeze["pending_relationship_review_count"]:
+        raise ValueError(
+            "cannot freeze with unresolved review work: "
+            f"{freeze['pending_candidate_count']} candidates, "
+            f"{freeze['pending_relationship_review_count']} relationship edges"
+        )
     (OUT_DIR / "ETS_UNIVERSE_FREEZE.json").write_text(
         json.dumps(freeze, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -427,6 +461,7 @@ def main() -> None:
     finalize.add_argument("--mapping", type=Path, default=DEFAULT_MAPPING)
     finalize.add_argument("--acceptance", type=Path, default=DEFAULT_ACCEPTANCE)
     finalize.add_argument("--candidates", type=Path, required=True)
+    finalize.add_argument("--gamma-metadata", required=True)
     finalize.add_argument("--review-edges", type=Path, required=True)
     finalize.add_argument("--base-sha", required=True)
     finalize.add_argument("--discovery-code-sha", required=True)

@@ -209,11 +209,12 @@ def search_events(term: str, audit_row: dict[str, Any]) -> list[dict[str, Any]]:
         data = get_json("/public-search", {"q": term, "page": page_no, "limit_per_type": 100})
         events = rows_from(data, "events")
         pages.append(len(events))
+        before = len(found)
         for event in events:
             if event.get("id") is not None:
                 found[str(event["id"])] = event
         pagination = data.get("pagination") or {} if isinstance(data, dict) else {}
-        if not events or not pagination.get("hasMore"):
+        if not events or not pagination.get("hasMore") or len(found) == before:
             break
     audit_row.update({
         "event_count": len(found), "page_sizes": pages,
