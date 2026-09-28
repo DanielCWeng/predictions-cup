@@ -246,7 +246,10 @@ def build_holdout_validation_table(
         selected = model.get("dev_selected", {})
         metrics = model.get("holdout_metrics", {})
         bootstrap = model.get("hierarchical_market_bootstrap", {})
-        for rank, candidate in enumerate(scalar_entries, start=1):
+        entries = list(enumerate(scalar_entries, start=1))
+        if not entries and model:
+            entries = [(None, {})]
+        for rank, candidate in entries:
             scalar = candidate.get("holdout", {})
             rows.append(
                 {
