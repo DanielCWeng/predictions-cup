@@ -1,0 +1,370 @@
+{
+  "disposition": "NO_INCREMENTAL_EVIDENCE",
+  "experiment_id": "EXPERIMENT-005E",
+  "falsification": {
+    "delayed_history_1h": {
+      "gain_vs_baseline": -0.0004394539320365376
+    },
+    "leave_family_out": {
+      "CAN_2025": {
+        "gain": -0.0035924539684173973,
+        "rows": 70644,
+        "status": "OK"
+      },
+      "COL_2026": {
+        "gain": 0.0015179186010034762,
+        "rows": 59404,
+        "status": "OK"
+      },
+      "HUN_2026": {
+        "gain": -0.0009061779802632675,
+        "rows": 70752,
+        "status": "OK"
+      },
+      "PER_2026": {
+        "gain": 0.0012195898564668073,
+        "rows": 73004,
+        "status": "OK"
+      },
+      "US_2024": {
+        "gain": -0.022873647028763572,
+        "rows": 89684,
+        "status": "OK"
+      }
+    },
+    "participant_state_frequency_matched_permutation": {
+      "gain_vs_baseline": -0.00539491191552216,
+      "mse": 0.3204587688070224,
+      "observed_full_behavior_gain": -0.0004317159840001583,
+      "permuted_features": [
+        "log_prior_fill_count",
+        "log_prior_active_days",
+        "log_recency_seconds",
+        "log_lifetime_seconds",
+        "log_recent_fill_count_300s",
+        "log_recent_fill_count_1800s",
+        "log_prior_same_market_count",
+        "log_unique_markets_prior",
+        "market_history_share",
+        "log_unique_events_prior",
+        "event_history_share",
+        "current_market_novelty",
+        "current_event_novelty",
+        "prior_mean_log_value",
+        "prior_std_log_value",
+        "current_size_z",
+        "market_size_percentile_proxy",
+        "prior_pressure_balance",
+        "prior_pressure_abs",
+        "current_prior_direction_alignment",
+        "prior_same_hour_share",
+        "activity_acceleration",
+        "hist_markout_score",
+        "log_hist_markout_count",
+        "hist_markout_uncertainty",
+        "log_market_participant_degree"
+      ],
+      "permuted_row_share": 0.9639437890659389
+    },
+    "participant_state_market_time_permutation": {
+      "gain_vs_baseline": -0.0006137778398292437,
+      "mse": 0.3156776347313295,
+      "observed_full_behavior_gain": -0.0004317159840001583,
+      "permuted_features": [
+        "log_prior_fill_count",
+        "log_prior_active_days",
+        "log_recency_seconds",
+        "log_lifetime_seconds",
+        "log_recent_fill_count_300s",
+        "log_recent_fill_count_1800s",
+        "log_prior_same_market_count",
+        "log_unique_markets_prior",
+        "market_history_share",
+        "log_unique_events_prior",
+        "event_history_share",
+        "current_market_novelty",
+        "current_event_novelty",
+        "prior_mean_log_value",
+        "prior_std_log_value",
+        "current_size_z",
+        "market_size_percentile_proxy",
+        "prior_pressure_balance",
+        "prior_pressure_abs",
+        "current_prior_direction_alignment",
+        "prior_same_hour_share",
+        "activity_acceleration",
+        "hist_markout_score",
+        "log_hist_markout_count",
+        "hist_markout_uncertainty",
+        "log_market_participant_degree"
+      ],
+      "permuted_row_share": 0.9627305440619773
+    },
+    "per_event_transfer": {
+      "events": 199,
+      "median_event_gain": -0.0010176458920243782,
+      "note": "hierarchically weighted event-level transfer diagnostic; true leave-family-out retraining remains the stronger frozen transfer test",
+      "positive_event_share": 0.32160804020100503
+    },
+    "per_market_transfer": {
+      "markets": 746,
+      "median_market_gain": -0.0006275330333091985,
+      "note": "hierarchically weighted per-market transfer diagnostic; exhaustive leave-one-market retraining omitted as computationally pathological",
+      "positive_market_share": 0.37131367292225204
+    },
+    "shuffled_historical_score": {
+      "gain_vs_baseline": -0.004905317267005493
+    }
+  },
+  "family_local_history_boundary": "participant histories are constructed independently inside each family file; cross-family evidence is model transfer/stability, not a globally continuous wallet ledger",
+  "phase": "HOLDOUT",
+  "primary_target": "y_60",
+  "primary_variants": {
+    "archetype": {
+      "bootstrap_ci95": [
+        -0.00034968850564721666,
+        0.00043333391433879716
+      ],
+      "bootstrap_p": 1.0,
+      "concentration": {
+        "effective_contributing_participants": 76.75221015698477,
+        "gain_without_top10_activity": 4.46879800600544e-06,
+        "gain_without_top1_activity": -2.253662093542856e-06,
+        "gain_without_top1pct_activity": -0.0001279747134345332,
+        "gain_without_top5_activity": 4.061963281806909e-06,
+        "participants": 53410,
+        "top10_effect_share": 0.2604940940972824,
+        "top1pct_effect_share": 0.7862182425024672,
+        "top5_effect_share": 0.19472683982385372,
+        "top_participant_effect_share": 0.08720918557085819
+      },
+      "family_gains": {
+        "CAN_2025": 0.0002417920546372021,
+        "COL_2026": -0.00023331201989434946,
+        "HUN_2026": 3.093691811784094e-05,
+        "PER_2026": 0.0002854779668410301,
+        "US_2024": -0.000354746913441617
+      },
+      "fdr": {
+        "family_size": 5,
+        "p": 1.0,
+        "q": 1.0,
+        "rank": 2,
+        "reject": false
+      },
+      "positive_families": 3,
+      "slices": {
+        "repeat": {
+          "mean_loss_gain": 6.18104714030541e-05,
+          "rows": 249992
+        },
+        "sparse": {
+          "mean_loss_gain": -0.0002691114859701977,
+          "rows": 113496
+        },
+        "unseen": {
+          "mean_loss_gain": 0.0033746639562655697,
+          "rows": 14502
+        }
+      },
+      "weighted_mse_gain": -5.970398748111894e-06
+    },
+    "full_behavior": {
+      "bootstrap_ci95": [
+        -0.0021087137197548958,
+        0.0019692584873007733
+      ],
+      "bootstrap_p": 1.0,
+      "concentration": {
+        "effective_contributing_participants": 282.92306233237576,
+        "gain_without_top10_activity": -0.00021290677963418825,
+        "gain_without_top1_activity": -0.0004042595938450859,
+        "gain_without_top1pct_activity": 0.0005809471741519058,
+        "gain_without_top5_activity": -0.00025468032104097166,
+        "participants": 53410,
+        "top10_effect_share": 0.13496086645651592,
+        "top1pct_effect_share": 0.7481386446557922,
+        "top5_effect_share": 0.08396534563447705,
+        "top_participant_effect_share": 0.02189865127442197
+      },
+      "family_gains": {
+        "CAN_2025": -0.0024813042187065704,
+        "COL_2026": 0.00011607744724401181,
+        "HUN_2026": -0.0008640469412944385,
+        "PER_2026": 0.00297453433881284,
+        "US_2024": -0.0019038405460571617
+      },
+      "fdr": {
+        "family_size": 5,
+        "p": 1.0,
+        "q": 1.0,
+        "rank": 3,
+        "reject": false
+      },
+      "positive_families": 2,
+      "slices": {
+        "repeat": {
+          "mean_loss_gain": -0.0008575412220108449,
+          "rows": 249992
+        },
+        "sparse": {
+          "mean_loss_gain": 0.0012214365330311717,
+          "rows": 113496
+        },
+        "unseen": {
+          "mean_loss_gain": 0.017885798852249425,
+          "rows": 14502
+        }
+      },
+      "weighted_mse_gain": -0.0004317159840001583
+    },
+    "hgb_full_behavior": {
+      "bootstrap_ci95": [
+        -0.012859105634267277,
+        0.006702746790294694
+      ],
+      "bootstrap_p": 1.0,
+      "concentration": {
+        "effective_contributing_participants": 107.28257332032635,
+        "gain_without_top10_activity": -0.0003842733466261272,
+        "gain_without_top1_activity": -0.00040767407654425906,
+        "gain_without_top1pct_activity": -0.004193935285883488,
+        "gain_without_top5_activity": 0.00029425012396221644,
+        "participants": 53410,
+        "top10_effect_share": 0.2601674285780967,
+        "top1pct_effect_share": 0.8246817670754013,
+        "top5_effect_share": 0.1729409116356685,
+        "top_participant_effect_share": 0.04819844753059923
+      },
+      "family_gains": {
+        "CAN_2025": 0.00044119957875671245,
+        "COL_2026": 0.006282167132389493,
+        "HUN_2026": 0.0019940317289244835,
+        "PER_2026": -0.009384482755417811,
+        "US_2024": -0.0009929900857538754
+      },
+      "fdr": {
+        "family_size": 5,
+        "p": 1.0,
+        "q": 1.0,
+        "rank": 4,
+        "reject": false
+      },
+      "positive_families": 3,
+      "slices": {
+        "repeat": {
+          "mean_loss_gain": 0.0009902525822865491,
+          "rows": 249992
+        },
+        "sparse": {
+          "mean_loss_gain": -0.005465364406528587,
+          "rows": 113496
+        },
+        "unseen": {
+          "mean_loss_gain": 0.07105691219874652,
+          "rows": 14502
+        }
+      },
+      "weighted_mse_gain": -0.0003320148802201661
+    },
+    "identity_history": {
+      "bootstrap_ci95": [
+        -0.001034658666866866,
+        0.00015770469251157653
+      ],
+      "bootstrap_p": 1.0,
+      "concentration": {
+        "effective_contributing_participants": 83.98474311140897,
+        "gain_without_top10_activity": -0.00027246880217599245,
+        "gain_without_top1_activity": -0.00034628540134620903,
+        "gain_without_top1pct_activity": -0.0001838277635712088,
+        "gain_without_top5_activity": -0.00029240827912129544,
+        "participants": 53410,
+        "top10_effect_share": 0.2355437272776402,
+        "top1pct_effect_share": 0.7959732634005083,
+        "top5_effect_share": 0.1781969688339705,
+        "top_participant_effect_share": 0.08743326246850923
+      },
+      "family_gains": {
+        "CAN_2025": 8.230330684289022e-05,
+        "COL_2026": -0.000835859833927588,
+        "HUN_2026": 1.5465358884969582e-05,
+        "PER_2026": -0.0005249805211281489,
+        "US_2024": -0.0003364403595456089
+      },
+      "fdr": {
+        "family_size": 5,
+        "p": 1.0,
+        "q": 1.0,
+        "rank": 5,
+        "reject": false
+      },
+      "positive_families": 2,
+      "slices": {
+        "repeat": {
+          "mean_loss_gain": -0.0004367702754239291,
+          "rows": 249992
+        },
+        "sparse": {
+          "mean_loss_gain": 0.00013380579963226383,
+          "rows": 113496
+        },
+        "unseen": {
+          "mean_loss_gain": 0.008864288680057232,
+          "rows": 14502
+        }
+      },
+      "weighted_mse_gain": -0.0003199024097748082
+    },
+    "selected_behavior": {
+      "bootstrap_ci95": [
+        -0.001144713887169977,
+        0.0014520170381505239
+      ],
+      "bootstrap_p": 0.776,
+      "concentration": {
+        "effective_contributing_participants": 253.05296927673064,
+        "gain_without_top10_activity": 0.00013739723176985557,
+        "gain_without_top1_activity": 0.00012618416285370735,
+        "gain_without_top1pct_activity": 0.00025588600687518275,
+        "gain_without_top5_activity": 0.00020956687714616197,
+        "participants": 53410,
+        "top10_effect_share": 0.15256082599041434,
+        "top1pct_effect_share": 0.7291438484510943,
+        "top5_effect_share": 0.0977277430565238,
+        "top_participant_effect_share": 0.02455802931878515
+      },
+      "family_gains": {
+        "CAN_2025": 0.00012071006528319161,
+        "COL_2026": 0.0002345734233112906,
+        "HUN_2026": -4.683668763683091e-05,
+        "PER_2026": 0.0018644566023463538,
+        "US_2024": -0.0015487170223298097
+      },
+      "fdr": {
+        "family_size": 5,
+        "p": 0.776,
+        "q": 1.0,
+        "rank": 1,
+        "reject": false
+      },
+      "positive_families": 3,
+      "slices": {
+        "repeat": {
+          "mean_loss_gain": -5.198032760778023e-05,
+          "rows": 249992
+        },
+        "sparse": {
+          "mean_loss_gain": 0.0008112842987982645,
+          "rows": 113496
+        },
+        "unseen": {
+          "mean_loss_gain": 0.018123209507497136,
+          "rows": 14502
+        }
+      },
+      "weighted_mse_gain": 0.00012483727619483354
+    }
+  },
+  "schema_version": 1
+}
