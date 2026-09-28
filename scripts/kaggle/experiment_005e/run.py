@@ -1458,38 +1458,19 @@ def block_bootstrap_p(
     *,
     reps: int = 500,
 ) -> tuple[float, list[float]]:
-    work = pd.DataFrame(
-        {
-            "family": frame["family"].astype(str).to_numpy(),
-            "condition_id": frame["condition_id"].astype(str).to_numpy(),
-            "timestamp": pd.to_numeric(frame["timestamp"]).to_numpy(np.int64),
-            "gain": loss_gain,
-        }
+    from predictions_cup.learning.participant_ecology import hierarchical_block_bootstrap
+
+    timestamp = pd.to_numeric(frame["timestamp"], errors="raise").to_numpy(np.int64)
+    weights = hierarchical_weights(frame)
+    p_value, draws = hierarchical_block_bootstrap(
+        np.asarray(loss_gain, dtype=float),
+        weights,
+        frame["family"].astype(str).to_numpy(),
+        timestamp // 86400,
+        reps=reps,
+        seed=SEED,
     )
-    batches = (
-        work.groupby(["family", "condition_id", "timestamp"], sort=False)["gain"]
-        .mean()
-        .reset_index()
-    )
-    batches["day"] = batches["timestamp"].to_numpy(np.int64) // 86400
-    blocks = batches.groupby(["family", "day"], sort=False)["gain"].mean().reset_index()
-    families = sorted(blocks["family"].unique())
-    rng = np.random.default_rng(SEED)
-    draws: list[float] = []
-    by_family = {
-        family: blocks.loc[blocks["family"] == family, "gain"].to_numpy(float)
-        for family in families
-    }
-    for _ in range(reps):
-        fam_draw = rng.choice(families, size=len(families), replace=True)
-        values = []
-        for family in fam_draw:
-            arr = by_family[str(family)]
-            values.extend(rng.choice(arr, size=len(arr), replace=True).tolist())
-        draws.append(float(np.mean(values)))
-    arr = np.asarray(draws, float)
-    p = float(2 * min(np.mean(arr <= 0), np.mean(arr >= 0)))
-    return min(1.0, p), draws
+    return p_value, draws.tolist()
 
 
 def concentration_report(
