@@ -151,7 +151,8 @@ def reconstruct_family(family: str) -> dict[str, object]:
                 f"""SELECT COUNT(*) FROM group_audit
                     WHERE active_count=1 AND passive_count>=1 AND all_binary
                       AND ABS(active_size-passive_size)
-                        > {YES_NOTIONAL_TOLERANCE} * GREATEST(1.0,ABS(active_size),ABS(passive_size))""",
+                        > {SIZE_TOLERANCE}
+                          * GREATEST(1.0, ABS(active_size), ABS(passive_size))""",
             )
         ),
         "yes_notional_conservation": int(
@@ -199,7 +200,10 @@ def main() -> None:
             "active_row": "audit-only aggregate; never double counted",
             "yes_axis": "YES p; NO 1-p; OTHER rejected",
             "multi_maker": "preserved as separate passive economic fills",
-            "rounding_audit": "005B reconstruction audit found max YES-notional relative error <5e-4 and zero groups above 1e-3",
+            "rounding_audit": (
+                "005B reconstruction audit found max YES-notional relative error "
+                "<5e-4 and zero groups above 1e-3"
+            ),
         },
         "families": families,
         "totals": {
