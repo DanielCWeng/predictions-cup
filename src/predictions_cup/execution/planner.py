@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 
-from predictions_cup.execution.models import ExecutionAudit, ExecutionEnvelope, ExecutionMode
+from predictions_cup.execution.models import ExecutionAudit, ExecutionEnvelope
 from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.risk.core import RiskDecision
 
@@ -23,10 +23,14 @@ def build_execution_plan(
     decision: RiskDecision,
     *,
     logical_operation_id: str,
-    mode: ExecutionMode,
     created_monotonic_ns: int,
 ) -> ExecutionPlan:
-    if not decision.approved or decision.operation_kind is None or not decision.intents:
+    if (
+        not decision.approved
+        or decision.operation_kind is None
+        or decision.execution_mode is None
+        or not decision.intents
+    ):
         raise ValueError("only approved risk decisions can become execution plans")
     if (
         decision.strategy_family is None
@@ -50,7 +54,7 @@ def build_execution_plan(
     envelope = ExecutionEnvelope.placement(
         logical_operation_id=logical_operation_id,
         operation_kind=decision.operation_kind,
-        sink_mode=mode,
+        sink_mode=decision.execution_mode,
         idempotency_key=idempotency_key,
         intents=decision.intents,
         created_monotonic_ns=created_monotonic_ns,
