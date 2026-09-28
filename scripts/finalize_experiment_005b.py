@@ -85,43 +85,91 @@ def build_registry(
     freeze: dict[str, Any],
     holdout: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    hold_map = {row["target"]: row for row in holdout.get("results", [])}
+    hold_map = {
+        row["target"]: row
+        for row in holdout.get("results", [])
+    }
     rows: list[dict[str, Any]] = []
     for target in sorted(freeze.get("shortlist", {})):
         shortlisted = freeze["shortlist"].get(target, [])
-        stable = [row for row in shortlisted if row.get("promoted_candidate")]
-        chosen = stable[0] if stable else None
+        promoted = [
+            row
+            for row in shortlisted
+            if row.get("promoted_candidate")
+        ]
         hrow = hold_map.get(target, {})
-        scalar_hold = (hrow.get("scalar_candidate") or {}).get("holdout", {})
+        scalar_entries = hrow.get("scalar_candidates")
+        if scalar_entries is None:
+            primary = hrow.get("scalar_candidate")
+            scalar_entries = [primary] if primary else []
+        scalar_map = {
+            row.get("feature"): row
+            for row in scalar_entries
+            if row
+        }
         model_name, model_primary, model_interval = holdout_model_summary(
             hrow.get("model")
         )
+
+        if promoted:
+            for candidate_rank, chosen in enumerate(promoted, start=1):
+                feature = chosen.get("feature")
+                scalar_hold = (
+                    scalar_map.get(feature, {}).get("holdout", {})
+                )
+                rows.append(
+                    {
+                        "target": target,
+                        "candidate_rank": candidate_rank,
+                        "scalar_feature": feature,
+                        "candidate_label": chosen.get(
+                            "selection_label",
+                            "DISCOVERY_ONLY",
+                        ),
+                        "train_spearman": chosen.get("spearman"),
+                        "dev_spearman": chosen.get("dev_spearman"),
+                        "dev_pearson": chosen.get("dev_pearson"),
+                        "holdout_spearman": scalar_hold.get("spearman"),
+                        "holdout_pearson": scalar_hold.get("pearson"),
+                        "holdout_support": scalar_hold.get("support"),
+                        "dev_selected_model": model_name,
+                        "holdout_model_primary_metric": model_primary,
+                        "holdout_bootstrap_interval": model_interval,
+                        "holdout_rows": hrow.get("holdout_rows"),
+                        "holdout_market_count": hrow.get(
+                            "holdout_market_count"
+                        ),
+                    }
+                )
+            continue
+
         rows.append(
             {
                 "target": target,
-                "scalar_feature": chosen.get("feature") if chosen else None,
-                "candidate_label": (
-                    chosen.get("selection_label") if chosen else "DISCOVERY_ONLY"
-                ),
-                "train_spearman": chosen.get("spearman") if chosen else None,
-                "dev_spearman": chosen.get("dev_spearman") if chosen else None,
-                "dev_pearson": chosen.get("dev_pearson") if chosen else None,
-                "holdout_spearman": scalar_hold.get("spearman"),
-                "holdout_pearson": scalar_hold.get("pearson"),
-                "holdout_support": scalar_hold.get("support"),
+                "candidate_rank": None,
+                "scalar_feature": None,
+                "candidate_label": "DISCOVERY_ONLY",
+                "train_spearman": None,
+                "dev_spearman": None,
+                "dev_pearson": None,
+                "holdout_spearman": None,
+                "holdout_pearson": None,
+                "holdout_support": None,
                 "dev_selected_model": model_name,
                 "holdout_model_primary_metric": model_primary,
                 "holdout_bootstrap_interval": model_interval,
                 "holdout_rows": hrow.get("holdout_rows"),
-                "holdout_market_count": hrow.get("holdout_market_count"),
+                "holdout_market_count": hrow.get(
+                    "holdout_market_count"
+                ),
             }
         )
     return rows
 
-
 def write_registry(path: Path, rows: list[dict[str, Any]]) -> None:
     fieldnames = [
         "target",
+        "candidate_rank",
         "scalar_feature",
         "candidate_label",
         "train_spearman",
@@ -172,11 +220,11 @@ def build_report(
         comparable_controls += 1
         if abs(float(shifted)) < abs(float(reference)):
             attenuated_controls += 1
-    stable = [
-        row
+    stable_targets = {
+        row["target"]
         for row in registry
         if row["scalar_feature"] is not None
-    ]
+    }
     evaluated = {
         row["target"]: row
         for row in holdout.get("results", [])
@@ -248,7 +296,7 @@ def build_report(
         "",
         (
             f"Targets with at least one TRAIN→DEV stable scalar candidate: "
-            f"**{len(stable)} / {freeze.get('target_count', len(registry))}**."
+            f"**{len(stable_targets)} / {freeze.get('target_count', len(set(row['target'] for row in registry)))}**."
         ),
         (
             f"Targets opened in sealed HOLDOUT: "
