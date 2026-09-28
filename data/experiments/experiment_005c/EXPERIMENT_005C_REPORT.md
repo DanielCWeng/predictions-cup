@@ -34,6 +34,8 @@ The economic-trade reconstruction passed cleanly in all five families.
 | HUN_2026 | 260,802 | 1.000000 | 0 |
 | PER_2026 | 346,114 | 1.000000 | 0 |
 
+A separate post-run Kaggle integrity audit then enforced the already-frozen exact source-identity rule directly on every source row. Across all five families it found **zero null-key rows and zero duplicate \`(tx_hash, log_index, token_id)\` keys**. This includes all 14,716,540 US_2024 DATA-002 fallback rows and all 854,625 CAN_2025 fallback rows. The first PyArrow implementation of this audit failed from a runtime memory/vector error before producing a scientific result; the completed external-memory DuckDB audit passed cleanly and changed no predictive design choice.
+
 The modelling path used canonical YES prices, logit-price changes as the primary coordinate, explicit missingness/age masks, chronological TRAIN/DEV/HOLDOUT splits, and no random row splits.
 
 ## Search scale
