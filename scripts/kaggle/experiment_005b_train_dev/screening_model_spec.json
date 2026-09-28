@@ -56,7 +56,18 @@
     "single_market_share_max": 0.5,
     "model_gate_abs_train_association": 0.01,
     "concentration_gate": "feature-target sample specific; max single-market share <= 0.50",
-    "stability_statistic": "TRAIN Spearman and DEV Spearman must have the same non-zero sign; DEV Pearson is retained as a secondary diagnostic."
+    "stability_statistic": "TRAIN Spearman and DEV Spearman must have the same non-zero sign; DEV Pearson is retained as a secondary diagnostic.",
+    "promotion_gate": {
+      "effect_sign_persistence": "Using the TRAIN median feature threshold, the TRAIN and DEV directional-response differences must both be finite, non-zero, and have the same sign.",
+      "model_improvement": "For model-eligible targets, the DEV-selected model must be non-baseline and strictly improve the primary DEV metric versus persistence/majority. Atlas-only targets cannot receive a promoted candidate label.",
+      "dev_family_min_rows_per_group": 100,
+      "dev_family_min_supported_groups": 2,
+      "dev_family_sign_consistency_min": 0.6,
+      "dev_regime_min_rows_per_group": 100,
+      "dev_regime_min_supported_groups": 2,
+      "dev_regime_sign_consistency_min": 0.6,
+      "no_rescue": "Failure of any promotion gate leaves the row DISCOVERY_ONLY; it does not trigger alternate horizons, thresholds, features or models."
+    }
   },
   "model_eligibility": {
     "atlas_only_target_fragments": [
