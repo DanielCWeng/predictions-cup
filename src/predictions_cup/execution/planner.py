@@ -15,7 +15,7 @@ def deterministic_idempotency_key(
 ) -> str:
     if not logical_operation_id.strip():
         raise ValueError("logical_operation_id must not be blank")
-    identity = f"{logical_operation_id}|{operation_kind}".encode("utf-8")
+    identity = f"{logical_operation_id}|{operation_kind}".encode()
     return f"pc-{hashlib.sha256(identity).hexdigest()}"
 
 
