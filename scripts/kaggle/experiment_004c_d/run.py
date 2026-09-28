@@ -1006,7 +1006,7 @@ def discovery_residual_blocks(
     for frame in frames:
         if frame.empty or str(frame["regime"].iloc[0]) != regime:
             continue
-        rows = finite_model_frame(frame, D1_BASE, "z_d1", "y_d1_30")
+        rows = finite_model_frame(frame, D1_BASE, "z_d1", "y_d1_30").reset_index(drop=True)
         if rows.empty:
             continue
         x = rows.loc[:, list(D1_BASE)].to_numpy(float)
