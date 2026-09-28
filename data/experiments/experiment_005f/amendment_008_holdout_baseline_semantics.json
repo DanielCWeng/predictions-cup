@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "amendment_id": "005F-AMENDMENT-008",
+  "status": "PRE_HOLDOUT_ENGINEERING_CLARIFICATION",
+  "reason": "Define the previously stated 'corresponding own-history baseline' unambiguously before HOLDOUT execution.",
+  "holdout_model_comparison": {
+    "row_universe": "For each frozen coordinate, baseline and challenger use the identical TRAIN+DEV/HOLDOUT complete-case row universe defined by the full challenger column set.",
+    "estimator_rule": "Baseline and challenger use the same DEV-selected estimator class and exact hyperparameters.",
+    "baseline_features": "Exact frozen tournament baseline columns for the coordinate.",
+    "challenger_features": "The same baseline columns plus the exact frozen selected feature or learned micro-FV block.",
+    "scaling": "Fit separate StandardScaler objects for baseline and challenger on the same frozen TRAIN+DEV rows; never refit on HOLDOUT.",
+    "classification_prediction": "positive-class probability",
+    "regression_prediction": "point prediction",
+    "tuning": "none after canonical TRAIN/DEV selection"
+  },
+  "selection_evidence_rule": "TRAIN/DEV FDR and selection classes remain exactly as produced by the frozen screening implementation; this clarification changes no DEV candidate identity.",
+  "scientific_design_changed": false,
+  "candidate_universe_changed": false,
+  "selected_models_changed": false,
+  "model_grid_changed": false,
+  "selection_rule_changed": false,
+  "holdout_accessed": false
+}
