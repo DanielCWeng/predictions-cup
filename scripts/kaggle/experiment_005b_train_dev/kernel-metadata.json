@@ -11,6 +11,10 @@
   "dataset_sources": [],
   "competition_sources": [],
   "kernel_sources": [
-    "polyleviathan/005b-historical-predictive-atlas-features"
+    "polyleviathan/005b-historical-predictive-atlas-features",
+    "polyleviathan/005b-historical-predictive-atlas-features-can-2025",
+    "polyleviathan/005b-historical-predictive-atlas-features-col-2026",
+    "polyleviathan/005b-historical-predictive-atlas-features-hun-2026",
+    "polyleviathan/005b-historical-predictive-atlas-features-per-2026"
   ]
 }
