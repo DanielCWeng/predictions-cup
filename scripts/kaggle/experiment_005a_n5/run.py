@@ -17,6 +17,8 @@ WORK = Path("/kaggle/working/005a_n5_maker_liquidity_nulls")
 WORK.mkdir(parents=True, exist_ok=True)
 
 MASTER_SEED = 20260928005
+EXPECTED_STAGE1_IMPLEMENTATION = "a0217eed5f775735d5ad01edf3141963be7b1787"
+EXPECTED_004C_FREEZE = "ba938bedcf63f562be8b26c9502e828391123867"
 DRAWS = 999
 NS = 1_000_000_000
 HORIZONS = (1, 5, 30, 60, 300)
@@ -78,6 +80,10 @@ def locate_stage1() -> tuple[Path, dict[str, Any]]:
     m = json.loads(p.read_text())
     if m.get("stage") != "A5_MAKER_LIQUIDITY_OBSERVED_AND_PANELS":
         raise RuntimeError(f"wrong A5 manifest: {m.get('stage')}")
+    if m.get("code_manifest", {}).get("implementation_commit") != EXPECTED_STAGE1_IMPLEMENTATION:
+        raise RuntimeError("wrong A5 stage-1 implementation")
+    if m.get("gate", {}).get("experiment_004c_freeze_sha") != EXPECTED_004C_FREEZE:
+        raise RuntimeError("wrong A5 stage-1 004C freeze")
     root = p.parent
     for name, meta in m["maker_panels"].items():
         q = root / name
