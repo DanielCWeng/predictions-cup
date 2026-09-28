@@ -53,6 +53,7 @@ class AccountAuthoritativeSnapshot:
             RuntimePosition(
                 exchange_id=position.exchange_id,
                 market_id=position.market_id,
+                tournament_id=self.tournament_id,
                 # One currency unit/share is the conservative settlement bound.
                 gross_exposure=float(abs(position.quantity)),
             )
@@ -67,6 +68,7 @@ class AccountAuthoritativeSnapshot:
                     logical_intent_id=f"sig-order-{order.id}",
                     exchange_id=order.exchange_id,
                     market_id=market_id,
+                    tournament_id=self.tournament_id,
                     reserved_exposure=float(abs(order.quantity)),
                     open=order.open,
                     uncertain=False,
