@@ -158,9 +158,13 @@ def selected_columns(freeze: dict[str, Any]) -> dict[str, set[str]]:
     by_target: dict[str, set[str]] = {}
     for target, rows in freeze["shortlist"].items():
         cols = {target, label_for_target(target)}
-        stable = [row for row in rows if row.get("promoted_candidate")]
-        if stable:
-            cols.add(stable[0]["feature"])
+        promoted = [
+            row for row in rows if row.get("promoted_candidate")
+        ]
+        cols.update(
+            str(row["feature"])
+            for row in promoted
+        )
         model = freeze["model_selection"].get(target, {})
         cols.update(model.get("features", []))
         cols.update({"price_change_30", "absolute_return_30", "trade_count_30", "realised_vol_30"})
@@ -521,29 +525,40 @@ def evaluate_target(
         },
     }
 
-    stable = [
+    promoted = [
         row
         for row in freeze["shortlist"].get(target, [])
         if row.get("promoted_candidate")
     ]
-    if stable:
-        scalar = stable[0]
-        feature = scalar["feature"]
-        result["scalar_candidate"] = {
-            "feature": feature,
-            "train_spearman": scalar.get("spearman"),
-            "dev_pearson": scalar.get("dev_pearson"),
-            "selection_label": scalar.get("selection_label"),
-            "holdout": scalar_metrics(
-                pd.to_numeric(hold[feature], errors="coerce").to_numpy(dtype=float),
-                y_hold,
-            ),
-        }
-    else:
-        result["scalar_candidate"] = None
+    scalar_candidates = []
+    for scalar in promoted:
+        feature = str(scalar["feature"])
+        scalar_candidates.append(
+            {
+                "feature": feature,
+                "train_spearman": scalar.get("spearman"),
+                "dev_spearman": scalar.get("dev_spearman"),
+                "dev_pearson": scalar.get("dev_pearson"),
+                "selection_label": scalar.get("selection_label"),
+                "holdout": scalar_metrics(
+                    pd.to_numeric(
+                        hold[feature],
+                        errors="coerce",
+                    ).to_numpy(dtype=float),
+                    y_hold,
+                ),
+            }
+        )
+    result["scalar_candidates"] = scalar_candidates
+    result["scalar_candidate"] = (
+        scalar_candidates[0] if scalar_candidates else None
+    )
 
     selection = freeze["model_selection"].get(target, {})
-    if selection.get("status") != "OK" or not len(hold):
+    if (
+        selection.get("promotion_eligible") is not True
+        or not len(hold)
+    ):
         result["model"] = None
         return result
 
