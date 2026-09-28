@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "phase": "TRAIN_DEV_PRE_CLOCK_CLASSIFICATION_FREEZE",
+  "claim_regime": "PRE_ELECTION",
+  "dataset_scope": [
+    "clock"
+  ],
+  "target_family_scope": [
+    "UPDATE_HAZARD",
+    "JUMP_HAZARD"
+  ],
+  "source_kernel": "polyleviathan/005f-pre-clock-classification",
+  "source_kernel_version": 1,
+  "source_runner_sha256": "6d999e94923cad129ae178ddaf9df8f4479bbdbbc91b223e8a9ff46f8c5e042c",
+  "design_freeze_commit": "b5bf4cfe7482a58161523b66097910903050fc6b",
+  "execution_freeze_commit": "9ec9511536514bbaa97929a4b88d701cbc09987c",
+  "governing_amendments": [
+    "005F-AMENDMENT-003",
+    "005F-AMENDMENT-005",
+    "005F-AMENDMENT-006"
+  ],
+  "holdout_read": false,
+  "data_manifest_sha256": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+  "identity_sha256": "e89fe8e25dcc494dad3ed96fe6672ab9f247c01eb70d4c0270a913f18a200a72",
+  "quality_sha256": "354801b67b9c32ae82d419f8a6198b7fd814923e8c424ac8716862b47907ccb5",
+  "raw_output_sha256": {
+    "book_state_capture_audit_csv": "b7e33f5862a7db35319dc5a66282dd1084a0c386a1b001cb9d4f260585f063d4",
+    "dev_model_tournament_csv": "d1f8be8d817c83b2c5c8a442cf7962f1299c86b52827a54773dc2115d8a4a998",
+    "dev_selection_json": "296d29ae029a55583bb7158563524238ba56b65d27b1a171464faacde4a2d7ca",
+    "feature_atlas_json": "c3654773a798d9134c8ecec895a007c1cd010357e31b4e7214ba50080a123264",
+    "provenance_json": "b5e4d0ae51c894f2e186bdf7d1829f31d66e6c6fd3cb750248d2e3497fa7d4f8",
+    "resilience_summary_csv": "712b9991cdc983b91e536de00a603aea04bb24ed99fa5005455451c1b2ad3ad4",
+    "target_atlas_json": "f7f4c63545d8b88ba1d96036cfcc68b20671f458a6b836e3bf21ed51b937bc99",
+    "train_dev_feature_screen_csv": "1538fc427a0e13aa5b8cd36c5a16614f6d6dbfe6407e65b50a5cc616e383ca90",
+    "train_dev_summary_json": "9b3291813306bd52bd10da4e66e8129a1d69a078dfcce5eb28e5a43afba3d819"
+  },
+  "summary": {
+    "clock_rows": 1907945,
+    "event_rows": 0,
+    "depth_rows": 0,
+    "screen_cells": 210,
+    "selected_coordinates": 1,
+    "confirmatory_candidates": 1,
+    "shadow_only_candidates": 0
+  },
+  "selection_integrity": {
+    "deterministic_recompute_exact_match": true,
+    "expected_coordinates": 1,
+    "frozen_coordinates": 1,
+    "unique_groups": true
+  },
+  "candidates": [
+    {
+      "blocks": 167,
+      "dataset": "clock",
+      "dev_delta_mse": 0.036235622649057164,
+      "dev_p_bh": 0.0003015118666456087,
+      "dev_p_raw": 0.000244081034903588,
+      "events": 5,
+      "feature": "genuine_age_s",
+      "feature_family": "BBO_AGE",
+      "horizon": "300",
+      "markets": 103,
+      "model": "HGB_D3_LR0.03",
+      "model_dev_mse": 0.08759374372392721,
+      "regime": "PRE_ELECTION",
+      "selection_class": "CONFIRMATORY_ELIGIBLE",
+      "target": "update_h300",
+      "target_family": "UPDATE_HAZARD"
+    }
+  ]
+}
