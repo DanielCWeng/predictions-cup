@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005C",
+  "followup_id": "005C_REVIEW_FALSIFICATION",
+  "label": "POST_HOC_INDEPENDENT_REVIEW_FALSIFICATION",
+  "status": "FROZEN_BEFORE_FOLLOWUP_EMPIRICAL_OUTPUT",
+  "reviewed_head": "085ef0e223d063a3c6a8bf4178e03baf7fa1519c",
+  "original_scientific_freeze": "ea7ed06dd47cb8240cc8a1e5dedabf00d009843f",
+  "original_preregistration_sha256": "b6505f8b07dd064cb1e4133a660c5d1f43864823b696539aa60e474eb9b8b6f5",
+  "original_empirical_implementation": "94512d3c9b785efcbf04bcabc5c57c416e5ad524",
+  "original_pre_holdout_freeze_sha256": "20f977ffb64a56ecfe230ba45d9d0021dcc97e5218b13eb307db896d14c87933",
+  "frozen_holdout_cells": 35,
+  "prohibited_actions": [
+    "rerun or reopen TRAIN/DEV search",
+    "add or change models, ranks, lags, horizons, alphas, targets or panel membership",
+    "promote a previously failed HOLDOUT cell",
+    "choose review methods based on which preserves significance",
+    "alter original 005C result files"
+  ],
+  "original_output_hashes": {
+    "PRE_HOLDOUT_FREEZE.json": "20f977ffb64a56ecfe230ba45d9d0021dcc97e5218b13eb307db896d14c87933",
+    "holdout_results.csv": "69ded820bdb336aa4cda16d432c79d51aae017c89fcdb71ed5afe344a60114a9",
+    "dev_model_candidates.csv": "01191b267d39d3a0d44dbcae5ea63bb355689b252141e4353622adb5feabd405",
+    "panel_coverage.csv": "47af352604cacc5842bc2940b9127cb13bbea057fb89c13e206c66b440706bb5",
+    "probability_coordinate_robustness.csv": "4caedf85d8e05a6af078b2bd906613fbe50a12fd0c0e6fb887ec5d2b77255ada",
+    "ablation_null_results.csv": "95b9069cf9bdef86431493ffb3f4ecdf643733cfcd91f371d8a00a5c0de6c8ef",
+    "train_singular_spectra.json": "3eea3eca2c292321120617669389ae459cfa52f8c4d52ed15e5db6bf4aa5140c",
+    "reconstruction_audit.csv": "76d4083a0c0ab081e0a56f0068ecba7ae88c12e6e13289b5bfd53f430aa92411",
+    "run_manifest.json": "e98daa2d62ad617098837281232bab9f4bed627be544faec90e4f6edd7a2dc55"
+  },
+  "strongest_fixed_cell": {
+    "panel_id": "US_2024_event_6e91434eb80f",
+    "event_id": "10656",
+    "grid_seconds": 15,
+    "horizon_seconds": 15,
+    "model": "M2",
+    "lag_depth": 3,
+    "alpha": 100,
+    "target_count": 4,
+    "selected_market_count": 5
+  },
+  "us_event_fixed_cells": [
+    {
+      "grid_seconds": 5,
+      "horizon_seconds": 15,
+      "model": "M2",
+      "lag_depth": 3,
+      "alpha": 100,
+      "rank": null
+    },
+    {
+      "grid_seconds": 5,
+      "horizon_seconds": 30,
+      "model": "M4",
+      "lag_depth": 3,
+      "alpha": 100,
+      "rank": 4
+    },
+    {
+      "grid_seconds": 15,
+      "horizon_seconds": 15,
+      "model": "M2",
+      "lag_depth": 3,
+      "alpha": 100,
+      "rank": null
+    }
+  ],
+  "task_a_b1": {
+    "selection_rule": "Use each frozen selection's already DEV-selected B1 lag_depth and alpha from PRE_HOLDOUT_FREEZE.json; no retuning.",
+    "metrics": [
+      "B1 HOLDOUT pooled MSE",
+      "B2 HOLDOUT pooled MSE",
+      "challenger HOLDOUT pooled MSE",
+      "challenger relative MSE improvement vs B1",
+      "challenger relative MSE improvement vs B2",
+      "median per-target relative MSE improvement vs B1",
+      "fraction targets helped vs B1"
+    ]
+  },
+  "task_b_familywise": {
+    "primary_method": "SYNCHRONIZED_UTC_HOUR_CLUSTER_WILD_BOOTSTRAP_MAX_T",
+    "draws": 10000,
+    "seed": 20260928051,
+    "row_loss": "At each frozen cell decision time, average target-cell squared-error advantage B2_loss - challenger_loss over targets for which y, B2 and challenger are all finite.",
+    "block_definition": "Absolute UTC calendar hour floor(timestamp/3600), shared across all 35 cells.",
+    "observed_statistic": "One-sided cluster-studentized mean loss advantage T_i = mean(d_i)/SE_i, where SE_i is the one-way UTC-hour cluster-robust standard error using hour influence S_ib - n_ib*dbar_i with finite-sample B/(B-1) correction.",
+    "null_generation": "Center each cell at its observed mean. For each draw, assign independent Rademacher +/-1 multipliers to every absolute UTC-hour block in the union of all cells; the same multiplier is used by every cell sharing that absolute hour. Recombine centered hour influences and divide by the frozen observed cluster SE.",
+    "max_statistic": "Maximum one-sided T_i* across all 35 frozen cells for each draw.",
+    "adjusted_p": "(1 + number of max-stat draws >= observed strongest-cell T)/(draws+1).",
+    "effective_tests": "Descriptive only: eigenvalue participation ratio of the 35x35 bootstrap correlation matrix of synchronized T_i* draws.",
+    "decision": "Strongest US result survives familywise challenge only if adjusted one-sided p < 0.05. Failure can only downgrade."
+  },
+  "task_c_block_sensitivity": {
+    "cells": "All three fixed US_2024 event cells listed in us_event_fixed_cells.",
+    "durations_minutes": [
+      5,
+      15,
+      30,
+      60,
+      120
+    ],
+    "include_120_rule": "Report 120-minute row only if block_rows <= n_valid_rows; otherwise report insufficient duration.",
+    "block_rows": "ceil(duration_seconds / grid_seconds)",
+    "bootstrap": "Moving-block bootstrap of chronological per-decision-time pooled loss advantage, 5000 draws, deterministic component seed.",
+    "effective_block_equivalents": "n_valid_times / block_rows",
+    "stable_ci_rule": "Report percentile 95% CI only when effective_block_equivalents >= 4.0; otherwise report mean and effective blocks with CI=null and status UNSTABLE_TOO_FEW_BLOCK_EQUIVALENTS.",
+    "no_favourable_selection": true
+  },
+  "task_d_semantics": {
+    "metadata_only": true,
+    "metadata_dataset": "polyleviathan/polyleviathan-market-meta",
+    "fields_to_report": [
+      "event title/economic meaning",
+      "five selected condition IDs",
+      "market questions",
+      "semantic relationship",
+      "market observation start/end",
+      "TRAIN/DEV/HOLDOUT boundaries",
+      "relation to 2024-11-05 US election date"
+    ],
+    "timing_classification_values": [
+      "MONTHS_BEFORE_ELECTION",
+      "WEEKS_BEFORE_ELECTION",
+      "ELECTION_DAY",
+      "ELECTION_NIGHT",
+      "POST_ELECTION"
+    ],
+    "no_price_inference": true
+  },
+  "task_e_source_target_map": {
+    "model": "Already fitted strongest-cell TRAIN M2 ridge only.",
+    "coefficient_scope": "Standardized return coefficients are the primary interpretable coefficients; mask/age coefficient norms are reported separately as controls because their sign is not a price-direction relation.",
+    "own_history": "For each target, report each own-market return coefficient by lag 0/1/2 and own-market return L2 norm.",
+    "cross_market": "For each target, rank cross-market individual standardized-return coefficients by absolute TRAIN coefficient magnitude only and report top 3 with source market, lag, signed coefficient and grouped source return L2 norm.",
+    "semantic_relation_labels": [
+      "SAME_CANDIDATE",
+      "SAME_STATE",
+      "ELECTORAL_COLLEGE_OR_CHAMBER",
+      "OVERALL_ELECTION",
+      "DIRECT_ECONOMIC_RELATIVE",
+      "COMMON_EVENT_OTHER",
+      "UNRELATED"
+    ],
+    "no_holdout_selection": true,
+    "no_causality": true
+  },
+  "task_f_temporal_concentration": {
+    "cell": "strongest_fixed_cell only",
+    "block_definition": "Absolute UTC calendar hour floor(timestamp/3600).",
+    "block_contribution": "Sum of target-cell squared-error advantage B2_loss - challenger_loss within the hour; also report valid target-cell count and pooled mean advantage.",
+    "active_block": "At least one common finite target-cell loss comparison.",
+    "top_share_denominator": "Sum of positive hourly loss-advantage contributions only.",
+    "remove_block_recompute": "After removing selected strongest positive UTC hours, recompute challenger and B2 pooled MSE on remaining common finite target cells, then recompute relative MSE improvement.",
+    "first_second_half": "Split at the absolute midpoint between first and last valid HOLDOUT decision timestamp, fixed before values are aggregated."
+  },
+  "task_g_interpretation": {
+    "cross_sectional_definition": "Can forecasts rank relative target moves at a timestamp?",
+    "time_series_definition": "Can forecasts improve each target's movement forecast through time?",
+    "rule": "Interpret the original cross-sectional IC, median per-target time-series IC and sign accuracy separately; do not relabel one as the other."
+  },
+  "outputs": [
+    "b1_holdout_comparison.csv",
+    "multiplicity_falsification.csv",
+    "block_sensitivity.csv",
+    "temporal_concentration.csv",
+    "us_event_semantics.json",
+    "source_target_map.csv",
+    "review_manifest.json",
+    "docs/experiments/EXPERIMENT_005C_REVIEW_FOLLOWUP.md"
+  ],
+  "kaggle": {
+    "namespace": "005c-review-falsification",
+    "shared_capacity": 3,
+    "empirical_compute_only_on_kaggle": true,
+    "launch_only_when_fewer_than_3_other_sessions_running": true
+  }
+}
