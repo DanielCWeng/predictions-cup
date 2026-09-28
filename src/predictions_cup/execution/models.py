@@ -201,6 +201,77 @@ class ExecutionEnvelope:
         )
 
 
+_ALLOWED_LIFECYCLE_TRANSITIONS: dict[LifecycleState, frozenset[LifecycleState]] = {
+    LifecycleState.PENDING: frozenset({
+        LifecycleState.ACKED,
+        LifecycleState.OPEN,
+        LifecycleState.PARTIALLY_FILLED,
+        LifecycleState.FILLED,
+        LifecycleState.UNCERTAIN,
+        LifecycleState.REJECTED,
+        LifecycleState.RECONCILING,
+    }),
+    LifecycleState.ACKED: frozenset({
+        LifecycleState.OPEN,
+        LifecycleState.PARTIALLY_FILLED,
+        LifecycleState.FILLED,
+        LifecycleState.UNCERTAIN,
+        LifecycleState.RECONCILING,
+        LifecycleState.REJECTED,
+    }),
+    LifecycleState.OPEN: frozenset({
+        LifecycleState.PARTIALLY_FILLED,
+        LifecycleState.FILLED,
+        LifecycleState.CANCEL_PENDING,
+        LifecycleState.CANCELLED,
+        LifecycleState.UNCERTAIN,
+        LifecycleState.RECONCILING,
+    }),
+    LifecycleState.PARTIALLY_FILLED: frozenset({
+        LifecycleState.FILLED,
+        LifecycleState.CANCEL_PENDING,
+        LifecycleState.CANCELLED,
+        LifecycleState.UNCERTAIN,
+        LifecycleState.RECONCILING,
+    }),
+    LifecycleState.CANCEL_PENDING: frozenset({
+        LifecycleState.CANCELLED,
+        LifecycleState.UNCERTAIN,
+        LifecycleState.RECONCILING,
+        LifecycleState.REJECTED,
+    }),
+    LifecycleState.UNCERTAIN: frozenset({
+        LifecycleState.RECONCILING,
+        LifecycleState.RECONCILED,
+        LifecycleState.OPEN,
+        LifecycleState.PARTIALLY_FILLED,
+        LifecycleState.FILLED,
+        LifecycleState.CANCELLED,
+        LifecycleState.REJECTED,
+    }),
+    LifecycleState.RECONCILING: frozenset({
+        LifecycleState.RECONCILED,
+        LifecycleState.OPEN,
+        LifecycleState.PARTIALLY_FILLED,
+        LifecycleState.FILLED,
+        LifecycleState.CANCELLED,
+        LifecycleState.UNCERTAIN,
+        LifecycleState.REJECTED,
+    }),
+    LifecycleState.RECONCILED: frozenset(),
+    LifecycleState.FILLED: frozenset(),
+    LifecycleState.CANCELLED: frozenset(),
+    LifecycleState.REJECTED: frozenset(),
+}
+
+
+def lifecycle_transition_allowed(
+    current: LifecycleState,
+    target: LifecycleState,
+) -> bool:
+    return target == current or target in _ALLOWED_LIFECYCLE_TRANSITIONS[current]
+
+
 @dataclass(frozen=True, slots=True)
 class ExecutionEvent:
     logical_operation_id: str
