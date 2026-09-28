@@ -637,8 +637,11 @@ def build_clock(
             fspread, _, _ = asof_from_states(s, future_ns, "spread")
             y = logit_array(fmid) - logmid
             good = (fseg == seg) & np.isfinite(fmid)
-            target_split = assign_split(pd.Series(pd.to_datetime(future_ns, utc=True)), bounds).to_numpy(object)
-            same_split = target_split == frame["split"].to_numpy(object)
+            target_split = assign_split(
+                pd.Series(pd.to_datetime(future_ns, utc=True)), bounds
+            ).fillna("__NONE__").astype(str).to_numpy()
+            current_split = frame["split"].fillna("__NONE__").astype(str).to_numpy()
+            same_split = target_split == current_split
             good &= same_split
             y[~good] = np.nan
             frame[f"price_h{h}"] = y
@@ -845,10 +848,11 @@ def attach_depth_targets(
             y = logit_array(fmid) - logit_array(cur_mid)
             target_split = assign_split(
                 pd.Series(pd.to_datetime(qns + h * NS, utc=True)), bounds
-            ).to_numpy(object)
+            ).fillna("__NONE__").astype(str).to_numpy()
+            depth_split = d["split"].fillna("__NONE__").astype(str).to_numpy()
             same = (
                 (fseg == cur_seg)
-                & (target_split == d["split"].fillna("__NONE__").to_numpy(object))
+                & (target_split == depth_split)
                 & np.isfinite(cur_mid)
                 & np.isfinite(fmid)
             )
