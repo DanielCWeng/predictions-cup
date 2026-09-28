@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -245,8 +246,8 @@ def test_live_risk_fails_closed_for_account_mapping_and_kill_switch() -> None:
     assert killed.risk_decision.reason == "global_kill_switch"
 
 
-def test_journal_persists_identity_and_rejects_mutation(tmp_path: object) -> None:
-    path = tmp_path / "journal.sqlite3"  # type: ignore[operator]
+def test_journal_persists_identity_and_rejects_mutation(tmp_path: Path) -> None:
+    path = tmp_path / "journal.sqlite3"
     journal = ExecutionJournal(path)
     try:
         intent = RuntimeOrderIntent(
@@ -280,10 +281,16 @@ def test_journal_persists_identity_and_rejects_mutation(tmp_path: object) -> Non
             idempotency_key="key-1",
             intents=(
                 RuntimeOrderIntent(
-                    **{
-                        **intent.__dict__,
-                        "quantity": 2,
-                    }
+                    intent_id="intent-1",
+                    exchange_id="36",
+                    market_id="26",
+                    tournament_id="tournament-1",
+                    outcome_side=OutcomeSide.YES,
+                    action=OrderAction.BUY,
+                    quantity=2,
+                    limit_price_ticks=84,
+                    strategy_id="synthetic",
+                    decision_observation_ns=1,
                 ),
             ),
             created_monotonic_ns=1,
