@@ -526,6 +526,7 @@ def main() -> None:
         "bucket": args.bucket,
         "object_prefix": output_prefix,
         "source": "OCI trades/ canonical daily Parquet, using sisterreq_fills_20260926 identity/dedup semantics",
+        "source_version": "POLYLEVIATHAN_TRADES_LAKE_CANONICAL",
         "block_number_join": {
             "source_prefix": "custody/",
             "join_key": "tx_hash",
