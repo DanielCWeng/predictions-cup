@@ -9,13 +9,6 @@ from __future__ import annotations
 
 from collections.abc import Collection, Mapping
 
-from sklearn.ensemble import (
-    HistGradientBoostingClassifier,
-    HistGradientBoostingRegressor,
-)
-from sklearn.linear_model import ElasticNet, LinearRegression, LogisticRegression, Ridge
-
-
 def is_classification_target(dataset: str, target: str) -> bool:
     return dataset == "clock" and (
         target.startswith("update_h") or target.startswith("jump_h")
@@ -91,7 +84,21 @@ def build_frozen_model(
     classification: bool,
     random_state: int,
 ):
-    """Instantiate one exact estimator from the frozen 005F model ladder."""
+    """Instantiate one exact estimator from the frozen 005F model ladder.
+
+    Scikit-learn is imported lazily because the repository's lightweight
+    unit-test environment does not require the Kaggle research stack.
+    """
+    from sklearn.ensemble import (
+        HistGradientBoostingClassifier,
+        HistGradientBoostingRegressor,
+    )
+    from sklearn.linear_model import (
+        ElasticNet,
+        LinearRegression,
+        LogisticRegression,
+        Ridge,
+    )
     if classification:
         if model_name.startswith("LOGIT_C"):
             c = float(model_name.removeprefix("LOGIT_C"))
