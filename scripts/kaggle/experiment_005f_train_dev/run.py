@@ -28,6 +28,7 @@ EXPECTED_QUALITY = "354801b67b9c32ae82d419f8a6198b7fd814923e8c424ac8716862b47907
 DESIGN_FREEZE_COMMIT = "b5bf4cfe7482a58161523b66097910903050fc6b"
 EXECUTION_FREEZE_COMMIT = "9ec9511536514bbaa97929a4b88d701cbc09987c"
 SEED = 20260928005
+SKLEARN_SEED = SEED % (2**32 - 1)
 NS = 1_000_000_000
 GRID_SECONDS = 15
 CAPTURE_BIN_SECONDS = 5
@@ -1252,7 +1253,7 @@ def screen_classification(
         if needed_base:
             sb = StandardScaler().fit(tr[needed_base])
             Xtr_b, Xdv_b = sb.transform(tr[needed_base]), sb.transform(dv[needed_base])
-            base = LogisticRegression(C=1.0, max_iter=500, random_state=SEED).fit(Xtr_b, ytr)
+            base = LogisticRegression(C=1.0, max_iter=500, random_state=SKLEARN_SEED).fit(Xtr_b, ytr)
             pred_b = base.predict_proba(Xdv_b)[:, 1]
         else:
             pred_b = np.full(len(dv), ytr.mean())
@@ -1260,7 +1261,7 @@ def screen_classification(
         all_cols = needed_base + [candidate]
         sc = StandardScaler().fit(tr[all_cols])
         Xtr, Xdv = sc.transform(tr[all_cols]), sc.transform(dv[all_cols])
-        model = LogisticRegression(C=1.0, max_iter=500, random_state=SEED).fit(Xtr, ytr)
+        model = LogisticRegression(C=1.0, max_iter=500, random_state=SKLEARN_SEED).fit(Xtr, ytr)
         pred = model.predict_proba(Xdv)[:, 1]
         lb = (ydv - pred_b) ** 2
         lc = (ydv - pred) ** 2
@@ -1343,14 +1344,14 @@ def model_tournament(
             if len(np.unique(ytr)) < 2 or len(np.unique(ydv)) < 2:
                 continue
             configs: list[tuple[str, Any]] = [
-                (f"LOGIT_C{value}", LogisticRegression(C=value, max_iter=500, random_state=SEED))
+                (f"LOGIT_C{value}", LogisticRegression(C=value, max_iter=500, random_state=SKLEARN_SEED))
                 for value in (0.1, 1.0, 10.0)
             ]
             configs += [
                 (
                     f"HGB_D{depth}_LR{lr}",
                     HistGradientBoostingClassifier(
-                        max_depth=depth, learning_rate=lr, max_iter=200, random_state=SEED
+                        max_depth=depth, learning_rate=lr, max_iter=200, random_state=SKLEARN_SEED
                     ),
                 )
                 for depth in (2, 3) for lr in (0.03, 0.1)
@@ -1377,7 +1378,7 @@ def model_tournament(
                 (
                     f"HGB_D{depth}_LR{lr}",
                     HistGradientBoostingRegressor(
-                        max_depth=depth, learning_rate=lr, max_iter=200, random_state=SEED
+                        max_depth=depth, learning_rate=lr, max_iter=200, random_state=SKLEARN_SEED
                     ),
                 )
                 for depth in (2, 3) for lr in (0.03, 0.1)
