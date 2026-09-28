@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "action": "wait_output",
+  "kernel": "polyleviathan/005b-ordering-falsification-us-family-context",
+  "poll_seconds": 60,
+  "timeout_minutes": 240,
+  "output_file_pattern": ".*us_continuation_family_context_report\\.json$",
+  "note": "Wait for corrected US family-context, then download only its compact provenance report."
+}
