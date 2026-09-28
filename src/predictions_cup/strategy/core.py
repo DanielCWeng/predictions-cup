@@ -6,7 +6,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
-from predictions_cup.runtime import OrderAction, OutcomeSide, RuntimeSnapshot
+from predictions_cup.runtime.models import OrderAction, OutcomeSide, RuntimeSnapshot
 from predictions_cup.strategy.kernels import KernelRegistry
 
 
