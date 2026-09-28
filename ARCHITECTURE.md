@@ -87,10 +87,12 @@ BUILD-007 therefore changes the **supervised** Polymarket path, not the research
 
 The systemd service passes `--require-explicit-universe` and the installer requires
 `PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS`. Empty or unresolved IDs fail closed. No Cup market
-ID is hard-coded. The intended source is the independently accepted LIVE-MAPPING-GATE-001
-crosswalk; until that crosswalk exists, the supervised Polymarket service is not production-ready.
-A deliberately bounded explicit public test universe may still be used for the required ARM64 EC2
-Parquet smoke/soak; that test set is not production mapping evidence.
+ID is hard-coded. The accepted live 2026 crosswalk under `data/mappings/` is now the production
+identity source. Supervised Polymarket capture must use accepted market/condition/token identities
+and remains fail-closed for unresolved IDs. Code/mapping acceptance is complete; the remaining
+operational gate is the mapping-bounded production soak plus SSH independence/reboot recovery. The
+historical 3-market / 6-token ARM64 test universe remains test-only and is not production
+configuration.
 
 High-frequency streams are written to short immutable Parquet shards using temp file -> fsync ->
 atomic rename. Source/event timestamps and local observation timestamps remain distinct. SQLite is
