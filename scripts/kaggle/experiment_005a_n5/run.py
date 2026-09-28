@@ -182,11 +182,24 @@ def regular_transform(index: dict[str, Any], *, mode: str, component: str, draw:
             shift=int(rng.integers(10,n-9))
         elif mode=="block":
             times=u.loc[order,"time_ns"].to_numpy(np.int64)
-            if n<20 or np.any(np.diff(times)!=30*NS): continue
             blocks=u.loc[order,"block"].to_numpy(np.int64)
-            _,counts=np.unique(blocks,return_counts=True)
-            if len(counts)<2 or np.any(counts!=10): continue
-            shift=int(rng.integers(1,len(counts)))*10
+            slots=((times//(30*NS))%10).astype(np.int64)
+            patterns={}
+            for block in sorted(set(map(int,blocks))):
+                local=np.flatnonzero(blocks==block)
+                pattern=tuple(map(int,slots[local]))
+                patterns.setdefault(pattern,[]).append(order[local])
+            shifted=False
+            for pattern in sorted(patterns):
+                chunks=patterns[pattern]
+                if len(chunks)<2: continue
+                shift_blocks=int(rng.integers(1,len(chunks)))
+                donors=np.roll(np.asarray(chunks,object),shift_blocks)
+                for destination,source in zip(chunks,donors,strict=True):
+                    out[destination]=values[np.asarray(source,np.int64)]
+                shifted=True
+            if shifted: valid+=1
+            continue
         else: raise ValueError(mode)
         out[order]=np.roll(values[order],shift,axis=0); valid+=1
     if valid==0: raise RuntimeError(f"no valid {mode} groups")

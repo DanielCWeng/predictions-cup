@@ -11,7 +11,7 @@
   "training_policy": "fit the frozen baseline and challenger once on the unchanged chronological training fold; stochastic nulls alter validation-time predictor alignment only, so training outcomes are never repeatedly re-used to choose a null fit",
   "a2_a3": {
     "circular_shift": "jointly circular-shift the signed-flow challenger columns on each unique source-market 30s validation grid within event/regime; minimum absolute shift is 10 grid rows = 300s",
-    "block_shift": "jointly circular-shift the signed-flow challenger columns by whole 300s blocks within each source market/event/regime validation grid",
+    "block_shift": "jointly circular-shift the signed-flow challenger columns by whole 300s blocks within each source market/event/regime validation grid; after the frozen finite-row mask, blocks are shifted only among blocks with identical observed 30s-slot missingness patterns",
     "a2_source_unit": "condition_id",
     "a3_source_unit": "source_condition_id; one source-time transformed value is mapped consistently to every target pair",
     "sign_permutation": "NOT_RUN_FROM_AGGREGATED_PANEL: mechanical token-side constraints cannot be revalidated after fill aggregation; this omission cannot rescue a failed mechanism",

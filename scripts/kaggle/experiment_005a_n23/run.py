@@ -237,14 +237,28 @@ def transformed_validation(
             shift = int(rng.integers(10, n - 9))
         elif mode == "block":
             times = unique.loc[order, "time_ns"].to_numpy(np.int64)
-            if n < 20 or np.any(np.diff(times) != 30 * NS):
-                continue
             blocks = unique.loc[order, "block"].to_numpy(np.int64)
-            _, counts = np.unique(blocks, return_counts=True)
-            if len(counts) < 2 or np.any(counts != 10):
-                continue
-            shift_blocks = int(rng.integers(1, len(counts)))
-            shift = shift_blocks * 10
+            slots = ((times // (30 * NS)) % 10).astype(np.int64)
+            patterns: dict[tuple[int, ...], list[np.ndarray]] = {}
+            for block in sorted(set(map(int, blocks))):
+                local = np.flatnonzero(blocks == block)
+                pattern = tuple(map(int, slots[local]))
+                patterns.setdefault(pattern, []).append(order[local])
+            shifted_any = False
+            for pattern in sorted(patterns):
+                chunks = patterns[pattern]
+                if len(chunks) < 2:
+                    continue
+                shift_blocks = int(rng.integers(1, len(chunks)))
+                for destination, source in zip(
+                    chunks, np.roll(np.asarray(chunks, object), shift_blocks), strict=True
+                ):
+                    source_ids = np.asarray(source, np.int64)
+                    transformed[destination] = values[source_ids]
+                shifted_any = True
+            if shifted_any:
+                valid_groups += 1
+            continue
         else:
             raise ValueError(mode)
         transformed[order] = np.roll(values[order], shift, axis=0)
