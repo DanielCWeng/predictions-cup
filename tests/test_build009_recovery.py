@@ -93,6 +93,8 @@ def test_journal_persists_identity_before_dispatch_and_restores_unresolved(
         assert submission.event_type == "SUBMISSION"
         assert submission.logical_intent_id == "intent-1"
         assert submission.decision_observation_ns == 123
+        assert submission.decision_monotonic_ns == 456
+        assert submission.observed_monotonic_ns == 456
         assert submission.strategy_family == "FV-TAKE"
         assert submission.strategy_id == "fixture"
         assert submission.signal_value == pytest.approx(0.025)
@@ -146,7 +148,13 @@ def test_journal_upgrades_pre_audit_event_schema(tmp_path: Path) -> None:
         }
     finally:
         connection.close()
-    assert {"strategy_family", "strategy_id", "signal_value", "fair_value"} <= columns
+    assert {
+        "decision_monotonic_ns",
+        "strategy_family",
+        "strategy_id",
+        "signal_value",
+        "fair_value",
+    } <= columns
 
 
 def test_journal_rejects_changed_payload_under_same_logical_operation(
