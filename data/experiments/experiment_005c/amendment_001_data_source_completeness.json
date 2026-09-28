@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005C",
+  "amendment_id": "DATA_SOURCE_COMPLETENESS_001",
+  "status": "FROZEN_BEFORE_ANY_PREDICTIVE_OUTCOME_INSPECTION",
+  "original_freeze_commit": "ea7ed06dd47cb8240cc8a1e5dedabf00d009843f",
+  "original_preregistration_sha256": "b6505f8b07dd064cb1e4133a660c5d1f43864823b696539aa60e474eb9b8b6f5",
+  "trigger": {
+    "observed_runtime_fact": "Kaggle mount polyleviathan/sig-cup-polyleviathan-fills exposes COL_2026, HUN_2026 and PER_2026 fills/markets but not US_2024 or CAN_2025.",
+    "predictive_outputs_seen": false,
+    "reason": "The frozen five-family universe cannot be executed from that mount alone."
+  },
+  "repair": {
+    "fallback_dataset": "polyleviathan/sig-cup-data-002-polymarket-fees",
+    "fallback_families": [
+      "US_2024",
+      "CAN_2025"
+    ],
+    "permitted_columns": [
+      "family",
+      "event_id",
+      "market_id",
+      "condition_id",
+      "token_id",
+      "timestamp",
+      "participant_address",
+      "order_is_match_taker_order",
+      "participant_side",
+      "outcome_side",
+      "price",
+      "size_shares",
+      "value_usd",
+      "tx_hash",
+      "log_index"
+    ],
+    "field_mapping": {
+      "participant_address": "maker_address (reconstruction identity only)",
+      "order_is_match_taker_order": "is_exchange_taker (active/passive reconstruction only)"
+    },
+    "predictor_exclusions": [
+      "fee_evidence",
+      "fee amounts",
+      "refunds",
+      "rebates",
+      "participant identity",
+      "maker/taker role as alpha",
+      "wallet history"
+    ],
+    "statement": "DATA-002 matched-fill rows originate from the same scoped OrderFilled population described in the canonical DATA-002 contract; the fallback is used only to recover raw economic fill fields for families absent from the current fills mount."
+  },
+  "frozen_search_design_changed": false,
+  "changed_items": [
+    "physical input source fallback for US_2024 and CAN_2025 only"
+  ]
+}
