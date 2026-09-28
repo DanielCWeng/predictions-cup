@@ -201,6 +201,47 @@ def count_events(
     return int(mask[lo:hi].sum())
 
 
+def observation_confirmation_ns(
+    series: BBOReconstruction,
+    start_ns: int,
+    end_ns: int,
+    collector_times_ns: np.ndarray,
+    *,
+    max_collector_gap_seconds: int = 30,
+    target_confirm_seconds: int = 300,
+) -> int | None:
+    """Return when a continuously observed endpoint became confirmable, else None."""
+
+    if end_ns <= start_ns or asof_index(series, start_ns) is None:
+        return None
+
+    lo = int(np.searchsorted(series.times_ns, start_ns, side="right"))
+    hi = int(np.searchsorted(series.times_ns, end_ns, side="right"))
+    if hi > lo and np.any(~series.valid[lo:hi]):
+        return None
+
+    next_index = int(np.searchsorted(series.times_ns, end_ns, side="left"))
+    if next_index >= len(series.times_ns) or not bool(series.valid[next_index]):
+        return None
+    confirmation_ns = int(series.times_ns[next_index])
+    if confirmation_ns - int(end_ns) > target_confirm_seconds * NS:
+        return None
+
+    collector = np.asarray(collector_times_ns, dtype=np.int64)
+    if len(collector) == 0:
+        return None
+    left = int(np.searchsorted(collector, start_ns, side="right") - 1)
+    right = int(np.searchsorted(collector, end_ns, side="left"))
+    if left < 0 or right >= len(collector):
+        return None
+    segment = collector[left : right + 1]
+    if len(segment) < 2:
+        return None
+    if np.max(np.diff(segment)) > max_collector_gap_seconds * NS:
+        return None
+    return confirmation_ns
+
+
 def observation_exposure_valid(
     series: BBOReconstruction,
     start_ns: int,
@@ -212,31 +253,14 @@ def observation_exposure_valid(
 ) -> bool:
     """Fail closed unless an unchanged target state was continuously observable."""
 
-    if end_ns <= start_ns or asof_index(series, start_ns) is None:
-        return False
-
-    lo = int(np.searchsorted(series.times_ns, start_ns, side="right"))
-    hi = int(np.searchsorted(series.times_ns, end_ns, side="right"))
-    if hi > lo and np.any(~series.valid[lo:hi]):
-        return False
-
-    next_index = int(np.searchsorted(series.times_ns, end_ns, side="left"))
-    if next_index >= len(series.times_ns) or not bool(series.valid[next_index]):
-        return False
-    if int(series.times_ns[next_index]) - int(end_ns) > target_confirm_seconds * NS:
-        return False
-
-    collector = np.asarray(collector_times_ns, dtype=np.int64)
-    if len(collector) == 0:
-        return False
-    left = int(np.searchsorted(collector, start_ns, side="right") - 1)
-    right = int(np.searchsorted(collector, end_ns, side="left"))
-    if left < 0 or right >= len(collector):
-        return False
-    segment = collector[left : right + 1]
-    if len(segment) < 2:
-        return False
-    return bool(np.max(np.diff(segment)) <= max_collector_gap_seconds * NS)
+    return observation_confirmation_ns(
+        series,
+        start_ns,
+        end_ns,
+        collector_times_ns,
+        max_collector_gap_seconds=max_collector_gap_seconds,
+        target_confirm_seconds=target_confirm_seconds,
+    ) is not None
 
 
 def deterministic_seed(master: int, component: str) -> int:

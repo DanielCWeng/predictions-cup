@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005A",
+  "stage": "A5_MAKER_LIQUIDITY",
+  "status": "FROZEN_BEFORE_A5_RESPONSE_ACCESS",
+  "primary_surface": {
+    "fee_regime": "V2",
+    "role_confidence": "HIGH_CONFIDENCE_ONLY",
+    "events": ["colombia_first_round", "peru_runoff", "colombia_runoff"],
+    "regimes": ["PRE_ELECTION", "ACTIVE_RESULTS"],
+    "horizons_seconds": [1, 5, 30, 60, 300],
+    "pool_pre_active": false
+  },
+  "maker_adverse_selection": {
+    "unit": "MAKER_HIGH_CONFIDENCE fill",
+    "target": "negative owner-perspective canonical YES markout",
+    "baseline_features": [
+      "midpoint_t",
+      "spread_t",
+      "quote_age_t",
+      "abs_price_move_300s",
+      "total_depth_t"
+    ],
+    "challenger_additions": [
+      "signed_taker_value_30s",
+      "signed_taker_shares_30s",
+      "participant_conditioned_taker_value_30s",
+      "family_activity_ex_target_30s"
+    ],
+    "participant_history": {
+      "target": "TAKER_HIGH_CONFIDENCE owner-perspective markout at same horizon",
+      "minimum_history": 20,
+      "prior_count": 20,
+      "prior_mean": 0,
+      "embargo_seconds": 300,
+      "label_must_be_observable_before_use": true
+    },
+    "split": "chronological per event-regime 2/3 train 1/3 validation with 300s purge/embargo",
+    "loss": "hierarchically weighted squared error",
+    "interpretation": "predictive adverse-selection state only; no maker profitability claim"
+  },
+  "liquidity_response": {
+    "unit": "condition x 30s decision grid",
+    "baseline_features": [
+      "own_price_move_t_minus_30_to_t",
+      "midpoint_t",
+      "spread_t",
+      "quote_age_t",
+      "abs_own_price_move_300s",
+      "genuine_bbo_changes_30s",
+      "fill_count_30s",
+      "unsigned_fill_value_30s",
+      "common_event_move_ex_target"
+    ],
+    "challenger_additions": [
+      "signed_taker_value_30s",
+      "signed_taker_shares_30s"
+    ],
+    "primary_continuous_responses": [
+      "future_genuine_change_count",
+      "future_spread_change",
+      "future_total_depth_change"
+    ],
+    "descriptive_binary_response": "future_genuine_renewal",
+    "capture_placebos": [
+      "future_raw_record_count",
+      "future_repeated_unchanged_count",
+      "future_depth_snapshot_count"
+    ],
+    "genuine_change_only": true,
+    "unchanged_bbo_records_are_not_renewal": true,
+    "depth_is_snapshot_state_not_queue_model": true
+  },
+  "selection": {
+    "horizon_search": false,
+    "threshold_search": false,
+    "best_market_selection": false,
+    "best_wallet_selection": false,
+    "all_declared_horizons_reported": true
+  }
+}

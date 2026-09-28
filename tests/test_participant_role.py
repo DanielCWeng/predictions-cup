@@ -102,3 +102,71 @@ def test_identity_permutation_preserves_each_stratum_multiset() -> None:
 def test_participant_seed_is_deterministic() -> None:
     assert deterministic_participant_seed(7, "a") == deterministic_participant_seed(7, "a")
     assert deterministic_participant_seed(7, "a") != deterministic_participant_seed(7, "b")
+
+
+def test_available_score_waits_for_label_horizon_and_embargo() -> None:
+    from predictions_cup.learning.participant_role import (
+        expanding_available_participant_role_scores,
+    )
+
+    times = np.array([0, 100, 200, 400], np.int64)
+    available = np.array([30, 130, 230, 430], np.int64)
+    participants = np.array(["a", "a", "a", "a"], object)
+    roles = np.array(["TAKER"] * 4, object)
+    outcomes = np.array([2.0, 4.0, 8.0, 16.0])
+    score, count = expanding_available_participant_role_scores(
+        times,
+        available,
+        participants,
+        roles,
+        outcomes,
+        embargo_ns=50,
+        minimum_history=1,
+        prior_count=0,
+    )
+    assert score.tolist() == [0.0, 2.0, 3.0, 14.0 / 3.0]
+    assert count.tolist() == [0, 1, 2, 3]
+
+
+def test_available_score_same_timestamp_rows_cannot_leak() -> None:
+    from predictions_cup.learning.participant_role import (
+        expanding_available_participant_role_scores,
+    )
+
+    times = np.array([100, 100, 200], np.int64)
+    available = np.array([100, 100, 200], np.int64)
+    participants = np.array(["a", "a", "a"], object)
+    roles = np.array(["TAKER", "TAKER", "TAKER"], object)
+    outcomes = np.array([1.0, 3.0, 5.0])
+    score, count = expanding_available_participant_role_scores(
+        times,
+        available,
+        participants,
+        roles,
+        outcomes,
+        embargo_ns=0,
+        minimum_history=1,
+        prior_count=0,
+    )
+    assert score.tolist() == [0.0, 0.0, 2.0]
+    assert count.tolist() == [0, 0, 2]
+
+
+def test_available_score_excludes_infrastructure_identity() -> None:
+    from predictions_cup.learning.participant_role import (
+        expanding_available_participant_role_scores,
+    )
+
+    score, count = expanding_available_participant_role_scores(
+        np.array([0, 100], np.int64),
+        np.array([10, 110], np.int64),
+        np.array(["0xinfra", "0xinfra"], object),
+        np.array(["TAKER", "TAKER"], object),
+        np.array([9.0, 9.0]),
+        embargo_ns=0,
+        minimum_history=1,
+        prior_count=0,
+        excluded_participants=frozenset({"0xinfra"}),
+    )
+    assert score.tolist() == [0.0, 0.0]
+    assert count.tolist() == [0, 0]

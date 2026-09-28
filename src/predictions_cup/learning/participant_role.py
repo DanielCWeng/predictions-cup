@@ -176,3 +176,95 @@ def permute_participant_identity_within_strata(
 def deterministic_participant_seed(master: int, component: str) -> int:
     digest = hashlib.sha256(f"{master}|participant|{component}".encode()).digest()
     return int.from_bytes(digest[:8], "big")
+
+
+def expanding_available_participant_role_scores(
+    times_ns: np.ndarray,
+    label_available_ns: np.ndarray,
+    participants: np.ndarray,
+    roles: np.ndarray,
+    outcomes: np.ndarray,
+    *,
+    embargo_ns: int,
+    minimum_history: int,
+    prior_count: float,
+    prior_mean: float = 0.0,
+    neutral_fallback: float = 0.0,
+    excluded_participants: frozenset[str] = frozenset(),
+) -> tuple[np.ndarray, np.ndarray]:
+    """Past-only participant-role scores using labels only after they become observable.
+
+    A historical row enters the score state only when its label-available time is strictly
+    earlier than current time minus embargo. Rows sharing one current timestamp are all
+    scored before any newly eligible label at that timestamp can be used.
+    """
+
+    times = np.asarray(times_ns, np.int64)
+    available = np.asarray(label_available_ns, np.int64)
+    participant_values = np.asarray(participants, object)
+    role_values = np.asarray(roles, object)
+    target = np.asarray(outcomes, float)
+    n = len(times)
+    if not (
+        len(available)
+        == len(participant_values)
+        == len(role_values)
+        == len(target)
+        == n
+    ):
+        raise ValueError("available-score input lengths differ")
+    if embargo_ns < 0 or minimum_history < 1 or prior_count < 0:
+        raise ValueError("invalid embargo/history/prior setting")
+
+    encoded = np.full(n, float(neutral_fallback), np.float64)
+    history_count = np.zeros(n, np.int64)
+    eval_order = np.argsort(times, kind="stable")
+    label_order = np.argsort(available, kind="stable")
+
+    totals: dict[tuple[str, str], float] = defaultdict(float)
+    counts: dict[tuple[str, str], int] = defaultdict(int)
+    cursor = 0
+
+    batch_start = 0
+    while batch_start < n:
+        batch_end = batch_start + 1
+        current_time = int(times[eval_order[batch_start]])
+        while batch_end < n and int(times[eval_order[batch_end]]) == current_time:
+            batch_end += 1
+
+        cutoff = current_time - embargo_ns
+        while cursor < n and int(available[label_order[cursor]]) < cutoff:
+            index = int(label_order[cursor])
+            outcome = target[index]
+            identity = str(participant_values[index]).lower()
+            role = str(role_values[index]).upper()
+            if (
+                np.isfinite(outcome)
+                and identity not in excluded_participants
+                and role in {"TAKER", "MAKER"}
+            ):
+                key = (identity, role)
+                totals[key] += float(outcome)
+                counts[key] += 1
+            cursor += 1
+
+        for index_value in eval_order[batch_start:batch_end]:
+            index = int(index_value)
+            identity = str(participant_values[index]).lower()
+            role = str(role_values[index]).upper()
+            if identity in excluded_participants or role not in {"TAKER", "MAKER"}:
+                continue
+            key = (identity, role)
+            count = counts.get(key, 0)
+            history_count[index] = count
+            if count < minimum_history:
+                continue
+            encoded[index] = shrink_mean(
+                totals.get(key, 0.0),
+                count,
+                prior_mean=prior_mean,
+                prior_count=prior_count,
+            )
+        batch_start = batch_end
+
+    return encoded, history_count
