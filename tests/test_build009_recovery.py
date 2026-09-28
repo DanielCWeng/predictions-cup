@@ -9,7 +9,7 @@ from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.models import ExecutionMode, LifecycleState, OperationKind
 from predictions_cup.execution.planning import build_execution_plan
 from predictions_cup.execution.replacement import quote_replacement_allowed
-from predictions_cup.risk.core import RiskContext, evaluate_risk
+from predictions_cup.risk.core import RiskContext, RiskDecision, evaluate_risk
 from predictions_cup.runtime import RuntimeOrderState, RuntimePortfolio, RuntimeSnapshot
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
 from predictions_cup.sig.account_state import (
@@ -55,18 +55,15 @@ def test_journal_persists_identity_before_dispatch_and_restores_unresolved(
         strategy_id="fixture",
         decision_observation_ns=123,
     )
-    decision = type(
-        "Decision",
-        (),
-        {
-            "approved": True,
-            "operation_kind": OperationKind.SINGLE_PLACEMENT,
-            "intents": (intent,),
-            "relationship_constraint": None,
-        },
-    )()
+    decision = RiskDecision(
+        approved=True,
+        reason="approved",
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        intents=(intent,),
+        relationship_constraint=None,
+    )
     plan = build_execution_plan(
-        decision,  # type: ignore[arg-type]
+        decision
         mode=ExecutionMode.LIVE,
         logical_operation_id="logical-1",
         idempotency_key="idem-1",
