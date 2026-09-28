@@ -1,0 +1,38 @@
+{
+  "challenge_label": "004B_SEALED_PRIOR_EXPERIMENT_EXPOSED",
+  "disposition": "SOFT_COMPETITIVE_EFFECT_ONLY",
+  "experiment_id": "EXPERIMENT-004C-B",
+  "freeze_marker": {
+    "base_sha": "4e094d13b06d9e558cbc404cc4d472316d7d5bbb",
+    "ec2_local_freeze_commit": "f9568d89908f111d1e95997e0b1162d1d953816b",
+    "experiment_id": "EXPERIMENT-004C-B",
+    "family_registry_sha256": "499b22e760b511d11f81707058ed92ce6218bd11428d7dd319436de22811c4dc",
+    "family_validation_report_sha256": "9a51a5f70383cbd86b4465f35db912f1b005bb7d98055bff71365bd78f9cc574",
+    "freeze_marker": true,
+    "preregistration_sha256": "d86df188d4f0dfdb0876b2a7b723750d27438f328f5c6a94100df714b5a80009",
+    "prior_exposure_manifest_sha256": "328642619ef09c22e8b257d42ea95f92f98e37e6e276c7613940a42edd2a44b7",
+    "remote_pre_marker_head": "7a0a942bab51643f6236d607da649e588d9bb38b",
+    "rule": "All listed scientific-definition artifacts are immutable after this marker. Empirical 004C-B challenge access may begin only from or after this commit.",
+    "scientific_doc_sha256": "34f1063e4e47138bc3744f67bfff2aade13be6d7a57ae8b44c346990f1a34d5f"
+  },
+  "full_executable_basket_certificates": 0,
+  "hard_1pct_hits": 0,
+  "hard_contradictions": [],
+  "hard_hits": [],
+  "hard_promoted": false,
+  "hard_supporting_scopes": [],
+  "limitations": [
+    "only three independent election families",
+    "no proven exhaustive parent family is fully 004A.2-usable in a primary historical scope",
+    "partial hard families use sum(p)<=1 and usually have zero residual unless subset sum exceeds one",
+    "semantic competition is not probability conservation",
+    "historical executable basket certification unavailable when any required family member is absent"
+  ],
+  "primary_30s_valid_tests": 7,
+  "primary_hard_valid_tests": 4,
+  "primary_soft_valid_tests": 3,
+  "soft_1pct_hits": 1,
+  "soft_hits": [
+    "COL_FIRST_ROUND_WINNER_34582|colombia_first_round|PRE_ELECTION|30"
+  ]
+}

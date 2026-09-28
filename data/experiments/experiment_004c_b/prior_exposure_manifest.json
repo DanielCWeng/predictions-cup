@@ -1,0 +1,14 @@
+{
+  "experiment_id": "EXPERIMENT-004C-B",
+  "discovery_events": [
+    "hungary_election",
+    "peru_first_round"
+  ],
+  "challenge_events": {
+    "colombia_first_round": "004B_SEALED_PRIOR_EXPERIMENT_EXPOSED",
+    "peru_runoff": "004B_SEALED_PRIOR_EXPERIMENT_EXPOSED",
+    "colombia_runoff": "004B_SEALED_PRIOR_EXPERIMENT_EXPOSED"
+  },
+  "interpretation": "Challenge events were sealed from 004B but were touched by EXPERIMENT-003. They are locked 004C replication/challenge data after preregistration, not globally pristine holdouts.",
+  "prospective_clean_evidence": "Only post-freeze live/shadow data can be described as globally clean prospective evidence."
+}

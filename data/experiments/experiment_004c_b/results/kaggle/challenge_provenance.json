@@ -1,0 +1,15 @@
+{
+  "base_sha": "4e094d13b06d9e558cbc404cc4d472316d7d5bbb",
+  "challenge_events": [
+    "colombia_first_round",
+    "colombia_runoff",
+    "peru_runoff"
+  ],
+  "challenge_label": "004B_SEALED_PRIOR_EXPERIMENT_EXPOSED",
+  "challenge_opened_only_after_freeze_marker": true,
+  "data001_identity_sha256": "e89fe8e25dcc494dad3ed96fe6672ab9f247c01eb70d4c0270a913f18a200a72",
+  "data001_manifest_sha256": "e3d95735262b0be3e9fe7dd32fb54e53dc7e65b403ef9b5a2261ac107a8ea4c4",
+  "data001_quality_sha256": "354801b67b9c32ae82d419f8a6198b7fd814923e8c424ac8716862b47907ccb5",
+  "freeze_preregistration_sha256": "d86df188d4f0dfdb0876b2a7b723750d27438f328f5c6a94100df714b5a80009",
+  "freeze_registry_sha256": "499b22e760b511d11f81707058ed92ce6218bd11428d7dd319436de22811c4dc"
+}

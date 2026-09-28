@@ -1,0 +1,16 @@
+{
+  "experiment_id": "EXPERIMENT-004C-B",
+  "external_files": [
+    {
+      "bytes": 8416515,
+      "filename": "null_results.csv",
+      "reason": "raw 77,606-draw null table retained as Kaggle output; compact audit committed in review/null_audit_summary.csv",
+      "sha256": "97cb22e79eba3efb0181d5f1b05fd8e50d9033c146b8d142ec3ad841cfea37b7"
+    }
+  ],
+  "implementation_remote_head": "bd7e52dbe72d8d16bfd84f236400afc042e58133",
+  "implementation_tree": "44bff6069a9f84a6b3e8b2093ea7f6958a73b438",
+  "kaggle_kernel": "polyleviathan/sig-cup-exp004c-b-structural-redistribution",
+  "kaggle_version": 3,
+  "runner_sha256": "608eceacc80050286ad0b182bff356e673cb631425a92aa9b68044e962273349"
+}
