@@ -243,6 +243,7 @@ def test_uncertain_orders_continue_to_consume_open_order_risk() -> None:
         logical_intent_id="old",
         exchange_id="36",
         market_id="m1",
+        tournament_id="t1",
         reserved_exposure=9.0,
         open=False,
         uncertain=True,
