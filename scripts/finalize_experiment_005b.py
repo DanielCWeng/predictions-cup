@@ -147,6 +147,28 @@ def build_report(
     registry: list[dict[str, Any]],
 ) -> str:
     totals = reconstruction["totals"]
+    family_builds = feature_build.get("families", [])
+    controls = freeze.get("negative_controls", {})
+    comparable_controls = 0
+    attenuated_controls = 0
+    for target, control in controls.items():
+        shifted = control.get("within_market_circular_shift_dev_spearman")
+        shortlisted = freeze.get("shortlist", {}).get(target, [])
+        stable_rows = [
+            row for row in shortlisted if row.get("stable_train_dev")
+        ]
+        reference = (
+            stable_rows[0].get("dev_spearman")
+            if stable_rows
+            else shortlisted[0].get("dev_spearman")
+            if shortlisted
+            else None
+        )
+        if shifted is None or reference is None:
+            continue
+        comparable_controls += 1
+        if abs(float(shifted)) < abs(float(reference)):
+            attenuated_controls += 1
     stable = [
         row
         for row in registry
@@ -194,6 +216,31 @@ def build_report(
             f"**{feature_build.get('totals', {}).get('rows', '—')}**."
         ),
         "",
+        "### Split support by family",
+        "",
+        "| Family | TRAIN rows | DEV rows | HOLDOUT rows |",
+        "|---|---:|---:|---:|",
+    ]
+    for family_report in family_builds:
+        splits = family_report.get("split_counts", {})
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    str(family_report.get("family", "—")),
+                    f"{int(splits.get('TRAIN', 0)):,}",
+                    f"{int(splits.get('DEV', 0)):,}",
+                    f"{int(splits.get('HOLDOUT', 0)):,}",
+                ]
+            )
+            + " |"
+        )
+    lines += [
+        "",
+        "The split boundaries are synchronized chronological time-span boundaries, not row "
+        "quantiles. Row-count imbalances therefore reflect when trading activity occurred "
+        "inside each family and are retained rather than repaired post hoc.",
+        "",
         "## TRAIN → DEV screen",
         "",
         (
@@ -240,6 +287,13 @@ def build_report(
     lines += [
         "",
         "## Negative controls and baselines",
+        "",
+        (
+            f"Within-market circular-shift controls were comparable for "
+            f"**{comparable_controls}** targets; absolute DEV rank association was lower after "
+            f"the shift for **{attenuated_controls}** of them. The complete per-target control "
+            "panel remains in the TRAIN/DEV freeze and is never used for candidate selection."
+        ),
         "",
         "For model-eligible targets, sealed HOLDOUT compares the DEV-selected model against "
         "persistence, own recent price movement, current absolute movement and recent anonymous "
