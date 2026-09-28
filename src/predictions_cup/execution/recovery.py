@@ -178,12 +178,32 @@ async def _recover_single_cancel(
         return
 
     fills = await rest.get_order_fills(order_id, limit=200)
+    observed = clock_ns()
+    for fill in fills.data:
+        journal.record_event(
+            logical_operation_id=envelope.logical_operation_id,
+            event_type="AUTHORITATIVE_FILL",
+            observed_monotonic_ns=observed,
+            source_timestamp=fill.filled_at.isoformat(),
+            exchange_id=fill.exchange_id,
+            exchange_order_id=str(order_id),
+            fill_id=str(fill.id),
+            quantity=str(fill.quantity),
+            price=None if fill.price is None else str(fill.price),
+        )
     terminal = (
         LifecycleState.FILLED
         if abs(fills.total_quantity_filled) >= abs(order.quantity)
         else LifecycleState.CANCELLED
     )
-    journal.mark_state(envelope.logical_operation_id, terminal, clock_ns())
+    journal.record_event(
+        logical_operation_id=envelope.logical_operation_id,
+        event_type="RECONCILED_TERMINAL",
+        observed_monotonic_ns=observed,
+        exchange_order_id=str(order_id),
+        terminal_status=terminal.value,
+    )
+    journal.mark_state(envelope.logical_operation_id, terminal, observed)
 
 
 async def _cancel_all_scope_has_open_orders(
