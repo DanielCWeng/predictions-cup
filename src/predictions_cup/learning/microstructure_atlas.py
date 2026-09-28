@@ -210,7 +210,7 @@ def clipped_logit(probability: float, *, eps: float = 1e-6) -> float:
 
 
 def depth_within(levels: Mapping[float, float], midpoint: float, band: float) -> float:
-    return float(sum(size for price, size in levels.items() if abs(price - midpoint) <= band))
+    return float(sum(size for price, size in levels.items() if abs(price - midpoint) <= band + 1e-12))
 
 
 def top_sizes(book: L2Book) -> tuple[float, float] | None:
@@ -336,9 +336,9 @@ def split_for_time(
     t = int(timestamp_ns)
     if train_start <= t < train_end - purge:
         return "TRAIN"
-    if dev_start + purge <= t < dev_end - purge:
+    if dev_start <= t < dev_end - purge:
         return "DEV"
-    if hold_start + purge <= t < hold_end:
+    if hold_start <= t < hold_end:
         return "HOLDOUT"
     return None
 
