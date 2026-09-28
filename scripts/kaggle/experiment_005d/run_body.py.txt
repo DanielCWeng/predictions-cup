@@ -521,6 +521,21 @@ def candidate_eval(
             score = float(np.mean(sr * yr))
             denom = float(sr @ sr)
             beta = None if denom <= 0 else float((sr @ yr) / denom)
+            metrics = response_metrics(sr, yr)
+            delayed_full = np.full(len(signal), np.nan)
+            delay_steps = 60 // STEP_SECONDS
+            delayed_full[delay_steps:] = signal[:-delay_steps]
+            delayed_valid = hold_valid & np.isfinite(delayed_full)
+            delayed_score = None
+            delayed_ratio = None
+            if int(delayed_valid.sum()) >= 50:
+                dyr = y[delayed_valid] - apply_control(controls[delayed_valid], by)
+                dsr = delayed_full[delayed_valid] - apply_control(
+                    controls[delayed_valid], bs
+                )
+                delayed_score = float(np.mean(dsr * dyr))
+                if abs(score) > 1e-18:
+                    delayed_ratio = abs(delayed_score) / abs(score)
             rows.append({
                 "candidate_key": key,
                 "event": event,
@@ -536,6 +551,15 @@ def candidate_eval(
                 "holdout_n": int(hold_valid.sum()),
                 "holdout_score": score,
                 "holdout_beta": beta,
+                "holdout_hit_rate": metrics["hit_rate"],
+                "holdout_standardized_effect": metrics["standardized_effect"],
+                "holdout_signal_quantile_scores": metrics["signal_quantile_scores"],
+                "holdout_quantile_monotone": metrics["quantile_monotone"],
+                "holdout_delayed_60s_score": delayed_score,
+                "holdout_delayed_60s_effect_ratio": delayed_ratio,
+                "p_value": None,
+                "q_value": None,
+                "fdr_group": "HOLDOUT|PREDICTIVE_ALL",
                 "_bootstrap_values": (sr * yr).tolist(),
             })
     if PHASE == "TRAIN_DEV":
@@ -2098,10 +2122,12 @@ def select_shortlist(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def bootstrap_ci(values: list[float], component: str) -> tuple[float, float, float]:
+def bootstrap_ci(
+    values: list[float], component: str
+) -> tuple[float, float, float, float]:
     x = np.asarray(values, float)
     if len(x) < 50:
-        return float(np.mean(x)), float("nan"), float("nan")
+        return float(np.mean(x)), float("nan"), float("nan"), 1.0
     block = max(1, PURGE_SECONDS // STEP_SECONDS)
     rng = np.random.default_rng(seed(component))
     blocks = [x[s : min(len(x), s + block)] for s in range(0, len(x), block)]
@@ -2115,10 +2141,15 @@ def bootstrap_ci(values: list[float], component: str) -> tuple[float, float, flo
             count += len(piece)
         sample = np.concatenate(pieces)[: len(x)]
         means.append(float(np.mean(sample)))
+    observed = float(np.mean(x))
+    one_sided_p = (1.0 + sum(value <= 0.0 for value in means)) / (
+        1.0 + len(means)
+    )
     return (
-        float(np.mean(x)),
+        observed,
         float(np.quantile(means, 0.025)),
         float(np.quantile(means, 0.975)),
+        float(one_sided_p),
     )
 
 
@@ -2257,11 +2288,31 @@ def main() -> None:
         for row in hold:
             values = row.pop("_bootstrap_values", None)
             if values:
-                mean, lo, hi = bootstrap_ci(values, row["candidate_key"])
+                mean, lo, hi, bootstrap_p = bootstrap_ci(
+                    values, row["candidate_key"]
+                )
                 row["bootstrap_mean"] = mean
                 row["bootstrap_ci_low"] = lo
                 row["bootstrap_ci_high"] = hi
                 row["bootstrap_excludes_zero"] = bool(lo > 0 or hi < 0)
+                row["p_value"] = bootstrap_p
+                row["fdr_group"] = "HOLDOUT|PREDICTIVE_ALL"
+        bh(hold)
+        for row in hold:
+            if row.get("target_kind") != "future_probability_change":
+                continue
+            delayed_ratio = row.get("holdout_delayed_60s_effect_ratio")
+            row["holdout_confirmatory_pass"] = bool(
+                row.get("holdout_score") is not None
+                and float(row["holdout_score"]) > 0.0
+                and row.get("bootstrap_excludes_zero") is True
+                and row.get("q_value") is not None
+                and float(row["q_value"]) <= 0.10
+                and (
+                    delayed_ratio is None
+                    or float(delayed_ratio) < 0.80
+                )
+            )
         write_csv(WORK / "holdout_candidate_results.csv", hold)
         (WORK / "holdout_summary.json").write_text(
             json.dumps(
@@ -2273,6 +2324,15 @@ def main() -> None:
                         )
                     ),
                     "evaluated_rows": len(hold),
+                    "predictive_evaluated_rows": sum(
+                        row.get("target_kind") == "future_probability_change"
+                        for row in hold
+                    ),
+                    "confirmatory_pass_rows": sum(
+                        row.get("holdout_confirmatory_pass") is True
+                        for row in hold
+                    ),
+                    "confirmatory_fdr_alpha": 0.10,
                     "holdout_inspected_once": True,
                 },
                 indent=2,
