@@ -6,12 +6,19 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 from predictions_cup.config import AppSettings
 from predictions_cup.execution.interlocks import LiveInterlockError, assert_live_interlocks
-from predictions_cup.execution.models import ExecutionMode, OperationKind
+from predictions_cup.execution.models import (
+    ExecutionEnvelope,
+    ExecutionMode,
+    LifecycleState,
+    OperationKind,
+    RuntimeOrderIntent,
+)
 from predictions_cup.execution.planner import build_execution_plan
+from predictions_cup.execution.sinks import ExecutionPlan, ShadowSink
 from predictions_cup.risk.core import (
     RiskContext,
     RiskLimits,
@@ -372,3 +379,131 @@ def test_hot_path_modules_do_not_import_io_heavy_dependencies() -> None:
             elif isinstance(node, ast.ImportFrom) and node.module:
                 imported.add(node.module.split(".", 1)[0])
     assert imported.isdisjoint(forbidden)
+
+
+
+def test_settings_default_to_shadow_and_live_requires_complete_caps() -> None:
+    default = AppSettings()
+    assert default.execution_mode == "SHADOW"
+    assert default.trading_enabled is False
+    assert default.global_kill_switch is True
+
+    with pytest.raises(ValidationError, match="trading_enabled"):
+        AppSettings(execution_mode="LIVE")
+
+    with pytest.raises(ValidationError, match="every central risk cap"):
+        AppSettings(
+            execution_mode="LIVE",
+            trading_enabled=True,
+            sig_trade_credential=SecretStr("trade-secret"),
+            tournament_id="t1",
+            tournament_slug="cup",
+        )
+
+
+def test_registered_equivalent_kernel_candidates_match_reference() -> None:
+    kernels = default_kernel_registry()
+    for probability in (0.01, 0.1, 0.42, 0.5, 0.9, 0.99):
+        assert kernels.run("M-038", "ratio", probability) == pytest.approx(
+            kernels.run("M-038", "log1p", probability),
+            rel=1e-14,
+            abs=1e-14,
+        )
+
+    assert kernels.run("M-041", "stable", 0.42, 0.1, 2.0) == pytest.approx(
+        kernels.run("M-041", "naive", 0.42, 0.1, 2.0),
+        rel=1e-14,
+        abs=1e-14,
+    )
+
+
+def test_live_risk_rejects_unaccepted_mapping_and_global_kill_switch() -> None:
+    base = _snapshot()
+    market = base.markets[0]
+    unmapped = RuntimeSnapshot(
+        markets=(
+            RuntimeMarket(
+                market_id=market.market_id,
+                status=market.status,
+                exchange_ids=market.exchange_ids,
+                tournament_id=market.tournament_id,
+                mapping_accepted=False,
+                tradeable=True,
+            ),
+        ),
+        books=base.books,
+        portfolio=base.portfolio,
+        observation_monotonic_ns=base.observation_monotonic_ns,
+    )
+    context = RiskContext(
+        mode=ExecutionMode.LIVE,
+        kill_switch=False,
+        limits=_limits(),
+        max_state_age_ns=1_000_000,
+    )
+    assert evaluate_risk(_opportunity(), unmapped, context).reason == (
+        "mapping_or_tradeability_not_accepted"
+    )
+
+    killed = RiskContext(
+        mode=ExecutionMode.LIVE,
+        kill_switch=True,
+        limits=_limits(),
+        max_state_age_ns=1_000_000,
+    )
+    assert evaluate_risk(_opportunity(), base, killed).reason == "global_kill_switch"
+
+
+def test_shadow_sink_only_fills_immediately_executable_crosses() -> None:
+    snapshot = _snapshot()
+    crossing = RuntimeOrderIntent(
+        intent_id="crossing",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=1,
+        limit_price_ticks=101,
+        strategy_id="fixture",
+        decision_observation_ns=1,
+    )
+    envelope = ExecutionEnvelope.placement(
+        logical_operation_id="shadow-cross",
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        sink_mode=ExecutionMode.SHADOW,
+        idempotency_key="shadow-cross",
+        intents=(crossing,),
+        created_monotonic_ns=1,
+    )
+    event = ShadowSink(clock_ns=lambda: 2).dispatch(
+        ExecutionPlan(envelope=envelope, intents=(crossing,)),
+        snapshot,
+    )
+    assert event.state is LifecycleState.FILLED
+
+    passive = RuntimeOrderIntent(
+        intent_id="passive",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=1,
+        limit_price_ticks=100,
+        strategy_id="fixture",
+        decision_observation_ns=1,
+    )
+    passive_envelope = ExecutionEnvelope.placement(
+        logical_operation_id="shadow-passive",
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        sink_mode=ExecutionMode.SHADOW,
+        idempotency_key="shadow-passive",
+        intents=(passive,),
+        created_monotonic_ns=1,
+    )
+    passive_event = ShadowSink(clock_ns=lambda: 3).dispatch(
+        ExecutionPlan(envelope=passive_envelope, intents=(passive,)),
+        snapshot,
+    )
+    assert passive_event.state is LifecycleState.OPEN
