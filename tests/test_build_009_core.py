@@ -98,7 +98,7 @@ def test_shadow_is_default_and_live_requires_all_explicit_gates() -> None:
         AppSettings(
             execution_mode="LIVE",
             trading_enabled=True,
-            sig_trade_credential="trade-secret",
+            sig_trade_credential=SecretStr("trade-secret"),
             tournament_id="tournament-1",
             tournament_slug="cup",
         )
@@ -106,7 +106,7 @@ def test_shadow_is_default_and_live_requires_all_explicit_gates() -> None:
     live = AppSettings(
         execution_mode="LIVE",
         trading_enabled=True,
-        sig_trade_credential="trade-secret",
+        sig_trade_credential=SecretStr("trade-secret"),
         tournament_id="tournament-1",
         tournament_slug="cup",
         risk_max_order_size=10,
