@@ -142,3 +142,11 @@ def test_holdout_emits_separate_falsification_concentration_artifact() -> None:
     assert 'WORK / "falsification_concentration_report.json"' in runner
     assert '"concentration",' in runner
     assert '"falsification": evaluation["falsification"]' in runner
+
+
+def test_holdout_reports_weighted_market_and_event_transfer() -> None:
+    runner = Path("scripts/kaggle/experiment_005e/run.py").read_text()
+    assert 'grouped_transfer("condition_id")' in runner
+    assert 'grouped_transfer("event_id")' in runner
+    assert 'falsification["per_event_transfer"]' in runner
+    assert '"weighted_numerator": observed_loss_gain * w_holdout' in runner
