@@ -159,7 +159,7 @@ def main() -> None:
     shutil.copyfile(freeze_path, freeze_target)
     shutil.copyfile(inventory_path, inventory_target)
 
-    source_evidence = [row for manifest in shards for row in manifest.get("source_evidence", [])]
+    source_evidence = [row for manifest in shards for row in manifest.get("source_objects", [])]
     source_hours = sorted({row["hour"] for row in source_evidence})
     scanned_hour_total = sum(
         int((parse_time(item["source_scan_bounds"]["shard_end_exclusive"]) -
@@ -239,9 +239,9 @@ def main() -> None:
     row_counts: dict[str, int] = defaultdict(int)
     duplicate_counts: dict[str, int] = defaultdict(int)
     for manifest in shards:
-        for stream, count in manifest.get("row_counts", {}).items():
+        for stream, count in manifest.get("row_counts_by_type", {}).items():
             row_counts[stream] += int(count)
-        for stream, count in manifest.get("duplicate_rows_removed", {}).items():
+        for stream, count in manifest.get("exact_duplicate_rows_removed_by_type", {}).items():
             duplicate_counts[stream] += int(count)
     markets_with_rows = {
         row["condition_id"] for row in coverage_rows if int(row["row_count"]) > 0

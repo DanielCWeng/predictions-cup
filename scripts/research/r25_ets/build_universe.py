@@ -189,10 +189,14 @@ def command_finalize(args: argparse.Namespace) -> None:
         if not market_id:
             continue
         old = by_market.get(market_id)
-        if old and old.get("condition_id") != cid:
-            raise ValueError(f"Gamma returned conflicting condition IDs for market {market_id}")
-        if old and old.get("clob_token_ids") != candidate.get("clob_token_ids"):
-            raise ValueError(f"Gamma returned conflicting token IDs for market {market_id}")
+        if old:
+            for identity_field in ("condition_id", "event_id", "outcomes", "clob_token_ids"):
+                old_value, new_value = old.get(identity_field, ""), candidate.get(identity_field, "")
+                if old_value and new_value and old_value != new_value:
+                    raise ValueError(
+                        f"Gamma returned conflicting {identity_field} for market {market_id}: "
+                        f"{old_value!r} != {new_value!r}"
+                    )
         by_market[market_id] = candidate
 
     edges: list[dict[str, Any]] = []
@@ -243,7 +247,14 @@ def command_finalize(args: argparse.Namespace) -> None:
         row = by_market[market_id]
         outcome_labels = _json_field(row, "outcomes", [])
         token_ids = _json_field(row, "clob_token_ids", [])
-        if len(outcome_labels) != len(token_ids) or len(token_ids) < 2 or len(set(token_ids)) != len(token_ids):
+        missing_identity = [field for field in ("event_id", "event_slug", "slug", "question") if not row.get(field, "").strip()]
+        if missing_identity:
+            raise ValueError(f"accepted market lacks canonical Gamma identity fields {missing_identity}: {market_id}")
+        if (
+            len(outcome_labels) != len(token_ids) or len(token_ids) < 2
+            or len(set(token_ids)) != len(token_ids) or len(set(outcome_labels)) != len(outcome_labels)
+            or any(not str(value).strip() for value in [*outcome_labels, *token_ids])
+        ):
             raise ValueError(f"ambiguous outcome/token alignment for accepted market {market_id}")
         if any(str(t) in direct_tokens for t in token_ids):
             raise ValueError(f"accepted ETS market reuses a direct-mapping token: {market_id}")
