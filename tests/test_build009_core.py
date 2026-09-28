@@ -327,6 +327,34 @@ def test_uncertain_orders_continue_to_consume_open_order_risk() -> None:
     assert decision.reason == "max_open_order_exposure"
 
 
+
+def test_open_and_uncertain_orders_count_toward_worst_case_gross_cap() -> None:
+    uncertain = RuntimeOrderState(
+        logical_intent_id="old-gross",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        reserved_exposure=9.0,
+        open=False,
+        uncertain=True,
+    )
+    decision = evaluate_risk(
+        _opportunity(quantity=2),
+        _snapshot(orders=(uncertain,)),
+        RiskContext(
+            mode=ExecutionMode.LIVE,
+            kill_switch=False,
+            limits=_limits(
+                max_gross_exposure=10.0,
+                max_open_order_exposure=100.0,
+            ),
+            max_state_age_ns=1_000_000,
+        ),
+    )
+    assert decision.approved is False
+    assert decision.reason == "max_gross_exposure"
+
+
 def test_atomic_relationship_is_risked_as_one_execution_operation() -> None:
     decision = evaluate_risk(
         _opportunity(
@@ -349,7 +377,17 @@ def test_atomic_relationship_is_risked_as_one_execution_operation() -> None:
 
 
 def test_shadow_and_live_share_identical_post_risk_intents() -> None:
-    decision = evaluate_risk(
+    shadow_decision = evaluate_risk(
+        _opportunity(),
+        _snapshot(),
+        RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=_limits(),
+            max_state_age_ns=1_000_000,
+        ),
+    )
+    live_decision = evaluate_risk(
         _opportunity(),
         _snapshot(),
         RiskContext(
@@ -359,17 +397,15 @@ def test_shadow_and_live_share_identical_post_risk_intents() -> None:
             max_state_age_ns=1_000_000,
         ),
     )
-    assert decision.approved
+    assert shadow_decision.approved and live_decision.approved
 
     shadow = build_execution_plan(
-        decision,
-        mode=ExecutionMode.SHADOW,
+        shadow_decision,
         logical_operation_id="logical-1",
         created_monotonic_ns=123,
     )
     live = build_execution_plan(
-        decision,
-        mode=ExecutionMode.LIVE,
+        live_decision,
         logical_operation_id="logical-1",
         created_monotonic_ns=123,
     )
@@ -378,6 +414,16 @@ def test_shadow_and_live_share_identical_post_risk_intents() -> None:
     assert shadow.envelope.payload_sha256 == live.envelope.payload_sha256
     assert shadow.envelope.sink_mode is ExecutionMode.SHADOW
     assert live.envelope.sink_mode is ExecutionMode.LIVE
+
+    # Execution mode is no longer an independent planner input. A SHADOW Risk
+    # approval therefore cannot be relabelled LIVE by a caller.
+    with pytest.raises(TypeError):
+        build_execution_plan(
+            shadow_decision,
+            logical_operation_id="bad-mode-override",
+            created_monotonic_ns=123,
+            mode=ExecutionMode.LIVE,  # type: ignore[call-arg]
+        )
 
 
 def test_live_interlocks_require_explicit_invocation_and_trusted_account() -> None:
@@ -407,11 +453,12 @@ def test_live_interlocks_require_explicit_invocation_and_trusted_account() -> No
             account_trusted=False,
         )
 
-    assert_live_interlocks(
+    permit = assert_live_interlocks(
         settings,
         explicit_live_invocation=True,
         account_trusted=True,
     )
+    assert permit.tournament_id == "t1"
 
 
 def test_hot_path_telemetry_is_bounded_and_counts_drops() -> None:
@@ -573,3 +620,30 @@ def test_shadow_sink_only_fills_immediately_executable_crosses() -> None:
         snapshot,
     )
     assert passive_event.state is LifecycleState.OPEN
+
+
+    oversized = RuntimeOrderIntent(
+        intent_id="partial-depth",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=25,
+        limit_price_ticks=101,
+        strategy_id="fixture",
+        decision_observation_ns=1,
+    )
+    oversized_envelope = ExecutionEnvelope.placement(
+        logical_operation_id="shadow-partial",
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        sink_mode=ExecutionMode.SHADOW,
+        idempotency_key="shadow-partial",
+        intents=(oversized,),
+        created_monotonic_ns=1,
+    )
+    partial_event = ShadowSink(clock_ns=lambda: 4).dispatch(
+        ExecutionPlan(envelope=oversized_envelope, intents=(oversized,)),
+        snapshot,
+    )
+    assert partial_event.state is LifecycleState.PARTIALLY_FILLED
