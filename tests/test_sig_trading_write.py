@@ -10,6 +10,7 @@ import pytest
 from pydantic import SecretStr, ValidationError
 
 from predictions_cup.config import AppSettings
+from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
 from predictions_cup.sig.account_state import (
     AccountRealtimeStateEngine,
     AccountTrustTransition,
@@ -22,6 +23,7 @@ from predictions_cup.sig.trading_dto import (
     BatchOrderRequestDto,
     MultiLegOrderRequestDto,
     OrderInputDto,
+    PositionReadDto,
     SingleOrderRequestDto,
 )
 
@@ -511,4 +513,65 @@ def test_realtime_fill_never_mutates_position_without_direction() -> None:
         is AccountTrustTransition.UNTRUSTED_FILL_REQUIRES_RECONCILIATION
     )
     assert engine.runtime_portfolio().positions == ()
+
+def test_delayed_fill_after_rest_snapshot_does_not_double_apply_or_assume_direction() -> None:
+    state = AccountRealtimeStateEngine(tournament_id="tournament-1")
+    position = PositionReadDto.model_validate(
+        {
+            "exchangeId": "36",
+            "marketId": "26",
+            "marketTitle": "fixture",
+            "option": "yes",
+            "settled": False,
+            "quantity": "5",
+            "avgCost": "0.42",
+            "currentPrice": "0.42",
+            "marketValue": "2.10",
+            "costBasis": "2.10",
+            "unrealizedPnl": "0",
+            "unrealizedPnlPct": "0",
+            "moneyEarned": "0",
+            "lots": [],
+        }
+    )
+    state.apply_authoritative(
+        AccountAuthoritativeSnapshot(
+            tournament_id="tournament-1",
+            tournament_slug="cup",
+            open_orders=(),
+            positions=(position,),
+            observed_at=datetime(2026, 9, 28, 20, 0, tzinfo=UTC),
+        )
+    )
+    before = state.runtime_portfolio()
+    assert before.positions[0].gross_exposure == 5.0
+
+    # Realtime does not tell us whether this quantity is a buy or sell, and the
+    # fill may already be reflected in the REST position above.
+    result = state.handle_raw_batch(
+        {
+            "fills": [
+                {
+                    "orderId": 1001,
+                    "exchangeId": "36",
+                    "marketId": "26",
+                    "price": "0.42",
+                    "quantity": "2",
+                    "executedAt": "2026-09-28T20:00:01Z",
+                    "tournamentId": "tournament-1",
+                }
+            ],
+            "orderUpdates": [],
+            "settlements": [],
+            "refunds": [],
+            "collateralChanges": [],
+            "delivery": _delivery(1, 0),
+        },
+        observed_at=datetime(2026, 9, 28, 20, 0, 1, tzinfo=UTC),
+    )
+
+    assert result.requires_reconciliation is True
+    assert state.trusted is False
+    after = state.runtime_portfolio()
+    assert after.positions[0].gross_exposure == 5.0
 
