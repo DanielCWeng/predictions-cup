@@ -37,16 +37,20 @@ class AffineFit:
         return self.intercept + self.slope * x
 
 
-def clip_probability(value: NDArray[np.float64] | float, eps: float = EPS):
-    return np.clip(value, eps, 1.0 - eps)
+def clip_probability(
+    value: NDArray[np.float64] | float, eps: float = EPS
+) -> NDArray[np.float64]:
+    return np.asarray(np.clip(value, eps, 1.0 - eps), dtype=np.float64)
 
 
-def logit(value: NDArray[np.float64] | float, eps: float = EPS):
+def logit(
+    value: NDArray[np.float64] | float, eps: float = EPS
+) -> NDArray[np.float64]:
     p = clip_probability(value, eps)
-    return np.log(p / (1.0 - p))
+    return np.asarray(np.log(p / (1.0 - p)), dtype=np.float64)
 
 
-def logistic(value: NDArray[np.float64] | float):
+def logistic(value: NDArray[np.float64] | float) -> NDArray[np.float64]:
     x = np.asarray(value, dtype=float)
     out = np.empty_like(x)
     positive = x >= 0
@@ -75,7 +79,7 @@ def project_simplex(values: Iterable[float]) -> NDArray[np.float64]:
         return np.full_like(v, 1.0 / len(v))
     j = int(rho[-1])
     theta = cssv[j] / (j + 1.0)
-    return np.maximum(v - theta, 0.0)
+    return np.asarray(np.maximum(v - theta, 0.0), dtype=np.float64)
 
 
 def project_capped_simplex(values: Iterable[float]) -> NDArray[np.float64]:
@@ -127,7 +131,7 @@ def kl_partition_projection(
         else:
             hi = lam
     p = logistic(z - hi / w)
-    return p / float(p.sum())
+    return np.asarray(p / float(p.sum()), dtype=np.float64)
 
 
 def weighted_isotonic_nonincreasing(
@@ -228,7 +232,9 @@ def common_factor_residual(panel: NDArray[np.float64], target_index: int) -> NDA
     if x.ndim != 2 or not 0 <= target_index < x.shape[1] or x.shape[1] < 2:
         raise ValueError("invalid panel/target")
     refs = np.delete(x, target_index, axis=1)
-    return x[:, target_index] - np.nanmean(refs, axis=1)
+    return np.asarray(
+        x[:, target_index] - np.nanmean(refs, axis=1), dtype=np.float64
+    )
 
 
 def structural_residual(
@@ -237,4 +243,4 @@ def structural_residual(
     a, b = _require_vector(observed), _require_vector(coherent)
     if len(a) != len(b):
         raise ValueError("observed/coherent vectors must match")
-    return logit(a) - logit(b)
+    return np.asarray(logit(a) - logit(b), dtype=np.float64)
