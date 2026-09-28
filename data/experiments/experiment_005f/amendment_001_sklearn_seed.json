@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005F",
+  "amendment_id": "005F-AMENDMENT-001",
+  "status": "PRE_RESULT_ENGINEERING_AMENDMENT",
+  "terminal_scientific_runner_commit": "9ec9511536514bbaa97929a4b88d701cbc09987c",
+  "terminal_freeze_record_commit": "38f9757",
+  "amended_runner_commit": "7899361bfade41211f143aa1d6b940b723c43319",
+  "reason": "Kaggle's installed scikit-learn rejects integer random_state values above 2^32-1. The frozen master seed 20260928005 exceeded that implementation range.",
+  "change": {
+    "master_seed": 20260928005,
+    "sklearn_seed_rule": "master_seed % (2**32 - 1)",
+    "sklearn_seed_value": 3081052825,
+    "affected_uses": [
+      "LogisticRegression random_state",
+      "HistGradientBoostingClassifier random_state",
+      "HistGradientBoostingRegressor random_state"
+    ]
+  },
+  "scientific_design_changed": false,
+  "feature_universe_changed": false,
+  "target_universe_changed": false,
+  "data_window_changed": false,
+  "split_policy_changed": false,
+  "model_grid_changed": false,
+  "selection_rule_changed": false,
+  "holdout_accessed": false,
+  "invalidated_runs": [
+    {
+      "kaggle_kernel": "polyleviathan/005f-microstructure-liquidity-atlas-train-dev",
+      "version": 4,
+      "disposition": "ENGINEERING_FAILURE_NO_SCIENTIFIC_OUTPUT",
+      "failure": "sklearn InvalidParameterError on random_state range before canonical TRAIN/DEV result production"
+    }
+  ],
+  "canonical_train_dev_run": "kernel version 9 or later only if byte-equivalent scientifically and separately documented"
+}
