@@ -76,6 +76,27 @@ def parse_jsonish(value) -> list[str]:
     return []
 
 
+def parse_relationship_map(value) -> dict[str, list[str]]:
+    if value is None:
+        return {}
+    try:
+        if pd.isna(value):
+            return {}
+    except Exception:
+        pass
+    try:
+        obj = json.loads(str(value))
+    except Exception:
+        return {}
+    if not isinstance(obj, dict):
+        return {}
+    out = {}
+    for key, values in obj.items():
+        if isinstance(values, (list, tuple, set)):
+            out[str(key)] = [idstr(x) for x in values if idstr(x)]
+    return out
+
+
 def locate(name: str, fragment: str) -> Path:
     matches = [p for p in Path("/kaggle/input").rglob(name) if fragment in str(p)]
     if len(matches) != 1:
@@ -216,21 +237,27 @@ def load_semantics(root: Path):
     )
 
     anchor_by_target = {}
+    exact_equiv_by_target = {}
     for r in anchors.itertuples(index=False):
         target = idstr(r.sig_market_id)
+        direct_ids = set(parse_jsonish(r.existing_direct_pm_market_ids_json))
+        relationships = parse_relationship_map(r.v2_relationship_market_ids_json)
+        exact_equiv = set(relationships.get("EXACT_EQUIVALENT", [])) - direct_ids
         anchor_by_target[target] = {
             "exchange_id": idstr(r.sig_exchange_id),
             "question": str(r.sig_question),
             "mapping_class": str(r.existing_direct_mapping_class),
             "adds": str(r.adds_beyond_direct),
             "relevant_ids": set(parse_jsonish(r.v2_relevant_pm_market_ids_json)),
+            "direct_ids": direct_ids,
+            "exact_equiv_ids": exact_equiv,
         }
+        exact_equiv_by_target[target] = exact_equiv
 
-    p1_by_target = {}
-    for r in family.itertuples(index=False):
-        p1_by_target[idstr(r.sig_market_id)] = set(
-            parse_jsonish(r.p1_direct_winner_ids_json)
-        )
+    # Load the frozen family seed as a provenance gate even though corrected
+    # LOO_PRICE uses only settlement-aligned EXACT_EQUIVALENT relationships.
+    if family.empty:
+        raise RuntimeError("DirectInformationFamily seed is empty")
 
     worked = {
         x["component"]: x for x in components.get("worked_rank_computations", [])
@@ -240,7 +267,7 @@ def load_semantics(root: Path):
     if sh_matrix.shape != (13, 16):
         raise RuntimeError(f"unexpected Senate-House matrix shape {sh_matrix.shape}")
 
-    return anchor_by_target, p1_by_target, sh_matrix
+    return anchor_by_target, exact_equiv_by_target, sh_matrix
 
 
 class SourceLookup:
@@ -616,12 +643,12 @@ def build_event_base(direct: pd.DataFrame, split: dict):
 def build_loo_price(
     base: pd.DataFrame,
     anchor_by_target: dict,
-    p1_by_target: dict,
+    exact_equiv_by_target: dict,
     lookup: SourceLookup,
 ):
     rows = []
     for ev in base.itertuples(index=False):
-        ids = sorted(p1_by_target.get(str(ev.sig_market_id), set()))
+        ids = sorted(exact_equiv_by_target.get(str(ev.sig_market_id), set()))
         if not ids:
             continue
         states = lookup.component(
@@ -635,7 +662,7 @@ def build_loo_price(
         row.update(
             {
                 "pred_qp": pred,
-                "candidate_p1_sources": len(ids),
+                "candidate_exact_equiv_sources": len(ids),
                 **source_age_summary(states),
             }
         )
@@ -768,12 +795,10 @@ def build_governor_inverse_rows(
     anchor_by_target: dict,
     lookup: SourceLookup,
 ):
-    gov_set = set(GOV_COUNT_IDS)
     eligible = {
         t
         for t, meta in anchor_by_target.items()
-        if gov_set.issubset(meta["relevant_ids"])
-        and "governor" in meta["question"].lower()
+        if "governor" in meta["question"].lower()
         and orientation_from_question(meta["question"]) is not None
     }
 
@@ -917,8 +942,8 @@ def coverage_sensitivity(
             {
                 t
                 for t, m in anchor_by_target.items()
-                if set(GOV_COUNT_IDS).issubset(m["relevant_ids"])
-                and "governor" in m["question"].lower()
+                if "governor" in m["question"].lower()
+                and orientation_from_question(m["question"]) is not None
             },
         ),
     }
@@ -960,7 +985,7 @@ def main() -> None:
     root = locate_data004_root()
     direct = load_direct_events(final_start)
     source = load_source_rows(root, final_start)
-    anchor_by_target, p1_by_target, sh_matrix = load_semantics(root)
+    anchor_by_target, exact_equiv_by_target, sh_matrix = load_semantics(root)
     sh_matrix = load_sh_matrix(sh_matrix)
     lookup = SourceLookup(source)
     base = build_event_base(direct, split)
@@ -968,7 +993,7 @@ def main() -> None:
     if (base["ts"] >= final_start).any():
         raise RuntimeError("FINAL leaked into corrected structural math base")
 
-    loo_price = build_loo_price(base, anchor_by_target, p1_by_target, lookup)
+    loo_price = build_loo_price(base, anchor_by_target, exact_equiv_by_target, lookup)
     georgia = build_georgia(base, anchor_by_target, lookup)
     chamber = build_chamber(base, anchor_by_target, lookup, sh_matrix)
     gov_inverse = build_governor_inverse_rows(base, anchor_by_target, lookup)
@@ -1008,7 +1033,7 @@ def main() -> None:
         },
         "R3-S02-LOO-PRICE-QP": {
             "status": "EXERCISED",
-            "evidence": "P1 direct-winner redundancy QP/least-squares comparator",
+            "evidence": "Settlement-aligned EXACT_EQUIVALENT redundancy comparator with literal DATA-003/direct IDs excluded",
         },
         "R3-S03-LOO-FAMILY-QP": {
             "status": "EXERCISED_PRIORITY_COMPONENTS",
