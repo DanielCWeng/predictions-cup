@@ -34,6 +34,7 @@ _SCHEMAS: dict[str, pa.Schema] = {
     "raw_events": pa.schema(
         [
             ("session_id", pa.string()),
+            ("connection_epoch", pa.int64()),
             ("schema_version", pa.string()),
             ("source", pa.string()),
             ("event_type", pa.string()),
@@ -53,6 +54,7 @@ _SCHEMAS: dict[str, pa.Schema] = {
     "normalized_events": pa.schema(
         [
             ("session_id", pa.string()),
+            ("connection_epoch", pa.int64()),
             ("schema_version", pa.string()),
             ("source", pa.string()),
             ("event_type", pa.string()),
@@ -215,8 +217,9 @@ class ImmutableCaptureSink:
         if self._closed:
             return
         self._closed = True
-        self._queue.put(None)
-        self._thread.join()
+        if self._thread.is_alive():
+            self._queue.put(None)
+            self._thread.join()
         if self._error is not None:
             raise CaptureStorageError("capture writer failed") from self._error
 
@@ -345,6 +348,7 @@ class LaunchSigRecorder(SigRealtimeRecorder):
     ) -> None:
         super().__init__(path)
         self.session_id = session_id or uuid.uuid4().hex
+        self._connection_epoch = 0
         self._sink = ImmutableCaptureSink(
             research_root,
             shard_seconds=shard_seconds,
@@ -389,6 +393,7 @@ class LaunchSigRecorder(SigRealtimeRecorder):
             "raw_events",
             {
                 "session_id": self.session_id,
+                "connection_epoch": self._connection_epoch,
                 "schema_version": SCHEMA_VERSION,
                 "source": "SIG_REALTIME_DECODED",
                 "event_type": "MARKET_BATCH",
@@ -660,6 +665,23 @@ class LaunchSigRecorder(SigRealtimeRecorder):
             payload={"topic": topic},
         )
 
+    def record_connection_boundary(
+        self,
+        *,
+        observed_at: datetime,
+        reason: str,
+    ) -> None:
+        """Start a new socket/subscription epoch inside one process session."""
+        self._connection_epoch += 1
+        self._emit_normalized(
+            event_type="CONNECTION_BOUNDARY",
+            observed_at=observed_at,
+            provenance="LOCAL_SUBSCRIPTION_LIFECYCLE",
+            evidence_label="LOCAL_CONNECTION_EPOCH",
+            reason=reason,
+            payload={"connection_epoch": self._connection_epoch},
+        )
+
     def record_shadow_make(
         self,
         *,
@@ -752,6 +774,7 @@ class LaunchSigRecorder(SigRealtimeRecorder):
             "normalized_events",
             {
                 "session_id": self.session_id,
+                "connection_epoch": self._connection_epoch,
                 "schema_version": SCHEMA_VERSION,
                 "source": "SIG",
                 "event_type": event_type,
