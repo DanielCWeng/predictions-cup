@@ -7,6 +7,6 @@
   "timeout_minutes": 180,
   "download_outputs": true,
   "output_file_pattern": "(dead_idea_ledger|results_summary)\\.json$|experiment_matrix\\.csv$",
-  "run_nonce": "PRED006_HAZARD_DIAG_FIX_20260929",
-  "note": "PRED-006 hazard-fee TRAIN/DEV search. Bound to frozen split 28d41fbb590f7f9abe59ca24e00841307fe13991c3c695748240fe127847f349; FINAL excluded. Relaunch changes diagnostics column access only after technical failure; model/search specification unchanged."
+  "run_nonce": "PRED006_HAZARD_V4_BLOCK_END_20260929",
+  "note": "PRED-006 hazard-fee DEV search corrected after V3 methodological invalidation: condition-block-end observations only, target price change strictly after current Polygon block. Frozen split; FINAL excluded."
 }

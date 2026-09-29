@@ -51,38 +51,69 @@ def load_frame(final_start:int)->pd.DataFrame:
     # snapshot fields are intentionally excluded because they are not historical.
     con.execute(f"""
       create temp view active_fee as
-      select cast(condition_id as varchar) condition_id,
-             lower(cast(tx_hash as varchar)) tx_hash,
-             max(cast(fee_evidence as varchar)) filter(where cast(order_is_match_taker_order as boolean)) active_fee_evidence,
-             max(cast(fee_net_usd_equiv as double)) filter(where cast(order_is_match_taker_order as boolean)) active_fee_net,
-             max(cast(fee_charged_usd_equiv as double)) filter(where cast(order_is_match_taker_order as boolean)) active_fee_charged,
-             max(cast(fee_refunded_usd_equiv as double)) filter(where cast(order_is_match_taker_order as boolean)) active_fee_refunded,
-             max(cast(n_charge_legs as double)) filter(where cast(order_is_match_taker_order as boolean)) active_charge_legs
+      select cast(condition_id as varchar) AS condition_id,
+             lower(cast(tx_hash as varchar)) AS tx_hash,
+             max(cast(fee_evidence as varchar)) filter(where cast(order_is_match_taker_order as boolean)) AS active_fee_evidence,
+             max(cast(fee_net_usd_equiv as double)) filter(where cast(order_is_match_taker_order as boolean)) AS active_fee_net,
+             max(cast(fee_charged_usd_equiv as double)) filter(where cast(order_is_match_taker_order as boolean)) AS active_fee_charged,
+             max(cast(fee_refunded_usd_equiv as double)) filter(where cast(order_is_match_taker_order as boolean)) AS active_fee_refunded,
+             max(cast(n_charge_legs as double)) filter(where cast(order_is_match_taker_order as boolean)) AS active_charge_legs
       from read_parquet([{fs}],union_by_name=true)
       where cast(timestamp as bigint)<{int(final_start)}
       group by 1,2
     """)
     df=con.execute(f"""
-      select cast(e.timestamp as bigint) AS event_ts, lower(cast(e.tx_hash as varchar)) AS tx_hash,
-             cast(e.log_index as bigint) AS log_index,cast(e.condition_id as varchar) AS condition_id,
-             cast(e.p_yes as double) AS p_yes,cast(e.size_shares as double) AS size_shares,
-             cast(e.value_usd as double) AS value_usd,cast(e.sig_market_id as varchar) AS sig_market_id,
-             upper(cast(e.mapping_class as varchar)) AS mapping_class,cast(e.window_id as varchar) AS window_id,
-             t.block_number,f.active_fee_evidence,
-             f.active_fee_net,f.active_fee_charged,f.active_fee_refunded,f.active_charge_legs
-      from read_parquet('{q(econ)}') e
-      join read_parquet('{q(txb)}') t on lower(cast(e.tx_hash as varchar))=t.tx_hash
-      join read_parquet('{q(bts)}') b using(block_number)
-      left join active_fee f on cast(e.condition_id as varchar)=f.condition_id and lower(cast(e.tx_hash as varchar))=f.tx_hash
-      where cast(e.timestamp as bigint)<{int(final_start)}
-      order by t.block_number,cast(e.log_index as bigint)
+      with enriched as (
+        select
+          b.block_timestamp AS event_ts,
+          t.block_number,
+          cast(e.log_index as bigint) AS log_index,
+          cast(e.condition_id as varchar) AS condition_id,
+          cast(e.p_yes as double) AS p_yes,
+          cast(e.size_shares as double) AS size_shares,
+          cast(e.value_usd as double) AS value_usd,
+          cast(e.sig_market_id as varchar) AS sig_market_id,
+          upper(cast(e.mapping_class as varchar)) AS mapping_class,
+          cast(e.window_id as varchar) AS window_id,
+          lower(coalesce(cast(f.active_fee_evidence as varchar),'')) AS fee_evidence,
+          coalesce(cast(f.active_fee_net as double),0.0) AS fee_net,
+          coalesce(cast(f.active_fee_charged as double),0.0) AS fee_charged_amt,
+          coalesce(cast(f.active_fee_refunded as double),0.0) AS fee_refunded_amt,
+          coalesce(cast(f.active_charge_legs as double),0.0) AS charge_legs
+        from read_parquet('{q(econ)}') e
+        join read_parquet('{q(txb)}') t on lower(cast(e.tx_hash as varchar))=t.tx_hash
+        join read_parquet('{q(bts)}') b using(block_number)
+        left join active_fee f
+          on cast(e.condition_id as varchar)=f.condition_id
+         and lower(cast(e.tx_hash as varchar))=f.tx_hash
+        where b.block_timestamp < {int(final_start)}
+      )
+      select
+        event_ts AS timestamp,
+        block_number,
+        condition_id,
+        arg_max(p_yes,log_index) AS p_yes,
+        sum(size_shares) AS size_shares,
+        sum(value_usd) AS value_usd,
+        arg_max(sig_market_id,log_index) AS sig_market_id,
+        arg_max(mapping_class,log_index) AS mapping_class,
+        arg_max(window_id,log_index) AS window_id,
+        count(*) AS block_trade_count,
+        max(case when fee_evidence='fee_charged' then 1 else 0 end) AS fee_charged,
+        max(case when fee_evidence='custody_not_ingested' then 1 else 0 end) AS fee_missing,
+        max(case when fee_evidence='no_fee_leg_observed' then 1 else 0 end) AS fee_no_leg,
+        sum(fee_net) AS active_fee_net,
+        sum(fee_charged_amt) AS active_fee_charged,
+        sum(fee_refunded_amt) AS active_fee_refunded,
+        sum(charge_legs) AS active_charge_legs
+      from enriched
+      group by event_ts,block_number,condition_id
+      order by block_number,condition_id
     """).df()
-    df = df.rename(columns={"event_ts": "timestamp"})
     con.close()
     if df.empty or int(df.timestamp.max())>=final_start:raise RuntimeError("FINAL contamination")
-    if df.duplicated(["block_number","log_index"]).any():raise RuntimeError("bad canonical ordering")
+    if df.duplicated(["condition_id","block_number"]).any():raise RuntimeError("duplicate condition/block observations")
     return df.reset_index(drop=True)
-
 def features(df:pd.DataFrame)->pd.DataFrame:
     n=len(df);ts=df.timestamp.to_numpy(np.int64);p=df.p_yes.to_numpy(float)
     df["boundary_distance"]=np.minimum(p,1-p)
@@ -102,10 +133,8 @@ def features(df:pd.DataFrame)->pd.DataFrame:
             df.loc[idx,f"count_{w}"]=np.where(supported,loc-left+1,np.nan)
             df.loc[idx,f"vol_{w}"]=np.where(supported,np.sqrt(np.maximum(0,pref[loc+1]-pref[left])),np.nan)
             df.loc[idx,f"mom_{w}"]=np.where(supported,x-x[left],np.nan)
-    ev=df.active_fee_evidence.fillna("").astype(str).str.lower()
-    df["fee_charged"]=(ev=="fee_charged").astype(float)
-    df["fee_missing"]=(ev=="custody_not_ingested").astype(float)
-    df["fee_no_leg"]=(ev=="no_fee_leg_observed").astype(float)
+    for c in ("fee_charged","fee_missing","fee_no_leg"):
+        df[c]=pd.to_numeric(df[c],errors="coerce").fillna(0).astype(float)
     df["fee_net_log"]=np.sign(df.active_fee_net.fillna(0))*np.log1p(np.abs(df.active_fee_net.fillna(0)))
     df["fee_charge_log"]=np.log1p(np.maximum(0,df.active_fee_charged.fillna(0)))
     df["fee_refund_log"]=np.log1p(np.maximum(0,df.active_fee_refunded.fillna(0)))
@@ -197,9 +226,9 @@ def main():
             "features":FEATURES,"search_breadth":{"evaluations":len(ev),"horizons":list(HORIZONS),"models":len(specs()),"features":len(FEATURES)},
             "top_diagnostics":tops,"family_shortlist":short,"family_disposition":"DEV_CANDIDATES" if short else "NO_DEV_CANDIDATE",
             "final_rows_accessed_for_predictive_search":0,
-            "fee_guard":"Only realised contemporaneous fee evidence used; current Gamma snapshot configuration and rebates excluded."}
+            "fee_guard":"Only realised contemporaneous fee evidence aggregated through the current condition-block-end is used; current Gamma snapshot configuration and rebates excluded.","observation_unit":"condition_block_end","target_future_rule":"next changed canonical YES price must occur in a strictly later Polygon block"}
     (OUT/"results_summary.json").write_text(json.dumps(result,indent=2,sort_keys=True)+"\n")
     print("PRED006_HAZARD_RESULT="+json.dumps({"evaluations":len(ev),"shortlist_count":len(short),"disposition":result["family_disposition"],
           "top":[{"horizon":r["horizon"],"kind":r["kind"],"improvement":r["improvement_vs_best_baseline"],"pass":r["dev_screen_pass"]} for r in tops[:5]],
-          "final_rows_accessed":0},sort_keys=True),flush=True)
+          "observation_unit":"condition_block_end","final_rows_accessed":0},sort_keys=True),flush=True)
 if __name__=="__main__":main()
