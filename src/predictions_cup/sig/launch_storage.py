@@ -635,6 +635,21 @@ class LaunchSigRecorder(SigRealtimeRecorder):
             )
         self._last_books[book.exchange_id] = book
 
+    def record_health(
+        self,
+        *,
+        observed_at: datetime,
+        payload: dict[str, object],
+    ) -> None:
+        super().record_health(observed_at=observed_at, payload=payload)
+        self._emit_normalized(
+            event_type="CAPTURE_HEALTH",
+            observed_at=observed_at,
+            provenance="LOCAL_STATE_ENGINE",
+            evidence_label="LOCAL_HEALTH_STATE",
+            payload=payload,
+        )
+
     def record_transition(
         self,
         *,
