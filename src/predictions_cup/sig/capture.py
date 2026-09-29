@@ -155,6 +155,10 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                         await engine.initialize()
                     else:
                         await engine.prepare_subscription(reason)
+                    recorder.record_connection_boundary(
+                        observed_at=datetime.now(UTC),
+                        reason=reason.value,
+                    )
                     subscriber = SupabaseTournamentSubscriber(
                         topic=engine.topic,
                         token=token,
