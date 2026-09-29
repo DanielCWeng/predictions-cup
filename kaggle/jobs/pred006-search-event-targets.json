@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/pred006_search_event_targets",
+  "kernel": "polyleviathan/pred006-search-event-targets",
+  "poll_seconds": 20,
+  "timeout_minutes": 180,
+  "download_outputs": true,
+  "output_file_pattern": "(hypothesis_ledger|dead_idea_ledger|results_summary)\\.json$|experiment_matrix\\.csv$",
+  "run_nonce": "PRED006_EVENT_TARGET_ATLAS_20260929",
+  "note": "PRED-006 DEV-only expansion covering conditional material direction and next economic price-change direction. Frozen split; condition-block-end observations; FINAL excluded."
+}
