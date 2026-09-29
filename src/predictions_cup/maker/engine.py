@@ -222,6 +222,10 @@ class MakerEngine:
 
         bid_size = int(math.floor(sizes.bid * gate.size_multiplier))
         ask_size = int(math.floor(sizes.ask * gate.size_multiplier))
+        if bid_ticks is None:
+            bid_size = 0
+        if ask_ticks is None:
+            ask_size = 0
         if gate.mode is GateMode.BID_ONLY:
             ask_ticks = None
             ask_size = 0
