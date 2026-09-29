@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "purpose": "Freeze the Gamma semantic projection and exact ETS graph outputs for offline audit.",
+  "source_universe": {
+    "commit": "09e94090753b7648814cf425c9ffb6701f08975e",
+    "path": "data/research/r25_ets_v2_market_review/ETS_V2_MARKETS_FOR_REVIEW.csv",
+    "market_count": 1279,
+    "condition_count": 1279,
+    "token_count": 2558
+  },
+  "gamma_semantic_snapshot": {
+    "path": "data/research/r25_ets_math_graph/ETS_GAMMA_SEMANTIC_AUDIT.csv",
+    "sha256": "1f3ba68b82066fe4d9b495793d9bab879dac7e14e2a8c6bf45617d3c20a84ae4",
+    "rows": 1279,
+    "unique_events": 237,
+    "direct_market_lookups": 1267,
+    "event_fallback_lookups": 12,
+    "description_hash_matches": 1279,
+    "note": "Equivalent immutable semantic cache: Gamma-derived IDs, questions, tokens, event metadata, fetch timestamps, and SHA-256 of the full fetched descriptions. The original response bodies were not retained in Git."
+  },
+  "exact_outputs": {
+    "ETS_FILL_ACQUISITION.csv": {
+      "sha256": "c833f2598078c8ccf608a87fcf8a8f4a493b3c5042e0e94ba7fd6dd4dbbabb0f",
+      "rows": 1279
+    },
+    "ETS_GAMMA_SEMANTIC_AUDIT.csv": {
+      "sha256": "1f3ba68b82066fe4d9b495793d9bab879dac7e14e2a8c6bf45617d3c20a84ae4",
+      "rows": 1279
+    },
+    "ETS_MARKET_GRAPH.csv": {
+      "sha256": "8d784bdc73e1875548561162b573d249891cb4519fcc38bd155902383071bce5",
+      "rows": 5422
+    },
+    "ETS_SIG_ANCHOR_GRAPH.csv": {
+      "sha256": "80b378de5f7a94a3bba746d6bf6a7fae61dc4619a25fc21ee187619d93566166",
+      "rows": 231
+    },
+    "ETS_RELATIONSHIP_TAXONOMY.json": {
+      "sha256": "f1c965185a58ab2872fea31af5355b8d2f5335fe26e381a735213542b3949cfb"
+    },
+    "ETS_COMPONENTS.json": {
+      "sha256": "59c801d87ed2ae77dbaab09539979eb537247615ce22e6791d47bc3d4f8b435e"
+    }
+  },
+  "acquisition_class_counts": {
+    "FILLS_P0": 210,
+    "FILLS_P1": 88,
+    "FILLS_P2": 533,
+    "FILLS_P3": 104,
+    "METADATA_ONLY": 334,
+    "DROP": 10
+  }
+}
