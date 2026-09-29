@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "action": "output",
+  "kernel": "polyleviathan/r3-fv-001-seat-aggregate-lead-lag",
+  "output_dir": "data/research/r3_fv_001/seat_leadlag_output",
+  "note": "Read-only recovery of completed frozen R3-SEAT-LEADLAG-001 outputs."
+}
