@@ -303,18 +303,17 @@ class ConservativeEligibilityPolicy:
             self._max_signal_age_ns,
         ):
             return GateDecision(GateMode.CANCEL, "toxicity_untrusted_or_stale")
-        if self._require_depth:
-            if (
-                not snapshot.sig_depth_trusted
-                or snapshot.sig_depth_observed_ns is None
-                or self._max_depth_age_ns is None
-                or self._stale(
-                    snapshot.now_monotonic_ns,
-                    snapshot.sig_depth_observed_ns,
-                    self._max_depth_age_ns,
-                )
-            ):
-                return GateDecision(GateMode.CANCEL, "sig_depth_untrusted_or_stale")
+        if self._require_depth and (
+            not snapshot.sig_depth_trusted
+            or snapshot.sig_depth_observed_ns is None
+            or self._max_depth_age_ns is None
+            or self._stale(
+                snapshot.now_monotonic_ns,
+                snapshot.sig_depth_observed_ns,
+                self._max_depth_age_ns,
+            )
+        ):
+            return GateDecision(GateMode.CANCEL, "sig_depth_untrusted_or_stale")
 
         toxic = max(
             context.toxicity.update_hazard,
