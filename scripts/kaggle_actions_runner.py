@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -70,6 +71,19 @@ def output_dir_for(manifest_path: Path) -> Path:
     path = OUTPUT_ROOT / manifest_path.stem
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def canonical_kernel_from_push(
+    result: subprocess.CompletedProcess[str], fallback: str
+) -> str:
+    text = (result.stdout or "") + "\n" + (result.stderr or "")
+    match = re.search(
+        r"https://www\\.kaggle\\.com/code/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)",
+        text,
+    )
+    if not match:
+        return fallback
+    return f"{match.group(1)}/{match.group(2)}"
 
 
 def auth_check(output_dir: Path) -> None:
@@ -163,14 +177,23 @@ def run_kernel(data: dict[str, Any], output_dir: Path) -> None:
     if not 1 <= timeout_minutes <= 330:
         raise ValueError("timeout_minutes must be between 1 and 330")
 
-    run_command(["kaggle", "kernels", "push", "-p", str(kernel_dir)])
+    push_result = run_command(["kaggle", "kernels", "push", "-p", str(kernel_dir)])
+    active_kernel = canonical_kernel_from_push(push_result, declared_kernel)
+    (output_dir / "canonical_kernel.txt").write_text(
+        active_kernel + "\n", encoding="utf-8"
+    )
+    if active_kernel != declared_kernel:
+        print(
+            f"Kaggle canonicalized kernel slug: {declared_kernel} -> {active_kernel}",
+            flush=True,
+        )
 
     deadline = time.monotonic() + timeout_minutes * 60
     last_status = ""
     terminal = None
 
     while time.monotonic() < deadline:
-        result = run_command(["kaggle", "kernels", "status", declared_kernel], check=False)
+        result = run_command(["kaggle", "kernels", "status", active_kernel], check=False)
         last_status = ((result.stdout or "") + (result.stderr or "")).strip()
         lowered = last_status.lower()
         if "complete" in lowered:
@@ -182,7 +205,7 @@ def run_kernel(data: dict[str, Any], output_dir: Path) -> None:
         time.sleep(poll_seconds)
 
     (output_dir / "final_status.txt").write_text(last_status + "\n", encoding="utf-8")
-    capture_logs(declared_kernel, output_dir)
+    capture_logs(active_kernel, output_dir)
 
     if terminal is None:
         raise TimeoutError(f"Kaggle kernel did not finish within {timeout_minutes} minutes")
@@ -190,13 +213,13 @@ def run_kernel(data: dict[str, Any], output_dir: Path) -> None:
         raise RuntimeError(f"Kaggle kernel failed: {last_status}")
 
     if bool(data.get("download_outputs", False)):
-        download_outputs(data, declared_kernel, output_dir)
+        download_outputs(data, active_kernel, output_dir)
 
     write_summary(
         [
             "## Kaggle run",
             "",
-            f"- Kernel: {declared_kernel}",
+            f"- Declared kernel: {declared_kernel}",\n            f"- Active kernel: {active_kernel}",
             f"- Final state: {terminal.upper()}",
             f"- Downloaded outputs: {bool(data.get('download_outputs', False))}",
         ]
