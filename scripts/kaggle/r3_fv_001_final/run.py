@@ -22,7 +22,8 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 DATA004_SLUG = "sig-cup-data-004-ets-p0p1-fills"
 BLOCK_GATE_FRAGMENT = "005b-data003-block-gate"
-PREPARE_FRAGMENT = "r3-fv-001-prepare-v2"\nDISCOVERY_FRAGMENT = "r3-fv-001-discovery"
+PREPARE_FRAGMENT = "r3-fv-001-prepare-v2"
+DISCOVERY_FRAGMENT = "r3-fv-001-discovery"
 HALF_LIFE_SECONDS = 21600.0
 BOOTSTRAPS = 400
 RNG_SEED = 20260929
