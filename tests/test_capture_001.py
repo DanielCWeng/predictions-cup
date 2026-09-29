@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -74,6 +75,10 @@ def test_launch_recorder_persists_replayable_evidence_and_first_hours_report(
         "sourceSequenceFrom": 10,
         "sourceSequenceThrough": 10,
     }
+    recorder.record_connection_boundary(
+        observed_at=at,
+        reason="initial_subscribe",
+    )
     payload: dict[str, object] = {
         "trades": [trade_payload],
         "bookDirty": [],
@@ -140,10 +145,15 @@ def test_launch_recorder_persists_replayable_evidence_and_first_hours_report(
         exchange_id="sig-exchange-1",
         revision=2,
     )
+    recorder.record_health(
+        observed_at=at + timedelta(seconds=1),
+        payload={"connected": True},
+    )
     recorder.close()
 
     raw = _rows(root, "raw_events")
     assert raw[0]["session_id"] == "test-session"
+    assert raw[0]["connection_epoch"] == 1
     assert raw[0]["monotonic_receive_ns"] == 123
     assert json.loads(str(raw[0]["raw_json"]))["delivery"]["revision"] == 1
 
@@ -181,6 +191,21 @@ def test_launch_recorder_persists_replayable_evidence_and_first_hours_report(
     assert (report_root / "summary.json").exists()
     assert (report_root / "report.md").exists()
     assert (report_root / "market_activity.csv").exists()
+    assert (report_root / "market_microstructure.csv").exists()
+    assert (report_root / "markouts.csv").exists()
+    assert (report_root / "depth_summary.csv").exists()
+    assert (report_root / "activity_15m.csv").exists()
+
+    connection = sqlite3.connect(tmp_path / "sig.sqlite3")
+    health_row = connection.execute(
+        "SELECT payload_json FROM capture_health ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    connection.close()
+    assert health_row is not None
+    health = json.loads(str(health_row[0]))
+    assert health["connected"] is True
+    assert health["research_storage"]["dropped_rows"] == 0
+    assert health["research_storage"]["storage_failures"] == 0
 
 
 def test_launch_recorder_restart_never_corrupts_published_shards(tmp_path: Path) -> None:
