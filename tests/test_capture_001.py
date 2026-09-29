@@ -144,7 +144,14 @@ def test_launch_recorder_persists_replayable_evidence_and_first_hours_report(
 
     normalized = _rows(root, "normalized_events")
     event_types = {str(row["event_type"]) for row in normalized}
-    assert {"DELIVERY", "TRADE", "BBO_SNAPSHOT", "DEPTH_SNAPSHOT", "TRUST_TRANSITION"} <= event_types
+    expected = {
+        "DELIVERY",
+        "TRADE",
+        "BBO_SNAPSHOT",
+        "DEPTH_SNAPSHOT",
+        "TRUST_TRANSITION",
+    }
+    assert expected <= event_types
 
     liquidity = _rows(root, "liquidity_events")
     decreased = [
