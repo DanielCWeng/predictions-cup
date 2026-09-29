@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
   "action": "status",
-  "kernel": "polyleviathan/pred006-phase0-audit",
-  "note": "Status-only probe for PRED-006 Phase 0. Does not launch compute."
+  "kernel": "polyleviathan/pred006-phase0-audit-and-split-freeze",
+  "note": "Status-only probe of title-derived Phase-0 slug. Does not launch compute."
 }
