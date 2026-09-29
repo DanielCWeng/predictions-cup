@@ -134,6 +134,9 @@ class MakerEngine:
 
         try:
             gate = self._eligibility.gate(context)
+            next_recheck_ns = self._eligibility.next_recheck_monotonic_ns(context)
+            if next_recheck_ns is not None and next_recheck_ns < 0:
+                raise ValueError("freshness deadline must be non-negative")
         except Exception:
             return self._failed(
                 snapshot,
@@ -170,6 +173,7 @@ class MakerEngine:
                     ask_size=0,
                     gate=gate,
                 ),
+                next_recheck_monotonic_ns=None,
             )
 
         try:
@@ -276,6 +280,9 @@ class MakerEngine:
                 bid_size=bid_size,
                 ask_size=ask_size,
                 gate=gate,
+            ),
+            next_recheck_monotonic_ns=(
+                next_recheck_ns if desired is not None else None
             ),
         )
 
