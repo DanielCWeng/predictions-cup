@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "subexperiment": "R3-SEAT-COUNT-001",
+  "stage": "ATTEMPT2_CORRECTED_RESIDUAL_EVIDENCE",
+  "source_commit": "8bb8e6f6fcc607defb54785d8e27e20156a7b324",
+  "github_actions_run": 36644803186,
+  "artifact_id": 11067604157,
+  "artifact_zip_sha256": "33b973c7bc9aaf97723202f637a594d6516c2752adee34be7c25a32ecb906ea5",
+  "empirical_universe": {
+    "source": "DATA-004",
+    "target": "DATA-003",
+    "data001_used": false,
+    "historical_analogues_used": false
+  },
+  "final_opened": false,
+  "final_rows_accessed": 0,
+  "implementation_correction_applied": "literal next target update assigned before source-completeness filtering",
+  "corrected_residual_results": {
+    "house": {
+      "qp": {
+        "train_rows": 923,
+        "dev_rows": 48,
+        "beta": 0.006669375023746304,
+        "baseline_mae": 0.003958333333333337,
+        "model_mae": 0.00426001267520434,
+        "mae_improvement": -0.00030167934187100287,
+        "bootstrap_95": [
+          -0.0005099070674405275,
+          -0.0001337543161012318
+        ],
+        "direction_accuracy": 0.1875
+      },
+      "kl": {
+        "train_rows": 923,
+        "dev_rows": 48,
+        "beta": 0.007224281179905916,
+        "baseline_mae": 0.003958333333333337,
+        "model_mae": 0.004275214591046732,
+        "mae_improvement": -0.00031688125771339466,
+        "bootstrap_95": [
+          -0.0005738293746920947,
+          -0.00014374565608219272
+        ],
+        "direction_accuracy": 0.1875
+      },
+      "decision": "NEGATIVE_NEXT_UPDATE_RESIDUAL"
+    },
+    "senate_t50": {
+      "qp": {
+        "train_rows": 1357,
+        "dev_rows": 80,
+        "beta": 0.013688720173662516,
+        "baseline_mae": 0.004375000000000004,
+        "model_mae": 0.004455880316473087,
+        "mae_improvement": -0.00008088031647308317,
+        "bootstrap_95": [
+          -0.00015394520047805072,
+          -0.000003645777287562229
+        ],
+        "direction_accuracy": 0.25
+      },
+      "kl": {
+        "train_rows": 1357,
+        "dev_rows": 80,
+        "beta": 0.014252969736316555,
+        "baseline_mae": 0.004375000000000004,
+        "model_mae": 0.004438335947584723,
+        "mae_improvement": -0.00006333594758471933,
+        "bootstrap_95": [
+          -0.00015456009072883488,
+          -0.000009642832458119963
+        ],
+        "direction_accuracy": 0.35
+      },
+      "decision": "NEGATIVE_NEXT_UPDATE_RESIDUAL"
+    },
+    "senate_t51": {
+      "qp": {
+        "train_rows": 1357,
+        "dev_rows": 80,
+        "beta": 0.0008381342027956294,
+        "baseline_mae": 0.004375000000000004,
+        "model_mae": 0.004436435073247795,
+        "mae_improvement": -0.00006143507324779095,
+        "bootstrap_95": [
+          -0.00006686313917666246,
+          -0.00004231120340346521
+        ],
+        "direction_accuracy": 0.225
+      },
+      "kl": {
+        "train_rows": 1357,
+        "dev_rows": 80,
+        "beta": 0.0008692168730085315,
+        "baseline_mae": 0.004375000000000004,
+        "model_mae": 0.0044360826091763865,
+        "mae_improvement": -0.00006108260917638258,
+        "bootstrap_95": [
+          -0.00006639370225329985,
+          -0.00004275329188123526
+        ],
+        "direction_accuracy": 0.225
+      },
+      "decision": "NEGATIVE_AND_SEMANTICS_UNRESOLVED"
+    }
+  },
+  "scientific_interpretation": "With the literal next-target-update horizon correctly implemented, contemporaneous structural residuals from the supported House and Senate seat distributions still fail to predict the next direct-target repricing. This closes the tested static/residual seat-count estimators on TRAIN/DEV.",
+  "next_step": "Evaluate event-time aggregate-change shocks as information-leadership signals. Static level/residual constructions may not be rescued by parameter tuning."
+}
