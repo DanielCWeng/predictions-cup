@@ -201,6 +201,7 @@ class AccountRealtimeStateEngine:
                     market_id=market_id,
                     tournament_id=self.tournament_id,
                     gross_exposure=float(abs(quantity)),
+                    signed_quantity=float(quantity),
                 )
                 for exchange_id, (market_id, quantity) in self._positions.items()
                 if quantity != 0
