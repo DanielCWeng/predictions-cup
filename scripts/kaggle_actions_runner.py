@@ -151,7 +151,7 @@ def run_kernel(data: dict[str, Any], output_dir: Path) -> None:
         if "complete" in lowered:
             terminal = "complete"
             break
-        if any(token in lowered for token in ("error", "failed", "cancelled", "canceled")):
+        if any(token in lowered for token in ("error", "failed", "cancelled", "canceled", "cannot access kernel", "permission 'kernels.get' was denied")):
             terminal = "failed"
             break
         time.sleep(poll_seconds)
