@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import csv
 import ctypes
 import gc
@@ -117,10 +118,8 @@ def df_free_bytes() -> int:
 def trim_process_memory() -> None:
     """Release freed per-day Arrow/Polars arenas before opening the next large source object."""
     gc.collect()
-    try:
+    with contextlib.suppress(AttributeError, OSError):
         ctypes.CDLL("libc.so.6").malloc_trim(0)
-    except (AttributeError, OSError):
-        pass
 
 
 def disk_gate(lane: Path, stage: str, reserve_bytes: int = 0) -> int:
@@ -960,7 +959,7 @@ def validate_uploaded_corpus(
     market_stats = {str(row["market_id"]): row for row in coverage_market_df.iter_rows(named=True)}
     coverage_by_market: list[dict[str, Any]] = []
     zero_fill_markets: list[dict[str, Any]] = []
-    source_days = sorted({row["date"] for row in files if row["kind"] == "fills"})
+    sorted({row["date"] for row in files if row["kind"] == "fills"})
     last_source_date = date.fromisoformat(source_last_day)
     for market_id, market in sorted(expected_markets.items(), key=lambda pair: int(pair[0])):
         stats = market_stats.get(market_id)
@@ -1682,7 +1681,7 @@ def main() -> None:
     token_values = pl.Series(
         sorted(row["token_id"] for row in universe["tokens"]), dtype=pl.String
     ).implode()
-    by_token = {str(row["token_id"]): row for row in universe["tokens"]}
+    {str(row["token_id"]): row for row in universe["tokens"]}
     market_df, token_dimension_df, token_metadata = build_dimensions(universe)
     del market_df
     registry = json.loads((SONAR_ROOT / "infra_registry.json").read_text(encoding="utf-8"))
@@ -1766,9 +1765,7 @@ def main() -> None:
             )
             duplicate_key_groups = duplicate_stats.height
             conflict_df = duplicate_stats.filter(pl.col("content_versions") > 1)
-            conflict_tx = (
-                sorted(set(conflict_df["tx_hash"].to_list())) if conflict_df.height else []
-            )
+            (sorted(set(conflict_df["tx_hash"].to_list())) if conflict_df.height else [])
             if conflict_df.height:
                 day_conflicts = conflict_df.select(
                     DEDUP_KEY + ["rows", "content_versions"]
@@ -1866,7 +1863,6 @@ def main() -> None:
                     "block_number_provenance"
                 ].to_list()
             )
-            source_fill_rows = enriched.height
             chunk_files, _ = parquet_parts(
                 enriched,
                 object_prefix=DATA_PREFIX,
