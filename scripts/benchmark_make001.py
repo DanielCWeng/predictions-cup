@@ -113,10 +113,7 @@ def _measure(iterations: int, fn: Callable[[], object]) -> list[int]:
 
 def _build_fixture(mapping_path: Path):
     document = load_document(mapping_path)
-    provider = DirectPolymarketFairValueProvider(
-        document,
-        max_age_ns=1_000_000_000,
-    )
+    provider = DirectPolymarketFairValueProvider(document)
     engine = MakerEngine(
         fair_value=provider,
         predictive=NullPredictiveAdjuster(),
@@ -309,10 +306,7 @@ def main() -> int:
         lambda: engine.quote(representative),
     )
 
-    provider = DirectPolymarketFairValueProvider(
-        document,
-        max_age_ns=1_000_000_000,
-    )
+    provider = DirectPolymarketFairValueProvider(document)
     fv_durations = _measure(
         args.iterations,
         lambda: provider.fair_value(representative),
