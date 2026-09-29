@@ -60,52 +60,44 @@ class NullToxicityProvider:
         )
 
 
-class AvellanedaStoikovInventoryModel:
-    """A-S-inspired reservation price in probability space.
+class BinaryCaraInventoryModel:
+    """Exact binary-CARA reservation probability from MATHS_LEDGER M-041.
 
-    Classical reservation price is s - q*gamma*sigma^2*(T-t). We use normalized
-    inventory q/max_q because Cup contracts share a bounded probability payoff.
-    The effective variance is the maximum of supplied short-horizon volatility,
-    FV uncertainty, and a small configured floor; this avoids silently disabling
-    inventory control when a volatility plugin is absent.
+    For a Bernoulli settlement payoff and CARA utility, the marginal reservation
+    probability for another YES share is:
+
+        r(q) = sigmoid(logit(p) - gamma * q)
+
+    where p is the adjusted fair probability, q is signed YES inventory and gamma
+    is the configured per-share risk-aversion coefficient. Unlike literal
+    Avellaneda-Stoikov, this does not assume a Brownian mid-price or stationary
+    Poisson fills.
     """
 
-    model_id = "as-normalized-inventory"
+    model_id = "binary-cara-inventory"
     version = "make-001-v1"
 
-    def __init__(
-        self,
-        *,
-        risk_aversion: float = 1.0,
-        variance_horizon: float = 1.0,
-        variance_floor: float = 0.000025,
-    ) -> None:
-        if risk_aversion < 0.0 or variance_horizon < 0.0 or variance_floor < 0.0:
-            raise ValueError("inventory model parameters must be non-negative")
+    def __init__(self, *, risk_aversion: float = 0.02) -> None:
+        if not math.isfinite(risk_aversion) or risk_aversion < 0.0:
+            raise ValueError("risk_aversion must be finite and non-negative")
         self._risk_aversion = risk_aversion
-        self._variance_horizon = variance_horizon
-        self._variance_floor = variance_floor
 
     def reservation_price(self, context: QuoteContext) -> float:
-        if context.max_abs_inventory <= 0.0:
-            raise ValueError("max_abs_inventory must be positive")
-        fraction = max(
-            -1.5,
-            min(1.5, context.signed_inventory / context.max_abs_inventory),
-        )
-        volatility = context.snapshot.volatility or 0.0
-        variance = max(
-            volatility * volatility,
-            context.raw_fair_value.uncertainty * context.raw_fair_value.uncertainty,
-            self._variance_floor,
-        )
-        shift = (
-            fraction
-            * self._risk_aversion
-            * variance
-            * self._variance_horizon
-        )
-        return min(0.995, max(0.005, context.adjusted_fair_value - shift))
+        p = context.adjusted_fair_value
+        if not math.isfinite(p) or not 0.0 < p < 1.0:
+            raise ValueError("binary CARA requires fair probability strictly within (0,1)")
+        q = context.signed_inventory
+        if not math.isfinite(q):
+            raise ValueError("inventory must be finite")
+        logit = math.log(p / (1.0 - p))
+        shifted = logit - self._risk_aversion * q
+        if shifted >= 0.0:
+            exp_neg = math.exp(-shifted)
+            reservation = 1.0 / (1.0 + exp_neg)
+        else:
+            exp_pos = math.exp(shifted)
+            reservation = exp_pos / (1.0 + exp_pos)
+        return min(0.995, max(0.005, reservation))
 
 
 class ConservativeSpreadPolicy:
