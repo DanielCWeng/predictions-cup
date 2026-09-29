@@ -42,7 +42,10 @@ from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.mapping.models import MappingDocument
 from predictions_cup.runtime.telemetry import HotPathTelemetry
-from predictions_cup.sig.account_reconciliation import reconcile_account
+from predictions_cup.sig.account_reconciliation import (
+    AccountAuthoritativeSnapshot,
+    reconcile_account,
+)
 from predictions_cup.sig.account_runtime import AccountRealtimeController
 from predictions_cup.sig.account_state import AccountRealtimeStateEngine
 from predictions_cup.sig.errors import SigApiError
@@ -150,6 +153,7 @@ class MakerService:
                 polymarket_books=self.pm_books,
             )
 
+            adapter: LiveMakerExecutionAdapter | ShadowMakerExecutionAdapter
             if self.core.risk_context.mode is ExecutionMode.LIVE:
                 journal = ExecutionJournal(self.settings.execution_journal_path)
                 trading = SigTradingClient(
@@ -226,7 +230,7 @@ class MakerService:
                 telemetry=self.telemetry,
             )
 
-            async def account_resync():
+            async def account_resync() -> AccountAuthoritativeSnapshot:
                 authoritative = await reconcile_account(
                     rest,
                     tournament_id=tournament_id,
