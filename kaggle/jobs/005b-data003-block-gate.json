@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/experiment_005b_data003_block_gate",
+  "kernel": "polyleviathan/005b-data003-block-gate",
+  "poll_seconds": 30,
+  "timeout_minutes": 90,
+  "download_outputs": true,
+  "output_file_pattern": ".*(data003_block_gate_report\\.json|economic_fills_DATA003\\.parquet|tx_block_DATA003\\.parquet|block_timestamp\\.parquet)$",
+  "note": "Fresh-confirmation pre-evaluation hard gate: frozen economic-fill reconstruction plus authoritative Polygon block_number/log_index ordering. No predictive targets or performance metrics."
+}
