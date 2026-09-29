@@ -644,3 +644,149 @@ def test_signed_inventory_is_additive_to_existing_gross_risk_state() -> None:
     portfolio = RuntimePortfolio(positions=(position,), account_trusted=True)
     assert portfolio.gross_exposure == pytest.approx(7.0)
     assert position.signed_quantity == pytest.approx(-7.0)
+
+def test_binary_cara_reservation_matches_math_ledger_formula() -> None:
+    engine = _engine(max_inventory=10.0)
+    decision = engine.quote(_maker_snapshot(signed_inventory=5.0))
+    assert decision.trace.adjusted_fv is not None
+    assert decision.trace.reservation_price is not None
+    p = decision.trace.adjusted_fv
+    gamma = 0.02
+    expected = 1.0 / (1.0 + math.exp(-(math.log(p / (1.0 - p)) - gamma * 5.0)))
+    assert decision.trace.reservation_price == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    "state",
+    (
+        LifecycleState.PENDING,
+        LifecycleState.ACKED,
+        LifecycleState.CANCEL_PENDING,
+        LifecycleState.UNCERTAIN,
+        LifecycleState.RECONCILING,
+    ),
+)
+def test_unresolved_quote_states_block_replacement(state: LifecycleState) -> None:
+    manager = QuoteLifecycleManager()
+    current = replace(
+        QuoteRegistry().state("36"),
+        bid=_active(
+            QuoteSide.BID,
+            ticks=99,
+            state=state,
+            order_id=91,
+        ),
+    )
+    desired = _engine().quote(_maker_snapshot()).desired
+    assert desired is not None
+    desired = replace(desired, bid_ticks=101, bid_size=4, ask_ticks=None, ask_size=0)
+    actions = manager.decide(
+        desired=desired,
+        current=current,
+        now_monotonic_ns=NOW,
+    )
+    bid = next(action for action in actions if action.side is QuoteSide.BID)
+    assert bid.kind is QuoteLifecycleActionKind.WAIT_RECONCILIATION
+
+
+def test_partial_fill_can_cancel_but_never_place_replacement_same_cycle() -> None:
+    manager = QuoteLifecycleManager()
+    current = replace(
+        QuoteRegistry().state("36"),
+        bid=_active(
+            QuoteSide.BID,
+            ticks=99,
+            size=4,
+            state=LifecycleState.PARTIALLY_FILLED,
+            order_id=91,
+        ),
+    )
+    desired = _engine().quote(_maker_snapshot()).desired
+    assert desired is not None
+    desired = replace(desired, bid_ticks=101, bid_size=4, ask_ticks=None, ask_size=0)
+    actions = manager.decide(
+        desired=desired,
+        current=current,
+        now_monotonic_ns=NOW,
+    )
+    bid = next(action for action in actions if action.side is QuoteSide.BID)
+    assert bid.kind is QuoteLifecycleActionKind.CANCEL
+    assert not any(
+        action.kind is QuoteLifecycleActionKind.PLACE
+        for action in actions
+        if action.side is QuoteSide.BID
+    )
+
+
+def test_full_fill_allows_later_refill() -> None:
+    manager = QuoteLifecycleManager()
+    current = replace(
+        QuoteRegistry().state("36"),
+        bid=_active(
+            QuoteSide.BID,
+            ticks=99,
+            size=2,
+            state=LifecycleState.FILLED,
+            order_id=91,
+        ),
+    )
+    desired = _engine().quote(_maker_snapshot()).desired
+    assert desired is not None
+    desired = replace(desired, ask_ticks=None, ask_size=0)
+    actions = manager.decide(
+        desired=desired,
+        current=current,
+        now_monotonic_ns=NOW,
+    )
+    bid = next(action for action in actions if action.side is QuoteSide.BID)
+    assert bid.kind is QuoteLifecycleActionKind.PLACE
+    assert bid.reason == "terminal_quote_refill"
+
+
+def test_settled_market_cancels_quote_generation() -> None:
+    snapshot = _maker_snapshot()
+    settled_runtime = replace(
+        snapshot.runtime,
+        markets=(replace(snapshot.runtime.markets[0], status="settled"),),
+    )
+    decision = _engine().quote(replace(snapshot, runtime=settled_runtime))
+    assert decision.desired is None
+    assert decision.gate.mode is GateMode.CANCEL
+    assert decision.gate.reason == "market_not_open"
+
+
+def test_quote_invariants_over_probability_inventory_grid() -> None:
+    engine = _engine(max_inventory=10.0)
+    for midpoint in (0.02, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.98):
+        bid = max(0.0, midpoint - 0.005)
+        ask = min(1.0, midpoint + 0.005)
+        for inventory in (-10.0, -8.0, -2.0, 0.0, 2.0, 8.0, 10.0):
+            decision = engine.quote(
+                _maker_snapshot(
+                    signed_inventory=inventory,
+                    external={
+                        "token-yes": _external(bid=bid, ask=ask),
+                    },
+                )
+            )
+            if decision.desired is None:
+                assert decision.gate.mode in {
+                    GateMode.CANCEL,
+                    GateMode.SUSPEND,
+                    GateMode.NO_TRADE,
+                }
+                continue
+            quote = decision.desired
+            assert quote.bid_size >= 0
+            assert quote.ask_size >= 0
+            if quote.bid_ticks is not None:
+                assert 1 <= quote.bid_ticks <= 199
+            if quote.ask_ticks is not None:
+                assert 1 <= quote.ask_ticks <= 199
+            if quote.bid_ticks is not None and quote.ask_ticks is not None:
+                assert quote.bid_ticks < quote.ask_ticks
+            if inventory >= 10.0:
+                assert quote.bid_ticks is None
+            if inventory <= -10.0:
+                assert quote.ask_ticks is None
+
