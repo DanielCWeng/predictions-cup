@@ -7,5 +7,5 @@
   "timeout_minutes": 30,
   "download_outputs": true,
   "output_file_pattern": ".*schema_report\\.json$",
-  "note": "Schema-only DATA-003 inspection. No predictive target evaluation."
+  "note": "Schema-only DATA-003 inspection v2: accept direct parquet mount or fills.zip. No predictive outcomes."
 }
