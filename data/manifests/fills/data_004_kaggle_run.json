@@ -1,0 +1,18 @@
+{
+  "archive_member_count": 712,
+  "dataset_metadata_path": "sig-cup-data-004-ets-p0p1-fills/dataset-metadata.json",
+  "dataset_ref": "polyleviathan/sig-cup-data-004-ets-p0p1-fills",
+  "file_count": 366,
+  "generated_utc": "2026-09-29T17:58:20.288375Z",
+  "note": "Prepared for manual upload; this host has no Kaggle CLI or credentials. The OCI v1 copy remains the immutable source copy.",
+  "oci_manifest_object": "research/data004_ets_p0p1/v1/MANIFEST.json",
+  "oci_manifest_sha256": "048bd5a59642f14c174316590adbdce220f9efabbf571a3a8348da30bc33ce72",
+  "source_archive": "/home/ubuntu/inbox/data004_20260929/sig-cup-data-004-ets-p0p1-fills.tar.zst",
+  "source_archive_bytes": 22552249,
+  "source_archive_sha256": "80b3dfb2c95d3c82a4c61cd36aa47e60ae0396aa7883fb85035c8ee72579ed99",
+  "status": "PENDING_MANUAL_UPLOAD",
+  "uncompressed_bytes": 52033834,
+  "upload_command": "kaggle datasets create -p sig-cup-data-004-ets-p0p1-fills --dir-mode zip",
+  "upload_command_cwd": "/home/ubuntu/inbox/data004_20260929",
+  "visibility": "private"
+}

@@ -1,0 +1,47 @@
+{
+  "book_needed_later_markets": 797,
+  "dataset_id": "DATA-004",
+  "files": [
+    {
+      "bytes": 1519664,
+      "path": "data/research/r25_ets_math_graph/ETS_FILL_ACQUISITION.csv",
+      "rows": 1279,
+      "sha256": "c833f2598078c8ccf608a87fcf8a8f4a493b3c5042e0e94ba7fd6dd4dbbabb0f"
+    },
+    {
+      "bytes": 892428,
+      "path": "data/research/r25_ets_math_graph/ETS_GAMMA_SEMANTIC_AUDIT.csv",
+      "rows": 1279,
+      "sha256": "1f3ba68b82066fe4d9b495793d9bab879dac7e14e2a8c6bf45617d3c20a84ae4"
+    },
+    {
+      "bytes": 8485002,
+      "path": "data/research/r25_ets_math_graph/ETS_MARKET_GRAPH.csv",
+      "rows": 5422,
+      "sha256": "8d784bdc73e1875548561162b573d249891cb4519fcc38bd155902383071bce5"
+    },
+    {
+      "bytes": 781554,
+      "path": "data/research/r25_ets_math_graph/ETS_SIG_ANCHOR_GRAPH.csv",
+      "rows": 231,
+      "sha256": "80b378de5f7a94a3bba746d6bf6a7fae61dc4619a25fc21ee187619d93566166"
+    },
+    {
+      "bytes": 10995,
+      "path": "data/research/r25_ets_math_graph/ETS_RELATIONSHIP_TAXONOMY.json",
+      "sha256": "f1c965185a58ab2872fea31af5355b8d2f5335fe26e381a735213542b3949cfb"
+    },
+    {
+      "bytes": 362669,
+      "path": "data/research/r25_ets_math_graph/ETS_COMPONENTS.json",
+      "sha256": "59c801d87ed2ae77dbaab09539979eb537247615ce22e6791d47bc3d4f8b435e"
+    }
+  ],
+  "frozen_candidate_conditions": 1279,
+  "frozen_candidate_markets": 1279,
+  "frozen_candidate_tokens": 2558,
+  "market_graph_rows": 5422,
+  "purpose": "Preserve the full frozen R2.5 ETS candidate metadata while fills are limited to P0/P1.",
+  "selected_fill_markets": 298,
+  "sig_anchor_rows": 231
+}

@@ -36,6 +36,7 @@ Status semantics:
 | EXPERIMENT-005F — Microstructure/liquidity atlas | MERGED / ACCEPTED RESEARCH | `experiment/005f-microstructure-liquidity-atlas` | #44 | head `060b58b0...`; merge `4efa3dd002abc1cbf1997acdf8734adee2e13f4c` | Qualified state-hazard support; strongest result is persistent economic-BBO age / renewal hazard. |
 | INFRA — GitHub Actions → Kaggle runner | MERGED / ACCEPTED | `infra/kaggle-actions-runner` | #47 | head `3781d40f...`; merge `793ff521c64ad15e12377d3c75d1053ad76582a7` | Canonical routine Kaggle execution path; max five parallel jobs. |
 | DATA-003 — SIG actual-market fills | MERGED / ACCEPTED | `data/003-sig-actual-fills` | #48 | head `a9ef91fa...`; merge `3e4f9ac350ba6a33dfbc9a300a00a933efdfce42` | 132,928 mapped-universe fills; fill-complete evidence; explicit custody gaps; zero DATA-001/002 overlap. |
+| DATA-004 — ETS P0/P1 market-graph fills | BLOCKED / IN REVIEW | `data/data004-ets-p0p1-fills` | pending | pending | 231,964 fills across 298 markets; 4,989 rows lack custody blocks on Sep 20–21 and maker/taker symmetry is unresolved. OCI source is immutable; private Kaggle package is pending manual upload. Branch is not canonical. |
 
 ## Closed / superseded branch-only work
 

@@ -49,6 +49,7 @@ The repository contains:
 - DATA-001 historical replay corpus;
 - DATA-002 fee/refund/rebate and role-attribution evidence;
 - DATA-003 actual mapped-2026-universe Polymarket fills;
+- DATA-004 ETS P0/P1 market-graph fills are under review on `data/data004-ets-p0p1-fills`; this branch is not canonical until PR acceptance;
 - repository-native GitHub Actions → Kaggle execution via PR #47.
 
 Routine Kaggle compute now uses:
@@ -99,6 +100,26 @@ Key quality facts:
 
 DATA-003 is the preferred fresh mapped-universe replication/evaluation surface for findings that need
 to transfer from historical election families into the actual Cup universe.
+
+## DATA-004 — ETS P0/P1 graph universe (BLOCKED / IN REVIEW)
+
+DATA-004 freezes 298 selected Gamma markets (210 P0 and 88 P1), their 596 outcome tokens, 1,596
+market-graph links, and 134 selected SIG exchange IDs. The comparison plan covers 231 accepted SIG
+anchors and records their direct/derived/near DATA-003 source identities without copying or
+reacquiring those histories. The immutable source copy is in OCI at
+`research/data004_ets_p0p1/v1/`; Kaggle delivery is pending manual upload. The prepared archive hash
+and command are in `data/manifests/fills/data_004_kaggle_run.json`. This branch carries the
+manifest, gate evidence, per-market/condition/token/event/date coverage, full source-day inventory,
+and samples. The Kaggle package also retains metadata for all 1,279 frozen candidates / 2,558 tokens
+and the complete 5,422-row market graph; only P0/P1 fill histories were acquired. The final status
+and measured row counts are in
+`data/research/data004_ets_p0p1/v1/data004_manifest.json` and the campaign lane's `REPORT.md`.
+
+The manifest records 231,964 fills and five failed gate entries: missing block provenance on 4,989
+rows across 2026-09-20/21, unorderable rows from that gap, and an unresolved maker/taker size audit
+with 4,418 mismatched and 124,293 one-sided groups. All 298 markets have fills. Keep the corpus
+blocked until the provenance gap and symmetry audit are resolved; do not expand the scope or start
+R3. This branch does not change canonical `main`.
 
 ## Research programme state
 
