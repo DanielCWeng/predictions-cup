@@ -463,7 +463,7 @@ def test_generic_5xx_execution_outcome_stays_uncertain_and_reserved(
     operation_kind: OperationKind,
 ) -> None:
     first = _intent()
-    intents = (first,)
+    intents: tuple[RuntimeOrderIntent, ...] = (first,)
     relationship_constraint: str | None = None
     if operation_kind is not OperationKind.SINGLE_PLACEMENT:
         second = RuntimeOrderIntent(
