@@ -28,12 +28,12 @@ from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.models import ExecutionMode, LifecycleState
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.maker import (
+    ActiveQuote,
     BinaryCaraInventoryModel,
     ConservativeEligibilityPolicy,
     ConservativeSpreadPolicy,
     DirectPolymarketFairValueProvider,
     ExternalQuoteState,
-    ActiveQuote,
     InventoryConfidenceSizePolicy,
     MakerConfig,
     MakerCoordinator,
