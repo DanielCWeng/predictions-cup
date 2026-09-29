@@ -77,7 +77,7 @@ External FV requires:
 - both bid and ask;
 - finite probabilities with `0 <= bid <= ask <= 1`.
 
-The source bridge assigns **effective freshness** to a Polymarket book while the market WebSocket is healthy. This is deliberate: reconnect always performs a fresh CLOB seed, and the WebSocket independently enforces receive/PONG liveness. A quiet but healthy book is therefore current even if no economic mutation occurred. On disconnect/reconnect the feed is marked untrusted immediately and MAKE globally reevaluates/cancels before the fresh seed is accepted.
+The provider preserves the source observation timestamp. It does **not** relabel an old-but-trusted book as fresh. The central eligibility policy is the single authority for FV freshness and returns `fv_stale` when the actual observation age reaches the configured limit. Trust and freshness are deliberately separate.
 
 The canonical mapping currently contains 237 SIG exchange records. Six are NO_TRADE, leaving 231 directly maker-eligible records under accepted mapping semantics. All 87 DERIVED records in the current artifact use the explicit partition/union language required by the baseline provider.
 
@@ -103,14 +103,14 @@ This model is appropriate to a Bernoulli settlement payoff under the CARA assump
 
 ### Spread
 
-The baseline spread is intentionally auditable rather than clever. Its bid and ask half-widths are an additive probability-space combination of:
+The baseline spread is intentionally auditable rather than clever. Half-width is an additive probability-space combination of:
 
 - minimum/base tick width;
 - external-FV uncertainty;
 - optional volatility;
 - optional toxicity/update-hazard widening.
 
-The baseline returns equal bid/ask widths, but the `SpreadPolicy` contract is explicitly two-sided. A future inventory/toxicity/event policy can widen bid and ask independently without changing the engine, lifecycle, Risk or execution plumbing. The maths ledger's log-odds/information-spread models remain valid challengers; MAKE does not hard-code the baseline as universal truth.
+The spread policy is replaceable. The maths ledger's log-odds/information-spread models remain valid challengers; MAKE does not hard-code the baseline as universal truth.
 
 ### Size
 
@@ -139,16 +139,16 @@ MAKE tracks distinct observation times/trust for:
 - predictive plugin;
 - toxicity plugin.
 
-The source bridge distinguishes mutation timestamps from effective live-source freshness. SIG BBO/depth preserve their actual REST-refresh timestamps and therefore expire on real age deadlines. Account/inventory become effectively current only while `AccountRealtimeStateEngine` is trusted, which itself requires a subscribed account socket plus authoritative reconciliation. Polymarket FV becomes effectively current only while the seeded market WebSocket is healthy; disconnect removes trust immediately. Future/clock-anomalous observations still fail closed.
+The source bridge converts each source's **actual** wall-clock observation into the current monotonic clock domain at snapshot construction. Trusted/connected state never resets the observation time. Future/clock-anomalous observations map to a negative monotonic age and fail closed.
 
 The eligibility policy computes the nearest exact freshness expiry for every live quote. `MakerRuntimeLoop` stores one deadline per quoted exchange and waits on the single nearest deadline alongside normal feed notifications. When a deadline expires, only the affected exchange is enqueued for reevaluation. This means stale expiry itself cancels resting exposure even if no new feed event arrives, without task-per-market polling or a fixed high-frequency global sweep.
 
 Default fail-closed actions:
 
-- untrusted PM feed/FV -> cancel/suspend;
+- stale/untrusted FV -> cancel/suspend;
 - stale/untrusted SIG BBO -> cancel;
+- stale account/inventory -> cancel;
 - account trust loss -> cancel;
-- account/inventory timestamps remain separately observable, but a trusted subscribed account channel does not expire merely because no mutation occurred;
 - required depth stale/untrusted -> cancel;
 - market no longer open -> cancel;
 - mapping not tradeable -> NO_TRADE;
@@ -266,11 +266,10 @@ Repeated updates before the worker runs collapse into one bounded set. There is 
 - update hazard/adverse selection;
 - signed inventory;
 - reservation price;
-- conservative max half-spread plus explicit bid/ask half-widths;
+- half-spread;
 - desired bid/ask ticks;
 - sizes;
 - gate/reason;
-- SIG BBO/depth, account, FV, predictive and toxicity trust flags;
 - decision monotonic timestamp.
 
 `HotPathTelemetry` remains bounded and in-memory. CAPTURE may consume cycle/trace information but quote generation does not require CAPTURE to succeed.
@@ -309,7 +308,7 @@ MAKE relies intentionally on BUILD-009 regression coverage for transport/recover
 - rate governor/cooldown;
 - conservative shadow depth.
 
-MAKE-specific tests add fair-value mapping semantics, quiet trusted-source freshness, exact-deadline stale cancellation for mutation-aged sources, inventory skew/boundaries, asymmetric quote widths, malformed plugin failure, quote materiality, two-phase replacement, placement/cancel uncertainty, restart quote reconstruction, coalescing runtime behavior, source-loss cancellation and SHADOW/LIVE adapter state.
+MAKE-specific tests add fair-value mapping semantics, actual source-age preservation, exact-deadline stale cancellation without a source event, inventory skew/boundaries, plugin failure, quote materiality, two-phase replacement, placement/cancel uncertainty, restart quote reconstruction, coalescing runtime behavior, source-loss cancellation and SHADOW/LIVE adapter state.
 
 ## Performance acceptance
 
