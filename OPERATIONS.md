@@ -8,7 +8,7 @@
 - The accepted repository includes a separate, explicitly invoked public read-only Polymarket research recorder.
 - BUILD-006 SIG live REST governance/tracked-depth correction is accepted on `main`; its accepted 60-second credentialed smoke passed at the merged head.
 - BUILD-007 / PR #20 is merged/accepted. Its ARM64 EC2 PyArrow/Parquet runtime/storage gate passed on 26 September 2026.
-- The live 2026 SIG ↔ Polymarket crosswalk is accepted on `main`; the remaining production-runtime gate is the mapping-bounded paired soak plus SSH independence/reboot recovery using accepted IDs.
+- The live 2026 SIG ↔ Polymarket crosswalk is accepted on `main`. CAPTURE-001's production-shaped paired soak, explicit collector restart, SSH-independence test and operator-controlled reboot recovery all passed on 29 September 2026 at reviewed head `0d9ef9eb7cadc123d7719d3b35db49d631d04d81`.
 - PR #47 is merged; routine Kaggle work uses the GitHub Actions manifest runner rather than EC2.
 
 The accepted EXPERIMENT-001A baseline used local SQLite/WAL research persistence. BUILD-007, now accepted on `main`, changes the live/supervised storage shape after the EC2 soak: market/token metadata and health remain in a small operational SQLite, while high-frequency panel/book-change/trade/depth history is written as immutable ZSTD Parquet shards.
@@ -73,6 +73,18 @@ The final production gate for PR #57 is a mapping-bounded paired soak on the int
 followed by collector restart, SSH disconnect/reconnect, operator-controlled reboot, readable-shard
 checks and a successful `first_hours` run. Existing BUILD-006/007 evidence validates the underlying
 governor/systemd/Parquet mechanisms but does not by itself validate the new SIG immutable layer.
+
+### Replacement VM / migration handoff
+
+A cold-start agent moving these collectors to another VM should begin with
+`docs/operations/VM_MIGRATION_QUICKSTART.md`, then run
+`scripts/install_runtime_services.sh` on the destination host. Do not copy rendered systemd units
+from the old VM because they contain absolute repo/home/Python paths.
+
+The migration runbook also documents the separate Remote Desktop Commander boot-service setup.
+RDC is out-of-band from the collectors: the accepted reboot test proved the SIG/Polymarket
+services can recover normally even when the ChatGPT-visible RDC control channel itself needs
+separate restoration.
 
 ## Kaggle execution — canonical GitHub Actions route
 
@@ -356,7 +368,7 @@ Observed acceptance evidence:
 The temporary test universe must not be treated as a production default. The accepted crosswalk is
 now the only production identity source.
 
-### Mapping-bounded production soak — still required
+### Accepted mapping-bounded production soak — 29 September 2026
 
 Populate `runtime.env` from the accepted crosswalk:
 
@@ -405,10 +417,11 @@ may source `trade.env`.
 ## Eventual operating expectations
 
 BUILD-007 / PR #20 is accepted on `main` as the supervised-process and automatic-restart collector
-layer. The ARM64 runtime/storage gate is live-validated. The remaining production claim is narrower: the mapping-bounded deployment still needs the final
-paired soak plus SSH independence/reboot recovery run with accepted production IDs. Collector-native reconciliation and
-journald visibility remain authoritative; BUILD-007 does not introduce a separate logging daemon or
-trading service.
+layer. The ARM64 runtime/storage gate is live-validated. CAPTURE-001's mapping-bounded production
+acceptance also passed the final paired soak, service restart, SSH independence and full-host reboot
+recovery checks with accepted production IDs on 29 September 2026. Collector-native reconciliation
+and journald visibility remain authoritative; BUILD-007 does not introduce a separate logging daemon
+or trading service.
 
 ## Repository state discipline
 
