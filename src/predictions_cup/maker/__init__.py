@@ -4,6 +4,7 @@ from predictions_cup.maker.adapters import (
     LiveMakerExecutionAdapter,
     ShadowMakerExecutionAdapter,
 )
+from predictions_cup.maker.bridge import MakerSnapshotAssembler
 from predictions_cup.maker.contracts import (
     DesiredQuote,
     ExternalQuoteState,
@@ -62,6 +63,7 @@ __all__ = [
     "MakerEngine",
     "MakerMarketSnapshot",
     "MakerQuoteState",
+    "MakerSnapshotAssembler",
     "MakerStateChange",
     "MakerTrace",
     "NullPredictiveAdjuster",
