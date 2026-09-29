@@ -592,7 +592,7 @@ def build_v2_local(
     v1_manifest_path = v1_repo / "data004_manifest.json"
     v1_quality_path = v1_repo / "data004_quality.json"
     v1_manifest = json.loads(v1_manifest_path.read_text(encoding="utf-8"))
-    json.loads(v1_quality_path.read_text(encoding="utf-8"))
+    _v1_quality = json.loads(v1_quality_path.read_text(encoding="utf-8"))
     block_evidence = json.loads(block_evidence_path.read_text(encoding="utf-8"))
     if block_evidence.get("validation", {}).get("pass") is not True:
         raise RuntimeError(
@@ -779,7 +779,7 @@ def build_v2_local(
     ):
         raise RuntimeError("unexpected exact-decimal residual magnitude")
     price_rows_path = output_dir / "maker_taker_residual_buckets.csv"
-    (
+    _price_rows = (
         list(csv.DictReader(price_rows_path.open(encoding="utf-8", newline="")))
         if price_rows_path.exists()
         else []
