@@ -21,7 +21,15 @@ from predictions_cup.execution.models import (
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.maker.adapters import LiveMakerExecutionAdapter
-from predictions_cup.maker.contracts import MakerMarketSnapshot, QuoteSide
+from predictions_cup.maker.contracts import (
+    DesiredQuote,
+    GateDecision,
+    GateMode,
+    MakerDecision,
+    MakerMarketSnapshot,
+    MakerTrace,
+    QuoteSide,
+)
 from predictions_cup.maker.coordinator import (
     MakerCoordinator,
     MakerCycleResult,
@@ -300,11 +308,57 @@ class _Bridge:
         }
 
 
+def _runtime_decision(
+    exchange_id: str,
+    *,
+    deadline_ns: int | None,
+) -> MakerDecision:
+    desired = DesiredQuote(
+        exchange_id=exchange_id,
+        market_id=f"market-{exchange_id}",
+        tournament_id="t1",
+        bid_ticks=99,
+        ask_ticks=101,
+        bid_size=1,
+        ask_size=1,
+    )
+    gate = GateDecision(GateMode.NORMAL, "fixture")
+    return MakerDecision(
+        desired=desired,
+        gate=gate,
+        trace=MakerTrace(
+            strategy_id="fixture",
+            strategy_version="v1",
+            fv_source="fixture",
+            fv_version="v1",
+            raw_fv=0.5,
+            predictive_shift=0.0,
+            adjusted_fv=0.5,
+            uncertainty=0.0,
+            confidence=1.0,
+            update_hazard=0.0,
+            adverse_selection=0.0,
+            signed_inventory=0.0,
+            reservation_price=0.5,
+            half_spread=0.005,
+            desired_bid_ticks=99,
+            desired_ask_ticks=101,
+            desired_bid_size=1,
+            desired_ask_size=1,
+            gate_mode=GateMode.NORMAL,
+            reason="fixture",
+            decision_monotonic_ns=100,
+        ),
+        next_recheck_monotonic_ns=deadline_ns,
+    )
+
+
 class _Coordinator:
     def __init__(self) -> None:
         self.calls: list[frozenset[str]] = []
         self.event_ids: list[str] = []
         self.killed = False
+        self.deadline_ns: int | None = None
 
     async def on_state_change(
         self,
@@ -313,18 +367,30 @@ class _Coordinator:
     ) -> MakerCycleResult:
         self.event_ids.append(change.event_id)
         self.calls.append(frozenset(snapshots))
-        return MakerCycleResult((), (), (), ())
+        decisions = tuple(
+            _runtime_decision(exchange_id, deadline_ns=self.deadline_ns)
+            for exchange_id in sorted(snapshots)
+        )
+        return MakerCycleResult(decisions, (), (), ())
 
     def activate_kill_switch(self, reason: str) -> None:
         assert reason
         self.killed = True
 
 
+class _MutableClock:
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+    def __call__(self) -> int:
+        return self.value
+
+
 def test_runtime_loop_coalesces_exchange_and_token_updates() -> None:
     bridge = _Bridge()
     coordinator = _Coordinator()
     telemetry = HotPathTelemetry()
-    clock = iter((100, 110, 120, 130, 140, 150, 160)).__next__
+    clock = _MutableClock(100)
     runtime = MakerRuntimeLoop(
         bridge=cast(MakerSourceBridge, bridge),
         coordinator=cast(MakerCoordinator, coordinator),
@@ -347,6 +413,43 @@ def test_runtime_loop_coalesces_exchange_and_token_updates() -> None:
     runtime.notify_account(observed_monotonic_ns=120)
     asyncio.run(runtime.drain_once())
     assert coordinator.calls[-1] == frozenset({"36", "37"})
+
+
+def test_runtime_deadline_rechecks_exchange_without_new_source_event() -> None:
+    bridge = _Bridge()
+    coordinator = _Coordinator()
+    coordinator.deadline_ns = 150
+    clock = _MutableClock(100)
+    telemetry = HotPathTelemetry()
+    runtime = MakerRuntimeLoop(
+        bridge=cast(MakerSourceBridge, bridge),
+        coordinator=cast(MakerCoordinator, coordinator),
+        polymarket_feed_trusted=lambda: True,
+        telemetry=telemetry,
+        wall_clock=lambda: datetime(2026, 9, 29, 14, 0, tzinfo=UTC),
+        mono_clock=clock,
+        runtime_session_id="deadline",
+    )
+
+    runtime.notify_sig({"36"}, observed_monotonic_ns=90)
+    asyncio.run(runtime.drain_once())
+    assert coordinator.calls == [frozenset({"36"})]
+
+    coordinator.deadline_ns = None
+    clock.value = 149
+    assert asyncio.run(runtime.drain_once()) is None
+    assert coordinator.calls == [frozenset({"36"})]
+
+    clock.value = 150
+    asyncio.run(runtime.drain_once())
+    assert coordinator.calls == [
+        frozenset({"36"}),
+        frozenset({"36"}),
+    ]
+    assert (
+        telemetry.snapshot().counters["maker_freshness_deadline_triggers"]
+        == 1
+    )
 
 
 def test_runtime_kill_switch_requests_global_recheck() -> None:
