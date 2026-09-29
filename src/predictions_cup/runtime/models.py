@@ -54,6 +54,10 @@ class RuntimePosition:
     market_id: str
     tournament_id: str
     gross_exposure: float
+    # Signed share inventory is additive maker state. Central Risk continues to
+    # consume gross_exposure conservatively; MAKE uses signed_quantity only for
+    # reservation-price skew and hard inventory boundaries.
+    signed_quantity: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
