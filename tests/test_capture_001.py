@@ -4,6 +4,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import cast
 
 import pyarrow.dataset as ds
 
@@ -38,7 +39,11 @@ def _book(at: datetime, *, bid_quantity: str, ask_quantity: str) -> OrderBook:
 def _rows(root: Path, stream: str) -> list[dict[str, object]]:
     files = sorted((root / stream).rglob("*.parquet"))
     assert files
-    return ds.dataset([str(path) for path in files], format="parquet").to_table().to_pylist()
+    rows = ds.dataset(
+        [str(path) for path in files],
+        format="parquet",
+    ).to_table().to_pylist()
+    return cast(list[dict[str, object]], rows)
 
 
 def test_launch_recorder_persists_replayable_evidence_and_first_hours_report(
@@ -54,26 +59,26 @@ def test_launch_recorder_persists_replayable_evidence_and_first_hours_report(
         session_id="test-session",
     )
     at = datetime(2026, 10, 1, 16, 0, tzinfo=UTC)
-    payload = {
-        "trades": [
-            {
-                "exchangeId": "sig-exchange-1",
-                "marketId": "sig-market-1",
-                "price": "0.50",
-                "quantity": "3",
-                "executedAt": at.isoformat(),
-                "tournamentId": "cup",
-            }
-        ],
+    trade_payload: dict[str, object] = {
+        "exchangeId": "sig-exchange-1",
+        "marketId": "sig-market-1",
+        "price": "0.50",
+        "quantity": "3",
+        "executedAt": at.isoformat(),
+        "tournamentId": "cup",
+    }
+    delivery_payload: dict[str, object] = {
+        "revision": 1,
+        "previousRevision": 0,
+        "correlationId": "corr-1",
+        "sourceSequenceFrom": 10,
+        "sourceSequenceThrough": 10,
+    }
+    payload: dict[str, object] = {
+        "trades": [trade_payload],
         "bookDirty": [],
         "marketSettled": [],
-        "delivery": {
-            "revision": 1,
-            "previousRevision": 0,
-            "correlationId": "corr-1",
-            "sourceSequenceFrom": 10,
-            "sourceSequenceThrough": 10,
-        },
+        "delivery": delivery_payload,
     }
     recorder.record_raw_batch(
         topic="tournament:cup",
@@ -85,13 +90,13 @@ def test_launch_recorder_persists_replayable_evidence_and_first_hours_report(
     )
     recorder.record_delivery(
         topic="tournament:cup",
-        delivery=RealtimeDeliveryDto.model_validate(payload["delivery"]),
+        delivery=RealtimeDeliveryDto.model_validate(delivery_payload),
         observed_at=at,
     )
     recorder.record_trade(
         topic="tournament:cup",
         revision=1,
-        trade=RealtimeTradeDto.model_validate(payload["trades"][0]),
+        trade=RealtimeTradeDto.model_validate(trade_payload),
         observed_at=at,
     )
     recorder.record_prices(
