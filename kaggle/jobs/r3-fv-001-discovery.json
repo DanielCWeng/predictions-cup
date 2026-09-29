@@ -1,11 +1,6 @@
 {
   "schema_version": 1,
-  "action": "run",
-  "kernel_dir": "scripts/kaggle/r3_fv_001_discovery",
-  "kernel": "polyleviathan/r3-fv-001-discovery",
-  "poll_seconds": 20,
-  "timeout_minutes": 90,
-  "download_outputs": true,
-  "output_file_pattern": "(DISCOVERY_RESULTS|SELECTION_DECISION|FAMILY_AUDIT|FEATURE_SCHEMA)\\.json$|DEV_PREDICTION_SAMPLE\\.csv$",
-  "note": "R3 TRAIN/DEV discovery only. FINAL >= 2026-09-10 must remain unopened; champion gate is frozen in data/research/r3_fv_001/DISCOVERY_PROTOCOL.json."
+  "action": "status",
+  "kernel": "polyleviathan/r3-fv-001-structural-discovery",
+  "note": "R3 DEV discovery is consumed and STOP_NO_INDEPENDENT_SIGNAL. Permanently read-only: do not change back to action=run; FINAL was not opened."
 }
