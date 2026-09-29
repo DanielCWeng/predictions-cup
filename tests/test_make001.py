@@ -419,6 +419,65 @@ def test_stale_internal_sources_cancel_quotes(field: str, reason: str) -> None:
     assert decision.gate.reason == reason
 
 
+def test_trusted_but_stale_sources_fail_closed_at_exact_deadline() -> None:
+    max_age_ns = 100_000_000
+    engine = _engine(max_age_ns=max_age_ns)
+
+    stale_pm = engine.quote(
+        _maker_snapshot(
+            external={
+                "token-yes": _external(
+                    observed_ns=NOW - max_age_ns,
+                    trusted=True,
+                )
+            }
+        )
+    )
+    assert stale_pm.desired is None
+    assert stale_pm.gate.mode is GateMode.CANCEL
+    assert stale_pm.gate.reason == "fv_stale"
+
+    stale_account = engine.quote(
+        _maker_snapshot(
+            account_observed_ns=NOW - max_age_ns,
+            inventory_observed_ns=NOW - max_age_ns,
+        )
+    )
+    assert stale_account.desired is None
+    assert stale_account.gate.mode is GateMode.CANCEL
+    assert stale_account.gate.reason == "account_stale"
+
+    fresh = engine.quote(
+        _maker_snapshot(
+            bbo_observed_ns=NOW - max_age_ns + 1,
+            account_observed_ns=NOW - max_age_ns + 1,
+            inventory_observed_ns=NOW - max_age_ns + 1,
+            external={
+                "token-yes": _external(
+                    observed_ns=NOW - max_age_ns + 1,
+                    trusted=True,
+                )
+            },
+        )
+    )
+    assert fresh.desired is not None
+    assert fresh.gate.mode in {GateMode.NORMAL, GateMode.WIDER}
+
+
+def test_future_source_timestamp_fails_closed() -> None:
+    decision = _engine().quote(
+        _maker_snapshot(
+            external={
+                "token-yes": _external(
+                    observed_ns=NOW + 1,
+                    trusted=True,
+                )
+            }
+        )
+    )
+    assert decision.desired is None
+
+
 def test_untrusted_account_and_lost_pm_feed_fail_closed() -> None:
     untrusted = _engine().quote(_maker_snapshot(account_trusted=False))
     assert untrusted.desired is None
