@@ -20,11 +20,20 @@ from predictions_cup.mapping.crosswalk import load_document
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="CAPTURE-001 first-hours forensic report")
-    parser.add_argument(\n        "--input", type=Path, required=True, help="SIG research root or launch root"\n    )
+    parser.add_argument(
+        "--input",
+        type=Path,
+        required=True,
+        help="SIG research root or launch root",
+    )
     parser.add_argument("--output", type=Path, required=True, help="Report output directory")
     parser.add_argument("--polymarket-root", type=Path)
     parser.add_argument("--execution-journal", type=Path)
-    parser.add_argument(\n        "--mapping",\n        type=Path,\n        help="Accepted mapping JSON for direct cross-venue diagnostics",\n    )
+    parser.add_argument(
+        "--mapping",
+        type=Path,
+        help="Accepted mapping JSON for direct cross-venue diagnostics",
+    )
     return parser.parse_args()
 
 
@@ -149,7 +158,11 @@ def _analyse_sig(root: Path) -> tuple[dict[str, Any], dict[str, dict[str, int]],
                 at = row.get("local_receive_at")
                 revision = row.get("revision")
                 previous = row.get("previous_revision")
-                if (\n                    isinstance(at, datetime)\n                    and isinstance(revision, int)\n                    and isinstance(previous, int)\n                ):
+                if (
+                    isinstance(at, datetime)
+                    and isinstance(revision, int)
+                    and isinstance(previous, int)
+                ):
                     revision_rows.append((at, revision, previous))
     revision_rows.sort(key=lambda item: item[0])
     revision_gaps = 0
