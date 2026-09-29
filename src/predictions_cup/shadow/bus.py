@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import asyncio
 from collections import deque
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from time import monotonic_ns
-from typing import Callable
-
 from predictions_cup.shadow.contracts import (
     CandidateOutput,
     CanonicalShadowSnapshot,
