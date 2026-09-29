@@ -267,7 +267,8 @@ Outputs:
 - `depth_summary.csv` — tracked depth and top-level concentration;
 - `activity_15m.csv` — burst/regime inspection buckets;
 - `cross_venue_diagnostics.csv` — direct mapped economic-change response lags and direction;
-- `cross_venue_latest.csv` — latest direction-aligned direct SIG/Polymarket discrepancies.
+- `cross_venue_latest.csv` — latest direction-aligned direct SIG/Polymarket discrepancies;
+- `execution_latency.csv` — per-operation monotonic execution-lifecycle timing.
 
 The microstructure analysis includes:
 
@@ -284,7 +285,8 @@ The microstructure analysis includes:
 - latest direct mapped SIG/Polymarket discrepancy after `SAME`/`COMPLEMENT` alignment;
 - PM→SIG and SIG→PM nearest-subsequent economic BBO-change lag within 60 seconds;
 - same-direction response rate for those matched economic changes;
-- BUILD-009 observation-to-decision latency where journal fields are available.
+- BUILD-009 observation→decision, decision→submission, submission→network-dispatch,
+  dispatch→ACK/fill and observation→ACK/fill timing where journal fields are available.
 
 A nominal horizon is never silently treated as exact if the next captured BBO arrives later. The
 markout table reports sampling-delay percentiles and rejects observations more than 30 seconds late.
