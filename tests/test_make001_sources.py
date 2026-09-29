@@ -71,7 +71,7 @@ def _mapping() -> MappingDocument:
         sig_outcome_label="YES",
         mapping_class=MappingClass.EXACT,
         mapping_direction=MappingDirection.SAME,
-        mapping_confidence=1.0,
+        mapping_confidence=Decimal("1.0"),
         status=MappingStatus.VERIFIED,
         direct_polymarket=direct,
     )
