@@ -40,6 +40,7 @@ def test_full_snapshot_delta_zero_delete_and_decimal_precision() -> None:
     snapshot = store.snapshot("token-1", depth=10)
     assert snapshot is not None
     assert result.uninitialized_deltas == 0
+    assert result.uninitialized_token_ids == frozenset()
     assert len(result.changes) == 3
     assert result.changes[0].token_id == "token-1"
     assert result.changes[0].market_id == "0xmarket"
@@ -76,6 +77,7 @@ def test_delta_before_snapshot_is_counted_and_not_applied() -> None:
     )
 
     assert result.uninitialized_deltas == 1
+    assert result.uninitialized_token_ids == frozenset({"missing-token"})
     assert result.changed_tokens == frozenset()
     assert result.changes == ()
     assert store.snapshot("missing-token", depth=10) is None
