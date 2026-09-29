@@ -24,6 +24,7 @@ from predictions_cup.runtime.models import (
     RuntimeBook,
     RuntimeLevel,
     RuntimeMarket,
+    RuntimePortfolio,
     RuntimeSnapshot,
     limit_price_to_ticks,
 )
@@ -40,7 +41,7 @@ class AccountMakerState(Protocol):
     tournament_id: str
     last_accepted_observed_at: datetime | None
 
-    def runtime_portfolio(self): ...
+    def runtime_portfolio(self) -> RuntimePortfolio: ...
 
 
 class PolymarketBookSource(Protocol):
