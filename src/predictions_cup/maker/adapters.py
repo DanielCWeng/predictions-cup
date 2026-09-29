@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import (
     ExecutionEnvelope,
@@ -11,8 +12,9 @@ from predictions_cup.execution.models import (
     OperationKind,
 )
 from predictions_cup.execution.sinks import ExecutionPlan, ShadowSink
-from predictions_cup.maker.contracts import MakerMarketSnapshot
-from predictions_cup.maker.lifecycle import ActiveQuote
+from predictions_cup.maker.contracts import MakerMarketSnapshot, QuoteSide
+from predictions_cup.maker.lifecycle import ActiveQuote, QuoteRegistry
+from predictions_cup.runtime.models import OrderAction
 
 
 class ShadowMakerExecutionAdapter:
@@ -45,10 +47,18 @@ class ShadowMakerExecutionAdapter:
 
 
 class LiveMakerExecutionAdapter:
-    """LIVE adapter delegates entirely to BUILD-009 interlocked/journaled sink."""
+    """LIVE adapter delegates writes to BUILD-009 and resolves ACK identity."""
 
-    def __init__(self, sink: SigLiveSink) -> None:
+    def __init__(
+        self,
+        sink: SigLiveSink,
+        *,
+        journal: ExecutionJournal,
+        quotes: QuoteRegistry,
+    ) -> None:
         self._sink = sink
+        self._journal = journal
+        self._quotes = quotes
 
     async def place(
         self,
@@ -56,7 +66,9 @@ class LiveMakerExecutionAdapter:
         snapshot: MakerMarketSnapshot,
     ) -> ExecutionEvent:
         del snapshot
-        return await self._sink.dispatch(plan)
+        event = await self._sink.dispatch(plan)
+        self._sync_quote_registry(plan, event)
+        return event
 
     async def cancel(
         self,
@@ -76,3 +88,86 @@ class LiveMakerExecutionAdapter:
             tournament_id=tournament_id,
         )
         return await self._sink.cancel(envelope)
+
+    def _sync_quote_registry(
+        self,
+        plan: ExecutionPlan,
+        event: ExecutionEvent,
+    ) -> None:
+        journal_events = self._journal.events(plan.envelope.logical_operation_id)
+        for intent in plan.intents:
+            side = (
+                QuoteSide.BID
+                if intent.action is OrderAction.BUY
+                else QuoteSide.ASK
+            )
+            related = tuple(
+                item
+                for item in journal_events
+                if item.logical_intent_id == intent.intent_id
+                and item.event_type in {"ACK", "REJECTED"}
+            )
+            if not related:
+                # No conclusive per-intent identity: keep the coordinator's
+                # local UNCERTAIN reservation and wait for reconciliation.
+                continue
+            latest = related[-1]
+            if latest.event_type == "REJECTED":
+                self._quotes.clear_side(
+                    exchange_id=intent.exchange_id,
+                    side=side,
+                    observed_monotonic_ns=event.observed_monotonic_ns,
+                )
+                continue
+            order_id = self._positive_int(latest.exchange_order_id)
+            if order_id is None:
+                continue
+            state = self._event_state(latest.terminal_status, event.state)
+            if state in {
+                LifecycleState.FILLED,
+                LifecycleState.REJECTED,
+                LifecycleState.CANCELLED,
+            }:
+                self._quotes.clear_side(
+                    exchange_id=intent.exchange_id,
+                    side=side,
+                    observed_monotonic_ns=event.observed_monotonic_ns,
+                )
+                continue
+            if intent.limit_price_ticks is None:
+                # MAKE only emits passive limit quotes. A market sentinel here is
+                # an invariant violation, so keep the pre-dispatch uncertain state.
+                continue
+            self._quotes.apply_authoritative(
+                exchange_id=intent.exchange_id,
+                side=side,
+                price_ticks=intent.limit_price_ticks,
+                size=intent.quantity,
+                remaining_size=intent.quantity,
+                logical_operation_id=plan.envelope.logical_operation_id,
+                exchange_order_id=order_id,
+                lifecycle_state=state,
+                observed_monotonic_ns=event.observed_monotonic_ns,
+            )
+
+    @staticmethod
+    def _positive_int(value: str | None) -> int | None:
+        if value is None:
+            return None
+        try:
+            parsed = int(value)
+        except ValueError:
+            return None
+        return parsed if parsed > 0 else None
+
+    @staticmethod
+    def _event_state(
+        terminal_status: str | None,
+        fallback: LifecycleState,
+    ) -> LifecycleState:
+        if terminal_status is None:
+            return fallback
+        try:
+            return LifecycleState(terminal_status)
+        except ValueError:
+            return fallback
