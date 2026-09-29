@@ -367,13 +367,18 @@ def _write_activity(path: Path, counts: dict[str, dict[str, int]]) -> None:
             )
 
 
-def _write_rows(path: Path, rows: list[dict[str, object]]) -> None:
-    if not rows:
+def _write_rows(
+    path: Path,
+    rows: list[dict[str, object]],
+    *,
+    fieldnames: list[str] | None = None,
+) -> None:
+    if not rows and fieldnames is None:
         path.write_text("", encoding="utf-8")
         return
-    fieldnames = list(rows[0])
+    selected_fields = fieldnames or list(rows[0])
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=selected_fields)
         writer.writeheader()
         writer.writerows(rows)
 
@@ -516,7 +521,18 @@ def run(
     _write_activity(output_root / "market_activity.csv", activity)
     _write_rows(output_root / "market_microstructure.csv", microstructure_rows)
     _write_rows(output_root / "markouts.csv", markout_rows)
-    _write_rows(output_root / "depth_summary.csv", depth_rows)
+    _write_rows(
+        output_root / "depth_summary.csv",
+        depth_rows,
+        fieldnames=[
+            "exchange_id",
+            "depth_snapshots",
+            "bid_depth_p50",
+            "ask_depth_p50",
+            "bid_top_level_share_p50",
+            "ask_top_level_share_p50",
+        ],
+    )
     _write_rows(output_root / "activity_15m.csv", bucket_rows)
     return summary
 
