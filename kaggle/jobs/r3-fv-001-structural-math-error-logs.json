@@ -2,5 +2,5 @@
   "schema_version": 1,
   "action": "logs",
   "kernel": "polyleviathan/r3-fv-001-corrected-structural-math",
-  "note": "Read-only traceback recovery for the failed corrected R3 structural-math run. Does not push or rerun compute."
+  "note": "Read-only traceback recovery for the failed corrected R3 structural-math run. Runner supports logs after d6cf62da66d450aa8d621eb1024be1d34eef9d75. Does not push or rerun compute."
 }
