@@ -1,0 +1,351 @@
+{
+  "candidate_count": 2,
+  "candidates": [
+    {
+      "ablation_variant": "full",
+      "baseline_spec": [
+        "base_rate",
+        "own_history_logit"
+      ],
+      "candidate_id": "PRED006-C01",
+      "dev_diagnostics": {
+        "condition_bootstrap_lower_2_5": 0.024595347254912695,
+        "condition_bootstrap_upper_97_5": 0.03188419403960481,
+        "condition_positive_fraction": 0.7449139280125195,
+        "day_bootstrap_lower_2_5": 0.021246730062718277,
+        "day_bootstrap_upper_97_5": 0.028927345111431396,
+        "first_half_improvement": 0.08979455204541024,
+        "second_half_improvement": 0.1250835613240575
+      },
+      "dev_improvement_vs_best_baseline": 0.10751177149943177,
+      "family": "hazard_fee",
+      "features": [
+        "p_yes",
+        "logit_p",
+        "boundary_distance",
+        "size_log",
+        "value_log",
+        "since_prev",
+        "count_30",
+        "count_120",
+        "count_600",
+        "count_1800",
+        "vol_30",
+        "vol_120",
+        "vol_600",
+        "vol_1800",
+        "mom_30",
+        "mom_120",
+        "mom_600",
+        "mom_1800",
+        "fee_charged",
+        "fee_missing",
+        "fee_no_leg",
+        "fee_net_log",
+        "fee_charge_log",
+        "fee_refund_log",
+        "charge_legs_log"
+      ],
+      "final_pass_rule": {
+        "condition_cluster_bootstrap_lower_2_5_must_exceed": 0.0,
+        "first_half_loss_improvement_must_exceed": 0.0,
+        "max_top_decile_share_of_positive_condition_gain": 0.75,
+        "min_fraction_conditions_with_positive_loss_improvement": 0.55,
+        "min_relative_loss_improvement_vs_best_frozen_baseline": 0.01,
+        "no_reselection_or_retuning": true,
+        "second_half_loss_improvement_must_exceed": 0.0
+      },
+      "full_feature_dev_improvement": 0.10751177149943177,
+      "horizon_seconds": 1800,
+      "market_scope": "all DATA-003 condition-block-end observations supported by the frozen feature/target construction; no post-hoc mapping-class or market filtering",
+      "metric": "brier",
+      "missingness": "median imputation fit on pre-FINAL training data only",
+      "model_kind": "hgb",
+      "model_param": 15,
+      "participant_handling": "past-observable only; no future leaderboard/state",
+      "permuted_label_dev_improvement": -0.0497951257887939,
+      "target_type": "next_price_change_hazard"
+    },
+    {
+      "ablation_variant": "full",
+      "baseline_spec": [
+        "base_rate",
+        "own_history_logit"
+      ],
+      "candidate_id": "PRED006-C02",
+      "dev_diagnostics": {
+        "condition_bootstrap_lower_2_5": 0.015672454255570123,
+        "condition_bootstrap_upper_97_5": 0.02243305006283015,
+        "condition_positive_fraction": 0.7244582043343654,
+        "day_bootstrap_lower_2_5": 0.014981210195209886,
+        "day_bootstrap_upper_97_5": 0.02228959784966259,
+        "first_half_improvement": 0.09580313476481847,
+        "second_half_improvement": 0.1164961178997446
+      },
+      "dev_improvement_vs_best_baseline": 0.10605021348528691,
+      "family": "hazard_fee",
+      "features": [
+        "p_yes",
+        "logit_p",
+        "boundary_distance",
+        "size_log",
+        "value_log",
+        "since_prev",
+        "count_30",
+        "count_120",
+        "count_600",
+        "count_1800",
+        "vol_30",
+        "vol_120",
+        "vol_600",
+        "vol_1800",
+        "mom_30",
+        "mom_120",
+        "mom_600",
+        "mom_1800",
+        "fee_charged",
+        "fee_missing",
+        "fee_no_leg",
+        "fee_net_log",
+        "fee_charge_log",
+        "fee_refund_log",
+        "charge_legs_log"
+      ],
+      "final_pass_rule": {
+        "condition_cluster_bootstrap_lower_2_5_must_exceed": 0.0,
+        "first_half_loss_improvement_must_exceed": 0.0,
+        "max_top_decile_share_of_positive_condition_gain": 0.75,
+        "min_fraction_conditions_with_positive_loss_improvement": 0.55,
+        "min_relative_loss_improvement_vs_best_frozen_baseline": 0.01,
+        "no_reselection_or_retuning": true,
+        "second_half_loss_improvement_must_exceed": 0.0
+      },
+      "full_feature_dev_improvement": 0.10605021348528691,
+      "horizon_seconds": 600,
+      "market_scope": "all DATA-003 condition-block-end observations supported by the frozen feature/target construction; no post-hoc mapping-class or market filtering",
+      "metric": "brier",
+      "missingness": "median imputation fit on pre-FINAL training data only",
+      "model_kind": "hgb",
+      "model_param": 7,
+      "participant_handling": "past-observable only; no future leaderboard/state",
+      "permuted_label_dev_improvement": -0.01978375147547332,
+      "target_type": "next_price_change_hazard"
+    }
+  ],
+  "classification": "SHORTLIST_FREEZE_BEFORE_FINAL",
+  "experiment_id": "PRED-006",
+  "final_open_rule": "FINAL may be read only by pred006-final after this freeze exists. If candidate_count=0, FINAL remains unopened and disposition is TERMINAL_NULL.",
+  "pool_size_before_dedup": 3,
+  "post_final_rescue_forbidden": true,
+  "schema_version": 1,
+  "search_ledger": {
+    "cross_market": {
+      "disposition": "NO_DEV_CANDIDATE",
+      "search_breadth": {
+        "failed_or_nonpositive": 70,
+        "feature_count": 47,
+        "horizons": [
+          5,
+          30,
+          120,
+          600,
+          1800
+        ],
+        "model_target_horizon_evaluations": 70,
+        "models_per_supported_target_horizon": 7
+      },
+      "shortlist_count": 0
+    },
+    "event_targets": {
+      "disposition": "NO_DEV_CANDIDATE",
+      "search_breadth": {
+        "evaluations": 55,
+        "feature_count": 30,
+        "models_per_supported_target": 5,
+        "target_definitions": 13
+      },
+      "shortlist_count": 0
+    },
+    "hazard_ablation": {
+      "recommendations": [
+        {
+          "ablation_validated": true,
+          "full_improvement": 0.10605021348528691,
+          "horizon": 600,
+          "model_kind": "hgb",
+          "model_param": 7,
+          "recommended_features": [
+            "p_yes",
+            "logit_p",
+            "boundary_distance",
+            "size_log",
+            "value_log",
+            "since_prev",
+            "count_30",
+            "count_120",
+            "count_600",
+            "count_1800",
+            "vol_30",
+            "vol_120",
+            "vol_600",
+            "vol_1800",
+            "mom_30",
+            "mom_120",
+            "mom_600",
+            "mom_1800",
+            "fee_charged",
+            "fee_missing",
+            "fee_no_leg",
+            "fee_net_log",
+            "fee_charge_log",
+            "fee_refund_log",
+            "charge_legs_log"
+          ],
+          "recommended_improvement": 0.10605021348528691,
+          "recommended_variant": "full"
+        },
+        {
+          "ablation_validated": true,
+          "full_improvement": 0.10751177149943177,
+          "horizon": 1800,
+          "model_kind": "hgb",
+          "model_param": 15,
+          "recommended_features": [
+            "p_yes",
+            "logit_p",
+            "boundary_distance",
+            "size_log",
+            "value_log",
+            "since_prev",
+            "count_30",
+            "count_120",
+            "count_600",
+            "count_1800",
+            "vol_30",
+            "vol_120",
+            "vol_600",
+            "vol_1800",
+            "mom_30",
+            "mom_120",
+            "mom_600",
+            "mom_1800",
+            "fee_charged",
+            "fee_missing",
+            "fee_no_leg",
+            "fee_net_log",
+            "fee_charge_log",
+            "fee_refund_log",
+            "charge_legs_log"
+          ],
+          "recommended_improvement": 0.10751177149943177,
+          "recommended_variant": "full"
+        },
+        {
+          "ablation_validated": true,
+          "full_improvement": 0.10447410619353582,
+          "horizon": 30,
+          "model_kind": "hgb",
+          "model_param": 7,
+          "recommended_features": [
+            "p_yes",
+            "logit_p",
+            "boundary_distance",
+            "size_log",
+            "value_log",
+            "since_prev",
+            "count_30",
+            "count_120",
+            "count_600",
+            "count_1800",
+            "vol_30",
+            "vol_120",
+            "vol_600",
+            "vol_1800",
+            "mom_30",
+            "mom_120",
+            "mom_600",
+            "mom_1800",
+            "fee_charged",
+            "fee_missing",
+            "fee_no_leg",
+            "fee_net_log",
+            "fee_charge_log",
+            "fee_refund_log",
+            "charge_legs_log"
+          ],
+          "recommended_improvement": 0.10447410619353582,
+          "recommended_variant": "full"
+        }
+      ]
+    },
+    "hazard_fee": {
+      "disposition": "DEV_CANDIDATES",
+      "search_breadth": {
+        "evaluations": 30,
+        "features": 25,
+        "horizons": [
+          5,
+          30,
+          120,
+          600,
+          1800
+        ],
+        "models": 6
+      },
+      "shortlist_count": 3
+    },
+    "interactions": {
+      "disposition": "NO_DEV_CANDIDATE",
+      "search_breadth": {
+        "failed_or_nonpositive": 70,
+        "feature_count": 64,
+        "horizons": [
+          5,
+          30,
+          120,
+          600,
+          1800
+        ],
+        "model_target_horizon_evaluations": 70,
+        "models_per_supported_target_horizon": 7
+      },
+      "shortlist_count": 0
+    },
+    "participant_flow": {
+      "disposition": "NO_DEV_CANDIDATE",
+      "search_breadth": {
+        "failed_or_nonpositive": 70,
+        "feature_count": 39,
+        "horizons": [
+          5,
+          30,
+          120,
+          600,
+          1800
+        ],
+        "model_target_horizon_evaluations": 70,
+        "models_per_supported_target_horizon": 7
+      },
+      "shortlist_count": 0
+    },
+    "temporal": {
+      "disposition": "NO_DEV_CANDIDATE",
+      "search_breadth": {
+        "failed_or_nonpositive": 70,
+        "feature_count": 28,
+        "horizons": [
+          5,
+          30,
+          120,
+          600,
+          1800
+        ],
+        "model_target_horizon_evaluations": 70,
+        "models_per_supported_target_horizon": 7
+      },
+      "shortlist_count": 0
+    }
+  },
+  "selection_rule": "Hostile DEV-screen pass only; corrected block-end hazard candidates additionally require ablation validation and a non-promoting permuted-label placebo. Sort by DEV relative improvement, tie-break fewer features; deduplicate target/horizon; max two per family; max five total.",
+  "split_manifest_sha256": "28d41fbb590f7f9abe59ca24e00841307fe13991c3c695748240fe127847f349"
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "experiment_id": "PRED-006",
+  "classification": "IMMUTABLE_SHORTLIST_FREEZE_EVIDENCE",
+  "github_actions_run": 36598785362,
+  "github_actions_job": 109510504795,
+  "artifact_id": 11047687190,
+  "split_manifest_sha256": "28d41fbb590f7f9abe59ca24e00841307fe13991c3c695748240fe127847f349",
+  "shortlist_freeze_sha256": "5deff02e70bbb63a7355390c4babfc1ed63dd8d5b112087a2e9ff9dddfe835f6",
+  "candidate_registry_sha256": "1f08a0e3d7cb264f6c9653016dc0d17ee023b0dc3995175560fb8bd64a1edfdb",
+  "candidate_count": 2,
+  "candidate_ids": [
+    "PRED006-C01",
+    "PRED006-C02"
+  ],
+  "final_opened": false,
+  "note": "Exact Kaggle shortlist_freeze.json and candidate_registry.json bytes are committed alongside this evidence before any FINAL launch."
+}
