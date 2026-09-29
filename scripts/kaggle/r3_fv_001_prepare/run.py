@@ -87,7 +87,7 @@ def pct_direct_row(con: duckdb.DuckDBPyConnection, view: str, frac: float) -> tu
     idx = max(1, min(n, int(math.floor(frac * n))))
     r = con.execute(
         f"""
-        select timestamp, block_number
+        select ts, block_number
         from {view}
         order by block_number, timestamp
         limit 1 offset {idx - 1}
@@ -576,6 +576,8 @@ def main() -> None:
         "semantic_graph_summary_sha256": sha256(semantic_path),
         "family_seed_sha256": sha256(family_path),
     }
+    print("R3_SPLIT_MANIFEST_JSON=" + json.dumps(split, sort_keys=True), flush=True)
+    print("R3_SEMANTIC_GRAPH_SUMMARY_JSON=" + json.dumps(semantic_summary, sort_keys=True, default=str), flush=True)
     print("R3_PREPARE_RESULT=" + json.dumps(result, sort_keys=True), flush=True)
 
 
