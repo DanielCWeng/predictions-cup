@@ -134,6 +134,22 @@ class AppSettings(BaseSettings):
     def validate_maker_configuration(self) -> Self:
         if self.maker_minimum_size > self.maker_base_size:
             raise ValueError("maker_minimum_size cannot exceed maker_base_size")
+        if self.maker_max_bbo_age_ms < int(
+            self.sig_realtime_bulk_price_refresh_seconds * 1_000
+        ):
+            raise ValueError(
+                "maker_max_bbo_age_ms must cover the configured SIG bulk-price "
+                "refresh interval"
+            )
+        if (
+            self.maker_require_trusted_depth
+            and self.maker_max_depth_age_ms
+            < int(self.sig_realtime_open_book_refresh_seconds * 1_000)
+        ):
+            raise ValueError(
+                "maker_max_depth_age_ms must cover the configured trusted-depth "
+                "refresh interval"
+            )
         return self
 
     @model_validator(mode="after")
