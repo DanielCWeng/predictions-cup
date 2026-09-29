@@ -1,16 +1,14 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "experiment_id": "R3-FV-001",
   "final_opened": false,
   "final_rows_accessed": 0,
-  "state": "LOCKED_STRUCTURAL_SEARCH_INCOMPLETE",
-  "supersedes_gate_reason": "The earlier FINAL block based solely on STOP_NO_INDEPENDENT_SIGNAL is no longer the governing reason.",
-  "current_reason": "Correct-universe Ridge/HGB screen is preserved as a null, but commissioned LP/QP/KL/MaxEnt/inverse structural methods are still under TRAIN/DEV evaluation.",
-  "unlock_conditions": [
-    "Complete structural TRAIN/DEV programme",
-    "Freeze one champion and at most two challengers",
-    "Freeze exact assumptions and semantic exclusions",
-    "Freeze parameters, target definitions, metrics and pass criteria",
-    "No post-DEV rescue or historical-data substitution"
-  ]
+  "state": "LOCKED_NO_CHAMPION_PROGRAMME_CLOSED",
+  "current_reason": "Corrected structural programme completed TRAIN/DEV without any candidate passing its frozen gate. FINAL remains untouched because no champion exists.",
+  "dev_candidates_passed": 0,
+  "champion": null,
+  "challengers": [],
+  "final_start_utc": "2026-09-10T00:00:00Z",
+  "programme_closed": true,
+  "future_reuse_rule": "A new preregistered programme may reuse the untouched FINAL slice only without examining it during hypothesis design."
 }
