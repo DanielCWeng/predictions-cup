@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "action": "output",
+  "kernel": "polyleviathan/005b-ordering-falsification-finalize",
+  "output_file_pattern": ".*ordering_falsification_summary\\.json$",
+  "note": "Retrieve deterministic final ordering-falsification verdict."
+}
