@@ -17,7 +17,8 @@ from sklearn.preprocessing import StandardScaler
 OUT=Path("/kaggle/working/pred006_final"); OUT.mkdir(parents=True,exist_ok=True)
 SEED=606999
 BOOT=1000
-EXPECTED_SPLIT_SHA="28d41fbb590f7f9abe59ca24e00841307fe13991c3c695748240fe127847f349"\nEXPECTED_FREEZE_SHA="5deff02e70bbb63a7355390c4babfc1ed63dd8d5b112087a2e9ff9dddfe835f6"
+EXPECTED_SPLIT_SHA="28d41fbb590f7f9abe59ca24e00841307fe13991c3c695748240fe127847f349"
+EXPECTED_FREEZE_SHA="5deff02e70bbb63a7355390c4babfc1ed63dd8d5b112087a2e9ff9dddfe835f6"
 WINDOWS=(30,120,600,1800)
 BASE=["p_yes","boundary_distance","since_prev","count_120","vol_120","mom_120"]
 
@@ -262,7 +263,9 @@ def evaluate_candidate(df,split,cand):
 def main():
     split_path=locate("split_manifest.json","pred006-phase0-audit"); split=json.loads(split_path.read_text())
     if sha256(split_path)!=EXPECTED_SPLIT_SHA: raise RuntimeError("split hash mismatch")
-    freeze_path=locate("shortlist_freeze.json","pred006-shortlist-freeze")\n    if sha256(freeze_path)!=EXPECTED_FREEZE_SHA: raise RuntimeError("shortlist freeze hash mismatch")\n    freeze=json.loads(freeze_path.read_text())
+    freeze_path=locate("shortlist_freeze.json","pred006-shortlist-freeze")
+    if sha256(freeze_path)!=EXPECTED_FREEZE_SHA: raise RuntimeError("shortlist freeze hash mismatch")
+    freeze=json.loads(freeze_path.read_text())
     if freeze.get("classification")!="SHORTLIST_FREEZE_BEFORE_FINAL": raise RuntimeError("invalid shortlist freeze")
     if freeze.get("split_manifest_sha256")!=EXPECTED_SPLIT_SHA: raise RuntimeError("freeze split mismatch")
     cands=freeze.get("candidates",[])
