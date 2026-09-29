@@ -7,5 +7,6 @@
   "timeout_minutes": 30,
   "download_outputs": true,
   "output_file_pattern": "smoke_result\\.json$",
-  "note": "R3-FV-001 mandatory DATA-004 Kaggle smoke gate. No expensive fair-value research may start unless this passes."
+  "note": "R3-FV-001 mandatory DATA-004 Kaggle smoke gate. Attempt 2 treats dataset-metadata.json as Kaggle upload-control metadata (verified pre-upload, not mounted content). No expensive fair-value research may start unless this passes.",
+  "attempt": 2
 }
