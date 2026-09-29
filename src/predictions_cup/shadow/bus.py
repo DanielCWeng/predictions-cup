@@ -87,7 +87,7 @@ class ShadowBus:
         candidates: Iterable[ShadowCandidate],
         *,
         store: ShadowEventStore | None = None,
-        queue_capacity: int = 1,
+        queue_capacity: int = 512,
         candidate_timeout_seconds: float = 0.050,
         trading_enabled: bool = False,
         clock_ns: ClockNs = monotonic_ns,
