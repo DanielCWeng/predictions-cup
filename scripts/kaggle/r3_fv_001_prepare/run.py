@@ -97,13 +97,6 @@ def pct_direct_row(con: duckdb.DuckDBPyConnection, view: str, frac: float) -> tu
 
 
 def extract_graph_bundle(root: Path) -> Path:
-    zips = list(root.rglob("full_frozen_universe.zip"))
-    if len(zips) != 1:
-        raise RuntimeError(f"expected full_frozen_universe.zip, got {zips}")
-    target = OUT / "full_frozen_universe"
-    target.mkdir(exist_ok=True)
-    with zipfile.ZipFile(zips[0]) as zf:
-        zf.extractall(target)
     required = [
         "ETS_MARKET_GRAPH.csv",
         "ETS_SIG_ANCHOR_GRAPH.csv",
@@ -112,9 +105,29 @@ def extract_graph_bundle(root: Path) -> Path:
         "ETS_RELATIONSHIP_TAXONOMY.json",
         "ETS_COMPONENTS.json",
     ]
+
+    mounted = root / "full_frozen_universe"
+    if mounted.is_dir():
+        for name in required:
+            if len(list(mounted.rglob(name))) != 1:
+                raise RuntimeError(
+                    f"mounted graph directory missing/ambiguous file {name}"
+                )
+        return mounted
+
+    zips = list(root.rglob("full_frozen_universe.zip"))
+    if len(zips) != 1:
+        raise RuntimeError(
+            "expected mounted full_frozen_universe directory or exactly one "
+            f"full_frozen_universe.zip, got dirs={mounted.is_dir()} zips={zips}"
+        )
+    target = OUT / "full_frozen_universe"
+    target.mkdir(exist_ok=True)
+    with zipfile.ZipFile(zips[0]) as zf:
+        zf.extractall(target)
     for name in required:
         if len(list(target.rglob(name))) != 1:
-            raise RuntimeError(f"missing/ambiguous graph file {name}")
+            raise RuntimeError(f"extracted graph bundle missing/ambiguous file {name}")
     return target
 
 
