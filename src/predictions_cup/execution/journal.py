@@ -107,6 +107,12 @@ class ExecutionJournal:
             ON execution_events(logical_operation_id, event_id)
             """
         )
+        self._connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS execution_events_strategy_idx
+            ON execution_events(strategy_id, event_type, logical_operation_id)
+            """
+        )
         self._connection.commit()
 
     def _ensure_execution_envelope_columns(self) -> None:
@@ -545,6 +551,39 @@ class ExecutionJournal:
             (exchange_order_id,),
         ).fetchone()
         return None if row is None else str(row[0])
+
+    def envelopes_for_strategy(
+        self,
+        strategy_id: str,
+    ) -> tuple[ExecutionEnvelope, ...]:
+        """Return durable envelopes attributed to one strategy submission."""
+        if not strategy_id.strip():
+            raise ValueError("strategy_id must not be blank")
+        rows = self._connection.execute(
+            """
+            SELECT DISTINCT
+                   envelope.logical_operation_id,
+                   envelope.tournament_id,
+                   envelope.idempotency_key,
+                   envelope.operation_kind,
+                   envelope.sink_mode,
+                   envelope.payload_json,
+                   envelope.payload_sha256,
+                   envelope.intent_ids_json,
+                   envelope.lifecycle_state,
+                   envelope.created_monotonic_ns,
+                   envelope.relationship_constraint
+            FROM execution_envelopes AS envelope
+            JOIN execution_events AS event
+              ON event.logical_operation_id = envelope.logical_operation_id
+            WHERE event.event_type = 'SUBMISSION'
+              AND event.strategy_id = ?
+            ORDER BY envelope.created_monotonic_ns,
+                     envelope.logical_operation_id
+            """,
+            (strategy_id,),
+        ).fetchall()
+        return self._decode_envelopes(rows)
 
     def envelopes(self) -> tuple[ExecutionEnvelope, ...]:
         """Return all durable execution envelopes, including terminal history."""
