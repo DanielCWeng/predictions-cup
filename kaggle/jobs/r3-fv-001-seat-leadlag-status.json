@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "status",
+  "kernel": "polyleviathan/r3-fv-001-seat-aggregate-lead-lag",
+  "note": "Read-only status probe for frozen R3-SEAT-LEADLAG-001 canonical title slug."
+}
