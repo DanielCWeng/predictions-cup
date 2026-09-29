@@ -1,70 +1,93 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "experiment_id": "R3-FV-001",
+  "programme_state": "CONTINUE_STRUCTURAL_MATHS",
   "final_opened": false,
+  "scope_correction": {
+    "audited_branch_head_before_correction": "53e625aa8eaba1e75136687de5c4e51036ba4897",
+    "correct_empirical_universe_verified": true,
+    "empirical_sources": [
+      "DATA-004"
+    ],
+    "empirical_targets": [
+      "DATA-003"
+    ],
+    "data001_used_by_r3_discovery": false,
+    "historical_analogue_families_used_by_r3_discovery": false,
+    "prior_ridge_hgb_discovery_classification": "SIMPLE_MODEL_SCREEN_NULL",
+    "prior_programme_level_stop": "SUPERSEDED_PREMATURE_STOP",
+    "reason": "The consumed Ridge/HGB screen was run on the correct DATA-004 + DATA-003 universe, but it did not implement the commissioned LP/QP/KL/MaxEnt/inverse structural layer. Its negative result is preserved as a screening null and cannot terminate untested methods."
+  },
   "entries": [
     {
+      "method_id": "R3-S00-SIMPLE-SCREEN",
+      "stage": "DEV_COMPLETE",
+      "decision": "NULL_PRESERVED",
+      "reason": "Correct-universe aggregate-feature Ridge/HGB screen was negative. Preserve exact consumed evidence; do not reinterpret it as a structural-maths test."
+    },
+    {
       "method_id": "R3-S01-LP-BOUNDS",
-      "stage": "PLANNED",
+      "stage": "ACTIVE",
       "decision": "CONTINUE",
-      "reason": "Hard/partial-identification layer must precede point models; establishes what DATA-004 actually identifies."
+      "reason": "Assumption-free partial identification is required before point-model closure."
     },
     {
       "method_id": "R3-S02-LOO-PRICE-QP",
-      "stage": "PLANNED",
+      "stage": "ACTIVE",
       "decision": "CONTINUE",
-      "reason": "Required recoverability/redundancy comparator; cannot establish independent information by itself."
+      "reason": "Run structural recoverability/redundancy QP comparator on DATA-004 sources only."
     },
     {
       "method_id": "R3-S03-LOO-FAMILY-QP",
-      "stage": "DEV_COMPLETE",
-      "decision": "STOP",
-      "reason": "Frozen DEV discovery found no independent next-update signal; all LOO-FAMILY candidate MAE improvements were negative with bootstrap intervals below zero."
+      "stage": "ACTIVE",
+      "decision": "CONTINUE",
+      "reason": "The prior generic regression was not a coherent LOO-FAMILY QP. This method was incorrectly marked complete and is reopened."
     },
     {
       "method_id": "R3-S04-LOO-FAMILY-KL",
-      "stage": "PLANNED",
-      "decision": "CHALLENGER",
-      "reason": "Tests whether probability-aware geometry materially improves the LOO-FAMILY estimate, especially near 0/1."
+      "stage": "ACTIVE",
+      "decision": "CONTINUE",
+      "reason": "Probability-geometry challenger must receive a TRAIN/DEV test before closure."
     },
     {
       "method_id": "R3-S05-MAXENT",
-      "stage": "PLANNED",
-      "decision": "CHALLENGER",
-      "reason": "Useful only where hard constraints leave a nontrivial identified set; must remain inside LP bounds."
+      "stage": "ACTIVE",
+      "decision": "CONTINUE",
+      "reason": "Point completion inside partially identified state spaces remains untested."
     },
     {
       "method_id": "R3-S06-LATENT",
-      "stage": "PLANNED",
+      "stage": "ACTIVE",
       "decision": "CONTINUE_IF_SUPPORT",
-      "reason": "Needed for scalable count-to-race inversion but carries stronger dependence assumptions."
+      "reason": "First scalable aggregate-to-constituent inverse model is required where current-universe component support exists."
     },
     {
       "method_id": "R3-S07-DYNAMIC",
-      "stage": "NOT_REACHED",
-      "decision": "STOP",
-      "reason": "Core static LOO-FAMILY discovery failed the frozen DEV gate; downstream dynamic/flow/hazard augmentation is not opened in R3."
+      "stage": "DEFERRED_UNTIL_CORE",
+      "decision": "CONTINUE_IF_CORE_SUPPORT",
+      "reason": "Do not add dynamic state-space complexity until core structural estimators are measured."
     },
     {
       "method_id": "R3-P01-FLOW",
-      "stage": "NOT_REACHED",
-      "decision": "STOP",
-      "reason": "Core static LOO-FAMILY discovery failed the frozen DEV gate; downstream dynamic/flow/hazard augmentation is not opened in R3."
+      "stage": "DEFERRED_UNTIL_CORE",
+      "decision": "CONTINUE_IF_CORE_SUPPORT",
+      "reason": "Flow is predictive augmentation only and remains separate from hard structural constraints."
     },
     {
       "method_id": "R3-P02-HAZARD",
-      "stage": "NOT_REACHED",
-      "decision": "STOP",
-      "reason": "Core static LOO-FAMILY discovery failed the frozen DEV gate; downstream dynamic/flow/hazard augmentation is not opened in R3."
+      "stage": "DEFERRED_UNTIL_CORE",
+      "decision": "CONTINUE_IF_CORE_SUPPORT",
+      "reason": "PRED-006 hazard may later inform freshness/update likelihood; it is not directional FV."
     }
   ],
   "controls": {
-    "final_rule": "Freeze champion/challengers, features, assumptions, parameters, horizons, metrics and pass criteria before one-shot within-R3 FINAL.",
+    "final_rule": "FINAL remains locked until structural methods are actually exercised and one champion plus at most two challengers are frozen with exact assumptions, parameters, targets, metrics and gates.",
     "leakage": [
       "Use block_number,log_index chronology",
-      "No later rows in same block",
+      "For target block B use only DATA-004 source blocks < B",
       "Explicit DirectInformationFamily exclusions",
-      "No future rows"
+      "No future rows",
+      "No FINAL rows in corrected structural discovery"
     ],
     "semantic": [
       "Hard edges require settlement-semantic proof",
@@ -72,26 +95,22 @@
       "Predictive-only edges never enter hard feasible set"
     ],
     "scope": [
-      "P0/P1 DATA-004 only",
+      "DATA-004 P0/P1 sources only",
+      "DATA-003 direct/reference targets only",
+      "DATA-001 and historical analogues excluded from fitting/selection/evaluation",
       "No P2/P3 rescue"
     ]
   },
-  "dev_discovery": {
-    "status": "STOP_NO_INDEPENDENT_SIGNAL",
-    "kaggle_kernel": "polyleviathan/r3-fv-001-structural-discovery",
-    "kaggle_last_run_time": "2026-09-29T20:41:42.487000Z",
+  "prior_dev_screen": {
+    "status": "SIMPLE_MODEL_SCREEN_NULL",
+    "original_decision": "STOP_NO_INDEPENDENT_SIGNAL",
+    "original_kaggle_kernel": "polyleviathan/r3-fv-001-structural-discovery",
     "output_recovery_actions_run_id": 36632235437,
     "output_artifact_id": 11062795819,
     "output_artifact_sha256": "0265ec42cb490328449fa52e1e1cbfaa4ca669cb4535d7a1dd5f512494e11e2b",
     "split_manifest_sha256": "cea20a374a8ed5822e361e7c8584cf3a2599fc80bcba3b2522efdf707e572225",
     "final_rows_accessed": 0,
-    "loo_family_support": {
-      "train_events": 11365,
-      "train_markets": 5,
-      "dev_events": 4389,
-      "dev_markets": 29
-    },
-    "best_loo_family_candidate": {
+    "best_loo_family_screen": {
       "mode": "LOO_FAMILY_SEMANTIC",
       "model_id": "blend_ridge",
       "baseline_persistence_mae": 0.00550604010025063,
@@ -103,21 +122,8 @@
         "median": -0.028717040221835174,
         "upper": -0.014999807945466997
       },
-      "dev_sig_markets": 29,
-      "champion_gate_pass": false
+      "dev_sig_markets": 29
     },
-    "loo_price_best_control": {
-      "model_id": "blend_ridge",
-      "baseline_persistence_mae": 0.005931613113330442,
-      "model_mae": 0.01503134854823915,
-      "absolute_mae_improvement": -0.009099735434908707,
-      "bootstrap_95": {
-        "lower": -0.022489368710545618,
-        "median": -0.00890003331985676,
-        "upper": -0.004073069255516063
-      }
-    },
-    "semantic_and_strict_identical_source_support": true,
-    "note": "Frozen stop rule triggered. No FINAL evaluation permitted."
+    "note": "Consumed result is immutable screening evidence. It may demote generic aggregate-feature regression, but it does not promote or reject unexecuted structural methods."
   }
 }
