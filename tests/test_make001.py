@@ -10,7 +10,7 @@ import pytest
 from predictions_cup.execution.models import ExecutionMode, LifecycleState
 from predictions_cup.maker import (
     ActiveQuote,
-    AvellanedaStoikovInventoryModel,
+    BinaryCaraInventoryModel,
     ConservativeEligibilityPolicy,
     ConservativeSpreadPolicy,
     DirectPolymarketFairValueProvider,
@@ -241,7 +241,7 @@ def _engine(
         fair_value=provider,
         predictive=NullPredictiveAdjuster(),
         toxicity=NullToxicityProvider(),
-        inventory=AvellanedaStoikovInventoryModel(),
+        inventory=BinaryCaraInventoryModel(),
         spread=ConservativeSpreadPolicy(base_half_spread_ticks=1.0),
         size=InventoryConfidenceSizePolicy(base_size=4),
         eligibility=ConservativeEligibilityPolicy(
@@ -421,7 +421,7 @@ def _engine_with_provider(provider: object) -> MakerEngine:
         fair_value=provider,  # type: ignore[arg-type]
         predictive=NullPredictiveAdjuster(),
         toxicity=NullToxicityProvider(),
-        inventory=AvellanedaStoikovInventoryModel(),
+        inventory=BinaryCaraInventoryModel(),
         spread=ConservativeSpreadPolicy(),
         size=InventoryConfidenceSizePolicy(),
         eligibility=ConservativeEligibilityPolicy(
