@@ -19,7 +19,6 @@ import tempfile
 import time
 from collections import defaultdict
 from collections.abc import Callable
-from collections.abc import Callable
 from pathlib import Path
 
 from predictions_cup.execution.journal import ExecutionJournal
