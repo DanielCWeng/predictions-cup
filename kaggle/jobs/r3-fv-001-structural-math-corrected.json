@@ -6,5 +6,5 @@
   "poll_seconds": 20,
   "timeout_minutes": 180,
   "download_outputs": true,
-  "note": "Attempt 3 of the same frozen corrected R3 TRAIN/DEV structural-math experiment. Only implementation fixes since attempt 1: empty governorship inverse support is recorded as INSUFFICIENT_SUPPORT instead of crashing, and Kaggle identity is bound to the confirmed canonical slug. DATA-004 sources + DATA-003 targets only. No thresholds, source-age rules, models, target definitions, or evaluation gates changed. FINAL remains unopened."
+  "note": "Attempt 4 corrective implementation pass. Frozen DATA-004->DATA-003 TRAIN/DEV programme unchanged. S02 now uses settlement-aligned EXACT_EQUIVALENT sources with literal direct IDs excluded; S06 now correctly treats every D/R Governor target as a constituent of the frozen 907686-907692 national Republican governorship count. No dataset, split, source-age, model, target, metric, bootstrap, or FINAL rule changed. See IMPLEMENTATION_CORRECTION_001.json."
 }
