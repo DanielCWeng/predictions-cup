@@ -397,9 +397,9 @@ interactive shells.
 Local quality and artifact validation on the launch branch:
 
 - Ruff: **PASS**;
-- strict mypy: **PASS** across 191 source files;
-- full pytest: **576 passed, 3 skipped**;
-- focused CAPTURE-001 + SIG Realtime regression battery: **17 passed**;
+- strict mypy: **PASS** across 192 source files;
+- full pytest: **577 passed, 3 skipped**;
+- focused CAPTURE-001 + SIG Realtime regression battery: **18 passed**;
 - normal application startup: **PASS**;
 - application smoke mode: **PASS**;
 - restart regression: previously published immutable shards remain readable and a new recorder
