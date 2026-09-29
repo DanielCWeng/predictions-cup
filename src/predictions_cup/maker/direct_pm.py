@@ -39,12 +39,7 @@ class DirectPolymarketFairValueProvider:
     def __init__(
         self,
         document: MappingDocument,
-        *,
-        max_age_ns: int,
     ) -> None:
-        if max_age_ns <= 0:
-            raise ValueError("max_age_ns must be positive")
-        self._max_age_ns = max_age_ns
         self._records = {
             record.sig_exchange_id: record
             for record in document.records
@@ -56,11 +51,9 @@ class DirectPolymarketFairValueProvider:
     def from_path(
         cls,
         path: Path,
-        *,
-        max_age_ns: int,
     ) -> DirectPolymarketFairValueProvider:
         """Startup helper. File I/O never occurs in fair_value()."""
-        return cls(load_document(path), max_age_ns=max_age_ns)
+        return cls(load_document(path))
 
     def fair_value(
         self,
@@ -133,7 +126,7 @@ class DirectPolymarketFairValueProvider:
         if quote is None or not quote.trusted:
             return None
         age = snapshot.now_monotonic_ns - quote.observed_monotonic_ns
-        if age < 0 or age > self._max_age_ns:
+        if age < 0:
             return None
         bid = quote.best_bid
         ask = quote.best_ask
