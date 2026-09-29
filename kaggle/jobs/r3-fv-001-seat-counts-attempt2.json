@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/r3_fv_001_seat_counts",
+  "kernel": "polyleviathan/r3-fv-001-seat-count-structural-test",
+  "poll_seconds": 20,
+  "timeout_minutes": 90,
+  "download_outputs": true,
+  "note": "R3-SEAT-COUNT-001 attempt 2. Identical frozen DATA-004->DATA-003 House/Senate formulas and gates. Sole implementation correction: residual next_y is assigned on the literal target-event sequence before source-completeness filtering, per SEAT_COUNT_IMPLEMENTATION_CORRECTION_001. No result-driven tuning. FINAL remains unopened."
+}
