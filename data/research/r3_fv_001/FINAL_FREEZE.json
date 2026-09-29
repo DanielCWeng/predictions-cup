@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "freeze_state": "NO_CHAMPION_FINAL_NOT_OPENED",
+  "frozen_at_programme_end": true,
+  "champion": null,
+  "challengers": [],
+  "dev_candidates_passed": 0,
+  "final_start_utc": "2026-09-10T00:00:00Z",
+  "final_opened": false,
+  "final_rows_accessed": 0,
+  "reason": "No structural, direct+struct, calibrated, or event-time candidate passed its frozen TRAIN/DEV gate after the corrected DATA-004 -> DATA-003 programme. Opening FINAL would convert the holdout into rescue-search data.",
+  "evidence_files": [
+    "DEV_DISCOVERY_VERDICT.json",
+    "ATTEMPT4_EVIDENCE_EVALUATION.json",
+    "P0_SUPPORT_AUDIT_EVIDENCE.json",
+    "SEAT_COUNT_ATTEMPT1_LEVEL_EVIDENCE.json",
+    "SEAT_COUNT_ATTEMPT2_CORRECTED_EVIDENCE.json",
+    "SEAT_CALIBRATED_ECM_EVIDENCE.json",
+    "SEAT_LEADLAG_EVIDENCE.json",
+    "P0_SIMPLEX_LEADLAG_EVIDENCE.json"
+  ],
+  "future_rule": "Any future use of the untouched FINAL slice requires a new programme with a frozen hypothesis derived without examining FINAL. R3-FV-001 itself is closed."
+}
