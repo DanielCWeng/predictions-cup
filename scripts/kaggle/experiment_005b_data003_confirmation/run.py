@@ -20,7 +20,6 @@ import aiohttp
 import duckdb
 import numpy as np
 import pandas as pd
-import pyarrow.parquet as pq
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LinearRegression, Ridge
@@ -252,10 +251,17 @@ async def map_values(items: list[str], method: str, parse: Any) -> dict[str, Any
         async with aiohttp.ClientSession(connector=connector) as session:
             semaphore = asyncio.Semaphore(32)
 
-            async def work(batch_no: int, batch: list[str]) -> dict[str, Any]:
+            async def work(
+                batch_no: int,
+                batch: list[str],
+                *,
+                _endpoint: str = endpoint,
+                _semaphore: asyncio.Semaphore = semaphore,
+                _session: aiohttp.ClientSession = session,
+            ) -> dict[str, Any]:
                 calls = [(batch_no*100+i, method, [value]) for i, value in enumerate(batch)]
-                async with semaphore:
-                    reply = await rpc_batch(session, endpoint, calls)
+                async with _semaphore:
+                    reply = await rpc_batch(_session, _endpoint, calls)
                 out: dict[str, Any] = {}
                 for i, value in enumerate(batch):
                     result = reply.get(batch_no*100+i)
