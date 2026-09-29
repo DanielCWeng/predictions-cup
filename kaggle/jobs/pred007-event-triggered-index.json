@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/pred007_event_index",
+  "kernel": "polyleviathan/pred007-event-triggered-index",
+  "poll_seconds": 20,
+  "timeout_minutes": 180,
+  "download_outputs": true,
+  "output_file_pattern": "(PRED007_RESULTS|PRED007_VERDICT|CELL_RESULTS|COVERAGE)\\.(json|csv)$",
+  "note": "PRED-007 frozen historical mechanism test: event-triggered cross-event election index -> held-out market repricing. No post-result rescue."
+}
