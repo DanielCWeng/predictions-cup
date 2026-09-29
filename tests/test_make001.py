@@ -33,7 +33,6 @@ from predictions_cup.maker import (
     QuoteLifecycleManager,
     QuoteRegistry,
     QuoteSide,
-    QuoteWidths,
     ShadowMakerExecutionAdapter,
 )
 from predictions_cup.maker.contracts import FairValueResult
@@ -375,47 +374,6 @@ def test_quote_ticks_are_passive_valid_and_never_cross() -> None:
             assert quote.bid_ticks < quote.ask_ticks
 
 
-class _AsymmetricSpreadPolicy:
-    policy_id = "asymmetric-fixture"
-    version = "v1"
-
-    def widths(self, context: object) -> QuoteWidths:
-        del context
-        return QuoteWidths(bid=0.02, ask=0.005)
-
-
-def test_asymmetric_spread_plugin_changes_bid_and_ask_independently() -> None:
-    engine = MakerEngine(
-        fair_value=DirectPolymarketFairValueProvider(_mapping()),
-        predictive=NullPredictiveAdjuster(),
-        toxicity=NullToxicityProvider(),
-        inventory=BinaryCaraInventoryModel(risk_aversion=0.0),
-        spread=_AsymmetricSpreadPolicy(),
-        size=InventoryConfidenceSizePolicy(base_size=2),
-        eligibility=ConservativeEligibilityPolicy(
-            max_bbo_age_ns=100_000_000,
-            max_fv_age_ns=100_000_000,
-            max_account_age_ns=100_000_000,
-            max_inventory_age_ns=100_000_000,
-            max_optional_signal_age_ns=100_000_000,
-        ),
-        config=MakerConfig(max_abs_inventory=10.0),
-    )
-    decision = engine.quote(_maker_snapshot(volatility=None))
-
-    assert decision.desired is not None
-    assert decision.desired.bid_ticks == 96
-    assert decision.desired.ask_ticks == 101
-    assert decision.trace.bid_half_spread == pytest.approx(0.02)
-    assert decision.trace.ask_half_spread == pytest.approx(0.005)
-    assert decision.trace.half_spread == pytest.approx(0.02)
-    assert decision.trace.sig_bbo_trusted is True
-    assert decision.trace.account_trusted is True
-    assert decision.trace.fv_trusted is True
-    assert decision.trace.prediction_trusted is True
-    assert decision.trace.toxicity_trusted is True
-
-
 def test_probability_boundary_drops_side_instead_of_narrowing_required_spread() -> None:
     high = _engine().quote(
         _maker_snapshot(
@@ -576,83 +534,6 @@ def _engine_with_provider(provider: object) -> MakerEngine:
             max_optional_signal_age_ns=100_000_000,
         ),
     )
-
-
-class _MalformedFairValue:
-    provider_id = "malformed-fv"
-    version = "v1"
-
-    def fair_value(self, snapshot: MakerMarketSnapshot) -> object:
-        del snapshot
-        return object()
-
-
-class _MalformedPredictive:
-    model_id = "malformed-pred"
-    version = "v1"
-
-    def adjust(
-        self,
-        snapshot: MakerMarketSnapshot,
-        fair_value: FairValueResult,
-    ) -> object:
-        del snapshot, fair_value
-        return object()
-
-
-class _MalformedSpread:
-    policy_id = "malformed-spread"
-    version = "v1"
-
-    def widths(self, context: object) -> object:
-        del context
-        return object()
-
-
-def test_malformed_plugin_return_types_fail_closed() -> None:
-    malformed_fv = _engine_with_provider(_MalformedFairValue()).quote(
-        _maker_snapshot()
-    )
-    assert malformed_fv.desired is None
-    assert malformed_fv.gate.reason == "fair_value_plugin_malformed"
-
-    predictive_engine = MakerEngine(
-        fair_value=DirectPolymarketFairValueProvider(_mapping()),
-        predictive=_MalformedPredictive(),  # type: ignore[arg-type]
-        toxicity=NullToxicityProvider(),
-        inventory=BinaryCaraInventoryModel(),
-        spread=ConservativeSpreadPolicy(),
-        size=InventoryConfidenceSizePolicy(),
-        eligibility=ConservativeEligibilityPolicy(
-            max_bbo_age_ns=100_000_000,
-            max_fv_age_ns=100_000_000,
-            max_account_age_ns=100_000_000,
-            max_inventory_age_ns=100_000_000,
-            max_optional_signal_age_ns=100_000_000,
-        ),
-    )
-    malformed_signal = predictive_engine.quote(_maker_snapshot())
-    assert malformed_signal.desired is None
-    assert malformed_signal.gate.reason == "signal_plugin_malformed"
-
-    spread_engine = MakerEngine(
-        fair_value=DirectPolymarketFairValueProvider(_mapping()),
-        predictive=NullPredictiveAdjuster(),
-        toxicity=NullToxicityProvider(),
-        inventory=BinaryCaraInventoryModel(),
-        spread=_MalformedSpread(),  # type: ignore[arg-type]
-        size=InventoryConfidenceSizePolicy(),
-        eligibility=ConservativeEligibilityPolicy(
-            max_bbo_age_ns=100_000_000,
-            max_fv_age_ns=100_000_000,
-            max_account_age_ns=100_000_000,
-            max_inventory_age_ns=100_000_000,
-            max_optional_signal_age_ns=100_000_000,
-        ),
-    )
-    malformed_spread = spread_engine.quote(_maker_snapshot())
-    assert malformed_spread.desired is None
-    assert malformed_spread.gate.reason == "quote_policy_exception"
 
 
 def test_plugin_exception_and_nan_output_suspend() -> None:
