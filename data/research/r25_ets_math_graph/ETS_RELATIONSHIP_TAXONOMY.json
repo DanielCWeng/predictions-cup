@@ -1,0 +1,282 @@
+{
+  "schema_version": 1,
+  "mathematical_classes": [
+    {
+      "name": "EXACT_STRUCTURAL",
+      "definition": "A deterministic identity, disjointness relation, or mathematically exact subset/bound follows from matched settlement events."
+    },
+    {
+      "name": "MODEL_DEPENDENT_STRUCTURAL",
+      "definition": "The contract is a deterministic function of latent election states, but target inversion needs count/joint/dependence assumptions or yields only LP bounds."
+    },
+    {
+      "name": "PREDICTIVE_ONLY",
+      "definition": "No logical implication for the SIG target is asserted; the source is eligible only for preregistered empirical prediction tests."
+    },
+    {
+      "name": "REJECTED",
+      "definition": "The proposition does not resolve the target 2026 general-election event."
+    }
+  ],
+  "relationships": [
+    {
+      "name": "EXACT_EQUIVALENT",
+      "default_mathematical_class": "EXACT_STRUCTURAL",
+      "equation": "I_SIG(X)=I_PM(X), hence P(SIG)=P(PM mapped outcome).",
+      "assumptions": [
+        "same contest and election round",
+        "same party/candidate event",
+        "same tie, recount, runoff, cutoff and resolution-source semantics"
+      ],
+      "allowed_interpretations": [
+        "fair-value reference under equivalent settlement",
+        "one latent event probability"
+      ],
+      "forbidden_interpretations": [
+        "cross-venue arbitrage without lockable offset",
+        "equating last trade with probability without calibration",
+        "identity from title alone"
+      ]
+    },
+    {
+      "name": "COMPLEMENT",
+      "default_mathematical_class": "EXACT_STRUCTURAL",
+      "equation": "I_A+I_notA=1; P(not A)=1-P(A).",
+      "assumptions": [
+        "the two claims are exact logical complements on the same settlement domain"
+      ],
+      "allowed_interpretations": [
+        "same-market Yes/No complement"
+      ],
+      "forbidden_interpretations": [
+        "treating Democratic win and Republican win as complements when Other/tie is possible",
+        "treating negative-risk metadata alone as proof"
+      ]
+    },
+    {
+      "name": "EXHAUSTIVE_PARTITION",
+      "default_mathematical_class": "EXACT_STRUCTURAL",
+      "equation": "For disjoint exhaustive A_k, sum_k P(A_k)=1; P(A)=sum_{k in A} P(A_k).",
+      "assumptions": [
+        "mutually exclusive categories",
+        "coverage of every valid settlement state",
+        "aligned dates and resolution rules"
+      ],
+      "allowed_interpretations": [
+        "sum disjoint bucket probabilities",
+        "rank/df accounting"
+      ],
+      "forbidden_interpretations": [
+        "summing overlapping thresholds",
+        "assuming an omitted Other bucket has zero mass"
+      ]
+    },
+    {
+      "name": "NONEXHAUSTIVE_PARTITION",
+      "default_mathematical_class": "EXACT_STRUCTURAL",
+      "equation": "For pairwise disjoint listed A_k, sum_k P(A_k)<=1; residual=1-sum_k P(A_k)>=0.",
+      "assumptions": [
+        "listed outcomes are disjoint",
+        "unlisted/Other/tie outcomes remain possible"
+      ],
+      "allowed_interpretations": [
+        "valid probability upper bounds and explicit residual mass"
+      ],
+      "forbidden_interpretations": [
+        "renormalizing listed outcomes to one without a stated conditional estimand"
+      ]
+    },
+    {
+      "name": "THRESHOLD",
+      "default_mathematical_class": "EXACT_STRUCTURAL",
+      "equation": "P(K>=c)=sum_{k>=c}P(K=k); interval thresholds yield corresponding sums.",
+      "assumptions": [
+        "same count variable and boundary convention"
+      ],
+      "allowed_interpretations": [
+        "monotone count constraints"
+      ],
+      "forbidden_interpretations": [
+        "converting an aggregate threshold into a named constituent probability without bounds/model"
+      ]
+    },
+    {
+      "name": "COUNT_DISTRIBUTION",
+      "default_mathematical_class": "MODEL_DEPENDENT_STRUCTURAL",
+      "equation": "K=sum_r I_r; P(K in B)=sum_x 1{sum_r I_r(x) in B} P(x).",
+      "assumptions": [
+        "same constituent set, party attribution, incumbent/seat universe, and timing"
+      ],
+      "allowed_interpretations": [
+        "aggregate count probability and exact count-based bounds"
+      ],
+      "forbidden_interpretations": [
+        "inverting a count distribution into individual race marginals under independence without labeling the assumption"
+      ]
+    },
+    {
+      "name": "JOINT_OUTCOME",
+      "default_mathematical_class": "EXACT_STRUCTURAL",
+      "equation": "For a complete A x B table: sum_{a,b}p_ab=1; P(A)=p_11+p_10; P(B)=p_11+p_01.",
+      "assumptions": [
+        "all joint cells are listed, definitions and dates align, and no pooled Other state hides relevant marginals"
+      ],
+      "allowed_interpretations": [
+        "joint event probability, margins, covariance when complete"
+      ],
+      "forbidden_interpretations": [
+        "calling a partial table complete or inferring constituent outcomes from a single cell"
+      ]
+    },
+    {
+      "name": "PARTIAL_JOINT",
+      "default_mathematical_class": "MODEL_DEPENDENT_STRUCTURAL",
+      "equation": "max(0,P(A)+P(B)-1)<=P(A cap B)<=min(P(A),P(B)); listed cell J subset A gives P(J)<=P(A).",
+      "assumptions": [
+        "event cell has matching constituents; all residual/Other states remain explicit"
+      ],
+      "allowed_interpretations": [
+        "Frechet bounds and LP partial identification"
+      ],
+      "forbidden_interpretations": [
+        "independence or full-table inversion from incomplete joint cells"
+      ]
+    },
+    {
+      "name": "CONDITIONAL",
+      "default_mathematical_class": "MODEL_DEPENDENT_STRUCTURAL",
+      "equation": "P(A|B)=P(A cap B)/P(B), for P(B)>0.",
+      "assumptions": [
+        "same B event, same conditioning information and settlement time"
+      ],
+      "allowed_interpretations": [
+        "conditional probabilities after denominator/source validation"
+      ],
+      "forbidden_interpretations": [
+        "using a market phrased “if” as conditional probability without matching B"
+      ]
+    },
+    {
+      "name": "CONSTITUENT_OF_AGGREGATE",
+      "default_mathematical_class": "MODEL_DEPENDENT_STRUCTURAL",
+      "equation": "If A_i is one item in count K=sum I_i, then P(K=N)<=P(A_i)<=P(K>=1) for N constituents.",
+      "assumptions": [
+        "the target is literally included in the aggregate count"
+      ],
+      "allowed_interpretations": [
+        "partial bounds; count-surface constraints"
+      ],
+      "forbidden_interpretations": [
+        "count-to-race point inversion without dependence structure"
+      ]
+    },
+    {
+      "name": "CHAMBER_CONTROL",
+      "default_mathematical_class": "MODEL_DEPENDENT_STRUCTURAL",
+      "equation": "Control may equal 1{party seat count >= majority threshold}, then modified by tie/caucus/leadership settlement rules.",
+      "assumptions": [
+        "exact chamber control definition, VP/tie treatment, caucusing rule and membership date"
+      ],
+      "allowed_interpretations": [
+        "seat-count bounds with explicit threshold uncertainty"
+      ],
+      "forbidden_interpretations": [
+        "equating “win chamber” and “control after election” absent matching definitions"
+      ]
+    },
+    {
+      "name": "MARGIN_DISTRIBUTION",
+      "default_mathematical_class": "EXACT_STRUCTURAL",
+      "equation": "For disjoint party winner-margin bins M_k, P(party wins)=sum_k P(M_k) only if every positive margin and tie/Other state is covered.",
+      "assumptions": [
+        "margin denominator and top-two rule match",
+        "boundary tie-break is followed",
+        "bins are disjoint and complete"
+      ],
+      "allowed_interpretations": [
+        "sum of complete party margin bins; individual-bin lower bounds"
+      ],
+      "forbidden_interpretations": [
+        "treating within-epsilon closeness as directional winner probability",
+        "omitting explicit Other/tie mass"
+      ]
+    },
+    {
+      "name": "CROSS_RACE_COMPARISON",
+      "default_mathematical_class": "PREDICTIVE_ONLY",
+      "equation": "I(|M_A|<|M_B|) is a joint comparison; it does not identify P(A wins) or P(B wins).",
+      "assumptions": [
+        "comparison races and winning-round margin are correctly identified"
+      ],
+      "allowed_interpretations": [
+        "predictive feature about relative closeness"
+      ],
+      "forbidden_interpretations": [
+        "direct FV for either race winner"
+      ]
+    },
+    {
+      "name": "PIVOTAL_RACE",
+      "default_mathematical_class": "PREDICTIVE_ONLY",
+      "equation": "P(|M|<=epsilon) or P(race has minimum |M|) contains no party-direction label.",
+      "assumptions": [
+        "a prior predictive hypothesis is frozen"
+      ],
+      "allowed_interpretations": [
+        "predictive-only feature"
+      ],
+      "forbidden_interpretations": [
+        "party win probability or deterministic bound"
+      ]
+    },
+    {
+      "name": "SOFT_RELATED",
+      "default_mathematical_class": "PREDICTIVE_ONLY",
+      "equation": "No deterministic equation is asserted.",
+      "assumptions": [
+        "any predictive use is preregistered and validated out of sample"
+      ],
+      "allowed_interpretations": [
+        "feature hypothesis only"
+      ],
+      "forbidden_interpretations": [
+        "structural edge, exact mapping or arbitrage"
+      ]
+    },
+    {
+      "name": "TURNOUT_THRESHOLD",
+      "default_mathematical_class": "PREDICTIVE_ONLY",
+      "equation": "P(T in B) concerns turnout T; winner W is not determined by T.",
+      "assumptions": [
+        "turnout feature has a separately frozen predictive test"
+      ],
+      "allowed_interpretations": [
+        "predictive-only covariate"
+      ],
+      "forbidden_interpretations": [
+        "turnout threshold as winner probability"
+      ]
+    },
+    {
+      "name": "REJECTED_RESOLUTION_SCOPE",
+      "default_mathematical_class": "REJECTED",
+      "equation": "No equation to the 2026 general-election winner is valid.",
+      "assumptions": [
+        "the observed contract resolves candidacy, withdrawal or party-primary pairing"
+      ],
+      "allowed_interpretations": [
+        "audit trail for exclusion"
+      ],
+      "forbidden_interpretations": [
+        "use as a general-election fair-value input"
+      ]
+    }
+  ],
+  "interpretation_policy": {
+    "venue_role": "Polymarket is an external information/reference venue; SIG is the execution venue.",
+    "arbitrage": "Do not label a discrepancy arbitrage unless offsetting positions can be locked with matched settlement rules.",
+    "price_inputs": "No price, fill, order-book or resolved-outcome field was used in this phase; weights are not fitted.",
+    "same_race_party_yes_no": "D/R win events are disjoint when party categories differ, but they are not complements if Independent/Other/tie is possible.",
+    "negative_risk": "negRisk and groupItemThreshold are metadata only; neither alone proves exhaustive mathematical coverage."
+  }
+}
