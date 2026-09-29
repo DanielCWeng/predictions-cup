@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -12,12 +13,12 @@ from pydantic import SecretStr
 
 from predictions_cup.config import AppSettings
 
-from predictions_cup.execution.interlocks import assert_live_interlocks
+from predictions_cup.execution.interlocks import LiveExecutionPermit, assert_live_interlocks
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import ExecutionMode, LifecycleState, OperationKind
 from predictions_cup.execution.planner import build_execution_plan
-from predictions_cup.execution.recovery import recover_startup
+from predictions_cup.execution.recovery import RecoveryRest, recover_startup
 from predictions_cup.execution.replacement import quote_replacement_allowed
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.risk.core import RiskContext, RiskDecision, evaluate_risk
@@ -37,6 +38,7 @@ from predictions_cup.sig.trading_client import SigTradingClient
 from predictions_cup.sig.trading_dto import (
     OrderFillsResponseDto,
     OrderReadDto,
+    OrderStatusFilter,
     PositionsResponseDto,
     SingleOrderResponseDto,
 )
@@ -322,15 +324,15 @@ class _RecoveryRestFixture:
     def iter_orders(
         self,
         *,
-        status: str = "open",
+        status: OrderStatusFilter = "open",
         exchange_id: str | None = None,
         market_id: str | None = None,
         tournament_id: str | None = None,
         limit: int = 200,
-    ):
+    ) -> AsyncIterator[OrderReadDto]:
         del status, exchange_id, market_id, tournament_id, limit
 
-        async def empty():
+        async def empty() -> AsyncIterator[OrderReadDto]:
             if False:
                 yield OrderReadDto.model_validate({})
 
@@ -394,7 +396,7 @@ class _RecoveryTradingFixture:
         )
 
 
-def _recovery_permit():
+def _recovery_permit() -> LiveExecutionPermit:
     settings = AppSettings(
         sig_trade_credential=SecretStr("trade-secret"),
         tournament_id="t1",
@@ -480,7 +482,7 @@ def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
         result = asyncio.run(
             recover_startup(
                 journal=journal,
-                rest=cast(object, _RecoveryRestFixture()),
+                rest=cast(RecoveryRest, _RecoveryRestFixture()),
                 live_sink=sink,
                 tournament_id="t1",
                 tournament_slug="cup",
