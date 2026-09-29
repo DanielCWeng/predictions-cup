@@ -312,7 +312,7 @@ def analyze_sig_microstructure(
                 "bbo_lifetime_seconds_p90": _percentiles(
                     [
                         (right - left).total_seconds()
-                        for left, right in zip(economic_times, economic_times[1:])
+                        for left, right in zip(economic_times, economic_times[1:], strict=False)
                     ]
                 )["p90"],
                 "absolute_mid_move_p90": _percentiles(mid_moves)["p90"],
