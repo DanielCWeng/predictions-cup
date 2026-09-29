@@ -101,7 +101,9 @@ Each regime is split by wall-clock time:
 - final 40%: EVALUATION;
 - a 30-second embargo separates TRAIN and EVALUATION.
 
-No hyperparameter or source selection uses EVALUATION target outcomes.
+No hyperparameter or source selection uses EVALUATION target outcomes. Model coefficients are fitted on all finite TRAIN source-event observations; the frozen shock threshold is used for the primary EVALUATION subset rather than for coefficient fitting.
+
+A target/horizon cell requires at least 200 common finite TRAIN rows and 20 shock-EVALUATION rows. Delayed-index controls must also have at least three finite cross-event sources at the decision timestamp.
 
 Because these event families were previously studied, the EVALUATION label does not mean pristine holdout.
 
