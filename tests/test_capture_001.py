@@ -7,9 +7,21 @@ from decimal import Decimal
 from pathlib import Path
 from typing import cast
 
+import pyarrow as pa
 import pyarrow.dataset as ds
+import pyarrow.parquet as pq
 
+from predictions_cup.analysis.cross_venue import analyze_direct_cross_venue
 from predictions_cup.analysis.first_hours import run
+from predictions_cup.mapping.crosswalk import write_document
+from predictions_cup.mapping.models import (
+    MappingClass,
+    MappingDirection,
+    MappingDocument,
+    MappingStatus,
+    MarketMapping,
+    PolymarketContractIdentity,
+)
 from predictions_cup.models import OrderBook, OrderBookLevel
 from predictions_cup.sig.dto import PriceSnapshotDto
 from predictions_cup.sig.launch_storage import LaunchSigRecorder
@@ -246,3 +258,133 @@ def test_launch_recorder_restart_never_corrupts_published_shards(tmp_path: Path)
     rows = _rows(root, "raw_events")
     assert {str(row["session_id"]) for row in rows} == {"session-0", "session-1"}
     assert not tuple(root.rglob("*.tmp"))
+
+
+def _write_rows_parquet(root: Path, stream: str, rows: list[dict[str, object]]) -> None:
+    directory = root / stream
+    directory.mkdir(parents=True, exist_ok=True)
+    pq.write_table(pa.Table.from_pylist(rows), directory / "part.parquet")
+
+
+def test_cross_venue_complement_alignment_and_response_lags(tmp_path: Path) -> None:
+    at = datetime(2026, 10, 1, 16, 0, tzinfo=UTC)
+    sig_root = tmp_path / "sig"
+    pm_root = tmp_path / "pm"
+    mapping_path = tmp_path / "mapping.json"
+
+    _write_rows_parquet(
+        sig_root,
+        "normalized_events",
+        [
+            {
+                "event_type": "BBO_SNAPSHOT",
+                "exchange_id": "sig-1",
+                "observed_at": at,
+                "best_bid": "0.49",
+                "best_ask": "0.51",
+                "spread": "0.02",
+            },
+            {
+                "event_type": "BBO_SNAPSHOT",
+                "exchange_id": "sig-1",
+                "observed_at": at + timedelta(seconds=1),
+                "best_bid": "0.59",
+                "best_ask": "0.61",
+                "spread": "0.02",
+            },
+            {
+                "event_type": "BBO_SNAPSHOT",
+                "exchange_id": "sig-1",
+                "observed_at": at + timedelta(seconds=2),
+                "best_bid": "0.69",
+                "best_ask": "0.71",
+                "spread": "0.02",
+            },
+        ],
+    )
+    _write_rows_parquet(
+        pm_root,
+        "observations",
+        [
+            {
+                "token_id": "pm-no",
+                "observed_at": at,
+                "best_bid": "0.49",
+                "best_ask": "0.51",
+                "spread": "0.02",
+                "book_valid": True,
+            },
+            {
+                "token_id": "pm-no",
+                "observed_at": at + timedelta(milliseconds=500),
+                "best_bid": "0.39",
+                "best_ask": "0.41",
+                "spread": "0.02",
+                "book_valid": True,
+            },
+            {
+                "token_id": "pm-no",
+                "observed_at": at + timedelta(milliseconds=2200),
+                "best_bid": "0.29",
+                "best_ask": "0.31",
+                "spread": "0.02",
+                "book_valid": True,
+            },
+        ],
+    )
+    document = MappingDocument(
+        tournament_id="cup",
+        records=(
+            MarketMapping(
+                sig_tournament_id="cup",
+                sig_market_id="sig-market",
+                sig_market_title="Test",
+                sig_exchange_id="sig-1",
+                sig_outcome_label="YES",
+                mapping_class=MappingClass.EXACT,
+                mapping_direction=MappingDirection.COMPLEMENT,
+                mapping_confidence=Decimal("1"),
+                status=MappingStatus.VERIFIED,
+                direct_polymarket=PolymarketContractIdentity(
+                    market_id="pm-market",
+                    condition_id="pm-condition",
+                    question="Test complement",
+                    outcomes=("YES", "NO"),
+                    token_ids=("pm-yes", "pm-no"),
+                    mapped_outcome="NO",
+                    mapped_token_id="pm-no",
+                ),
+            ),
+        ),
+    )
+    write_document(mapping_path, document)
+
+    cross_summary, rows = analyze_direct_cross_venue(
+        sig_root=sig_root,
+        polymarket_root=pm_root,
+        mapping_path=mapping_path,
+        max_lag_seconds=10.0,
+    )
+    assert cross_summary["available"] is True
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["mapping_direction"] == "COMPLEMENT"
+    assert abs(float(str(row["latest_pm_aligned_mid"])) - 0.7) < 1e-9
+    assert abs(float(str(row["latest_discrepancy"]))) < 1e-9
+    assert row["pm_to_sig_matches"] == 1
+    assert row["sig_to_pm_matches"] == 2
+    assert abs(float(str(row["pm_to_sig_lag_seconds_p50"])) - 0.5) < 1e-9
+
+    report_root = tmp_path / "first_hours_cross"
+    summary = run(
+        input_root=sig_root,
+        output_root=report_root,
+        polymarket_root=pm_root,
+        execution_journal=None,
+        mapping_path=mapping_path,
+    )
+    latest = summary["cross_venue_latest"][0]
+    assert latest["mapping_direction"] == "COMPLEMENT"
+    assert abs(float(str(latest["polymarket_aligned_mid"])) - 0.7) < 1e-9
+    assert (report_root / "cross_venue_diagnostics.csv").exists()
+    assert (report_root / "cross_venue_latest.csv").exists()
