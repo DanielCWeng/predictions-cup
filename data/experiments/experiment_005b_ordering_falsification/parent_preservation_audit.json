@@ -1,16 +1,17 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "experiment_id": "EXPERIMENT-005B-ORDERING-FALSIFICATION",
   "check": "parent_pr_45_byte_preservation",
   "parent_final_head": "232c7c396edd18c93df72b309235110a89b5143a",
-  "checked_falsification_head": "49feb5f4770e07cc8b2c8c0ccb3426de75875ed7",
+  "checked_falsification_head": "6e44459fbfc5ec5295545c94fb645af1cdbd336a",
   "compare_status": "ahead",
-  "falsification_commits_ahead": 28,
+  "falsification_commits_ahead": 89,
   "protected_parent_paths": [
     "data/experiments/experiment_005b/results/",
     "data/experiments/experiment_005b/holdout_gate.json",
     "scripts/kaggle/experiment_005b_holdout/"
   ],
   "changed_files_under_protected_parent_paths": 0,
-  "pass": true
+  "pass": true,
+  "note": "This audit binds preservation through the immediately preceding scientific/reporting head. The audit commit itself changes only this correction-root file."
 }
