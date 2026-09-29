@@ -207,6 +207,7 @@ def main() -> int:
     elif action == "status":
         kernel = kernel_from_manifest(data)
         text = status(kernel, output_dir)
+        capture_logs(kernel, output_dir)
         write_summary(["## Kaggle status", "", f"Kernel: {kernel}", "", text])
     elif action == "output":
         kernel = kernel_from_manifest(data)
