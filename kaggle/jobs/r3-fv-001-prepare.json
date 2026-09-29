@@ -8,6 +8,6 @@
   "download_outputs": true,
   "output_file_pattern": "(R3_SPLIT_MANIFEST|DIRECT_CHRONOLOGY_AUDIT|DATA004_ECONOMIC_AUDIT|SEMANTIC_GRAPH_SUMMARY|DIRECT_INFORMATION_FAMILY_SEED)\\.(json|csv)$",
   "note": "R3 non-predictive prepare gate only: support/chronology split and semantic family construction. Must not evaluate FINAL performance.",
-  "attempt": 2,
-  "retry_reason": "Attempt 1 failed before any output/performance access because DuckDB parsed timestamp alias as reserved syntax; direct chronology alias changed to ts."
+  "attempt": 3,
+  "retry_reason": "Final corrected prepare code: DuckDB timestamp aliases normalized to ts throughout; still non-predictive and FINAL unopened."
 }
