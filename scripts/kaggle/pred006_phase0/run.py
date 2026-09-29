@@ -97,13 +97,13 @@ def main():
       from chron
     """).fetchone()
     class_rows=con.execute("""
-      select mapping_class,count(*) rows,count(distinct condition_id) conditions
+      select mapping_class, count(*) AS row_count, count(distinct condition_id) AS condition_count
       from chron group by 1 order by 1
     """).fetchdf().to_dict("records")
     monthly=con.execute("""
       select strftime(to_timestamp(timestamp),'%Y-%m') month,
-             count(*) rows,count(distinct condition_id) conditions,
-             count(distinct sig_market_id) sig_markets
+             count(*) AS row_count, count(distinct condition_id) AS condition_count,
+             count(distinct sig_market_id) AS sig_market_count
       from chron group by 1 order by 1
     """).fetchdf().to_dict("records")
     price=con.execute("""
@@ -117,10 +117,10 @@ def main():
     """).fetchone()
     same_block=con.execute("""
       select
-        count(*) blocks,
-        sum(n) fills,
-        sum(case when n>1 then n else 0 end) fills_in_multifill_blocks,
-        count(*) filter(where n>1) multifill_blocks
+        count(*) AS block_count,
+        sum(n) AS fill_count,
+        sum(case when n>1 then n else 0 end) AS fills_in_multifill_blocks,
+        count(*) filter(where n>1) AS multifill_block_count
       from (select block_number,count(*) n from chron group by 1)
     """).fetchone()
     cond_stats=con.execute("""

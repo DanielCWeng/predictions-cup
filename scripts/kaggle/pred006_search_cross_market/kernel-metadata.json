@@ -14,6 +14,6 @@
   "competition_sources": [],
   "kernel_sources": [
     "polyleviathan/005b-data003-block-gate",
-    "polyleviathan/pred006-phase0-audit"
+    "polyleviathan/pred006-phase0-audit-and-split-freeze"
   ]
 }
