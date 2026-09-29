@@ -192,6 +192,7 @@ class ImmutableCaptureSink:
         self._written_rows = 0
         self._written_shards = 0
         self._dropped_rows = 0
+        self._queue_high_water = 0
         self._last_write_at: datetime | None = None
         self._initialize()
         self._thread.start()
@@ -210,6 +211,10 @@ class ImmutableCaptureSink:
             raise CaptureStorageError("capture writer previously failed") from self._error
         try:
             self._queue.put_nowait((stream, row))
+            self._queue_high_water = max(
+                self._queue_high_water,
+                self._queue.qsize(),
+            )
         except queue.Full as exc:
             self._dropped_rows += 1
             raise CaptureBackpressureError(
@@ -233,6 +238,7 @@ class ImmutableCaptureSink:
             "writer_alive": self._thread.is_alive(),
             "queue_depth": self._queue.qsize(),
             "queue_capacity": self._queue.maxsize,
+            "queue_high_water": self._queue_high_water,
             "written_rows": self._written_rows,
             "written_shards": self._written_shards,
             "dropped_rows": self._dropped_rows,
