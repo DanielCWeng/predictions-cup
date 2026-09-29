@@ -155,38 +155,44 @@ class MakerSourceBridge:
             raise ValueError("monotonic_now_ns must be non-negative")
 
         record = self._records.get(exchange_id)
-        sig_exchange = self._sig.states.get(exchange_id)
-        if record is None or sig_exchange is None:
+        if record is None:
             return None
-        if record.sig_market_id != sig_exchange.market_id:
+        sig_exchange = self._sig.states.get(exchange_id)
+        if (
+            sig_exchange is not None
+            and record.sig_market_id != sig_exchange.market_id
+        ):
             raise ValueError("mapping/SIG market identity mismatch")
 
         sig_market = self._sig.market_states.get(record.sig_market_id)
-        if sig_market is None:
-            return None
         market_exchange_ids = self._market_exchange_ids[record.sig_market_id]
         runtime_market = RuntimeMarket(
             market_id=record.sig_market_id,
-            status=sig_market.status,
+            status="unknown" if sig_market is None else sig_market.status,
             exchange_ids=market_exchange_ids,
             tournament_id=self._mapping.tournament_id,
             mapping_accepted=record.status is MappingStatus.VERIFIED,
             tradeable=self._record_tradeable(record),
         )
 
-        try:
-            runtime_book, bbo_observed_ns, bbo_trusted, depth_observed_ns = (
-                self._runtime_book(
-                    sig_exchange,
-                    wall_now=wall_now,
-                    monotonic_now_ns=monotonic_now_ns,
+        runtime_book: RuntimeBook | None = None
+        bbo_observed_ns = 0
+        bbo_trusted = False
+        depth_observed_ns: int | None = None
+        if sig_exchange is not None:
+            try:
+                runtime_book, bbo_observed_ns, bbo_trusted, depth_observed_ns = (
+                    self._runtime_book(
+                        sig_exchange,
+                        wall_now=wall_now,
+                        monotonic_now_ns=monotonic_now_ns,
+                    )
                 )
-            )
-        except ValueError:
-            runtime_book = None
-            bbo_observed_ns = 0
-            bbo_trusted = False
-            depth_observed_ns = None
+            except ValueError:
+                runtime_book = None
+                bbo_observed_ns = 0
+                bbo_trusted = False
+                depth_observed_ns = None
         if runtime_book is None:
             # Missing BBO still produces a snapshot. The eligibility policy sees
             # sig_bbo_trusted=False and cancels/fails closed.
@@ -249,7 +255,11 @@ class MakerSourceBridge:
             sig_bbo_observed_ns=bbo_observed_ns,
             sig_bbo_trusted=bbo_trusted and sig_connected,
             sig_depth_observed_ns=depth_observed_ns,
-            sig_depth_trusted=sig_exchange.trusted and sig_connected,
+            sig_depth_trusted=(
+                sig_exchange is not None
+                and sig_exchange.trusted
+                and sig_connected
+            ),
             account_observed_ns=account_observed_ns,
             inventory_observed_ns=account_observed_ns,
             external_quotes=external_quotes,
