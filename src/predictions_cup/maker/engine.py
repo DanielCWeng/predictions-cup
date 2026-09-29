@@ -325,8 +325,8 @@ class MakerEngine:
             trace=MakerTrace(
                 strategy_id=self._config.strategy_id,
                 strategy_version=self._config.strategy_version,
-                fv_source=fv_source or getattr(self._fair_value, "provider_id", "unknown"),
-                fv_version=fv_version or getattr(self._fair_value, "version", "unknown"),
+                fv_source=fv_source or self._fair_value.provider_id,
+                fv_version=fv_version or self._fair_value.version,
                 raw_fv=raw_fv,
                 predictive_shift=predictive_shift,
                 adjusted_fv=None,
