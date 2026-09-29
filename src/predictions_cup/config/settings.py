@@ -51,9 +51,7 @@ class AppSettings(BaseSettings):
     maker_base_size: int = Field(default=2, gt=0, le=2_147_483_647)
     maker_minimum_size: int = Field(default=1, gt=0, le=2_147_483_647)
     maker_base_half_spread_ticks: float = Field(default=1.0, ge=0.5)
-    maker_inventory_risk_aversion: float = Field(default=1.0, ge=0.0)
-    maker_variance_horizon: float = Field(default=1.0, ge=0.0)
-    maker_variance_floor: float = Field(default=0.000025, ge=0.0)
+    maker_inventory_risk_aversion: float = Field(default=0.02, ge=0.0)
     maker_uncertainty_multiplier: float = Field(default=1.0, ge=0.0)
     maker_volatility_multiplier: float = Field(default=0.5, ge=0.0)
     maker_toxicity_half_spread_ticks: float = Field(default=4.0, ge=0.0)
@@ -187,8 +185,6 @@ class AppSettings(BaseSettings):
             "maker_minimum_size": self.maker_minimum_size,
             "maker_base_half_spread_ticks": self.maker_base_half_spread_ticks,
             "maker_inventory_risk_aversion": self.maker_inventory_risk_aversion,
-            "maker_variance_horizon": self.maker_variance_horizon,
-            "maker_variance_floor": self.maker_variance_floor,
             "maker_uncertainty_multiplier": self.maker_uncertainty_multiplier,
             "maker_volatility_multiplier": self.maker_volatility_multiplier,
             "maker_toxicity_half_spread_ticks": self.maker_toxicity_half_spread_ticks,
