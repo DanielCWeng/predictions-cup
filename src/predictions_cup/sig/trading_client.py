@@ -406,16 +406,16 @@ class SigTradingClient:
                 await self._sleep(self._retry_delay(attempt))
                 continue
 
-            if execution_can_be_uncertain and (
-                error.code in {"TX_CONFLICT", "SERVICE_UNAVAILABLE"}
-                and response.status_code >= 500
-            ):
+            if execution_can_be_uncertain and response.status_code >= 500:
+                # A structured server error after POST does not prove the request
+                # had no economic effect. Preserve the same idempotency identity
+                # and fail closed until retry/reconciliation resolves it.
                 raise SigExecutionUncertainError(
                     status_code=response.status_code,
                     code=error.code,
                     safe_message=(
-                        "SIG execution is unresolved after bounded same-payload retries; "
-                        "reconciliation is required"
+                        "SIG execution received a server error after dispatch; preserve "
+                        "the original payload/key and reconcile authoritatively"
                     ),
                     details=error.details,
                 )
