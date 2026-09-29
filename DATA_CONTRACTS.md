@@ -213,6 +213,48 @@ families — the manifest confirms zero condition/token overlap between the two 
 See `docs/implementation/DATA_003_SIG_ACTUAL_FILLS.md`.
 
 
+## Launch capture research evidence — CAPTURE-001 / PR #57
+
+CAPTURE-001 extends the accepted SIG operational state with a separate immutable research layer.
+It does not replace BUILD-004/006 SQLite or reinterpret SIG feed semantics.
+
+The SIG research root contains five versioned ZSTD Parquet streams:
+
+- `raw_events`: faithful decoded tournament `market_batch` payloads plus process session,
+  connection epoch, delivery provenance, local receive/parse clocks and validation result;
+- `normalized_events`: defensible SIG Realtime, authoritative REST and local trust/lifecycle
+  observations with explicit provenance/evidence labels;
+- `liquidity_events`: transitions between consecutive authoritative tracked-depth snapshots;
+- `strategy_events`: optional forward-compatible SHADOW/MAKE decision state supplied through an
+  explicit interface rather than MAKE internals;
+- `ets_state`: optional aggregate/ETF/ETS model state with model version, components, freshness,
+  provenance and uncertainty.
+
+All streams carry `schema_version=capture-001-v1`. Process `session_id` and integer
+`connection_epoch` distinguish restart/reconnect boundaries. Wall-clock observation time and
+monotonic timing are kept separate where applicable.
+
+Evidence labels are deliberately conservative. In particular, a `bookDirty` item is an observed
+invalidation, not an order delta. A level reduction/disappearance derived from consecutive
+aggregate REST snapshots is `AMBIGUOUS_DEPTH_DECREASE`; CAPTURE-001 does not manufacture an
+order-level cancellation, queue position or persistent anonymous participant identity.
+
+The supplied SIG tournament feed exposes trade price/quantity/time, `bookDirty`, settlement and
+delivery metadata. The accepted aggregate REST book exposes price/quantity levels but no
+participant/order identity and no per-order expiration metadata. Any aggressor classification used
+by the forensic library is therefore a derived price-vs-prior-BBO diagnostic with an explicit BBO
+freshness rule, not maker/taker identity from SIG.
+
+Operational SQLite remains the small state/health surface and now includes `capture_health`.
+LaunchSigRecorder merges immutable-writer queue depth/capacity, published row/shard counts,
+dropped-row count, storage-failure count and last-publish time into the one-second health snapshot.
+Queue exhaustion or writer failure raises visibly; already-published Parquet shards remain
+immutable.
+
+The detailed field dictionary, launch commands, evidence limitations and soak gate live in
+`docs/implementation/CAPTURE_001_LAUNCH_FORENSICS.md`.
+
+
 ## Strategy / execution boundary
 
 Accepted data contracts do not imply an accepted trading strategy. `OrderIntent`, `Order`,
