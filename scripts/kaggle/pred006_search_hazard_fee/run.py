@@ -148,7 +148,7 @@ def metrics(y,p):
 def diag(dev,y,p,b):
     diff=(y-b)**2-(y-p)**2
     tmp=pd.DataFrame({"condition":dev.condition_id.astype(str).to_numpy(),"diff":diff})
-    per=tmp.groupby("condition").diff.mean().to_numpy(float)
+    per=tmp.groupby("condition")["diff"].mean().to_numpy(float)
     rng=np.random.default_rng(SEED);reps=np.empty(BOOT)
     for i in range(BOOT):reps[i]=float(np.mean(per[rng.integers(0,len(per),len(per))]))
     med=int(np.median(dev.timestamp.to_numpy(np.int64)));first=dev.timestamp.to_numpy(np.int64)<=med
