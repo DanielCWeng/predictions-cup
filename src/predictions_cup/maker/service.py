@@ -320,14 +320,15 @@ class MakerService:
                 runtime.activate_kill_switch(
                     f"service_task_failure:{failure.get_name()}"
                 )
-                with suppress(Exception):
-                    await runtime.drain_once()
-                raise failure.exception()  # type: ignore[misc]
+                await self._best_effort_kill_drain(runtime)
+                failure_exc = failure.exception()
+                if failure_exc is None:
+                    raise RuntimeError("MAKE service task failed without exception")
+                raise failure_exc
 
             if stop_waiter in done:
                 runtime.activate_kill_switch("operator_shutdown")
-                with suppress(Exception):
-                    await runtime.drain_once()
+                await self._best_effort_kill_drain(runtime)
 
             for task in tasks:
                 task.cancel()
@@ -520,6 +521,35 @@ class MakerService:
                 if previous is None or current[3] != previous[3]:
                     runtime.notify_account(observed_monotonic_ns=monotonic_ns())
             await asyncio.sleep(0.05)
+
+    async def _best_effort_kill_drain(
+        self,
+        runtime: MakerRuntimeLoop,
+    ) -> None:
+        """Drain paced maker cancellations without one failure hiding later quotes."""
+        failures = 0
+        max_cycles = len(self.core.mapping.records) + 1
+        for _ in range(max_cycles):
+            try:
+                result = await runtime.drain_once()
+            except Exception as exc:
+                failures += 1
+                _LOG.error(
+                    "MAKE kill-drain cycle failed closed: %s",
+                    type(exc).__name__,
+                )
+                continue
+            if result is None:
+                break
+        else:
+            _LOG.error("MAKE kill-drain did not reach idle within bounded universe")
+
+        if failures:
+            _LOG.error(
+                "MAKE kill-drain completed with %d failed/uncertain cycles; "
+                "authoritative reconciliation is required before any LIVE resume",
+                failures,
+            )
 
     def _tournament_context(self) -> tuple[str, str]:
         tournament_id = self.settings.tournament_id or self.core.mapping.tournament_id
