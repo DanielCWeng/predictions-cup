@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "created_before_expensive_research": true,
+  "layer_classes": [
+    "HARD_IDENTITY",
+    "PARTIAL_IDENTIFICATION",
+    "MODEL_DEPENDENT",
+    "PREDICTIVE_ONLY"
+  ],
+  "methods": [
+    {
+      "method_id": "R3-B00-DIRECT",
+      "name": "Accepted direct Polymarket reference",
+      "layer": "BASELINE",
+      "status": "PLANNED",
+      "purpose": "Causally observable FV_direct baseline with mapping-class and staleness semantics.",
+      "assumptions": [
+        "Accepted DATA-003 crosswalk semantics",
+        "No future/same-block leakage"
+      ],
+      "inputs": [
+        "DATA-003",
+        "accepted crosswalk"
+      ]
+    },
+    {
+      "method_id": "R3-S01-LP-BOUNDS",
+      "name": "Assumption-free structural LP bounds",
+      "layer": "PARTIAL_IDENTIFICATION",
+      "status": "PLANNED",
+      "purpose": "Compute identified sets from exact semantic constraints before point estimation.",
+      "assumptions": [
+        "Only reviewed hard identities enter constraints"
+      ],
+      "inputs": [
+        "DATA-004",
+        "R2.5 semantic graph"
+      ]
+    },
+    {
+      "method_id": "R3-S02-LOO-PRICE-QP",
+      "name": "LOO-PRICE weighted coherent projection",
+      "layer": "MODEL_DEPENDENT",
+      "status": "PLANNED",
+      "purpose": "Recover hidden literal target quote while mechanically equivalent siblings remain; redundancy/recoverability test.",
+      "assumptions": [
+        "Quadratic projection geometry",
+        "Freshness/support weights trained only on TRAIN/DEV"
+      ],
+      "inputs": [
+        "DATA-004",
+        "DATA-003"
+      ]
+    },
+    {
+      "method_id": "R3-S03-LOO-FAMILY-QP",
+      "name": "LOO-FAMILY weighted coherent projection",
+      "layer": "MODEL_DEPENDENT",
+      "status": "PLANNED",
+      "purpose": "Primary genuine indirect-information test with DirectInformationFamily(target) removed.",
+      "assumptions": [
+        "Explicit auditable family exclusion",
+        "Quadratic projection geometry"
+      ],
+      "inputs": [
+        "DATA-004",
+        "DATA-003",
+        "R2.5 semantic graph"
+      ]
+    },
+    {
+      "method_id": "R3-S04-LOO-FAMILY-KL",
+      "name": "LOO-FAMILY Bernoulli-KL projection",
+      "layer": "MODEL_DEPENDENT",
+      "status": "PLANNED",
+      "purpose": "Probability-geometry challenger near 0/1.",
+      "assumptions": [
+        "Explicit family exclusion",
+        "Bernoulli-KL projection",
+        "TRAIN/DEV-selected weights only"
+      ],
+      "inputs": [
+        "DATA-004",
+        "DATA-003"
+      ]
+    },
+    {
+      "method_id": "R3-S05-MAXENT",
+      "name": "Maximum-entropy state reconstruction",
+      "layer": "MODEL_DEPENDENT",
+      "status": "PLANNED",
+      "purpose": "Select a point inside partially identified structural state spaces without pretending it is exact.",
+      "assumptions": [
+        "Maximum-entropy selection within hard feasible set"
+      ],
+      "inputs": [
+        "DATA-004"
+      ]
+    },
+    {
+      "method_id": "R3-S06-LATENT",
+      "name": "Hierarchical latent election factor",
+      "layer": "MODEL_DEPENDENT",
+      "status": "PLANNED",
+      "purpose": "Scale race/count reverse inference where explicit state enumeration is infeasible.",
+      "assumptions": [
+        "Low-dimensional national/chamber/state dependence structure"
+      ],
+      "inputs": [
+        "DATA-004",
+        "DATA-003"
+      ]
+    },
+    {
+      "method_id": "R3-S07-DYNAMIC",
+      "name": "Dynamic coherent/state-space filter",
+      "layer": "MODEL_DEPENDENT",
+      "status": "PLANNED",
+      "purpose": "Sequentially update structural fair values with freshness-aware uncertainty.",
+      "assumptions": [
+        "Past-only transition/filter parameters"
+      ],
+      "inputs": [
+        "DATA-004",
+        "DATA-003"
+      ]
+    },
+    {
+      "method_id": "R3-P01-FLOW",
+      "name": "Flow-augmented structural residual model",
+      "layer": "PREDICTIVE_ONLY",
+      "status": "PLANNED",
+      "purpose": "Test whether maker/taker and economic direction improve future repricing after core structural FV exists.",
+      "assumptions": [
+        "Flow is predictive evidence, never a hard identity"
+      ],
+      "inputs": [
+        "DATA-004",
+        "core structural estimates"
+      ]
+    },
+    {
+      "method_id": "R3-P02-HAZARD",
+      "name": "PRED-006 update-hazard freshness challenger",
+      "layer": "PREDICTIVE_ONLY",
+      "status": "OPTIONAL_AFTER_CORE",
+      "purpose": "Test frozen 600s/1800s update hazard only as freshness/update-likelihood evidence.",
+      "assumptions": [
+        "Not directional fair value",
+        "Requires parity with frozen PRED-006 features"
+      ],
+      "inputs": [
+        "PRED-006 frozen candidates",
+        "core structural estimates"
+      ]
+    }
+  ]
+}
