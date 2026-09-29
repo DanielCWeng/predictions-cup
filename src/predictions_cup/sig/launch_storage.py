@@ -120,6 +120,7 @@ _SCHEMAS: dict[str, pa.Schema] = {
     "ets_state": pa.schema(
         [
             ("session_id", pa.string()),
+            ("connection_epoch", pa.int64()),
             ("schema_version", pa.string()),
             ("observed_at", _UTC_TIMESTAMP),
             ("monotonic_ns", pa.int64()),
