@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "action": "status",
+  "action": "logs",
   "kernel": "polyleviathan/pred006-phase0-audit-and-split-freeze",
-  "note": "Status-only probe of title-derived Phase-0 slug. Does not launch compute."
+  "note": "Fetch failed Phase-0 kernel log only; does not launch compute."
 }

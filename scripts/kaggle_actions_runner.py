@@ -50,7 +50,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     if data.get("schema_version") != 1:
         raise ValueError("schema_version must be 1")
     action = data.get("action")
-    if action not in {"auth_check", "run", "status", "output"}:
+    if action not in {"auth_check", "run", "status", "output", "logs"}:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
 
@@ -209,6 +209,10 @@ def main() -> int:
         kernel = kernel_from_manifest(data)
         download_outputs(data, kernel, output_dir)
         write_summary(["## Kaggle output download", "", f"Kernel: {kernel}"])
+    elif action == "logs":
+        kernel = kernel_from_manifest(data)
+        capture_logs(kernel, output_dir)
+        write_summary(["## Kaggle logs", "", f"Kernel: {kernel}"])
 
     return 0
 
