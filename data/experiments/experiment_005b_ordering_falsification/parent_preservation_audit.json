@@ -3,9 +3,9 @@
   "experiment_id": "EXPERIMENT-005B-ORDERING-FALSIFICATION",
   "check": "parent_pr_45_byte_preservation",
   "parent_final_head": "232c7c396edd18c93df72b309235110a89b5143a",
-  "checked_falsification_head": "6e44459fbfc5ec5295545c94fb645af1cdbd336a",
+  "checked_falsification_head": "f73409980cc460955298371796bb35b4b4b0897e",
   "compare_status": "ahead",
-  "falsification_commits_ahead": 89,
+  "falsification_commits_ahead": 91,
   "protected_parent_paths": [
     "data/experiments/experiment_005b/results/",
     "data/experiments/experiment_005b/holdout_gate.json",
@@ -13,5 +13,5 @@
   ],
   "changed_files_under_protected_parent_paths": 0,
   "pass": true,
-  "note": "This audit binds preservation through the immediately preceding scientific/reporting head. The audit commit itself changes only this correction-root file."
+  "note": "This audit binds preservation through the immediately preceding final content head. The audit commit itself changes only this correction-root audit file."
 }
