@@ -24,6 +24,7 @@ from predictions_cup.runtime.models import (
     RuntimeBook,
     RuntimeLevel,
     RuntimeMarket,
+    RuntimeOrderState,
     RuntimePortfolio,
     RuntimeSnapshot,
     limit_price_to_ticks,
@@ -234,7 +235,7 @@ class MakerSourceBridge:
         runtime = RuntimeSnapshot(
             markets=(runtime_market,),
             books=(runtime_book,),
-            portfolio=self._account.runtime_portfolio(),
+            portfolio=self._canonical_portfolio(),
             observation_monotonic_ns=monotonic_now_ns,
         )
         sig_connected = self._sig.health.connected
@@ -252,6 +253,38 @@ class MakerSourceBridge:
             inventory_observed_ns=account_observed_ns,
             external_quotes=external_quotes,
             volatility=volatility,
+        )
+
+    def _canonical_portfolio(self) -> RuntimePortfolio:
+        portfolio = self._account.runtime_portfolio()
+        orders: list[RuntimeOrderState] = []
+        for order in portfolio.orders:
+            record = self._records.get(order.exchange_id)
+            if (
+                record is None
+                or order.tournament_id != self._mapping.tournament_id
+            ):
+                orders.append(order)
+                continue
+            if order.market_id not in {"UNKNOWN", record.sig_market_id}:
+                raise ValueError(
+                    "account open-order market identity conflicts with canonical mapping"
+                )
+            orders.append(
+                RuntimeOrderState(
+                    logical_intent_id=order.logical_intent_id,
+                    exchange_id=order.exchange_id,
+                    market_id=record.sig_market_id,
+                    tournament_id=order.tournament_id,
+                    reserved_exposure=order.reserved_exposure,
+                    open=order.open,
+                    uncertain=order.uncertain,
+                )
+            )
+        return RuntimePortfolio(
+            positions=portfolio.positions,
+            orders=tuple(orders),
+            account_trusted=portfolio.account_trusted,
         )
 
     def _runtime_book(
