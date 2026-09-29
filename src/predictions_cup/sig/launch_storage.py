@@ -356,6 +356,7 @@ class LaunchSigRecorder(SigRealtimeRecorder):
         session_id: str | None = None,
     ) -> None:
         super().__init__(path)
+        self._operational_path = path
         self.session_id = session_id or uuid.uuid4().hex
         self._connection_epoch = 0
         self._sink = ImmutableCaptureSink(
@@ -376,6 +377,10 @@ class LaunchSigRecorder(SigRealtimeRecorder):
         snapshot = self._sink.health_snapshot()
         snapshot["session_id"] = self.session_id
         snapshot["connection_epoch"] = self._connection_epoch
+        snapshot["operational_sqlite_bytes"] = _path_size(self._operational_path)
+        snapshot["operational_wal_bytes"] = _path_size(
+            Path(f"{self._operational_path}-wal")
+        )
         return snapshot
 
     def record_raw_batch(
@@ -947,6 +952,13 @@ class LaunchSigRecorder(SigRealtimeRecorder):
             },
         )
 
+
+
+def _path_size(path: Path) -> int:
+    try:
+        return path.stat().st_size
+    except FileNotFoundError:
+        return 0
 
 def _int_or_none(value: object) -> int | None:
     if isinstance(value, bool):
