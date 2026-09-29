@@ -27,6 +27,25 @@ def maker_unresolved_envelopes(
     )
 
 
+def maker_placement_envelopes(
+    journal: ExecutionJournal,
+    *,
+    strategy_id: str = "make-direct-pm",
+) -> tuple[ExecutionEnvelope, ...]:
+    """Return all durable MAKE placement envelopes, including reconciled history."""
+    return tuple(
+        envelope
+        for envelope in journal.envelopes()
+        if _is_maker_operation(journal, envelope, strategy_id=strategy_id)
+        and envelope.operation_kind
+        in {
+            OperationKind.SINGLE_PLACEMENT,
+            OperationKind.BEST_EFFORT_BATCH,
+            OperationKind.ATOMIC_MULTI_LEG,
+        }
+    )
+
+
 def reconcile_maker_quote_registry(
     *,
     journal: ExecutionJournal,
@@ -44,7 +63,7 @@ def reconcile_maker_quote_registry(
     if observed_monotonic_ns < 0:
         raise ValueError("observed_monotonic_ns must be non-negative")
     candidate_envelopes = tuple(
-        maker_unresolved_envelopes(journal, strategy_id=strategy_id)
+        maker_placement_envelopes(journal, strategy_id=strategy_id)
         if envelopes is None
         else envelopes
     )
