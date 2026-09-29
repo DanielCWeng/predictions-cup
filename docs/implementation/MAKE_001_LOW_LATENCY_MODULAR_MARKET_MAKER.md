@@ -103,14 +103,14 @@ This model is appropriate to a Bernoulli settlement payoff under the CARA assump
 
 ### Spread
 
-The baseline spread is intentionally auditable rather than clever. Half-width is an additive probability-space combination of:
+The baseline spread is intentionally auditable rather than clever. Its bid and ask half-widths are an additive probability-space combination of:
 
 - minimum/base tick width;
 - external-FV uncertainty;
 - optional volatility;
 - optional toxicity/update-hazard widening.
 
-The spread policy is replaceable. The maths ledger's log-odds/information-spread models remain valid challengers; MAKE does not hard-code the baseline as universal truth.
+The baseline returns equal bid/ask widths, but the `SpreadPolicy` contract is explicitly two-sided. A future inventory/toxicity/event policy can widen bid and ask independently without changing the engine, lifecycle, Risk or execution plumbing. The maths ledger's log-odds/information-spread models remain valid challengers; MAKE does not hard-code the baseline as universal truth.
 
 ### Size
 
@@ -266,10 +266,11 @@ Repeated updates before the worker runs collapse into one bounded set. There is 
 - update hazard/adverse selection;
 - signed inventory;
 - reservation price;
-- half-spread;
+- conservative max half-spread plus explicit bid/ask half-widths;
 - desired bid/ask ticks;
 - sizes;
 - gate/reason;
+- SIG BBO/depth, account, FV, predictive and toxicity trust flags;
 - decision monotonic timestamp.
 
 `HotPathTelemetry` remains bounded and in-memory. CAPTURE may consume cycle/trace information but quote generation does not require CAPTURE to succeed.
@@ -308,7 +309,7 @@ MAKE relies intentionally on BUILD-009 regression coverage for transport/recover
 - rate governor/cooldown;
 - conservative shadow depth.
 
-MAKE-specific tests add fair-value mapping semantics, quiet trusted-source freshness, exact-deadline stale cancellation for mutation-aged sources, inventory skew/boundaries, plugin failure, quote materiality, two-phase replacement, placement/cancel uncertainty, restart quote reconstruction, coalescing runtime behavior, source-loss cancellation and SHADOW/LIVE adapter state.
+MAKE-specific tests add fair-value mapping semantics, quiet trusted-source freshness, exact-deadline stale cancellation for mutation-aged sources, inventory skew/boundaries, asymmetric quote widths, malformed plugin failure, quote materiality, two-phase replacement, placement/cancel uncertainty, restart quote reconstruction, coalescing runtime behavior, source-loss cancellation and SHADOW/LIVE adapter state.
 
 ## Performance acceptance
 
