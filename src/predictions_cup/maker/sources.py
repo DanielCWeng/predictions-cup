@@ -86,6 +86,13 @@ class MakerSourceBridge:
             token_id: frozenset(exchange_ids)
             for token_id, exchange_ids in token_to_exchanges.items()
         }
+        market_to_exchanges: dict[str, list[str]] = defaultdict(list)
+        for record in mapping.records:
+            market_to_exchanges[record.sig_market_id].append(record.sig_exchange_id)
+        self._market_exchange_ids = {
+            market_id: tuple(sorted(exchange_ids))
+            for market_id, exchange_ids in market_to_exchanges.items()
+        }
 
     @property
     def tradeable_exchange_ids(self) -> frozenset[str]:
@@ -150,13 +157,7 @@ class MakerSourceBridge:
         sig_market = self._sig.market_states.get(record.sig_market_id)
         if sig_market is None:
             return None
-        market_exchange_ids = tuple(
-            sorted(
-                state.exchange_id
-                for state in self._sig.states.values()
-                if state.market_id == record.sig_market_id
-            )
-        )
+        market_exchange_ids = self._market_exchange_ids[record.sig_market_id]
         runtime_market = RuntimeMarket(
             market_id=record.sig_market_id,
             status=sig_market.status,
@@ -166,13 +167,19 @@ class MakerSourceBridge:
             tradeable=self._record_tradeable(record),
         )
 
-        runtime_book, bbo_observed_ns, bbo_trusted, depth_observed_ns = (
-            self._runtime_book(
-                sig_exchange,
-                wall_now=wall_now,
-                monotonic_now_ns=monotonic_now_ns,
+        try:
+            runtime_book, bbo_observed_ns, bbo_trusted, depth_observed_ns = (
+                self._runtime_book(
+                    sig_exchange,
+                    wall_now=wall_now,
+                    monotonic_now_ns=monotonic_now_ns,
+                )
             )
-        )
+        except ValueError:
+            runtime_book = None
+            bbo_observed_ns = 0
+            bbo_trusted = False
+            depth_observed_ns = None
         if runtime_book is None:
             # Missing BBO still produces a snapshot. The eligibility policy sees
             # sig_bbo_trusted=False and cancels/fails closed.
@@ -186,7 +193,10 @@ class MakerSourceBridge:
                 observed_monotonic_ns=0,
             )
 
-        account_observed = self._account.last_accepted_observed_at
+        account_observed = (
+            self._account.last_accepted_observed_at
+            or self._account.last_authoritative_observed_at
+        )
         account_observed_ns = self._to_monotonic(
             account_observed,
             wall_now=wall_now,
@@ -283,7 +293,7 @@ class MakerSourceBridge:
                     observed_monotonic_ns=observed_ns,
                 ),
                 observed_ns,
-                bool(bids or asks),
+                self._sig.health.connected and bool(bids) and bool(asks),
                 observed_ns,
             )
 
@@ -325,7 +335,11 @@ class MakerSourceBridge:
                 observed_monotonic_ns=observed_ns,
             ),
             observed_ns,
-            best_bid is not None or best_ask is not None,
+            (
+                self._sig.health.connected
+                and best_bid is not None
+                and best_ask is not None
+            ),
             None,
         )
 
@@ -357,6 +371,13 @@ class MakerSourceBridge:
             return 0
         if observed_at.tzinfo is None or observed_at.utcoffset() is None:
             raise ValueError("source observation timestamp must be timezone-aware")
-        age_seconds = (wall_now.astimezone(UTC) - observed_at.astimezone(UTC)).total_seconds()
-        age_ns = max(0, int(age_seconds * 1_000_000_000))
-        return max(0, monotonic_now_ns - age_ns)
+        age_seconds = (
+            wall_now.astimezone(UTC) - observed_at.astimezone(UTC)
+        ).total_seconds()
+        # A future wall-clock observation maps past monotonic_now_ns so the
+        # eligibility policy sees a negative age and fails closed. Very old
+        # observations clamp to zero and therefore remain stale.
+        return max(
+            0,
+            monotonic_now_ns - int(age_seconds * 1_000_000_000),
+        )
