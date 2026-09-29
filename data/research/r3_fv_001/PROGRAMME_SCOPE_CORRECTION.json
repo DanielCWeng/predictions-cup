@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "stage": "PROGRAMME_SCOPE_AND_STOP_CORRECTION",
+  "audited_branch_head": "53e625aa8eaba1e75136687de5c4e51036ba4897",
+  "correct_empirical_datasets": {
+    "sources": "DATA-004",
+    "targets": "DATA-003",
+    "verified": true
+  },
+  "data001_used_in_r3_empirical_discovery": false,
+  "historical_analogue_families_used_for_r3_fitting_or_selection": false,
+  "valid_existing_work": [
+    "DATA-004 Kaggle upload and smoke gate",
+    "DATA-003 accepted block-order binding",
+    "R2.5 semantic graph and DirectInformationFamily",
+    "frozen TRAIN/DEV/FINAL split",
+    "block-safe source-before-target event construction",
+    "consumed Ridge/HGB screening evidence"
+  ],
+  "screening_result": {
+    "classification": "SIMPLE_MODEL_SCREEN_NULL",
+    "original_verdict_file": "data/research/r3_fv_001/DEV_DISCOVERY_VERDICT.json",
+    "original_decision": "STOP_NO_INDEPENDENT_SIGNAL",
+    "programme_level_effect": "SUPERSEDED_PREMATURE_STOP",
+    "why": "The screen used the correct DATA-004 + DATA-003 universe but did not run the commissioned structural mathematics."
+  },
+  "reopened_methods": [
+    "R3-S01-LP-BOUNDS",
+    "R3-S02-LOO-PRICE-QP",
+    "R3-S03-LOO-FAMILY-QP",
+    "R3-S04-LOO-FAMILY-KL",
+    "R3-S05-MAXENT",
+    "R3-S06-LATENT"
+  ],
+  "priority_labs": {
+    "georgia_senate_governor": [
+      "3729337",
+      "3729338",
+      "3729339",
+      "3729340"
+    ],
+    "senate_house_count": [
+      "2683257",
+      "2683258",
+      "2683259",
+      "2683260",
+      "2683261",
+      "2683262",
+      "2683263",
+      "2683264",
+      "2683265",
+      "2683266",
+      "2683267",
+      "2683268",
+      "2683269"
+    ],
+    "republican_governorship_count": [
+      "907686",
+      "907687",
+      "907688",
+      "907689",
+      "907690",
+      "907691",
+      "907692"
+    ]
+  },
+  "final_opened": false,
+  "final_rows_accessed": 0,
+  "next_stage": "CORRECTED_STRUCTURAL_MATH_TRAIN_DEV"
+}
