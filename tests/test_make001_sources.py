@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from predictions_cup.external.polymarket.models import BookLevel, BookSnapshot
+from predictions_cup.maker.service import _mapped_token_ids
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.mapping.models import (
     MappingClass,
@@ -488,4 +489,8 @@ def test_quiet_trusted_account_and_pm_feed_remain_fresh_without_mutation() -> No
     assert snapshot.inventory_observed_ns == 9_000_000_000
     assert snapshot.external_quotes["yes-token"].observed_monotonic_ns == 9_000_000_000
     assert snapshot.external_quotes["yes-token"].trusted is True
+
+def test_polymarket_service_seeds_all_outcome_tokens_not_only_aligned_fv_token() -> None:
+    tokens = _mapped_token_ids(_mapping())
+    assert tokens == ("no-token", "yes-token")
 
