@@ -167,6 +167,11 @@ class MakerEngine:
                     signed_inventory=signed_inventory,
                     reservation_price=None,
                     half_spread=None,
+                    bid_half_spread=None,
+                    ask_half_spread=None,
+                    fv_trusted=fair_value.trusted,
+                    prediction_trusted=prediction.trusted,
+                    toxicity_trusted=toxicity.trusted,
                     bid_ticks=None,
                     ask_ticks=None,
                     bid_size=0,
@@ -185,10 +190,10 @@ class MakerEngine:
                 reservation_price=reservation,
                 half_spread=0.0,
             )
-            half_spread = self._spread.half_spread(provisional)
-            if not math.isfinite(half_spread) or half_spread <= 0.0:
-                raise ValueError("half spread must be finite and positive")
-            half_spread *= gate.spread_multiplier
+            widths = self._spread.widths(provisional)
+            bid_half_spread = widths.bid * gate.spread_multiplier
+            ask_half_spread = widths.ask * gate.spread_multiplier
+            half_spread = max(bid_half_spread, ask_half_spread)
             priced = with_quote_math(
                 context,
                 reservation_price=reservation,
@@ -210,7 +215,8 @@ class MakerEngine:
         bid_ticks, ask_ticks = self._passive_ticks(
             snapshot,
             reservation=reservation,
-            half_spread=half_spread,
+            bid_half_spread=bid_half_spread,
+            ask_half_spread=ask_half_spread,
         )
         if bid_ticks is None and ask_ticks is None:
             return self._failed(
@@ -275,6 +281,11 @@ class MakerEngine:
                 signed_inventory=signed_inventory,
                 reservation_price=reservation,
                 half_spread=half_spread,
+                bid_half_spread=bid_half_spread,
+                ask_half_spread=ask_half_spread,
+                fv_trusted=fair_value.trusted,
+                prediction_trusted=prediction.trusted,
+                toxicity_trusted=toxicity.trusted,
                 bid_ticks=bid_ticks,
                 ask_ticks=ask_ticks,
                 bid_size=bid_size,
@@ -291,14 +302,15 @@ class MakerEngine:
         snapshot: MakerMarketSnapshot,
         *,
         reservation: float,
-        half_spread: float,
+        bid_half_spread: float,
+        ask_half_spread: float,
     ) -> tuple[int | None, int | None]:
         book = snapshot.runtime.book(snapshot.exchange_id)
         if book is None:
             return None, None
 
-        raw_bid = math.floor((reservation - half_spread) / _TICK)
-        raw_ask = math.ceil((reservation + half_spread) / _TICK)
+        raw_bid = math.floor((reservation - bid_half_spread) / _TICK)
+        raw_ask = math.ceil((reservation + ask_half_spread) / _TICK)
         bid_value = raw_bid if 1 <= raw_bid <= 199 else None
         ask_value = raw_ask if 1 <= raw_ask <= 199 else None
 
@@ -377,6 +389,11 @@ class MakerEngine:
         signed_inventory: float,
         reservation_price: float | None,
         half_spread: float | None,
+        bid_half_spread: float | None,
+        ask_half_spread: float | None,
+        fv_trusted: bool,
+        prediction_trusted: bool,
+        toxicity_trusted: bool,
         bid_ticks: int | None,
         ask_ticks: int | None,
         bid_size: int,
@@ -405,6 +422,14 @@ class MakerEngine:
             gate_mode=gate.mode,
             reason=gate.reason,
             decision_monotonic_ns=snapshot.now_monotonic_ns,
+            bid_half_spread=bid_half_spread,
+            ask_half_spread=ask_half_spread,
+            sig_bbo_trusted=snapshot.sig_bbo_trusted,
+            sig_depth_trusted=snapshot.sig_depth_trusted,
+            account_trusted=snapshot.runtime.portfolio.account_trusted,
+            fv_trusted=fv_trusted,
+            prediction_trusted=prediction_trusted,
+            toxicity_trusted=toxicity_trusted,
         )
 
 
