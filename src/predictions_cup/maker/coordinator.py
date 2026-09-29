@@ -26,7 +26,7 @@ PlacementDispatcher = Callable[
     [ExecutionPlan, MakerMarketSnapshot],
     Awaitable[ExecutionEvent],
 ]
-CancelDispatcher = Callable[[ActiveQuote, str], Awaitable[ExecutionEvent]]
+CancelDispatcher = Callable[[ActiveQuote, str, str], Awaitable[ExecutionEvent]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,7 +139,7 @@ class MakerCoordinator:
                     f"{change.event_id}:make-cancel:{exchange_id}:{action.side.value}"
                 )
                 try:
-                    event = await self._cancel_dispatch(active, logical_id)
+                    event = await self._cancel_dispatch(active, logical_id, snapshot.tournament_id)
                 except BaseException:
                     self._registry.mark_lifecycle(
                         exchange_id=exchange_id,
