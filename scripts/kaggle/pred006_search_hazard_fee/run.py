@@ -1,4 +1,4 @@
-# ruff: noqa: E501
+# ruff: noqa
 from __future__ import annotations
 
 import hashlib, json, math
@@ -165,7 +165,8 @@ def main():
     df=features(load_frame(final_start));matrix=[];cache={}
     for h in HORIZONS:
         ya=hazard_target(df,h);ts=df.timestamp.to_numpy(np.int64)
-        trm=(ts<dev_start-h)&np.isfinite(ya);dvm=(ts>=dev_start)&(ts<final_start-h)&np.isfinite(ya)
+        purge=int(split["selection_rule"]["target_purge_seconds"])
+        trm=(ts<dev_start-purge)&np.isfinite(ya);dvm=(ts>=dev_start)&(ts<final_start-purge)&np.isfinite(ya)
         tr=df.loc[trm].reset_index(drop=True);dv=df.loc[dvm].reset_index(drop=True);yt=ya[trm];yd=ya[dvm]
         if len(tr)<1000 or len(dv)<300 or dv.condition_id.nunique()<25 or len(np.unique(yt))<2:
             matrix.append({"horizon":h,"status":"INSUFFICIENT_SUPPORT","train_rows":len(tr),"dev_rows":len(dv)});continue
