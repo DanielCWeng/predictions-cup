@@ -10,8 +10,9 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Protocol
 
-from predictions_cup.external.polymarket.orderbook import OrderBookStore
+from predictions_cup.external.polymarket.models import BookSnapshot
 from predictions_cup.maker.contracts import ExternalQuoteState, MakerMarketSnapshot
 from predictions_cup.mapping.models import (
     MappingClass,
@@ -26,8 +27,25 @@ from predictions_cup.runtime.models import (
     RuntimeSnapshot,
     limit_price_to_ticks,
 )
-from predictions_cup.sig.account_state import AccountRealtimeStateEngine
-from predictions_cup.sig.realtime_state import SigRealtimeStateEngine
+from predictions_cup.sig.realtime_state import ExchangeRuntimeState, MarketRuntimeState
+
+
+class SigMakerState(Protocol):
+    tournament_id: str
+    states: dict[str, ExchangeRuntimeState]
+    market_states: dict[str, MarketRuntimeState]
+
+
+class AccountMakerState(Protocol):
+    tournament_id: str
+    last_accepted_observed_at: datetime | None
+
+    def runtime_portfolio(self): ...
+
+
+class PolymarketBookSource(Protocol):
+    def snapshot(self, token_id: str, depth: int) -> BookSnapshot | None: ...
+
 
 
 class MakerSourceBridge:
@@ -37,9 +55,9 @@ class MakerSourceBridge:
         self,
         *,
         mapping: MappingDocument,
-        sig_state: SigRealtimeStateEngine,
-        account_state: AccountRealtimeStateEngine,
-        polymarket_books: OrderBookStore,
+        sig_state: SigMakerState,
+        account_state: AccountMakerState,
+        polymarket_books: PolymarketBookSource,
         polymarket_source_version: str = "clob-market-ws-v1",
     ) -> None:
         if mapping.tournament_id != sig_state.tournament_id:
@@ -220,20 +238,18 @@ class MakerSourceBridge:
 
     def _runtime_book(
         self,
-        state: object,
+        state: ExchangeRuntimeState,
         *,
         wall_now: datetime,
         monotonic_now_ns: int,
     ) -> tuple[RuntimeBook | None, int, bool, int | None]:
-        # State is deliberately consumed through its BUILD-004 public attributes,
-        # avoiding a parallel SIG state representation.
-        exchange_id = getattr(state, "exchange_id")
-        market_id = getattr(state, "market_id")
-        tournament_id = getattr(state, "tournament_id")
-        trusted_depth = bool(getattr(state, "trusted"))
-        orderbook = getattr(state, "orderbook")
-        last_rest = getattr(state, "last_rest_observed_at")
-        last_scalar = getattr(state, "last_scalar_observed_at")
+        exchange_id = state.exchange_id
+        market_id = state.market_id
+        tournament_id = state.tournament_id
+        trusted_depth = state.trusted
+        orderbook = state.orderbook
+        last_rest = state.last_rest_observed_at
+        last_scalar = state.last_scalar_observed_at
 
         if trusted_depth and orderbook is not None:
             bids = tuple(
@@ -270,8 +286,8 @@ class MakerSourceBridge:
                 observed_ns,
             )
 
-        best_bid: Decimal | None = getattr(state, "scalar_best_bid")
-        best_ask: Decimal | None = getattr(state, "scalar_best_ask")
+        best_bid: Decimal | None = state.scalar_best_bid
+        best_ask: Decimal | None = state.scalar_best_ask
         observed_ns = self._to_monotonic(
             last_scalar,
             wall_now=wall_now,
