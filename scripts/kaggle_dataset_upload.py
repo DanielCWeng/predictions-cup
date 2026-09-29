@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import subprocess
@@ -175,22 +176,54 @@ def existing_is_identical(
         return False, {"inspection_error": str(exc)}
 
 
-def wait_ready(dataset_ref: str, timeout_seconds: int = 600) -> str:
+def owned_dataset_match(dataset_ref: str) -> tuple[bool, dict[str, Any]]:
+    owner, slug = dataset_ref.split("/", 1)
+    result = run(
+        ["kaggle", "datasets", "list", "-m", "-s", slug, "-v"],
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "Could not list owned Kaggle datasets safely: "
+            + ((result.stderr or result.stdout or "").strip())
+        )
+    rows = list(csv.DictReader((result.stdout or "").splitlines()))
+    refs = {
+        str(row.get("ref") or row.get("Ref") or "").strip(): row
+        for row in rows
+    }
+    exact = refs.get(dataset_ref)
+    return exact is not None, {
+        "owned_search_rows": len(rows),
+        "owned_search_exact_ref": dataset_ref if exact is not None else None,
+        "owned_search_record": exact,
+    }
+
+
+def wait_dataset_files(dataset_ref: str, timeout_seconds: int = 600) -> dict[str, Any]:
     deadline = time.monotonic() + timeout_seconds
     last = ""
     while time.monotonic() < deadline:
-        result = run(["kaggle", "datasets", "status", dataset_ref], check=False)
+        result = run(
+            ["kaggle", "datasets", "files", dataset_ref, "--page-size", "200", "-v"],
+            check=False,
+        )
         last = ((result.stdout or "") + (result.stderr or "")).strip()
-        if result.returncode == 0 and "ready" in last.lower():
-            return last
-        if (
-            any(token in last.lower() for token in ("error", "failed"))
-            and "not found" not in last.lower()
+        if result.returncode == 0:
+            rows = list(csv.DictReader((result.stdout or "").splitlines()))
+            if rows:
+                return {
+                    "files_api_rows_first_page": len(rows),
+                    "files_api_first_page": rows,
+                }
+        lowered = last.lower()
+        if result.returncode != 0 and any(
+            token in lowered for token in ("failed", "invalid dataset")
         ):
-            raise RuntimeError(f"Kaggle dataset entered failure state: {last}")
+            raise RuntimeError(f"Kaggle dataset file listing failed: {last}")
         time.sleep(10)
     raise TimeoutError(
-        f"Kaggle dataset did not become ready within {timeout_seconds}s: {last}"
+        f"Kaggle dataset files did not become available within {timeout_seconds}s: {last}"
     )
 
 
@@ -218,13 +251,9 @@ def main() -> int:
         work = Path(tmp)
         package_root, evidence = verify_package(data, work)
 
-        status_before = run(
-            ["kaggle", "datasets", "status", str(data["dataset_ref"])], check=False
-        )
-        status_text = (
-            (status_before.stdout or "") + (status_before.stderr or "")
-        ).strip()
-        if status_before.returncode == 0:
+        exists, existence_evidence = owned_dataset_match(str(data["dataset_ref"]))
+        evidence.update(existence_evidence)
+        if exists:
             identical, existing_evidence = existing_is_identical(data, work)
             evidence.update(existing_evidence)
             if not identical:
@@ -233,17 +262,9 @@ def main() -> int:
                     "DATA-004 v2 provenance; refusing overwrite/version mutation"
                 )
             evidence["upload_disposition"] = "REUSED_IDENTICAL_EXISTING"
-            evidence["kaggle_version"] = None
-            evidence["status"] = status_text
+            evidence["kaggle_version"] = "EXISTING_CURRENT"
+            evidence["availability"] = wait_dataset_files(str(data["dataset_ref"]))
         else:
-            lowered = status_text.lower()
-            not_found = any(
-                token in lowered for token in ("404", "not found", "does not exist")
-            )
-            if not not_found:
-                raise RuntimeError(
-                    f"Could not safely determine dataset existence: {status_text}"
-                )
             run(
                 [
                     "kaggle",
@@ -257,7 +278,7 @@ def main() -> int:
             )
             evidence["upload_disposition"] = "CREATED_NEW_DATASET"
             evidence["kaggle_version"] = 1
-            evidence["status"] = wait_ready(str(data["dataset_ref"]))
+            evidence["availability"] = wait_dataset_files(str(data["dataset_ref"]))
 
         evidence["verified_private_metadata"] = True
         (output_dir / "dataset_upload_result.json").write_text(
