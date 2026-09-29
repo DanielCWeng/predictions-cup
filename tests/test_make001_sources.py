@@ -20,6 +20,7 @@ from predictions_cup.sig.realtime_state import (
     DepthState,
     ExchangeRuntimeState,
     MarketRuntimeState,
+    RuntimeHealth,
 )
 
 
@@ -33,6 +34,7 @@ class _SigState:
     tournament_id: str
     states: dict[str, ExchangeRuntimeState]
     market_states: dict[str, MarketRuntimeState]
+    health: RuntimeHealth
     health: _Health = field(default_factory=_Health)
 
 
@@ -120,6 +122,7 @@ def test_bridge_builds_bounded_scalar_bbo_snapshot_with_separate_freshness() -> 
                 last_rest_observed_at=sig_observed,
             )
         },
+        health=RuntimeHealth(connected=True),
     )
     account = _AccountState(
         tournament_id="t1",
@@ -202,6 +205,7 @@ def test_bridge_preserves_trusted_sig_depth_and_quantity() -> None:
                 last_rest_observed_at=observed,
             )
         },
+        health=RuntimeHealth(connected=True),
     )
     account = _AccountState(
         tournament_id="t1",
@@ -261,6 +265,7 @@ def test_bridge_indexes_polymarket_token_to_affected_sig_exchange() -> None:
                     last_rest_observed_at=wall_now,
                 )
             },
+            health=RuntimeHealth(connected=True),
         ),
         account_state=_AccountState(
             tournament_id="t1",
@@ -298,6 +303,7 @@ def test_bridge_marks_external_quotes_untrusted_when_pm_feed_is_down() -> None:
                 last_rest_observed_at=wall_now,
             )
         },
+        health=RuntimeHealth(connected=True),
     )
     bridge = MakerSourceBridge(
         mapping=_mapping(),
@@ -319,3 +325,58 @@ def test_bridge_marks_external_quotes_untrusted_when_pm_feed_is_down() -> None:
 
     assert snapshot is not None
     assert snapshot.external_quotes["yes-token"].trusted is False
+
+def test_bridge_revokes_sig_bbo_and_depth_trust_when_realtime_disconnects() -> None:
+    wall_now = datetime(2026, 9, 29, 14, 0, tzinfo=UTC)
+    observed = wall_now
+    sig = _SigState(
+        tournament_id="t1",
+        states={
+            "36": ExchangeRuntimeState(
+                exchange_id="36",
+                market_id="m1",
+                tournament_id="t1",
+                depth_state=DepthState.TRACKED_TRUSTED,
+                orderbook=OrderBook(
+                    exchange_id="36",
+                    bids=(OrderBookLevel(price=Decimal("0.49"), quantity=Decimal("5")),),
+                    asks=(OrderBookLevel(price=Decimal("0.51"), quantity=Decimal("5")),),
+                    timestamp=observed,
+                    source="sig-rest",
+                ),
+                last_rest_observed_at=observed,
+            )
+        },
+        market_states={
+            "m1": MarketRuntimeState(
+                market_id="m1",
+                title="fixture",
+                status="open",
+                settled_with=None,
+                last_rest_observed_at=observed,
+            )
+        },
+        health=RuntimeHealth(connected=False),
+    )
+    bridge = MakerSourceBridge(
+        mapping=_mapping(),
+        sig_state=sig,
+        account_state=_AccountState(
+            tournament_id="t1",
+            last_accepted_observed_at=observed,
+            portfolio=RuntimePortfolio(account_trusted=True),
+        ),
+        polymarket_books=_PmBooks({"yes-token": _pm_snapshot(observed)}),
+    )
+
+    snapshot = bridge.build(
+        "36",
+        wall_now=wall_now,
+        monotonic_now_ns=1_000,
+        polymarket_feed_trusted=True,
+    )
+
+    assert snapshot is not None
+    assert snapshot.sig_bbo_trusted is False
+    assert snapshot.sig_depth_trusted is False
+
