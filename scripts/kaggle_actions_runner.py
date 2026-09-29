@@ -219,7 +219,8 @@ def run_kernel(data: dict[str, Any], output_dir: Path) -> None:
         [
             "## Kaggle run",
             "",
-            f"- Declared kernel: {declared_kernel}",\n            f"- Active kernel: {active_kernel}",
+            f"- Declared kernel: {declared_kernel}",
+            f"- Active kernel: {active_kernel}",
             f"- Final state: {terminal.upper()}",
             f"- Downloaded outputs: {bool(data.get('download_outputs', False))}",
         ]
