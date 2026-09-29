@@ -265,7 +265,9 @@ Outputs:
 - `market_microstructure.csv` — update/trade rates, spread, BBO lifetime and movement diagnostics;
 - `markouts.csv` — maker-perspective multi-horizon markouts for defensibly classified trades;
 - `depth_summary.csv` — tracked depth and top-level concentration;
-- `activity_15m.csv` — burst/regime inspection buckets.
+- `activity_15m.csv` — burst/regime inspection buckets;
+- `cross_venue_diagnostics.csv` — direct mapped economic-change response lags and direction;
+- `cross_venue_latest.csv` — latest direction-aligned direct SIG/Polymarket discrepancies.
 
 The microstructure analysis includes:
 
@@ -279,11 +281,17 @@ The microstructure analysis includes:
 - maker-perspective 1s/5s/30s/300s markouts for classified trades;
 - adverse-selection rate;
 - the actual BBO sampling delay used for each nominal markout horizon;
-- latest direct mapped SIG/Polymarket discrepancy;
+- latest direct mapped SIG/Polymarket discrepancy after `SAME`/`COMPLEMENT` alignment;
+- PM→SIG and SIG→PM nearest-subsequent economic BBO-change lag within 60 seconds;
+- same-direction response rate for those matched economic changes;
 - BUILD-009 observation-to-decision latency where journal fields are available.
 
 A nominal horizon is never silently treated as exact if the next captured BBO arrives later. The
 markout table reports sampling-delay percentiles and rejects observations more than 30 seconds late.
+
+The cross-venue lag table is an observable-time response diagnostic only. It does not claim that
+the earlier venue caused the later change, and its interpretation must account for the very
+different SIG/Polymarket sampling/update cadences.
 
 This is descriptive launch forensics. It is not a confirmed 005F transfer or a promoted trading
 signal.
