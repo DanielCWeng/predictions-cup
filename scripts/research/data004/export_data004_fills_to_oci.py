@@ -644,11 +644,13 @@ def parquet_parts(
                         content_type="application/vnd.apache.parquet",
                     )
 
-            def optional_min_max(column: str) -> tuple[int | None, int | None]:
-                if column not in chunk.columns:
+            def optional_min_max(
+                column: str, frame: pl.DataFrame = chunk
+            ) -> tuple[int | None, int | None]:
+                if column not in frame.columns:
                     return None, None
-                values = chunk.get_column(column)
-                if values.null_count() >= chunk.height:
+                values = frame.get_column(column)
+                if values.null_count() >= frame.height:
                     return None, None
                 return int(values.min()), int(values.max())
 
@@ -959,7 +961,6 @@ def validate_uploaded_corpus(
     market_stats = {str(row["market_id"]): row for row in coverage_market_df.iter_rows(named=True)}
     coverage_by_market: list[dict[str, Any]] = []
     zero_fill_markets: list[dict[str, Any]] = []
-    sorted({row["date"] for row in files if row["kind"] == "fills"})
     last_source_date = date.fromisoformat(source_last_day)
     for market_id, market in sorted(expected_markets.items(), key=lambda pair: int(pair[0])):
         stats = market_stats.get(market_id)
@@ -1681,7 +1682,6 @@ def main() -> None:
     token_values = pl.Series(
         sorted(row["token_id"] for row in universe["tokens"]), dtype=pl.String
     ).implode()
-    {str(row["token_id"]): row for row in universe["tokens"]}
     market_df, token_dimension_df, token_metadata = build_dimensions(universe)
     del market_df
     registry = json.loads((SONAR_ROOT / "infra_registry.json").read_text(encoding="utf-8"))
@@ -1713,13 +1713,17 @@ def main() -> None:
                 raise RuntimeError(
                     f"source custody object availability changed during partial-day resume {day}"
                 )
-            if custody is not None and previous_custody is not None:
-                if custody.get("etag") != previous_custody.get("etag") or custody.get(
-                    "size"
-                ) != previous_custody.get("size"):
-                    raise RuntimeError(
-                        f"source custody object changed during partial-day resume {day}"
-                    )
+            if (
+                custody is not None
+                and previous_custody is not None
+                and (
+                    custody.get("etag") != previous_custody.get("etag")
+                    or custody.get("size") != previous_custody.get("size")
+                )
+            ):
+                raise RuntimeError(
+                    f"source custody object changed during partial-day resume {day}"
+                )
         checkpoint["source_objects"][day] = {"trade": trade, "custody": custody}
         save_checkpoint(checkpoint_path, checkpoint)
         trade_uri = f"s3://{BUCKET}/{trade['object_name']}"
@@ -1765,7 +1769,6 @@ def main() -> None:
             )
             duplicate_key_groups = duplicate_stats.height
             conflict_df = duplicate_stats.filter(pl.col("content_versions") > 1)
-            (sorted(set(conflict_df["tx_hash"].to_list())) if conflict_df.height else [])
             if conflict_df.height:
                 day_conflicts = conflict_df.select(
                     DEDUP_KEY + ["rows", "content_versions"]
