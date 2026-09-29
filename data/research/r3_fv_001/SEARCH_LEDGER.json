@@ -1,129 +1,125 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "experiment_id": "R3-FV-001",
-  "programme_state": "CONTINUE_STRUCTURAL_MATHS",
+  "programme_state": "STOP_NO_CONFIRMED_INDEPENDENT_STRUCTURAL_SIGNAL_FINAL_UNOPENED",
   "final_opened": false,
-  "scope_correction": {
-    "audited_branch_head_before_correction": "53e625aa8eaba1e75136687de5c4e51036ba4897",
-    "correct_empirical_universe_verified": true,
-    "empirical_sources": [
-      "DATA-004"
-    ],
-    "empirical_targets": [
-      "DATA-003"
-    ],
-    "data001_used_by_r3_discovery": false,
-    "historical_analogue_families_used_by_r3_discovery": false,
-    "prior_ridge_hgb_discovery_classification": "SIMPLE_MODEL_SCREEN_NULL",
-    "prior_programme_level_stop": "SUPERSEDED_PREMATURE_STOP",
-    "reason": "The consumed Ridge/HGB screen was run on the correct DATA-004 + DATA-003 universe, but it did not implement the commissioned LP/QP/KL/MaxEnt/inverse structural layer. Its negative result is preserved as a screening null and cannot terminate untested methods."
+  "final_rows_accessed": 0,
+  "scope": {
+    "source": "DATA-004 P0/P1",
+    "target": "DATA-003 accepted direct/reference observations",
+    "data001_used": false,
+    "historical_analogue_families_used": false,
+    "p2_p3_used": false
   },
   "entries": [
     {
       "method_id": "R3-S00-SIMPLE-SCREEN",
       "stage": "DEV_COMPLETE",
       "decision": "NULL_PRESERVED",
-      "reason": "Correct-universe aggregate-feature Ridge/HGB screen was negative. Preserve exact consumed evidence; do not reinterpret it as a structural-maths test."
+      "reason": "Broad Ridge/HGB correct-universe screen materially worse than persistence; useful screening null, not sole stop reason."
     },
     {
       "method_id": "R3-S01-LP-BOUNDS",
-      "stage": "ACTIVE",
-      "decision": "CONTINUE",
-      "reason": "Assumption-free partial identification is required before point-model closure."
+      "stage": "DEV_COMPLETE",
+      "decision": "RESEARCH_DIAGNOSTIC_ONLY",
+      "reason": "Some bounds informative, but many vacuous and Senate hard-threshold interpretation semantically invalid against direct reference."
     },
     {
       "method_id": "R3-S02-LOO-PRICE-QP",
-      "stage": "ACTIVE",
-      "decision": "CONTINUE",
-      "reason": "Run structural recoverability/redundancy QP comparator on DATA-004 sources only."
+      "stage": "DEV_COMPLETE",
+      "decision": "NO_QUALIFIED_SIGNAL",
+      "reason": "Broad LOO-PRICE negative; corrected exact-equivalent structural comparator had zero usable rows."
     },
     {
       "method_id": "R3-S03-LOO-FAMILY-QP",
-      "stage": "ACTIVE",
-      "decision": "CONTINUE",
-      "reason": "The prior generic regression was not a coherent LOO-FAMILY QP. This method was incorrectly marked complete and is reopened."
+      "stage": "DEV_COMPLETE",
+      "decision": "KILL",
+      "reason": "Broad LOO-FAMILY negative and coherent QP priority-component estimates materially worse than persistence."
     },
     {
       "method_id": "R3-S04-LOO-FAMILY-KL",
-      "stage": "ACTIVE",
-      "decision": "CONTINUE",
-      "reason": "Probability-geometry challenger must receive a TRAIN/DEV test before closure."
+      "stage": "DEV_COMPLETE",
+      "decision": "KILL",
+      "reason": "KL challenger likewise negative; no geometry rescue."
     },
     {
       "method_id": "R3-S05-MAXENT",
-      "stage": "ACTIVE",
-      "decision": "CONTINUE",
-      "reason": "Point completion inside partially identified state spaces remains untested."
+      "stage": "DEV_COMPLETE",
+      "decision": "KILL_POINT_ESTIMATE",
+      "reason": "Valid stated completion rule inside partial-ID set, but tested point FV failed."
     },
     {
       "method_id": "R3-S06-LATENT",
-      "stage": "ACTIVE",
-      "decision": "CONTINUE_IF_SUPPORT",
-      "reason": "First scalable aggregate-to-constituent inverse model is required where current-universe component support exists."
+      "stage": "SUPPORT_AUDITED",
+      "decision": "DO_NOT_ESCALATE",
+      "reason": "First count inverse had zero TRAIN support; global LOO-FAMILY target support was only 5 TRAIN markets vs 29 DEV. Large latent model not justified after simpler structural nulls."
     },
     {
       "method_id": "R3-S07-DYNAMIC",
-      "stage": "DEFERRED_UNTIL_CORE",
-      "decision": "CONTINUE_IF_CORE_SUPPORT",
-      "reason": "Do not add dynamic state-space complexity until core structural estimators are measured."
+      "stage": "DEV_COMPLETE",
+      "decision": "NO_QUALIFIED_CANDIDATE",
+      "reason": "Seat scalar and full CLR-distribution lead-lag tests produced no frozen-gate candidate; machine-speed response support was extremely sparse on DEV."
+    },
+    {
+      "method_id": "R3-A01-SEAT-STATIC",
+      "stage": "DEV_COMPLETE",
+      "decision": "KILL",
+      "reason": "Supported House and Senate count distributions were much worse than persistence as contemporaneous point FV."
+    },
+    {
+      "method_id": "R3-A02-SEAT-RESIDUAL",
+      "stage": "DEV_COMPLETE",
+      "decision": "KILL",
+      "reason": "Corrected literal-next-target-update structural residuals were worse than persistence under QP and KL."
+    },
+    {
+      "method_id": "R3-A03-CALIBRATED-ECM",
+      "stage": "DEV_COMPLETE",
+      "decision": "KILL",
+      "reason": "TRAIN-only affine calibration reduced scale mismatch but calibrated FV and error-correction residual both remained worse than persistence."
+    },
+    {
+      "method_id": "R3-A04-SEAT-LEADLAG",
+      "stage": "DEV_COMPLETE",
+      "decision": "SUPPORT_LIMITED_NULL",
+      "reason": "No candidate; the only favorable Senate 300s DEV response was one row on one day and failed frozen support gates."
+    },
+    {
+      "method_id": "R3-A05-P0-SIMPLEX-LEADLAG",
+      "stage": "DEV_COMPLETE",
+      "decision": "SUPPORT_LIMITED_NULL",
+      "reason": "No one of seven frozen narrow source-target pairs passed. Most had zero or one DEV response within 300s."
     },
     {
       "method_id": "R3-P01-FLOW",
-      "stage": "DEFERRED_UNTIL_CORE",
-      "decision": "CONTINUE_IF_CORE_SUPPORT",
-      "reason": "Flow is predictive augmentation only and remains separate from hard structural constraints."
+      "stage": "NOT_OPENED",
+      "decision": "NO_RESCUE_SEARCH",
+      "reason": "No core structural candidate existed to justify flow augmentation."
     },
     {
       "method_id": "R3-P02-HAZARD",
-      "stage": "DEFERRED_UNTIL_CORE",
-      "decision": "CONTINUE_IF_CORE_SUPPORT",
-      "reason": "PRED-006 hazard may later inform freshness/update likelihood; it is not directional FV."
+      "stage": "NOT_OPENED",
+      "decision": "NO_RESCUE_SEARCH",
+      "reason": "PRED-006 hazard is update likelihood, not directional FV; no R3 core signal justified augmentation."
     }
   ],
+  "stop_reason": "After correcting the premature initial stop, the programme exercised assumption-free bounds, QP/KL coherent projections, MaxEnt completion, supported count surfaces, corrected next-update residuals, TRAIN-only affine calibration, scalar event-time lead-lag and full-distribution CLR lead-lag. No method passed its frozen TRAIN/DEV gate. Further post-result model expansion would be rescue search rather than disciplined confirmation.",
   "controls": {
-    "final_rule": "FINAL remains locked until structural methods are actually exercised and one champion plus at most two challengers are frozen with exact assumptions, parameters, targets, metrics and gates.",
-    "leakage": [
-      "Use block_number,log_index chronology",
-      "For target block B use only DATA-004 source blocks < B",
-      "Explicit DirectInformationFamily exclusions",
-      "No future rows",
-      "No FINAL rows in corrected structural discovery"
-    ],
-    "semantic": [
-      "Hard edges require settlement-semantic proof",
-      "Other/tie/runoff/recount/bucket semantics preserved",
-      "Predictive-only edges never enter hard feasible set"
-    ],
-    "scope": [
-      "DATA-004 P0/P1 sources only",
-      "DATA-003 direct/reference targets only",
-      "DATA-001 and historical analogues excluded from fitting/selection/evaluation",
-      "No P2/P3 rescue"
-    ]
+    "chronology": "block_number,log_index; target-state inference used source blocks strictly before target block; event-time source shocks used target baseline before and response after the source block.",
+    "semantics": "Hard constraints only where reviewed settlement semantics supported them; Senate win/control threshold ambiguity was not promoted to identity.",
+    "final": "FINAL start 2026-09-10T00:00:00Z; never opened.",
+    "execution": "Fills are repricing observations, not historical executable-PnL evidence."
   },
-  "prior_dev_screen": {
-    "status": "SIMPLE_MODEL_SCREEN_NULL",
-    "original_decision": "STOP_NO_INDEPENDENT_SIGNAL",
-    "original_kaggle_kernel": "polyleviathan/r3-fv-001-structural-discovery",
-    "output_recovery_actions_run_id": 36632235437,
-    "output_artifact_id": 11062795819,
-    "output_artifact_sha256": "0265ec42cb490328449fa52e1e1cbfaa4ca669cb4535d7a1dd5f512494e11e2b",
-    "split_manifest_sha256": "cea20a374a8ed5822e361e7c8584cf3a2599fc80bcba3b2522efdf707e572225",
-    "final_rows_accessed": 0,
-    "best_loo_family_screen": {
-      "mode": "LOO_FAMILY_SEMANTIC",
-      "model_id": "blend_ridge",
-      "baseline_persistence_mae": 0.00550604010025063,
-      "model_mae": 0.03440094738147165,
-      "absolute_mae_improvement": -0.028894907281221016,
-      "relative_mae_improvement": -5.247856309638164,
-      "bootstrap_95": {
-        "lower": -0.04910677052286493,
-        "median": -0.028717040221835174,
-        "upper": -0.014999807945466997
-      },
-      "dev_sig_markets": 29
-    },
-    "note": "Consumed result is immutable screening evidence. It may demote generic aggregate-feature regression, but it does not promote or reject unexecuted structural methods."
-  }
+  "retained_for_live_research": [
+    "Assumption-free structural bounds as diagnostics",
+    "R2.5 semantic graph",
+    "P0 source capture universe",
+    "Live order-book information-leadership monitoring after launch"
+  ],
+  "prohibited_claims": [
+    "Do not claim R3 found a deployable structural alpha.",
+    "Do not claim historical fill tests prove absence of live order-book lead-lag.",
+    "Do not use isolated one-row Senate responses as evidence of alpha.",
+    "Do not open FINAL without a new independently preregistered programme."
+  ]
 }
