@@ -1,7 +1,7 @@
 # Current State
 
-**As of:** 28 September 2026  
-**Canonical main before this documentation pass:** `4efa3dd002abc1cbf1997acdf8734adee2e13f4c`  
+**As of:** 29 September 2026  
+**Canonical main before this documentation pass:** `bbd152eb13f827b9ede36e444ac597eb0274443d`  
 **Phase:** ACCEPTED LIVE MAPPING + REPLAY/RESEARCH FOUNDATION; NO TRADING CAPABILITY.
 
 This file describes accepted repository state. GitHub merge state and the actual contents of `main`
@@ -59,16 +59,19 @@ EC2 is not the default Kaggle middleman.
 
 ## Active implementation lane — BUILD-009
 
-Draft PR #50 on `build/009-low-latency-strategy-execution-core` now has its technical BUILD-009
-gates complete on benchmarked code SHA `8a56dec7ed2c0992ed9c86a911edf3a82786cc74`. GitHub CI
-#2380 passed lint, strict mypy, 533 tests with 2 skips, application smoke and benchmark smoke.
-Target-host 3k/journal and repeated 1m hot-path evidence is recorded in the BUILD-009 implementation
-handoff. It is still **not accepted capability on `main`** because independent review/merge has
-not occurred.
+Draft PR #50 on `build/009-low-latency-strategy-execution-core` has completed its independent-review
+correction pass on benchmarked code SHA `7ea841e0b26a312465a3deb68bc504ea311569ef`. GitHub CI
+#2467 passed lint, strict mypy, **547 tests with 2 skips**, application smoke and benchmark smoke.
+Target-host evidence now includes the required 3k/journal, explicit 100k and repeated 1m stages.
+The 100k median decision path was **39.722 us**; the repeated 1m median mean was **45.585 us** on a
+shared host with concurrent Polymarket recorder/SIG capture load, so the old pre-review 0.7% stability
+claim is retired. All benchmark correctness checks passed.
 
-The branch is intentionally fail-closed: SHADOW remains the default, and LIVE requires explicit
-enablement, trade credential, tournament identity, configured central risk caps, kill-switch
-release, trusted account state, durable operation identity and authoritative recovery.
+The correction closes the review's six safety findings: Risk-bound execution mode + explicit LIVE
+permit, synchronous in-flight reservations, worst-case gross accounting, fail-closed unsigned/delayed
+Realtime fills, malformed accepted responses -> UNCERTAIN, and depth-aware SHADOW fills. It also adds
+reserved HIGH-priority REST burst capacity, longer HTTP keepalive and exact journaled payload bytes.
+The PR remains **not accepted capability on `main`** and stays draft pending correction re-review.
 
 No 005 research finding is promoted by this implementation ticket. EXPERIMENT-005B remains frozen
 and separate. No real SIG orders were sent during BUILD-009 implementation or benchmarking.
