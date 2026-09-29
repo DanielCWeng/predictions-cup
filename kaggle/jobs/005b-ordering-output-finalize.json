@@ -1,7 +1,9 @@
 {
   "schema_version": 1,
-  "action": "output",
+  "action": "wait_output",
   "kernel": "polyleviathan/005b-ordering-falsification-finalize",
   "output_file_pattern": ".*ordering_falsification_summary\\.json$",
-  "note": "Retrieve deterministic final ordering-falsification verdict."
+  "note": "Wait for deterministic finalizer completion, then retrieve compact final verdict.",
+  "poll_seconds": 30,
+  "timeout_minutes": 60
 }
