@@ -20,10 +20,16 @@ def maker_unresolved_envelopes(
     strategy_id: str = "make-direct-pm",
 ) -> tuple[ExecutionEnvelope, ...]:
     """Return unresolved operations proven by journal audit to belong to MAKE."""
+    terminal = {
+        LifecycleState.FILLED,
+        LifecycleState.CANCELLED,
+        LifecycleState.RECONCILED,
+        LifecycleState.REJECTED,
+    }
     return tuple(
         envelope
-        for envelope in journal.unresolved()
-        if _is_maker_operation(journal, envelope, strategy_id=strategy_id)
+        for envelope in journal.envelopes_for_strategy(strategy_id)
+        if envelope.lifecycle_state not in terminal
     )
 
 
@@ -35,9 +41,8 @@ def maker_placement_envelopes(
     """Return all durable MAKE placement envelopes, including reconciled history."""
     return tuple(
         envelope
-        for envelope in journal.envelopes()
-        if _is_maker_operation(journal, envelope, strategy_id=strategy_id)
-        and envelope.operation_kind
+        for envelope in journal.envelopes_for_strategy(strategy_id)
+        if envelope.operation_kind
         in {
             OperationKind.SINGLE_PLACEMENT,
             OperationKind.BEST_EFFORT_BATCH,
@@ -62,22 +67,23 @@ def reconcile_maker_quote_registry(
     """
     if observed_monotonic_ns < 0:
         raise ValueError("observed_monotonic_ns must be non-negative")
-    candidate_envelopes = tuple(
-        maker_placement_envelopes(journal, strategy_id=strategy_id)
-        if envelopes is None
-        else envelopes
-    )
-    maker_envelopes = tuple(
-        envelope
-        for envelope in candidate_envelopes
-        if _is_maker_operation(journal, envelope, strategy_id=strategy_id)
-        and envelope.operation_kind
-        in {
-            OperationKind.SINGLE_PLACEMENT,
-            OperationKind.BEST_EFFORT_BATCH,
-            OperationKind.ATOMIC_MULTI_LEG,
-        }
-    )
+    if envelopes is None:
+        maker_envelopes = maker_placement_envelopes(
+            journal,
+            strategy_id=strategy_id,
+        )
+    else:
+        maker_envelopes = tuple(
+            envelope
+            for envelope in envelopes
+            if _is_maker_operation(journal, envelope, strategy_id=strategy_id)
+            and envelope.operation_kind
+            in {
+                OperationKind.SINGLE_PLACEMENT,
+                OperationKind.BEST_EFFORT_BATCH,
+                OperationKind.ATOMIC_MULTI_LEG,
+            }
+        )
     maker_operation_ids = {
         envelope.logical_operation_id for envelope in maker_envelopes
     }
