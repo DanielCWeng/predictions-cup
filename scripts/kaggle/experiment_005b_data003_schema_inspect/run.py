@@ -13,16 +13,33 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 
 def main() -> None:
-    zips = sorted(Path("/kaggle/input").rglob("fills.zip"))
-    if len(zips) != 1:
-        raise RuntimeError(f"expected one fills.zip, found {zips}")
-    extract = OUT / "fills"
-    extract.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(zips[0]) as archive:
-        archive.extractall(extract)
-    files = sorted(extract.rglob("*.parquet"))
+    root = Path("/kaggle/input")
+    direct = sorted(
+        path for path in root.rglob("*.parquet")
+        if "fills" in path.parts
+        and "fees" not in path.parts
+        and "rebates" not in path.parts
+        and "unattributed_fee_legs" not in path.parts
+    )
+    zips = sorted(root.rglob("fills.zip"))
+    if direct:
+        files = direct
+        source_mode = "DIRECT_PARQUET"
+    elif len(zips) == 1:
+        extract = OUT / "fills"
+        extract.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(zips[0]) as archive:
+            archive.extractall(extract)
+        files = sorted(extract.rglob("*.parquet"))
+        source_mode = "FILLS_ZIP"
+    else:
+        top_level = sorted(str(path) for path in root.glob("*"))
+        raise RuntimeError(
+            "could not locate DATA-003 fills as direct parquet or fills.zip; "
+            f"top_level={top_level}"
+        )
     if not files:
-        raise RuntimeError("no fill parquet files after extraction")
+        raise RuntimeError("no fill parquet files located")
 
     schema = pq.read_schema(files[0])
     columns = schema.names
@@ -64,34 +81,6 @@ def main() -> None:
     }
     groups = None
     if "order_is_match_taker_order" in columns:
-        groups = {
-            key: int(value)
-            for key, value in con.execute(
-                f"""
-                WITH g AS (
-                  SELECT condition_id, tx_hash,
-                         COUNT(*) AS n,
-                         SUM(
-                           CASE
-                             WHEN CAST(order_is_match_taker_order AS BOOLEAN)
-                             THEN 1 ELSE 0
-                           END
-                         ) AS active_n
-                  FROM {source}
-                  GROUP BY 1,2
-                )
-                SELECT
-                  COUNT(*) AS groups,
-                  COUNT(*) FILTER (WHERE active_n=1) AS one_active,
-                  COUNT(*) FILTER (WHERE active_n=1 AND n-active_n>=1)
-                    AS one_active_with_passive
-                FROM g
-                """
-            ).fetchone()
-            for key in ()
-        }
-    # Build group summary without a fragile dict-comprehension trick.
-    if "order_is_match_taker_order" in columns:
         vals = con.execute(
             f"""
             WITH g AS (
@@ -121,7 +110,7 @@ def main() -> None:
         "schema_version": 1,
         "stage": "DATA003_SCHEMA_ONLY",
         "predictive_outcomes_accessed": False,
-        "fills_zip": zips[0].name,
+        "source_mode": source_mode,
         "parquet_files": len(files),
         "rows": total,
         "schema": [
