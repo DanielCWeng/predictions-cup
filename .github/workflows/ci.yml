@@ -52,3 +52,6 @@ jobs:
 
       - name: MAKE-001 benchmark smoke
         run: python scripts/benchmark_make001.py --iterations 20 --bursts 1 --journal-iterations 2
+
+      - name: MAKE-001 service smoke
+        run: python -m predictions_cup.maker --smoke-test
