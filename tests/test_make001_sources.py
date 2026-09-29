@@ -439,7 +439,7 @@ def test_bridge_restores_canonical_market_identity_for_open_order_risk() -> None
     assert order.market_id == "m1"
     assert order.reserved_exposure == 4.0
 
-def test_quiet_trusted_account_and_pm_feed_remain_fresh_without_mutation() -> None:
+def test_trusted_sources_preserve_actual_old_observation_age() -> None:
     wall_now = datetime(2026, 9, 29, 14, 1, tzinfo=UTC)
     old = wall_now - timedelta(minutes=5)
     sig = _SigState(
@@ -480,14 +480,18 @@ def test_quiet_trusted_account_and_pm_feed_remain_fresh_without_mutation() -> No
     snapshot = bridge.build(
         "36",
         wall_now=wall_now,
-        monotonic_now_ns=9_000_000_000,
+        monotonic_now_ns=600_000_000_000,
         polymarket_feed_trusted=True,
     )
 
     assert snapshot is not None
-    assert snapshot.account_observed_ns == 9_000_000_000
-    assert snapshot.inventory_observed_ns == 9_000_000_000
-    assert snapshot.external_quotes["yes-token"].observed_monotonic_ns == 9_000_000_000
+    assert snapshot.account_observed_ns == 300_000_000_000
+    assert snapshot.inventory_observed_ns == 300_000_000_000
+    assert (
+        snapshot.external_quotes["yes-token"].observed_monotonic_ns
+        == 300_000_000_000
+    )
+    assert snapshot.runtime.portfolio.account_trusted is True
     assert snapshot.external_quotes["yes-token"].trusted is True
 
 def test_polymarket_service_seeds_all_outcome_tokens_not_only_aligned_fv_token() -> None:
