@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "status",
+  "kernel": "polyleviathan/r3-fv-001-structural-math-corrected",
+  "note": "Read-only status probe for the corrected R3 structural-math TRAIN/DEV kernel. Do not launch or modify compute."
+}
