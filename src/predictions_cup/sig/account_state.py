@@ -53,6 +53,8 @@ class AccountRealtimeStateEngine:
         self.transition = AccountTrustTransition.INITIAL
         self.last_accepted_revision: int | None = None
         self.last_realtime_observed_at: datetime | None = None
+        self.last_authoritative_observed_at: datetime | None = None
+        self.last_accepted_observed_at: datetime | None = None
         self._positions: dict[str, tuple[str, Decimal]] = {}
         self._orders: dict[int, RuntimeOrderState] = {}
         self._outstanding_advance: dict[str, Decimal] = {}
@@ -70,6 +72,8 @@ class AccountRealtimeStateEngine:
     ) -> None:
         if snapshot.tournament_id != self.tournament_id:
             raise ValueError("authoritative snapshot tournament mismatch")
+        self.last_authoritative_observed_at = snapshot.observed_at
+        self.last_accepted_observed_at = snapshot.observed_at
         self._positions = {
             position.exchange_id: (position.market_id, position.quantity)
             for position in snapshot.positions
@@ -186,6 +190,7 @@ class AccountRealtimeStateEngine:
             )
 
         self.last_accepted_revision = delivery.revision
+        self.last_accepted_observed_at = observed_at
         return AccountBatchApplyResult(
             accepted=True,
             duplicate=False,
