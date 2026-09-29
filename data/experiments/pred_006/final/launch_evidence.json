@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "experiment_id": "PRED-006",
+  "classification": "ONE_SHOT_FINAL_LAUNCH",
+  "parent_commit": "6be20cfe2c2e78d1815b19b4554d5feabc79f6be",
+  "split_manifest_sha256": "28d41fbb590f7f9abe59ca24e00841307fe13991c3c695748240fe127847f349",
+  "shortlist_freeze_sha256": "5deff02e70bbb63a7355390c4babfc1ed63dd8d5b112087a2e9ff9dddfe835f6",
+  "candidate_ids": [
+    "PRED006-C01",
+    "PRED006-C02"
+  ],
+  "expected_candidate_count": 2,
+  "final_start_utc": "2026-09-11T00:00:00Z",
+  "final_access_before_this_commit": false,
+  "rerun_forbidden_after_predictive_outcome_access": true
+}
