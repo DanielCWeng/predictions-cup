@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "action": "output",
+  "kernel": "polyleviathan/r3-fv-001-p0-simplex-lead-lag",
+  "output_dir": "data/research/r3_fv_001/p0_simplex_leadlag_output",
+  "note": "Read-only recovery of completed frozen R3-P0-SIMPLEX-LEADLAG-001 outputs."
+}
