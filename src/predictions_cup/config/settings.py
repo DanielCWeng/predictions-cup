@@ -44,6 +44,12 @@ class AppSettings(BaseSettings):
     risk_max_state_age_ms: int = Field(default=1_000, gt=0)
 
     sig_realtime_storage_path: Path = Path("data/sig_realtime.sqlite3")
+    sig_research_path: Path = Path("data/sig_research")
+    sig_capture_queue_max: int = Field(default=200_000, ge=10_000, le=2_000_000)
+    sig_capture_parquet_shard_seconds: int = Field(default=60, ge=10, le=300)
+    sig_capture_parquet_max_rows_per_shard: int = Field(
+        default=100_000, ge=1_000, le=1_000_000
+    )
     sig_realtime_book_depth: int = Field(default=20, ge=1, le=200)
     sig_realtime_tracked_exchange_ids: str = ""
     sig_rest_governor_rate_per_second: float = Field(default=2.0, gt=0.0, le=100.0)
@@ -84,6 +90,7 @@ class AppSettings(BaseSettings):
         "polymarket_storage_path",
         "polymarket_research_path",
         "sig_realtime_storage_path",
+        "sig_research_path",
         "execution_journal_path",
     )
     @classmethod
@@ -151,6 +158,12 @@ class AppSettings(BaseSettings):
             "sig_read_credential_configured": self.sig_read_credential is not None,
             "sig_trade_credential_configured": self.sig_trade_credential is not None,
             "sig_realtime_storage_path": str(self.sig_realtime_storage_path),
+            "sig_research_path": str(self.sig_research_path),
+            "sig_capture_queue_max": self.sig_capture_queue_max,
+            "sig_capture_parquet_shard_seconds": self.sig_capture_parquet_shard_seconds,
+            "sig_capture_parquet_max_rows_per_shard": (
+                self.sig_capture_parquet_max_rows_per_shard
+            ),
             "sig_realtime_book_depth": self.sig_realtime_book_depth,
             "sig_realtime_tracked_exchange_count": len(
                 {
