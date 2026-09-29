@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 import pyarrow.dataset as ds
 
+from predictions_cup.analysis.cross_venue import analyze_direct_cross_venue
 from predictions_cup.analysis.microstructure import analyze_sig_microstructure
 from predictions_cup.mapping.crosswalk import load_document
 from predictions_cup.mapping.models import MappingDirection
@@ -399,6 +400,7 @@ def _report(summary: dict[str, Any]) -> str:
     pm = summary["polymarket"]
     execution = summary["execution"]
     microstructure = summary["sig_microstructure"]
+    cross_response = summary["cross_venue_response"]
     cross = summary["cross_venue_latest"]
     lines = [
         "# CAPTURE-001 First-Hours Forensics",
@@ -451,6 +453,14 @@ def _report(summary: dict[str, Any]) -> str:
         "## Own execution / shadow audit",
         "",
         f"- Summary: {execution}.",
+        "",
+        "## Cross-venue response diagnostics",
+        "",
+        f"- Summary: {cross_response}.",
+        (
+            "- Response lag means nearest subsequent economic BBO change within the "
+            "declared window; it is descriptive and not causal evidence."
+        ),
         "",
         "## Direct mapped cross-venue latest marks",
         "",
@@ -516,6 +526,11 @@ def run(
     ) = analyze_sig_microstructure(sig_root)
     pm, pm_mid = _analyse_polymarket(pm_root)
     execution = _analyse_execution(journal)
+    cross_response, cross_response_rows = analyze_direct_cross_venue(
+        sig_root=sig_root,
+        polymarket_root=pm_root,
+        mapping_path=mapping_path,
+    )
     cross = _cross_venue(mapping_path, sig_mid, pm_mid)
     summary = {
         "schema_version": "capture-001-first-hours-v1",
@@ -524,6 +539,7 @@ def run(
         "sig_microstructure": sig_microstructure,
         "polymarket": pm,
         "execution": execution,
+        "cross_venue_response": cross_response,
         "cross_venue_latest": cross,
     }
 
@@ -549,6 +565,8 @@ def run(
         ],
     )
     _write_rows(output_root / "activity_15m.csv", bucket_rows)
+    _write_rows(output_root / "cross_venue_diagnostics.csv", cross_response_rows)
+    _write_rows(output_root / "cross_venue_latest.csv", cross)
     return summary
 
 
