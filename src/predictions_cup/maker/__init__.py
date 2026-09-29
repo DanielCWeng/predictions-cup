@@ -35,7 +35,7 @@ from predictions_cup.maker.lifecycle import (
     QuoteRegistry,
 )
 from predictions_cup.maker.policies import (
-    AvellanedaStoikovInventoryModel,
+    BinaryCaraInventoryModel,
     ConservativeEligibilityPolicy,
     ConservativeSpreadPolicy,
     InventoryConfidenceSizePolicy,
@@ -48,7 +48,7 @@ from predictions_cup.maker.sources import MakerSourceBridge
 
 __all__ = [
     "ActiveQuote",
-    "AvellanedaStoikovInventoryModel",
+    "BinaryCaraInventoryModel",
     "ConservativeEligibilityPolicy",
     "ConservativeSpreadPolicy",
     "DesiredQuote",
