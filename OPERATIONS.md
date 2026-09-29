@@ -43,9 +43,11 @@ sqlite3 data/sig_realtime.sqlite3 \
   "select observed_at,payload_json from capture_health order by id desc limit 3;"
 ```
 
-The SIG health JSON must show a bounded research queue with `dropped_rows=0` and
-`storage_failures=0`. Published shards must remain readable across service restart. A hard crash may
-lose only the not-yet-published in-memory shard; it must never mutate an already-published shard.
+The SIG health JSON must show a bounded research queue with `dropped_rows=0`,
+`storage_failures=0`, a sane queue high-water mark and acceptable
+`operational_sqlite_bytes`/`operational_wal_bytes` growth. Published shards must remain readable
+across service restart. A hard crash may lose only the not-yet-published in-memory shard; it must
+never mutate an already-published shard.
 
 Generate the first-hours package directly from capture artifacts:
 
