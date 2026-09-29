@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "subexperiment": "R3-SEAT-LEADLAG-001",
+  "stage": "TRAIN_DEV_EVIDENCE",
+  "output_recovery_commit": "1a8e94e54608d0f46d0affeb35664622b21e1a02",
+  "github_actions_run": 36646019246,
+  "artifact_id": 11067918452,
+  "artifact_zip_sha256": "892e3e673897bbffb71fcf5b0bd5bc321878ef2bf450edf2b71d04aa49363641",
+  "empirical_universe": {
+    "source": "DATA-004",
+    "target": "DATA-003",
+    "data001_used": false,
+    "historical_analogue_families_used": false
+  },
+  "final_opened": false,
+  "final_rows_accessed": 0,
+  "primary_horizon_seconds": 300,
+  "house": {
+    "candidate": false,
+    "QP": {
+      "shock_rows": 195,
+      "train_matched_rows": 51,
+      "dev_matched_rows": 8,
+      "primary_train_rows": 3,
+      "primary_dev_rows": 1,
+      "status": "INSUFFICIENT_SUPPORT"
+    },
+    "KL": {
+      "shock_rows": 173,
+      "train_matched_rows": 55,
+      "dev_matched_rows": 7,
+      "primary_train_rows": 4,
+      "primary_dev_rows": 1,
+      "status": "INSUFFICIENT_SUPPORT"
+    }
+  },
+  "senate_t50": {
+    "candidate": false,
+    "QP": {
+      "shock_rows": 529,
+      "train_matched_rows": 127,
+      "dev_matched_rows": 11,
+      "primary_train_rows": 20,
+      "primary_dev_rows": 1,
+      "day_clusters": 1,
+      "mae_improvement": 0.0008234440241585705,
+      "direction_accuracy": 1,
+      "median_latency_s": 59,
+      "gate": false
+    },
+    "KL": {
+      "shock_rows": 523,
+      "train_matched_rows": 114,
+      "dev_matched_rows": 8,
+      "primary_train_rows": 20,
+      "primary_dev_rows": 1,
+      "day_clusters": 1,
+      "mae_improvement": 0.0013466077165203427,
+      "direction_accuracy": 1,
+      "median_latency_s": 36,
+      "gate": false
+    }
+  },
+  "decision": "NO_HISTORICAL_MACHINE_SPEED_CANDIDATE",
+  "interpretation": "Both coherent scalar variants improve the same single Senate DEV response within 300s, but the frozen gate requires at least 50 TRAIN rows, 30 DEV rows and 4 DEV day clusters. The observed DEV support is one response on one UTC day. House is similarly support-limited. This is not promotable alpha.",
+  "no_rescue": "30s/5s diagnostics cannot rescue. No threshold or horizon relaxation, no post-result source selection, no FINAL."
+}
