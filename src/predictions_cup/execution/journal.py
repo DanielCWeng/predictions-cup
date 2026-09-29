@@ -107,6 +107,12 @@ class ExecutionJournal:
             ON execution_events(logical_operation_id, event_id)
             """
         )
+        self._connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS execution_events_strategy_idx
+            ON execution_events(strategy_id, event_type, logical_operation_id)
+            """
+        )
         self._connection.commit()
 
     def _ensure_execution_envelope_columns(self) -> None:
@@ -546,6 +552,53 @@ class ExecutionJournal:
         ).fetchone()
         return None if row is None else str(row[0])
 
+    def envelopes_for_strategy(
+        self,
+        strategy_id: str,
+    ) -> tuple[ExecutionEnvelope, ...]:
+        """Return durable envelopes attributed to one strategy submission."""
+        if not strategy_id.strip():
+            raise ValueError("strategy_id must not be blank")
+        rows = self._connection.execute(
+            """
+            SELECT DISTINCT
+                   envelope.logical_operation_id,
+                   envelope.tournament_id,
+                   envelope.idempotency_key,
+                   envelope.operation_kind,
+                   envelope.sink_mode,
+                   envelope.payload_json,
+                   envelope.payload_sha256,
+                   envelope.intent_ids_json,
+                   envelope.lifecycle_state,
+                   envelope.created_monotonic_ns,
+                   envelope.relationship_constraint
+            FROM execution_envelopes AS envelope
+            JOIN execution_events AS event
+              ON event.logical_operation_id = envelope.logical_operation_id
+            WHERE event.event_type = 'SUBMISSION'
+              AND event.strategy_id = ?
+            ORDER BY envelope.created_monotonic_ns,
+                     envelope.logical_operation_id
+            """,
+            (strategy_id,),
+        ).fetchall()
+        return self._decode_envelopes(rows)
+
+    def envelopes(self) -> tuple[ExecutionEnvelope, ...]:
+        """Return all durable execution envelopes, including terminal history."""
+        rows = self._connection.execute(
+            """
+            SELECT logical_operation_id, tournament_id, idempotency_key,
+                   operation_kind, sink_mode, payload_json, payload_sha256,
+                   intent_ids_json, lifecycle_state, created_monotonic_ns,
+                   relationship_constraint
+            FROM execution_envelopes
+            ORDER BY created_monotonic_ns, logical_operation_id
+            """
+        ).fetchall()
+        return self._decode_envelopes(rows)
+
     def unresolved(self) -> tuple[ExecutionEnvelope, ...]:
         terminal = (
             LifecycleState.FILLED.value,
@@ -565,9 +618,15 @@ class ExecutionJournal:
             """,
             terminal,
         ).fetchall()
+        return self._decode_envelopes(rows)
+
+    def _decode_envelopes(
+        self,
+        rows: list[tuple[object, ...]],
+    ) -> tuple[ExecutionEnvelope, ...]:
         result: list[ExecutionEnvelope] = []
         for row in rows:
-            intent_ids_raw = json.loads(row[7])
+            intent_ids_raw = json.loads(str(row[7]))
             if not isinstance(intent_ids_raw, list) or not all(
                 isinstance(value, str) for value in intent_ids_raw
             ):
@@ -583,7 +642,7 @@ class ExecutionJournal:
                     payload_sha256=str(row[6]),
                     intent_ids=tuple(intent_ids_raw),
                     lifecycle_state=LifecycleState(str(row[8])),
-                    created_monotonic_ns=int(row[9]),
+                    created_monotonic_ns=int(str(row[9])),
                     relationship_constraint=(
                         None if row[10] is None else str(row[10])
                     ),
