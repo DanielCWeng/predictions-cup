@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "status",
+  "kernel": "polyleviathan/r3-fv-001-seat-counts",
+  "note": "Read-only status probe for R3-SEAT-COUNT-001. Do not launch compute."
+}
