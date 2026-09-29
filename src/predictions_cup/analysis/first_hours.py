@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 import pyarrow.dataset as ds
 
+from predictions_cup.analysis.microstructure import analyze_sig_microstructure
 from predictions_cup.mapping.crosswalk import load_document
 
 
@@ -366,10 +367,22 @@ def _write_activity(path: Path, counts: dict[str, dict[str, int]]) -> None:
             )
 
 
+def _write_rows(path: Path, rows: list[dict[str, object]]) -> None:
+    if not rows:
+        path.write_text("", encoding="utf-8")
+        return
+    fieldnames = list(rows[0])
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def _report(summary: dict[str, Any]) -> str:
     sig = summary["sig"]
     pm = summary["polymarket"]
     execution = summary["execution"]
+    microstructure = summary["sig_microstructure"]
     cross = summary["cross_venue_latest"]
     lines = [
         "# CAPTURE-001 First-Hours Forensics",
@@ -398,6 +411,22 @@ def _report(summary: dict[str, Any]) -> str:
         f"- Event counts: {sig['event_counts']}.",
         f"- Liquidity transitions: {sig['liquidity_change_counts']}.",
         f"- Evidence labels: {sig['liquidity_evidence_counts']}.",
+        f"- Economic BBO lifetime: {microstructure.get('economic_bbo_lifetime_seconds')}.",
+        f"- Trade-arrival interval: {microstructure.get('trade_arrival_interval_seconds')}.",
+        f"- Absolute midpoint moves: {microstructure.get('absolute_midpoint_move')}.",
+        (
+            "- Jump counts |mid move| >= 0.05 / 0.10: "
+            f"{microstructure.get('jump_count_abs_0_05')} / "
+            f"{microstructure.get('jump_count_abs_0_10')}."
+        ),
+        f"- Aggressor classification: {microstructure.get('aggressor_classification')}.",
+        f"- Tracked bid depth: {microstructure.get('tracked_bid_depth')}.",
+        f"- Tracked ask depth: {microstructure.get('tracked_ask_depth')}.",
+        "",
+        "## Markout semantics",
+        "",
+        f"- {microstructure.get('markout_rule')}.",
+        "- Full horizon tables are written to markouts.csv.",
         "",
         "## Polymarket synchronization",
         "",
@@ -458,6 +487,13 @@ def run(
         journal = input_root / "execution_journal.sqlite3"
 
     sig, activity, sig_mid = _analyse_sig(sig_root)
+    (
+        sig_microstructure,
+        microstructure_rows,
+        markout_rows,
+        depth_rows,
+        bucket_rows,
+    ) = analyze_sig_microstructure(sig_root)
     pm, pm_mid = _analyse_polymarket(pm_root)
     execution = _analyse_execution(journal)
     cross = _cross_venue(mapping_path, sig_mid, pm_mid)
@@ -465,6 +501,7 @@ def run(
         "schema_version": "capture-001-first-hours-v1",
         "generated_at": datetime.now(UTC).isoformat(),
         "sig": sig,
+        "sig_microstructure": sig_microstructure,
         "polymarket": pm,
         "execution": execution,
         "cross_venue_latest": cross,
@@ -477,6 +514,10 @@ def run(
     )
     (output_root / "report.md").write_text(_report(summary), encoding="utf-8")
     _write_activity(output_root / "market_activity.csv", activity)
+    _write_rows(output_root / "market_microstructure.csv", microstructure_rows)
+    _write_rows(output_root / "markouts.csv", markout_rows)
+    _write_rows(output_root / "depth_summary.csv", depth_rows)
+    _write_rows(output_root / "activity_15m.csv", bucket_rows)
     return summary
 
 
