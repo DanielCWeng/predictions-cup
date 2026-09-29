@@ -62,6 +62,7 @@ class MakerRuntimeLoop:
         self._pending_exchanges: set[str] = set()
         self._global_recheck = False
         self._oldest_observed_ns: int | None = None
+        self._freshness_deadlines: dict[str, int] = {}
         self._sequence = 0
 
     def notify_sig(
@@ -105,16 +106,33 @@ class MakerRuntimeLoop:
 
     async def run(self, *, stop_event: asyncio.Event) -> None:
         while not stop_event.is_set():
-            try:
-                await asyncio.wait_for(self._wake.wait(), timeout=0.25)
-            except TimeoutError:
+            self._enqueue_due_deadlines(self._mono_clock())
+            if self._wake.is_set():
+                await self._drain_once()
                 continue
-            if stop_event.is_set():
-                break
-            await self._drain_once()
+
+            timeout = self._seconds_until_next_deadline(self._mono_clock())
+            wake_wait = asyncio.create_task(self._wake.wait())
+            stop_wait = asyncio.create_task(stop_event.wait())
+            done, pending = await asyncio.wait(
+                {wake_wait, stop_wait},
+                timeout=timeout,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+
+            if stop_wait in done and stop_event.is_set():
+                return
+            if not done:
+                self._enqueue_due_deadlines(self._mono_clock())
+            if self._wake.is_set():
+                await self._drain_once()
 
     async def drain_once(self) -> MakerCycleResult | None:
-        """Deterministic test/operational hook: process current pending work once."""
+        """Deterministic test/operational hook: process pending or expired work once."""
+        self._enqueue_due_deadlines(self._mono_clock())
         if not self._wake.is_set():
             return None
         return await self._drain_once()
@@ -176,6 +194,19 @@ class MakerRuntimeLoop:
             self._observe("maker_cycle", finished - started)
         self._increment("maker_cycles")
         self._increment("maker_exchange_evaluations", len(snapshots))
+        evaluated_exchange_ids = tuple(sorted(snapshots))
+        if len(result.decisions) != len(evaluated_exchange_ids):
+            raise RuntimeError("maker decision count does not match evaluated exchanges")
+        for exchange_id, decision in zip(
+            evaluated_exchange_ids,
+            result.decisions,
+            strict=True,
+        ):
+            deadline = decision.next_recheck_monotonic_ns
+            if decision.desired is None or deadline is None:
+                self._freshness_deadlines.pop(exchange_id, None)
+            else:
+                self._freshness_deadlines[exchange_id] = deadline
 
         if self._observer is not None:
             try:
@@ -203,6 +234,27 @@ class MakerRuntimeLoop:
                 # Analytics is optional by default. Execution safety never depends
                 # on successful downstream persistence.
         return result
+
+    def _enqueue_due_deadlines(self, now_ns: int) -> None:
+        due = {
+            exchange_id
+            for exchange_id, deadline_ns in self._freshness_deadlines.items()
+            if deadline_ns <= now_ns
+        }
+        if not due:
+            return
+        for exchange_id in due:
+            self._freshness_deadlines.pop(exchange_id, None)
+        self._pending_exchanges.update(due)
+        self._record_observed(now_ns)
+        self._wake.set()
+        self._increment("maker_freshness_deadline_triggers", len(due))
+
+    def _seconds_until_next_deadline(self, now_ns: int) -> float | None:
+        if not self._freshness_deadlines:
+            return None
+        nearest = min(self._freshness_deadlines.values())
+        return max(0.0, (nearest - now_ns) / 1_000_000_000.0)
 
     def _notify_exchanges(
         self,
