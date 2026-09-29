@@ -24,10 +24,16 @@ from predictions_cup.sig.realtime_state import (
 
 
 @dataclass
+class _Health:
+    connected: bool = True
+
+
+@dataclass
 class _SigState:
     tournament_id: str
     states: dict[str, ExchangeRuntimeState]
     market_states: dict[str, MarketRuntimeState]
+    health: _Health = _Health()
 
 
 @dataclass
@@ -35,6 +41,7 @@ class _AccountState:
     tournament_id: str
     last_accepted_observed_at: datetime | None
     portfolio: RuntimePortfolio
+    last_authoritative_observed_at: datetime | None = None
 
     def runtime_portfolio(self) -> RuntimePortfolio:
         return self.portfolio
