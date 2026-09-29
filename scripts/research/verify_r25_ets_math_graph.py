@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Offline reproducibility audit for the frozen R2.5 ETS mathematical graph."""
 
-from __future__ import annotations
-
 import csv
 import hashlib
 import json
