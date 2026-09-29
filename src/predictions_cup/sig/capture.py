@@ -14,8 +14,8 @@ from pathlib import Path
 from predictions_cup.config import AppSettings, load_settings
 from predictions_cup.sig.errors import SigApiError
 from predictions_cup.sig.governed_client import GovernedSigRestClient
+from predictions_cup.sig.launch_storage import LaunchSigRecorder
 from predictions_cup.sig.realtime_state import SigRealtimeStateEngine, SubscriptionReason
-from predictions_cup.sig.realtime_storage import SigRealtimeRecorder
 from predictions_cup.sig.realtime_subscriber import SubscriberExit, SupabaseTournamentSubscriber
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,16 @@ def parse_args() -> argparse.Namespace:
         help="List accessible tournaments and exit without subscribing.",
     )
     parser.add_argument("--storage-path", type=Path, help="Override SQLite recorder path.")
+    parser.add_argument(
+        "--research-root",
+        type=Path,
+        help="Override immutable CAPTURE-001 SIG research Parquet root.",
+    )
+    parser.add_argument(
+        "--research-queue-max",
+        type=int,
+        help="Override bounded research persistence queue capacity.",
+    )
     parser.add_argument("--book-depth", type=int, help="Override authoritative REST depth.")
     parser.add_argument(
         "--tracked-exchange-id",
@@ -83,7 +93,20 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
             )
         book_depth = args.book_depth or settings.sig_realtime_book_depth
         storage_path = args.storage_path or settings.sig_realtime_storage_path
-        recorder = SigRealtimeRecorder(storage_path)
+        research_root = args.research_root or settings.sig_research_path
+        queue_max = args.research_queue_max or settings.sig_capture_queue_max
+        recorder = LaunchSigRecorder(
+            storage_path,
+            research_root=research_root,
+            queue_max=queue_max,
+            shard_seconds=settings.sig_capture_parquet_shard_seconds,
+            max_rows_per_shard=settings.sig_capture_parquet_max_rows_per_shard,
+        )
+        logger.info(
+            "SIG CAPTURE-001 research persistence enabled root=%s session=%s",
+            research_root,
+            recorder.session_id,
+        )
         stop_event = asyncio.Event()
         _install_signal_handlers(stop_event)
         if args.run_seconds is not None:
@@ -132,6 +155,10 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                         await engine.initialize()
                     else:
                         await engine.prepare_subscription(reason)
+                    recorder.record_connection_boundary(
+                        observed_at=datetime.now(UTC),
+                        reason=reason.value,
+                    )
                     subscriber = SupabaseTournamentSubscriber(
                         topic=engine.topic,
                         token=token,
@@ -168,12 +195,11 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
         finally:
             await engine.aclose()
             if args.print_health:
-                print(
-                    json.dumps(
-                        _json_health_snapshot(engine.health_snapshot()),
-                        sort_keys=True,
-                    )
+                health = _json_health_snapshot(engine.health_snapshot())
+                health["capture"] = _json_health_snapshot(
+                    recorder.capture_health_snapshot()
                 )
+                print(json.dumps(health, sort_keys=True))
             recorder.close()
     return 0
 

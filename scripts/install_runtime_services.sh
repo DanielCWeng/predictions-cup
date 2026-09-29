@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Replacement-VM operators: read docs/operations/VM_MIGRATION_QUICKSTART.md first.
+# These units embed absolute repo/home/Python paths, so rerun this installer on the
+# destination VM; do not copy rendered /etc/systemd/system units from another host.
+# Remote Desktop Commander is out-of-band and needs its own boot service; the
+# migration runbook documents the separate per-account HOME/systemd setup.
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd -P)"
 UNIT_SOURCE_DIR="${REPO_ROOT}/deploy/systemd"

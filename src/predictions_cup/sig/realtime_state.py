@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import AsyncIterator, Callable, Iterable, Sequence
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
@@ -305,9 +306,19 @@ class SigRealtimeStateEngine:
 
     def mark_connected(self) -> None:
         self.health.connected = True
+        observed_at = self._clock()
+        self._recorder.record_health(
+            observed_at=observed_at,
+            payload=self.health_snapshot(),
+        )
 
     def mark_disconnected(self) -> None:
         self.health.connected = False
+        observed_at = self._clock()
+        self._recorder.record_health(
+            observed_at=observed_at,
+            payload=self.health_snapshot(),
+        )
 
     async def maintenance(self, observed_at: datetime) -> None:
         """Schedule staggered tracked refreshes and cheap broad-universe BBO work."""
@@ -330,6 +341,11 @@ class SigRealtimeStateEngine:
                 name="sig-bulk-price-refresh",
             )
             self._track_background_task(task)
+
+        self._recorder.record_health(
+            observed_at=observed_at,
+            payload=self.health_snapshot(),
+        )
 
     async def refresh_stale_open_books(
         self,
@@ -422,12 +438,22 @@ class SigRealtimeStateEngine:
     ) -> None:
         if topic != self.topic:
             raise ValueError("received batch for unexpected topic")
+        monotonic_receive_ns = time.monotonic_ns()
         self.health.last_realtime_receive = observed_at
 
         try:
             batch = MarketBatchDto.model_validate(payload)
             self._validate_batch_tournament(batch)
         except (ValidationError, ValueError) as exc:
+            parsed_at = self._clock()
+            self._recorder.record_raw_batch(
+                topic=topic,
+                payload=payload,
+                observed_at=observed_at,
+                monotonic_receive_ns=monotonic_receive_ns,
+                parsed_at=parsed_at,
+                validation_error=type(exc).__name__,
+            )
             logger.warning("SIG Realtime payload rejected: %s", type(exc).__name__)
             await self._full_resync(
                 transition=TrustTransition.UNTRUSTED_MALFORMED_PAYLOAD,
@@ -438,6 +464,14 @@ class SigRealtimeStateEngine:
             return
 
         delivery = batch.delivery
+        self._recorder.record_raw_batch(
+            topic=topic,
+            payload=payload,
+            observed_at=observed_at,
+            monotonic_receive_ns=monotonic_receive_ns,
+            parsed_at=self._clock(),
+            validation_error=None,
+        )
         self._recorder.record_delivery(
             topic=topic, delivery=delivery, observed_at=observed_at
         )
