@@ -262,7 +262,7 @@ def make_split(con: duckdb.DuckDBPyConnection) -> dict:
                   and ts < {final_start}-{p}
             ) dev_markets,
             count(distinct sig_market_id) filter(
-                where timestamp >= {final_start}
+                where ts >= {final_start}
             ) final_markets
         from direct_block_updates
         """
