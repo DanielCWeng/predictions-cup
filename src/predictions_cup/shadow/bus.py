@@ -7,6 +7,7 @@ from collections import deque
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from time import monotonic_ns
+
 from predictions_cup.shadow.contracts import (
     CandidateOutput,
     CanonicalShadowSnapshot,
