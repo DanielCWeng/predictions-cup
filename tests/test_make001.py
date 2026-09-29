@@ -327,6 +327,25 @@ def test_inventory_skews_reservation_price_and_hard_boundary_is_one_sided() -> N
     assert boundary.desired.ask_ticks is not None
 
 
+def test_fractional_inventory_headroom_never_rounds_up_past_hard_boundary() -> None:
+    long = _engine(max_inventory=10.0).quote(
+        _maker_snapshot(signed_inventory=9.5)
+    )
+    short = _engine(max_inventory=10.0).quote(
+        _maker_snapshot(signed_inventory=-9.5)
+    )
+
+    assert long.desired is not None
+    assert long.desired.bid_ticks is None
+    assert long.desired.bid_size == 0
+    assert long.desired.ask_ticks is not None
+
+    assert short.desired is not None
+    assert short.desired.ask_ticks is None
+    assert short.desired.ask_size == 0
+    assert short.desired.bid_ticks is not None
+
+
 def test_quote_ticks_are_passive_valid_and_never_cross() -> None:
     engine = _engine()
     for bid, ask in (
