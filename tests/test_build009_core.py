@@ -19,6 +19,7 @@ from predictions_cup.execution.models import (
     RuntimeOrderIntent,
 )
 from predictions_cup.execution.planner import build_execution_plan
+from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan, ShadowSink
 from predictions_cup.risk.core import (
     RiskContext,
@@ -380,6 +381,50 @@ def test_atomic_relationship_is_risked_as_one_execution_operation() -> None:
     assert decision.operation_kind is OperationKind.ATOMIC_MULTI_LEG
     assert len(decision.intents) == 2
     assert decision.relationship_constraint == "22222222-2222-2222-2222-222222222222"
+
+
+def test_same_timestamp_multi_market_intents_have_distinct_global_identity() -> None:
+    context = RiskContext(
+        mode=ExecutionMode.LIVE,
+        kill_switch=False,
+        limits=_limits(),
+        max_state_age_ns=1_000_000,
+    )
+
+    def proposal(exchange_id: str) -> Opportunity:
+        return Opportunity(
+            family=StrategyFamily.MAKE,
+            strategy_id="make-direct-pm",
+            legs=(
+                CandidateLeg(
+                    exchange_id=exchange_id,
+                    market_id="m1",
+                    tournament_id="t1",
+                    outcome_side=OutcomeSide.YES,
+                    action=OrderAction.BUY,
+                    quantity=1,
+                    limit_price_ticks=100,
+                ),
+            ),
+            gross_edge=0.01,
+            fair_value=0.55,
+            decision_observation_ns=1_000_000,
+        )
+
+    first = evaluate_risk(proposal("36"), _snapshot(), context)
+    second = evaluate_risk(proposal("37"), _snapshot(), context)
+    assert first.approved and second.approved
+    assert first.intents[0].intent_id != second.intents[0].intent_id
+
+    reservations = ExecutionReservationBook()
+    reservations.reserve("op-36", first.intents)
+    reservations.reserve("op-37", second.intents)
+    assert reservations.intent_ids() == frozenset(
+        {
+            first.intents[0].intent_id,
+            second.intents[0].intent_id,
+        }
+    )
 
 
 def test_shadow_and_live_share_identical_post_risk_intents() -> None:
