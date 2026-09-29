@@ -142,7 +142,7 @@ def build_direct_chronology() -> tuple[duckdb.DuckDBPyConnection, dict]:
         f"""
         create temp view direct_rows as
         select
-            cast(e.timestamp as bigint) timestamp,
+            cast(e.timestamp as bigint) ts,
             lower(cast(e.tx_hash as varchar)) tx_hash,
             cast(e.log_index as bigint) log_index,
             cast(e.condition_id as varchar) condition_id,
@@ -151,7 +151,7 @@ def build_direct_chronology() -> tuple[duckdb.DuckDBPyConnection, dict]:
             upper(cast(e.mapping_direction as varchar)) mapping_direction,
             cast(e.p_yes as double) p_yes,
             cast(t.block_number as bigint) block_number,
-            cast(b.block_timestamp as bigint) block_timestamp
+            cast(b.block_timestamp as bigint) block_ts
         from read_parquet('{q(econ)}') e
         join read_parquet('{q(txb)}') t
           on lower(cast(e.tx_hash as varchar))=t.tx_hash
@@ -165,11 +165,11 @@ def build_direct_chronology() -> tuple[duckdb.DuckDBPyConnection, dict]:
             count(distinct condition_id) conditions,
             count(distinct sig_market_id) sig_markets,
             count(distinct block_number) blocks,
-            min(timestamp) min_ts,
-            max(timestamp) max_ts,
+            min(ts) min_ts,
+            max(ts) max_ts,
             count(*) filter(where block_number is null) missing_blocks,
-            count(*) filter(where block_timestamp is null) missing_block_ts,
-            count(*) filter(where timestamp<>block_timestamp) timestamp_mismatch,
+            count(*) filter(where block_ts is null) missing_block_ts,
+            count(*) filter(where ts<>block_ts) timestamp_mismatch,
             count(*) filter(where mapping_class is null) missing_mapping_class,
             count(*) filter(where mapping_direction is null) missing_mapping_direction
         from direct_rows
@@ -195,7 +195,7 @@ def build_direct_chronology() -> tuple[duckdb.DuckDBPyConnection, dict]:
         create temp view direct_block_updates as
         select
             block_number,
-            max(timestamp) timestamp,
+            max(ts) ts,
             sig_market_id,
             any_value(mapping_class) mapping_class,
             count(distinct condition_id) conditions_updated
@@ -230,13 +230,13 @@ def make_split(con: duckdb.DuckDBPyConnection) -> dict:
     con.execute(
         f"""
         create temp view direct_prefinal as
-        select * from direct_block_updates where timestamp < {final_start}
+        select * from direct_block_updates where ts < {final_start}
         """
     )
     p65 = pct_direct_row(con, "direct_prefinal", DEV_ANCHOR_FRAC_PREFINAL)
     dev_start = next_midnight(p65[0])
     mm = con.execute(
-        "select min(timestamp),max(timestamp) from direct_block_updates"
+        "select min(ts),max(ts) from direct_block_updates"
     ).fetchone()
     if not (int(mm[0]) < dev_start < final_start <= int(mm[1])):
         raise RuntimeError(
@@ -248,18 +248,18 @@ def make_split(con: duckdb.DuckDBPyConnection) -> dict:
     counts = con.execute(
         f"""
         select
-            count(*) filter(where timestamp < {dev_start}-{p}) train_rows,
+            count(*) filter(where ts < {dev_start}-{p}) train_rows,
             count(*) filter(
-                where timestamp >= {dev_start}
-                  and timestamp < {final_start}-{p}
+                where ts >= {dev_start}
+                  and ts < {final_start}-{p}
             ) dev_rows,
-            count(*) filter(where timestamp >= {final_start}) final_rows,
+            count(*) filter(where ts >= {final_start}) final_rows,
             count(distinct sig_market_id) filter(
-                where timestamp < {dev_start}-{p}
+                where ts < {dev_start}-{p}
             ) train_markets,
             count(distinct sig_market_id) filter(
-                where timestamp >= {dev_start}
-                  and timestamp < {final_start}-{p}
+                where ts >= {dev_start}
+                  and ts < {final_start}-{p}
             ) dev_markets,
             count(distinct sig_market_id) filter(
                 where timestamp >= {final_start}
@@ -274,12 +274,12 @@ def make_split(con: duckdb.DuckDBPyConnection) -> dict:
         f"""
         select
             mapping_class,
-            count(*) filter(where timestamp < {dev_start}-{p}) train_rows,
+            count(*) filter(where ts < {dev_start}-{p}) train_rows,
             count(*) filter(
-                where timestamp >= {dev_start}
-                  and timestamp < {final_start}-{p}
+                where ts >= {dev_start}
+                  and ts < {final_start}-{p}
             ) dev_rows,
-            count(*) filter(where timestamp >= {final_start}) final_rows
+            count(*) filter(where ts >= {final_start}) final_rows
         from direct_block_updates
         group by 1 order by 1
         """
