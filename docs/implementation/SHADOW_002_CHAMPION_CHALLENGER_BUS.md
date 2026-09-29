@@ -125,7 +125,7 @@ import the active R3 research branch.
 
 ## Fan-out and failure isolation
 
-Every candidate has its own bounded queue and worker. `publish()` freezes no new
+Every candidate has its own bounded queue and worker. The production default is 512 pending states, which retains a full 237-market Cup sweep with headroom. `publish()` freezes no new
 state after the boundary; every eligible candidate receives the same
 `CanonicalShadowSnapshot` object/snapshot ID.
 
