@@ -645,7 +645,7 @@ def parquet_parts(
                     )
 
             def optional_min_max(
-                column: str, frame: pl.DataFrame = chunk
+                column: str, frame=chunk
             ) -> tuple[int | None, int | None]:
                 if column not in frame.columns:
                     return None, None
