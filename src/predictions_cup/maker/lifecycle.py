@@ -296,6 +296,35 @@ class QuoteRegistry:
             last_action_ns=observed_monotonic_ns,
         )
 
+    def mark_lifecycle(
+        self,
+        *,
+        exchange_id: str,
+        side: QuoteSide,
+        lifecycle_state: LifecycleState,
+        observed_monotonic_ns: int,
+    ) -> None:
+        current = self.state(exchange_id)
+        active = current.bid if side is QuoteSide.BID else current.ask
+        if active is None:
+            return
+        quote = ActiveQuote(
+            side=active.side,
+            price_ticks=active.price_ticks,
+            size=active.size,
+            remaining_size=active.remaining_size,
+            logical_operation_id=active.logical_operation_id,
+            exchange_order_id=active.exchange_order_id,
+            lifecycle_state=lifecycle_state,
+            observed_monotonic_ns=observed_monotonic_ns,
+        )
+        self._states[exchange_id] = self._replace_side(
+            current,
+            side=side,
+            quote=quote,
+            last_action_ns=observed_monotonic_ns,
+        )
+
     def clear_side(
         self,
         *,
