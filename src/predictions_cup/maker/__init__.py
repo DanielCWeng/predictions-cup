@@ -24,6 +24,7 @@ from predictions_cup.maker.coordinator import (
 )
 from predictions_cup.maker.direct_pm import DirectPolymarketFairValueProvider
 from predictions_cup.maker.engine import MakerConfig, MakerEngine
+from predictions_cup.maker.factory import MakerRuntimeComponents, build_maker_components
 from predictions_cup.maker.lifecycle import (
     ActiveQuote,
     MakerQuoteState,
@@ -33,6 +34,7 @@ from predictions_cup.maker.lifecycle import (
     QuoteLifecycleManager,
     QuoteRegistry,
 )
+from predictions_cup.maker.safety import MakerKillSwitch
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.maker.policies import (
     AvellanedaStoikovInventoryModel,
@@ -62,7 +64,9 @@ __all__ = [
     "MakerDecision",
     "MakerEngine",
     "MakerMarketSnapshot",
+    "MakerKillSwitch",
     "MakerQuoteState",
+    "MakerRuntimeComponents",
     "MakerSourceBridge",
     "MakerStateChange",
     "MakerTrace",
@@ -77,4 +81,5 @@ __all__ = [
     "QuoteSide",
     "ShadowMakerExecutionAdapter",
     "ToxicityEstimate",
+    "build_maker_components",
 ]
