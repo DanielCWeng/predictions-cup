@@ -146,10 +146,9 @@ Expected behavior:
 - Polymarket disconnect -> PM feed trust false -> global reevaluation -> maker quotes cancel/suspend.
 - SIG disconnect/reconnect -> relevant SIG state becomes untrusted/reconciles -> global reevaluation.
 - account revision gap / fill ambiguity / reconnect -> account trust revoked -> maker cancels/suspends until authoritative REST recovery.
-- PM feed disconnect/liveness failure -> feed trust false -> global reevaluation -> cancel/suspend. A quiet healthy PM socket does not stale solely because the book did not change.
-- stale SIG BBO -> cancel at its real REST-refresh expiry.
-- trusted-depth expiry -> cancel when depth is required.
-- account socket/reconciliation trust loss -> cancel/suspend. A quiet trusted account channel does not stale solely because inventory did not mutate.
+- stale PM FV -> cancel/suspend at the configured expiry even if no new PM message arrives.
+- stale SIG BBO -> cancel at its expiry.
+- stale account/inventory -> cancel at its expiry.
 - market settled/not open -> cancel.
 - plugin exception/NaN/invalid probability -> suspend.
 - critical state task failure -> process kill latch -> best-effort global maker cancel -> process failure.
@@ -224,10 +223,10 @@ python scripts/benchmark_make001.py
 
 Then verify SHADOW on the target host:
 
-- PM feed connected, fresh CLOB seed complete, and WebSocket receive/PONG liveness healthy;
+- PM feed connected and source timestamps advancing as expected;
 - SIG market feed connected;
-- account state trusted only after subscribed-socket authoritative reconciliation;
-- SIG BBO/depth deadline cancellation works without a feed event;
+- account state trusted with real observation ages;
+- nearest-deadline stale cancellation works without a feed event;
 - no unexpected stale-source churn;
 - full canonical maker universe available;
 - quote materiality suppresses insignificant replace churn;
