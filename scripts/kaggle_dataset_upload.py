@@ -176,6 +176,17 @@ def existing_is_identical(
         return False, {"inspection_error": str(exc)}
 
 
+def parse_cli_csv(text: str, header_prefix: str) -> list[dict[str, str]]:
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines) if line.startswith(header_prefix)), None)
+    if start is None:
+        return []
+    rows = []
+    for row in csv.DictReader(lines[start:]):
+        rows.append({str(k): ("" if v is None else str(v)) for k, v in row.items() if k is not None})
+    return rows
+
+
 def owned_dataset_match(dataset_ref: str) -> tuple[bool, dict[str, Any]]:
     owner, slug = dataset_ref.split("/", 1)
     result = run(
@@ -187,7 +198,7 @@ def owned_dataset_match(dataset_ref: str) -> tuple[bool, dict[str, Any]]:
             "Could not list owned Kaggle datasets safely: "
             + ((result.stderr or result.stdout or "").strip())
         )
-    rows = list(csv.DictReader((result.stdout or "").splitlines()))
+    rows = parse_cli_csv(result.stdout or "", "ref,")
     refs = {
         str(row.get("ref") or row.get("Ref") or "").strip(): row
         for row in rows
@@ -210,11 +221,11 @@ def wait_dataset_files(dataset_ref: str, timeout_seconds: int = 600) -> dict[str
         )
         last = ((result.stdout or "") + (result.stderr or "")).strip()
         if result.returncode == 0:
-            rows = list(csv.DictReader((result.stdout or "").splitlines()))
+            rows = parse_cli_csv(result.stdout or "", "name,")
             if rows:
                 return {
                     "files_api_rows_first_page": len(rows),
-                    "files_api_first_page": rows,
+                    "files_api_first_page_names": [row.get("name", "") for row in rows[:25]],
                 }
         lowered = last.lower()
         if result.returncode != 0 and any(
