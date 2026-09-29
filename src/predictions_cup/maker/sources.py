@@ -200,14 +200,19 @@ class MakerSourceBridge:
                 observed_monotonic_ns=0,
             )
 
+        portfolio = self._canonical_portfolio()
         account_observed = (
             self._account.last_accepted_observed_at
             or self._account.last_authoritative_observed_at
         )
-        account_observed_ns = self._to_monotonic(
-            account_observed,
-            wall_now=wall_now,
-            monotonic_now_ns=monotonic_now_ns,
+        account_observed_ns = (
+            monotonic_now_ns
+            if portfolio.account_trusted
+            else self._to_monotonic(
+                account_observed,
+                wall_now=wall_now,
+                monotonic_now_ns=monotonic_now_ns,
+            )
         )
 
         external_quotes: dict[str, ExternalQuoteState] = {}
@@ -223,10 +228,14 @@ class MakerSourceBridge:
                 best_ask=(
                     None if book.best_ask is None else float(book.best_ask)
                 ),
-                observed_monotonic_ns=self._to_monotonic(
-                    book.observed_at,
-                    wall_now=wall_now,
-                    monotonic_now_ns=monotonic_now_ns,
+                observed_monotonic_ns=(
+                    monotonic_now_ns
+                    if polymarket_feed_trusted
+                    else self._to_monotonic(
+                        book.observed_at,
+                        wall_now=wall_now,
+                        monotonic_now_ns=monotonic_now_ns,
+                    )
                 ),
                 trusted=polymarket_feed_trusted,
                 source_version=self._pm_source_version,
@@ -235,7 +244,7 @@ class MakerSourceBridge:
         runtime = RuntimeSnapshot(
             markets=(runtime_market,),
             books=(runtime_book,),
-            portfolio=self._canonical_portfolio(),
+            portfolio=portfolio,
             observation_monotonic_ns=monotonic_now_ns,
         )
         sig_connected = self._sig.health.connected
