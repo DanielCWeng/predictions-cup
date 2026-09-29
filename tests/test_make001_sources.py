@@ -15,7 +15,7 @@ from predictions_cup.mapping.models import (
     PolymarketContractIdentity,
 )
 from predictions_cup.models import OrderBook, OrderBookLevel
-from predictions_cup.runtime.models import RuntimePortfolio, RuntimePosition
+from predictions_cup.runtime.models import RuntimeOrderState, RuntimePortfolio, RuntimePosition
 from predictions_cup.sig.realtime_state import (
     DepthState,
     ExchangeRuntimeState,
@@ -373,4 +373,68 @@ def test_bridge_revokes_sig_bbo_and_depth_trust_when_realtime_disconnects() -> N
     assert snapshot is not None
     assert snapshot.sig_bbo_trusted is False
     assert snapshot.sig_depth_trusted is False
+
+def test_bridge_restores_canonical_market_identity_for_open_order_risk() -> None:
+    wall_now = datetime(2026, 9, 29, 14, 0, tzinfo=UTC)
+    sig = _SigState(
+        tournament_id="t1",
+        states={
+            "36": ExchangeRuntimeState(
+                exchange_id="36",
+                market_id="m1",
+                tournament_id="t1",
+                scalar_best_bid=Decimal("0.49"),
+                scalar_best_ask=Decimal("0.51"),
+                last_scalar_observed_at=wall_now,
+            )
+        },
+        market_states={
+            "m1": MarketRuntimeState(
+                market_id="m1",
+                title="fixture",
+                status="open",
+                settled_with=None,
+                last_rest_observed_at=wall_now,
+            )
+        },
+        health=RuntimeHealth(connected=True),
+    )
+    account = _AccountState(
+        tournament_id="t1",
+        last_accepted_observed_at=wall_now,
+        portfolio=RuntimePortfolio(
+            orders=(
+                RuntimeOrderState(
+                    logical_intent_id="sig-order-91",
+                    exchange_id="36",
+                    market_id="UNKNOWN",
+                    tournament_id="t1",
+                    reserved_exposure=4.0,
+                    open=True,
+                    uncertain=False,
+                ),
+            ),
+            account_trusted=True,
+        ),
+    )
+    bridge = MakerSourceBridge(
+        mapping=_mapping(),
+        sig_state=sig,
+        account_state=account,
+        polymarket_books=_PmBooks({"yes-token": _pm_snapshot(wall_now)}),
+    )
+
+    snapshot = bridge.build(
+        "36",
+        wall_now=wall_now,
+        monotonic_now_ns=1_000_000,
+        polymarket_feed_trusted=True,
+    )
+
+    assert snapshot is not None
+    assert len(snapshot.runtime.portfolio.orders) == 1
+    order = snapshot.runtime.portfolio.orders[0]
+    assert order.exchange_id == "36"
+    assert order.market_id == "m1"
+    assert order.reserved_exposure == 4.0
 
