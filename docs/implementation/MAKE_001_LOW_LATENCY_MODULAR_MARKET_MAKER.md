@@ -75,10 +75,9 @@ External FV requires:
 - a mapped token book;
 - trusted source state;
 - both bid and ask;
-- finite probabilities with `0 <= bid <= ask <= 1`;
-- source age inside the configured FV freshness limit.
+- finite probabilities with `0 <= bid <= ask <= 1`.
 
-Any failure returns an unusable `FairValueResult`; the maker then suspends/cancels rather than carrying the last value forward silently.
+The provider preserves the source observation timestamp. It does **not** relabel an old-but-trusted book as fresh. The central eligibility policy is the single authority for FV freshness and returns `fv_stale` when the actual observation age reaches the configured limit. Trust and freshness are deliberately separate.
 
 The canonical mapping currently contains 237 SIG exchange records. Six are NO_TRADE, leaving 231 directly maker-eligible records under accepted mapping semantics. All 87 DERIVED records in the current artifact use the explicit partition/union language required by the baseline provider.
 
@@ -140,7 +139,9 @@ MAKE tracks distinct observation times/trust for:
 - predictive plugin;
 - toxicity plugin.
 
-The source bridge converts wall-clock feed observations into the current monotonic clock domain at snapshot construction. Quote mathematics uses only monotonic age comparisons.
+The source bridge converts each source's **actual** wall-clock observation into the current monotonic clock domain at snapshot construction. Trusted/connected state never resets the observation time. Future/clock-anomalous observations map to a negative monotonic age and fail closed.
+
+The eligibility policy computes the nearest exact freshness expiry for every live quote. `MakerRuntimeLoop` stores one deadline per quoted exchange and waits on the single nearest deadline alongside normal feed notifications. When a deadline expires, only the affected exchange is enqueued for reevaluation. This means stale expiry itself cancels resting exposure even if no new feed event arrives, without task-per-market polling or a fixed high-frequency global sweep.
 
 Default fail-closed actions:
 
@@ -180,7 +181,7 @@ Partial fills remain active/resting; subsequent account reconciliation updates i
 
 MAKE inherits BUILD-009 semantics without modification:
 
-- fixed logical operation identity;
+- fixed logical operation identity, namespaced by runtime session and exchange so restart/same-timestamp opportunities cannot collide;
 - deterministic idempotency;
 - exact payload identity;
 - journal-before-write;
@@ -247,9 +248,10 @@ LIVE requires every existing BUILD-009 interlock **plus** the service's explicit
 - PM token event -> pre-indexed affected SIG exchanges only;
 - account/inventory update -> global reevaluation;
 - health/trust transition -> global reevaluation;
+- freshness deadline -> affected exchange only;
 - kill switch -> global reevaluation.
 
-Repeated updates before the worker runs collapse into one bounded set. There is no task per market and no full-universe recomputation for ordinary single-market source changes.
+Repeated updates before the worker runs collapse into one bounded set. There is no task per market and no fixed-cadence global freshness poll. The worker sleeps until either a real event, stop request or the nearest required freshness deadline.
 
 ## Observability
 
@@ -306,7 +308,7 @@ MAKE relies intentionally on BUILD-009 regression coverage for transport/recover
 - rate governor/cooldown;
 - conservative shadow depth.
 
-MAKE-specific tests add fair-value mapping semantics, stale/trust behavior, inventory skew/boundaries, plugin failure, quote materiality, two-phase replacement, restart quote reconstruction, coalescing runtime behavior and SHADOW/LIVE adapter state.
+MAKE-specific tests add fair-value mapping semantics, actual source-age preservation, exact-deadline stale cancellation without a source event, inventory skew/boundaries, plugin failure, quote materiality, two-phase replacement, placement/cancel uncertainty, restart quote reconstruction, coalescing runtime behavior, source-loss cancellation and SHADOW/LIVE adapter state.
 
 ## Performance acceptance
 
