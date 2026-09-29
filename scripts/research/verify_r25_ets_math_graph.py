@@ -8,7 +8,6 @@ import json
 import pathlib
 import typing
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 GRAPH = ROOT / "data/research/r25_ets_math_graph"
 SOURCE = ROOT / "data/research/r25_ets_v2_market_review"
