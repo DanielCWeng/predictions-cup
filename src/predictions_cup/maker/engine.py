@@ -286,18 +286,21 @@ class MakerEngine:
         if book is None:
             return None, None
 
-        bid = max(1, min(199, math.floor((reservation - half_spread) / _TICK)))
-        ask = max(1, min(199, math.ceil((reservation + half_spread) / _TICK)))
+        raw_bid = math.floor((reservation - half_spread) / _TICK)
+        raw_ask = math.ceil((reservation + half_spread) / _TICK)
+        bid_value = raw_bid if 1 <= raw_bid <= 199 else None
+        ask_value = raw_ask if 1 <= raw_ask <= 199 else None
 
-        if book.asks:
+        if bid_value is not None and book.asks:
             best_ask = min(level.price_ticks for level in book.asks)
-            bid = min(bid, best_ask - 1)
-        if book.bids:
+            bid_value = min(bid_value, best_ask - 1)
+            if bid_value < 1:
+                bid_value = None
+        if ask_value is not None and book.bids:
             best_bid = max(level.price_ticks for level in book.bids)
-            ask = max(ask, best_bid + 1)
-
-        bid_value = bid if 1 <= bid <= 199 else None
-        ask_value = ask if 1 <= ask <= 199 else None
+            ask_value = max(ask_value, best_bid + 1)
+            if ask_value > 199:
+                ask_value = None
         if (
             bid_value is not None
             and ask_value is not None
