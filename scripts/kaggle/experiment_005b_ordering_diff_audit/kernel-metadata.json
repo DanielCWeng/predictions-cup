@@ -1,0 +1,25 @@
+{
+  "id": "polyleviathan/005b-ordering-falsification-diff-audit",
+  "title": "005B Ordering Falsification Diff Audit",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [
+    "polyleviathan/005b-us-merge",
+    "polyleviathan/005b-historical-predictive-atlas-features-can-2025",
+    "polyleviathan/005b-historical-predictive-atlas-features-col-2026",
+    "polyleviathan/005b-historical-predictive-atlas-features-hun-2026",
+    "polyleviathan/005b-historical-predictive-atlas-features-per-2026",
+    "polyleviathan/005b-ordering-falsification-us-merge",
+    "polyleviathan/005b-ordering-falsification-features-can-2025",
+    "polyleviathan/005b-ordering-falsification-features-col-2026",
+    "polyleviathan/005b-ordering-falsification-features-hun-2026",
+    "polyleviathan/005b-ordering-falsification-features-per-2026"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B-ORDERING-FALSIFICATION",
+  "classification": "POST_HOC_FALSIFICATION_ONLY",
+  "check": "corrected_stage2_source_equivalence",
+  "parent_ref": "experiment/005b-historical-predictive-atlas",
+  "corrected_ref": "experiment/005b-ordering-falsification",
+  "permitted_semantic_change": "observable ordering only: timestamp,tx_hash,log_index -> timestamp,log_index,tx_hash, later accepted only after actual block-number gate proves equivalence to block_number,log_index",
+  "results": {
+    "non_us_full_builds": {
+      "CAN_2025": true,
+      "COL_2026": true,
+      "HUN_2026": true,
+      "PER_2026": true,
+      "normalization": [
+        "005b_ordering_falsification -> 005b_historical_predictive_atlas",
+        "timestamp, log_index, tx_hash, condition_id -> timestamp, tx_hash, log_index, condition_id",
+        "log_index, tx_hash, condition_id -> tx_hash, log_index, condition_id",
+        "log_index, tx_hash -> tx_hash, log_index"
+      ]
+    },
+    "US_2024_base_price_helpers": true,
+    "US_2024_continuations": {
+      "activity": true,
+      "family_context": true,
+      "event_context": true,
+      "targets": true,
+      "merge": true,
+      "normalization": [
+        "output namespace only"
+      ]
+    }
+  },
+  "frozen_science_drift_detected": false
+}

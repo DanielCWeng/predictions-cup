@@ -1,0 +1,1006 @@
+{
+  "experiment_id": "EXPERIMENT-005B",
+  "families": [
+    {
+      "eligible_groups": 6821998,
+      "family": "US_2024",
+      "groups_above_yes_tolerance": {
+        "0.0001": 1366,
+        "0.001": 0,
+        "0.01": 0,
+        "1e-05": 14058,
+        "1e-06": 42546,
+        "1e-07": 105018,
+        "1e-08": 113708
+      },
+      "top_failure_patterns": [
+        {
+          "active_outcome": "YES",
+          "group_count": 16773,
+          "median_yes_rel_error": 6.499201041158619e-07,
+          "passive_count": 2,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 15593,
+          "median_yes_rel_error": 5.315738133741743e-07,
+          "passive_count": 2,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 11336,
+          "median_yes_rel_error": 7.917585488392117e-07,
+          "passive_count": 2,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 8144,
+          "median_yes_rel_error": 6.658701976471538e-07,
+          "passive_count": 2,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 8072,
+          "median_yes_rel_error": 6.588142400897102e-07,
+          "passive_count": 3,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 4980,
+          "median_yes_rel_error": 6.924521706489582e-07,
+          "passive_count": 4,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 4925,
+          "median_yes_rel_error": 5.394634607986249e-07,
+          "passive_count": 2,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 4735,
+          "median_yes_rel_error": 9.576481705881928e-07,
+          "passive_count": 3,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 3351,
+          "median_yes_rel_error": 6.409041578526413e-07,
+          "passive_count": 3,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 3322,
+          "median_yes_rel_error": 7.034107144805358e-07,
+          "passive_count": 5,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 2720,
+          "median_yes_rel_error": 6.199125095698367e-07,
+          "passive_count": 2,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 2344,
+          "median_yes_rel_error": 6.897827377107107e-07,
+          "passive_count": 6,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 2048,
+          "median_yes_rel_error": 1.0019999999721918e-06,
+          "passive_count": 1,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1964,
+          "median_yes_rel_error": 1.1324917426201006e-06,
+          "passive_count": 4,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 1726,
+          "median_yes_rel_error": 6.013867899625821e-07,
+          "passive_count": 3,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1716,
+          "median_yes_rel_error": 6.991012514546016e-07,
+          "passive_count": 7,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 1431,
+          "median_yes_rel_error": 5.341162447465089e-07,
+          "passive_count": 4,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1311,
+          "median_yes_rel_error": 6.476746932959713e-07,
+          "passive_count": 3,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1209,
+          "median_yes_rel_error": 6.871136986388552e-07,
+          "passive_count": 8,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1008,
+          "median_yes_rel_error": 1.130396018886135e-06,
+          "passive_count": 5,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 964,
+          "median_yes_rel_error": 6.894379058948993e-07,
+          "passive_count": 9,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 749,
+          "median_yes_rel_error": 5.342483939623212e-07,
+          "passive_count": 5,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 710,
+          "median_yes_rel_error": 6.809806878339268e-07,
+          "passive_count": 10,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 601,
+          "median_yes_rel_error": 6.868416172555757e-07,
+          "passive_count": 11,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 598,
+          "median_yes_rel_error": 5.807896429691951e-07,
+          "passive_count": 4,
+          "passive_outcomes": "YES"
+        }
+      ],
+      "value_rel_error_max": 0.9990467111534796,
+      "value_rel_error_p99": 0.9989991040118325,
+      "yes_rel_error_quantiles": {
+        "max": 0.0004961266191086539,
+        "p50": 0.0,
+        "p90": 2.1662888285368903e-16,
+        "p95": 6.661338147750939e-16,
+        "p99": 5.133529128160288e-07,
+        "p999": 2.7100007435487723e-05
+      }
+    },
+    {
+      "eligible_groups": 340791,
+      "family": "CAN_2025",
+      "groups_above_yes_tolerance": {
+        "0.0001": 250,
+        "0.001": 0,
+        "0.01": 0,
+        "1e-05": 3053,
+        "1e-06": 13391,
+        "1e-07": 25453,
+        "1e-08": 27101
+      },
+      "top_failure_patterns": [
+        {
+          "active_outcome": "YES",
+          "group_count": 2629,
+          "median_yes_rel_error": 8.861901444292612e-07,
+          "passive_count": 2,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 2311,
+          "median_yes_rel_error": 9.999999999763531e-07,
+          "passive_count": 3,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1965,
+          "median_yes_rel_error": 1.0377235364441162e-06,
+          "passive_count": 2,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1820,
+          "median_yes_rel_error": 1.0750235065983058e-06,
+          "passive_count": 2,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1755,
+          "median_yes_rel_error": 1.1727078893465313e-06,
+          "passive_count": 4,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 1482,
+          "median_yes_rel_error": 8.794688745581974e-07,
+          "passive_count": 2,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 1386,
+          "median_yes_rel_error": 8.518809037105932e-07,
+          "passive_count": 2,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1218,
+          "median_yes_rel_error": 1.1741727918704219e-06,
+          "passive_count": 5,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 939,
+          "median_yes_rel_error": 1.0996394273344715e-06,
+          "passive_count": 3,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 935,
+          "median_yes_rel_error": 6.907365109609751e-07,
+          "passive_count": 3,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 905,
+          "median_yes_rel_error": 1.1833096845092059e-06,
+          "passive_count": 6,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 686,
+          "median_yes_rel_error": 1.0952694035492117e-06,
+          "passive_count": 7,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 646,
+          "median_yes_rel_error": 1.7548887466556429e-06,
+          "passive_count": 3,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 640,
+          "median_yes_rel_error": 1.0695830178744413e-06,
+          "passive_count": 2,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 629,
+          "median_yes_rel_error": 6.635054115138763e-07,
+          "passive_count": 4,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 541,
+          "median_yes_rel_error": 1.0416234730125586e-06,
+          "passive_count": 8,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 498,
+          "median_yes_rel_error": 8.620790049870685e-07,
+          "passive_count": 4,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 456,
+          "median_yes_rel_error": 7.227415358595183e-07,
+          "passive_count": 3,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 433,
+          "median_yes_rel_error": 1.0285138759076888e-06,
+          "passive_count": 9,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 401,
+          "median_yes_rel_error": 6.557377049025266e-07,
+          "passive_count": 5,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 295,
+          "median_yes_rel_error": 1.1701170115183024e-06,
+          "passive_count": 5,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 292,
+          "median_yes_rel_error": 1.050050343660263e-06,
+          "passive_count": 10,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 279,
+          "median_yes_rel_error": 1.233749316869504e-06,
+          "passive_count": 4,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 275,
+          "median_yes_rel_error": 5.988783444054961e-07,
+          "passive_count": 6,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 232,
+          "median_yes_rel_error": 1.1263190800192443e-06,
+          "passive_count": 11,
+          "passive_outcomes": "NO,YES"
+        }
+      ],
+      "value_rel_error_max": 0.9990467111534796,
+      "value_rel_error_p99": 0.9989999836062886,
+      "yes_rel_error_quantiles": {
+        "max": 0.00048661800486634254,
+        "p50": 0.0,
+        "p90": 8.881784197001252e-16,
+        "p95": 5.528846671495856e-07,
+        "p99": 8.908671465802482e-06,
+        "p999": 7.999494440379834e-05
+      }
+    },
+    {
+      "eligible_groups": 279775,
+      "family": "COL_2026",
+      "groups_above_yes_tolerance": {
+        "0.0001": 254,
+        "0.001": 0,
+        "0.01": 0,
+        "1e-05": 2991,
+        "1e-06": 9759,
+        "1e-07": 16357,
+        "1e-08": 17238
+      },
+      "top_failure_patterns": [
+        {
+          "active_outcome": "NO",
+          "group_count": 1497,
+          "median_yes_rel_error": 3.109999999306723e-06,
+          "passive_count": 2,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1234,
+          "median_yes_rel_error": 1.1132994040606746e-06,
+          "passive_count": 2,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1218,
+          "median_yes_rel_error": 1.2510863574795559e-06,
+          "passive_count": 3,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1178,
+          "median_yes_rel_error": 3.000000000030756e-06,
+          "passive_count": 2,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 922,
+          "median_yes_rel_error": 1.4558753664444027e-06,
+          "passive_count": 2,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 911,
+          "median_yes_rel_error": 1.2719693235354496e-06,
+          "passive_count": 4,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 823,
+          "median_yes_rel_error": 8.019766901756185e-07,
+          "passive_count": 2,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 763,
+          "median_yes_rel_error": 1.4879875810398448e-06,
+          "passive_count": 3,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 747,
+          "median_yes_rel_error": 1.1895181462746714e-06,
+          "passive_count": 5,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 542,
+          "median_yes_rel_error": 1.0719748597443834e-06,
+          "passive_count": 6,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 497,
+          "median_yes_rel_error": 2.6899999996388146e-06,
+          "passive_count": 3,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 486,
+          "median_yes_rel_error": 4.025693901459675e-06,
+          "passive_count": 3,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 450,
+          "median_yes_rel_error": 1.2710605174548438e-06,
+          "passive_count": 4,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 386,
+          "median_yes_rel_error": 9.935698749564267e-07,
+          "passive_count": 2,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 383,
+          "median_yes_rel_error": 1.0401748558555733e-06,
+          "passive_count": 7,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 354,
+          "median_yes_rel_error": 9.128507331343115e-07,
+          "passive_count": 3,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 328,
+          "median_yes_rel_error": 8.289937568151903e-07,
+          "passive_count": 5,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 308,
+          "median_yes_rel_error": 1.0837164722643526e-06,
+          "passive_count": 8,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 260,
+          "median_yes_rel_error": 1.2721693278203642e-06,
+          "passive_count": 9,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 248,
+          "median_yes_rel_error": 5.737136300612448e-06,
+          "passive_count": 4,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 207,
+          "median_yes_rel_error": 6.993865983710183e-07,
+          "passive_count": 4,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 204,
+          "median_yes_rel_error": 8.60347794799248e-07,
+          "passive_count": 6,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 200,
+          "median_yes_rel_error": 1.2118319504751447e-06,
+          "passive_count": 10,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 184,
+          "median_yes_rel_error": 1.6807179051926908e-06,
+          "passive_count": 4,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 165,
+          "median_yes_rel_error": 1.1218312677073261e-06,
+          "passive_count": 11,
+          "passive_outcomes": "NO,YES"
+        }
+      ],
+      "value_rel_error_max": 0.9990467111534796,
+      "value_rel_error_p99": 0.9990000000000001,
+      "yes_rel_error_quantiles": {
+        "max": 0.00045042652769964437,
+        "p50": 8.673617379884035e-18,
+        "p90": 6.661338147750939e-16,
+        "p95": 3.552538753662725e-07,
+        "p99": 1.0781465009659705e-05,
+        "p999": 9.383055014533555e-05
+      }
+    },
+    {
+      "eligible_groups": 333329,
+      "family": "HUN_2026",
+      "groups_above_yes_tolerance": {
+        "0.0001": 302,
+        "0.001": 0,
+        "0.01": 0,
+        "1e-05": 3198,
+        "1e-06": 9727,
+        "1e-07": 17856,
+        "1e-08": 18943
+      },
+      "top_failure_patterns": [
+        {
+          "active_outcome": "YES",
+          "group_count": 1448,
+          "median_yes_rel_error": 1.2233038788881395e-06,
+          "passive_count": 3,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1382,
+          "median_yes_rel_error": 1.0125259292622482e-06,
+          "passive_count": 2,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1086,
+          "median_yes_rel_error": 1.3222589613857622e-06,
+          "passive_count": 2,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1071,
+          "median_yes_rel_error": 1.3303333333899067e-06,
+          "passive_count": 4,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 1023,
+          "median_yes_rel_error": 1.4924768259612484e-06,
+          "passive_count": 2,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 989,
+          "median_yes_rel_error": 1.3950053963857922e-06,
+          "passive_count": 2,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 966,
+          "median_yes_rel_error": 7.401396298168966e-07,
+          "passive_count": 2,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 890,
+          "median_yes_rel_error": 1.967850480563714e-06,
+          "passive_count": 3,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 843,
+          "median_yes_rel_error": 1.0423511640889588e-06,
+          "passive_count": 5,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 637,
+          "median_yes_rel_error": 1.0845023019149664e-06,
+          "passive_count": 6,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 632,
+          "median_yes_rel_error": 1.4055327376337395e-06,
+          "passive_count": 4,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 531,
+          "median_yes_rel_error": 6.947115091930046e-07,
+          "passive_count": 3,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 501,
+          "median_yes_rel_error": 1.1882809004871124e-06,
+          "passive_count": 2,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 483,
+          "median_yes_rel_error": 2.2193476839629557e-06,
+          "passive_count": 3,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 448,
+          "median_yes_rel_error": 1.3244465909908737e-06,
+          "passive_count": 7,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 410,
+          "median_yes_rel_error": 1.361838206539468e-06,
+          "passive_count": 3,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 372,
+          "median_yes_rel_error": 1.204201433157072e-06,
+          "passive_count": 8,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 363,
+          "median_yes_rel_error": 1.2043891255685886e-06,
+          "passive_count": 5,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 300,
+          "median_yes_rel_error": 1.0527654198780207e-06,
+          "passive_count": 9,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 284,
+          "median_yes_rel_error": 6.737452951291133e-07,
+          "passive_count": 4,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 260,
+          "median_yes_rel_error": 7.318285310222261e-07,
+          "passive_count": 6,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 219,
+          "median_yes_rel_error": 1.1898349811452161e-06,
+          "passive_count": 10,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 212,
+          "median_yes_rel_error": 1.0126026526789547e-06,
+          "passive_count": 4,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 191,
+          "median_yes_rel_error": 1.438846850809589e-06,
+          "passive_count": 3,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 171,
+          "median_yes_rel_error": 1.3288312532599752e-06,
+          "passive_count": 4,
+          "passive_outcomes": "YES"
+        }
+      ],
+      "value_rel_error_max": 0.9990467111534796,
+      "value_rel_error_p99": 0.999,
+      "yes_rel_error_quantiles": {
+        "max": 0.00047087500000009275,
+        "p50": 0.0,
+        "p90": 7.930164461608254e-16,
+        "p95": 1.959243833291842e-07,
+        "p99": 9.528114293664638e-06,
+        "p999": 9.168572908454846e-05
+      }
+    },
+    {
+      "eligible_groups": 460795,
+      "family": "PER_2026",
+      "groups_above_yes_tolerance": {
+        "0.0001": 345,
+        "0.001": 0,
+        "0.01": 0,
+        "1e-05": 6350,
+        "1e-06": 27780,
+        "1e-07": 44146,
+        "1e-08": 46097
+      },
+      "top_failure_patterns": [
+        {
+          "active_outcome": "YES",
+          "group_count": 4335,
+          "median_yes_rel_error": 1.4127208923643023e-06,
+          "passive_count": 3,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 4024,
+          "median_yes_rel_error": 1.384057669222732e-06,
+          "passive_count": 2,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 3599,
+          "median_yes_rel_error": 1.9911997705133057e-06,
+          "passive_count": 2,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 3218,
+          "median_yes_rel_error": 1.443909151757398e-06,
+          "passive_count": 4,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 2620,
+          "median_yes_rel_error": 2.088170988339524e-06,
+          "passive_count": 2,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 2344,
+          "median_yes_rel_error": 1.4422868914998707e-06,
+          "passive_count": 5,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 2266,
+          "median_yes_rel_error": 1.0197027657027705e-06,
+          "passive_count": 2,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 1962,
+          "median_yes_rel_error": 1.299582243223928e-06,
+          "passive_count": 2,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1828,
+          "median_yes_rel_error": 2.4412239565189497e-06,
+          "passive_count": 3,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1682,
+          "median_yes_rel_error": 1.5572745989150847e-06,
+          "passive_count": 6,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 1576,
+          "median_yes_rel_error": 1.4297761891100757e-06,
+          "passive_count": 3,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1281,
+          "median_yes_rel_error": 1.6058449977193254e-06,
+          "passive_count": 7,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 1013,
+          "median_yes_rel_error": 9.658233761536082e-07,
+          "passive_count": 3,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 976,
+          "median_yes_rel_error": 1.2749669400131324e-06,
+          "passive_count": 4,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 945,
+          "median_yes_rel_error": 2.604205895588368e-06,
+          "passive_count": 4,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 939,
+          "median_yes_rel_error": 1.939772227484419e-06,
+          "passive_count": 3,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 905,
+          "median_yes_rel_error": 1.625396960284812e-06,
+          "passive_count": 8,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 753,
+          "median_yes_rel_error": 1.056123657623494e-06,
+          "passive_count": 2,
+          "passive_outcomes": "NO"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 751,
+          "median_yes_rel_error": 1.4536489491509073e-06,
+          "passive_count": 9,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 653,
+          "median_yes_rel_error": 1.1071625708399184e-06,
+          "passive_count": 5,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 554,
+          "median_yes_rel_error": 1.575722962985782e-06,
+          "passive_count": 10,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 464,
+          "median_yes_rel_error": 3.4779333034664864e-06,
+          "passive_count": 5,
+          "passive_outcomes": "YES"
+        },
+        {
+          "active_outcome": "NO",
+          "group_count": 438,
+          "median_yes_rel_error": 1.08533531983222e-06,
+          "passive_count": 6,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 432,
+          "median_yes_rel_error": 1.4198052694550158e-06,
+          "passive_count": 11,
+          "passive_outcomes": "NO,YES"
+        },
+        {
+          "active_outcome": "YES",
+          "group_count": 418,
+          "median_yes_rel_error": 1.001216430679222e-06,
+          "passive_count": 4,
+          "passive_outcomes": "NO"
+        }
+      ],
+      "value_rel_error_max": 0.9990467111534796,
+      "value_rel_error_p99": 0.9989994517791846,
+      "yes_rel_error_quantiles": {
+        "max": 0.0004960317460316914,
+        "p50": 0.0,
+        "p90": 1.1381996108533176e-08,
+        "p95": 1.4592352667854771e-06,
+        "p99": 1.374606972785845e-05,
+        "p999": 8.486935248535269e-05
+      }
+    }
+  ],
+  "purpose": "schema-only reconstruction audit; no predictor/target outcomes inspected"
+}

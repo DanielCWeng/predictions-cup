@@ -1,0 +1,23 @@
+{
+  "id": "polyleviathan/pred006-shortlist-freeze",
+  "title": "PRED006 Shortlist Freeze",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [
+    "polyleviathan/pred006-phase0-audit-and-split-freeze",
+    "polyleviathan/pred006-search-temporal",
+    "polyleviathan/pred006-search-cross-market",
+    "polyleviathan/pred006-search-participant-flow",
+    "polyleviathan/pred006-search-interactions",
+    "polyleviathan/pred006-search-event-targets",
+    "polyleviathan/pred006-search-hazard-fee",
+    "polyleviathan/pred006-hazard-ablation"
+  ]
+}

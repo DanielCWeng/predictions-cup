@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "attempt": "PRED006_HAZARD_V3_DIAGNOSTIC_FAILURE",
+  "github_actions_run": 36590503658,
+  "disposition": "TECHNICAL_FAILURE_BEFORE_RESULT_PACKAGE",
+  "reason": "Pandas attribute access collided with DataFrame.diff method in condition diagnostics; fixed to groupby(\"condition\")[\"diff\"].mean().",
+  "final_rows_accessed": false,
+  "scientific_spec_changed": false
+}

@@ -1,0 +1,250 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B-DATA003-FRESH-CONFIRMATION",
+  "artifact_id": "R1_TRANSFER_RESOLUTION_V1",
+  "classification": "DERIVED_RESOLUTION_ONLY_NON_GOVERNING",
+  "scientific_status": "FROZEN_BY_REFERENCE",
+  "governing_freeze": {
+    "path": "data/experiments/experiment_005b_ordering_falsification/data_003_confirmation_protocol.json",
+    "present_at_pr51_head_before_downstream_branch": "faffc01ed6b4438e625fdc9a784dba3a20e65757",
+    "rule": "This file only expands immutable references already fixed by the governing protocol. It does not alter, relax, tune, or replace that protocol."
+  },
+  "historical_bindings": {
+    "parent_pr": 45,
+    "parent_final_head": "232c7c396edd18c93df72b309235110a89b5143a",
+    "train_dev_shortlist_sha256": "44025aa2c5e5bddd97d88c81e649d86d6bf55d6cccec1d57c2aa7af12a9a7ec6",
+    "feature_target_spec_sha256": "47dc9c9a678f58558aba7e4bc282103cacbc0836f08018a79d4197487d689cf7",
+    "parent_holdout_sha256": "94db3e2319d376078e9f80f5e28d04215dcade53d76c1ec749af8bcc0fa8972a",
+    "evaluator_reference_commit": "76a52913f3a38a7c573ee7f9f53db6d651f301b1",
+    "evaluator_reference_path": "scripts/kaggle/experiment_005b_holdout/run.py"
+  },
+  "eligible_candidates": [
+    "target_clock_realised_movement_1",
+    "target_clock_realised_movement_5",
+    "target_clock_realised_movement_15",
+    "target_clock_realised_movement_30",
+    "target_clock_realised_movement_60",
+    "target_clock_realised_movement_120",
+    "target_clock_realised_movement_300"
+  ],
+  "targets": {
+    "definition": "For horizon h, sqrt(sum(one-trade price_change^2)) over strictly later economic fills through t+h; NULL when no later economic fill occurs in (t,t+h].",
+    "horizons_seconds": [1, 5, 15, 30, 60, 120, 300],
+    "observed_stasis": "Zero is retained only when a later economic fill exists and the realised movement is zero.",
+    "ordering": "block_number, log_index"
+  },
+  "models": {
+    "target_clock_realised_movement_1": {
+      "model": "HistGradientBoostingRegressor",
+      "params": {
+        "learning_rate": 0.05,
+        "max_iter": 100,
+        "max_leaf_nodes": 15,
+        "l2_regularization": 1,
+        "random_state": 505005
+      },
+      "features": [
+        "realised_vol_5",
+        "absolute_return_5",
+        "recent_max_move_900",
+        "absolute_return_30",
+        "absolute_return_15",
+        "absolute_return_60",
+        "absolute_return_120",
+        "absolute_return_300"
+      ],
+      "preprocessing": ["SimpleImputer(strategy=median)"]
+    },
+    "target_clock_realised_movement_5": {
+      "model": "Ridge",
+      "params": {"alpha": 10},
+      "features": [
+        "realised_vol_5",
+        "recent_max_move_900",
+        "absolute_return_5",
+        "absolute_return_30",
+        "absolute_return_60",
+        "absolute_return_15",
+        "absolute_return_120",
+        "absolute_return_300"
+      ],
+      "preprocessing": [
+        "SimpleImputer(strategy=median)",
+        "StandardScaler()"
+      ]
+    },
+    "target_clock_realised_movement_15": {
+      "model": "HistGradientBoostingRegressor",
+      "params": {
+        "learning_rate": 0.05,
+        "max_iter": 100,
+        "max_leaf_nodes": 15,
+        "l2_regularization": 1,
+        "random_state": 505005
+      },
+      "features": [
+        "realised_vol_5",
+        "recent_max_move_900",
+        "absolute_return_300",
+        "absolute_return_60",
+        "absolute_return_120",
+        "absolute_return_30",
+        "absolute_return_15",
+        "absolute_return_900"
+      ],
+      "preprocessing": ["SimpleImputer(strategy=median)"]
+    },
+    "target_clock_realised_movement_30": {
+      "model": "HistGradientBoostingRegressor",
+      "params": {
+        "learning_rate": 0.05,
+        "max_iter": 100,
+        "max_leaf_nodes": 15,
+        "l2_regularization": 1,
+        "random_state": 505005
+      },
+      "features": [
+        "recent_max_move_900",
+        "realised_vol_5",
+        "absolute_return_300",
+        "absolute_return_120",
+        "absolute_return_60",
+        "absolute_return_900",
+        "absolute_return_30",
+        "absolute_return_15"
+      ],
+      "preprocessing": ["SimpleImputer(strategy=median)"]
+    },
+    "target_clock_realised_movement_60": {
+      "model": "HistGradientBoostingRegressor",
+      "params": {
+        "learning_rate": 0.05,
+        "max_iter": 100,
+        "max_leaf_nodes": 15,
+        "l2_regularization": 1,
+        "random_state": 505005
+      },
+      "features": [
+        "recent_max_move_900",
+        "absolute_return_300",
+        "realised_vol_5",
+        "absolute_return_900",
+        "absolute_return_120",
+        "absolute_return_60",
+        "absolute_return_30",
+        "absolute_return_15"
+      ],
+      "preprocessing": ["SimpleImputer(strategy=median)"]
+    },
+    "target_clock_realised_movement_120": {
+      "model": "HistGradientBoostingRegressor",
+      "params": {
+        "learning_rate": 0.05,
+        "max_iter": 100,
+        "max_leaf_nodes": 15,
+        "l2_regularization": 1,
+        "random_state": 505005
+      },
+      "features": [
+        "recent_max_move_900",
+        "absolute_return_300",
+        "absolute_return_900",
+        "absolute_return_120",
+        "realised_vol_5",
+        "absolute_return_60",
+        "distance_recent_low_300",
+        "absolute_return_30"
+      ],
+      "preprocessing": ["SimpleImputer(strategy=median)"]
+    },
+    "target_clock_realised_movement_300": {
+      "model": "HistGradientBoostingRegressor",
+      "params": {
+        "learning_rate": 0.05,
+        "max_iter": 100,
+        "max_leaf_nodes": 15,
+        "l2_regularization": 1,
+        "random_state": 505005
+      },
+      "features": [
+        "recent_max_move_900",
+        "absolute_return_900",
+        "absolute_return_300",
+        "absolute_return_120",
+        "absolute_return_60",
+        "realised_vol_5",
+        "distance_recent_low_300",
+        "absolute_return_30"
+      ],
+      "preprocessing": ["SimpleImputer(strategy=median)"]
+    }
+  },
+  "feature_definitions": {
+    "realised_vol_5": "sqrt(sum(one-trade price_change^2)) over the backward/current 5-second window.",
+    "absolute_return_5": "Absolute backward-window price change over 5 seconds.",
+    "absolute_return_15": "Absolute backward-window price change over 15 seconds.",
+    "absolute_return_30": "Absolute backward-window price change over 30 seconds.",
+    "absolute_return_60": "Absolute backward-window price change over 60 seconds.",
+    "absolute_return_120": "Absolute backward-window price change over 120 seconds.",
+    "absolute_return_300": "Absolute backward-window price change over 300 seconds.",
+    "absolute_return_900": "Absolute backward-window price change over 900 seconds.",
+    "recent_max_move_900": "Maximum absolute one-trade price change in the backward/current 900-second window.",
+    "distance_recent_low_300": "Current p_yes minus rolling 300-second minimum p_yes."
+  },
+  "fit_recipe": {
+    "historical_training_population": "Corrected-order 005B TRAIN+DEV decisions only: timestamp < dev_end_timestamp-300, target non-null, label endpoint non-null and label endpoint < dev_end_timestamp.",
+    "sampling": "Per family ORDER BY hash(condition_id, tx_hash, log_index) LIMIT 100000; concatenate five families; no target-value sampling.",
+    "embargo_seconds": 300,
+    "training_on_corrected_holdout": false,
+    "training_on_data_003": false
+  },
+  "external_evaluation": {
+    "evaluation_rows": "All supported DATA-003 rows after exact feature/target support and window-boundary validity rules; no target-value sampling.",
+    "primary_metric": "MAE",
+    "named_baselines": [
+      "persistence",
+      "own_recent_price",
+      "current_absolute_movement",
+      "recent_activity"
+    ],
+    "baseline_definitions": {
+      "persistence": "Historical TRAIN+DEV mean for positive realised-movement targets.",
+      "own_recent_price": "One-feature linear comparator using price_change_30.",
+      "current_absolute_movement": "One-feature linear comparator using absolute_return_30.",
+      "recent_activity": "One-feature linear comparator using trade_count_30."
+    },
+    "uncertainty": "Hierarchical family/market bootstrap on market-level candidate-minus-persistence MAE differences.",
+    "bootstrap_replicates": 1000,
+    "bootstrap_seed": 505005,
+    "report_only_diagnostics": [
+      "predictive_ic",
+      "directional_accuracy",
+      "mapping-class slices",
+      "per-window support",
+      "per-window MAE improvement"
+    ]
+  },
+  "success_failure": {
+    "per_horizon_success": "Candidate MAE must beat every frozen named baseline and hierarchical bootstrap lower_2_5 must be > 0.",
+    "package_success": "All seven frozen horizons must satisfy the per-horizon success rule.",
+    "failure": "Any horizon failing its frozen rule is reported as failure/partial transfer; no replacement horizon, feature, model, threshold, mapping slice, or candidate may be introduced."
+  },
+  "multiple_testing": {
+    "new_hypotheses": 0,
+    "fixed_hypothesis_count": 7,
+    "treatment": "No reselection or multiplicity-driven rescue. Package-level success is the preregistered conjunction that all seven fixed horizons pass their frozen rule."
+  },
+  "exclusions": [
+    "No event-time target is eligible for R1 transfer.",
+    "No mapping-class subset may become the primary test or rescue a failure.",
+    "No row may cross a DATA-003 capture window boundary for a feature lookback or target label endpoint.",
+    "If an original selected feature cannot be materialized faithfully, that target is INAPPLICABLE; no substitute feature or simplified model is allowed.",
+    "No new target, feature, model class, hyperparameter, threshold, horizon, sampling rule, baseline, metric, or success criterion may be introduced."
+  ],
+  "seeds": {
+    "model_random_state": 505005,
+    "hierarchical_bootstrap": 505005,
+    "calendar_block_bootstrap_if_reported": 505006
+  },
+  "data_003_results_used_to_derive_this_resolution": false
+}

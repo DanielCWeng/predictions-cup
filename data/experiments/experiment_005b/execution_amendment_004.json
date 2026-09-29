@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "amendment_id": "EXECUTION_004",
+  "type": "compute_plan_only",
+  "predictive_design_changed": false,
+  "prior_outcome_motivated": false,
+  "trigger": "The monolithic US_2024 feature/target build was killed by Kaggle during wide-window materialisation before TRAIN/DEV analysis.",
+  "replacement_plan": "Run the same frozen feature/target formulas in six memory-bounded passes per election family, then merge aligned columns positionally; execute the five families as independent Kaggle kernels.",
+  "family_parallelism": [
+    "US_2024",
+    "CAN_2025",
+    "COL_2026",
+    "HUN_2026",
+    "PER_2026"
+  ],
+  "per_kernel_memory_limit": "6GB DuckDB memory limit with temp spill",
+  "scientific_invariants": [
+    "226 frozen predictors unchanged",
+    "47 frozen targets unchanged",
+    "same synchronized 60/20/20 family split boundaries",
+    "same 300-second embargo and target purge downstream",
+    "same no-identity/no-role/no-fee predictor policy",
+    "no predictive outcome inspected to choose this execution plan"
+  ]
+}

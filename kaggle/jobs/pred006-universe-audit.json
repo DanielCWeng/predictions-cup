@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/pred006_universe",
+  "kernel": "polyleviathan/pred006-universe-audit",
+  "poll_seconds": 20,
+  "timeout_minutes": 60,
+  "download_outputs": true,
+  "output_file_pattern": "universe_audit\\.json$",
+  "note": "PRED-006 Phase 1 non-predictive DATA-003 universe characterization. No predictive targets or performance."
+}

@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "title": "Full Historical Price / Fill Predictive Atlas",
+  "namespace": "005b_historical_predictive_atlas",
+  "base_main_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+  "design_status": "FROZEN_BEFORE_PRIOR_OUTCOME_INSPECTION",
+  "scope": {
+    "primary": "identity-blind scalar prediction from canonical transaction prices and anonymous fill/activity history",
+    "excludes": ["maker_taker_alpha","participant_identity","order_book_microstructure","reduced_rank_panel_models","structural_seat_models","strategy_pnl"]
+  },
+  "datasets": {
+    "primary_fill_source": "DATA-002 matched_fills",
+    "families": ["US_2024","CAN_2025","COL_2026","HUN_2026","PER_2026"],
+    "declared_rows": 18317515,
+    "data_002_manifest_sha256": "3bcb544fdcf3479f5e8a6973906c8ccfd5b9abd77592629daa70facfdfdd6d5c",
+    "data_001_use": "canonical mappings/provenance only when necessary; book coverage is never an inclusion requirement"
+  },
+  "trade_reconstruction": {
+    "group_key": ["family","condition_id","tx_hash"],
+    "required_group_shape": "exactly one active-order row and one or more passive-order rows",
+    "active_marker": "order_is_match_taker_order == true",
+    "economic_trade_rows": "passive rows; active aggregate row is audit-only and never counted as another trade",
+    "multi_maker": "each passive leg is one economic fill in deterministic timestamp, tx_hash, log_index order",
+    "yes_axis": {"YES":"price","NO":"1-price","OTHER":"reject"},
+    "conservation": [
+      "active size equals summed passive size within tolerance",
+      "active YES-axis notional equals summed passive YES-axis notional within tolerance"
+    ],
+    "failure_policy": "fail closed and report group",
+    "alpha_prohibition": "role, fee and participant fields may be used only for reconstruction/audit and are removed before feature construction"
+  },
+  "decision_points": "every reconstructed economic fill",
+  "price_windows_seconds": [5,15,30,60,120,300,900],
+  "activity_windows_seconds": [5,15,30,60,120,300,900],
+  "features": {
+    "price_history": ["price_yes","logit_price","price_change_W","logit_return_W","momentum_W","momentum_short_minus_long_30_300","reversal_30_300","return_streak","acceleration_15_60","previous_jump_size","distance_recent_high_300","distance_recent_low_300","trend_slope_60","trend_slope_300"],
+    "movement_state": ["realised_vol_W","absolute_return_W","recent_max_move_W","jump_frequency_W","stasis_fraction_W","direction_change_frequency_W"],
+    "anonymous_activity": ["trade_count_W","notional_value_W","share_volume_W","mean_trade_size_W","median_trade_size_W","trade_size_variance_W","trade_size_q90_W","max_trade_size_W","large_trade_share_W","last_interarrival_seconds","mean_interarrival_W","burstiness_W","activity_acceleration_30_300","activity_vs_train_history_60"],
+    "context": ["loo_event_price_movement_W","loo_event_activity_W","loo_event_cross_sectional_dispersion_W","loo_event_fraction_up_W","loo_event_fraction_down_W","common_event_momentum_30","market_minus_event_momentum_30"],
+    "large_trade_threshold": "TRAIN-only q90 of economic-trade shares within market; family fallback for markets with fewer than 100 TRAIN trades",
+    "activity_history_reference": "TRAIN-only median 60-second trade count per market; family fallback"
+  },
+  "targets": {
+    "clock_seconds": [1,5,15,30,60,120,300],
+    "clock_metrics": ["future_price_change","future_logit_change","future_change_sign","future_absolute_change","future_realised_movement"],
+    "clock_asof": "last economic trade at or before t+h, valid only if at least one later economic trade occurs in (t,t+h]; otherwise NO_FUTURE_OBSERVATION",
+    "observed_no_movement": "later economic trade exists and resulting change equals zero",
+    "event_trade_counts": [1,2,5,10],
+    "event_metrics": ["future_price_change","future_change_sign","future_absolute_change"],
+    "label_end_time": "timestamp of selected future clock observation or Nth future economic trade"
+  },
+  "splits": {
+    "method": "per-family synchronized chronological boundaries across all markets",
+    "fractions": {"TRAIN":0.60,"DEV":0.20,"HOLDOUT":0.20},
+    "boundary_basis": "family timestamp coverage only, never performance",
+    "row_assignment": "decision timestamp",
+    "purge": "discard TRAIN/DEV rows whose label_end_time is at or beyond the next split boundary",
+    "embargo_seconds": 300,
+    "holdout_rule": "no feature, threshold or hyperparameter selection uses HOLDOUT"
+  },
+  "train_census": {
+    "minimum_support_rows": 1000,
+    "minimum_markets": 3,
+    "minimum_time_blocks": 4,
+    "time_block": "calendar day within family",
+    "statistics": ["pearson","spearman","directional_response","decile_response","monotonicity","standardized_effect","support","market_count","block_count","market_concentration_hhi","family_sign_consistency"],
+    "raw_p_value_is_selection_criterion": false
+  },
+  "redundancy": {
+    "train_only": true,
+    "absolute_spearman_threshold": 0.95,
+    "algebraic_equivalence": "collapse explicitly",
+    "representative_rule": "highest median absolute TRAIN rank association across supported targets, ties lexicographically"
+  },
+  "dev_selection": {
+    "top_representatives_per_target_family": 8,
+    "labels": ["DISCOVERY_ONLY","WITHIN_FAMILY_STABLE","REGIME_SPECIFIC_CANDIDATE","CROSS_FAMILY_CANDIDATE"],
+    "stability_rule": "direction agrees TRAIN to DEV in claimed scope and no single market contributes more than 50% of supported rows",
+    "shortlist_cap_per_target_horizon": 12
+  },
+  "model_ladder": {
+    "regression": [
+      {"name":"persistence_baseline"},
+      {"name":"own_history_linear"},
+      {"name":"univariate_linear"},
+      {"name":"ols"},
+      {"name":"ridge","alpha":[0.1,1.0,10.0]},
+      {"name":"elastic_net","alpha":[0.001,0.01,0.1],"l1_ratio":[0.1,0.5,0.9]},
+      {"name":"hist_gradient_boosting","learning_rate":[0.05],"max_iter":[100],"max_leaf_nodes":[15],"l2_regularization":[1.0]}
+    ],
+    "classification": [
+      {"name":"majority_baseline"},
+      {"name":"logistic_l2","C":[0.1,1.0,10.0]}
+    ],
+    "preprocessing": "TRAIN-fit median imputation and standardization for linear models; no target-derived transforms",
+    "selection": "hyperparameters selected on DEV only; frozen shortlist evaluated once on HOLDOUT"
+  },
+  "holdout_metrics": ["mse","mae","mse_improvement_vs_baseline","mae_improvement_vs_baseline","predictive_ic","directional_accuracy","brier","calibration","market_concentration","family_concentration","parameter_stability"],
+  "uncertainty": {
+    "row_iid": false,
+    "primary": "family to market hierarchical bootstrap plus calendar-time moving blocks",
+    "bootstrap_replicates": 1000,
+    "seed": 505005
+  },
+  "negative_controls": [
+    "own recent price movement baseline",
+    "current absolute movement versus subsequent movement",
+    "activity predicting contemporaneous movement versus subsequent movement",
+    "within-market circular time-block feature permutation preserving missingness"
+  ],
+  "compute": {
+    "kaggle_shared_capacity": 3,
+    "launch_rule": "launch only while fewer than three shared Kaggle jobs are running or queued",
+    "ec2_empirical_compute": false,
+    "restartable": true,
+    "cache_key_parts": ["dataset_hash","reconstruction_policy_hash","feature_spec_hash","target_spec_hash"]
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "experiment_id": "EXPERIMENT-005B",
+  "base_main_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+  "branch": "experiment/005b-historical-predictive-atlas",
+  "prior_work_boundary_path": "docs/research/005_DISCOVERY_PRIOR_WORK_BOUNDARY.md",
+  "pre_freeze_detailed_prior_outcomes_inspected": false,
+  "freeze_note": "Feature universe, targets, split rules, screening policy and model ladder were specified before intentional inspection of prior ranked cells, effect magnitudes, best horizons, subgroup winners or post-hoc candidate lists."
+}

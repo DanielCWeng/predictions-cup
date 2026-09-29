@@ -213,7 +213,54 @@ families — the manifest confirms zero condition/token overlap between the two 
 See `docs/implementation/DATA_003_SIG_ACTUAL_FILLS.md`.
 
 
-## ETS P0/P1 market-graph fills — DATA-004 (v2 ACCEPTED / PR IN REVIEW)
+## Launch capture research evidence — CAPTURE-001 / PR #57
+
+CAPTURE-001 extends the accepted SIG operational state with a separate immutable research layer.
+It does not replace BUILD-004/006 SQLite or reinterpret SIG feed semantics.
+
+The SIG research root contains five versioned ZSTD Parquet streams:
+
+- `raw_events`: faithful decoded tournament `market_batch` payloads plus process session,
+  connection epoch, delivery provenance, local receive/parse clocks and validation result;
+- `normalized_events`: defensible SIG Realtime, authoritative REST and local trust/lifecycle
+  observations with explicit provenance/evidence labels;
+- `liquidity_events`: transitions between consecutive authoritative tracked-depth snapshots;
+- `strategy_events`: optional forward-compatible SHADOW/MAKE decision state supplied through an
+  explicit interface rather than MAKE internals;
+- `ets_state`: optional aggregate/ETF/ETS model state with model version, components, freshness,
+  provenance and uncertainty.
+
+All streams carry `schema_version=capture-001-v1`. Process `session_id` and integer
+`connection_epoch` distinguish restart/reconnect boundaries. Wall-clock observation time and
+monotonic timing are kept separate where applicable.
+
+Evidence labels are deliberately conservative. In particular, a `bookDirty` item is an observed
+invalidation, not an order delta. A level reduction/disappearance derived from consecutive
+aggregate REST snapshots is `AMBIGUOUS_DEPTH_DECREASE`; CAPTURE-001 does not manufacture an
+order-level cancellation, queue position or persistent anonymous participant identity.
+
+The supplied SIG tournament feed exposes trade price/quantity/time, `bookDirty`, settlement and
+delivery metadata. The accepted aggregate REST book exposes price/quantity levels but no
+participant/order identity and no per-order expiration metadata. Any aggressor classification used
+by the forensic library is therefore a derived price-vs-prior-BBO diagnostic with an explicit BBO
+freshness rule, not maker/taker identity from SIG.
+
+SIG operational SQLite remains the accepted normalized BUILD-005 replay-compatibility surface and
+now also includes `capture_health`. Unlike BUILD-007 Polymarket operational SQLite, it is therefore
+**not metadata-only** on this branch. CAPTURE-001 keeps that compatibility deliberately rather than
+silently breaking deterministic replay, while the durable research/raw layer is immutable Parquet.
+
+LaunchSigRecorder merges immutable-writer queue depth/capacity/high-water, published row/shard
+counts, dropped-row count, storage-failure count, last-publish time and current SQLite/WAL bytes
+into the one-second health snapshot. Queue exhaustion or writer failure raises visibly;
+already-published Parquet shards remain immutable. Any unacceptable SQLite/WAL growth during the
+final launch soak is a blocker rather than evidence to be hidden or reclassified.
+
+The detailed field dictionary, launch commands, evidence limitations and soak gate live in
+`docs/implementation/CAPTURE_001_LAUNCH_FORENSICS.md`.
+
+
+## ETS P0/P1 market-graph fills — DATA-004 (v2 ACCEPTED / MERGED)
 
 DATA-004 v2 is the corrected review version of the frozen ETS acquisition and relationship graph
 corpus in `data/research/r25_ets_math_graph/`. The universe remains 298 Gamma-verified markets,
@@ -251,7 +298,6 @@ acquired only for P0/P1.
   or copied into DATA-004. There is no order-book history or R3 predictive/fair-value result.
 
 See `docs/implementation/DATA_004_ETS_P0P1_FILLS.md` and the seven-item campaign report.
-
 
 ## Strategy / execution boundary
 

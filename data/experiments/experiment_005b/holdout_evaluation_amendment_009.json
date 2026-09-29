@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "amendment_id": "HOLDOUT_EVAL_009",
+  "type": "pre_holdout_evaluation_clarification",
+  "holdout_opened": false,
+  "predictive_results_seen": "TRAIN/DEV has not run; HOLDOUT has not been queried.",
+  "change": "Replace first-promoted-scalar-only HOLDOUT evaluation with evaluation of every frozen promoted_candidate row exactly once.",
+  "reason": "The source brief requests one-time HOLDOUT evaluation of frozen shortlisted features; retaining all frozen promoted candidates avoids silently dropping legitimate preregistered discoveries.",
+  "selection_effect": "NONE. HOLDOUT cannot select, reorder, rescue or drop promoted candidates based on its results.",
+  "holdout_protocol_sha256": "0d7385e0cf560d62a12100204cd462f6a97f5ae35e735cfb15e540187acbc330"
+}

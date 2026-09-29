@@ -1,0 +1,67 @@
+{
+  "experiment_id": "EXPERIMENT-005B",
+  "family": "US_2024",
+  "feature_target_spec_sha256": "47dc9c9a678f58558aba7e4bc282103cacbc0836f08018a79d4197487d689cf7",
+  "outputs": [
+    {
+      "bytes": 175508596,
+      "columns": [
+        "row_id",
+        "loo_event_price_movement_5",
+        "loo_event_activity_5",
+        "loo_event_dispersion_5",
+        "loo_event_fraction_up_5",
+        "loo_event_fraction_down_5",
+        "loo_event_price_movement_15",
+        "loo_event_activity_15",
+        "loo_event_dispersion_15",
+        "loo_event_fraction_up_15",
+        "loo_event_fraction_down_15",
+        "loo_event_price_movement_30",
+        "loo_event_activity_30",
+        "loo_event_dispersion_30",
+        "loo_event_fraction_up_30",
+        "loo_event_fraction_down_30",
+        "loo_event_price_movement_60",
+        "loo_event_activity_60",
+        "loo_event_dispersion_60",
+        "loo_event_fraction_up_60",
+        "loo_event_fraction_down_60",
+        "common_event_momentum_30"
+      ],
+      "max_row_id": 7890463,
+      "min_row_id": 1,
+      "path": "event_context_short_US_2024.parquet",
+      "rows": 7890463,
+      "sha256": "331eb47b72c14eda091be0220dee006bf35e7b82be6f0d961fc5d43faa9b82a1"
+    },
+    {
+      "bytes": 240906973,
+      "columns": [
+        "row_id",
+        "loo_event_price_movement_120",
+        "loo_event_activity_120",
+        "loo_event_dispersion_120",
+        "loo_event_fraction_up_120",
+        "loo_event_fraction_down_120",
+        "loo_event_price_movement_300",
+        "loo_event_activity_300",
+        "loo_event_dispersion_300",
+        "loo_event_fraction_up_300",
+        "loo_event_fraction_down_300",
+        "loo_event_price_movement_900",
+        "loo_event_activity_900",
+        "loo_event_dispersion_900",
+        "loo_event_fraction_up_900",
+        "loo_event_fraction_down_900"
+      ],
+      "max_row_id": 7890463,
+      "min_row_id": 1,
+      "path": "event_context_long_US_2024.parquet",
+      "rows": 7890463,
+      "sha256": "739f619dab804de6db2d825446f57958cae689ac18c2ae589e3ffbccb0e45571"
+    }
+  ],
+  "schema_version": 1,
+  "task": "event_context"
+}

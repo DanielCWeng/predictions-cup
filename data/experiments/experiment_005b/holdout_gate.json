@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "status": "CONSUMED",
+  "expected_train_dev_shortlist_sha256": "44025aa2c5e5bddd97d88c81e649d86d6bf55d6cccec1d57c2aa7af12a9a7ec6",
+  "gate_commit": "726cbdb13de00f5aa8b5d4a6e7c675cc2e4da361",
+  "note": "HOLDOUT version 1 completed exactly once. Current HEAD re-closes the executable to prevent accidental re-query; the executed open-gate state is preserved in commit 76a52913f3a38a7c573ee7f9f53db6d651f301b1.",
+  "holdout_kernel": "polyleviathan/005b-historical-predictive-atlas-holdout",
+  "holdout_kernel_version": 1,
+  "holdout_results_sha256": "94db3e2319d376078e9f80f5e28d04215dcade53d76c1ec749af8bcc0fa8972a"
+}

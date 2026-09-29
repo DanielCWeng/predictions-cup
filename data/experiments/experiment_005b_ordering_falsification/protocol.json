@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B-ORDERING-FALSIFICATION",
+  "parent_experiment": "EXPERIMENT-005B",
+  "parent_pr": 45,
+  "parent_final_head": "232c7c396edd18c93df72b309235110a89b5143a",
+  "classification": "POST_HOC_FALSIFICATION_ONLY",
+  "purpose": "Correct the historical observable ordering defect without redesigning the frozen 005B science, then test whether the original promoted findings are falsified or materially weakened.",
+  "ordering_defect": {
+    "old_reconstruction_order": ["timestamp", "tx_hash", "log_index"],
+    "correct_observable_order": ["block_number", "log_index"],
+    "reason": "timestamp is block time at one-second resolution and tx_hash is not an observable sequencing key; log_index is block-global and block_number establishes inter-block order.",
+    "upstream_note": "The Polygon OrderFilled decoder exposes block_number and log_index before the canonical trades schema projects block_number away. The correction must therefore use a block-number enrichment sourced from the upstream decoded/on-chain fill layer, not infer block_number from tx_hash or timestamp."
+  },
+  "immutable_parent_evidence": {
+    "train_dev_freeze_sha256": "44025aa2c5e5bddd97d88c81e649d86d6bf55d6cccec1d57c2aa7af12a9a7ec6",
+    "holdout_results_sha256": "94db3e2319d376078e9f80f5e28d04215dcade53d76c1ec749af8bcc0fa8972a",
+    "feature_target_spec_sha256": "47dc9c9a678f58558aba7e4bc282103cacbc0836f08018a79d4197487d689cf7",
+    "screening_model_spec_sha256": "1fc782b8edf9dbdcf1b3fc90f271c140a05499e9f081ac116764d44cb5dcd96a",
+    "holdout_protocol_sha256": "0d7385e0cf560d62a12100204cd462f6a97f5ae35e735cfb15e540187acbc330"
+  },
+  "preservation": {
+    "pr_45_outputs": "MUST_REMAIN_BYTE_IDENTICAL",
+    "corrected_output_root": "data/experiments/experiment_005b_ordering_falsification/results",
+    "no_overwrite_parent_results": true
+  },
+  "required_sequence": [
+    "Recover block_number for the exact frozen 005B economic-fill population from the upstream decoded/on-chain fill source using immutable fill keys.",
+    "Before any corrected feature build, quantify shared timestamp/block groups and exact old-vs-corrected rank changes at market, event and family scopes.",
+    "Quantify feature/target observations whose realised values or label endpoints differ solely because of ordering.",
+    "Rebuild the frozen 005B feature/target matrices with only the ordering correction.",
+    "Re-evaluate only the original parent promoted scalar candidates and original selected model specifications/hyperparameters. No new candidate may enter.",
+    "Run the corrected HOLDOUT comparison only as post-hoc falsification. It cannot promote, upgrade, reconfirm, or create an alpha claim."
+  ],
+  "frozen_science": {
+    "features": "UNCHANGED",
+    "targets": "UNCHANGED",
+    "windows": "UNCHANGED",
+    "models": "UNCHANGED",
+    "model_hyperparameters": "ORIGINAL_DEV_SELECTED_ONLY",
+    "thresholds": "UNCHANGED",
+    "splits": "UNCHANGED",
+    "embargo": "UNCHANGED",
+    "negative_controls": "UNCHANGED",
+    "bootstrap": "UNCHANGED",
+    "candidate_universe": "ORIGINAL_PROMOTED_ONLY",
+    "new_candidates_allowed": false
+  },
+  "audit_requirements": {
+    "per_family": [
+      "economic_rows",
+      "rows_in_multi_row_timestamp_groups",
+      "rows_in_multi_tx_timestamp_groups",
+      "rows_in_multi_row_block_groups",
+      "rows_in_multi_tx_block_groups",
+      "market_order_rank_changed_rows",
+      "event_order_rank_changed_rows",
+      "family_order_rank_changed_rows",
+      "feature_observations_changed",
+      "target_observations_changed",
+      "label_endpoint_observations_changed"
+    ],
+    "mapping_gate": "100% of frozen 005B economic rows must map to a non-null upstream block_number; any key conflict or timestamp disagreement is a hard failure."
+  },
+  "parent_findings_of_interest": {
+    "clock_realised_movement_horizons_seconds": [1, 5, 15, 30, 60, 120, 300],
+    "event_time_directional_targets": [
+      "target_event_sign_1",
+      "target_event_sign_2",
+      "target_event_sign_5",
+      "target_event_sign_10"
+    ],
+    "event_time_price_change_targets": [
+      "target_event_price_change_5",
+      "target_event_price_change_10"
+    ]
+  },
+  "interpretation_rule": {
+    "survival_language": "not_falsified_by_ordering_correction",
+    "prohibited_language": ["confirmed", "reconfirmed", "promoted_by_corrected_holdout"],
+    "movement_material_survival": "Report whether each original clock realised-movement model still beats every original named baseline on corrected HOLDOUT MAE, whether family-level MAE improvement remains positive in all five families, and whether the original hierarchical bootstrap metric remains positive. This is a falsification diagnostic only.",
+    "event_direction_survival": "Report corrected sign/accuracy/bootstrap behavior for the original event-time directional candidates/models only; no replacements are allowed."
+  },
+  "downstream_rule": {
+    "if_movement_materially_survives": "Carry the unchanged movement hypothesis forward for fresh confirmation on DATA-003 / the actual mapped 2026 universe.",
+    "if_movement_does_not_survive": "Close 005B as ordering-contaminated historical discovery.",
+    "data_003_is_fresh_confirmation": true
+  }
+}

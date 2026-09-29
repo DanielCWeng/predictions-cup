@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "experiment_id": "PRED-006",
+  "classification": "FINAL_RECOVERY_EVIDENCE_NO_RERUN",
+  "final_kernel_canonical_slug": "polyleviathan/pred006-one-shot-final",
+  "legacy_declared_slug": "polyleviathan/pred006-final",
+  "original_launch_github_actions_run": 36599964960,
+  "original_launch_job": 109514543823,
+  "original_launch_note": "The one-shot Kaggle execution completed, but the GitHub wrapper kept polling the legacy/noncanonical slug and therefore remained in-progress. No second FINAL execution was launched.",
+  "canonical_status_probe_run": 36603524903,
+  "canonical_status_probe_job": 109526657844,
+  "canonical_status": "KernelWorkerStatus.COMPLETE",
+  "output_recovery_run": 36603691581,
+  "output_recovery_job": 109527244433,
+  "output_recovery_artifact_id": 11050547097,
+  "logs_recovery_job": 109527244536,
+  "logs_recovery_artifact_id": 11049354095,
+  "raw_artifact_sha256": {
+    "FINAL_REPORT_md": "31d7529e6ed88c3e0708a005af2206d076edbec985692a0a1fc396ee174ce64a",
+    "final_results_json": "b01d36ada446355cddda91be8a98a6767c62b274bd17a85af694ec55f13f3ff4",
+    "make_plugin_spec_json": "8564d67eb83d6b803ac97a505e0aac0a176361095b2c98334a5390a2125e558d"
+  },
+  "rerun_performed": false,
+  "final_result": {
+    "candidate_count": 2,
+    "survivor_count": 2,
+    "survivor_ids": [
+      "PRED006-C01",
+      "PRED006-C02"
+    ],
+    "disposition": "CURRENT_UNIVERSE_CANDIDATE_REQUIRES_FUTURE_CONFIRMATION"
+  }
+}

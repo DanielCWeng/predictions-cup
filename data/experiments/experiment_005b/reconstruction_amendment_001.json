@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "amendment_id": "RECONSTRUCTION-001",
+  "type": "schema_operationalisation_not_predictor_search_change",
+  "predictive_design_changed": false,
+  "audit_kernel": "polyleviathan/005b-reconstruction-conservation-audit",
+  "audit_version": 2,
+  "reason": "The initial 1e-8 relative YES-axis notional tolerance rejected many groups despite exact group shape, binary outcomes and size conservation. A dedicated schema-only audit was run before predictive analysis.",
+  "audit_findings": {
+    "maximum_yes_relative_error_by_family": {
+      "US_2024": 0.0004961266191086539,
+      "CAN_2025": 0.00048661800486634254,
+      "COL_2026": 0.00045042652769964437,
+      "HUN_2026": 0.00047087500000009275,
+      "PER_2026": 0.0004960317460316914
+    },
+    "groups_above_0_001_relative_error": 0,
+    "pattern": "small discrepancies span YES/NO and single-/multi-maker structures rather than one structural failure mode"
+  },
+  "frozen_reconstruction_tolerances": {
+    "size_relative": 1e-8,
+    "yes_axis_notional_relative": 0.001
+  },
+  "interpretation": "The wider notional tolerance covers source price/amount discretisation while retaining the independent strict size-conservation gate. It is fixed before any 005B predictor or target outcome is inspected."
+}

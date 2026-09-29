@@ -1,0 +1,28 @@
+{
+  "conditions_absent_from_final": 116,
+  "dev_final_purge_rows": 24,
+  "dev_start_epoch": 1786233600,
+  "dev_start_utc": "2026-08-09T00:00:00+00:00",
+  "dev_target_eligible_rows": 22338,
+  "experiment_id": "PRED-006",
+  "final_conditions": 569,
+  "final_rows": 13637,
+  "final_sig_markets": 212,
+  "final_start_epoch": 1789084800,
+  "final_start_utc": "2026-09-11T00:00:00+00:00",
+  "ordering": [
+    "block_number",
+    "log_index"
+  ],
+  "predictive_outcomes_accessed": false,
+  "schema_version": 1,
+  "selection_rule": {
+    "dev_anchor_fraction_of_prefinal": 0.65,
+    "dev_start_rule": "first UTC midnight strictly after the floor(65% * N_prefinal) canonical economic-fill row timestamp",
+    "final_anchor_fraction": 0.82,
+    "final_start_rule": "first UTC midnight strictly after the floor(82% * N) canonical economic-fill row timestamp",
+    "target_purge_seconds": 1800
+  },
+  "train_dev_purge_rows": 6,
+  "train_target_eligible_rows": 41549
+}

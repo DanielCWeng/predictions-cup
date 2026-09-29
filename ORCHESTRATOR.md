@@ -38,7 +38,7 @@ Staleness, flow quality, volatility, liquidity, participant ecology and similar 
 features, controls or challengers inside these families. They are not standalone strategies unless
 MASTER explicitly changes the programme taxonomy.
 
-## Current canonical posture — 28 September 2026
+## Current canonical posture — 29 September 2026
 
 Accepted live mapping exists on `main`: 237 SIG exchanges are classified as 140 EXACT, 87 DERIVED,
 4 NEAR and 6 NO_TRADE, with 693 unique Polymarket conditions / 1,386 token IDs.
@@ -48,7 +48,7 @@ DATA-003 provides fresh actual-mapped-universe fills and is accepted.
 The broad 005 discovery programme is substantially closed:
 
 - 005A — narrow same-family PRE 5s effect only; no broad role-aware edge;
-- 005B — **BLOCKED / unmerged** pending causal same-block ordering falsification;
+- 005B — **CLOSED / FAILED FRESH DATA-003 TRANSFER (0/7)**; historical movement findings survived post-hoc ordering falsification but the frozen models do not transfer to the current mapped universe;
 - 005C — familywise null not rejected; shadow/research comparator only;
 - 005D — narrow LATE_COUNT structural-convergence evidence only;
 - 005E — no incremental evidence on the preregistered primary participant target;
@@ -58,11 +58,11 @@ No accepted execution path exists.
 
 ## Current direction
 
-1. Finish the bounded 005B ordering falsification without redesign.
-2. Close broad predictive discovery.
+1. Keep 005B closed and do not reuse its seven historical movement models as current-universe alpha.
+2. Keep broad predictive discovery closed absent a genuinely new preregistered hypothesis.
 3. Establish simple baseline strategy engines for the approved families.
 4. Build common shadow/evaluation machinery shared by all families.
-5. Replicate important findings on DATA-003 / the actual 2026 mapped universe.
+5. Replicate other important findings on DATA-003 / the actual 2026 mapped universe before promotion.
 6. Use live SIG evidence to promote/demote mechanisms.
 7. Iterate after launch without proliferating ad-hoc strategy families.
 
@@ -152,18 +152,11 @@ Never:
 
 ## Active workstreams
 
-### 1. EXPERIMENT-005B ordering falsification
+### 1. EXPERIMENT-005B — closed
 
-PR #45 is blocked. The follow-up branch is `experiment/005b-ordering-falsification`.
+The full chain is complete. PR #45 preserves the original historical evidence; the #51 correction shows substantial ordering contamination but 7/7 realised-movement findings survive `POST_HOC_FALSIFICATION_ONLY`; the preregistered #52 DATA-003 transfer then fails 0/7.
 
-The allowed task is narrowly defined:
-
-- recover true block/log observable order;
-- quantify the original pseudo-order impact;
-- rerun the exact frozen specification;
-- preserve the original sealed outputs;
-- classify corrected HOLDOUT analysis as `POST_HOC_FALSIFICATION_ONLY`;
-- no candidate/model/threshold redesign.
+Operational rule: do not promote or deploy the seven historical movement models. Positive DATA-003 predictive IC does not rescue the frozen MAE/bootstrap failure. Mapping-class slices are diagnostics only and may not be used for post-hoc subsetting. Any future movement-state work must be a genuinely new preregistered hypothesis with fresh validation, not a rescue of 005B.
 
 ### 2. Baseline strategy engines
 
@@ -179,8 +172,7 @@ attribution.
 
 ### 4. Actual-universe replication
 
-Use DATA-003 to test whether historically important mechanisms transfer to the real mapped 2026
-universe. Historical HOLDOUT success is not equivalent to Cup-universe validation.
+Use DATA-003 to test whether historically important mechanisms transfer to the real mapped 2026 universe. Historical HOLDOUT success is not equivalent to Cup-universe validation. 005B is the canonical example: its historical movement models survived an ordering falsification but then failed fresh DATA-003 transfer 0/7.
 
 ### 5. Live runtime validation
 

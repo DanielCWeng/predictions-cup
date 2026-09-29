@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "attempt": "PRED006_SEARCH_ATTEMPT_1",
+  "github_actions_run": 36583887125,
+  "disposition": "INFRA_SCHEMA_FAILURE_PRE_TARGET_CONSTRUCTION",
+  "predictive_results_produced": false,
+  "final_rows_accessed": false,
+  "errors": {
+    "general_lanes": "DATA-003 raw fill schema exposes canonical side, not participant_side.",
+    "hazard_lane": "Same nonexistent participant_side reference occurred before target construction; reserved timestamp alias repaired simultaneously."
+  },
+  "scientific_effect": "NONE. No hypothesis, target, horizon, model, threshold, shortlist rule or FINAL gate changed."
+}
