@@ -53,9 +53,6 @@ def load_frame(final_start:int)->pd.DataFrame:
       create temp view active_fee as
       select cast(condition_id as varchar) condition_id,
              lower(cast(tx_hash as varchar)) tx_hash,
-             max(lower(cast(participant_address as varchar))) filter(where cast(order_is_match_taker_order as boolean)) actor,
-             max(upper(cast(outcome_side as varchar))) filter(where cast(order_is_match_taker_order as boolean)) active_outcome,
-             max(upper(cast(participant_side as varchar))) filter(where cast(order_is_match_taker_order as boolean)) active_side,
              max(cast(fee_evidence as varchar)) filter(where cast(order_is_match_taker_order as boolean)) active_fee_evidence,
              max(cast(fee_net_usd_equiv as double)) filter(where cast(order_is_match_taker_order as boolean)) active_fee_net,
              max(cast(fee_charged_usd_equiv as double)) filter(where cast(order_is_match_taker_order as boolean)) active_fee_charged,
@@ -66,12 +63,12 @@ def load_frame(final_start:int)->pd.DataFrame:
       group by 1,2
     """)
     df=con.execute(f"""
-      select cast(e.timestamp as bigint) timestamp, lower(cast(e.tx_hash as varchar)) tx_hash,
-             cast(e.log_index as bigint) log_index,cast(e.condition_id as varchar) condition_id,
-             cast(e.p_yes as double) p_yes,cast(e.size_shares as double) size_shares,
-             cast(e.value_usd as double) value_usd,cast(e.sig_market_id as varchar) sig_market_id,
-             upper(cast(e.mapping_class as varchar)) mapping_class,cast(e.window_id as varchar) window_id,
-             t.block_number,f.actor,f.active_outcome,f.active_side,f.active_fee_evidence,
+      select cast(e.timestamp as bigint) AS event_ts, lower(cast(e.tx_hash as varchar)) AS tx_hash,
+             cast(e.log_index as bigint) AS log_index,cast(e.condition_id as varchar) AS condition_id,
+             cast(e.p_yes as double) AS p_yes,cast(e.size_shares as double) AS size_shares,
+             cast(e.value_usd as double) AS value_usd,cast(e.sig_market_id as varchar) AS sig_market_id,
+             upper(cast(e.mapping_class as varchar)) AS mapping_class,cast(e.window_id as varchar) AS window_id,
+             t.block_number,f.active_fee_evidence,
              f.active_fee_net,f.active_fee_charged,f.active_fee_refunded,f.active_charge_legs
       from read_parquet('{q(econ)}') e
       join read_parquet('{q(txb)}') t on lower(cast(e.tx_hash as varchar))=t.tx_hash
@@ -79,7 +76,9 @@ def load_frame(final_start:int)->pd.DataFrame:
       left join active_fee f on cast(e.condition_id as varchar)=f.condition_id and lower(cast(e.tx_hash as varchar))=f.tx_hash
       where cast(e.timestamp as bigint)<{int(final_start)}
       order by t.block_number,cast(e.log_index as bigint)
-    """).df();con.close()
+    """).df()
+    df = df.rename(columns={"event_ts": "timestamp"})
+    con.close()
     if df.empty or int(df.timestamp.max())>=final_start:raise RuntimeError("FINAL contamination")
     if df.duplicated(["block_number","log_index"]).any():raise RuntimeError("bad canonical ordering")
     return df.reset_index(drop=True)
