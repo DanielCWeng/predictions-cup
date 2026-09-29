@@ -1,0 +1,31 @@
+{
+  "block_count": 167374,
+  "block_timestamp_bytes": 469014,
+  "block_timestamp_path": "block_timestamp.parquet",
+  "block_timestamp_sha256": "cc5f3149435c7ed7cb5b3a554b7a490e22c7651a31efa36a4c136b9115ab05e4",
+  "classification": "POST_HOC_FALSIFICATION_ONLY",
+  "distinct_blocks_sharing_timestamp": 0,
+  "duplicate_block_log_groups": 0,
+  "economic_rows": 412863,
+  "experiment_id": "EXPERIMENT-005B-ORDERING-FALSIFICATION",
+  "family": "COL_2026",
+  "mapped_block_count": 167374,
+  "mapped_tx_count": 279775,
+  "missing_block_numbers": 0,
+  "missing_block_timestamps": 0,
+  "parent_canonical_path": "/home/ec2-user/005b_reconstruct_output/005b_historical_predictive_atlas/reconstruction/canonical_trades_COL_2026.parquet",
+  "parent_canonical_sha256": "991d43f0a7ae5a740c97bc52049341a936fdec5ec0105cc195d68553a4bb37c9",
+  "rpc_methods": [
+    "eth_getTransactionByHash",
+    "eth_getBlockByNumber"
+  ],
+  "rpc_url": "https://tenderly.rpc.polygon.community/",
+  "schema_version": 2,
+  "source": "Polygon archival JSON-RPC",
+  "stage": "archival_chain_tx_block_enrichment",
+  "timestamp_mismatches": 0,
+  "tx_block_bytes": 10629270,
+  "tx_block_path": "tx_block_COL_2026.parquet",
+  "tx_block_sha256": "e9ea949eb3b002cb1270f417e3c1f94f3f2f016cf6e24543936ec1e6f78e4a4d",
+  "tx_count": 279775
+}

@@ -1,0 +1,287 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B-DATA003-CONFIRMATION",
+  "classification": "FRESH_CONFIRMATION_ONLY",
+  "purpose": "Test the unchanged seven 005B realised-movement hypotheses on the disjoint actual mapped 2026 SIG universe after the historical ordering correction survived post-hoc falsification.",
+  "parent_binding": {
+    "corrected_005b_final_verdict_commit": "32b79983aa8cbbc544686aefdec8b89f96bea81d",
+    "corrected_005b_disposition": "CARRY_UNCHANGED_MOVEMENT_HYPOTHESIS_TO_FRESH_DATA_003",
+    "movement_horizons_not_falsified": 7,
+    "movement_horizon_count": 7,
+    "original_train_dev_freeze_sha256": "44025aa2c5e5bddd97d88c81e649d86d6bf55d6cccec1d57c2aa7af12a9a7ec6",
+    "original_holdout_sha256": "94db3e2319d376078e9f80f5e28d04215dcade53d76c1ec749af8bcc0fa8972a",
+    "original_feature_spec_sha256": "47dc9c9a678f58558aba7e4bc282103cacbc0836f08018a79d4197487d689cf7"
+  },
+  "data003_binding": {
+    "accepted_merge_commit": "3e4f9ac350ba6a33dfbc9a300a00a933efdfce42",
+    "accepted_data_branch_head": "a9ef91fa61e9c0fd5ba7244d52f937721568400c",
+    "kaggle_dataset": "polyleviathan/sig-cup-data-003-sig-actual-fills",
+    "dataset_id": "sigfills-20260928",
+    "fills": 132928,
+    "sig_markets_with_rows": 231,
+    "conditions": 693,
+    "sisterreq_condition_overlap": 0,
+    "sisterreq_token_overlap": 0,
+    "extraction_cutoff_utc": "2026-09-28T18:52:11Z",
+    "schema_evidence_commit": "619ecd75ccf168bcea6f24606a65440fd2638463",
+    "schema_report": "data/experiments/experiment_005b_data003_confirmation/schema_report.json",
+    "predictive_outcomes_accessed_before_freeze": false
+  },
+  "immutable_scope": {
+    "carried_targets": [
+      "target_clock_realised_movement_1",
+      "target_clock_realised_movement_5",
+      "target_clock_realised_movement_15",
+      "target_clock_realised_movement_30",
+      "target_clock_realised_movement_60",
+      "target_clock_realised_movement_120",
+      "target_clock_realised_movement_300"
+    ],
+    "new_targets_allowed": false,
+    "new_features_allowed": false,
+    "model_reselection_allowed": false,
+    "hyperparameter_tuning_allowed": false,
+    "threshold_tuning_allowed": false,
+    "mapping_class_subsetting_allowed": false,
+    "event_time_direction_carried_forward": false,
+    "data003_training_allowed": false
+  },
+  "reconstruction": {
+    "source_rows": "DATA-003 raw OrderFilled rows",
+    "group_key": [
+      "condition_id",
+      "tx_hash"
+    ],
+    "accepted_group_rules": [
+      "exactly one order_is_match_taker_order=true row",
+      "at least one passive row",
+      "all outcome_side values are YES/NO",
+      "active/passive size conservation within 1e-8 relative tolerance",
+      "YES-notional conservation within 1e-3 relative tolerance"
+    ],
+    "economic_rows": "passive OrderFilled rows only; preserve multi-maker passive fills",
+    "yes_axis": "YES -> price; NO -> 1-price",
+    "block_order": "authoritative Polygon block_number, then log_index",
+    "hard_block_gate": [
+      "100% distinct tx_hash values map to non-null archival block_number",
+      "100% distinct mapped blocks map to non-null block timestamp",
+      "stored DATA-003 timestamp equals archival block timestamp for every economic row",
+      "no duplicate (block_number, log_index) within the retained economic fill population"
+    ],
+    "predictive_evaluation_must_not_start_before_block_gate_passes": true
+  },
+  "frozen_features": {
+    "price_change_30": "p_yes - first_value(p_yes) over prior 30 seconds within condition",
+    "trade_count_30": "count of economic fills over prior 30 seconds within condition",
+    "realised_vol_5": "sqrt(sum(one_trade_change^2)) over prior 5 seconds within condition",
+    "absolute_return_5": "abs(p_yes - first_value(p_yes)) over prior 5 seconds within condition",
+    "absolute_return_15": "abs(p_yes - first_value(p_yes)) over prior 15 seconds within condition",
+    "absolute_return_30": "abs(p_yes - first_value(p_yes)) over prior 30 seconds within condition",
+    "absolute_return_60": "abs(p_yes - first_value(p_yes)) over prior 60 seconds within condition",
+    "absolute_return_120": "abs(p_yes - first_value(p_yes)) over prior 120 seconds within condition",
+    "absolute_return_300": "abs(p_yes - first_value(p_yes)) over prior 300 seconds within condition",
+    "absolute_return_900": "abs(p_yes - first_value(p_yes)) over prior 900 seconds within condition",
+    "recent_max_move_900": "max(abs(one_trade_change)) over prior 900 seconds within condition",
+    "distance_recent_low_300": "p_yes - min(p_yes) over prior 300 seconds within condition"
+  },
+  "frozen_target_definition": "For each horizon h in {1,5,15,30,60,120,300}, sqrt(sum(one_trade_change^2)) over strictly following economic fills within h seconds in the same condition; target is null when no following fill exists in-window.",
+  "historical_fit": {
+    "source": "five corrected 005B family matrices only; DATA-003 never enters fitting",
+    "families": [
+      "US_2024",
+      "CAN_2025",
+      "COL_2026",
+      "HUN_2026",
+      "PER_2026"
+    ],
+    "eligibility": "timestamp < dev_end_timestamp - 300; target and corresponding clock_label_end non-null; clock_label_end < dev_end_timestamp",
+    "per_family_sampling": "ORDER BY hash(condition_id,tx_hash,log_index) LIMIT 100000",
+    "refit_policy": "fit each original DEV-selected model once on the corrected historical TRAIN+DEV sample for that target"
+  },
+  "models": {
+    "target_clock_realised_movement_1": {
+      "model": "hist_gradient_boosting",
+      "params": {
+        "learning_rate": 0.05,
+        "max_iter": 100,
+        "max_leaf_nodes": 15,
+        "l2_regularization": 1,
+        "random_state": 505005
+      },
+      "features": [
+        "realised_vol_5",
+        "absolute_return_5",
+        "recent_max_move_900",
+        "absolute_return_30",
+        "absolute_return_15",
+        "absolute_return_60",
+        "absolute_return_120",
+        "absolute_return_300"
+      ]
+    },
+    "target_clock_realised_movement_5": {
+      "model": "ridge",
+      "params": {
+        "alpha": 10
+      },
+      "features": [
+        "realised_vol_5",
+        "recent_max_move_900",
+        "absolute_return_5",
+        "absolute_return_30",
+        "absolute_return_60",
+        "absolute_return_15",
+        "absolute_return_120",
+        "absolute_return_300"
+      ]
+    },
+    "target_clock_realised_movement_15": {
+      "model": "hist_gradient_boosting",
+      "params": {
+        "learning_rate": 0.05,
+        "max_iter": 100,
+        "max_leaf_nodes": 15,
+        "l2_regularization": 1,
+        "random_state": 505005
+      },
+      "features": [
+        "realised_vol_5",
+        "recent_max_move_900",
+        "absolute_return_300",
+        "absolute_return_60",
+        "absolute_return_120",
+        "absolute_return_30",
+        "absolute_return_15",
+        "absolute_return_900"
+      ]
+    },
+    "target_clock_realised_movement_30": {
+      "model": "hist_gradient_boosting",
+      "params": {
+        "learning_rate": 0.05,
+        "max_iter": 100,
+        "max_leaf_nodes": 15,
+        "l2_regularization": 1,
+        "random_state": 505005
+      },
+      "features": [
+        "recent_max_move_900",
+        "realised_vol_5",
+        "absolute_return_300",
+        "absolute_return_120",
+        "absolute_return_60",
+        "absolute_return_900",
+        "absolute_return_30",
+        "absolute_return_15"
+      ]
+    },
+    "target_clock_realised_movement_60": {
+      "model": "hist_gradient_boosting",
+      "params": {
+        "learning_rate": 0.05,
+        "max_iter": 100,
+        "max_leaf_nodes": 15,
+        "l2_regularization": 1,
+        "random_state": 505005
+      },
+      "features": [
+        "recent_max_move_900",
+        "absolute_return_300",
+        "realised_vol_5",
+        "absolute_return_900",
+        "absolute_return_120",
+        "absolute_return_60",
+        "absolute_return_30",
+        "absolute_return_15"
+      ]
+    },
+    "target_clock_realised_movement_120": {
+      "model": "hist_gradient_boosting",
+      "params": {
+        "learning_rate": 0.05,
+        "max_iter": 100,
+        "max_leaf_nodes": 15,
+        "l2_regularization": 1,
+        "random_state": 505005
+      },
+      "features": [
+        "recent_max_move_900",
+        "absolute_return_300",
+        "absolute_return_900",
+        "absolute_return_120",
+        "realised_vol_5",
+        "absolute_return_60",
+        "distance_recent_low_300",
+        "absolute_return_30"
+      ]
+    },
+    "target_clock_realised_movement_300": {
+      "model": "hist_gradient_boosting",
+      "params": {
+        "learning_rate": 0.05,
+        "max_iter": 100,
+        "max_leaf_nodes": 15,
+        "l2_regularization": 1,
+        "random_state": 505005
+      },
+      "features": [
+        "recent_max_move_900",
+        "absolute_return_900",
+        "absolute_return_300",
+        "absolute_return_120",
+        "absolute_return_60",
+        "realised_vol_5",
+        "distance_recent_low_300",
+        "absolute_return_30"
+      ]
+    }
+  },
+  "baselines": {
+    "persistence": "constant historical corrected TRAIN+DEV mean of the target",
+    "own_recent_price": "historical corrected TRAIN+DEV linear regression on price_change_30",
+    "current_absolute_movement": "historical corrected TRAIN+DEV linear regression on absolute_return_30",
+    "recent_activity": "historical corrected TRAIN+DEV linear regression on trade_count_30"
+  },
+  "evaluation": {
+    "test_set": "all eligible DATA-003 economic fills; evaluation-only; no split/tuning",
+    "aggregate_metrics": [
+      "MAE",
+      "MSE",
+      "predictive_IC"
+    ],
+    "bootstrap": {
+      "unit": "condition_id",
+      "aggregation": "equal-weight condition mean of abs(y-persistence)-abs(y-model)",
+      "repetitions": 1000,
+      "seed": 505003,
+      "interval": [
+        0.025,
+        0.975
+      ],
+      "positive_means_model_better": true
+    },
+    "mapping_class_diagnostics": [
+      "EXACT",
+      "DERIVED",
+      "NEAR"
+    ],
+    "mapping_class_diagnostics_are_selection_gates": false
+  },
+  "confirmation_rule": {
+    "per_horizon": [
+      "model aggregate MAE is strictly lower than all four frozen baseline MAEs",
+      "condition-cluster bootstrap lower 2.5% bound versus persistence is strictly greater than zero"
+    ],
+    "full_movement_transfer": "all seven horizons satisfy both per-horizon conditions",
+    "partial_result_policy": "report exact passing/failing horizons; do not replace, tune, subset or rescue failures"
+  },
+  "interpretation": {
+    "success_language": "freshly_supported_on_DATA_003",
+    "prohibited_language": [
+      "guaranteed_alpha",
+      "executable_edge_without_execution_test",
+      "newly_selected_candidate"
+    ],
+    "failure_language": "does_not_transfer_to_DATA_003_under_frozen_test"
+  }
+}

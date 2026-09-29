@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "action": "output",
+  "kernel": "polyleviathan/005b-ordering-falsification-diff-audit",
+  "output_file_pattern": ".*matrix_difference_audit\\.json$",
+  "note": "Fetch compact original-vs-corrected matrix-difference audit only."
+}

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Freeze DATA-004 P0/P1 identities, Gamma outcome alignment, and baseline links."""
+
 from __future__ import annotations
 
 import argparse
@@ -12,7 +13,6 @@ from pathlib import Path
 from typing import Any
 
 import requests
-
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_LANE = Path("/home/ubuntu/campaigns/data004_20260929")
@@ -64,7 +64,9 @@ def fetch_json(path: str, *, retries: int = 5) -> dict[str, Any]:
             if attempt + 1 < retries:
                 time.sleep(min(2**attempt, 20))
     assert last_error is not None
-    raise RuntimeError(f"Gamma request failed for {path}: {type(last_error).__name__}: {last_error}")
+    raise RuntimeError(
+        f"Gamma request failed for {path}: {type(last_error).__name__}: {last_error}"
+    )
 
 
 def get_market(market_id: str) -> tuple[str, dict[str, Any]]:
@@ -89,7 +91,9 @@ def source_identity(source: dict[str, Any]) -> dict[str, Any]:
     outcomes = [str(x) for x in source.get("outcomes", [])]
     tokens = [str(x) for x in source.get("token_ids", [])]
     if len(outcomes) != len(tokens) or not tokens:
-        raise ValueError(f"baseline source has invalid outcome/token alignment: {source.get('market_id')}")
+        raise ValueError(
+            f"baseline source has invalid outcome/token alignment: {source.get('market_id')}"
+        )
     return {
         "market_id": str(source["market_id"]),
         "condition_id": str(source["condition_id"]),
@@ -109,9 +113,13 @@ def build_baseline_plan(
 ) -> dict[str, Any]:
     mapping_payload = json.loads(MAPPING_PATH.read_text(encoding="utf-8"))
     mapping_records = mapping_payload["records"]
-    usable = [row for row in mapping_records if row["mapping_class"] in {"EXACT", "DERIVED", "NEAR"}]
+    usable = [
+        row for row in mapping_records if row["mapping_class"] in {"EXACT", "DERIVED", "NEAR"}
+    ]
     if len(usable) != 231:
-        raise ValueError(f"accepted direct/derived/near mapping rows expected 231, got {len(usable)}")
+        raise ValueError(
+            f"accepted direct/derived/near mapping rows expected 231, got {len(usable)}"
+        )
     by_exchange = {str(row["sig_exchange_id"]): row for row in usable}
     if len(by_exchange) != 231:
         raise ValueError("SIG exchange IDs are not unique in the accepted mapping")
@@ -134,40 +142,40 @@ def build_baseline_plan(
         source_rows = (
             [source_identity(item) for item in mapping.get("polymarket_components", [])]
             if mapping_class == "DERIVED"
-            else [source_identity(mapping["direct_polymarket"]) ]
+            else [source_identity(mapping["direct_polymarket"])]
         )
         for source in source_rows:
             source_market_ids.add(source["market_id"])
             source_conditions.add(source["condition_id"])
             source_tokens.update(source["token_ids"])
         v2 = data004_by_exchange.get(exchange_id, {"p0": [], "p1": []})
-        anchor_plans.append({
-            "sig_exchange_id": exchange_id,
-            "sig_market_id": str(mapping["sig_market_id"]),
-            "sig_outcome_label": mapping.get("sig_outcome_label"),
-            "sig_question": mapping.get("sig_market_title"),
-            "mapping_class": mapping_class,
-            "mapping_direction": mapping.get("mapping_direction"),
-            "mapping_status": mapping.get("status"),
-            "semantic_notes": mapping.get("semantic_notes"),
-            "resolution_notes": mapping.get("resolution_notes"),
-            "baseline_source_markets": source_rows,
-            "data004_p0_market_ids": sorted(set(v2["p0"]), key=int),
-            "data004_p1_market_ids": sorted(set(v2["p1"]), key=int),
-            "ets_anchor_graph_row": anchor_rows[exchange_id],
-            "pairing_rule": (
-                "Join DATA-003 history by accepted baseline condition_id/token_id and the SIG exchange mapping; "
-                "join DATA-004 by the frozen sig_exchange_ids_json edge. Preserve SAME/COMPLEMENT or DERIVED "
-                "semantics from the accepted mapping; compare only under the graph's stated relationship/equation."
-            ),
-        })
+        anchor_plans.append(
+            {
+                "sig_exchange_id": exchange_id,
+                "sig_market_id": str(mapping["sig_market_id"]),
+                "sig_outcome_label": mapping.get("sig_outcome_label"),
+                "sig_question": mapping.get("sig_market_title"),
+                "mapping_class": mapping_class,
+                "mapping_direction": mapping.get("mapping_direction"),
+                "mapping_status": mapping.get("status"),
+                "semantic_notes": mapping.get("semantic_notes"),
+                "resolution_notes": mapping.get("resolution_notes"),
+                "baseline_source_markets": source_rows,
+                "data004_p0_market_ids": sorted(set(v2["p0"]), key=int),
+                "data004_p1_market_ids": sorted(set(v2["p1"]), key=int),
+                "ets_anchor_graph_row": anchor_rows[exchange_id],
+                "pairing_rule": (
+                    "Join DATA-003 history by accepted baseline condition_id/token_id and the SIG exchange mapping; "
+                    "join DATA-004 by the frozen sig_exchange_ids_json edge. Preserve SAME/COMPLEMENT or DERIVED "
+                    "semantics from the accepted mapping; compare only under the graph's stated relationship/equation."
+                ),
+            }
+        )
 
     selected_market_ids = {str(row["market_id"]) for row in selected}
     selected_cids = {str(row["condition_id"]) for row in selected}
     selected_tokens = {
-        str(token)
-        for row in selected
-        for token in (row["token_yes"], row["token_no"])
+        str(token) for row in selected for token in (row["token_yes"], row["token_no"])
     }
     overlap = {
         "market_ids": sorted(source_market_ids & selected_market_ids, key=int),
@@ -186,7 +194,10 @@ def build_baseline_plan(
         "accepted_mapping_sha256": sha256_file(MAPPING_PATH),
         "source_scope": {
             "mapping_records": len(usable),
-            "classes": {name: sum(row["mapping_class"] == name for row in usable) for name in ("EXACT", "DERIVED", "NEAR")},
+            "classes": {
+                name: sum(row["mapping_class"] == name for row in usable)
+                for name in ("EXACT", "DERIVED", "NEAR")
+            },
             "unique_market_ids": len(source_market_ids),
             "unique_condition_ids": len(source_conditions),
             "unique_token_ids": len(source_tokens),
@@ -212,10 +223,15 @@ def main() -> None:
 
     with ACQUISITION_PATH.open(encoding="utf-8-sig", newline="") as handle:
         acquisition_rows = list(csv.DictReader(handle))
-    selected = [row for row in acquisition_rows if row.get("acquisition_class") in {"FILLS_P0", "FILLS_P1"}]
+    selected = [
+        row for row in acquisition_rows if row.get("acquisition_class") in {"FILLS_P0", "FILLS_P1"}
+    ]
     if len(selected) != 298:
         raise ValueError(f"P0+P1 acquisition scope expected 298 rows, got {len(selected)}")
-    counts = {tier: sum(row["acquisition_class"] == tier for row in selected) for tier in ("FILLS_P0", "FILLS_P1")}
+    counts = {
+        tier: sum(row["acquisition_class"] == tier for row in selected)
+        for tier in ("FILLS_P0", "FILLS_P1")
+    }
     if counts != {"FILLS_P0": 210, "FILLS_P1": 88}:
         raise ValueError(f"expected 210 P0 + 88 P1, got {counts}")
     for label, values in (
@@ -225,12 +241,18 @@ def main() -> None:
     ):
         if len(values) != len(set(values)):
             raise ValueError(f"duplicate {label} IDs in P0+P1 universe")
-    if any(not row.get(field) for row in selected for field in ("market_id", "condition_id", "token_yes", "token_no")):
+    if any(
+        not row.get(field)
+        for row in selected
+        for field in ("market_id", "condition_id", "token_yes", "token_no")
+    ):
         raise ValueError("P0+P1 universe contains blank market/CID/token identity")
 
     with MARKET_GRAPH_PATH.open(encoding="utf-8-sig", newline="") as handle:
         market_graph = list(csv.DictReader(handle))
-    graph_by_market: dict[str, list[dict[str, str]]] = {str(row["market_id"]): [] for row in selected}
+    graph_by_market: dict[str, list[dict[str, str]]] = {
+        str(row["market_id"]): [] for row in selected
+    }
     selected_ids = set(graph_by_market)
     for edge in market_graph:
         for market_id in graph_market_ids(edge) & selected_ids:
@@ -249,7 +271,9 @@ def main() -> None:
     }
     missing_anchors = sorted(selected_anchor_ids - set(anchor_rows), key=int)
     if missing_anchors:
-        raise ValueError(f"selected SIG anchor references absent from ETS_SIG_ANCHOR_GRAPH: {missing_anchors}")
+        raise ValueError(
+            f"selected SIG anchor references absent from ETS_SIG_ANCHOR_GRAPH: {missing_anchors}"
+        )
 
     market_ids = [str(row["market_id"]) for row in selected]
     raw_market_by_id: dict[str, dict[str, Any]] = {}
@@ -276,11 +300,22 @@ def main() -> None:
             raise ValueError(f"Gamma market ID mismatch for requested market {market_id}")
         if str(gamma.get("conditionId") or "").lower() != str(row["condition_id"]).lower():
             raise ValueError(f"Gamma CID mismatch for market {market_id}")
-        outcomes = parse_json_array(gamma.get("outcomes")) if isinstance(gamma.get("outcomes"), str) else list(gamma.get("outcomes") or [])
-        clob_tokens = parse_json_array(gamma.get("clobTokenIds")) if isinstance(gamma.get("clobTokenIds"), str) else list(gamma.get("clobTokenIds") or [])
+        outcomes = (
+            parse_json_array(gamma.get("outcomes"))
+            if isinstance(gamma.get("outcomes"), str)
+            else list(gamma.get("outcomes") or [])
+        )
+        clob_tokens = (
+            parse_json_array(gamma.get("clobTokenIds"))
+            if isinstance(gamma.get("clobTokenIds"), str)
+            else list(gamma.get("clobTokenIds") or [])
+        )
         if len(outcomes) != len(clob_tokens) or not outcomes:
             raise ValueError(f"Gamma outcome/token arrays do not align for market {market_id}")
-        outcome_map = {str(label).strip().casefold(): str(token) for label, token in zip(outcomes, clob_tokens, strict=True)}
+        outcome_map = {
+            str(label).strip().casefold(): str(token)
+            for label, token in zip(outcomes, clob_tokens, strict=True)
+        }
         if len(outcome_map) != len(outcomes):
             raise ValueError(f"Gamma outcomes are not unique for market {market_id}")
         expected = {"yes": str(row["token_yes"]), "no": str(row["token_no"])}
@@ -290,16 +325,18 @@ def main() -> None:
                 f"Gamma={outcome_map}, frozen={expected}"
             )
         for outcome_label, token_id in zip(outcomes, clob_tokens, strict=True):
-            token_rows.append({
-                "market_id": market_id,
-                "condition_id": str(row["condition_id"]),
-                "token_id": str(token_id),
-                "outcome_label": str(outcome_label),
-                "market_question": str(gamma.get("question") or row.get("question") or ""),
-                "event_id": str(row.get("event_id") or ""),
-                "acquisition_class": row["acquisition_class"],
-                "priority": row["priority"],
-            })
+            token_rows.append(
+                {
+                    "market_id": market_id,
+                    "condition_id": str(row["condition_id"]),
+                    "token_id": str(token_id),
+                    "outcome_label": str(outcome_label),
+                    "market_question": str(gamma.get("question") or row.get("question") or ""),
+                    "event_id": str(row.get("event_id") or ""),
+                    "acquisition_class": row["acquisition_class"],
+                    "priority": row["priority"],
+                }
+            )
 
         event_id = str(row.get("event_id") or "")
         event_raw = raw_event_by_id.get(event_id)
@@ -309,17 +346,23 @@ def main() -> None:
             "condition_id": str(row["condition_id"]),
             "gamma_market": gamma,
             "gamma_event": event_raw,
-            "gamma_event_fetch_error": next((item["error"] for item in event_errors if item["event_id"] == event_id), None),
+            "gamma_event_fetch_error": next(
+                (item["error"] for item in event_errors if item["event_id"] == event_id), None
+            ),
             "gamma_created_at": gamma.get("createdAt"),
             "gamma_start_date": gamma.get("startDate"),
             "gamma_end_date": gamma.get("endDate"),
             "gamma_outcomes": [str(value) for value in outcomes],
             "gamma_token_ids": [str(value) for value in clob_tokens],
             "gamma_outcome_token_alignment": [
-                {"outcome_label": str(label), "token_id": str(token)} for label, token in zip(outcomes, clob_tokens, strict=True)
+                {"outcome_label": str(label), "token_id": str(token)}
+                for label, token in zip(outcomes, clob_tokens, strict=True)
             ],
             "graph_links": graph_by_market[market_id],
-            "sig_anchor_rows": [anchor_rows[str(anchor)] for anchor in parse_json_array(row.get("sig_exchange_ids_json"))],
+            "sig_anchor_rows": [
+                anchor_rows[str(anchor)]
+                for anchor in parse_json_array(row.get("sig_exchange_ids_json"))
+            ],
         }
         universe_markets.append(market_record)
 
@@ -327,44 +370,67 @@ def main() -> None:
     gamma_market_cache = lane / "gamma_markets.jsonl"
     gamma_event_cache = lane / "gamma_events.jsonl"
     gamma_market_cache.write_text(
-        "".join(json.dumps(raw_market_by_id[mid], sort_keys=True, separators=(",", ":")) + "\n" for mid in sorted(raw_market_by_id, key=int)),
+        "".join(
+            json.dumps(raw_market_by_id[mid], sort_keys=True, separators=(",", ":")) + "\n"
+            for mid in sorted(raw_market_by_id, key=int)
+        ),
         encoding="utf-8",
     )
     gamma_event_cache.write_text(
-        "".join(json.dumps(raw_event_by_id[eid], sort_keys=True, separators=(",", ":")) + "\n" for eid in sorted(raw_event_by_id, key=int)),
+        "".join(
+            json.dumps(raw_event_by_id[eid], sort_keys=True, separators=(",", ":")) + "\n"
+            for eid in sorted(raw_event_by_id, key=int)
+        ),
         encoding="utf-8",
     )
-    write_json(lane / "data004_universe.json", {
-        "schema_version": 1,
-        "source_repository_commit": __import__("subprocess").check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip(),
-        "source_files": {
-            "acquisition": {"path": str(ACQUISITION_PATH.relative_to(ROOT)), "sha256": sha256_file(ACQUISITION_PATH)},
-            "market_graph": {"path": str(MARKET_GRAPH_PATH.relative_to(ROOT)), "sha256": sha256_file(MARKET_GRAPH_PATH)},
-            "sig_anchor_graph": {"path": str(ANCHOR_GRAPH_PATH.relative_to(ROOT)), "sha256": sha256_file(ANCHOR_GRAPH_PATH)},
-            "accepted_mapping": {"path": str(MAPPING_PATH.relative_to(ROOT)), "sha256": sha256_file(MAPPING_PATH)},
+    write_json(
+        lane / "data004_universe.json",
+        {
+            "schema_version": 1,
+            "source_repository_commit": __import__("subprocess")
+            .check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True)
+            .strip(),
+            "source_files": {
+                "acquisition": {
+                    "path": str(ACQUISITION_PATH.relative_to(ROOT)),
+                    "sha256": sha256_file(ACQUISITION_PATH),
+                },
+                "market_graph": {
+                    "path": str(MARKET_GRAPH_PATH.relative_to(ROOT)),
+                    "sha256": sha256_file(MARKET_GRAPH_PATH),
+                },
+                "sig_anchor_graph": {
+                    "path": str(ANCHOR_GRAPH_PATH.relative_to(ROOT)),
+                    "sha256": sha256_file(ANCHOR_GRAPH_PATH),
+                },
+                "accepted_mapping": {
+                    "path": str(MAPPING_PATH.relative_to(ROOT)),
+                    "sha256": sha256_file(MAPPING_PATH),
+                },
+            },
+            "gamma": {
+                "api_base": GAMMA_BASE,
+                "market_snapshot_path": str(gamma_market_cache),
+                "market_snapshot_sha256": sha256_file(gamma_market_cache),
+                "market_snapshot_rows": len(raw_market_by_id),
+                "event_snapshot_path": str(gamma_event_cache),
+                "event_snapshot_sha256": sha256_file(gamma_event_cache),
+                "event_snapshot_rows": len(raw_event_by_id),
+                "event_fetch_errors": event_errors,
+            },
+            "counts": {
+                "markets": len(universe_markets),
+                "conditions": len({row["condition_id"] for row in universe_markets}),
+                "tokens": len(token_rows),
+                "p0_markets": counts["FILLS_P0"],
+                "p1_markets": counts["FILLS_P1"],
+                "selected_sig_exchange_ids": len(selected_anchor_ids),
+                "market_graph_links": sum(len(row["graph_links"]) for row in universe_markets),
+            },
+            "markets": universe_markets,
+            "tokens": token_rows,
         },
-        "gamma": {
-            "api_base": GAMMA_BASE,
-            "market_snapshot_path": str(gamma_market_cache),
-            "market_snapshot_sha256": sha256_file(gamma_market_cache),
-            "market_snapshot_rows": len(raw_market_by_id),
-            "event_snapshot_path": str(gamma_event_cache),
-            "event_snapshot_sha256": sha256_file(gamma_event_cache),
-            "event_snapshot_rows": len(raw_event_by_id),
-            "event_fetch_errors": event_errors,
-        },
-        "counts": {
-            "markets": len(universe_markets),
-            "conditions": len({row["condition_id"] for row in universe_markets}),
-            "tokens": len(token_rows),
-            "p0_markets": counts["FILLS_P0"],
-            "p1_markets": counts["FILLS_P1"],
-            "selected_sig_exchange_ids": len(selected_anchor_ids),
-            "market_graph_links": sum(len(row["graph_links"]) for row in universe_markets),
-        },
-        "markets": universe_markets,
-        "tokens": token_rows,
-    })
+    )
     write_json(lane / "data004_baseline_pairing.json", baseline_plan)
     summary = {
         "status": "PREPARED",

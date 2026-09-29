@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "action": "wait",
+  "kernel": "polyleviathan/005b-ordering-falsification-us-family-context",
+  "poll_seconds": 60,
+  "timeout_minutes": 330,
+  "note": "Wait for corrected US continuation to reach a terminal Kaggle state."
+}

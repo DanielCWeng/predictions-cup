@@ -851,3 +851,27 @@ def test_recorder_normalization_wal_bulk_prices_and_retention(tmp_path: Path) ->
         assert connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone() == (0,)
     assert connection.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
     connection.close()
+
+def test_bounded_dirty_price_refresh_uses_high_priority_subset(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        rest = FakeRest()
+        engine, recorder = _engine(tmp_path, rest)
+        await engine.initialize()
+        rest.bulk_calls.clear()
+        rest.bulk_priorities.clear()
+
+        await engine.refresh_exchange_prices(
+            {"37"},
+            reason="maker_book_dirty",
+            priority=RestPriority.HIGH,
+        )
+
+        assert rest.bulk_calls == [("37",)]
+        assert rest.bulk_priorities == [RestPriority.HIGH]
+        assert engine.states["37"].scalar_best_bid == Decimal("0.4")
+        assert engine.states["37"].scalar_best_ask == Decimal("0.6")
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+

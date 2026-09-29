@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "logs",
+  "kernel": "polyleviathan/pred006-phase0-audit-and-split-freeze",
+  "note": "Fetch failed Phase-0 kernel log only; does not launch compute."
+}

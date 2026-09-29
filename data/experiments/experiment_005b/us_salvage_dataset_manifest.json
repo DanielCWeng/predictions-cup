@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "artifact": "US_2024 salvage base/price intermediates",
+  "kaggle_dataset": "polyleviathan/005b-us-base-price-intermediates",
+  "source_kernel": "polyleviathan/005b-historical-predictive-atlas-features version 3",
+  "source_kernel_status": "ERROR",
+  "inclusion_rule": "Only metadata-validated complete Parquet outputs are included. Truncated _activity_raw_US_2024.parquet is excluded.",
+  "files": {
+    "_base_US_2024.parquet": {
+      "rows": 7890463,
+      "sha256": "16d0e9fbe6f2d9b69c9e25b89050c04c876c3dfca3a1de044f33cda94a7431a4"
+    },
+    "_price_US_2024.parquet": {
+      "rows": 7890463,
+      "sha256": "77b08d871d734174bdc0e39352ee3b5be6fab15685c856186b3fe14bd675f731"
+    }
+  },
+  "excluded": {
+    "_activity_raw_US_2024.parquet": "Truncated/invalid Parquet; not used."
+  }
+}

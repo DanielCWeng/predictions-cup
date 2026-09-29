@@ -285,7 +285,7 @@ def test_live_same_state_change_reserves_first_approval_before_second_risk_check
 
     assert len(events) == 1
     assert dispatched == ["e1:a"]
-    assert reservations.intent_ids() == frozenset({"a:100:0"})
+    assert reservations.intent_ids() == frozenset({"a:100:36:0"})
 
 
 def test_live_duplicate_intent_different_event_id_is_not_dispatched_twice() -> None:

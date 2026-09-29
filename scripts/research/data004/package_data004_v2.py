@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Refresh the DATA-004 v2 Kaggle tree from local v2 evidence and OCI manifest."""
+
 from __future__ import annotations
 
-import csv
 import hashlib
 import json
 import os
-import time
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -34,25 +34,43 @@ def sha256_file(path: Path) -> str:
 
 
 def json_write(path: Path, value: Any) -> None:
-    path.write_text(json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
 
 
 def disk_gate(path: Path, stage: str, reserve_bytes: int = 0) -> int:
     log_path = Path("/home/ubuntu/campaigns/data004_20260929/data004_a3_disk_check.jsonl")
     started = time.monotonic()
     while True:
-        result = subprocess.run(["df", "-B1", "--output=avail", str(path)], check=True, text=True, capture_output=True)
+        result = subprocess.run(
+            ["df", "-B1", "--output=avail", str(path)], check=True, text=True, capture_output=True
+        )
         available = int([line.strip() for line in result.stdout.splitlines() if line.strip()][-1])
         with log_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps({"stage": stage, "available_bytes": available, "reserve_bytes": reserve_bytes,
-                                     "checked_at_utc": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()}) + "\n")
+            handle.write(
+                json.dumps(
+                    {
+                        "stage": stage,
+                        "available_bytes": available,
+                        "reserve_bytes": reserve_bytes,
+                        "checked_at_utc": __import__("datetime")
+                        .datetime.now(__import__("datetime").timezone.utc)
+                        .isoformat(),
+                    }
+                )
+                + "\n"
+            )
         if available < HARD_MIN_FREE_BYTES:
             raise RuntimeError(f"disk below hard 5 GiB floor at {stage}: {available}")
         if available >= MIN_FREE_BYTES + reserve_bytes:
             return available
         if time.monotonic() - started > 2 * 60 * 60:
             raise RuntimeError(f"disk gate timed out at {stage}: {available}")
-        print(f"PAUSED disk gate stage={stage} free_bytes={available}; rechecking in 5 minutes", flush=True)
+        print(
+            f"PAUSED disk gate stage={stage} free_bytes={available}; rechecking in 5 minutes",
+            flush=True,
+        )
         time.sleep(300)
 
 
@@ -86,7 +104,11 @@ def copy_review_files() -> None:
     # The Kaggle bundle points to the same canonical v2 source manifest that will
     # be published as the final OCI object.
     source_manifest = V2 / "data004_manifest.json"
-    disk_gate(PACKAGE, "before_package_copy_oci_manifest", reserve_bytes=source_manifest.stat().st_size * 2)
+    disk_gate(
+        PACKAGE,
+        "before_package_copy_oci_manifest",
+        reserve_bytes=source_manifest.stat().st_size * 2,
+    )
     shutil.copy2(source_manifest, PACKAGE / "OCI_SOURCE_MANIFEST.json")
 
 
@@ -105,8 +127,8 @@ The private Kaggle dataset ID is `polyleviathan/sig-cup-data-004-ets-p0p1-fills`
 
 ## Scope
 
-- {counts['markets']:,} markets: 210 P0 and 88 P1; {counts['conditions']:,} conditions and {counts['tokens']:,} Gamma-aligned outcome tokens.
-- {counts['deduped_fill_rows']:,} rows from {counts['earliest_fill_utc']} through {counts['latest_fill_utc']}.
+- {counts["markets"]:,} markets: 210 P0 and 88 P1; {counts["conditions"]:,} conditions and {counts["tokens"]:,} Gamma-aligned outcome tokens.
+- {counts["deduped_fill_rows"]:,} rows from {counts["earliest_fill_utc"]} through {counts["latest_fill_utc"]}.
 - Full history is partitioned by UTC date under `fills/date=YYYY-MM-DD/`.
 - The package retains metadata for the full 1,279-market / 2,558-token candidate universe. The 797 `book_needed_later` markets have no acquired fills.
 - `data004_baseline_pairing.json` preserves the plan for 231 accepted DATA-003 anchors (140 EXACT, 87 DERIVED, 4 NEAR); no DATA-003 source fills were reacquired.
@@ -117,7 +139,7 @@ v2 reuses every v1 fill row and does not rescan the trade lake. The 4,989 rows o
 
 ## Review outcome
 
-All rows have a block number and pass strict per-token `(block_number, log_index)` ordering. Deduplication, universe/token alignment, source-date coverage, price bounds, core-field completeness, lifecycle bounds, per-market coverage and maker/taker conservation pass. The 43 non-zero maker/taker residual groups are classified as `PRECISION_ROUNDING_4DP`; each is within the accepted source-quantum tolerance of `0.0001 × max(maker_rows, 1)` shares. Across all {precision['rows_scanned']:,} `size_shares` values, the maximum observed precision is {precision['max_decimal_places_observed']} decimal places. No fill values were changed. The residuals remain individually listed in `maker_taker_tx_condition_residuals.csv`; see `QUALITY.json` and `COVERAGE.md` for the gate evidence.
+All rows have a block number and pass strict per-token `(block_number, log_index)` ordering. Deduplication, universe/token alignment, source-date coverage, price bounds, core-field completeness, lifecycle bounds, per-market coverage and maker/taker conservation pass. The 43 non-zero maker/taker residual groups are classified as `PRECISION_ROUNDING_4DP`; each is within the accepted source-quantum tolerance of `0.0001 × max(maker_rows, 1)` shares. Across all {precision["rows_scanned"]:,} `size_shares` values, the maximum observed precision is {precision["max_decimal_places_observed"]} decimal places. No fill values were changed. The residuals remain individually listed in `maker_taker_tx_condition_residuals.csv`; see `QUALITY.json` and `COVERAGE.md` for the gate evidence.
 
 This package contains no order-book history, R3 predictive/fair-value test or outcome-driven graph change.
 """,
@@ -138,7 +160,7 @@ The custody join supplied 226,975 block numbers. Custody objects are absent for 
 
 ## Maker/taker conservation
 
-The gate groups all taker-order rows (`order_is_match_taker_order=true`, equivalent to an exchange counterparty) and maker rows by `(tx_hash, condition_id)`, summing serialized Parquet values with `Decimal(str(value))`. The source lake stores `size_shares` at four decimal places; the full {precision['rows_scanned']:,}-row check observed a maximum of {precision['max_decimal_places_observed']} decimal places. Of {symmetry['groups_checked']:,} groups, {symmetry['exact_equal_size_groups']:,} match exactly and {symmetry['precision_rounding_groups']:,} have residuals of exactly ±0.0001 shares. The accepted condition is `abs(taker_size - maker_size) <= 0.0001 × max(maker_rows, 1)` shares. This allows at most one source quantum per summed maker row and accounts for source rounding of the on-chain six-decimal amounts; no fill values are changed. There are no one-sided groups or unexplained residuals. The 43 precision-rounding groups are listed individually in `maker_taker_tx_condition_residuals.csv`.
+The gate groups all taker-order rows (`order_is_match_taker_order=true`, equivalent to an exchange counterparty) and maker rows by `(tx_hash, condition_id)`, summing serialized Parquet values with `Decimal(str(value))`. The source lake stores `size_shares` at four decimal places; the full {precision["rows_scanned"]:,}-row check observed a maximum of {precision["max_decimal_places_observed"]} decimal places. Of {symmetry["groups_checked"]:,} groups, {symmetry["exact_equal_size_groups"]:,} match exactly and {symmetry["precision_rounding_groups"]:,} have residuals of exactly ±0.0001 shares. The accepted condition is `abs(taker_size - maker_size) <= 0.0001 × max(maker_rows, 1)` shares. This allows at most one source quantum per summed maker row and accounts for source rounding of the on-chain six-decimal amounts; no fill values are changed. There are no one-sided groups or unexplained residuals. The 43 precision-rounding groups are listed individually in `maker_taker_tx_condition_residuals.csv`.
 
 Price-indexed buckets are retained only as descriptive diagnostics: the taker row can aggregate multiple maker price levels, so those buckets are not the transaction-condition conservation gate. The source-quantum tolerance applies only to the gate; no `size_shares` values were rounded or changed.
 
@@ -155,7 +177,9 @@ def write_package_manifest(source_manifest: dict[str, Any]) -> dict[str, Any]:
     disk_gate(PACKAGE, "before_package_manifest_refresh", reserve_bytes=2 * (1 << 20))
     old = json.loads(old_path.read_text(encoding="utf-8")) if old_path.exists() else {}
     old_files = {row["path"]: row for row in old.get("files", [])}
-    object_by_date = {row["date"]: row for row in source_manifest["files"] if row.get("kind") == "fills"}
+    object_by_date = {
+        row["date"]: row for row in source_manifest["files"] if row.get("kind") == "fills"
+    }
     package_files: list[dict[str, Any]] = []
     for path in sorted(p for p in PACKAGE.rglob("*") if p.is_file() and p.name != "MANIFEST.json"):
         relative = path.relative_to(PACKAGE).as_posix()
@@ -172,7 +196,13 @@ def write_package_manifest(source_manifest: dict[str, Any]) -> dict[str, Any]:
         "dataset_id": "DATA-004",
         "version": "v2",
         "status": source_manifest["status"],
-        "scope": {"markets": 298, "conditions": 298, "tokens": 596, "p0_markets": 210, "p1_markets": 88},
+        "scope": {
+            "markets": 298,
+            "conditions": 298,
+            "tokens": 596,
+            "p0_markets": 210,
+            "p1_markets": 88,
+        },
         "source_oci": {
             "bucket": BUCKET,
             "object_prefix": OCI_PREFIX,
@@ -193,15 +223,27 @@ def main() -> None:
         raise FileNotFoundError(PACKAGE)
     source_manifest = json.loads((V2 / "data004_manifest.json").read_text(encoding="utf-8"))
     quality = json.loads((V2 / "data004_quality.json").read_text(encoding="utf-8"))
-    if source_manifest.get("version") != "v2" or source_manifest.get("status") != quality.get("status"):
+    if source_manifest.get("version") != "v2" or source_manifest.get("status") != quality.get(
+        "status"
+    ):
         raise RuntimeError("v2 manifest and quality summary disagree")
     disk_gate(PACKAGE, "before_package_refresh", reserve_bytes=10 * (1 << 20))
     copy_review_files()
     write_docs(source_manifest, quality)
     manifest = write_package_manifest(source_manifest)
-    print(json.dumps({"package": str(PACKAGE), "version": manifest["version"], "status": manifest["status"],
-                      "file_count": len(manifest["files"]), "uncompressed_bytes": sum(row["bytes"] for row in manifest["files"]),
-                      "source_manifest_sha256": manifest["source_oci"]["manifest_sha256"]}, sort_keys=True))
+    print(
+        json.dumps(
+            {
+                "package": str(PACKAGE),
+                "version": manifest["version"],
+                "status": manifest["status"],
+                "file_count": len(manifest["files"]),
+                "uncompressed_bytes": sum(row["bytes"] for row in manifest["files"]),
+                "source_manifest_sha256": manifest["source_oci"]["manifest_sha256"],
+            },
+            sort_keys=True,
+        )
+    )
 
 
 if __name__ == "__main__":

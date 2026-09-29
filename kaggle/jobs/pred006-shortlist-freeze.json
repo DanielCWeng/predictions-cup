@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/pred006_shortlist_freeze",
+  "kernel": "polyleviathan/pred006-shortlist-freeze",
+  "poll_seconds": 20,
+  "timeout_minutes": 90,
+  "download_outputs": true,
+  "output_file_pattern": "(shortlist_freeze|candidate_registry)\\.json$",
+  "run_nonce": "PRED006_SHORTLIST_FREEZE_V1_20260929",
+  "note": "PRED-006 immutable shortlist freeze after all DEV search, block-safe hazard correction, ablation, and placebo checks. FINAL remains sealed."
+}

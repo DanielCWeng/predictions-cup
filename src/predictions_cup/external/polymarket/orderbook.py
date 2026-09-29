@@ -40,6 +40,7 @@ class _MutableBook:
 class DeltaResult:
     changed_tokens: frozenset[str]
     uninitialized_deltas: int
+    uninitialized_token_ids: frozenset[str]
     changes: tuple[BookChangeEvent, ...]
 
 
@@ -107,6 +108,7 @@ class OrderBookStore:
         changed: set[str] = set()
         normalized_changes: list[BookChangeEvent] = []
         missing = 0
+        missing_token_ids: set[str] = set()
 
         for change_raw in changes_raw:
             if not isinstance(change_raw, dict):
@@ -118,6 +120,7 @@ class OrderBookStore:
             book = self._books.get(token_id)
             if book is None:
                 missing += 1
+                missing_token_ids.add(token_id)
                 continue
             side_raw = require_text(change.get("side"), "price_change side").upper()
             normalized_side: BookSide
@@ -157,7 +160,12 @@ class OrderBookStore:
                 )
             )
 
-        return DeltaResult(frozenset(changed), missing, tuple(normalized_changes))
+        return DeltaResult(
+            frozenset(changed),
+            missing,
+            frozenset(missing_token_ids),
+            tuple(normalized_changes),
+        )
 
     def apply_last_trade_price(self, payload: JsonObject, observed_at: datetime) -> bool:
         event = _unwrap_market_event(payload)

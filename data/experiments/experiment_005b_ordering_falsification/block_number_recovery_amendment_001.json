@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B-ORDERING-FALSIFICATION",
+  "amendment_id": "block_number_recovery_amendment_001",
+  "classification": "ENGINEERING_ONLY_POST_HOC_FALSIFICATION",
+  "trigger": "The parent DATA-002 matched-fill package and canonical PolyLeviathan trades lake preserve tx_hash/log_index/timestamp but project block_number away after the upstream OrderFilled decoder.",
+  "source_of_truth": {
+    "chain": "Polygon PoS mainnet",
+    "chain_id": 137,
+    "transport": "archival JSON-RPC",
+    "endpoint_class": "public Polygon RPC",
+    "methods": [
+      "eth_getTransactionByHash",
+      "eth_getBlockByNumber"
+    ],
+    "transaction_mapping": "Every distinct frozen 005B economic tx_hash is queried directly; returned hash must match and blockNumber must be non-null.",
+    "timestamp_verification": "Every distinct returned block_number is queried directly; returned block number must match and its header timestamp must equal the parent canonical row timestamp for every economic row."
+  },
+  "hard_gates": [
+    "100% of frozen 005B economic rows map through their tx_hash to a non-null actual block_number.",
+    "100% of mapped block_numbers map to a non-null actual block-header timestamp.",
+    "Every frozen canonical timestamp equals the actual mapped block-header timestamp.",
+    "No two distinct mapped blocks share a timestamp.",
+    "No retained economic rows share the same (block_number, log_index)."
+  ],
+  "ordering": {
+    "parent_pseudo_order": "timestamp, tx_hash, log_index",
+    "correct_order": "block_number, log_index",
+    "provisional_equivalent_build_order": "timestamp, log_index, tx_hash",
+    "acceptance_rule": "The provisional corrected matrices may be accepted only if the 100% actual block-number gate passes and their sequence is proven identical to (block_number, log_index). Otherwise the provisional matrices are discarded and Stage 2 is rerun with explicit block_number."
+  },
+  "scientific_effect": "NONE",
+  "unchanged": [
+    "economic fill population",
+    "feature definitions",
+    "target definitions",
+    "windows",
+    "splits",
+    "embargo",
+    "models",
+    "model hyperparameters",
+    "thresholds",
+    "negative controls",
+    "bootstrap",
+    "original promoted shortlist",
+    "parent PR #45 artefacts"
+  ],
+  "interpretation": "Recovered/corrected HOLDOUT evidence remains POST_HOC FALSIFICATION ONLY. It can demote or falsify parent findings and cannot promote or reconfirm them."
+}

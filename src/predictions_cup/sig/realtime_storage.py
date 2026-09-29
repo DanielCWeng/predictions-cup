@@ -132,12 +132,37 @@ class SigRealtimeRecorder:
             );
             CREATE INDEX IF NOT EXISTS ix_trust_transitions_time
                 ON trust_transitions(observed_at);
+
+            CREATE TABLE IF NOT EXISTS capture_health (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                observed_at TEXT NOT NULL,
+                payload_json TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ix_capture_health_time
+                ON capture_health(observed_at);
             """
         )
         self._connection.commit()
 
     def close(self) -> None:
         self._connection.close()
+
+    def record_raw_batch(
+        self,
+        *,
+        topic: str,
+        payload: object,
+        observed_at: datetime,
+        monotonic_receive_ns: int,
+        parsed_at: datetime,
+        validation_error: str | None,
+    ) -> None:
+        """Optional raw-evidence hook used by CAPTURE-001.
+
+        The accepted operational recorder deliberately keeps raw high-frequency payloads
+        out of SQLite. LaunchSigRecorder overrides this hook and writes immutable Parquet.
+        """
+        return None
 
     def record_delivery(
         self,
@@ -380,6 +405,23 @@ class SigRealtimeRecorder:
         )
         self._connection.commit()
 
+    def record_health(
+        self,
+        *,
+        observed_at: datetime,
+        payload: dict[str, object],
+    ) -> None:
+        import json
+
+        self._connection.execute(
+            """
+            INSERT INTO capture_health (observed_at, payload_json)
+            VALUES (?, ?)
+            """,
+            (_iso(observed_at), json.dumps(payload, default=str, sort_keys=True)),
+        )
+        self._connection.commit()
+
     def record_transition(
         self,
         *,
@@ -426,6 +468,9 @@ class SigRealtimeRecorder:
             )
             self._connection.execute(
                 "DELETE FROM trust_transitions WHERE observed_at < ?", (cutoff_iso,)
+            )
+            self._connection.execute(
+                "DELETE FROM capture_health WHERE observed_at < ?", (cutoff_iso,)
             )
 
 

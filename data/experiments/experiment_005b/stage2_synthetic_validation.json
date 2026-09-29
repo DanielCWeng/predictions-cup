@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "validation_id": "STAGE2_SYNTHETIC_001",
+  "type": "synthetic_non_empirical_execution_validation",
+  "historical_data_used": false,
+  "duckdb_version": "1.4.1",
+  "source_feature_builder_sha256": "49ccb066167dd744a6c5f49b1d28428282dce5b553b1464310d23b33d6e3f9e3",
+  "synthetic_rows": 2400,
+  "synthetic_conditions": 4,
+  "synthetic_events": 2,
+  "stages_completed": [
+    "BASE",
+    "PRICE",
+    "ACTIVITY",
+    "FAMILY_CONTEXT",
+    "EVENT_CONTEXT",
+    "TARGETS",
+    "POSITIONAL_MERGE"
+  ],
+  "output_rows": 2400,
+  "output_feature_count": 226,
+  "output_target_count": 47,
+  "output_bytes": 1600931,
+  "disposition": "PASS",
+  "note": "Validates SQL syntax, pass alignment and final schema only. It contains no historical outcome evidence and cannot support a predictive claim."
+}

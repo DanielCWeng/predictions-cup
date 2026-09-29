@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "freeze_id": "TRAIN_DEV_TERMINAL_FREEZE",
+  "status": "FROZEN_BEFORE_005B_PREDICTIVE_SCREEN",
+  "freeze_parent_commit": "d25e3a00f77cd84746c7084da46a0755756d9207",
+  "base_main_sha": "ba938bedcf63f562be8b26c9502e828391123867",
+  "predictive_005b_train_dev_results_seen": false,
+  "holdout_touched": false,
+  "stage2_expected": {
+    "families": [
+      "US_2024",
+      "CAN_2025",
+      "COL_2026",
+      "HUN_2026",
+      "PER_2026"
+    ],
+    "base_feature_count": 226,
+    "target_count": 47,
+    "feature_target_spec_sha256": "47dc9c9a678f58558aba7e4bc282103cacbc0836f08018a79d4197487d689cf7"
+  },
+  "stage3": {
+    "screened_feature_count": 231,
+    "documented_regime_features": 5,
+    "run_sha256": "81bf97101c3965017ff384a53b2b3b53fbec45660d9bbb91076499addfef5e09",
+    "kernel_metadata_sha256": "e6f64a948e2c61a6a332ae33959ce29c1f226f573fe65a9170694c68de217d47",
+    "screening_model_spec_sha256": "fea0821b58fbd841e05b7326a48b9ca94d502e2168bbc079b8d9bd6bcbae597a"
+  },
+  "holdout": {
+    "protocol_sha256": "c6aa34e7e62161932ac9be3555c27c62d8738e549b0f73810e40a09aa2504c70",
+    "executable_pre_gate_sha256": "6b8e021f4974053aba93eaaef07ba8749c482828694beb3280853638cbb9b67b",
+    "gate_status": "CLOSED_PLACEHOLDER",
+    "rule": "Do not alter screening/selection/model policy after this freeze. Stage 4 may only replace the documented placeholder shortlist hash and gate commit after the exact TRAIN/DEV output is committed."
+  },
+  "hashes": {
+    "preregistration_json": "b72f2c2c726069a4e7a2057fe5a084a8e1554e9bb2e88a86111a4df016f6be80",
+    "feature_target_spec_json": "47dc9c9a678f58558aba7e4bc282103cacbc0836f08018a79d4197487d689cf7",
+    "screening_model_spec_json": "fea0821b58fbd841e05b7326a48b9ca94d502e2168bbc079b8d9bd6bcbae597a",
+    "feature_dictionary_csv": "cc1584479b147decd06bf08fa646d0796b5d43e28b2ab8a88b34a0a2783be52e",
+    "target_dictionary_csv": "5e30d87a846d0c91f4e2fc0c6f58d0bfa84a658fe349719edf416602ec1c1de8",
+    "reconstruction_amendment_001": "e3b7b9e27ff0203e3825fbfbe8713c71e6e6c693341920948a64b2cb05d224fe",
+    "spec_compliance_amendment_002": "d91b7e7a68845c7c58120f0bcfcabbc6c26155c1b2a8a52406303f20f81b3281",
+    "operations_amendment_003": "cea9c8a374fa9f4ce6a48f6d847a376c7574b4a06df509bf5250cf13301be9c7",
+    "execution_amendment_004": "4bd1b7ee2fba59a315f9c93b758f05b2435f82d1d53c1d6f075ef6137d363ac1",
+    "negative_control_amendment_005": "af61138875cbae5cf80e8f318070d914b6ab69bc8b617d107899ed3358d0c51d",
+    "regime_support_amendment_006": "048b9f1abb4e9c74bb5d5f0603fa04ac28f3db7aa79d9be4e7dac9fb5ddaeb8f",
+    "portability_label_amendment_007": "ed6b0c59469fb0d36273a57c0e4650fd3ec6cbb1c6abca1aa0f044c94ea21836",
+    "prior_work_crosswalk_md": "d3c965146c0b24387b1beeb77855901fbd32cb0c8398c85940d933e23027c1c0"
+  },
+  "restrictions": [
+    "No post-freeze feature or target addition/removal.",
+    "No post-freeze horizon or threshold search.",
+    "No post-freeze shortlist, stability, concentration or portability-label rule change.",
+    "No post-freeze model family or hyperparameter-grid change.",
+    "Negative controls remain reporting-only and cannot alter selection.",
+    "No HOLDOUT access before exact TRAIN/DEV shortlist hash is committed.",
+    "No real order placement and no strategy/PnL claim."
+  ]
+}

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Verify/publish DATA-004 v2 payloads and version its reviewed manifest."""
+
 from __future__ import annotations
 
 import hashlib
@@ -8,7 +9,7 @@ import os
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -43,25 +44,41 @@ def sha256_file(path: Path) -> str:
 
 
 def write_json(path: Path, value: Any) -> None:
-    path.write_text(json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
 
 
 def disk_gate(stage: str, reserve_bytes: int = 1 << 20) -> int:
     log = LANE / "data004_a3_disk_check.jsonl"
     started = time.monotonic()
     while True:
-        result = subprocess.run(["df", "-B1", "--output=avail", str(INBOX)], check=True, text=True, capture_output=True)
+        result = subprocess.run(
+            ["df", "-B1", "--output=avail", str(INBOX)], check=True, text=True, capture_output=True
+        )
         available = int([line.strip() for line in result.stdout.splitlines() if line.strip()][-1])
         with log.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps({"stage": stage, "available_bytes": available, "reserve_bytes": reserve_bytes,
-                                     "checked_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}) + "\n")
+            handle.write(
+                json.dumps(
+                    {
+                        "stage": stage,
+                        "available_bytes": available,
+                        "reserve_bytes": reserve_bytes,
+                        "checked_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                    }
+                )
+                + "\n"
+            )
         if available < HARD_MIN_FREE_BYTES:
             raise RuntimeError(f"disk below hard 5 GiB floor at {stage}: {available}")
         if available >= MIN_FREE_BYTES + reserve_bytes:
             return available
         if time.monotonic() - started > 2 * 60 * 60:
             raise RuntimeError(f"disk gate timed out at {stage}: {available}")
-        print(f"PAUSED disk gate stage={stage} free_bytes={available}; rechecking in 5 minutes", flush=True)
+        print(
+            f"PAUSED disk gate stage={stage} free_bytes={available}; rechecking in 5 minutes",
+            flush=True,
+        )
         time.sleep(300)
 
 
@@ -73,7 +90,9 @@ def object_body_bytes(response: Any) -> bytes:
 
 
 def get_object_bytes(client: Any, namespace: str, object_name: str) -> bytes:
-    response = client.get_object(namespace_name=namespace, bucket_name=BUCKET, object_name=object_name)
+    response = client.get_object(
+        namespace_name=namespace, bucket_name=BUCKET, object_name=object_name
+    )
     return object_body_bytes(response)
 
 
@@ -81,7 +100,9 @@ def head_or_none(client: Any, namespace: str, object_name: str) -> Any | None:
     import oci
 
     try:
-        return client.head_object(namespace_name=namespace, bucket_name=BUCKET, object_name=object_name)
+        return client.head_object(
+            namespace_name=namespace, bucket_name=BUCKET, object_name=object_name
+        )
     except oci.exceptions.ServiceError as exc:
         if exc.status == 404:
             return None
@@ -97,7 +118,10 @@ def main() -> None:
     import oci  # type: ignore[import-not-found]
 
     manifest = json.loads(V2_MANIFEST_PATH.read_text(encoding="utf-8"))
-    if manifest.get("version") != "v2" or manifest.get("status") not in {"BLOCKED_QUALITY_GATE", "ACCEPTED_V2"}:
+    if manifest.get("version") != "v2" or manifest.get("status") not in {
+        "BLOCKED_QUALITY_GATE",
+        "ACCEPTED_V2",
+    }:
         raise RuntimeError("refusing to publish a non-v2 or unreviewed manifest")
     if manifest.get("status") == "ACCEPTED_V2":
         addendum_4 = manifest.get("addendum_4", {})
@@ -108,11 +132,18 @@ def main() -> None:
         ):
             raise RuntimeError("accepted v2 manifest lacks the Addendum 4 source-quantum evidence")
     v1_manifest = json.loads(V1_MANIFEST_PATH.read_text(encoding="utf-8"))
-    if v1_manifest.get("original_manifest_sha256") != V1_ORIGINAL_MANIFEST_SHA or v1_manifest.get("status") != "BLOCKED_SUPERSEDED":
+    if (
+        v1_manifest.get("original_manifest_sha256") != V1_ORIGINAL_MANIFEST_SHA
+        or v1_manifest.get("status") != "BLOCKED_SUPERSEDED"
+    ):
         raise RuntimeError("v1 source manifest lacks the required blocked/superseded annotation")
 
     signer, config_obj = config.get_oci_signer_and_config()
-    client = oci.object_storage.ObjectStorageClient(config_obj, signer=signer) if signer else oci.object_storage.ObjectStorageClient(config_obj)
+    client = (
+        oci.object_storage.ObjectStorageClient(config_obj, signer=signer)
+        if signer
+        else oci.object_storage.ObjectStorageClient(config_obj)
+    )
     namespace = str(client.get_namespace().data)
     uploaded: list[dict[str, Any]] = []
     for index, entry in enumerate(manifest["files"], 1):
@@ -127,7 +158,10 @@ def main() -> None:
             if len(matches) != 1:
                 raise RuntimeError(f"expected one local Parquet for {day}, found {len(matches)}")
             local_path = matches[0]
-            if local_path.stat().st_size != int(entry["bytes"]) or sha256_file(local_path) != entry["sha256"]:
+            if (
+                local_path.stat().st_size != int(entry["bytes"])
+                or sha256_file(local_path) != entry["sha256"]
+            ):
                 raise RuntimeError(f"local fill object hash/size mismatch: {local_path}")
             payload = local_path.read_bytes()
         else:
@@ -140,17 +174,45 @@ def main() -> None:
         existing = head_or_none(client, namespace, object_name)
         if existing is not None:
             existing_payload = get_object_bytes(client, namespace, object_name)
-            if len(existing_payload) != int(entry["bytes"]) or sha256(existing_payload) != entry["sha256"]:
-                raise RuntimeError(f"v2 prefix already contains different bytes at {object_name}; refusing overwrite")
-            uploaded.append({"path": object_name, "bytes": len(payload), "sha256": entry["sha256"], "action": "verified_existing"})
+            if (
+                len(existing_payload) != int(entry["bytes"])
+                or sha256(existing_payload) != entry["sha256"]
+            ):
+                raise RuntimeError(
+                    f"v2 prefix already contains different bytes at {object_name}; refusing overwrite"
+                )
+            uploaded.append(
+                {
+                    "path": object_name,
+                    "bytes": len(payload),
+                    "sha256": entry["sha256"],
+                    "action": "verified_existing",
+                }
+            )
             continue
-        response = client.put_object(namespace_name=namespace, bucket_name=BUCKET, object_name=object_name, put_object_body=payload)
-        head = client.head_object(namespace_name=namespace, bucket_name=BUCKET, object_name=object_name)
+        response = client.put_object(
+            namespace_name=namespace,
+            bucket_name=BUCKET,
+            object_name=object_name,
+            put_object_body=payload,
+        )
+        head = client.head_object(
+            namespace_name=namespace, bucket_name=BUCKET, object_name=object_name
+        )
         response_size = int(head.headers.get("content-length", -1))
         if response_size != int(entry["bytes"]):
-            raise RuntimeError(f"OCI object size verification failed for {object_name}: {response_size}")
-        uploaded.append({"path": object_name, "bytes": len(payload), "sha256": entry["sha256"],
-                         "etag": response.headers.get("etag"), "action": "uploaded"})
+            raise RuntimeError(
+                f"OCI object size verification failed for {object_name}: {response_size}"
+            )
+        uploaded.append(
+            {
+                "path": object_name,
+                "bytes": len(payload),
+                "sha256": entry["sha256"],
+                "etag": response.headers.get("etag"),
+                "action": "uploaded",
+            }
+        )
         if index % 50 == 0 or index == len(manifest["files"]):
             print(f"published v2 objects {index}/{len(manifest['files'])}", flush=True)
 
@@ -174,15 +236,29 @@ def main() -> None:
                 or old_manifest.get("files") != new_manifest.get("files")
                 or not archive_name
             ):
-                raise RuntimeError("refusing v2 manifest transition that is not the Addendum 4 acceptance of unchanged payload objects")
+                raise RuntimeError(
+                    "refusing v2 manifest transition that is not the Addendum 4 acceptance of unchanged payload objects"
+                )
             archived = head_or_none(client, namespace, archive_name)
             if archived is None:
-                client.put_object(namespace_name=namespace, bucket_name=BUCKET, object_name=archive_name, put_object_body=existing)
+                client.put_object(
+                    namespace_name=namespace,
+                    bucket_name=BUCKET,
+                    object_name=archive_name,
+                    put_object_body=existing,
+                )
             else:
                 archived_payload = get_object_bytes(client, namespace, archive_name)
                 if sha256(archived_payload) != sha256(existing):
-                    raise RuntimeError(f"blocked v2 manifest archive already exists with different bytes: {archive_name}")
-            client.put_object(namespace_name=namespace, bucket_name=BUCKET, object_name=final_name, put_object_body=manifest_bytes)
+                    raise RuntimeError(
+                        f"blocked v2 manifest archive already exists with different bytes: {archive_name}"
+                    )
+            client.put_object(
+                namespace_name=namespace,
+                bucket_name=BUCKET,
+                object_name=final_name,
+                put_object_body=manifest_bytes,
+            )
             manifest_transition = {
                 "from_status": old_manifest.get("status"),
                 "to_status": new_manifest.get("status"),
@@ -191,8 +267,15 @@ def main() -> None:
                 "payload_file_list_unchanged": True,
             }
     else:
-        client.put_object(namespace_name=namespace, bucket_name=BUCKET, object_name=final_name, put_object_body=manifest_bytes)
-    final_head = client.head_object(namespace_name=namespace, bucket_name=BUCKET, object_name=final_name)
+        client.put_object(
+            namespace_name=namespace,
+            bucket_name=BUCKET,
+            object_name=final_name,
+            put_object_body=manifest_bytes,
+        )
+    final_head = client.head_object(
+        namespace_name=namespace, bucket_name=BUCKET, object_name=final_name
+    )
     if int(final_head.headers.get("content-length", -1)) != len(manifest_bytes):
         raise RuntimeError("v2 final manifest size verification failed")
 
@@ -205,16 +288,23 @@ def main() -> None:
     prior_v1_bytes = get_object_bytes(client, namespace, v1_object_name)
     prior_v1_sha = sha256(prior_v1_bytes)
     if prior_v1_sha == V1_ORIGINAL_MANIFEST_SHA:
-        client.put_object(namespace_name=namespace, bucket_name=BUCKET, object_name=v1_object_name, put_object_body=v1_bytes)
+        client.put_object(
+            namespace_name=namespace,
+            bucket_name=BUCKET,
+            object_name=v1_object_name,
+            put_object_body=v1_bytes,
+        )
     elif prior_v1_sha != v1_sha:
         raise RuntimeError(f"v1 manifest changed unexpectedly: {prior_v1_sha}")
-    v1_head = client.head_object(namespace_name=namespace, bucket_name=BUCKET, object_name=V1_PREFIX + "MANIFEST.json")
+    v1_head = client.head_object(
+        namespace_name=namespace, bucket_name=BUCKET, object_name=V1_PREFIX + "MANIFEST.json"
+    )
     if int(v1_head.headers.get("content-length", -1)) != len(v1_bytes):
         raise RuntimeError("v1 supersession manifest size verification failed")
 
     record = {
         "dataset_id": "DATA-004",
-        "published_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "published_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "bucket": BUCKET,
         "v2_prefix": V2_PREFIX,
         "v2_objects": len(uploaded),
@@ -225,15 +315,32 @@ def main() -> None:
         "v1_parquet_objects_changed": 0,
         "v1_status_manifest_sha256": v1_sha,
         "v1_original_manifest_sha256": V1_ORIGINAL_MANIFEST_SHA,
-        "upload_actions": {action: sum(row["action"] == action for row in uploaded) for action in {row["action"] for row in uploaded}},
+        "upload_actions": {
+            action: sum(row["action"] == action for row in uploaded)
+            for action in {row["action"] for row in uploaded}
+        },
         "objects": uploaded,
     }
-    path = LANE / ("data004_a4_oci_publish.json" if json.loads(manifest_bytes).get("status") == "ACCEPTED_V2" else "data004_a3_oci_publish.json")
+    path = LANE / (
+        "data004_a4_oci_publish.json"
+        if json.loads(manifest_bytes).get("status") == "ACCEPTED_V2"
+        else "data004_a3_oci_publish.json"
+    )
     record["manifest_transition"] = manifest_transition
     write_json(path, record)
-    print(json.dumps({"v2_objects": record["v2_objects"], "v2_bytes": record["v2_bytes"],
-                      "v2_manifest_sha256": manifest_sha, "v1_manifest_sha256": v1_sha,
-                      "v1_parquet_objects_changed": 0}, sort_keys=True), flush=True)
+    print(
+        json.dumps(
+            {
+                "v2_objects": record["v2_objects"],
+                "v2_bytes": record["v2_bytes"],
+                "v2_manifest_sha256": manifest_sha,
+                "v1_manifest_sha256": v1_sha,
+                "v1_parquet_objects_changed": 0,
+            },
+            sort_keys=True,
+        ),
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Stream immutable DATA-004 P0/P1 fills from the Polyleviathan OCI trades lake."""
+
 from __future__ import annotations
 
 import argparse
+import contextlib
 import csv
 import ctypes
 import gc
@@ -10,16 +12,14 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
 import time
-from collections import Counter, defaultdict
-from datetime import date, datetime, timedelta, timezone
+from collections import Counter
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
-
 
 SONAR_ROOT = Path("/home/ubuntu/polymarketwhale/Sonar")
 DEFAULT_LANE = Path("/home/ubuntu/campaigns/data004_20260929")
@@ -40,12 +40,27 @@ RESUME_COMPATIBLE_EXPORTER_SHA256 = {
 }
 DEDUP_KEY = ["tx_hash", "log_index", "token_id"]
 CONTENT_COLUMNS = [
-    "timestamp", "side", "price", "size_shares", "value_usd", "condition_id",
-    "maker_address", "taker_address",
+    "timestamp",
+    "side",
+    "price",
+    "size_shares",
+    "value_usd",
+    "condition_id",
+    "maker_address",
+    "taker_address",
 ]
 TRADE_COLUMNS = [
-    "timestamp", "side", "price", "size_shares", "value_usd", "token_id", "condition_id",
-    "maker_address", "taker_address", "tx_hash", "log_index",
+    "timestamp",
+    "side",
+    "price",
+    "size_shares",
+    "value_usd",
+    "token_id",
+    "condition_id",
+    "maker_address",
+    "taker_address",
+    "tx_hash",
+    "log_index",
 ]
 
 
@@ -92,7 +107,9 @@ def atomic_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) ->
 def df_free_bytes() -> int:
     result = subprocess.run(
         ["df", "-B1", "--output=avail", "/home/ubuntu"],
-        check=True, text=True, capture_output=True,
+        check=True,
+        text=True,
+        capture_output=True,
     )
     lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
     return int(lines[-1])
@@ -101,10 +118,8 @@ def df_free_bytes() -> int:
 def trim_process_memory() -> None:
     """Release freed per-day Arrow/Polars arenas before opening the next large source object."""
     gc.collect()
-    try:
+    with contextlib.suppress(AttributeError, OSError):
         ctypes.CDLL("libc.so.6").malloc_trim(0)
-    except (AttributeError, OSError):
-        pass
 
 
 def disk_gate(lane: Path, stage: str, reserve_bytes: int = 0) -> int:
@@ -113,7 +128,7 @@ def disk_gate(lane: Path, stage: str, reserve_bytes: int = 0) -> int:
     while True:
         available = df_free_bytes()
         entry = {
-            "checked_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "checked_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "stage": stage,
             "available_bytes": available,
             "reserve_bytes": reserve_bytes,
@@ -125,12 +140,16 @@ def disk_gate(lane: Path, stage: str, reserve_bytes: int = 0) -> int:
             handle.flush()
             os.fsync(handle.fileno())
         if available < HARD_MIN_FREE_BYTES:
-            raise RuntimeError(f"disk is already below the 5 GiB hard floor at {stage}: {available} bytes")
+            raise RuntimeError(
+                f"disk is already below the 5 GiB hard floor at {stage}: {available} bytes"
+            )
         if available >= MIN_FREE_BYTES and available - reserve_bytes >= HARD_MIN_FREE_BYTES:
             return available
         elapsed = time.monotonic() - started
         if elapsed >= 2 * 60 * 60:
-            raise RuntimeError(f"disk gate timed out after two hours at {stage}: {available} bytes free")
+            raise RuntimeError(
+                f"disk gate timed out after two hours at {stage}: {available} bytes free"
+            )
         print(
             f"PAUSED disk gate stage={stage} free_bytes={available}; recheck in 5 minutes "
             f"(elapsed={int(elapsed)}s, max=7200s)",
@@ -194,20 +213,20 @@ def parse_date(value: str | None) -> datetime | None:
     if fraction:
         digits = fraction.group(1)
         normalized = digits[:6].ljust(6, "0")
-        text = text[:fraction.start(1)] + normalized + fraction.group(2)
+        text = text[: fraction.start(1)] + normalized + fraction.group(2)
     try:
         parsed = datetime.fromisoformat(text)
     except ValueError:
         return None
     if parsed.tzinfo is None:
         return None
-    return parsed.astimezone(timezone.utc)
+    return parsed.astimezone(UTC)
 
 
 def utc_string(epoch: int | float | None) -> str | None:
     if epoch is None:
         return None
-    return datetime.fromtimestamp(float(epoch), timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.fromtimestamp(float(epoch), UTC).isoformat().replace("+00:00", "Z")
 
 
 def utc_day(epoch: int | float | None) -> str | None:
@@ -222,7 +241,9 @@ def is_404(exc: Exception) -> bool:
 def object_exists(client: Any, namespace: str, object_name: str) -> dict[str, Any] | None:
     try:
         result = client.head_object(
-            namespace_name=namespace, bucket_name=BUCKET, object_name=object_name,
+            namespace_name=namespace,
+            bucket_name=BUCKET,
+            object_name=object_name,
         )
         size = result.headers.get("content-length")
         return {"size": int(size) if size is not None else None, "etag": result.headers.get("etag")}
@@ -233,7 +254,7 @@ def object_exists(client: Any, namespace: str, object_name: str) -> dict[str, An
 
 
 def save_checkpoint(path: Path, checkpoint: dict[str, Any]) -> None:
-    checkpoint["updated_at_utc"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    checkpoint["updated_at_utc"] = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     write_json(path, checkpoint)
 
 
@@ -262,7 +283,9 @@ def build_dimensions(universe: dict[str, Any]) -> tuple[Any, Any, dict[str, dict
             "market_end_date": str(gamma.get("endDate") or market.get("end_date") or ""),
             "market_closed": bool(gamma.get("closed")) if gamma.get("closed") is not None else None,
             "market_active": bool(gamma.get("active")) if gamma.get("active") is not None else None,
-            "market_neg_risk": bool(gamma.get("negRisk")) if gamma.get("negRisk") is not None else None,
+            "market_neg_risk": bool(gamma.get("negRisk"))
+            if gamma.get("negRisk") is not None
+            else None,
             "acquisition_class": str(market.get("acquisition_class") or ""),
             "acquisition_tier": str(market.get("priority") or ""),
             "contract_archetype": str(market.get("contract_archetype") or ""),
@@ -272,51 +295,73 @@ def build_dimensions(universe: dict[str, Any]) -> tuple[Any, Any, dict[str, dict
             "sig_exchange_ids_json": str(market.get("sig_exchange_ids_json") or "[]"),
             "gamma_description_sha256": str(market.get("gamma_description_sha256") or ""),
             "graph_link_ids_json": json.dumps(
-                sorted({edge.get("relationship_id", "") for edge in market.get("graph_links") or []}),
+                sorted(
+                    {edge.get("relationship_id", "") for edge in market.get("graph_links") or []}
+                ),
                 separators=(",", ":"),
             ),
             "graph_relationship_classes_json": json.dumps(
-                sorted({edge.get("relationship_class", "") for edge in market.get("graph_links") or []}),
+                sorted(
+                    {edge.get("relationship_class", "") for edge in market.get("graph_links") or []}
+                ),
                 separators=(",", ":"),
             ),
-            "gamma_market_sha256": hashlib.sha256(json.dumps(gamma, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+            "gamma_market_sha256": hashlib.sha256(
+                json.dumps(gamma, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest(),
         }
     market_rows: list[dict[str, Any]] = []
     for market in markets:
         gamma = market["gamma_market"]
         event = market.get("gamma_event") or {}
-        market_rows.append({
-            "market_id": str(market["market_id"]),
-            "condition_id": str(market["condition_id"]),
-            "event_id": str(market.get("event_id") or ""),
-            "event_slug": str(market.get("event_slug") or event.get("slug") or ""),
-            "event_title": str(market.get("event_title") or event.get("title") or ""),
-            "market_slug": str(gamma.get("slug") or ""),
-            "market_question": str(gamma.get("question") or market.get("question") or ""),
-            "market_description": str(gamma.get("description") or ""),
-            "created_at": str(gamma.get("createdAt") or ""),
-            "start_date": str(gamma.get("startDate") or market.get("start_date") or ""),
-            "end_date": str(gamma.get("endDate") or market.get("end_date") or ""),
-            "closed": bool(gamma.get("closed")) if gamma.get("closed") is not None else None,
-            "active": bool(gamma.get("active")) if gamma.get("active") is not None else None,
-            "neg_risk": bool(gamma.get("negRisk")) if gamma.get("negRisk") is not None else None,
-            "outcomes_json": json.dumps(market.get("gamma_outcomes") or [], separators=(",", ":")),
-            "token_alignment_json": json.dumps(market.get("gamma_outcome_token_alignment") or [], separators=(",", ":")),
-            "acquisition_class": str(market.get("acquisition_class") or ""),
-            "acquisition_tier": str(market.get("priority") or ""),
-            "contract_archetype": str(market.get("contract_archetype") or ""),
-            "mathematical_class": str(market.get("mathematical_class") or ""),
-            "relationship_class_set_json": str(market.get("relationship_class_set_json") or "[]"),
-            "sig_market_ids_json": str(market.get("sig_market_ids_json") or "[]"),
-            "sig_exchange_ids_json": str(market.get("sig_exchange_ids_json") or "[]"),
-            "expected_empirical_use": str(market.get("expected_empirical_use") or ""),
-            "reason": str(market.get("reason") or ""),
-            "gamma_description_sha256": str(market.get("gamma_description_sha256") or ""),
-            "graph_links_json": json.dumps(market.get("graph_links") or [], sort_keys=True, separators=(",", ":")),
-            "sig_anchor_rows_json": json.dumps(market.get("sig_anchor_rows") or [], sort_keys=True, separators=(",", ":")),
-            "gamma_market_sha256": hashlib.sha256(json.dumps(gamma, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
-            "gamma_event_fetch_error": str(market.get("gamma_event_fetch_error") or ""),
-        })
+        market_rows.append(
+            {
+                "market_id": str(market["market_id"]),
+                "condition_id": str(market["condition_id"]),
+                "event_id": str(market.get("event_id") or ""),
+                "event_slug": str(market.get("event_slug") or event.get("slug") or ""),
+                "event_title": str(market.get("event_title") or event.get("title") or ""),
+                "market_slug": str(gamma.get("slug") or ""),
+                "market_question": str(gamma.get("question") or market.get("question") or ""),
+                "market_description": str(gamma.get("description") or ""),
+                "created_at": str(gamma.get("createdAt") or ""),
+                "start_date": str(gamma.get("startDate") or market.get("start_date") or ""),
+                "end_date": str(gamma.get("endDate") or market.get("end_date") or ""),
+                "closed": bool(gamma.get("closed")) if gamma.get("closed") is not None else None,
+                "active": bool(gamma.get("active")) if gamma.get("active") is not None else None,
+                "neg_risk": bool(gamma.get("negRisk"))
+                if gamma.get("negRisk") is not None
+                else None,
+                "outcomes_json": json.dumps(
+                    market.get("gamma_outcomes") or [], separators=(",", ":")
+                ),
+                "token_alignment_json": json.dumps(
+                    market.get("gamma_outcome_token_alignment") or [], separators=(",", ":")
+                ),
+                "acquisition_class": str(market.get("acquisition_class") or ""),
+                "acquisition_tier": str(market.get("priority") or ""),
+                "contract_archetype": str(market.get("contract_archetype") or ""),
+                "mathematical_class": str(market.get("mathematical_class") or ""),
+                "relationship_class_set_json": str(
+                    market.get("relationship_class_set_json") or "[]"
+                ),
+                "sig_market_ids_json": str(market.get("sig_market_ids_json") or "[]"),
+                "sig_exchange_ids_json": str(market.get("sig_exchange_ids_json") or "[]"),
+                "expected_empirical_use": str(market.get("expected_empirical_use") or ""),
+                "reason": str(market.get("reason") or ""),
+                "gamma_description_sha256": str(market.get("gamma_description_sha256") or ""),
+                "graph_links_json": json.dumps(
+                    market.get("graph_links") or [], sort_keys=True, separators=(",", ":")
+                ),
+                "sig_anchor_rows_json": json.dumps(
+                    market.get("sig_anchor_rows") or [], sort_keys=True, separators=(",", ":")
+                ),
+                "gamma_market_sha256": hashlib.sha256(
+                    json.dumps(gamma, sort_keys=True, separators=(",", ":")).encode()
+                ).hexdigest(),
+                "gamma_event_fetch_error": str(market.get("gamma_event_fetch_error") or ""),
+            }
+        )
     token_dimension_rows = [
         {
             "market_id": str(row["market_id"]),
@@ -330,7 +375,11 @@ def build_dimensions(universe: dict[str, Any]) -> tuple[Any, Any, dict[str, dict
         }
         for row in token_rows
     ]
-    return pl.DataFrame(market_rows, infer_schema_length=None), pl.DataFrame(token_dimension_rows, infer_schema_length=None), token_metadata
+    return (
+        pl.DataFrame(market_rows, infer_schema_length=None),
+        pl.DataFrame(token_dimension_rows, infer_schema_length=None),
+        token_metadata,
+    )
 
 
 def active_role_expr(exchange_addresses: list[str]) -> Any:
@@ -339,8 +388,10 @@ def active_role_expr(exchange_addresses: list[str]) -> Any:
     maker = pl.col("maker_address").cast(pl.String, strict=False)
     taker = pl.col("taker_address").cast(pl.String, strict=False).str.to_lowercase()
     role_known = (
-        maker.is_not_null() & (maker.str.len_chars() > 0)
-        & pl.col("taker_address").is_not_null() & (pl.col("taker_address").cast(pl.String).str.len_chars() > 0)
+        maker.is_not_null()
+        & (maker.str.len_chars() > 0)
+        & pl.col("taker_address").is_not_null()
+        & (pl.col("taker_address").cast(pl.String).str.len_chars() > 0)
     )
     active = taker.is_in(exchange_addresses) & maker.is_not_null() & (maker.str.len_chars() > 0)
     return pl.when(role_known).then(active).otherwise(None)
@@ -358,13 +409,19 @@ def transform_fills(
 ) -> Any:
     import polars as pl
 
-    token_rows = [{"token_id": token_id, **metadata} for token_id, metadata in token_metadata.items()]
+    token_rows = [
+        {"token_id": token_id, **metadata} for token_id, metadata in token_metadata.items()
+    ]
     token_df = pl.DataFrame(token_rows, infer_schema_length=None)
     enriched = fills.join(token_df, on="token_id", how="left")
     if enriched.filter(pl.col("market_id").is_null()).height:
-        raise ValueError("selected trade rows contain tokens outside the frozen Gamma P0/P1 token set")
+        raise ValueError(
+            "selected trade rows contain tokens outside the frozen Gamma P0/P1 token set"
+        )
     enriched = enriched.with_columns(
-        (pl.col("condition_id").cast(pl.String) == pl.col("gamma_condition_id")).alias("condition_id_matches_gamma"),
+        (pl.col("condition_id").cast(pl.String) == pl.col("gamma_condition_id")).alias(
+            "condition_id_matches_gamma"
+        ),
     )
     # The canonical trade row's CID remains the preserved raw source value. Gamma's frozen CID
     # is kept separately and a mismatch is visible in both the row and the quality gate.
@@ -380,35 +437,56 @@ def transform_fills(
             .then(pl.lit("CONFLICTING_CUSTODY_BLOCK_NUMBER"))
             .otherwise(provenance)
         )
-    provenance = pl.when(pl.col("tx_hash").is_null() | (pl.col("tx_hash").cast(pl.String).str.len_chars() == 0)).then(
-        pl.lit("MISSING_TRANSACTION_HASH")
-    ).otherwise(provenance)
+    provenance = (
+        pl.when(
+            pl.col("tx_hash").is_null() | (pl.col("tx_hash").cast(pl.String).str.len_chars() == 0)
+        )
+        .then(pl.lit("MISSING_TRANSACTION_HASH"))
+        .otherwise(provenance)
+    )
     if custody is None:
-        provenance = pl.when(pl.col("block_number").is_null()).then(pl.lit("MISSING_CUSTODY_OBJECT")).otherwise(provenance)
+        provenance = (
+            pl.when(pl.col("block_number").is_null())
+            .then(pl.lit("MISSING_CUSTODY_OBJECT"))
+            .otherwise(provenance)
+        )
     else:
-        provenance = pl.when(
-            pl.col("block_number").is_null()
-            & ~pl.col("tx_hash").is_in(conflict_tx_hashes)
-            & pl.col("tx_hash").is_not_null()
-        ).then(pl.lit("MISSING_CUSTODY_BLOCK_MATCH")).otherwise(provenance)
+        provenance = (
+            pl.when(
+                pl.col("block_number").is_null()
+                & ~pl.col("tx_hash").is_in(conflict_tx_hashes)
+                & pl.col("tx_hash").is_not_null()
+            )
+            .then(pl.lit("MISSING_CUSTODY_BLOCK_MATCH"))
+            .otherwise(provenance)
+        )
     role_expr = active_role_expr(exchange_addresses)
     side = pl.col("side").cast(pl.String, strict=False).str.to_lowercase()
     enriched = enriched.with_columns(
         provenance.alias("block_number_provenance"),
-        pl.when(side.is_in(["buy", "sell"])).then(side.str.to_uppercase()).otherwise(None).alias("economic_direction"),
+        pl.when(side.is_in(["buy", "sell"]))
+        .then(side.str.to_uppercase())
+        .otherwise(None)
+        .alias("economic_direction"),
         pl.when(side.is_in(["buy", "sell"]))
         .then(pl.lit("RECONSTRUCTED_FROM_SIGNED_ORDER_SIDE"))
         .otherwise(pl.lit("UNKNOWN_UNRECONSTRUCTABLE_SIDE"))
         .alias("economic_direction_status"),
         role_expr.alias("order_is_match_taker_order"),
-        pl.when(role_expr.is_null()).then(pl.lit("UNKNOWN"))
-        .when(role_expr).then(pl.lit("TAKER"))
+        pl.when(role_expr.is_null())
+        .then(pl.lit("UNKNOWN"))
+        .when(role_expr)
+        .then(pl.lit("TAKER"))
         .otherwise(pl.lit("MAKER"))
         .alias("order_role"),
         pl.col("maker_address").alias("participant_address"),
         pl.col("taker_address").alias("counterparty_address"),
         pl.concat_str(
-            [pl.col("tx_hash").cast(pl.String), pl.col("log_index").cast(pl.String), pl.col("token_id")],
+            [
+                pl.col("tx_hash").cast(pl.String),
+                pl.col("log_index").cast(pl.String),
+                pl.col("token_id"),
+            ],
             separator=":",
         ).alias("fill_id"),
         pl.from_epoch(pl.col("timestamp"), time_unit="s")
@@ -420,29 +498,84 @@ def transform_fills(
         pl.lit(trade.get("source_sha256")).cast(pl.String).alias("source_trade_sha256"),
         pl.lit(trade.get("size")).cast(pl.Int64).alias("source_trade_bytes"),
         pl.lit(custody["object_name"] if custody else None).alias("source_custody_object"),
-        pl.lit(custody.get("etag") if custody else None).cast(pl.String).alias("source_custody_etag"),
-        pl.lit(custody.get("source_sha256") if custody else None).cast(pl.String).alias("source_custody_sha256"),
-        pl.lit(custody.get("size") if custody else None).cast(pl.Int64).alias("source_custody_bytes"),
+        pl.lit(custody.get("etag") if custody else None)
+        .cast(pl.String)
+        .alias("source_custody_etag"),
+        pl.lit(custody.get("source_sha256") if custody else None)
+        .cast(pl.String)
+        .alias("source_custody_sha256"),
+        pl.lit(custody.get("size") if custody else None)
+        .cast(pl.Int64)
+        .alias("source_custody_bytes"),
         pl.lit("POLYLEVIATHAN_TRADES_LAKE_CANONICAL").alias("source_version"),
         pl.lit("POLYLEVIATHAN_OCI_TRADES").alias("source"),
         pl.lit("TRADE_FILL").alias("evidence_grade"),
-        pl.lit("maker_address owns the signed order; counterparty is taker_address").alias("participant_address_semantics"),
+        pl.lit("maker_address owns the signed order; counterparty is taker_address").alias(
+            "participant_address_semantics"
+        ),
     )
-    return enriched.select([
-        "fill_id", "timestamp", "timestamp_utc", "block_number", "log_index", "tx_hash",
-        "condition_id", "gamma_condition_id", "condition_id_matches_gamma", "market_id", "event_id",
-        "event_slug", "event_title", "market_slug", "market_question",
-        "market_created_at", "market_start_date", "market_end_date", "market_closed", "market_active",
-        "market_neg_risk", "token_id", "outcome_label", "side", "economic_direction",
-        "economic_direction_status", "order_is_match_taker_order", "order_role", "participant_address",
-        "counterparty_address", "maker_address", "taker_address", "price", "size_shares", "value_usd",
-        "acquisition_class", "acquisition_tier", "contract_archetype", "mathematical_class",
-        "relationship_class_set_json", "sig_market_ids_json", "sig_exchange_ids_json",
-        "gamma_description_sha256", "graph_link_ids_json", "graph_relationship_classes_json",
-        "block_number_provenance", "participant_address_semantics", "source", "source_version", "evidence_grade",
-        "source_trade_object", "source_trade_etag", "source_trade_sha256", "source_trade_bytes",
-        "source_custody_object", "source_custody_etag", "source_custody_sha256", "source_custody_bytes",
-    ]).sort(["token_id", "block_number", "log_index", "tx_hash", "fill_id"], nulls_last=True)
+    return enriched.select(
+        [
+            "fill_id",
+            "timestamp",
+            "timestamp_utc",
+            "block_number",
+            "log_index",
+            "tx_hash",
+            "condition_id",
+            "gamma_condition_id",
+            "condition_id_matches_gamma",
+            "market_id",
+            "event_id",
+            "event_slug",
+            "event_title",
+            "market_slug",
+            "market_question",
+            "market_created_at",
+            "market_start_date",
+            "market_end_date",
+            "market_closed",
+            "market_active",
+            "market_neg_risk",
+            "token_id",
+            "outcome_label",
+            "side",
+            "economic_direction",
+            "economic_direction_status",
+            "order_is_match_taker_order",
+            "order_role",
+            "participant_address",
+            "counterparty_address",
+            "maker_address",
+            "taker_address",
+            "price",
+            "size_shares",
+            "value_usd",
+            "acquisition_class",
+            "acquisition_tier",
+            "contract_archetype",
+            "mathematical_class",
+            "relationship_class_set_json",
+            "sig_market_ids_json",
+            "sig_exchange_ids_json",
+            "gamma_description_sha256",
+            "graph_link_ids_json",
+            "graph_relationship_classes_json",
+            "block_number_provenance",
+            "participant_address_semantics",
+            "source",
+            "source_version",
+            "evidence_grade",
+            "source_trade_object",
+            "source_trade_etag",
+            "source_trade_sha256",
+            "source_trade_bytes",
+            "source_custody_object",
+            "source_custody_etag",
+            "source_custody_sha256",
+            "source_custody_bytes",
+        ]
+    ).sort(["token_id", "block_number", "log_index", "tx_hash", "fill_id"], nulls_last=True)
 
 
 def parquet_parts(
@@ -463,8 +596,13 @@ def parquet_parts(
     if frame.height == 0:
         return output_records, upload_records
     total_estimate = max(int(frame.estimated_size()), 1)
-    row_limit = frame.height if total_estimate <= MAX_ESTIMATED_CHUNK_BYTES else max(
-        1, int(frame.height * MAX_ESTIMATED_CHUNK_BYTES / total_estimate * 0.90),
+    row_limit = (
+        frame.height
+        if total_estimate <= MAX_ESTIMATED_CHUNK_BYTES
+        else max(
+            1,
+            int(frame.height * MAX_ESTIMATED_CHUNK_BYTES / total_estimate * 0.90),
+        )
     )
     start = 0
     part = 0
@@ -477,7 +615,9 @@ def parquet_parts(
                 break
             current_limit = max(1, int(current_limit * MAX_ESTIMATED_CHUNK_BYTES / estimate * 0.85))
         disk_gate(lane, f"before_output_chunk:{chunk_label}:part={part}", reserve_bytes=estimate)
-        with tempfile.NamedTemporaryFile(prefix="data004-fill-", suffix=".parquet", dir="/tmp", delete=False) as handle:
+        with tempfile.NamedTemporaryFile(
+            prefix="data004-fill-", suffix=".parquet", dir="/tmp", delete=False
+        ) as handle:
             temp_path = Path(handle.name)
         try:
             chunk.write_parquet(temp_path, compression="zstd", statistics=True)
@@ -491,7 +631,9 @@ def parquet_parts(
             existing = object_exists(client, namespace, object_name)
             if existing is not None:
                 if existing.get("size") not in (None, file_bytes):
-                    raise RuntimeError(f"existing immutable object has a different size: {object_name}")
+                    raise RuntimeError(
+                        f"existing immutable object has a different size: {object_name}"
+                    )
             else:
                 with temp_path.open("rb") as body:
                     client.put_object(
@@ -501,11 +643,14 @@ def parquet_parts(
                         put_object_body=body,
                         content_type="application/vnd.apache.parquet",
                     )
-            def optional_min_max(column: str) -> tuple[int | None, int | None]:
-                if column not in chunk.columns:
+
+            def optional_min_max(
+                column: str, frame=chunk
+            ) -> tuple[int | None, int | None]:
+                if column not in frame.columns:
                     return None, None
-                values = chunk.get_column(column)
-                if values.null_count() >= chunk.height:
+                values = frame.get_column(column)
+                if values.null_count() >= frame.height:
                     return None, None
                 return int(values.min()), int(values.max())
 
@@ -521,14 +666,20 @@ def parquet_parts(
                 "first_block_number": first_block_number,
                 "last_block_number": last_block_number,
                 "token_count": chunk["token_id"].n_unique() if "token_id" in chunk.columns else 0,
-                "condition_count": chunk["condition_id"].n_unique() if "condition_id" in chunk.columns else 0,
+                "condition_count": chunk["condition_id"].n_unique()
+                if "condition_id" in chunk.columns
+                else 0,
             }
             output_records.append(record)
             upload_record = {**record, "source_chunk": chunk_label, "object_prefix": object_prefix}
             upload_records.append(upload_record)
             previous = checkpoint["outputs"].get(object_name)
-            if previous is not None and (previous.get("sha256") != digest or previous.get("rows") != chunk.height):
-                raise RuntimeError(f"resume checkpoint differs from regenerated chunk {object_name}")
+            if previous is not None and (
+                previous.get("sha256") != digest or previous.get("rows") != chunk.height
+            ):
+                raise RuntimeError(
+                    f"resume checkpoint differs from regenerated chunk {object_name}"
+                )
             checkpoint["outputs"][object_name] = upload_record
             save_checkpoint(checkpoint_path, checkpoint)
             part += 1
@@ -564,25 +715,27 @@ def validate_uploaded_corpus(
                 if created and any(day >= created.date().isoformat() for day in missing_trade_days)
                 else "no_trading_observed_in_available_source"
             )
-            zero_market_rows.append({
-                "market_id": str(market["market_id"]),
-                "condition_id": str(market["condition_id"]),
-                "event_id": str(market.get("event_id") or ""),
-                "acquisition_class": market.get("acquisition_class"),
-                "acquisition_tier": market.get("priority"),
-                "created_at_utc": market.get("gamma_created_at"),
-                "end_date_utc": market.get("gamma_end_date"),
-                "fill_rows": 0,
-                "tokens_expected": 2,
-                "tokens_with_rows": 0,
-                "first_fill_utc": None,
-                "last_fill_utc": None,
-                "first_fill_minus_created_seconds": None,
-                "last_fill_minus_end_seconds": None,
-                "missing_block_rows": 0,
-                "condition_id_mismatch_rows": 0,
-                "zero_fill_reason": reason,
-            })
+            zero_market_rows.append(
+                {
+                    "market_id": str(market["market_id"]),
+                    "condition_id": str(market["condition_id"]),
+                    "event_id": str(market.get("event_id") or ""),
+                    "acquisition_class": market.get("acquisition_class"),
+                    "acquisition_tier": market.get("priority"),
+                    "created_at_utc": market.get("gamma_created_at"),
+                    "end_date_utc": market.get("gamma_end_date"),
+                    "fill_rows": 0,
+                    "tokens_expected": 2,
+                    "tokens_with_rows": 0,
+                    "first_fill_utc": None,
+                    "last_fill_utc": None,
+                    "first_fill_minus_created_seconds": None,
+                    "last_fill_minus_end_seconds": None,
+                    "missing_block_rows": 0,
+                    "condition_id_mismatch_rows": 0,
+                    "zero_fill_reason": reason,
+                }
+            )
         event_metadata = {}
         for market in markets:
             event_id = str(market.get("event_id") or "")
@@ -615,7 +768,12 @@ def validate_uploaded_corpus(
             "ordering_failure_by_token": [],
             "price_failure_rows": 0,
             "condition_id_mismatch_rows": 0,
-            "symmetry": {"groups_checked": 0, "one_sided_groups": 0, "mismatch_groups": 0, "max_abs_size_delta": 0.0},
+            "symmetry": {
+                "groups_checked": 0,
+                "one_sided_groups": 0,
+                "mismatch_groups": 0,
+                "max_abs_size_delta": 0.0,
+            },
             "coverage_by_market": zero_market_rows,
             "zero_fill_markets": zero_market_rows,
             "coverage_by_token": [
@@ -642,33 +800,84 @@ def validate_uploaded_corpus(
     raw_fill_rows = int(scan.select(pl.len()).collect(engine="streaming").item())
     dedup_groups = (
         scan.group_by(DEDUP_KEY)
-        .agg(pl.len().alias("rows"), pl.struct(CONTENT_COLUMNS).n_unique().alias("content_versions"))
+        .agg(
+            pl.len().alias("rows"), pl.struct(CONTENT_COLUMNS).n_unique().alias("content_versions")
+        )
         .filter(pl.col("rows") > 1)
         .collect(engine="streaming")
     )
     conflicting = dedup_groups.filter(pl.col("content_versions") > 1)
     provenance_rows = (
-        scan.group_by("block_number_provenance").len().sort("block_number_provenance").collect(engine="streaming")
+        scan.group_by("block_number_provenance")
+        .len()
+        .sort("block_number_provenance")
+        .collect(engine="streaming")
     )
-    provenance_mix = {str(row["block_number_provenance"]): int(row["len"]) for row in provenance_rows.iter_rows(named=True)}
-    missing_block_rows = int(scan.filter(pl.col("block_number").is_null()).select(pl.len()).collect(engine="streaming").item())
+    provenance_mix = {
+        str(row["block_number_provenance"]): int(row["len"])
+        for row in provenance_rows.iter_rows(named=True)
+    }
+    missing_block_rows = int(
+        scan.filter(pl.col("block_number").is_null())
+        .select(pl.len())
+        .collect(engine="streaming")
+        .item()
+    )
     missing_tx_hash_rows = int(
-        scan.filter(pl.col("tx_hash").is_null() | (pl.col("tx_hash").cast(pl.String).str.len_chars() == 0))
-        .select(pl.len()).collect(engine="streaming").item()
+        scan.filter(
+            pl.col("tx_hash").is_null() | (pl.col("tx_hash").cast(pl.String).str.len_chars() == 0)
+        )
+        .select(pl.len())
+        .collect(engine="streaming")
+        .item()
     )
-    missing_log_index_rows = int(scan.filter(pl.col("log_index").is_null()).select(pl.len()).collect(engine="streaming").item())
-    missing_timestamp_rows = int(scan.filter(pl.col("timestamp").is_null()).select(pl.len()).collect(engine="streaming").item())
-    missing_size_rows = int(scan.filter(pl.col("size_shares").is_null()).select(pl.len()).collect(engine="streaming").item())
-    missing_value_rows = int(scan.filter(pl.col("value_usd").is_null()).select(pl.len()).collect(engine="streaming").item())
-    unknown_order_role_rows = int(scan.filter(pl.col("order_is_match_taker_order").is_null()).select(pl.len()).collect(engine="streaming").item())
-    unknown_direction_rows = int(scan.filter(pl.col("economic_direction").is_null()).select(pl.len()).collect(engine="streaming").item())
+    missing_log_index_rows = int(
+        scan.filter(pl.col("log_index").is_null())
+        .select(pl.len())
+        .collect(engine="streaming")
+        .item()
+    )
+    missing_timestamp_rows = int(
+        scan.filter(pl.col("timestamp").is_null())
+        .select(pl.len())
+        .collect(engine="streaming")
+        .item()
+    )
+    missing_size_rows = int(
+        scan.filter(pl.col("size_shares").is_null())
+        .select(pl.len())
+        .collect(engine="streaming")
+        .item()
+    )
+    missing_value_rows = int(
+        scan.filter(pl.col("value_usd").is_null())
+        .select(pl.len())
+        .collect(engine="streaming")
+        .item()
+    )
+    unknown_order_role_rows = int(
+        scan.filter(pl.col("order_is_match_taker_order").is_null())
+        .select(pl.len())
+        .collect(engine="streaming")
+        .item()
+    )
+    unknown_direction_rows = int(
+        scan.filter(pl.col("economic_direction").is_null())
+        .select(pl.len())
+        .collect(engine="streaming")
+        .item()
+    )
     price_failure_rows = int(
         scan.filter(pl.col("price").is_null() | (pl.col("price") < 0) | (pl.col("price") > 1))
-        .select(pl.len()).collect(engine="streaming").item()
+        .select(pl.len())
+        .collect(engine="streaming")
+        .item()
     )
     condition_mismatch_rows = int(
         scan.filter(~pl.col("condition_id_matches_gamma").fill_null(False))
-        .select(pl.len()).collect(engine="streaming").item()
+        .select(pl.len())
+        .collect(engine="streaming")
+        .item()
     )
     ordering = (
         scan.filter(pl.col("block_number").is_not_null() & pl.col("log_index").is_not_null())
@@ -681,7 +890,10 @@ def validate_uploaded_corpus(
             pl.col("_prior_block").is_not_null()
             & (
                 (pl.col("block_number") < pl.col("_prior_block"))
-                | ((pl.col("block_number") == pl.col("_prior_block")) & (pl.col("log_index") <= pl.col("_prior_log")))
+                | (
+                    (pl.col("block_number") == pl.col("_prior_block"))
+                    & (pl.col("log_index") <= pl.col("_prior_log"))
+                )
             )
         )
         .group_by("token_id")
@@ -689,13 +901,24 @@ def validate_uploaded_corpus(
         .sort("token_id")
         .collect(engine="streaming")
     )
-    ordering_failures = [{"token_id": str(row["token_id"]), "rows": int(row["len"])} for row in ordering.iter_rows(named=True)]
+    ordering_failures = [
+        {"token_id": str(row["token_id"]), "rows": int(row["len"])}
+        for row in ordering.iter_rows(named=True)
+    ]
     symmetry = (
-        scan.filter(pl.col("tx_hash").is_not_null() & pl.col("order_is_match_taker_order").is_not_null())
+        scan.filter(
+            pl.col("tx_hash").is_not_null() & pl.col("order_is_match_taker_order").is_not_null()
+        )
         .group_by(["tx_hash", "token_id", "timestamp", "price"])
         .agg(
-            pl.col("size_shares").filter(pl.col("order_is_match_taker_order")).sum().alias("taker_size"),
-            pl.col("size_shares").filter(~pl.col("order_is_match_taker_order")).sum().alias("maker_size"),
+            pl.col("size_shares")
+            .filter(pl.col("order_is_match_taker_order"))
+            .sum()
+            .alias("taker_size"),
+            pl.col("size_shares")
+            .filter(~pl.col("order_is_match_taker_order"))
+            .sum()
+            .alias("maker_size"),
             pl.col("order_is_match_taker_order").sum().alias("taker_rows"),
             (~pl.col("order_is_match_taker_order")).sum().alias("maker_rows"),
         )
@@ -704,34 +927,52 @@ def validate_uploaded_corpus(
     paired = symmetry.filter((pl.col("taker_rows") > 0) & (pl.col("maker_rows") > 0))
     one_sided = symmetry.filter((pl.col("taker_rows") == 0) | (pl.col("maker_rows") == 0))
     mismatches = paired.filter((pl.col("taker_size") - pl.col("maker_size")).abs() > 0.00001)
-    max_delta = float((paired.select((pl.col("taker_size") - pl.col("maker_size")).abs().max()).item() or 0.0)) if paired.height else 0.0
+    max_delta = (
+        float(
+            paired.select((pl.col("taker_size") - pl.col("maker_size")).abs().max()).item() or 0.0
+        )
+        if paired.height
+        else 0.0
+    )
 
     coverage_market_df = (
-        scan.group_by(["market_id", "condition_id", "gamma_condition_id", "event_id", "acquisition_class", "acquisition_tier"])
+        scan.group_by(
+            [
+                "market_id",
+                "condition_id",
+                "gamma_condition_id",
+                "event_id",
+                "acquisition_class",
+                "acquisition_tier",
+            ]
+        )
         .agg(
             pl.len().alias("fill_rows"),
             pl.col("token_id").n_unique().alias("tokens_with_rows"),
             pl.col("timestamp").min().alias("first_timestamp"),
             pl.col("timestamp").max().alias("last_timestamp"),
             pl.col("block_number").null_count().alias("missing_block_rows"),
-            (~pl.col("condition_id_matches_gamma").fill_null(False)).sum().alias("condition_id_mismatch_rows"),
+            (~pl.col("condition_id_matches_gamma").fill_null(False))
+            .sum()
+            .alias("condition_id_mismatch_rows"),
         )
         .collect(engine="streaming")
     )
     market_stats = {str(row["market_id"]): row for row in coverage_market_df.iter_rows(named=True)}
     coverage_by_market: list[dict[str, Any]] = []
     zero_fill_markets: list[dict[str, Any]] = []
-    source_days = sorted({row["date"] for row in files if row["kind"] == "fills"})
     last_source_date = date.fromisoformat(source_last_day)
     for market_id, market in sorted(expected_markets.items(), key=lambda pair: int(pair[0])):
         stats = market_stats.get(market_id)
         created = parse_date(market.get("gamma_created_at"))
-        end = parse_date((market.get("gamma_market") or {}).get("endDate") or market.get("end_date"))
+        end = parse_date(
+            (market.get("gamma_market") or {}).get("endDate") or market.get("end_date")
+        )
         if stats:
             first = int(stats["first_timestamp"]) if stats["first_timestamp"] is not None else None
             last = int(stats["last_timestamp"]) if stats["last_timestamp"] is not None else None
-            first_dt = datetime.fromtimestamp(first, timezone.utc) if first is not None else None
-            last_dt = datetime.fromtimestamp(last, timezone.utc) if last is not None else None
+            first_dt = datetime.fromtimestamp(first, UTC) if first is not None else None
+            last_dt = datetime.fromtimestamp(last, UTC) if last is not None else None
             created_delta = (first_dt - created).total_seconds() if first_dt and created else None
             end_delta = (last_dt - end).total_seconds() if last_dt and end else None
             row = {
@@ -759,7 +1000,11 @@ def validate_uploaded_corpus(
                 reason = "new_market_after_latest_available_trade_day"
             else:
                 gaps = [day for day in missing_trade_days if not created_day or day >= created_day]
-                reason = "source_gap_during_market_lifetime" if gaps else "no_trading_observed_in_available_source"
+                reason = (
+                    "source_gap_during_market_lifetime"
+                    if gaps
+                    else "no_trading_observed_in_available_source"
+                )
             row = {
                 "market_id": market_id,
                 "condition_id": str(market["condition_id"]),
@@ -797,17 +1042,19 @@ def validate_uploaded_corpus(
     coverage_by_token = []
     for token_id, token in sorted(expected_tokens.items()):
         stats = token_stats.get(token_id)
-        coverage_by_token.append({
-            "token_id": token_id,
-            "market_id": str(token["market_id"]),
-            "condition_id": str(token["condition_id"]),
-            "outcome_label": str(token["outcome_label"]),
-            "fill_rows": int(stats["fill_rows"]) if stats else 0,
-            "first_fill_utc": utc_string(stats["first_timestamp"]) if stats else None,
-            "last_fill_utc": utc_string(stats["last_timestamp"]) if stats else None,
-            "missing_block_rows": int(stats["missing_block_rows"]) if stats else 0,
-            "zero_fill": stats is None,
-        })
+        coverage_by_token.append(
+            {
+                "token_id": token_id,
+                "market_id": str(token["market_id"]),
+                "condition_id": str(token["condition_id"]),
+                "outcome_label": str(token["outcome_label"]),
+                "fill_rows": int(stats["fill_rows"]) if stats else 0,
+                "first_fill_utc": utc_string(stats["first_timestamp"]) if stats else None,
+                "last_fill_utc": utc_string(stats["last_timestamp"]) if stats else None,
+                "missing_block_rows": int(stats["missing_block_rows"]) if stats else 0,
+                "zero_fill": stats is None,
+            }
+        )
     event_df = (
         scan.group_by(["event_id", "event_slug", "event_title"])
         .agg(
@@ -847,18 +1094,27 @@ def validate_uploaded_corpus(
         }
     coverage_by_event = []
     for event_id, identity in sorted(expected_events.items()):
-        coverage_by_event.append(event_by_id.get(event_id, {
-            **identity,
-            "fill_rows": 0,
-            "markets_with_rows": 0,
-            "conditions_with_rows": 0,
-            "tokens_with_rows": 0,
-            "first_fill_utc": None,
-            "last_fill_utc": None,
-            "missing_block_rows": 0,
-        }))
+        coverage_by_event.append(
+            event_by_id.get(
+                event_id,
+                {
+                    **identity,
+                    "fill_rows": 0,
+                    "markets_with_rows": 0,
+                    "conditions_with_rows": 0,
+                    "tokens_with_rows": 0,
+                    "first_fill_utc": None,
+                    "last_fill_utc": None,
+                    "missing_block_rows": 0,
+                },
+            )
+        )
     date_df = (
-        scan.with_columns(pl.from_epoch(pl.col("timestamp"), time_unit="s").dt.strftime("%Y-%m-%d").alias("utc_date"))
+        scan.with_columns(
+            pl.from_epoch(pl.col("timestamp"), time_unit="s")
+            .dt.strftime("%Y-%m-%d")
+            .alias("utc_date")
+        )
         .group_by("utc_date")
         .agg(
             pl.len().alias("fill_rows"),
@@ -884,9 +1140,16 @@ def validate_uploaded_corpus(
         for row in date_df.iter_rows(named=True)
     ]
     lifecycle_anomalies = [
-        row for row in coverage_by_market
-        if (row.get("first_fill_minus_created_seconds") is not None and row["first_fill_minus_created_seconds"] < -1)
-        or (row.get("last_fill_minus_end_seconds") is not None and row["last_fill_minus_end_seconds"] > 0)
+        row
+        for row in coverage_by_market
+        if (
+            row.get("first_fill_minus_created_seconds") is not None
+            and row["first_fill_minus_created_seconds"] < -1
+        )
+        or (
+            row.get("last_fill_minus_end_seconds") is not None
+            and row["last_fill_minus_end_seconds"] > 0
+        )
     ]
     return {
         "raw_fill_rows": raw_fill_rows,
@@ -946,7 +1209,13 @@ def make_gate_summary(
     token_count = len(universe["tokens"])
     p0_count = sum(row.get("acquisition_class") == "FILLS_P0" for row in universe["markets"])
     p1_count = sum(row.get("acquisition_class") == "FILLS_P1" for row in universe["markets"])
-    exact_scope = market_count == 298 and condition_count == 298 and token_count == 596 and p0_count == 210 and p1_count == 88
+    exact_scope = (
+        market_count == 298
+        and condition_count == 298
+        and token_count == 596
+        and p0_count == 210
+        and p1_count == 88
+    )
     block_mix = validation["block_number_provenance_mix"]
     only_custody_join = set(block_mix).issubset({"CUSTODY_TX_HASH_JOIN"})
     block_complete = validation["missing_block_number_rows"] == 0 and only_custody_join
@@ -972,8 +1241,12 @@ def make_gate_summary(
             "markets": market_count,
             "conditions": condition_count,
             "tokens": token_count,
-            "p0_markets": sum(row.get("acquisition_class") == "FILLS_P0" for row in universe["markets"]),
-            "p1_markets": sum(row.get("acquisition_class") == "FILLS_P1" for row in universe["markets"]),
+            "p0_markets": sum(
+                row.get("acquisition_class") == "FILLS_P0" for row in universe["markets"]
+            ),
+            "p1_markets": sum(
+                row.get("acquisition_class") == "FILLS_P1" for row in universe["markets"]
+            ),
             "pass": exact_scope,
         },
         "gamma_outcome_token_alignment": {
@@ -984,7 +1257,8 @@ def make_gate_summary(
         "graph_and_anchor_links": {
             "market_graph_links": market_graph_link_count,
             "selected_sig_exchange_ids": universe["counts"]["selected_sig_exchange_ids"],
-            "pass": market_graph_link_count > 0 and universe["counts"]["selected_sig_exchange_ids"] > 0,
+            "pass": market_graph_link_count > 0
+            and universe["counts"]["selected_sig_exchange_ids"] > 0,
         },
         "dedup": {
             "raw_fill_rows": raw_fill_rows,
@@ -992,14 +1266,17 @@ def make_gate_summary(
             "duplicate_rows_removed": duplicate_rows_removed,
             "source_duplicate_key_groups_before_dedup": duplicate_key_groups,
             "output_duplicate_key_groups_after_dedup": validation["duplicate_key_groups"],
-            "conflicting_duplicate_groups": max(conflicting_duplicate_groups, validation["conflicting_duplicate_groups"]),
+            "conflicting_duplicate_groups": max(
+                conflicting_duplicate_groups, validation["conflicting_duplicate_groups"]
+            ),
             "pass": dedup_pass,
         },
         "fill_key_completeness": {
             "dedup_key": DEDUP_KEY,
             "missing_transaction_hash_rows": validation["missing_tx_hash_rows"],
             "missing_log_index_rows": validation["missing_log_index_rows"],
-            "pass": validation["missing_tx_hash_rows"] == 0 and validation["missing_log_index_rows"] == 0,
+            "pass": validation["missing_tx_hash_rows"] == 0
+            and validation["missing_log_index_rows"] == 0,
         },
         "block_number_provenance": {
             "provenance_mix": block_mix,
@@ -1021,10 +1298,16 @@ def make_gate_summary(
             "missing_value_usd_rows": validation["missing_value_usd_rows"],
             "unknown_order_role_rows": validation["unknown_order_role_rows"],
             "unknown_economic_direction_rows": validation["unknown_economic_direction_rows"],
-            "pass": validation["missing_timestamp_rows"] == 0 and validation["missing_size_rows"] == 0 and validation["missing_value_usd_rows"] == 0,
+            "pass": validation["missing_timestamp_rows"] == 0
+            and validation["missing_size_rows"] == 0
+            and validation["missing_value_usd_rows"] == 0,
             "unknown_semantics": "unknown role/direction remain explicit; they are never imputed",
         },
-        "price_bounds": {"range": [0, 1], "invalid_or_missing_rows": validation["price_failure_rows"], "pass": price_pass},
+        "price_bounds": {
+            "range": [0, 1],
+            "invalid_or_missing_rows": validation["price_failure_rows"],
+            "pass": price_pass,
+        },
         "fill_condition_identity": {
             "token_to_gamma_condition_mismatch_rows": validation["condition_id_mismatch_rows"],
             "pass": identity_pass,
@@ -1033,11 +1316,13 @@ def make_gate_summary(
         "market_lifecycle_bounds": {
             "markets_checked": len(validation["coverage_by_market"]),
             "fills_before_gamma_created_at": sum(
-                row.get("first_fill_minus_created_seconds") is not None and row["first_fill_minus_created_seconds"] < -1
+                row.get("first_fill_minus_created_seconds") is not None
+                and row["first_fill_minus_created_seconds"] < -1
                 for row in validation["coverage_by_market"]
             ),
             "fills_after_gamma_end_date": sum(
-                row.get("last_fill_minus_end_seconds") is not None and row["last_fill_minus_end_seconds"] > 0
+                row.get("last_fill_minus_end_seconds") is not None
+                and row["last_fill_minus_end_seconds"] > 0
                 for row in validation["coverage_by_market"]
             ),
             "anomalies": validation["market_lifecycle_anomalies"],
@@ -1051,42 +1336,60 @@ def make_gate_summary(
             "pass": full_source_days_pass,
         },
         "per_market_coverage": {
-            "markets_with_fills": sum(row["fill_rows"] > 0 for row in validation["coverage_by_market"]),
+            "markets_with_fills": sum(
+                row["fill_rows"] > 0 for row in validation["coverage_by_market"]
+            ),
             "markets_zero_fill": len(validation["zero_fill_markets"]),
-            "zero_fill_reason_counts": dict(Counter(row["zero_fill_reason"] for row in validation["zero_fill_markets"])),
+            "zero_fill_reason_counts": dict(
+                Counter(row["zero_fill_reason"] for row in validation["zero_fill_markets"])
+            ),
             "pass": True,
         },
     }
     failures: list[dict[str, Any]] = []
     for gate_name, gate in gates.items():
         if not gate.get("pass", False):
-            failures.append({"gate": gate_name, "details": {key: value for key, value in gate.items() if key != "pass"}})
+            failures.append(
+                {
+                    "gate": gate_name,
+                    "details": {key: value for key, value in gate.items() if key != "pass"},
+                }
+            )
     zero_fill_source_gaps = [
-        row for row in validation["zero_fill_markets"]
+        row
+        for row in validation["zero_fill_markets"]
         if row.get("zero_fill_reason") == "source_gap_during_market_lifetime"
     ]
     if zero_fill_source_gaps:
-        failures.append({"gate": "zero_fill_markets_with_source_gaps", "markets": zero_fill_source_gaps})
+        failures.append(
+            {"gate": "zero_fill_markets_with_source_gaps", "markets": zero_fill_source_gaps}
+        )
     if missing_trade_days:
         affected_market_ids = [
             row["market_id"]
             for row in validation["coverage_by_market"]
-            if any(day >= str(row.get("created_at_utc") or "9999")[:10] for day in missing_trade_days)
+            if any(
+                day >= str(row.get("created_at_utc") or "9999")[:10] for day in missing_trade_days
+            )
         ]
-        failures.append({
-            "gate": "missing_trade_source_days",
-            "dates": missing_trade_days,
-            "markets_exposed_to_possible_source_gaps": affected_market_ids,
-        })
+        failures.append(
+            {
+                "gate": "missing_trade_source_days",
+                "dates": missing_trade_days,
+                "markets_exposed_to_possible_source_gaps": affected_market_ids,
+            }
+        )
     for day in day_coverage:
         if day.get("block_number_missing_rows", 0):
-            failures.append({
-                "gate": "block_number_missing_rows_by_day",
-                "date": day["date"],
-                "rows": day["block_number_missing_rows"],
-                "markets": day.get("markets_with_missing_blocks", []),
-                "reason": day.get("block_number_missing_reason"),
-            })
+            failures.append(
+                {
+                    "gate": "block_number_missing_rows_by_day",
+                    "date": day["date"],
+                    "rows": day["block_number_missing_rows"],
+                    "markets": day.get("markets_with_missing_blocks", []),
+                    "reason": day.get("block_number_missing_reason"),
+                }
+            )
     status = "PASS" if not failures else "BLOCKED_QUALITY_GATE"
     return {
         "dataset_id": "DATA-004",
@@ -1114,32 +1417,83 @@ def write_repo_artifacts(
     if baseline.exists():
         (repo_output / "data004_baseline_pairing.json").write_bytes(baseline.read_bytes())
     market_fields = [
-        "market_id", "condition_id", "event_id", "acquisition_class", "acquisition_tier", "created_at_utc",
-        "end_date_utc", "fill_rows", "tokens_expected", "tokens_with_rows", "first_fill_utc", "last_fill_utc",
-        "first_fill_minus_created_seconds", "last_fill_minus_end_seconds", "missing_block_rows",
-        "condition_id_mismatch_rows", "zero_fill_reason",
+        "market_id",
+        "condition_id",
+        "event_id",
+        "acquisition_class",
+        "acquisition_tier",
+        "created_at_utc",
+        "end_date_utc",
+        "fill_rows",
+        "tokens_expected",
+        "tokens_with_rows",
+        "first_fill_utc",
+        "last_fill_utc",
+        "first_fill_minus_created_seconds",
+        "last_fill_minus_end_seconds",
+        "missing_block_rows",
+        "condition_id_mismatch_rows",
+        "zero_fill_reason",
     ]
     atomic_csv(repo_output / "market_coverage.csv", validation["coverage_by_market"], market_fields)
     token_fields = [
-        "token_id", "market_id", "condition_id", "outcome_label", "fill_rows", "first_fill_utc",
-        "last_fill_utc", "missing_block_rows", "zero_fill",
+        "token_id",
+        "market_id",
+        "condition_id",
+        "outcome_label",
+        "fill_rows",
+        "first_fill_utc",
+        "last_fill_utc",
+        "missing_block_rows",
+        "zero_fill",
     ]
     atomic_csv(repo_output / "token_coverage.csv", validation["coverage_by_token"], token_fields)
     event_fields = [
-        "event_id", "event_slug", "event_title", "fill_rows", "markets_with_rows", "conditions_with_rows",
-        "tokens_with_rows", "first_fill_utc", "last_fill_utc", "missing_block_rows",
+        "event_id",
+        "event_slug",
+        "event_title",
+        "fill_rows",
+        "markets_with_rows",
+        "conditions_with_rows",
+        "tokens_with_rows",
+        "first_fill_utc",
+        "last_fill_utc",
+        "missing_block_rows",
     ]
     atomic_csv(repo_output / "event_coverage.csv", validation["coverage_by_event"], event_fields)
     date_fields = [
-        "date", "fill_rows", "markets_with_rows", "conditions_with_rows", "tokens_with_rows",
-        "events_with_rows", "missing_block_rows",
+        "date",
+        "fill_rows",
+        "markets_with_rows",
+        "conditions_with_rows",
+        "tokens_with_rows",
+        "events_with_rows",
+        "missing_block_rows",
     ]
     atomic_csv(repo_output / "date_coverage.csv", validation["coverage_by_date"], date_fields)
-    sample_fields = list(sample_rows[0]) if sample_rows else [
-        "fill_id", "timestamp_utc", "block_number", "log_index", "tx_hash", "market_id", "condition_id",
-        "event_id", "token_id", "outcome_label", "side", "economic_direction", "order_role", "price",
-        "size_shares", "value_usd", "block_number_provenance",
-    ]
+    sample_fields = (
+        list(sample_rows[0])
+        if sample_rows
+        else [
+            "fill_id",
+            "timestamp_utc",
+            "block_number",
+            "log_index",
+            "tx_hash",
+            "market_id",
+            "condition_id",
+            "event_id",
+            "token_id",
+            "outcome_label",
+            "side",
+            "economic_direction",
+            "order_role",
+            "price",
+            "size_shares",
+            "value_usd",
+            "block_number_provenance",
+        ]
+    )
     atomic_csv(repo_output / "sample_fills.csv", sample_rows, sample_fields)
     zero_fields = market_fields
     atomic_csv(repo_output / "zero_fill_markets.csv", validation["zero_fill_markets"], zero_fields)
@@ -1149,7 +1503,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--lane", type=Path, default=DEFAULT_LANE)
     parser.add_argument("--universe", type=Path, default=DEFAULT_LANE / "data004_universe.json")
-    parser.add_argument("--repo-output", type=Path, default=ROOT / "data/research/data004_ets_p0p1/v1")
+    parser.add_argument(
+        "--repo-output", type=Path, default=ROOT / "data/research/data004_ets_p0p1/v1"
+    )
     parser.add_argument("--bucket", default=BUCKET)
     parser.add_argument("--object-prefix", default=DATA_PREFIX)
     args = parser.parse_args()
@@ -1166,20 +1522,38 @@ def main() -> None:
     universe_path = args.universe.resolve()
     universe = json.loads(universe_path.read_text(encoding="utf-8"))
     if universe["counts"] != {
-        "markets": 298, "conditions": 298, "tokens": 596, "p0_markets": 210,
-        "p1_markets": 88, "selected_sig_exchange_ids": universe["counts"]["selected_sig_exchange_ids"],
+        "markets": 298,
+        "conditions": 298,
+        "tokens": 596,
+        "p0_markets": 210,
+        "p1_markets": 88,
+        "selected_sig_exchange_ids": universe["counts"]["selected_sig_exchange_ids"],
         "market_graph_links": universe["counts"]["market_graph_links"],
     }:
-        expected = {"markets": 298, "conditions": 298, "tokens": 596, "p0_markets": 210, "p1_markets": 88}
+        expected = {
+            "markets": 298,
+            "conditions": 298,
+            "tokens": 596,
+            "p0_markets": 210,
+            "p1_markets": 88,
+        }
         for key, value in expected.items():
             if universe["counts"].get(key) != value:
-                raise ValueError(f"universe count {key} expected {value}, got {universe['counts'].get(key)}")
+                raise ValueError(
+                    f"universe count {key} expected {value}, got {universe['counts'].get(key)}"
+                )
     if len(universe["markets"]) != 298 or len(universe["tokens"]) != 596:
-        raise ValueError("DATA-004 exporter input must be exactly the prepared 298 markets / 596 tokens")
+        raise ValueError(
+            "DATA-004 exporter input must be exactly the prepared 298 markets / 596 tokens"
+        )
     prepared_created = [parse_date(row.get("gamma_created_at")) for row in universe["markets"]]
     if not all(prepared_created):
-        raise ValueError("all scoped markets must have a Gamma createdAt timestamp for full-history scanning")
-    first_expected_day = min(value for value in prepared_created if value is not None).date().isoformat()
+        raise ValueError(
+            "all scoped markets must have a Gamma createdAt timestamp for full-history scanning"
+        )
+    first_expected_day = (
+        min(value for value in prepared_created if value is not None).date().isoformat()
+    )
     universe_sha = sha256_file(universe_path)
     script_sha = sha256_file(Path(__file__).resolve())
     if args.object_prefix.startswith("research/r25_ets/"):
@@ -1187,11 +1561,12 @@ def main() -> None:
 
     os.environ.setdefault("TMPDIR", "/tmp")
     from dotenv import load_dotenv
+
     load_dotenv(SONAR_ROOT / ".env", override=False)
     sys.path.insert(0, str(SONAR_ROOT))
+    import config
     import oci
     import polars as pl
-    import config
     from pnl_common import _oci_s3_storage_options
 
     # Polars' default streaming batches can be too large for custody objects with wide string
@@ -1199,29 +1574,44 @@ def main() -> None:
     pl.Config.set_streaming_chunk_size(STREAMING_CHUNK_ROWS)
 
     signer, cfg = config.get_oci_signer_and_config()
-    client = oci.object_storage.ObjectStorageClient(cfg, signer=signer) if signer else oci.object_storage.ObjectStorageClient(cfg)
+    client = (
+        oci.object_storage.ObjectStorageClient(cfg, signer=signer)
+        if signer
+        else oci.object_storage.ObjectStorageClient(cfg)
+    )
     namespace = client.get_namespace().data
     storage_options = _oci_s3_storage_options(namespace)
     initial_disk = disk_gate(lane, "before_export_start")
     final_marker = object_exists(client, namespace, FINAL_MANIFEST)
     if final_marker is not None:
-        raise RuntimeError(f"DATA-004 v1 is already finalized; immutable prefix cannot be overwritten: {FINAL_MANIFEST}")
+        raise RuntimeError(
+            f"DATA-004 v1 is already finalized; immutable prefix cannot be overwritten: {FINAL_MANIFEST}"
+        )
 
     checkpoint_path = lane / "data004_checkpoint.json"
     if checkpoint_path.exists():
         checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
-        if checkpoint.get("universe_sha256") != universe_sha or checkpoint.get("object_prefix") != DATA_PREFIX:
-            raise RuntimeError("checkpoint universe/prefix differs; refusing to resume inconsistent DATA-004 output")
+        if (
+            checkpoint.get("universe_sha256") != universe_sha
+            or checkpoint.get("object_prefix") != DATA_PREFIX
+        ):
+            raise RuntimeError(
+                "checkpoint universe/prefix differs; refusing to resume inconsistent DATA-004 output"
+            )
         if checkpoint.get("exporter_sha256") != script_sha:
             previous_script_sha = str(checkpoint.get("exporter_sha256") or "")
             if previous_script_sha not in RESUME_COMPATIBLE_EXPORTER_SHA256:
-                raise RuntimeError("exporter changed incompatibly since checkpoint; use a new immutable dataset version")
+                raise RuntimeError(
+                    "exporter changed incompatibly since checkpoint; use a new immutable dataset version"
+                )
             history = checkpoint.setdefault("exporter_resume_history", [])
-            history.append({
-                "from_sha256": previous_script_sha,
-                "to_sha256": script_sha,
-                "change": "Reduced Polars streaming batch size, filtered custody directly to selected transaction hashes, trimmed freed per-day memory, and made Parquet chunk statistics tolerate metadata tables without fill-only columns; fill output schema and row semantics unchanged.",
-            })
+            history.append(
+                {
+                    "from_sha256": previous_script_sha,
+                    "to_sha256": script_sha,
+                    "change": "Reduced Polars streaming batch size, filtered custody directly to selected transaction hashes, trimmed freed per-day memory, and made Parquet chunk statistics tolerate metadata tables without fill-only columns; fill output schema and row semantics unchanged.",
+                }
+            )
             checkpoint["exporter_sha256"] = script_sha
             save_checkpoint(checkpoint_path, checkpoint)
     else:
@@ -1244,7 +1634,7 @@ def main() -> None:
             "conflicting_duplicate_groups": 0,
             "custody_identity_failures_by_day": [],
             "condition_id_mismatch_rows": 0,
-            "created_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "created_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         }
         save_checkpoint(checkpoint_path, checkpoint)
 
@@ -1256,7 +1646,9 @@ def main() -> None:
     source_last_day = all_trade_days[-1]
     days = [day for day in all_trade_days if day >= first_expected_day]
     if not days:
-        raise RuntimeError(f"no trades objects exist on/after earliest scoped market creation date {first_expected_day}")
+        raise RuntimeError(
+            f"no trades objects exist on/after earliest scoped market creation date {first_expected_day}"
+        )
     scan_start_day = days[0]
     last_dt = date.fromisoformat(source_last_day)
     cursor = date.fromisoformat(first_expected_day)
@@ -1282,15 +1674,20 @@ def main() -> None:
             raise RuntimeError(f"source custody object availability changed while resuming {day}")
         if current_custody is not None and stored_custody is not None:
             refresh_object_metadata(client, namespace, current_custody)
-            if current_custody.get("etag") != stored_custody.get("etag") or current_custody.get("size") != stored_custody.get("size"):
+            if current_custody.get("etag") != stored_custody.get("etag") or current_custody.get(
+                "size"
+            ) != stored_custody.get("size"):
                 raise RuntimeError(f"source custody object changed while resuming {day}")
 
-    token_values = pl.Series(sorted(row["token_id"] for row in universe["tokens"]), dtype=pl.String).implode()
-    by_token = {str(row["token_id"]): row for row in universe["tokens"]}
+    token_values = pl.Series(
+        sorted(row["token_id"] for row in universe["tokens"]), dtype=pl.String
+    ).implode()
     market_df, token_dimension_df, token_metadata = build_dimensions(universe)
     del market_df
     registry = json.loads((SONAR_ROOT / "infra_registry.json").read_text(encoding="utf-8"))
-    exchange_addresses = sorted({str(address).lower() for address in registry["exchange_addresses"]})
+    exchange_addresses = sorted(
+        {str(address).lower() for address in registry["exchange_addresses"]}
+    )
     file_records: list[dict[str, Any]] = list(checkpoint.get("file_records", []))
     day_coverage_by_date = {row["date"]: row for row in checkpoint.get("day_coverage", [])}
     market_graph_link_count = int(universe["counts"]["market_graph_links"])
@@ -1308,20 +1705,34 @@ def main() -> None:
         if previous_source is not None:
             previous_trade = previous_source.get("trade") or {}
             previous_custody = previous_source.get("custody")
-            if trade.get("etag") != previous_trade.get("etag") or trade.get("size") != previous_trade.get("size"):
+            if trade.get("etag") != previous_trade.get("etag") or trade.get(
+                "size"
+            ) != previous_trade.get("size"):
                 raise RuntimeError(f"source trade object changed during partial-day resume {day}")
             if (custody is None) != (previous_custody is None):
-                raise RuntimeError(f"source custody object availability changed during partial-day resume {day}")
-            if custody is not None and previous_custody is not None:
-                if custody.get("etag") != previous_custody.get("etag") or custody.get("size") != previous_custody.get("size"):
-                    raise RuntimeError(f"source custody object changed during partial-day resume {day}")
+                raise RuntimeError(
+                    f"source custody object availability changed during partial-day resume {day}"
+                )
+            if (
+                custody is not None
+                and previous_custody is not None
+                and (
+                    custody.get("etag") != previous_custody.get("etag")
+                    or custody.get("size") != previous_custody.get("size")
+                )
+            ):
+                raise RuntimeError(
+                    f"source custody object changed during partial-day resume {day}"
+                )
         checkpoint["source_objects"][day] = {"trade": trade, "custody": custody}
         save_checkpoint(checkpoint_path, checkpoint)
         trade_uri = f"s3://{BUCKET}/{trade['object_name']}"
         source_schema = pl.scan_parquet(trade_uri, storage_options=storage_options).collect_schema()
         absent = sorted(set(TRADE_COLUMNS) - set(source_schema.names()))
         if absent:
-            raise ValueError(f"source trade object {trade['object_name']} lacks required columns {absent}")
+            raise ValueError(
+                f"source trade object {trade['object_name']} lacks required columns {absent}"
+            )
         source_fills = (
             pl.scan_parquet(trade_uri, storage_options=storage_options, low_memory=True)
             .select(TRADE_COLUMNS)
@@ -1333,8 +1744,11 @@ def main() -> None:
         dropped = 0
         if source_fills.height:
             outside_cid = source_fills.join(
-                token_dimension_df.select("token_id", pl.col("condition_id").alias("_gamma_condition_id")),
-                on="token_id", how="left",
+                token_dimension_df.select(
+                    "token_id", pl.col("condition_id").alias("_gamma_condition_id")
+                ),
+                on="token_id",
+                how="left",
             ).filter(pl.col("condition_id") != pl.col("_gamma_condition_id"))
             if outside_cid.height:
                 checkpoint["condition_id_mismatch_rows"] += outside_cid.height
@@ -1347,19 +1761,33 @@ def main() -> None:
             )
             duplicate_stats = (
                 valid_keys.group_by(DEDUP_KEY)
-                .agg(pl.len().alias("rows"), pl.struct(CONTENT_COLUMNS).n_unique().alias("content_versions"))
+                .agg(
+                    pl.len().alias("rows"),
+                    pl.struct(CONTENT_COLUMNS).n_unique().alias("content_versions"),
+                )
                 .filter(pl.col("rows") > 1)
             )
             duplicate_key_groups = duplicate_stats.height
             conflict_df = duplicate_stats.filter(pl.col("content_versions") > 1)
-            conflict_tx = sorted(set(conflict_df["tx_hash"].to_list())) if conflict_df.height else []
             if conflict_df.height:
-                day_conflicts = conflict_df.select(DEDUP_KEY + ["rows", "content_versions"]).to_dicts()
+                day_conflicts = conflict_df.select(
+                    DEDUP_KEY + ["rows", "content_versions"]
+                ).to_dicts()
             safe_base = valid_keys.sort(DEDUP_KEY + CONTENT_COLUMNS, nulls_last=True).unique(
-                subset=DEDUP_KEY, keep="first", maintain_order=True,
+                subset=DEDUP_KEY,
+                keep="first",
+                maintain_order=True,
             )
-            safe_conflicts = valid_keys.join(conflict_df.select(DEDUP_KEY), on=DEDUP_KEY, how="semi") if conflict_df.height else valid_keys.head(0)
-            safe_unique = safe_base.join(conflict_df.select(DEDUP_KEY), on=DEDUP_KEY, how="anti") if conflict_df.height else safe_base
+            safe_conflicts = (
+                valid_keys.join(conflict_df.select(DEDUP_KEY), on=DEDUP_KEY, how="semi")
+                if conflict_df.height
+                else valid_keys.head(0)
+            )
+            safe_unique = (
+                safe_base.join(conflict_df.select(DEDUP_KEY), on=DEDUP_KEY, how="anti")
+                if conflict_df.height
+                else safe_base
+            )
             deduped_valid = pl.concat([safe_unique, safe_conflicts], how="vertical_relaxed")
             deduped_fills = pl.concat([deduped_valid, invalid_keys], how="vertical_relaxed")
             dropped = valid_keys.height - deduped_valid.height
@@ -1367,23 +1795,32 @@ def main() -> None:
             checkpoint["duplicate_key_groups"] += duplicate_key_groups
             checkpoint["conflicting_duplicate_groups"] += conflict_df.height
             if day_conflicts:
-                checkpoint.setdefault("dedup_conflicts", []).extend([{"date": day, **row} for row in day_conflicts])
+                checkpoint.setdefault("dedup_conflicts", []).extend(
+                    [{"date": day, **row} for row in day_conflicts]
+                )
 
             txs = deduped_fills.select(pl.col("tx_hash").drop_nulls().unique().alias("tx_hash"))
             conflict_tx_hashes: list[str] = []
             block_map = pl.DataFrame(schema={"tx_hash": pl.String, "block_number": pl.Int64})
             if custody is not None and txs.height:
                 custody_uri = f"s3://{BUCKET}/{custody['object_name']}"
-                custody_schema = pl.scan_parquet(custody_uri, storage_options=storage_options).collect_schema()
+                custody_schema = pl.scan_parquet(
+                    custody_uri, storage_options=storage_options
+                ).collect_schema()
                 if not {"tx_hash", "block_number"}.issubset(custody_schema.names()):
-                    checkpoint["custody_identity_failures_by_day"].append({
-                        "date": day, "reason": "custody_source_missing_tx_hash_or_block_number_columns",
-                        "rows": deduped_fills.height,
-                    })
+                    checkpoint["custody_identity_failures_by_day"].append(
+                        {
+                            "date": day,
+                            "reason": "custody_source_missing_tx_hash_or_block_number_columns",
+                            "rows": deduped_fills.height,
+                        }
+                    )
                 else:
                     selected_tx_hashes = txs["tx_hash"].drop_nulls().unique().to_list()
                     custody_matches = (
-                        pl.scan_parquet(custody_uri, storage_options=storage_options, low_memory=True)
+                        pl.scan_parquet(
+                            custody_uri, storage_options=storage_options, low_memory=True
+                        )
                         .select("tx_hash", "block_number")
                         .filter(pl.col("tx_hash").is_in(selected_tx_hashes))
                         .collect(engine="streaming")
@@ -1393,13 +1830,22 @@ def main() -> None:
                         pl.col("block_number").drop_nulls().first().alias("block_number"),
                     )
                     conflict_df2 = block_stats.filter(pl.col("block_count") > 1)
-                    conflict_tx_hashes = sorted(set(conflict_df2["tx_hash"].to_list())) if conflict_df2.height else []
+                    conflict_tx_hashes = (
+                        sorted(set(conflict_df2["tx_hash"].to_list()))
+                        if conflict_df2.height
+                        else []
+                    )
                     if conflict_df2.height:
-                        checkpoint["custody_identity_failures_by_day"].append({
-                            "date": day, "reason": "conflicting_block_numbers_for_tx_hash",
-                            "transaction_hashes": conflict_tx_hashes,
-                        })
-                    block_map = block_stats.filter(pl.col("block_count") == 1).select("tx_hash", "block_number")
+                        checkpoint["custody_identity_failures_by_day"].append(
+                            {
+                                "date": day,
+                                "reason": "conflicting_block_numbers_for_tx_hash",
+                                "transaction_hashes": conflict_tx_hashes,
+                            }
+                        )
+                    block_map = block_stats.filter(pl.col("block_count") == 1).select(
+                        "tx_hash", "block_number"
+                    )
             enriched = transform_fills(
                 deduped_fills,
                 token_metadata,
@@ -1411,9 +1857,15 @@ def main() -> None:
             )
             mismatch_rows = int((~enriched["condition_id_matches_gamma"].fill_null(False)).sum())
             block_missing = int(enriched["block_number"].null_count())
-            missing_markets = sorted(set(enriched.filter(pl.col("block_number").is_null())["market_id"].to_list()), key=int)
-            provenance_reasons = Counter(enriched.filter(pl.col("block_number").is_null())["block_number_provenance"].to_list())
-            source_fill_rows = enriched.height
+            missing_markets = sorted(
+                set(enriched.filter(pl.col("block_number").is_null())["market_id"].to_list()),
+                key=int,
+            )
+            provenance_reasons = Counter(
+                enriched.filter(pl.col("block_number").is_null())[
+                    "block_number_provenance"
+                ].to_list()
+            )
             chunk_files, _ = parquet_parts(
                 enriched,
                 object_prefix=DATA_PREFIX,
@@ -1466,7 +1918,9 @@ def main() -> None:
                 "status": "NO_MATCHED_FILLS",
             }
         day_coverage_by_date[day] = day_coverage
-        checkpoint["day_coverage"] = [day_coverage_by_date[key] for key in sorted(day_coverage_by_date)]
+        checkpoint["day_coverage"] = [
+            day_coverage_by_date[key] for key in sorted(day_coverage_by_date)
+        ]
         checkpoint["file_records"] = file_records
         checkpoint["completed_source_days"] = sorted(completed | {day})
         completed.add(day)
@@ -1482,8 +1936,15 @@ def main() -> None:
     # Persist compact market and token dimensions in the same immutable OCI version.
     market_dimension, token_dimension, _ = build_dimensions(universe)
     meta_files = []
-    for kind, frame in (("market_universe", market_dimension), ("token_alignment", token_dimension)):
-        frame = frame.sort("market_id") if kind == "market_universe" else frame.sort(["market_id", "token_id"])
+    for kind, frame in (
+        ("market_universe", market_dimension),
+        ("token_alignment", token_dimension),
+    ):
+        frame = (
+            frame.sort("market_id")
+            if kind == "market_universe"
+            else frame.sort(["market_id", "token_id"])
+        )
         record, _ = parquet_parts(
             frame,
             object_prefix=DATA_PREFIX,
@@ -1496,10 +1957,16 @@ def main() -> None:
             chunk_label=f"metadata/{kind}",
         )
         meta_files.extend({**item, "kind": "metadata", "dataset": kind} for item in record)
-    file_records = [row for row in checkpoint.get("file_records", []) if row.get("kind") == "fills"] + meta_files
+    file_records = [
+        row for row in checkpoint.get("file_records", []) if row.get("kind") == "fills"
+    ] + meta_files
     # Rebuild the canonical file list from checkpoints, so a resumed export has no duplicate entries.
     fill_by_path = {
-        str(row["path"]): {**row, "kind": "fills", "date": row.get("date") or row.get("source_chunk", "").split("=")[-1]}
+        str(row["path"]): {
+            **row,
+            "kind": "fills",
+            "date": row.get("date") or row.get("source_chunk", "").split("=")[-1],
+        }
         for row in checkpoint.get("file_records", [])
         if row.get("kind") == "fills"
     }
@@ -1510,7 +1977,9 @@ def main() -> None:
             if record:
                 fill_by_path[path] = {**record, "kind": "fills", "date": day["date"]}
     meta_by_path = {str(row["path"]): row for row in meta_files}
-    file_records = sorted([*fill_by_path.values(), *meta_by_path.values()], key=lambda row: row["path"])
+    file_records = sorted(
+        [*fill_by_path.values(), *meta_by_path.values()], key=lambda row: row["path"]
+    )
     checkpoint["file_records"] = file_records
     save_checkpoint(checkpoint_path, checkpoint)
 
@@ -1534,7 +2003,9 @@ def main() -> None:
     validation["duplicate_rows_removed_within_source_days"] = duplicate_rows_removed
     validation["duplicate_key_groups_within_source_days"] = duplicate_key_groups
     validation["conflicting_duplicate_groups_within_source_days"] = conflicting_duplicate_groups
-    validation["condition_id_mismatch_rows_during_source_scan"] = int(checkpoint["condition_id_mismatch_rows"])
+    validation["condition_id_mismatch_rows_during_source_scan"] = int(
+        checkpoint["condition_id_mismatch_rows"]
+    )
     validation["custody_identity_failures_by_day"] = checkpoint["custody_identity_failures_by_day"]
 
     # Input preparation already validated all 298 Gamma market IDs, CIDs, and token/outcome pairs.
@@ -1561,23 +2032,37 @@ def main() -> None:
         market_graph_link_count=market_graph_link_count,
     )
     latest_fill_timestamp = max(
-        (row["last_timestamp"] for row in file_records if row["kind"] == "fills" and row.get("last_timestamp") is not None),
+        (
+            row["last_timestamp"]
+            for row in file_records
+            if row["kind"] == "fills" and row.get("last_timestamp") is not None
+        ),
         default=None,
     )
     earliest_fill_timestamp = min(
-        (row["first_timestamp"] for row in file_records if row["kind"] == "fills" and row.get("first_timestamp") is not None),
+        (
+            row["first_timestamp"]
+            for row in file_records
+            if row["kind"] == "fills" and row.get("first_timestamp") is not None
+        ),
         default=None,
     )
     file_payload_bytes = sum(int(row["bytes"]) for row in file_records)
-    disk_lines = [json.loads(line) for line in (lane / "disk_check_log.jsonl").read_text(encoding="utf-8").splitlines() if line]
+    disk_lines = [
+        json.loads(line)
+        for line in (lane / "disk_check_log.jsonl").read_text(encoding="utf-8").splitlines()
+        if line
+    ]
     disk_summary = {
         "checks": len(disk_lines),
         "initial_free_bytes": initial_disk,
-        "minimum_free_bytes_observed": min((row["available_bytes"] for row in disk_lines), default=initial_disk),
+        "minimum_free_bytes_observed": min(
+            (row["available_bytes"] for row in disk_lines), default=initial_disk
+        ),
         "max_temp_file_bytes": MAX_TEMP_FILE_BYTES,
         "disk_check_log": str(lane / "disk_check_log.jsonl"),
     }
-    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     manifest = {
         "schema_version": 1,
         "dataset_id": "DATA-004",
@@ -1585,8 +2070,10 @@ def main() -> None:
         "status": gate_summary["status"],
         "immutable_after_manifest_publication": True,
         "created_at_utc": now,
-        "repository_source_commit": checkpoint.get("repository_source_commit") or subprocess.check_output(
-            ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True,
+        "repository_source_commit": checkpoint.get("repository_source_commit")
+        or subprocess.check_output(
+            ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+            text=True,
         ).strip(),
         "exporter_sha256": script_sha,
         "exporter_resume_history": checkpoint.get("exporter_resume_history", []),
@@ -1606,22 +2093,31 @@ def main() -> None:
             "latest_available_trade_object_day": source_last_day,
             "first_available_trade_object_day": all_trade_days[0],
             "listed_trade_object_count": len(all_trade_days),
-            "latest_available_custody_object_day": max(custody_objects) if custody_objects else None,
+            "latest_available_custody_object_day": max(custody_objects)
+            if custody_objects
+            else None,
             "first_available_custody_object_day": min(custody_objects) if custody_objects else None,
             "listed_custody_object_count": len(custody_objects),
             "scan_start_day": scan_start_day,
             "scan_last_day": source_last_day,
             "scan_days_with_trade_objects": len(days),
             "missing_trade_object_days": missing_trade_days,
-            "source_trade_objects_scanned": [day_coverage_by_date[day]["source_trade_object"] for day in sorted(day_coverage_by_date)],
-            "source_day_coverage": [day_coverage_by_date[day] for day in sorted(day_coverage_by_date)],
+            "source_trade_objects_scanned": [
+                day_coverage_by_date[day]["source_trade_object"]
+                for day in sorted(day_coverage_by_date)
+            ],
+            "source_day_coverage": [
+                day_coverage_by_date[day] for day in sorted(day_coverage_by_date)
+            ],
             "source_custody_objects_used": [
                 day_coverage_by_date[day]["source_custody_object"]
                 for day in sorted(day_coverage_by_date)
                 if day_coverage_by_date[day].get("source_custody_object") is not None
             ],
             "dates_missing_custody_object_in_trade_scan": [
-                day for day in sorted(day_coverage_by_date) if day_coverage_by_date[day].get("source_custody_object") is None
+                day
+                for day in sorted(day_coverage_by_date)
+                if day_coverage_by_date[day].get("source_custody_object") is None
             ],
             "extraction_cutoff_utc": now,
         },
@@ -1640,7 +2136,9 @@ def main() -> None:
                     "event_id": str(row.get("event_id") or ""),
                     "event_slug": str(row.get("event_slug") or ""),
                     "event_title": str(row.get("event_title") or ""),
-                    "question": str((row.get("gamma_market") or {}).get("question") or row.get("question") or ""),
+                    "question": str(
+                        (row.get("gamma_market") or {}).get("question") or row.get("question") or ""
+                    ),
                     "created_at": row.get("gamma_created_at"),
                     "start_date": row.get("gamma_start_date"),
                     "end_date": row.get("gamma_end_date"),
@@ -1653,8 +2151,15 @@ def main() -> None:
                     "expected_empirical_use": row.get("expected_empirical_use"),
                     "sig_market_ids": row.get("sig_market_ids_json"),
                     "sig_exchange_ids": row.get("sig_exchange_ids_json"),
-                    "graph_link_ids": sorted({edge.get("relationship_id", "") for edge in (row.get("graph_links") or [])}),
-                    "graph_relationship_classes": sorted({edge.get("relationship_class", "") for edge in (row.get("graph_links") or [])}),
+                    "graph_link_ids": sorted(
+                        {edge.get("relationship_id", "") for edge in (row.get("graph_links") or [])}
+                    ),
+                    "graph_relationship_classes": sorted(
+                        {
+                            edge.get("relationship_class", "")
+                            for edge in (row.get("graph_links") or [])
+                        }
+                    ),
                 }
                 for row in sorted(universe["markets"], key=lambda item: int(item["market_id"]))
             ],
@@ -1684,7 +2189,9 @@ def main() -> None:
             "duplicate_rows_removed": duplicate_rows_removed,
             "source_duplicate_key_groups_before_dedup": duplicate_key_groups,
             "duplicate_key_groups_after_dedup": validation["duplicate_key_groups"],
-            "conflicting_duplicate_groups": max(conflicting_duplicate_groups, validation["conflicting_duplicate_groups"]),
+            "conflicting_duplicate_groups": max(
+                conflicting_duplicate_groups, validation["conflicting_duplicate_groups"]
+            ),
             "files": len(file_records),
             "fill_files": sum(row["kind"] == "fills" for row in file_records),
             "parquet_bytes": file_payload_bytes,
@@ -1723,42 +2230,92 @@ def main() -> None:
         "failures": gate_summary["failures"],
         "disk_safety": disk_summary,
         "schema": [
-            "fill_id", "timestamp", "timestamp_utc", "block_number", "log_index", "tx_hash",
-            "condition_id", "gamma_condition_id", "condition_id_matches_gamma", "market_id", "event_id",
-            "event_slug", "event_title", "market_slug", "market_question",
-            "market_created_at", "market_start_date", "market_end_date", "market_closed", "market_active",
-            "market_neg_risk", "token_id", "outcome_label", "side", "economic_direction",
-            "economic_direction_status", "order_is_match_taker_order", "order_role", "participant_address",
-            "counterparty_address", "maker_address", "taker_address", "price", "size_shares", "value_usd",
-            "acquisition_class", "acquisition_tier", "contract_archetype", "mathematical_class",
-            "relationship_class_set_json", "sig_market_ids_json", "sig_exchange_ids_json",
-            "gamma_description_sha256", "graph_link_ids_json", "graph_relationship_classes_json",
-            "block_number_provenance", "participant_address_semantics", "source", "source_version", "evidence_grade",
-            "source_trade_object", "source_trade_etag", "source_trade_sha256", "source_trade_bytes",
-            "source_custody_object", "source_custody_etag", "source_custody_sha256", "source_custody_bytes",
+            "fill_id",
+            "timestamp",
+            "timestamp_utc",
+            "block_number",
+            "log_index",
+            "tx_hash",
+            "condition_id",
+            "gamma_condition_id",
+            "condition_id_matches_gamma",
+            "market_id",
+            "event_id",
+            "event_slug",
+            "event_title",
+            "market_slug",
+            "market_question",
+            "market_created_at",
+            "market_start_date",
+            "market_end_date",
+            "market_closed",
+            "market_active",
+            "market_neg_risk",
+            "token_id",
+            "outcome_label",
+            "side",
+            "economic_direction",
+            "economic_direction_status",
+            "order_is_match_taker_order",
+            "order_role",
+            "participant_address",
+            "counterparty_address",
+            "maker_address",
+            "taker_address",
+            "price",
+            "size_shares",
+            "value_usd",
+            "acquisition_class",
+            "acquisition_tier",
+            "contract_archetype",
+            "mathematical_class",
+            "relationship_class_set_json",
+            "sig_market_ids_json",
+            "sig_exchange_ids_json",
+            "gamma_description_sha256",
+            "graph_link_ids_json",
+            "graph_relationship_classes_json",
+            "block_number_provenance",
+            "participant_address_semantics",
+            "source",
+            "source_version",
+            "evidence_grade",
+            "source_trade_object",
+            "source_trade_etag",
+            "source_trade_sha256",
+            "source_trade_bytes",
+            "source_custody_object",
+            "source_custody_etag",
+            "source_custody_sha256",
+            "source_custody_bytes",
         ],
     }
     manifest_payload = json_bytes(manifest)
     manifest_sha = hashlib.sha256(manifest_payload).hexdigest()
     # The manifest is the finalization marker. Publish only after all gates and summaries are complete.
     if object_exists(client, namespace, FINAL_MANIFEST) is not None:
-        raise RuntimeError(f"manifest path is already occupied, refusing to finalize over it: {FINAL_MANIFEST}")
+        raise RuntimeError(
+            f"manifest path is already occupied, refusing to finalize over it: {FINAL_MANIFEST}"
+        )
     write_json(lane / "data004_manifest.json", manifest)
     write_json(lane / "data004_quality.json", gate_summary)
-    write_json(lane / "data004_export_summary.json", {
-        "status": manifest["status"],
-        "manifest_object": FINAL_MANIFEST,
-        "manifest_sha256": manifest_sha,
-        "markets": manifest["counts"]["markets"],
-        "conditions": manifest["counts"]["conditions"],
-        "tokens": manifest["counts"]["tokens"],
-        "raw_fill_rows": raw_fill_rows,
-        "deduped_fill_rows": deduped_fill_rows,
-        "files": len(file_records),
-        "parquet_bytes": file_payload_bytes,
-        "source_trade_latest_available_day": source_last_day,
-        "selected_fill_latest_timestamp": utc_string(latest_fill_timestamp),
-    })
+    write_json(
+        lane / "data004_export_summary.json",
+        {
+            "status": manifest["status"],
+            "manifest_object": FINAL_MANIFEST,
+            "manifest_sha256": manifest_sha,
+            "markets": manifest["counts"]["markets"],
+            "conditions": manifest["counts"]["conditions"],
+            "tokens": manifest["counts"]["tokens"],
+            "raw_fill_rows": raw_fill_rows,
+            "deduped_fill_rows": deduped_fill_rows,
+            "files": len(file_records),
+            "parquet_bytes": file_payload_bytes,
+            "source_trade_latest_available_day": source_last_day,
+            "selected_fill_latest_timestamp": utc_string(latest_fill_timestamp),
+        },
+    )
     write_repo_artifacts(
         repo_output=repo_output,
         lane=lane,
@@ -1774,21 +2331,27 @@ def main() -> None:
         put_object_body=__import__("io").BytesIO(manifest_payload),
         content_type="application/json",
     )
-    print(json.dumps({
-        "status": manifest["status"],
-        "manifest_object": FINAL_MANIFEST,
-        "manifest_sha256": manifest_sha,
-        "markets": manifest["counts"]["markets"],
-        "conditions": manifest["counts"]["conditions"],
-        "tokens": manifest["counts"]["tokens"],
-        "raw_fill_rows": raw_fill_rows,
-        "deduped_fill_rows": deduped_fill_rows,
-        "parquet_bytes": file_payload_bytes,
-        "source_trade_latest_available_day": source_last_day,
-        "selected_fill_latest_timestamp": utc_string(latest_fill_timestamp),
-        "gate_failures": len(gate_summary["failures"]),
-        "gate_failure_names": [row["gate"] for row in gate_summary["failures"]],
-    }, sort_keys=True), flush=True)
+    print(
+        json.dumps(
+            {
+                "status": manifest["status"],
+                "manifest_object": FINAL_MANIFEST,
+                "manifest_sha256": manifest_sha,
+                "markets": manifest["counts"]["markets"],
+                "conditions": manifest["counts"]["conditions"],
+                "tokens": manifest["counts"]["tokens"],
+                "raw_fill_rows": raw_fill_rows,
+                "deduped_fill_rows": deduped_fill_rows,
+                "parquet_bytes": file_payload_bytes,
+                "source_trade_latest_available_day": source_last_day,
+                "selected_fill_latest_timestamp": utc_string(latest_fill_timestamp),
+                "gate_failures": len(gate_summary["failures"]),
+                "gate_failure_names": [row["gate"] for row in gate_summary["failures"]],
+            },
+            sort_keys=True,
+        ),
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

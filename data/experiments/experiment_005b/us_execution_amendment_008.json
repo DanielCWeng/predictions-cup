@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "amendment_id": "US_EXECUTION_008",
+  "type": "compute_plan_only",
+  "predictive_design_changed": false,
+  "predictive_results_seen": false,
+  "trigger": "US_2024 memory-bounded all-category kernel was killed during ACTIVITY after BASE and PRICE completed.",
+  "validated_salvage": {
+    "base_rows": 7890463,
+    "price_rows": 7890463,
+    "activity_raw_status": "TRUNCATED_INVALID_DO_NOT_USE"
+  },
+  "continuation_plan": [
+    "recompute activity as separate short and long window passes from validated base",
+    "compute family context as separate short and long passes",
+    "compute event context as separate short and long passes",
+    "compute targets separately",
+    "merge validated base/price plus continuation outputs positionally after row-id alignment checks"
+  ],
+  "scientific_invariants": [
+    "226 Stage-2 predictors unchanged",
+    "47 targets unchanged",
+    "feature_target_spec_sha256 unchanged",
+    "no TRAIN/DEV/HOLDOUT predictive result inspected"
+  ]
+}

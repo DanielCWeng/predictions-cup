@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "experiment_id": "PRED-006",
+  "source": "recovered from already-completed one-shot Kaggle FINAL; no rerun",
+  "raw_kaggle_artifact_sha256": "b01d36ada446355cddda91be8a98a6767c62b274bd17a85af694ec55f13f3ff4",
+  "shortlist_freeze_sha256": "5deff02e70bbb63a7355390c4babfc1ed63dd8d5b112087a2e9ff9dddfe835f6",
+  "final_opened": true,
+  "final_start_epoch": 1789084800,
+  "candidate_count": 2,
+  "survivor_ids": [
+    "PRED006-C01",
+    "PRED006-C02"
+  ],
+  "disposition": "CURRENT_UNIVERSE_CANDIDATE_REQUIRES_FUTURE_CONFIRMATION",
+  "post_final_rescue_forbidden": true,
+  "candidate_registry_path": "data/experiments/pred_006/shortlist/candidate_registry.json",
+  "results": [
+    {
+      "candidate_id": "PRED006-C01",
+      "target_type": "next_price_change_hazard",
+      "horizon_seconds": 1800,
+      "model_kind": "hgb",
+      "model_param": 15,
+      "train_rows": 38273,
+      "final_rows": 6924,
+      "final_conditions": 462,
+      "final_sig_markets": 198,
+      "best_frozen_baseline_on_final": "own_history_logit",
+      "baseline": {
+        "brier": 0.2220551533184001,
+        "auc": 0.6360733480390004,
+        "logloss": 0.6357957892263804
+      },
+      "candidate": {
+        "brier": 0.2038904770550343,
+        "auc": 0.7120490665385195,
+        "logloss": 0.5940439889402986
+      },
+      "relative_brier_improvement_vs_best_baseline": 0.08180254316061675,
+      "diagnostics": {
+        "condition_cluster_bootstrap_lower_2_5": 0.007876187121027016,
+        "condition_cluster_bootstrap_upper_97_5": 0.017098763908740152,
+        "condition_positive_fraction": 0.5995670995670995,
+        "first_half_improvement": 0.11154779059478666,
+        "second_half_improvement": 0.051593609314648445,
+        "top_decile_share_positive_condition_gain": 0.3192724821360363
+      },
+      "mapping_class_relative_brier_improvement": {
+        "DERIVED": 0.08646774398816097,
+        "EXACT": 0.10835248013959346,
+        "NEAR": 0.052279777950925636
+      },
+      "sig_market_stability": {
+        "markets_with_support": 117,
+        "positive_fraction": 0.7521367521367521,
+        "median_relative_improvement": 0.08004720510335268,
+        "p10": -0.0770862156387871,
+        "p90": 0.27857907236579477
+      },
+      "pass": true
+    },
+    {
+      "candidate_id": "PRED006-C02",
+      "target_type": "next_price_change_hazard",
+      "horizon_seconds": 600,
+      "model_kind": "hgb",
+      "model_param": 7,
+      "train_rows": 38694,
+      "final_rows": 6967,
+      "final_conditions": 466,
+      "final_sig_markets": 198,
+      "best_frozen_baseline_on_final": "own_history_logit",
+      "baseline": {
+        "brier": 0.19089635657241202,
+        "auc": 0.5828262960337336,
+        "logloss": 0.5687323057742142
+      },
+      "candidate": {
+        "brier": 0.1749425493248054,
+        "auc": 0.6969396967374599,
+        "logloss": 0.5289109629133267
+      },
+      "relative_brier_improvement_vs_best_baseline": 0.08357313640794876,
+      "diagnostics": {
+        "condition_cluster_bootstrap_lower_2_5": 0.00579063410007792,
+        "condition_cluster_bootstrap_upper_97_5": 0.014255276306536946,
+        "condition_positive_fraction": 0.5836909871244635,
+        "first_half_improvement": 0.12121982923861373,
+        "second_half_improvement": 0.04293325976695555,
+        "top_decile_share_positive_condition_gain": 0.40379620041660086
+      },
+      "mapping_class_relative_brier_improvement": {
+        "DERIVED": 0.08732513614002563,
+        "EXACT": 0.08833687853292613,
+        "NEAR": 0.07485694963714135
+      },
+      "sig_market_stability": {
+        "markets_with_support": 117,
+        "positive_fraction": 0.7350427350427351,
+        "median_relative_improvement": 0.0676422333170835,
+        "p10": -0.11308987879379301,
+        "p90": 0.2637302326878299
+      },
+      "pass": true
+    }
+  ]
+}

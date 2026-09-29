@@ -43,7 +43,36 @@ class AppSettings(BaseSettings):
     risk_max_concurrent_open_orders: int | None = Field(default=None, gt=0)
     risk_max_state_age_ms: int = Field(default=1_000, gt=0)
 
+    # MAKE-001 is disabled by default. These are calculation/runtime parameters,
+    # not substitutes for BUILD-009 central risk limits.
+    maker_enabled: bool = False
+    maker_mapping_path: Path = Path("data/mappings/sig_polymarket_2026.json")
+    maker_max_abs_inventory: float = Field(default=10.0, gt=0.0)
+    maker_base_size: int = Field(default=2, gt=0, le=2_147_483_647)
+    maker_minimum_size: int = Field(default=1, gt=0, le=2_147_483_647)
+    maker_base_half_spread_ticks: float = Field(default=1.0, ge=0.5)
+    maker_inventory_risk_aversion: float = Field(default=0.02, ge=0.0)
+    maker_uncertainty_multiplier: float = Field(default=1.0, ge=0.0)
+    maker_volatility_multiplier: float = Field(default=0.5, ge=0.0)
+    maker_toxicity_half_spread_ticks: float = Field(default=4.0, ge=0.0)
+    maker_max_bbo_age_ms: int = Field(default=12_000, gt=0)
+    maker_max_fv_age_ms: int = Field(default=1_000, gt=0)
+    maker_max_account_age_ms: int = Field(default=2_000, gt=0)
+    maker_max_inventory_age_ms: int = Field(default=2_000, gt=0)
+    maker_max_signal_age_ms: int = Field(default=1_000, gt=0)
+    maker_require_trusted_depth: bool = False
+    maker_max_depth_age_ms: int = Field(default=35_000, gt=0)
+    maker_min_replace_ticks: int = Field(default=1, gt=0)
+    maker_min_replace_size: int = Field(default=1, gt=0)
+    maker_min_requote_interval_ms: int = Field(default=0, ge=0)
+
     sig_realtime_storage_path: Path = Path("data/sig_realtime.sqlite3")
+    sig_research_path: Path = Path("data/sig_research")
+    sig_capture_queue_max: int = Field(default=200_000, ge=10_000, le=2_000_000)
+    sig_capture_parquet_shard_seconds: int = Field(default=60, ge=10, le=300)
+    sig_capture_parquet_max_rows_per_shard: int = Field(
+        default=100_000, ge=1_000, le=1_000_000
+    )
     sig_realtime_book_depth: int = Field(default=20, ge=1, le=200)
     sig_realtime_tracked_exchange_ids: str = ""
     sig_rest_governor_rate_per_second: float = Field(default=2.0, gt=0.0, le=100.0)
@@ -84,7 +113,9 @@ class AppSettings(BaseSettings):
         "polymarket_storage_path",
         "polymarket_research_path",
         "sig_realtime_storage_path",
+        "sig_research_path",
         "execution_journal_path",
+        "maker_mapping_path",
     )
     @classmethod
     def reject_blank_storage_path(cls, value: Path) -> Path:
@@ -105,6 +136,28 @@ class AppSettings(BaseSettings):
         if value is not None and not value.get_secret_value().strip():
             raise ValueError("credential must not be blank")
         return value
+
+    @model_validator(mode="after")
+    def validate_maker_configuration(self) -> Self:
+        if self.maker_minimum_size > self.maker_base_size:
+            raise ValueError("maker_minimum_size cannot exceed maker_base_size")
+        if self.maker_max_bbo_age_ms < int(
+            self.sig_realtime_bulk_price_refresh_seconds * 1_000
+        ):
+            raise ValueError(
+                "maker_max_bbo_age_ms must cover the configured SIG bulk-price "
+                "refresh interval"
+            )
+        if (
+            self.maker_require_trusted_depth
+            and self.maker_max_depth_age_ms
+            < int(self.sig_realtime_open_book_refresh_seconds * 1_000)
+        ):
+            raise ValueError(
+                "maker_max_depth_age_ms must cover the configured trusted-depth "
+                "refresh interval"
+            )
+        return self
 
     @model_validator(mode="after")
     def fail_closed_trading_configuration(self) -> Self:
@@ -148,9 +201,35 @@ class AppSettings(BaseSettings):
             "risk_max_open_order_exposure": self.risk_max_open_order_exposure,
             "risk_max_concurrent_open_orders": self.risk_max_concurrent_open_orders,
             "risk_max_state_age_ms": self.risk_max_state_age_ms,
+            "maker_enabled": self.maker_enabled,
+            "maker_mapping_path": str(self.maker_mapping_path),
+            "maker_max_abs_inventory": self.maker_max_abs_inventory,
+            "maker_base_size": self.maker_base_size,
+            "maker_minimum_size": self.maker_minimum_size,
+            "maker_base_half_spread_ticks": self.maker_base_half_spread_ticks,
+            "maker_inventory_risk_aversion": self.maker_inventory_risk_aversion,
+            "maker_uncertainty_multiplier": self.maker_uncertainty_multiplier,
+            "maker_volatility_multiplier": self.maker_volatility_multiplier,
+            "maker_toxicity_half_spread_ticks": self.maker_toxicity_half_spread_ticks,
+            "maker_max_bbo_age_ms": self.maker_max_bbo_age_ms,
+            "maker_max_fv_age_ms": self.maker_max_fv_age_ms,
+            "maker_max_account_age_ms": self.maker_max_account_age_ms,
+            "maker_max_inventory_age_ms": self.maker_max_inventory_age_ms,
+            "maker_max_signal_age_ms": self.maker_max_signal_age_ms,
+            "maker_require_trusted_depth": self.maker_require_trusted_depth,
+            "maker_max_depth_age_ms": self.maker_max_depth_age_ms,
+            "maker_min_replace_ticks": self.maker_min_replace_ticks,
+            "maker_min_replace_size": self.maker_min_replace_size,
+            "maker_min_requote_interval_ms": self.maker_min_requote_interval_ms,
             "sig_read_credential_configured": self.sig_read_credential is not None,
             "sig_trade_credential_configured": self.sig_trade_credential is not None,
             "sig_realtime_storage_path": str(self.sig_realtime_storage_path),
+            "sig_research_path": str(self.sig_research_path),
+            "sig_capture_queue_max": self.sig_capture_queue_max,
+            "sig_capture_parquet_shard_seconds": self.sig_capture_parquet_shard_seconds,
+            "sig_capture_parquet_max_rows_per_shard": (
+                self.sig_capture_parquet_max_rows_per_shard
+            ),
             "sig_realtime_book_depth": self.sig_realtime_book_depth,
             "sig_realtime_tracked_exchange_count": len(
                 {

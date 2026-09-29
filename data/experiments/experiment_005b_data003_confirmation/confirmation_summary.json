@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B-DATA003-CONFIRMATION",
+  "classification": "FRESH_CONFIRMATION_ONLY",
+  "dataset": "polyleviathan/sig-cup-data-003-sig-actual-fills",
+  "parent_verdict_commit": "32b79983aa8cbbc544686aefdec8b89f96bea81d",
+  "protocol_commit": "b42d01a32ed7c4cfa4c5ea24610920b346fe0aba",
+  "data003_training_rows": 0,
+  "new_candidates_introduced": 0,
+  "horizons_tested": [
+    1,
+    5,
+    15,
+    30,
+    60,
+    120,
+    300
+  ],
+  "horizons_passing_frozen_confirmation": 0,
+  "full_movement_transfer": false,
+  "disposition": "DOES_NOT_TRANSFER_TO_DATA_003_UNDER_FROZEN_TEST",
+  "interpretation": "The seven historical movement models survived the ordering correction but failed fresh confirmation on the disjoint mapped 2026 SIG universe. Do not use them as current-universe predictive models or executable alpha.",
+  "horizon_results": [
+    {
+      "horizon_seconds": 1,
+      "rows": 28897,
+      "conditions": 642,
+      "sig_markets": 227,
+      "mae_improvement_vs_persistence": -0.01721963152724107,
+      "predictive_ic": 0.19487709992712463,
+      "bootstrap_lower_2_5": -0.0019159880153149383,
+      "bootstrap_upper_97_5": -0.0012387450193378552,
+      "pass": false
+    },
+    {
+      "horizon_seconds": 5,
+      "rows": 33854,
+      "conditions": 654,
+      "sig_markets": 227,
+      "mae_improvement_vs_persistence": -0.0032730122805351976,
+      "predictive_ic": 0.19825413049181642,
+      "bootstrap_lower_2_5": -0.001782662924924779,
+      "bootstrap_upper_97_5": -0.0008475006735417732,
+      "pass": false
+    },
+    {
+      "horizon_seconds": 15,
+      "rows": 37974,
+      "conditions": 664,
+      "sig_markets": 229,
+      "mae_improvement_vs_persistence": -0.03509352377890659,
+      "predictive_ic": 0.2042204080998329,
+      "bootstrap_lower_2_5": -0.002954425310102509,
+      "bootstrap_upper_97_5": -0.001998049904904965,
+      "pass": false
+    },
+    {
+      "horizon_seconds": 30,
+      "rows": 39983,
+      "conditions": 664,
+      "sig_markets": 229,
+      "mae_improvement_vs_persistence": -0.05451198453502746,
+      "predictive_ic": 0.21473763206134505,
+      "bootstrap_lower_2_5": -0.003594471472150545,
+      "bootstrap_upper_97_5": -0.0025156868409745075,
+      "pass": false
+    },
+    {
+      "horizon_seconds": 60,
+      "rows": 42122,
+      "conditions": 676,
+      "sig_markets": 229,
+      "mae_improvement_vs_persistence": -0.08744782907883684,
+      "predictive_ic": 0.23043124485837446,
+      "bootstrap_lower_2_5": -0.00424274709011674,
+      "bootstrap_upper_97_5": -0.0030659864105124224,
+      "pass": false
+    },
+    {
+      "horizon_seconds": 120,
+      "rows": 44487,
+      "conditions": 676,
+      "sig_markets": 229,
+      "mae_improvement_vs_persistence": -0.10154479032598937,
+      "predictive_ic": 0.2344523822965183,
+      "bootstrap_lower_2_5": -0.004619171268354888,
+      "bootstrap_upper_97_5": -0.0033743191652452296,
+      "pass": false
+    },
+    {
+      "horizon_seconds": 300,
+      "rows": 48275,
+      "conditions": 676,
+      "sig_markets": 229,
+      "mae_improvement_vs_persistence": -0.09599890166227087,
+      "predictive_ic": 0.2528932723324475,
+      "bootstrap_lower_2_5": -0.005774234280120072,
+      "bootstrap_upper_97_5": -0.004091951905974062,
+      "pass": false
+    }
+  ],
+  "mapping_diagnostic_note": "NEAR mapping class is positive at all seven horizons but contains only four conditions. The preregistered protocol makes mapping-class diagnostics non-selection gates and forbids mapping-class subsetting, so this cannot rescue the failed confirmation."
+}

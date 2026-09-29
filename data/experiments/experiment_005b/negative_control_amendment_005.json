@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "amendment_id": "NEGATIVE_CONTROLS_005",
+  "type": "pre_predictive_implementation_clarification",
+  "predictive_design_changed": false,
+  "prior_outcome_motivated": false,
+  "trigger": "The preregistration already required negative controls; this amendment makes their exact TRAIN/DEV-only implementation explicit before Stage 3 is run.",
+  "controls": {
+    "own_recent_price": "DEV Spearman of price_change_30 with each target",
+    "current_absolute_movement": "DEV Spearman of absolute_return_30 with each target",
+    "recent_activity_future": "DEV Spearman of trade_count_30 with each target",
+    "activity_contemporaneous": "DEV association of trade_count_30 with absolute_return_30",
+    "circular_shift": "For the frozen top candidate feature, rotate finite values within each market by half the available observations after timestamp sorting, leaving missing-value positions unchanged; report DEV Spearman to the target."
+  },
+  "selection_use": "NONE. Negative-control results cannot alter shortlist membership, candidate labels, model features or DEV-selected hyperparameters.",
+  "holdout_touched": false
+}

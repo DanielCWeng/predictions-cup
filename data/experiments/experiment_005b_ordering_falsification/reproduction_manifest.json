@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B-ORDERING-FALSIFICATION",
+  "classification": "REPRODUCTION_PROVENANCE",
+  "canonical_workflow": ".github/workflows/kaggle-run.yml",
+  "github_actions_runtime": {
+    "runner": "ubuntu-latest",
+    "python": "3.12",
+    "kaggle_cli_install": "python -m pip install --upgrade kaggle",
+    "runner_command_template": "python scripts/kaggle_actions_runner.py --manifest <manifest>"
+  },
+  "scientific_runtime": {
+    "kernel_language": "python",
+    "gpu": false,
+    "tpu": false,
+    "internet": false,
+    "model_seed": 505005,
+    "bootstrap_replicates": 1000,
+    "bootstrap_seed": 505005
+  },
+  "upstream_ordering": {
+    "source": "Polygon archival JSON-RPC",
+    "canonical_fields": ["block_number", "log_index"],
+    "coverage_and_checksums": "data/experiments/experiment_005b_ordering_falsification/results/actual_block_number_hard_gate.json"
+  },
+  "reconstruction_sources": [
+    "scripts/kaggle/experiment_005b_ordering_reconstruct/run.py",
+    "scripts/kaggle/experiment_005b_ordering_features_can_2025/run.py",
+    "scripts/kaggle/experiment_005b_ordering_features_col_2026/run.py",
+    "scripts/kaggle/experiment_005b_ordering_features_hun_2026/run.py",
+    "scripts/kaggle/experiment_005b_ordering_features_per_2026/run.py",
+    "scripts/kaggle/experiment_005b_ordering_us_base_price/run.py",
+    "scripts/kaggle/experiment_005b_ordering_us_activity/run.py",
+    "scripts/kaggle/experiment_005b_ordering_us_family_context/run.py",
+    "scripts/kaggle/experiment_005b_ordering_us_event_context/run.py",
+    "scripts/kaggle/experiment_005b_ordering_us_targets/run.py",
+    "scripts/kaggle/experiment_005b_ordering_us_merge/run.py"
+  ],
+  "exact_final_stage_commands": [
+    "python scripts/kaggle_actions_runner.py --manifest kaggle/jobs/005b-ordering-block-gate-us.json",
+    "python scripts/kaggle_actions_runner.py --manifest kaggle/jobs/005b-ordering-run-us-merge-after-family.json",
+    "python scripts/kaggle_actions_runner.py --manifest kaggle/jobs/005b-ordering-run-diff-after-merge.json",
+    "python scripts/kaggle_actions_runner.py --manifest kaggle/jobs/005b-ordering-run-eval-after-merge.json",
+    "python scripts/kaggle_actions_runner.py --manifest kaggle/jobs/005b-ordering-run-finalize.json",
+    "python scripts/kaggle_actions_runner.py --manifest kaggle/jobs/005b-ordering-impact-audit.json"
+  ],
+  "output_retrieval_commands": [
+    "python scripts/kaggle_actions_runner.py --manifest kaggle/jobs/005b-ordering-output-block-gate-us.json",
+    "python scripts/kaggle_actions_runner.py --manifest kaggle/jobs/005b-ordering-output-diff-audit.json",
+    "python scripts/kaggle_actions_runner.py --manifest kaggle/jobs/005b-ordering-output-eval.json",
+    "python scripts/kaggle_actions_runner.py --manifest kaggle/jobs/005b-ordering-output-finalize.json"
+  ],
+  "frozen_references": {
+    "parent_final_head": "232c7c396edd18c93df72b309235110a89b5143a",
+    "train_dev_shortlist_sha256": "44025aa2c5e5bddd97d88c81e649d86d6bf55d6cccec1d57c2aa7af12a9a7ec6",
+    "parent_holdout_sha256": "94db3e2319d376078e9f80f5e28d04215dcade53d76c1ec749af8bcc0fa8972a",
+    "original_evaluator_commit": "76a52913f3a38a7c573ee7f9f53db6d651f301b1",
+    "original_evaluator_path": "scripts/kaggle/experiment_005b_holdout/run.py",
+    "corrected_evaluator_path": "scripts/kaggle/experiment_005b_ordering_falsification_eval/run.py"
+  },
+  "equivalence_evidence": [
+    "data/experiments/experiment_005b_ordering_falsification/stage2_equivalence_audit.json",
+    "data/experiments/experiment_005b_ordering_falsification/evaluator_equivalence.json"
+  ],
+  "note": "The exact historical Kaggle base-image package build is not separately pinned; source, kernel metadata, frozen hashes, seeds, inputs, output checksums and GitHub Actions execution path are preserved."
+}

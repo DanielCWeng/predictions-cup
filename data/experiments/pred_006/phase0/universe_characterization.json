@@ -1,0 +1,57 @@
+{
+  "condition_activity": {
+    "max_fills": 11411,
+    "median_fills": 27.0,
+    "p90_fills": 157.80000000000007
+  },
+  "mapping_class_rows": [
+    {
+      "condition_count": 541,
+      "mapping_class": "DERIVED",
+      "row_count": 15665
+    },
+    {
+      "condition_count": 140,
+      "mapping_class": "EXACT",
+      "row_count": 28945
+    },
+    {
+      "condition_count": 4,
+      "mapping_class": "NEAR",
+      "row_count": 32944
+    }
+  ],
+  "market_lifetimes_seconds": {
+    "max": 17796751,
+    "median": 3646474.0,
+    "p90": 14895617.4
+  },
+  "monthly_activity": [
+    {"condition_count": 17, "month_key": "2026-02", "row_count": 290, "sig_market_count": 17},
+    {"condition_count": 73, "month_key": "2026-03", "row_count": 6177, "sig_market_count": 73},
+    {"condition_count": 84, "month_key": "2026-04", "row_count": 5952, "sig_market_count": 84},
+    {"condition_count": 94, "month_key": "2026-05", "row_count": 9956, "sig_market_count": 94},
+    {"condition_count": 99, "month_key": "2026-06", "row_count": 9085, "sig_market_count": 99},
+    {"condition_count": 97, "month_key": "2026-07", "row_count": 5777, "sig_market_count": 97},
+    {"condition_count": 685, "month_key": "2026-08", "row_count": 17870, "sig_market_count": 229},
+    {"condition_count": 607, "month_key": "2026-09", "row_count": 22447, "sig_market_count": 218}
+  ],
+  "note": "Non-predictive Phase-0 characterization only; no targets/models/performance computed.",
+  "price_distribution": {
+    "mean": 0.44139104102947707,
+    "p01": 0.007,
+    "p05": 0.05,
+    "p25": 0.17000000000000004,
+    "p50": 0.45999999999999996,
+    "p75": 0.7,
+    "p95": 0.8799999999999999,
+    "p99": 0.92
+  },
+  "same_block_structure": {
+    "blocks": 43222,
+    "fills": 77554,
+    "fills_in_multifill_blocks": 45365,
+    "multifill_blocks": 11033
+  },
+  "schema_version": 1
+}

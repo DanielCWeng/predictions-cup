@@ -1,0 +1,3511 @@
+{
+  "experiment_id": "EXPERIMENT-005B",
+  "gate": {
+    "expected_train_dev_shortlist_sha256": "44025aa2c5e5bddd97d88c81e649d86d6bf55d6cccec1d57c2aa7af12a9a7ec6",
+    "gate_commit": "726cbdb13de00f5aa8b5d4a6e7c675cc2e4da361"
+  },
+  "holdout_protocol_repo_path": "data/experiments/experiment_005b/holdout_protocol.json",
+  "holdout_protocol_sha256": "0d7385e0cf560d62a12100204cd462f6a97f5ae35e735cfb15e540187acbc330",
+  "results": [
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 157,
+        "COL_2026": 80862,
+        "HUN_2026": 182971,
+        "PER_2026": 7271,
+        "US_2024": 3330837
+      },
+      "holdout_market_count": 509,
+      "holdout_rows": 3602098,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "mae": 0.0031249764456667997,
+            "mse": 9.497848713875956e-05,
+            "predictive_ic": 0.30863428683648975
+          },
+          "own_recent_price": {
+            "mae": 0.00402666005489532,
+            "mse": 0.00010757011905270314,
+            "predictive_ic": 0.06547355681366654
+          },
+          "persistence": {
+            "mae": 0.004129633203617622,
+            "mse": 0.00010824897587853014,
+            "predictive_ic": -8.375351371282758e-17
+          },
+          "recent_activity": {
+            "mae": 0.007180093792483681,
+            "mse": 0.00014816411950361263,
+            "predictive_ic": -0.03801052333040656
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": 0.0016712474321819862,
+          "mean": 0.0018466680410041353,
+          "upper_97_5": 0.002033947031656429
+        },
+        "dev_selected": {
+          "mae": 0.005037134138686511,
+          "mae_improvement": 0.24732373156275012,
+          "mse": 0.00025740636961152575,
+          "mse_improvement": 0.12638616482163986,
+          "name": "hist_gradient_boosting",
+          "params": {
+            "l2_regularization": 1.0,
+            "learning_rate": 0.05,
+            "max_iter": 100,
+            "max_leaf_nodes": 15
+          }
+        },
+        "features": [
+          "realised_vol_5",
+          "absolute_return_5",
+          "recent_max_move_900",
+          "absolute_return_30",
+          "absolute_return_15",
+          "absolute_return_60",
+          "absolute_return_120",
+          "absolute_return_300"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": 0.000705926699236571,
+          "mean": 0.001212125791955045,
+          "upper_97_5": 0.0016893892655549015
+        },
+        "holdout_metrics": {
+          "directional_accuracy": 0.6051251243025593,
+          "mae": 0.001994408079405126,
+          "mae_improvement_vs_persistence": 0.5170495825977972,
+          "mse": 8.765168349530322e-05,
+          "mse_improvement_vs_persistence": 0.19027701847581302,
+          "predictive_ic": 0.37577320021639793
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "mae_improvement_vs_persistence": 0.18652377446568277
+          },
+          "COL_2026": {
+            "mae_improvement_vs_persistence": 0.0657431839120047
+          },
+          "HUN_2026": {
+            "mae_improvement_vs_persistence": 0.09555746088601835
+          },
+          "PER_2026": {
+            "mae_improvement_vs_persistence": 0.3351724907394256
+          },
+          "US_2024": {
+            "mae_improvement_vs_persistence": 0.5861077450234614
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": 0.3086385213916944,
+        "dev_spearman": 0.3731742715105314,
+        "feature": "realised_vol_5",
+        "holdout": {
+          "decile_response": 0.007158588997447203,
+          "directional_response": 0.0016913649525930091,
+          "pearson": 0.31034038970514477,
+          "spearman": 0.3227270522117867,
+          "standardized_effect": 0.1679166685915291,
+          "support": 3602038
+        },
+        "selection_label": "CROSS_FAMILY_CANDIDATE",
+        "train_spearman": 0.4230100245276831
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": 0.3086385213916944,
+          "dev_spearman": 0.3731742715105314,
+          "feature": "realised_vol_5",
+          "holdout": {
+            "decile_response": 0.007158588997447203,
+            "directional_response": 0.0016913649525930091,
+            "pearson": 0.31034038970514477,
+            "spearman": 0.3227270522117867,
+            "standardized_effect": 0.1679166685915291,
+            "support": 3602038
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.4230100245276831
+        },
+        {
+          "dev_pearson": 0.23627808340371387,
+          "dev_spearman": 0.3418225336877397,
+          "feature": "recent_max_move_900",
+          "holdout": {
+            "decile_response": 0.0065197622856935835,
+            "directional_response": 0.001425685799161051,
+            "pearson": 0.27093541292695156,
+            "spearman": 0.20836999826884275,
+            "standardized_effect": 0.1415403632943677,
+            "support": 3602038
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.39650658753606344
+        }
+      ],
+      "target": "target_clock_realised_movement_1",
+      "train_dev_fit_rows": 448040
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 183,
+        "COL_2026": 120790,
+        "HUN_2026": 304677,
+        "PER_2026": 12395,
+        "US_2024": 6663098
+      },
+      "holdout_market_count": 512,
+      "holdout_rows": 7101143,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "mae": 0.006739775044918578,
+            "mse": 0.00029723747221851966,
+            "predictive_ic": 0.4878728928954492
+          },
+          "own_recent_price": {
+            "mae": 0.008124309462135437,
+            "mse": 0.00039415223810211457,
+            "predictive_ic": -0.005811918340524302
+          },
+          "persistence": {
+            "mae": 0.00820506895107261,
+            "mse": 0.0003892374865150223,
+            "predictive_ic": 3.4374193758335956e-16
+          },
+          "recent_activity": {
+            "mae": 0.02160943323210615,
+            "mse": 0.0010647645227537259,
+            "predictive_ic": 0.13971099170892767
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": 0.004811872864286085,
+          "mean": 0.005423446177022788,
+          "upper_97_5": 0.005997859187827321
+        },
+        "dev_selected": {
+          "mae": 0.008465816710951144,
+          "mae_improvement": 0.4278778325170194,
+          "mse": 0.0005425221516808538,
+          "mse_improvement": 0.3872239952193736,
+          "name": "hist_gradient_boosting",
+          "params": {
+            "l2_regularization": 1.0,
+            "learning_rate": 0.05,
+            "max_iter": 100,
+            "max_leaf_nodes": 15
+          }
+        },
+        "features": [
+          "recent_max_move_900",
+          "absolute_return_300",
+          "absolute_return_900",
+          "absolute_return_120",
+          "realised_vol_5",
+          "absolute_return_60",
+          "distance_recent_low_300",
+          "absolute_return_30"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": 0.003037538682281202,
+          "mean": 0.004343672821098699,
+          "upper_97_5": 0.005595607599898594
+        },
+        "holdout_metrics": {
+          "directional_accuracy": 0.8796100853059853,
+          "mae": 0.006482580642781608,
+          "mae_improvement_vs_persistence": 0.20992977859934125,
+          "mse": 0.00026555189588337204,
+          "mse_improvement_vs_persistence": 0.31776382007563064,
+          "predictive_ic": 0.5996308747532841
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "mae_improvement_vs_persistence": 0.5161505742222152
+          },
+          "COL_2026": {
+            "mae_improvement_vs_persistence": 0.21429160349007612
+          },
+          "HUN_2026": {
+            "mae_improvement_vs_persistence": 0.23938289992880007
+          },
+          "PER_2026": {
+            "mae_improvement_vs_persistence": 0.5808236751926497
+          },
+          "US_2024": {
+            "mae_improvement_vs_persistence": 0.20560709856834308
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": 0.4239204165148946,
+        "dev_spearman": 0.5876710904406878,
+        "feature": "recent_max_move_900",
+        "holdout": {
+          "decile_response": 0.028285017536535995,
+          "directional_response": 0.009437321720480856,
+          "pearson": 0.46738583977742154,
+          "spearman": 0.5483855371340787,
+          "standardized_effect": 0.48025320508669356,
+          "support": 7101021
+        },
+        "selection_label": "CROSS_FAMILY_CANDIDATE",
+        "train_spearman": 0.5561856494362514
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": 0.4239204165148946,
+          "dev_spearman": 0.5876710904406878,
+          "feature": "recent_max_move_900",
+          "holdout": {
+            "decile_response": 0.028285017536535995,
+            "directional_response": 0.009437321720480856,
+            "pearson": 0.46738583977742154,
+            "spearman": 0.5483855371340787,
+            "standardized_effect": 0.48025320508669356,
+            "support": 7101021
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.5561856494362514
+        },
+        {
+          "dev_pearson": 0.5277824066407941,
+          "dev_spearman": 0.4880658618458638,
+          "feature": "absolute_return_900",
+          "holdout": {
+            "decile_response": 0.021318498870755848,
+            "directional_response": 0.006451843709042453,
+            "pearson": 0.45512541272591023,
+            "spearman": 0.4043904701721993,
+            "standardized_effect": 0.3281717187141658,
+            "support": 7101143
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.5015408070078597
+        },
+        {
+          "dev_pearson": 0.44472683784958794,
+          "dev_spearman": 0.4708025740450258,
+          "feature": "realised_vol_5",
+          "holdout": {
+            "decile_response": 0.02517857287800689,
+            "directional_response": 0.009201502601980105,
+            "pearson": 0.4850693790080079,
+            "spearman": 0.6225313854133163,
+            "standardized_effect": 0.4682526724318702,
+            "support": 7101021
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.4726342486390441
+        }
+      ],
+      "target": "target_clock_realised_movement_120",
+      "train_dev_fit_rows": 491749
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 168,
+        "COL_2026": 100114,
+        "HUN_2026": 243317,
+        "PER_2026": 9534,
+        "US_2024": 5689891
+      },
+      "holdout_market_count": 510,
+      "holdout_rows": 6043024,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "mae": 0.0033680765459138937,
+            "mse": 0.00011121011515724577,
+            "predictive_ic": 0.5054734708507234
+          },
+          "own_recent_price": {
+            "mae": 0.004951912321624101,
+            "mse": 0.00016011671819038804,
+            "predictive_ic": -0.04723049593982309
+          },
+          "persistence": {
+            "mae": 0.005108837507817453,
+            "mse": 0.00015380000137812352,
+            "predictive_ic": 3.9990681751192157e-16
+          },
+          "recent_activity": {
+            "mae": 0.013001645083441003,
+            "mse": 0.0003674623685310808,
+            "predictive_ic": 0.058364050719587134
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": 0.0029675284616854807,
+          "mean": 0.0032259069271897535,
+          "upper_97_5": 0.00349728549845249
+        },
+        "dev_selected": {
+          "mae": 0.006458748073500998,
+          "mae_improvement": 0.3433849183645581,
+          "mse": 0.0003696539446643187,
+          "mse_improvement": 0.23155772570916025,
+          "name": "hist_gradient_boosting",
+          "params": {
+            "l2_regularization": 1.0,
+            "learning_rate": 0.05,
+            "max_iter": 100,
+            "max_leaf_nodes": 15
+          }
+        },
+        "features": [
+          "realised_vol_5",
+          "recent_max_move_900",
+          "absolute_return_300",
+          "absolute_return_60",
+          "absolute_return_120",
+          "absolute_return_30",
+          "absolute_return_15",
+          "absolute_return_900"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": 0.0013287509041540174,
+          "mean": 0.0021291228643714774,
+          "upper_97_5": 0.0029481167869514313
+        },
+        "holdout_metrics": {
+          "directional_accuracy": 0.8204312940011491,
+          "mae": 0.0026546775575562393,
+          "mae_improvement_vs_persistence": 0.48037541740286344,
+          "mse": 0.00010621841667222371,
+          "mse_improvement_vs_persistence": 0.30937310974997045,
+          "predictive_ic": 0.5323814139641853
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "mae_improvement_vs_persistence": 0.34734508317466845
+          },
+          "COL_2026": {
+            "mae_improvement_vs_persistence": 0.13462321711482692
+          },
+          "HUN_2026": {
+            "mae_improvement_vs_persistence": 0.16551235922913682
+          },
+          "PER_2026": {
+            "mae_improvement_vs_persistence": 0.46166809217604915
+          },
+          "US_2024": {
+            "mae_improvement_vs_persistence": 0.5289716786013366
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": 0.4354415911926541,
+        "dev_spearman": 0.45212228782018044,
+        "feature": "realised_vol_5",
+        "holdout": {
+          "decile_response": 0.012128465401315213,
+          "directional_response": 0.0038974709772024215,
+          "pearson": 0.5349316721529527,
+          "spearman": 0.5907896419574444,
+          "standardized_effect": 0.3215503494722355,
+          "support": 6042937
+        },
+        "selection_label": "CROSS_FAMILY_CANDIDATE",
+        "train_spearman": 0.4694533124231737
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": 0.4354415911926541,
+          "dev_spearman": 0.45212228782018044,
+          "feature": "realised_vol_5",
+          "holdout": {
+            "decile_response": 0.012128465401315213,
+            "directional_response": 0.0038974709772024215,
+            "pearson": 0.5349316721529527,
+            "spearman": 0.5907896419574444,
+            "standardized_effect": 0.3215503494722355,
+            "support": 6042937
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.4694533124231737
+        },
+        {
+          "dev_pearson": 0.31858079178640764,
+          "dev_spearman": 0.46138166931185376,
+          "feature": "recent_max_move_900",
+          "holdout": {
+            "decile_response": 0.012681196167685626,
+            "directional_response": 0.0035327791008862783,
+            "pearson": 0.4057590299159653,
+            "spearman": 0.42291204644576913,
+            "standardized_effect": 0.2914624281085941,
+            "support": 6042937
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.4671995855659432
+        },
+        {
+          "dev_pearson": 0.3949569668505443,
+          "dev_spearman": 0.4040289814306596,
+          "feature": "absolute_return_900",
+          "holdout": {
+            "decile_response": 0.010150620469365393,
+            "directional_response": 0.0022136673804922825,
+            "pearson": 0.37882659463526164,
+            "spearman": 0.31224845692484615,
+            "standardized_effect": 0.1825836249919778,
+            "support": 6043024
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.419719668268443
+        }
+      ],
+      "target": "target_clock_realised_movement_15",
+      "train_dev_fit_rows": 476416
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 173,
+        "COL_2026": 106495,
+        "HUN_2026": 263912,
+        "PER_2026": 10389,
+        "US_2024": 6093708
+      },
+      "holdout_market_count": 511,
+      "holdout_rows": 6474677,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "mae": 0.004044019531447947,
+            "mse": 0.00014367913356621692,
+            "predictive_ic": 0.5166759321011781
+          },
+          "own_recent_price": {
+            "mae": 0.005639404754563215,
+            "mse": 0.0002044940261393517,
+            "predictive_ic": -0.018301898011099944
+          },
+          "persistence": {
+            "mae": 0.005773616700681582,
+            "mse": 0.00019938786624740682,
+            "predictive_ic": -2.752060268448634e-16
+          },
+          "recent_activity": {
+            "mae": 0.015907754802992575,
+            "mse": 0.0005545876866285092,
+            "predictive_ic": 0.084289408749459
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": 0.003466290742153267,
+          "mean": 0.0038101291493956684,
+          "upper_97_5": 0.004129845017461221
+        },
+        "dev_selected": {
+          "mae": 0.006845897647842973,
+          "mae_improvement": 0.3745891571995312,
+          "mse": 0.000392776510119376,
+          "mse_improvement": 0.2962761404242596,
+          "name": "hist_gradient_boosting",
+          "params": {
+            "l2_regularization": 1.0,
+            "learning_rate": 0.05,
+            "max_iter": 100,
+            "max_leaf_nodes": 15
+          }
+        },
+        "features": [
+          "recent_max_move_900",
+          "realised_vol_5",
+          "absolute_return_300",
+          "absolute_return_120",
+          "absolute_return_60",
+          "absolute_return_900",
+          "absolute_return_30",
+          "absolute_return_15"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": 0.0017417044815143433,
+          "mean": 0.002613038344239727,
+          "upper_97_5": 0.0035232907647362467
+        },
+        "holdout_metrics": {
+          "directional_accuracy": 0.8467366016868486,
+          "mae": 0.0034873728063558804,
+          "mae_improvement_vs_persistence": 0.39598123894435316,
+          "mse": 0.00013567491693555606,
+          "mse_improvement_vs_persistence": 0.3195427611066046,
+          "predictive_ic": 0.5603341198972052
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "mae_improvement_vs_persistence": 0.40097095747578326
+          },
+          "COL_2026": {
+            "mae_improvement_vs_persistence": 0.16312004311281872
+          },
+          "HUN_2026": {
+            "mae_improvement_vs_persistence": 0.1913107544704497
+          },
+          "PER_2026": {
+            "mae_improvement_vs_persistence": 0.4957706107052055
+          },
+          "US_2024": {
+            "mae_improvement_vs_persistence": 0.427974747816778
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": 0.35780076019243096,
+        "dev_spearman": 0.5099909472479827,
+        "feature": "recent_max_move_900",
+        "holdout": {
+          "decile_response": 0.01665404154886817,
+          "directional_response": 0.004953738615244778,
+          "pearson": 0.4234283133883373,
+          "spearman": 0.48785058766719386,
+          "standardized_effect": 0.3563555459385461,
+          "support": 6474584
+        },
+        "selection_label": "CROSS_FAMILY_CANDIDATE",
+        "train_spearman": 0.49327055848726525
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": 0.35780076019243096,
+          "dev_spearman": 0.5099909472479827,
+          "feature": "recent_max_move_900",
+          "holdout": {
+            "decile_response": 0.01665404154886817,
+            "directional_response": 0.004953738615244778,
+            "pearson": 0.4234283133883373,
+            "spearman": 0.48785058766719386,
+            "standardized_effect": 0.3563555459385461,
+            "support": 6474584
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.49327055848726525
+        },
+        {
+          "dev_pearson": 0.4536617265476197,
+          "dev_spearman": 0.46987585437913576,
+          "feature": "realised_vol_5",
+          "holdout": {
+            "decile_response": 0.01560706234285734,
+            "directional_response": 0.005268156681595054,
+            "pearson": 0.5245382131010842,
+            "spearman": 0.6163192232003355,
+            "standardized_effect": 0.37897374007224255,
+            "support": 6474584
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.47415329889216246
+        },
+        {
+          "dev_pearson": 0.439774233271273,
+          "dev_spearman": 0.43622343864118585,
+          "feature": "absolute_return_900",
+          "holdout": {
+            "decile_response": 0.013192223241954135,
+            "directional_response": 0.003178816608384756,
+            "pearson": 0.40614527006409806,
+            "spearman": 0.3543930832438074,
+            "standardized_effect": 0.22853270523721309,
+            "support": 6474677
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.4431495239436745
+        }
+      ],
+      "target": "target_clock_realised_movement_30",
+      "train_dev_fit_rows": 481410
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 189,
+        "COL_2026": 131881,
+        "HUN_2026": 328229,
+        "PER_2026": 13862,
+        "US_2024": 6949690
+      },
+      "holdout_market_count": 514,
+      "holdout_rows": 7423851,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "mae": 0.0100523912103697,
+            "mse": 0.000558625413754341,
+            "predictive_ic": 0.4527436875714384
+          },
+          "own_recent_price": {
+            "mae": 0.011343980534148193,
+            "mse": 0.0006971837151120565,
+            "predictive_ic": 0.00916696197030132
+          },
+          "persistence": {
+            "mae": 0.011397666280579474,
+            "mse": 0.0006925260114699175,
+            "predictive_ic": 7.863132606513793e-16
+          },
+          "recent_activity": {
+            "mae": 0.025660639381410104,
+            "mse": 0.001563102778425556,
+            "predictive_ic": 0.17373134949521657
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": 0.006114040033367501,
+          "mean": 0.007018487225131498,
+          "upper_97_5": 0.007857503828798249
+        },
+        "dev_selected": {
+          "mae": 0.010135136367191076,
+          "mae_improvement": 0.45609230147746405,
+          "mse": 0.0007492589021191264,
+          "mse_improvement": 0.4262443016681954,
+          "name": "hist_gradient_boosting",
+          "params": {
+            "l2_regularization": 1.0,
+            "learning_rate": 0.05,
+            "max_iter": 100,
+            "max_leaf_nodes": 15
+          }
+        },
+        "features": [
+          "recent_max_move_900",
+          "absolute_return_900",
+          "absolute_return_300",
+          "absolute_return_120",
+          "absolute_return_60",
+          "realised_vol_5",
+          "distance_recent_low_300",
+          "absolute_return_30"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": 0.004296861881449474,
+          "mean": 0.006075955209005729,
+          "upper_97_5": 0.0077670268882159155
+        },
+        "holdout_metrics": {
+          "directional_accuracy": 0.8977028229688339,
+          "mae": 0.009847477255187594,
+          "mae_improvement_vs_persistence": 0.13600933622993094,
+          "mse": 0.00047488429281480774,
+          "mse_improvement_vs_persistence": 0.3142722656628528,
+          "predictive_ic": 0.6225255237835894
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "mae_improvement_vs_persistence": 0.5407840149034753
+          },
+          "COL_2026": {
+            "mae_improvement_vs_persistence": 0.26107828375959674
+          },
+          "HUN_2026": {
+            "mae_improvement_vs_persistence": 0.2774641950503043
+          },
+          "PER_2026": {
+            "mae_improvement_vs_persistence": 0.5976010524398385
+          },
+          "US_2024": {
+            "mae_improvement_vs_persistence": 0.11501581230878397
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": 0.4532185701529162,
+        "dev_spearman": 0.6353280377865543,
+        "feature": "recent_max_move_900",
+        "holdout": {
+          "decile_response": 0.04091933968037748,
+          "directional_response": 0.014527214496985016,
+          "pearson": 0.4899591401837313,
+          "spearman": 0.5724194756883062,
+          "standardized_effect": 0.5522458163319264,
+          "support": 7423708
+        },
+        "selection_label": "CROSS_FAMILY_CANDIDATE",
+        "train_spearman": 0.6013317225271803
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": 0.4532185701529162,
+          "dev_spearman": 0.6353280377865543,
+          "feature": "recent_max_move_900",
+          "holdout": {
+            "decile_response": 0.04091933968037748,
+            "directional_response": 0.014527214496985016,
+            "pearson": 0.4899591401837313,
+            "spearman": 0.5724194756883062,
+            "standardized_effect": 0.5522458163319264,
+            "support": 7423708
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.6013317225271803
+        },
+        {
+          "dev_pearson": 0.5566700120887287,
+          "dev_spearman": 0.5163767984457592,
+          "feature": "absolute_return_900",
+          "holdout": {
+            "decile_response": 0.031206909820931876,
+            "directional_response": 0.010197973265407579,
+            "pearson": 0.4772197822523525,
+            "spearman": 0.42638586305245424,
+            "standardized_effect": 0.3875620472547749,
+            "support": 7423851
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.5388826557270514
+        },
+        {
+          "dev_pearson": 0.420686705290993,
+          "dev_spearman": 0.4626737920855565,
+          "feature": "realised_vol_5",
+          "holdout": {
+            "decile_response": 0.03485484040707831,
+            "directional_response": 0.013934081102589264,
+            "pearson": 0.4514249992573647,
+            "spearman": 0.6166516181189168,
+            "standardized_effect": 0.529698105230821,
+            "support": 7423708
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.47371453565248844
+        }
+      ],
+      "target": "target_clock_realised_movement_300",
+      "train_dev_fit_rows": 500000
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 159,
+        "COL_2026": 90732,
+        "HUN_2026": 214630,
+        "PER_2026": 8308,
+        "US_2024": 4852341
+      },
+      "holdout_market_count": 509,
+      "holdout_rows": 5166170,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "mae": 0.0029760532383204777,
+            "mse": 9.245351674275379e-05,
+            "predictive_ic": 0.3779686534311422
+          },
+          "own_recent_price": {
+            "mae": 0.004322493003634814,
+            "mse": 0.0001130742690275431,
+            "predictive_ic": 0.0766229917138414
+          },
+          "persistence": {
+            "mae": 0.004496489169134465,
+            "mse": 0.00011293355259293347,
+            "predictive_ic": 4.518630450666817e-16
+          },
+          "recent_activity": {
+            "mae": 0.010303803923286349,
+            "mse": 0.0002277062020554053,
+            "predictive_ic": 0.0092328867180968
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": 0.0018805169236369781,
+          "mean": 0.002029209400990395,
+          "upper_97_5": 0.002183720018233282
+        },
+        "dev_selected": {
+          "mae": 0.00621137924648764,
+          "mae_improvement": 0.2600097178583838,
+          "mse": 0.00031361949821250007,
+          "mse_improvement": 0.17350133941351642,
+          "name": "ridge",
+          "params": {
+            "alpha": 10.0
+          }
+        },
+        "features": [
+          "realised_vol_5",
+          "recent_max_move_900",
+          "absolute_return_5",
+          "absolute_return_30",
+          "absolute_return_60",
+          "absolute_return_15",
+          "absolute_return_120",
+          "absolute_return_300"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": 0.0009285352446144763,
+          "mean": 0.001413020368738728,
+          "upper_97_5": 0.001845621078340544
+        },
+        "holdout_metrics": {
+          "directional_accuracy": 0.7757257310541466,
+          "mae": 0.002316922558593608,
+          "mae_improvement_vs_persistence": 0.48472631169717795,
+          "mse": 8.753134696874249e-05,
+          "mse_improvement_vs_persistence": 0.22493054580291724,
+          "predictive_ic": 0.423957287887469
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "mae_improvement_vs_persistence": 0.24512647215861236
+          },
+          "COL_2026": {
+            "mae_improvement_vs_persistence": 0.058753353880102874
+          },
+          "HUN_2026": {
+            "mae_improvement_vs_persistence": 0.140165183146082
+          },
+          "PER_2026": {
+            "mae_improvement_vs_persistence": 0.3225019736000468
+          },
+          "US_2024": {
+            "mae_improvement_vs_persistence": 0.5381686484222088
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": 0.39032641162889825,
+        "dev_spearman": 0.41551223673044957,
+        "feature": "realised_vol_5",
+        "holdout": {
+          "decile_response": 0.008876497398220341,
+          "directional_response": 0.002335090289036959,
+          "pearson": 0.3728372225871382,
+          "spearman": 0.49736738475670644,
+          "standardized_effect": 0.22730252025012437,
+          "support": 5166105
+        },
+        "selection_label": "CROSS_FAMILY_CANDIDATE",
+        "train_spearman": 0.44122131411235177
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": 0.39032641162889825,
+          "dev_spearman": 0.41551223673044957,
+          "feature": "realised_vol_5",
+          "holdout": {
+            "decile_response": 0.008876497398220341,
+            "directional_response": 0.002335090289036959,
+            "pearson": 0.3728372225871382,
+            "spearman": 0.49736738475670644,
+            "standardized_effect": 0.22730252025012437,
+            "support": 5166105
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.44122131411235177
+        },
+        {
+          "dev_pearson": 0.2819148277339841,
+          "dev_spearman": 0.394726181502276,
+          "feature": "recent_max_move_900",
+          "holdout": {
+            "decile_response": 0.008367454005066182,
+            "directional_response": 0.002109347483602507,
+            "pearson": 0.31201177352741083,
+            "spearman": 0.2918598639927006,
+            "standardized_effect": 0.20532824848663445,
+            "support": 5166105
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.4236689439111166
+        }
+      ],
+      "target": "target_clock_realised_movement_5",
+      "train_dev_fit_rows": 469238
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 177,
+        "COL_2026": 113286,
+        "HUN_2026": 284794,
+        "PER_2026": 11377,
+        "US_2024": 6413733
+      },
+      "holdout_market_count": 511,
+      "holdout_rows": 6823367,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "mae": 0.005118707474002681,
+            "mse": 0.00019844158685714957,
+            "predictive_ic": 0.5058866414992966
+          },
+          "own_recent_price": {
+            "mae": 0.006622577111587604,
+            "mse": 0.00027461250117490543,
+            "predictive_ic": -0.012537450186146909
+          },
+          "persistence": {
+            "mae": 0.006730891094337167,
+            "mse": 0.0002690763479515511,
+            "predictive_ic": -3.52105656915612e-16
+          },
+          "recent_activity": {
+            "mae": 0.01844957129823619,
+            "mse": 0.0007595958241434185,
+            "predictive_ic": 0.11360524615169669
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": 0.004041424790762401,
+          "mean": 0.004497325534079424,
+          "upper_97_5": 0.004931394540328061
+        },
+        "dev_selected": {
+          "mae": 0.007568807459346637,
+          "mae_improvement": 0.39952226400686425,
+          "mse": 0.00045566625915724403,
+          "mse_improvement": 0.34702327614823353,
+          "name": "hist_gradient_boosting",
+          "params": {
+            "l2_regularization": 1.0,
+            "learning_rate": 0.05,
+            "max_iter": 100,
+            "max_leaf_nodes": 15
+          }
+        },
+        "features": [
+          "recent_max_move_900",
+          "absolute_return_300",
+          "realised_vol_5",
+          "absolute_return_900",
+          "absolute_return_120",
+          "absolute_return_60",
+          "absolute_return_30",
+          "absolute_return_15"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": 0.002267641782904619,
+          "mean": 0.0033067465812739965,
+          "upper_97_5": 0.004416646729408265
+        },
+        "holdout_metrics": {
+          "directional_accuracy": 0.865556110348454,
+          "mae": 0.004716886837222183,
+          "mae_improvement_vs_persistence": 0.2992180721523493,
+          "mse": 0.00018241339379562553,
+          "mse_improvement_vs_persistence": 0.32207570385015705,
+          "predictive_ic": 0.5824603951586081
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "mae_improvement_vs_persistence": 0.4464107391614754
+          },
+          "COL_2026": {
+            "mae_improvement_vs_persistence": 0.18414306566826733
+          },
+          "HUN_2026": {
+            "mae_improvement_vs_persistence": 0.2105141668179203
+          },
+          "PER_2026": {
+            "mae_improvement_vs_persistence": 0.5520289792137255
+          },
+          "US_2024": {
+            "mae_improvement_vs_persistence": 0.3133797797450399
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": 0.39277275217856106,
+        "dev_spearman": 0.5518024890012045,
+        "feature": "recent_max_move_900",
+        "holdout": {
+          "decile_response": 0.02165575735204827,
+          "directional_response": 0.006846974498823008,
+          "pearson": 0.4477769305523922,
+          "spearman": 0.52661986916233,
+          "standardized_effect": 0.42127323585178245,
+          "support": 6823267
+        },
+        "selection_label": "CROSS_FAMILY_CANDIDATE",
+        "train_spearman": 0.5216151644760765
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": 0.39277275217856106,
+          "dev_spearman": 0.5518024890012045,
+          "feature": "recent_max_move_900",
+          "holdout": {
+            "decile_response": 0.02165575735204827,
+            "directional_response": 0.006846974498823008,
+            "pearson": 0.4477769305523922,
+            "spearman": 0.52661986916233,
+            "standardized_effect": 0.42127323585178245,
+            "support": 6823267
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.5216151644760765
+        },
+        {
+          "dev_pearson": 0.4512490453162217,
+          "dev_spearman": 0.4737101230309804,
+          "feature": "realised_vol_5",
+          "holdout": {
+            "decile_response": 0.01986301245940685,
+            "directional_response": 0.006740232535081584,
+            "pearson": 0.5117858164200457,
+            "spearman": 0.6240286497743806,
+            "standardized_effect": 0.4147057318433692,
+            "support": 6823267
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.4718813353442632
+        },
+        {
+          "dev_pearson": 0.48646643946113893,
+          "dev_spearman": 0.4650555395283313,
+          "feature": "absolute_return_900",
+          "holdout": {
+            "decile_response": 0.01611530929200126,
+            "directional_response": 0.004556130964652646,
+            "pearson": 0.43142864827875194,
+            "spearman": 0.384243414016518,
+            "standardized_effect": 0.2801661676609972,
+            "support": 6823367
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.47144517838495537
+        }
+      ],
+      "target": "target_clock_realised_movement_60",
+      "train_dev_fit_rows": 486443
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 157,
+        "COL_2026": 80862,
+        "HUN_2026": 182971,
+        "PER_2026": 7271,
+        "US_2024": 3330837
+      },
+      "holdout_market_count": 509,
+      "holdout_rows": 3602098,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "accuracy": 0.5531354227453001
+          },
+          "own_recent_price": {
+            "accuracy": 0.5535460167935464
+          },
+          "persistence": {
+            "accuracy": 0.5512531863375177
+          },
+          "recent_activity": {
+            "accuracy": 0.5509983348592958
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": -0.009724584106798608,
+          "mean": 0.0024241156820936573,
+          "upper_97_5": 0.01061509203513204
+        },
+        "dev_selected": {
+          "accuracy": 0.5483557856344491,
+          "brier": 0.5906614449584556,
+          "name": "logistic_l2",
+          "params": {
+            "C": 10.0
+          }
+        },
+        "features": [
+          "trend_slope_60",
+          "trend_slope_300",
+          "momentum_120",
+          "logit_return_60",
+          "logit_return_30",
+          "momentum_300",
+          "momentum_15",
+          "momentum_5"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": 0.011652561227081124,
+          "mean": 0.02725950500565913,
+          "upper_97_5": 0.04518990856029257
+        },
+        "holdout_metrics": {
+          "accuracy": 0.5531901130952017,
+          "expected_calibration_error": 0.005077896229825083,
+          "multiclass_brier": 0.5957095908692402
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "accuracy": 0.2229299363057325
+          },
+          "COL_2026": {
+            "accuracy": 0.5183522544582128
+          },
+          "HUN_2026": {
+            "accuracy": 0.5603729552770658
+          },
+          "PER_2026": {
+            "accuracy": 0.46747352496217853
+          },
+          "US_2024": {
+            "accuracy": 0.5538439737519428
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": 0.09246040479598149,
+        "dev_spearman": 0.24049431094504797,
+        "feature": "trend_slope_60",
+        "holdout": {
+          "decile_response": 0.16188942126388225,
+          "directional_response": -0.036214954056982974,
+          "pearson": 0.03682474063891258,
+          "spearman": -0.000291270167593762,
+          "standardized_effect": -0.05394596019087977,
+          "support": 3420721
+        },
+        "selection_label": "CROSS_FAMILY_CANDIDATE",
+        "train_spearman": 0.2852836272398242
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": 0.09246040479598149,
+          "dev_spearman": 0.24049431094504797,
+          "feature": "trend_slope_60",
+          "holdout": {
+            "decile_response": 0.16188942126388225,
+            "directional_response": -0.036214954056982974,
+            "pearson": 0.03682474063891258,
+            "spearman": -0.000291270167593762,
+            "standardized_effect": -0.05394596019087977,
+            "support": 3420721
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.2852836272398242
+        },
+        {
+          "dev_pearson": 0.07619425058222237,
+          "dev_spearman": 0.22516658814824425,
+          "feature": "trend_slope_300",
+          "holdout": {
+            "decile_response": 0.19345133602221898,
+            "directional_response": 0.010560219400707511,
+            "pearson": 0.02928438409023668,
+            "spearman": 0.03715961039190011,
+            "standardized_effect": 0.015748122376457754,
+            "support": 3503310
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.2547312437136498
+        },
+        {
+          "dev_pearson": 0.11627173915265128,
+          "dev_spearman": 0.19739956930035124,
+          "feature": "momentum_120",
+          "holdout": {
+            "decile_response": -0.15986155504544833,
+            "directional_response": -0.2639042701297015,
+            "pearson": 0.020697634064244193,
+            "spearman": -0.18360538234917798,
+            "standardized_effect": -0.3940265099487017,
+            "support": 3602098
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.23551304679960208
+        },
+        {
+          "dev_pearson": 0.1449789842664382,
+          "dev_spearman": 0.19921071842772245,
+          "feature": "logit_return_60",
+          "holdout": {
+            "decile_response": -0.18353008792059927,
+            "directional_response": -0.30245712081153947,
+            "pearson": 0.011955110095691845,
+            "spearman": -0.21350702312867584,
+            "standardized_effect": -0.4515884629829295,
+            "support": 3602098
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.2341975625402629
+        },
+        {
+          "dev_pearson": 0.13560335131304257,
+          "dev_spearman": 0.1908326433124342,
+          "feature": "logit_return_30",
+          "holdout": {
+            "decile_response": -0.27652088457275803,
+            "directional_response": -0.3358863728958391,
+            "pearson": 0.011333896972426734,
+            "spearman": -0.23859809531180887,
+            "standardized_effect": -0.5015005448241906,
+            "support": 3602098
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.23330658987671796
+        },
+        {
+          "dev_pearson": 0.10342854227718203,
+          "dev_spearman": 0.20238984381774594,
+          "feature": "momentum_300",
+          "holdout": {
+            "decile_response": -0.13101711917444303,
+            "directional_response": -0.20759830850167293,
+            "pearson": 0.02547293443901538,
+            "spearman": -0.1357559128923914,
+            "standardized_effect": -0.3099579894253551,
+            "support": 3602098
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.22734568507738473
+        },
+        {
+          "dev_pearson": 0.09565781404019169,
+          "dev_spearman": 0.17707965136971274,
+          "feature": "momentum_15",
+          "holdout": {
+            "decile_response": -0.5304177097187032,
+            "directional_response": -0.3668883576097256,
+            "pearson": 0.005711810688317123,
+            "spearman": -0.26386321555949327,
+            "standardized_effect": -0.5477885561257587,
+            "support": 3602098
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.22681773949471062
+        },
+        {
+          "dev_pearson": 0.08740038769910645,
+          "dev_spearman": 0.16715857854748528,
+          "feature": "momentum_5",
+          "holdout": {
+            "decile_response": -0.6131538835193462,
+            "directional_response": -0.4089935498867436,
+            "pearson": 0.0025206759556119914,
+            "spearman": -0.2887250227829321,
+            "standardized_effect": -0.6106543898444727,
+            "support": 3602098
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.22654363881157333
+        }
+      ],
+      "target": "target_clock_sign_1",
+      "train_dev_fit_rows": 448040
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 183,
+        "COL_2026": 120790,
+        "HUN_2026": 304677,
+        "PER_2026": 12395,
+        "US_2024": 6663098
+      },
+      "holdout_market_count": 512,
+      "holdout_rows": 7101143,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "accuracy": 0.40814795589949393
+          },
+          "own_recent_price": {
+            "accuracy": 0.40799079810109445
+          },
+          "persistence": {
+            "accuracy": 0.4075828356082957
+          },
+          "recent_activity": {
+            "accuracy": 0.40729344557629665
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": -0.008686105807804054,
+          "mean": -0.004728128981841052,
+          "upper_97_5": -0.0008078901627140001
+        },
+        "dev_selected": {
+          "accuracy": 0.4551845640426217,
+          "brier": 0.6385758896264809,
+          "name": "logistic_l2",
+          "params": {
+            "C": 10.0
+          }
+        },
+        "features": [
+          "market_minus_event_momentum_30",
+          "loo_event_activity_300",
+          "loo_family_activity_30",
+          "loo_event_activity_30",
+          "loo_event_activity_900",
+          "loo_event_activity_120"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": -0.08521341686928047,
+          "mean": -0.029448646109038218,
+          "upper_97_5": 0.007783891260876437
+        },
+        "holdout_metrics": {
+          "accuracy": 0.38725906519556075,
+          "expected_calibration_error": 0.0411030867712208,
+          "multiclass_brier": 0.6889704207637556
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "accuracy": 0.21311475409836064
+          },
+          "COL_2026": {
+            "accuracy": 0.402541601125921
+          },
+          "HUN_2026": {
+            "accuracy": 0.4521969167347716
+          },
+          "PER_2026": {
+            "accuracy": 0.42702702702702705
+          },
+          "US_2024": {
+            "accuracy": 0.38394347494213654
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": -0.07968580902737307,
+        "dev_spearman": -0.08912531548073327,
+        "feature": "market_minus_event_momentum_30",
+        "holdout": {
+          "decile_response": -0.5393733616794752,
+          "directional_response": -0.32260156460651046,
+          "pearson": -0.07470944139499003,
+          "spearman": -0.25094181351367706,
+          "standardized_effect": -0.4144812393157357,
+          "support": 5964143
+        },
+        "selection_label": "WITHIN_FAMILY_STABLE",
+        "train_spearman": -0.04074059132847078
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": -0.07968580902737307,
+          "dev_spearman": -0.08912531548073327,
+          "feature": "market_minus_event_momentum_30",
+          "holdout": {
+            "decile_response": -0.5393733616794752,
+            "directional_response": -0.32260156460651046,
+            "pearson": -0.07470944139499003,
+            "spearman": -0.25094181351367706,
+            "standardized_effect": -0.4144812393157357,
+            "support": 5964143
+          },
+          "selection_label": "WITHIN_FAMILY_STABLE",
+          "train_spearman": -0.04074059132847078
+        },
+        {
+          "dev_pearson": -0.025339620489700145,
+          "dev_spearman": -0.04973274682826986,
+          "feature": "loo_event_activity_300",
+          "holdout": {
+            "decile_response": -0.020461087115395588,
+            "directional_response": -0.019528586305212828,
+            "pearson": -0.014588899762600445,
+            "spearman": -0.015242853850702997,
+            "standardized_effect": -0.02537551728251801,
+            "support": 7101143
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.03655084443725269
+        },
+        {
+          "dev_pearson": -0.03862495623797209,
+          "dev_spearman": -0.05175282438416899,
+          "feature": "loo_family_activity_30",
+          "holdout": {
+            "decile_response": -0.03645749158798462,
+            "directional_response": -0.023611859014842404,
+            "pearson": -0.016072650571604247,
+            "spearman": -0.017207963278488208,
+            "standardized_effect": -0.030681336945704848,
+            "support": 7101143
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.03521165838594093
+        },
+        {
+          "dev_pearson": -0.0224096698835427,
+          "dev_spearman": -0.04529157268906879,
+          "feature": "loo_event_activity_900",
+          "holdout": {
+            "decile_response": -0.015153051183872435,
+            "directional_response": -0.019284566167175617,
+            "pearson": -0.013890176840475475,
+            "spearman": -0.014019162293109727,
+            "standardized_effect": -0.025058436612505924,
+            "support": 7101143
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.03446930746455747
+        },
+        {
+          "dev_pearson": -0.02861234621007378,
+          "dev_spearman": -0.049200062236219304,
+          "feature": "loo_event_activity_120",
+          "holdout": {
+            "decile_response": -0.03069023954170227,
+            "directional_response": -0.022095460268077276,
+            "pearson": -0.015381491908423838,
+            "spearman": -0.01620528467250705,
+            "standardized_effect": -0.028710922804899598,
+            "support": 7101143
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.03419430233259856
+        }
+      ],
+      "target": "target_clock_sign_120",
+      "train_dev_fit_rows": 491749
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 168,
+        "COL_2026": 100114,
+        "HUN_2026": 243317,
+        "PER_2026": 9534,
+        "US_2024": 5689891
+      },
+      "holdout_market_count": 510,
+      "holdout_rows": 6043024,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "accuracy": 0.47571662796639563
+          },
+          "own_recent_price": {
+            "accuracy": 0.4747166319379172
+          },
+          "persistence": {
+            "accuracy": 0.47457233332186005
+          },
+          "recent_activity": {
+            "accuracy": 0.45574235680679076
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": 0.0013429118335268437,
+          "mean": 0.0025811397347533303,
+          "upper_97_5": 0.004368972536799565
+        },
+        "dev_selected": {
+          "accuracy": 0.5041410808330238,
+          "brier": 0.6227239309742291,
+          "name": "logistic_l2",
+          "params": {
+            "C": 10.0
+          }
+        },
+        "features": [
+          "trend_slope_300",
+          "trend_slope_60",
+          "momentum_300",
+          "momentum_900",
+          "momentum_120"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": 0.001879246213676706,
+          "mean": 0.010393159756684879,
+          "upper_97_5": 0.02069678462522006
+        },
+        "holdout_metrics": {
+          "accuracy": 0.47509822896616,
+          "expected_calibration_error": 0.042199403937481485,
+          "multiclass_brier": 0.6393875689445196
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "accuracy": 0.2261904761904762
+          },
+          "COL_2026": {
+            "accuracy": 0.4632718700681223
+          },
+          "HUN_2026": {
+            "accuracy": 0.48839579643017134
+          },
+          "PER_2026": {
+            "accuracy": 0.44105307321166354
+          },
+          "US_2024": {
+            "accuracy": 0.4748020656283222
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": 0.04348822331991154,
+        "dev_spearman": 0.08380295234209541,
+        "feature": "trend_slope_300",
+        "holdout": {
+          "decile_response": 0.03815480366294269,
+          "directional_response": -0.06620117869711586,
+          "pearson": 0.015314622141653864,
+          "spearman": -0.029933827058963854,
+          "standardized_effect": -0.09114656306834219,
+          "support": 5887070
+        },
+        "selection_label": "CROSS_FAMILY_CANDIDATE",
+        "train_spearman": 0.15791500106647285
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": 0.04348822331991154,
+          "dev_spearman": 0.08380295234209541,
+          "feature": "trend_slope_300",
+          "holdout": {
+            "decile_response": 0.03815480366294269,
+            "directional_response": -0.06620117869711586,
+            "pearson": 0.015314622141653864,
+            "spearman": -0.029933827058963854,
+            "standardized_effect": -0.09114656306834219,
+            "support": 5887070
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.15791500106647285
+        },
+        {
+          "dev_pearson": 0.04451208092171049,
+          "dev_spearman": 0.045105857276244304,
+          "feature": "trend_slope_60",
+          "holdout": {
+            "decile_response": -0.14949056610382014,
+            "directional_response": -0.1440344998066964,
+            "pearson": 0.017023434181991624,
+            "spearman": -0.10620651165728177,
+            "standardized_effect": -0.19804170068185137,
+            "support": 5710257
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.14921514611382666
+        },
+        {
+          "dev_pearson": 0.004873531457286255,
+          "dev_spearman": 0.019387736279088155,
+          "feature": "momentum_300",
+          "holdout": {
+            "decile_response": -0.3272951331433326,
+            "directional_response": -0.32022172508703367,
+            "pearson": -0.03211885648307395,
+            "spearman": -0.21993069513044694,
+            "standardized_effect": -0.44176866525063424,
+            "support": 6043024
+          },
+          "selection_label": "WITHIN_FAMILY_STABLE",
+          "train_spearman": 0.11073382077372944
+        },
+        {
+          "dev_pearson": 0.013055828449760602,
+          "dev_spearman": 0.03550365977250195,
+          "feature": "momentum_900",
+          "holdout": {
+            "decile_response": -0.15960228371785593,
+            "directional_response": -0.24393139035420364,
+            "pearson": -0.01867902040000331,
+            "spearman": -0.15873618483225063,
+            "standardized_effect": -0.33652071763781594,
+            "support": 6043024
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.10881682017635988
+        }
+      ],
+      "target": "target_clock_sign_15",
+      "train_dev_fit_rows": 476416
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 173,
+        "COL_2026": 106495,
+        "HUN_2026": 263912,
+        "PER_2026": 10389,
+        "US_2024": 6093708
+      },
+      "holdout_market_count": 511,
+      "holdout_rows": 6474677,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "accuracy": 0.45064811727287707
+          },
+          "own_recent_price": {
+            "accuracy": 0.4487902639776471
+          },
+          "persistence": {
+            "accuracy": 0.4486906451086286
+          },
+          "recent_activity": {
+            "accuracy": 0.42781562694169917
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": 0.0007249999816484837,
+          "mean": 0.0017088685239487087,
+          "upper_97_5": 0.0033189327753593684
+        },
+        "dev_selected": {
+          "accuracy": 0.4943782414189002,
+          "brier": 0.627766297435227,
+          "name": "logistic_l2",
+          "params": {
+            "C": 10.0
+          }
+        },
+        "features": [
+          "trend_slope_300",
+          "momentum_900"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": -0.0014527383158847776,
+          "mean": 0.007151831563318827,
+          "upper_97_5": 0.0172726918696864
+        },
+        "holdout_metrics": {
+          "accuracy": 0.44895814880031853,
+          "expected_calibration_error": 0.0611183044391612,
+          "multiclass_brier": 0.6522182696107767
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "accuracy": 0.2254335260115607
+          },
+          "COL_2026": {
+            "accuracy": 0.43687497065589936
+          },
+          "HUN_2026": {
+            "accuracy": 0.4709031798478281
+          },
+          "PER_2026": {
+            "accuracy": 0.43613437289440754
+          },
+          "US_2024": {
+            "accuracy": 0.4482471099698246
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": 0.03829787475504776,
+        "dev_spearman": 0.05165045768606092,
+        "feature": "trend_slope_300",
+        "holdout": {
+          "decile_response": 0.006943294570187617,
+          "directional_response": -0.08202524198723857,
+          "pearson": 0.012180443935925515,
+          "spearman": -0.04515420419555456,
+          "standardized_effect": -0.11036091384977857,
+          "support": 6280872
+        },
+        "selection_label": "CROSS_FAMILY_CANDIDATE",
+        "train_spearman": 0.1252757625167249
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": 0.03829787475504776,
+          "dev_spearman": 0.05165045768606092,
+          "feature": "trend_slope_300",
+          "holdout": {
+            "decile_response": 0.006943294570187617,
+            "directional_response": -0.08202524198723857,
+            "pearson": 0.012180443935925515,
+            "spearman": -0.04515420419555456,
+            "standardized_effect": -0.11036091384977857,
+            "support": 6280872
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.1252757625167249
+        }
+      ],
+      "target": "target_clock_sign_30",
+      "train_dev_fit_rows": 481410
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 189,
+        "COL_2026": 131881,
+        "HUN_2026": 328229,
+        "PER_2026": 13862,
+        "US_2024": 6949690
+      },
+      "holdout_market_count": 514,
+      "holdout_rows": 7423851,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "accuracy": 0.37680861321166065
+          },
+          "own_recent_price": {
+            "accuracy": 0.37430384850126974
+          },
+          "persistence": {
+            "accuracy": 0.3732364779411656
+          },
+          "recent_activity": {
+            "accuracy": 0.4023235380128184
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": 0.004662424617480464,
+          "mean": 0.009375483847020794,
+          "upper_97_5": 0.014588843300920737
+        },
+        "dev_selected": {
+          "accuracy": 0.4609187257378766,
+          "brier": 0.6241242008466257,
+          "name": "logistic_l2",
+          "params": {
+            "C": 10.0
+          }
+        },
+        "features": [
+          "market_minus_event_momentum_30",
+          "distance_recent_high_300",
+          "loo_event_activity_300",
+          "distance_recent_low_300",
+          "loo_event_activity_900",
+          "loo_event_activity_120",
+          "loo_family_activity_30",
+          "loo_event_activity_30"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": -0.054318621157896825,
+          "mean": 0.0023190091822155433,
+          "upper_97_5": 0.05300835687798986
+        },
+        "holdout_metrics": {
+          "accuracy": 0.39073831088474165,
+          "expected_calibration_error": 0.04291664170560153,
+          "multiclass_brier": 0.6678355379833965
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "accuracy": 0.24867724867724866
+          },
+          "COL_2026": {
+            "accuracy": 0.4162843775828209
+          },
+          "HUN_2026": {
+            "accuracy": 0.4690993178543029
+          },
+          "PER_2026": {
+            "accuracy": 0.4222334439474823
+          },
+          "US_2024": {
+            "accuracy": 0.3864936421624562
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": -0.08306215226875414,
+        "dev_spearman": -0.08908419299029087,
+        "feature": "market_minus_event_momentum_30",
+        "holdout": {
+          "decile_response": -0.4987649032987643,
+          "directional_response": -0.28557218888595864,
+          "pearson": -0.07050152314560067,
+          "spearman": -0.21776958811976735,
+          "standardized_effect": -0.3556491377960154,
+          "support": 6118504
+        },
+        "selection_label": "WITHIN_FAMILY_STABLE",
+        "train_spearman": -0.05082879118064683
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": -0.08306215226875414,
+          "dev_spearman": -0.08908419299029087,
+          "feature": "market_minus_event_momentum_30",
+          "holdout": {
+            "decile_response": -0.4987649032987643,
+            "directional_response": -0.28557218888595864,
+            "pearson": -0.07050152314560067,
+            "spearman": -0.21776958811976735,
+            "standardized_effect": -0.3556491377960154,
+            "support": 6118504
+          },
+          "selection_label": "WITHIN_FAMILY_STABLE",
+          "train_spearman": -0.05082879118064683
+        },
+        {
+          "dev_pearson": -0.04358997603587823,
+          "dev_spearman": -0.10719608805809046,
+          "feature": "distance_recent_high_300",
+          "holdout": {
+            "decile_response": -0.3921194315937685,
+            "directional_response": -0.32437384494896293,
+            "pearson": -0.04330216229713833,
+            "spearman": -0.23582113834257346,
+            "standardized_effect": -0.4097942778961602,
+            "support": 7423851
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.04506743030146914
+        },
+        {
+          "dev_pearson": -0.03350793226256683,
+          "dev_spearman": -0.03678114646989186,
+          "feature": "loo_family_activity_30",
+          "holdout": {
+            "decile_response": -0.03628038318535891,
+            "directional_response": -0.02697559510117988,
+            "pearson": -0.016598208770262027,
+            "spearman": -0.017373468331969465,
+            "standardized_effect": -0.03407933373002535,
+            "support": 7423851
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.04120110537672278
+        }
+      ],
+      "target": "target_clock_sign_300",
+      "train_dev_fit_rows": 500000
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 159,
+        "COL_2026": 90732,
+        "HUN_2026": 214630,
+        "PER_2026": 8308,
+        "US_2024": 4852341
+      },
+      "holdout_market_count": 509,
+      "holdout_rows": 5166170,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "accuracy": 0.5010603599958964
+          },
+          "own_recent_price": {
+            "accuracy": 0.5008180141187766
+          },
+          "persistence": {
+            "accuracy": 0.50031454636607
+          },
+          "recent_activity": {
+            "accuracy": 0.49765029025370827
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": -0.0038089545674140006,
+          "mean": 0.0029258989701602344,
+          "upper_97_5": 0.008572067037427054
+        },
+        "dev_selected": {
+          "accuracy": 0.5300562016005801,
+          "brier": 0.6069392708526533,
+          "name": "logistic_l2",
+          "params": {
+            "C": 10.0
+          }
+        },
+        "features": [
+          "trend_slope_60",
+          "trend_slope_300",
+          "momentum_300",
+          "momentum_120",
+          "momentum_900",
+          "logit_return_60",
+          "logit_return_30",
+          "momentum_5"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": 0.0072884393450369815,
+          "mean": 0.020327178309949765,
+          "upper_97_5": 0.03584335654744635
+        },
+        "holdout_metrics": {
+          "accuracy": 0.5013605824043731,
+          "expected_calibration_error": 0.045914521238410444,
+          "multiclass_brier": 0.6292608445177559
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "accuracy": 0.25157232704402516
+          },
+          "COL_2026": {
+            "accuracy": 0.48901159458625404
+          },
+          "HUN_2026": {
+            "accuracy": 0.5195266272189349
+          },
+          "PER_2026": {
+            "accuracy": 0.4488444872412133
+          },
+          "US_2024": {
+            "accuracy": 0.5008860671580996
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": 0.0691177081038226,
+        "dev_spearman": 0.12849700350642257,
+        "feature": "trend_slope_60",
+        "holdout": {
+          "decile_response": -0.03504610260368008,
+          "directional_response": -0.1109769771492835,
+          "pearson": 0.024991033326457728,
+          "spearman": -0.07112969884254378,
+          "standardized_effect": -0.15631490606703127,
+          "support": 4923796
+        },
+        "selection_label": "CROSS_FAMILY_CANDIDATE",
+        "train_spearman": 0.21135706443311358
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": 0.0691177081038226,
+          "dev_spearman": 0.12849700350642257,
+          "feature": "trend_slope_60",
+          "holdout": {
+            "decile_response": -0.03504610260368008,
+            "directional_response": -0.1109769771492835,
+            "pearson": 0.024991033326457728,
+            "spearman": -0.07112969884254378,
+            "standardized_effect": -0.15631490606703127,
+            "support": 4923796
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.21135706443311358
+        },
+        {
+          "dev_pearson": 0.061236827970718034,
+          "dev_spearman": 0.14493720305624766,
+          "feature": "trend_slope_300",
+          "holdout": {
+            "decile_response": 0.09198719536971883,
+            "directional_response": -0.03739983687461011,
+            "pearson": 0.020729988696747973,
+            "spearman": -0.004415829842898999,
+            "standardized_effect": -0.0527652303864821,
+            "support": 5045042
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.20281607146865926
+        },
+        {
+          "dev_pearson": 0.04772140501474793,
+          "dev_spearman": 0.10170848461081944,
+          "feature": "momentum_300",
+          "holdout": {
+            "decile_response": -0.2770289718092481,
+            "directional_response": -0.29025768172027705,
+            "pearson": -0.013241038937632876,
+            "spearman": -0.20028140428788102,
+            "standardized_effect": -0.4106164713667816,
+            "support": 5166170
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.16655199397834355
+        },
+        {
+          "dev_pearson": 0.05178022239732211,
+          "dev_spearman": 0.0887010691456534,
+          "feature": "momentum_120",
+          "holdout": {
+            "decile_response": -0.355304975073364,
+            "directional_response": -0.3534855483362628,
+            "pearson": -0.023255542490476545,
+            "spearman": -0.2519992433155816,
+            "standardized_effect": -0.5000625226410618,
+            "support": 5166170
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.16277529030585583
+        },
+        {
+          "dev_pearson": 0.045777026013774536,
+          "dev_spearman": 0.10554643067657685,
+          "feature": "momentum_900",
+          "holdout": {
+            "decile_response": -0.11787900166599372,
+            "directional_response": -0.21424828215039377,
+            "pearson": -0.0052977184972768515,
+            "spearman": -0.13783869564915785,
+            "standardized_effect": -0.3030888729338444,
+            "support": 5166170
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.1597206585235176
+        },
+        {
+          "dev_pearson": 0.0880126829633347,
+          "dev_spearman": 0.08371981551706649,
+          "feature": "logit_return_60",
+          "holdout": {
+            "decile_response": -0.42395596913979455,
+            "directional_response": -0.3938950913929487,
+            "pearson": -0.049938487327734114,
+            "spearman": -0.2827971384310765,
+            "standardized_effect": -0.5572283619089128,
+            "support": 5166170
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.15946322243734468
+        },
+        {
+          "dev_pearson": 0.07970423766349896,
+          "dev_spearman": 0.07092435536692243,
+          "feature": "logit_return_30",
+          "holdout": {
+            "decile_response": -0.5125197934792024,
+            "directional_response": -0.42805381163484063,
+            "pearson": -0.04658018446083153,
+            "spearman": -0.30678990234842973,
+            "standardized_effect": -0.6055514005585764,
+            "support": 5166170
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.15400138180006198
+        },
+        {
+          "dev_pearson": 0.03419902242464418,
+          "dev_spearman": 0.05267917638648083,
+          "feature": "momentum_5",
+          "holdout": {
+            "decile_response": -0.7586244808262127,
+            "directional_response": -0.48387970135864405,
+            "pearson": -0.03562985530232746,
+            "spearman": -0.337050805252874,
+            "standardized_effect": -0.684526157448526,
+            "support": 5166170
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": 0.14803169394782267
+        }
+      ],
+      "target": "target_clock_sign_5",
+      "train_dev_fit_rows": 469238
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 177,
+        "COL_2026": 113286,
+        "HUN_2026": 284794,
+        "PER_2026": 11377,
+        "US_2024": 6413733
+      },
+      "holdout_market_count": 511,
+      "holdout_rows": 6823367,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "accuracy": 0.4306697851661797
+          },
+          "own_recent_price": {
+            "accuracy": 0.4287424375678459
+          },
+          "persistence": {
+            "accuracy": 0.4284902160472975
+          },
+          "recent_activity": {
+            "accuracy": 0.41324774118115
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": 0.0005325004754119393,
+          "mean": 0.0014571516454557508,
+          "upper_97_5": 0.0029880620994415896
+        },
+        "dev_selected": {
+          "accuracy": 0.4706762253963042,
+          "brier": 0.637544646066387,
+          "name": "logistic_l2",
+          "params": {
+            "C": 10.0
+          }
+        },
+        "features": [
+          "trend_slope_300",
+          "loo_event_price_movement_5",
+          "loo_event_activity_300",
+          "loo_family_activity_30"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": -0.0020720188955130076,
+          "mean": 0.006351461976556034,
+          "upper_97_5": 0.016633270025041728
+        },
+        "holdout_metrics": {
+          "accuracy": 0.42867502217013975,
+          "expected_calibration_error": 0.09432331987310606,
+          "multiclass_brier": 0.6772896450791668
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "accuracy": 0.21468926553672316
+          },
+          "COL_2026": {
+            "accuracy": 0.41458785728157055
+          },
+          "HUN_2026": {
+            "accuracy": 0.4556486442832363
+          },
+          "PER_2026": {
+            "accuracy": 0.4150479036652896
+          },
+          "US_2024": {
+            "accuracy": 0.4277561912851689
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": 0.027892731115304496,
+        "dev_spearman": 0.024065912939434168,
+        "feature": "trend_slope_300",
+        "holdout": {
+          "decile_response": -0.010701497025084054,
+          "directional_response": -0.08806775164757713,
+          "pearson": 0.009208400941098963,
+          "spearman": -0.051218549714928084,
+          "standardized_effect": -0.11644698840465934,
+          "support": 6585058
+        },
+        "selection_label": "WITHIN_FAMILY_STABLE",
+        "train_spearman": 0.09750202064435226
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": 0.027892731115304496,
+          "dev_spearman": 0.024065912939434168,
+          "feature": "trend_slope_300",
+          "holdout": {
+            "decile_response": -0.010701497025084054,
+            "directional_response": -0.08806775164757713,
+            "pearson": 0.009208400941098963,
+            "spearman": -0.051218549714928084,
+            "standardized_effect": -0.11644698840465934,
+            "support": 6585058
+          },
+          "selection_label": "WITHIN_FAMILY_STABLE",
+          "train_spearman": 0.09750202064435226
+        },
+        {
+          "dev_pearson": -0.0028881829778506546,
+          "dev_spearman": -0.023774709560275647,
+          "feature": "loo_event_price_movement_5",
+          "holdout": {
+            "decile_response": -0.008817075609188523,
+            "directional_response": -0.012993703967407367,
+            "pearson": -0.001840180380971393,
+            "spearman": -0.007291366167589781,
+            "standardized_effect": -0.016987317465797756,
+            "support": 4471602
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.041633557615023284
+        },
+        {
+          "dev_pearson": -0.027441829285727685,
+          "dev_spearman": -0.04837950799623569,
+          "feature": "loo_event_activity_300",
+          "holdout": {
+            "decile_response": -0.024316368788116723,
+            "directional_response": -0.022349460677943328,
+            "pearson": -0.015930755761513964,
+            "spearman": -0.018003811932726564,
+            "standardized_effect": -0.029567108224303917,
+            "support": 6823367
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.035656139662326614
+        },
+        {
+          "dev_pearson": -0.045834250984989104,
+          "dev_spearman": -0.055216206428443194,
+          "feature": "loo_family_activity_30",
+          "holdout": {
+            "decile_response": -0.04123430488504516,
+            "directional_response": -0.024815736961153672,
+            "pearson": -0.01681017492022553,
+            "spearman": -0.01892817720020309,
+            "standardized_effect": -0.03282985620858434,
+            "support": 6823367
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.03559447390794551
+        }
+      ],
+      "target": "target_clock_sign_60",
+      "train_dev_fit_rows": 486443
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 307,
+        "COL_2026": 158440,
+        "HUN_2026": 375652,
+        "PER_2026": 18527,
+        "US_2024": 7509182
+      },
+      "holdout_market_count": 497,
+      "holdout_rows": 8062108,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "mae": 0.0024666811873440817,
+            "mse": 0.00013789973908731018,
+            "predictive_ic": 0.1037244844950113
+          },
+          "own_recent_price": {
+            "mae": 0.0023771429045998734,
+            "mse": 0.00012523562145928387,
+            "predictive_ic": 0.3186184775561943
+          },
+          "persistence": {
+            "mae": 0.0023256849584500747,
+            "mse": 0.00013935296277649007,
+            "predictive_ic": NaN
+          },
+          "recent_activity": {
+            "mae": 0.0025698658929669475,
+            "mse": 0.00013985313444483298,
+            "predictive_ic": 0.0012642812576185592
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": 5.700925030615788e-06,
+          "mean": 2.0271045226653236e-05,
+          "upper_97_5": 3.4989638137211225e-05
+        },
+        "dev_selected": {
+          "mae": 0.0055846173833985005,
+          "mae_improvement": 0.0031600457429346008,
+          "mse": 0.0003230810642686847,
+          "mse_improvement": 0.08213431787948408,
+          "name": "elastic_net",
+          "params": {
+            "alpha": 0.01,
+            "l1_ratio": 0.5
+          }
+        },
+        "features": [
+          "trend_slope_60",
+          "momentum_120",
+          "logit_return_60",
+          "momentum_300",
+          "momentum_900",
+          "logit_return_30",
+          "momentum_15",
+          "trend_slope_300"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": 2.786832931159528e-05,
+          "mean": 9.386174495470678e-05,
+          "upper_97_5": 0.0001548043631698648
+        },
+        "holdout_metrics": {
+          "directional_accuracy": 0.3884826400241723,
+          "mae": 0.0023142991844686905,
+          "mae_improvement_vs_persistence": 0.004895664797596725,
+          "mse": 0.00013173602136746655,
+          "mse_improvement_vs_persistence": 0.05465934313316629,
+          "predictive_ic": 0.3226877486171995
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "mae_improvement_vs_persistence": 0.00191109885443105
+          },
+          "COL_2026": {
+            "mae_improvement_vs_persistence": -0.0018357785626414143
+          },
+          "HUN_2026": {
+            "mae_improvement_vs_persistence": 0.008283951758374292
+          },
+          "PER_2026": {
+            "mae_improvement_vs_persistence": 0.0007454676064008763
+          },
+          "US_2024": {
+            "mae_improvement_vs_persistence": 0.004800888341051951
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": -0.24706531199290682,
+        "dev_spearman": -0.16226624158135636,
+        "feature": "trend_slope_60",
+        "holdout": {
+          "decile_response": -0.004171767688409496,
+          "directional_response": -0.0009319906866617062,
+          "pearson": -0.2402149317102069,
+          "spearman": -0.183414541241201,
+          "standardized_effect": -0.08892767059574024,
+          "support": 6819713
+        },
+        "selection_label": "CROSS_FAMILY_CANDIDATE",
+        "train_spearman": -0.1598875959632701
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": -0.24706531199290682,
+          "dev_spearman": -0.16226624158135636,
+          "feature": "trend_slope_60",
+          "holdout": {
+            "decile_response": -0.004171767688409496,
+            "directional_response": -0.0009319906866617062,
+            "pearson": -0.2402149317102069,
+            "spearman": -0.183414541241201,
+            "standardized_effect": -0.08892767059574024,
+            "support": 6819713
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.1598875959632701
+        },
+        {
+          "dev_pearson": -0.295115700718279,
+          "dev_spearman": -0.16497048483295493,
+          "feature": "momentum_120",
+          "holdout": {
+            "decile_response": -0.0036007778316281417,
+            "directional_response": -0.0013789267413681762,
+            "pearson": -0.29773917601775146,
+            "spearman": -0.3042910265799893,
+            "standardized_effect": -0.11681082704731563,
+            "support": 8062108
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.15144484979122141
+        },
+        {
+          "dev_pearson": -0.1851885178337535,
+          "dev_spearman": -0.1669168604894263,
+          "feature": "logit_return_60",
+          "holdout": {
+            "decile_response": -0.0045181053457252415,
+            "directional_response": -0.0014272836158685592,
+            "pearson": -0.12351565842678962,
+            "spearman": -0.31973630385259577,
+            "standardized_effect": -0.12090720601680927,
+            "support": 8062108
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.14947236258477473
+        },
+        {
+          "dev_pearson": -0.2468318844448389,
+          "dev_spearman": -0.1623876069116595,
+          "feature": "momentum_300",
+          "holdout": {
+            "decile_response": -0.0039745521431764986,
+            "directional_response": -0.0013134569510677894,
+            "pearson": -0.26110757192006834,
+            "spearman": -0.27221003972140145,
+            "standardized_effect": -0.1112647888698164,
+            "support": 8062108
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.14937502361450494
+        },
+        {
+          "dev_pearson": -0.19735605344970003,
+          "dev_spearman": -0.15611092456831174,
+          "feature": "momentum_900",
+          "holdout": {
+            "decile_response": -0.0038807801900304266,
+            "directional_response": -0.0012094648666468027,
+            "pearson": -0.19739905577240327,
+            "spearman": -0.2260404607971698,
+            "standardized_effect": -0.10245547288285033,
+            "support": 8062108
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.14656638238849157
+        },
+        {
+          "dev_pearson": -0.18951394122539858,
+          "dev_spearman": -0.16262490967746945,
+          "feature": "logit_return_30",
+          "holdout": {
+            "decile_response": -0.004473942232698608,
+            "directional_response": -0.0014642806615528265,
+            "pearson": -0.12759432569440518,
+            "spearman": -0.3274714622143308,
+            "standardized_effect": -0.12404127788229403,
+            "support": 8062108
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.1454371789199467
+        },
+        {
+          "dev_pearson": -0.32524802405418574,
+          "dev_spearman": -0.15715345709198614,
+          "feature": "momentum_15",
+          "holdout": {
+            "decile_response": -0.002871820680338684,
+            "directional_response": -0.00143517353303117,
+            "pearson": -0.3146176458308792,
+            "spearman": -0.3248171960549685,
+            "standardized_effect": -0.12157557201585063,
+            "support": 8062108
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.1438396212987475
+        },
+        {
+          "dev_pearson": -0.20589686247897962,
+          "dev_spearman": -0.1197993580902062,
+          "feature": "trend_slope_300",
+          "holdout": {
+            "decile_response": -0.0032023782667295643,
+            "directional_response": -0.0007319081829779365,
+            "pearson": -0.17500274483922781,
+            "spearman": -0.11512827501812083,
+            "standardized_effect": -0.06768943791190227,
+            "support": 7419498
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.13678603468747821
+        }
+      ],
+      "target": "target_event_price_change_10",
+      "train_dev_fit_rows": 500000
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 319,
+        "COL_2026": 159202,
+        "HUN_2026": 376147,
+        "PER_2026": 18727,
+        "US_2024": 7511937
+      },
+      "holdout_market_count": 509,
+      "holdout_rows": 8066332,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "mae": 0.002077640125057241,
+            "mse": 0.00010549369801768432,
+            "predictive_ic": 0.09636750637674157
+          },
+          "own_recent_price": {
+            "mae": 0.002065737628356637,
+            "mse": 9.563272227991247e-05,
+            "predictive_ic": 0.31816076649409186
+          },
+          "persistence": {
+            "mae": 0.0019876605548841803,
+            "mse": 0.00010636385132278397,
+            "predictive_ic": NaN
+          },
+          "recent_activity": {
+            "mae": 0.002145629790647373,
+            "mse": 0.00010658902157676036,
+            "predictive_ic": 0.0008392917101694099
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": -2.0236157744900005e-05,
+          "mean": 0.00015271370914676509,
+          "upper_97_5": 0.0004704014794862413
+        },
+        "dev_selected": {
+          "mae": 0.00449163626137864,
+          "mae_improvement": 4.3843640518206325e-05,
+          "mse": 0.00024953470284537325,
+          "mse_improvement": 0.034026837573984225,
+          "name": "univariate_linear",
+          "params": {
+            "feature": "trend_slope_300"
+          }
+        },
+        "features": [
+          "momentum_120",
+          "momentum_300",
+          "trend_slope_60",
+          "logit_return_60",
+          "momentum_900",
+          "logit_return_30",
+          "momentum_15",
+          "trend_slope_300"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": -3.3738079765091465e-05,
+          "mean": 4.604250965220838e-05,
+          "upper_97_5": 0.00014448038698131586
+        },
+        "holdout_metrics": {
+          "directional_accuracy": 0.2562613341479126,
+          "mae": 0.00198593957538838,
+          "mae_improvement_vs_persistence": 0.0008658316892043374,
+          "mse": 0.00010337270488907075,
+          "mse_improvement_vs_persistence": 0.02812183271397291,
+          "predictive_ic": 0.1688556051404352
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "mae_improvement_vs_persistence": 0.06573937962985674
+          },
+          "COL_2026": {
+            "mae_improvement_vs_persistence": 0.0006822520370056856
+          },
+          "HUN_2026": {
+            "mae_improvement_vs_persistence": -0.0036618080737227518
+          },
+          "PER_2026": {
+            "mae_improvement_vs_persistence": 0.00018830791244697857
+          },
+          "US_2024": {
+            "mae_improvement_vs_persistence": 0.0019395659366513377
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": -0.29154670783230535,
+        "dev_spearman": -0.15284469385607266,
+        "feature": "momentum_120",
+        "holdout": {
+          "decile_response": -0.003344923205961357,
+          "directional_response": -0.001327077531268991,
+          "pearson": -0.30334601365049807,
+          "spearman": -0.3087067394828254,
+          "standardized_effect": -0.1286765118801012,
+          "support": 8066332
+        },
+        "selection_label": "CROSS_FAMILY_CANDIDATE",
+        "train_spearman": -0.1264267272727602
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": -0.29154670783230535,
+          "dev_spearman": -0.15284469385607266,
+          "feature": "momentum_120",
+          "holdout": {
+            "decile_response": -0.003344923205961357,
+            "directional_response": -0.001327077531268991,
+            "pearson": -0.30334601365049807,
+            "spearman": -0.3087067394828254,
+            "standardized_effect": -0.1286765118801012,
+            "support": 8066332
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.1264267272727602
+        },
+        {
+          "dev_pearson": -0.25452247818984003,
+          "dev_spearman": -0.15407340247683007,
+          "feature": "momentum_300",
+          "holdout": {
+            "decile_response": -0.0036990455543011737,
+            "directional_response": -0.001257504133238798,
+            "pearson": -0.2651870957337237,
+            "spearman": -0.2755073393763101,
+            "standardized_effect": -0.12193051402599654,
+            "support": 8066332
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.12640710126947102
+        },
+        {
+          "dev_pearson": -0.2371210326452797,
+          "dev_spearman": -0.14438791186037428,
+          "feature": "trend_slope_60",
+          "holdout": {
+            "decile_response": -0.0038492682488118516,
+            "directional_response": -0.0008810842743536937,
+            "pearson": -0.25490754216023026,
+            "spearman": -0.18493018519592258,
+            "standardized_effect": -0.09595435465290036,
+            "support": 6821538
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.125497538940532
+        },
+        {
+          "dev_pearson": -0.18383665709194658,
+          "dev_spearman": -0.1579981120662322,
+          "feature": "logit_return_60",
+          "holdout": {
+            "decile_response": -0.004170541789907256,
+            "directional_response": -0.0013597025432223787,
+            "pearson": -0.1261638853397033,
+            "spearman": -0.3256142011347493,
+            "standardized_effect": -0.13183990862165723,
+            "support": 8066332
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.124268510253695
+        },
+        {
+          "dev_pearson": -0.2007918165306973,
+          "dev_spearman": -0.14743733093161696,
+          "feature": "momentum_900",
+          "holdout": {
+            "decile_response": -0.003648786498213451,
+            "directional_response": -0.001163162423777143,
+            "pearson": -0.2038730685832547,
+            "spearman": -0.22839721865698914,
+            "standardized_effect": -0.11278292331460571,
+            "support": 8066332
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.12354803888500551
+        },
+        {
+          "dev_pearson": -0.18564248348503906,
+          "dev_spearman": -0.1492207363679019,
+          "feature": "logit_return_30",
+          "holdout": {
+            "decile_response": -0.004083454422700242,
+            "directional_response": -0.0013820281193954204,
+            "pearson": -0.12980041866709777,
+            "spearman": -0.3296137517177046,
+            "standardized_effect": -0.13400464820918795,
+            "support": 8066332
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.11991092604306751
+        },
+        {
+          "dev_pearson": -0.3147536378326751,
+          "dev_spearman": -0.1432170608865864,
+          "feature": "momentum_15",
+          "holdout": {
+            "decile_response": -0.0026045681501020604,
+            "directional_response": -0.0013450964580501473,
+            "pearson": -0.3113946136671163,
+            "spearman": -0.32398485752298584,
+            "standardized_effect": -0.13042366876535494,
+            "support": 8066332
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.11940917791273957
+        },
+        {
+          "dev_pearson": -0.1634087855294547,
+          "dev_spearman": -0.11094497782339076,
+          "feature": "trend_slope_300",
+          "holdout": {
+            "decile_response": -0.0029861692330079817,
+            "directional_response": -0.0007143946337821804,
+            "pearson": -0.19169201174979153,
+            "spearman": -0.12007547373147734,
+            "standardized_effect": -0.07543119580848422,
+            "support": 7421714
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.11002091725440247
+        }
+      ],
+      "target": "target_event_price_change_5",
+      "train_dev_fit_rows": 500000
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 331,
+        "COL_2026": 159835,
+        "HUN_2026": 376543,
+        "PER_2026": 18915,
+        "US_2024": 7514141
+      },
+      "holdout_market_count": 522,
+      "holdout_rows": 8069765,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "accuracy": 0.5554601651968799
+          },
+          "own_recent_price": {
+            "accuracy": 0.5552711881944518
+          },
+          "persistence": {
+            "accuracy": 0.5552607789694
+          },
+          "recent_activity": {
+            "accuracy": 0.5552607789694
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": -0.00024514086183602055,
+          "mean": 0.0010738326669887958,
+          "upper_97_5": 0.0030101905651284764
+        },
+        "dev_selected": {
+          "accuracy": 0.5977061556329849,
+          "brier": 0.556964865154657,
+          "name": "logistic_l2",
+          "params": {
+            "C": 10.0
+          }
+        },
+        "features": [
+          "distance_recent_high_300",
+          "distance_recent_low_300",
+          "momentum_900",
+          "momentum_300",
+          "logit_return_60",
+          "momentum_120",
+          "loo_event_price_movement_15",
+          "loo_event_price_movement_5"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": -0.0029917690532157266,
+          "mean": 0.0012654713603742489,
+          "upper_97_5": 0.003997407510917349
+        },
+        "holdout_metrics": {
+          "accuracy": 0.5553108423851252,
+          "expected_calibration_error": 0.04953150081413613,
+          "multiclass_brier": 0.5924063926378742
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "accuracy": 0.30513595166163143
+          },
+          "COL_2026": {
+            "accuracy": 0.5828635780648794
+          },
+          "HUN_2026": {
+            "accuracy": 0.6058059770066101
+          },
+          "PER_2026": {
+            "accuracy": 0.5273063706053397
+          },
+          "US_2024": {
+            "accuracy": 0.552275902195607
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": -0.017955083218442844,
+        "dev_spearman": -0.12268989596798546,
+        "feature": "distance_recent_high_300",
+        "holdout": {
+          "decile_response": -0.41507028144931857,
+          "directional_response": -0.35275369383655064,
+          "pearson": -0.04908503733102479,
+          "spearman": -0.302061946074579,
+          "standardized_effect": -0.5289601813738963,
+          "support": 8069765
+        },
+        "selection_label": "CROSS_FAMILY_CANDIDATE",
+        "train_spearman": -0.07500098831963713
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": -0.017955083218442844,
+          "dev_spearman": -0.12268989596798546,
+          "feature": "distance_recent_high_300",
+          "holdout": {
+            "decile_response": -0.41507028144931857,
+            "directional_response": -0.35275369383655064,
+            "pearson": -0.04908503733102479,
+            "spearman": -0.302061946074579,
+            "standardized_effect": -0.5289601813738963,
+            "support": 8069765
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.07500098831963713
+        },
+        {
+          "dev_pearson": -0.0018943766503016133,
+          "dev_spearman": -0.11291093705662876,
+          "feature": "momentum_900",
+          "holdout": {
+            "decile_response": -0.25816198263824386,
+            "directional_response": -0.2804592931838046,
+            "pearson": -0.03432661059312063,
+            "spearman": -0.21938203665946068,
+            "standardized_effect": -0.4205534943575651,
+            "support": 8069765
+          },
+          "selection_label": "WITHIN_FAMILY_STABLE",
+          "train_spearman": -0.05334864119066616
+        },
+        {
+          "dev_pearson": -0.004318718762229288,
+          "dev_spearman": -0.11687825088773013,
+          "feature": "momentum_300",
+          "holdout": {
+            "decile_response": -0.3916919692717219,
+            "directional_response": -0.3361615710378304,
+            "pearson": -0.04678684506887147,
+            "spearman": -0.268075006873897,
+            "standardized_effect": -0.5040800101996842,
+            "support": 8069765
+          },
+          "selection_label": "WITHIN_FAMILY_STABLE",
+          "train_spearman": -0.048975600333457374
+        },
+        {
+          "dev_pearson": -0.058834118835615554,
+          "dev_spearman": -0.11739083419799176,
+          "feature": "logit_return_60",
+          "holdout": {
+            "decile_response": -0.6713522337934028,
+            "directional_response": -0.4009078779496328,
+            "pearson": -0.16804274452230217,
+            "spearman": -0.3290035004800179,
+            "standardized_effect": -0.6011682018919474,
+            "support": 8069765
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.04702877548163532
+        },
+        {
+          "dev_pearson": -0.003733389683198674,
+          "dev_spearman": -0.11173708208896795,
+          "feature": "momentum_120",
+          "holdout": {
+            "decile_response": -0.5249627245587714,
+            "directional_response": -0.3775739816529395,
+            "pearson": -0.05436433021572832,
+            "spearman": -0.3015388887200009,
+            "standardized_effect": -0.5661786263526545,
+            "support": 8069765
+          },
+          "selection_label": "WITHIN_FAMILY_STABLE",
+          "train_spearman": -0.045828207622395416
+        },
+        {
+          "dev_pearson": -0.013763651165523798,
+          "dev_spearman": -0.04092135221922978,
+          "feature": "loo_event_price_movement_15",
+          "holdout": {
+            "decile_response": -0.019763344752252703,
+            "directional_response": -0.010258631132285801,
+            "pearson": -0.003652310091056552,
+            "spearman": -0.007515286136606339,
+            "standardized_effect": -0.015666506035072133,
+            "support": 5869860
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.042413422715249054
+        },
+        {
+          "dev_pearson": -0.010593000850746517,
+          "dev_spearman": -0.04087036612004687,
+          "feature": "loo_event_price_movement_5",
+          "holdout": {
+            "decile_response": -0.021914584911143786,
+            "directional_response": -0.011205034488332738,
+            "pearson": -0.004791464454492419,
+            "spearman": -0.008195654159265696,
+            "standardized_effect": -0.017275065951666932,
+            "support": 4793322
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.0410478865334559
+        }
+      ],
+      "target": "target_event_sign_1",
+      "train_dev_fit_rows": 500000
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 307,
+        "COL_2026": 158440,
+        "HUN_2026": 375652,
+        "PER_2026": 18527,
+        "US_2024": 7509182
+      },
+      "holdout_market_count": 497,
+      "holdout_rows": 8062108,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "accuracy": 0.4672495084412166
+          },
+          "own_recent_price": {
+            "accuracy": 0.47122998104217906
+          },
+          "persistence": {
+            "accuracy": 0.4599525335061252
+          },
+          "recent_activity": {
+            "accuracy": 0.4599525335061252
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": 0.03290054062504788,
+          "mean": 0.0434435073952516,
+          "upper_97_5": 0.0550140673003289
+        },
+        "dev_selected": {
+          "accuracy": 0.35111979007750044,
+          "brier": 0.6613051632496645,
+          "name": "logistic_l2",
+          "params": {
+            "C": 10.0
+          }
+        },
+        "features": [
+          "trend_slope_60",
+          "momentum_120",
+          "logit_return_60",
+          "momentum_300",
+          "momentum_900",
+          "logit_return_30",
+          "momentum_15",
+          "trend_slope_300"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": 0.03961160410277915,
+          "mean": 0.06255186742841763,
+          "upper_97_5": 0.08953868420750098
+        },
+        "holdout_metrics": {
+          "accuracy": 0.4755678043509216,
+          "expected_calibration_error": 0.11474518001260114,
+          "multiclass_brier": 0.6519700003332559
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "accuracy": 0.2182410423452769
+          },
+          "COL_2026": {
+            "accuracy": 0.3861777328957334
+          },
+          "HUN_2026": {
+            "accuracy": 0.4391378190452866
+          },
+          "PER_2026": {
+            "accuracy": 0.3875964808117882
+          },
+          "US_2024": {
+            "accuracy": 0.4795038927009626
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": -0.042060120350579495,
+        "dev_spearman": -0.15576244046143992,
+        "feature": "trend_slope_60",
+        "holdout": {
+          "decile_response": -0.4644809464318183,
+          "directional_response": -0.20792699510694151,
+          "pearson": -0.024017065962741675,
+          "spearman": -0.18330458596142168,
+          "standardized_effect": -0.28381803912488146,
+          "support": 6819713
+        },
+        "selection_label": "CROSS_FAMILY_CANDIDATE",
+        "train_spearman": -0.1450123754479403
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": -0.042060120350579495,
+          "dev_spearman": -0.15576244046143992,
+          "feature": "trend_slope_60",
+          "holdout": {
+            "decile_response": -0.4644809464318183,
+            "directional_response": -0.20792699510694151,
+            "pearson": -0.024017065962741675,
+            "spearman": -0.18330458596142168,
+            "standardized_effect": -0.28381803912488146,
+            "support": 6819713
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.1450123754479403
+        },
+        {
+          "dev_pearson": -0.06957566195868402,
+          "dev_spearman": -0.159058940097534,
+          "feature": "momentum_120",
+          "holdout": {
+            "decile_response": -0.6302361770917402,
+            "directional_response": -0.41546374977294676,
+            "pearson": -0.0846709397261752,
+            "spearman": -0.3051926136858163,
+            "standardized_effect": -0.5653497896347159,
+            "support": 8062108
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.1417715535116654
+        },
+        {
+          "dev_pearson": -0.11815246058152855,
+          "dev_spearman": -0.16356865503093962,
+          "feature": "logit_return_60",
+          "holdout": {
+            "decile_response": -0.7393581373960317,
+            "directional_response": -0.44691041056572556,
+            "pearson": -0.16364359528028716,
+            "spearman": -0.3285775045522877,
+            "standardized_effect": -0.6081414003916779,
+            "support": 8062108
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.14116087937187874
+        },
+        {
+          "dev_pearson": -0.05815934950867627,
+          "dev_spearman": -0.15864390134428588,
+          "feature": "momentum_300",
+          "holdout": {
+            "decile_response": -0.48914292902188206,
+            "directional_response": -0.3678858320453778,
+            "pearson": -0.07258694453674838,
+            "spearman": -0.27105164793965464,
+            "standardized_effect": -0.5006072801059329,
+            "support": 8062108
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.13889483095767755
+        },
+        {
+          "dev_pearson": -0.044803564768295855,
+          "dev_spearman": -0.1530805327768,
+          "feature": "momentum_900",
+          "holdout": {
+            "decile_response": -0.3403641831063783,
+            "directional_response": -0.3051378376435676,
+            "pearson": -0.052479244760380565,
+            "spearman": -0.22220843316060782,
+            "standardized_effect": -0.41522181517800416,
+            "support": 8062108
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.1373484757822298
+        },
+        {
+          "dev_pearson": -0.10825324774029886,
+          "dev_spearman": -0.1562489320130877,
+          "feature": "logit_return_30",
+          "holdout": {
+            "decile_response": -0.783971840967556,
+            "directional_response": -0.47135756092420555,
+            "pearson": -0.14850292503996101,
+            "spearman": -0.33519412119722114,
+            "standardized_effect": -0.6414083011017598,
+            "support": 8062108
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.1353723769775386
+        },
+        {
+          "dev_pearson": -0.07918320865537633,
+          "dev_spearman": -0.1469232622290722,
+          "feature": "momentum_15",
+          "holdout": {
+            "decile_response": -0.7902046907326165,
+            "directional_response": -0.4804887939911297,
+            "pearson": -0.08566132638783813,
+            "spearman": -0.3285442069725745,
+            "standardized_effect": -0.6538337911627154,
+            "support": 8062108
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.1334280729663689
+        },
+        {
+          "dev_pearson": -0.03899037062595375,
+          "dev_spearman": -0.11843707805016541,
+          "feature": "trend_slope_300",
+          "holdout": {
+            "decile_response": -0.2639881393624907,
+            "directional_response": -0.1379362442440126,
+            "pearson": -0.017547195493714085,
+            "spearman": -0.11331667046864403,
+            "standardized_effect": -0.18820159073554948,
+            "support": 7419498
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.12456186864965217
+        }
+      ],
+      "target": "target_event_sign_10",
+      "train_dev_fit_rows": 500000
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 328,
+        "COL_2026": 159676,
+        "HUN_2026": 376444,
+        "PER_2026": 18863,
+        "US_2024": 7513590
+      },
+      "holdout_market_count": 519,
+      "holdout_rows": 8068901,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "accuracy": 0.5436801120747423
+          },
+          "own_recent_price": {
+            "accuracy": 0.5427766433123916
+          },
+          "persistence": {
+            "accuracy": 0.5427098436329805
+          },
+          "recent_activity": {
+            "accuracy": 0.5427098436329805
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": 0.0011872220092172304,
+          "mean": 0.004143990008387679,
+          "upper_97_5": 0.008498154156238946
+        },
+        "dev_selected": {
+          "accuracy": 0.5319373122759422,
+          "brier": 0.6015324929363548,
+          "name": "logistic_l2",
+          "params": {
+            "C": 10.0
+          }
+        },
+        "features": [
+          "distance_recent_high_300",
+          "momentum_900",
+          "momentum_120",
+          "momentum_300",
+          "distance_recent_low_300",
+          "logit_return_60",
+          "momentum_15",
+          "logit_return_30"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": 0.005294289972437093,
+          "mean": 0.010893254977178636,
+          "upper_97_5": 0.017404011555839215
+        },
+        "holdout_metrics": {
+          "accuracy": 0.544072730598628,
+          "expected_calibration_error": 0.015023090534663714,
+          "multiclass_brier": 0.5956944552065796
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "accuracy": 0.2347560975609756
+          },
+          "COL_2026": {
+            "accuracy": 0.4981024073749342
+          },
+          "HUN_2026": {
+            "accuracy": 0.5330088937531213
+          },
+          "PER_2026": {
+            "accuracy": 0.496050469172454
+          },
+          "US_2024": {
+            "accuracy": 0.545738055975905
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": -0.02245102447766251,
+        "dev_spearman": -0.11001931122829915,
+        "feature": "distance_recent_high_300",
+        "holdout": {
+          "decile_response": -0.4217580346732831,
+          "directional_response": -0.36326316835531725,
+          "pearson": -0.05356087319741032,
+          "spearman": -0.2986762107228577,
+          "standardized_effect": -0.5371916307132545,
+          "support": 8068901
+        },
+        "selection_label": "CROSS_FAMILY_CANDIDATE",
+        "train_spearman": -0.08065604634307891
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": -0.02245102447766251,
+          "dev_spearman": -0.11001931122829915,
+          "feature": "distance_recent_high_300",
+          "holdout": {
+            "decile_response": -0.4217580346732831,
+            "directional_response": -0.36326316835531725,
+            "pearson": -0.05356087319741032,
+            "spearman": -0.2986762107228577,
+            "standardized_effect": -0.5371916307132545,
+            "support": 8068901
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.08065604634307891
+        },
+        {
+          "dev_pearson": -0.007890317617173322,
+          "dev_spearman": -0.10910327647934721,
+          "feature": "momentum_900",
+          "holdout": {
+            "decile_response": -0.27791068253568807,
+            "directional_response": -0.27877670504952934,
+            "pearson": -0.03845605922291586,
+            "spearman": -0.2125595168570903,
+            "standardized_effect": -0.4122535005914606,
+            "support": 8068901
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.06193500888142487
+        },
+        {
+          "dev_pearson": -0.015025402838739696,
+          "dev_spearman": -0.10491395368021046,
+          "feature": "momentum_120",
+          "holdout": {
+            "decile_response": -0.5416236597903172,
+            "directional_response": -0.38445484696154797,
+            "pearson": -0.06168803975143776,
+            "spearman": -0.2976343947317856,
+            "standardized_effect": -0.568529771707767,
+            "support": 8068901
+          },
+          "selection_label": "WITHIN_FAMILY_STABLE",
+          "train_spearman": -0.0600170852924878
+        },
+        {
+          "dev_pearson": -0.012467205140465188,
+          "dev_spearman": -0.1108234459817665,
+          "feature": "momentum_300",
+          "holdout": {
+            "decile_response": -0.41233106621668975,
+            "directional_response": -0.3381121164791286,
+            "pearson": -0.05255839057313148,
+            "spearman": -0.2618892837816431,
+            "standardized_effect": -0.4999983897009753,
+            "support": 8068901
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.05828391374498142
+        },
+        {
+          "dev_pearson": -0.05707884834470186,
+          "dev_spearman": -0.10821381096012594,
+          "feature": "logit_return_60",
+          "holdout": {
+            "decile_response": -0.6286531187470116,
+            "directional_response": -0.41196448259121393,
+            "pearson": -0.1425850043745391,
+            "spearman": -0.3206406975012801,
+            "standardized_effect": -0.6092108737615073,
+            "support": 8068901
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.0576393211609734
+        },
+        {
+          "dev_pearson": -0.01353247314116842,
+          "dev_spearman": -0.08335676145237435,
+          "feature": "momentum_15",
+          "holdout": {
+            "decile_response": -0.7133997900218583,
+            "directional_response": -0.4456505370870598,
+            "pearson": -0.060104350928135694,
+            "spearman": -0.32287223583517155,
+            "standardized_effect": -0.6590256310044408,
+            "support": 8068901
+          },
+          "selection_label": "WITHIN_FAMILY_STABLE",
+          "train_spearman": -0.049599659443834244
+        },
+        {
+          "dev_pearson": -0.04421459635039714,
+          "dev_spearman": -0.09471124103769013,
+          "feature": "logit_return_30",
+          "holdout": {
+            "decile_response": -0.6698198138699927,
+            "directional_response": -0.43302783380164583,
+            "pearson": -0.12742437487855904,
+            "spearman": -0.3263782112392296,
+            "standardized_effect": -0.6403592448893789,
+            "support": 8068901
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.04914320478141989
+        }
+      ],
+      "target": "target_event_sign_2",
+      "train_dev_fit_rows": 500000
+    },
+    {
+      "holdout_family_counts": {
+        "CAN_2025": 319,
+        "COL_2026": 159202,
+        "HUN_2026": 376147,
+        "PER_2026": 18727,
+        "US_2024": 7511937
+      },
+      "holdout_market_count": 509,
+      "holdout_rows": 8066332,
+      "model": {
+        "baseline_metrics": {
+          "current_absolute_movement": {
+            "accuracy": 0.487595477101612
+          },
+          "own_recent_price": {
+            "accuracy": 0.48875015310552555
+          },
+          "persistence": {
+            "accuracy": 0.48739154302104104
+          },
+          "recent_activity": {
+            "accuracy": 0.48739154302104104
+          }
+        },
+        "calendar_3day_block_bootstrap": {
+          "lower_2_5": 0.012132580348512933,
+          "mean": 0.017909649151616556,
+          "upper_97_5": 0.024413275601389714
+        },
+        "dev_selected": {
+          "accuracy": 0.4423670335544379,
+          "brier": 0.6452247831277491,
+          "name": "logistic_l2",
+          "params": {
+            "C": 10.0
+          }
+        },
+        "features": [
+          "momentum_120",
+          "logit_return_60",
+          "momentum_300",
+          "momentum_900",
+          "logit_return_30",
+          "momentum_15",
+          "trend_slope_60",
+          "distance_recent_low_300"
+        ],
+        "hierarchical_market_bootstrap": {
+          "lower_2_5": 0.026450994512100437,
+          "mean": 0.04407239320256315,
+          "upper_97_5": 0.06480821850515953
+        },
+        "holdout_metrics": {
+          "accuracy": 0.4971638906010811,
+          "expected_calibration_error": 0.07231309851206151,
+          "multiclass_brier": 0.6284113188329147
+        },
+        "per_family_metrics": {
+          "CAN_2025": {
+            "accuracy": 0.15987460815047022
+          },
+          "COL_2026": {
+            "accuracy": 0.4175135990753885
+          },
+          "HUN_2026": {
+            "accuracy": 0.4594400593385033
+          },
+          "PER_2026": {
+            "accuracy": 0.3931222299353874
+          },
+          "US_2024": {
+            "accuracy": 0.5010145851862177
+          }
+        }
+      },
+      "scalar_candidate": {
+        "dev_pearson": -0.04692518298295974,
+        "dev_spearman": -0.14330674440322852,
+        "feature": "momentum_120",
+        "holdout": {
+          "decile_response": -0.6067479328074608,
+          "directional_response": -0.4093657540712355,
+          "pearson": -0.07773783980835253,
+          "spearman": -0.3076946194489174,
+          "standardized_effect": -0.5717673987233286,
+          "support": 8066332
+        },
+        "selection_label": "CROSS_FAMILY_CANDIDATE",
+        "train_spearman": -0.11405424355251931
+      },
+      "scalar_candidates": [
+        {
+          "dev_pearson": -0.04692518298295974,
+          "dev_spearman": -0.14330674440322852,
+          "feature": "momentum_120",
+          "holdout": {
+            "decile_response": -0.6067479328074608,
+            "directional_response": -0.4093657540712355,
+            "pearson": -0.07773783980835253,
+            "spearman": -0.3076946194489174,
+            "standardized_effect": -0.5717673987233286,
+            "support": 8066332
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.11405424355251931
+        },
+        {
+          "dev_pearson": -0.10403745609032279,
+          "dev_spearman": -0.1516891473673271,
+          "feature": "logit_return_60",
+          "holdout": {
+            "decile_response": -0.7317379854449051,
+            "directional_response": -0.438840531645005,
+            "pearson": -0.16713859157685784,
+            "spearman": -0.33261636429689534,
+            "standardized_effect": -0.6129352705682468,
+            "support": 8066332
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.11360053268937977
+        },
+        {
+          "dev_pearson": -0.040621855315264355,
+          "dev_spearman": -0.14572307591806355,
+          "feature": "momentum_300",
+          "holdout": {
+            "decile_response": -0.4675232947300003,
+            "directional_response": -0.36206106255910114,
+            "pearson": -0.06655364582262713,
+            "spearman": -0.2728074795388298,
+            "standardized_effect": -0.5056962138615975,
+            "support": 8066332
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.11348284943525712
+        },
+        {
+          "dev_pearson": -0.030131166413691308,
+          "dev_spearman": -0.1393450726544653,
+          "feature": "momentum_900",
+          "holdout": {
+            "decile_response": -0.32271403860713377,
+            "directional_response": -0.3006602649776269,
+            "pearson": -0.04877494015282772,
+            "spearman": -0.22349981358513432,
+            "standardized_effect": -0.4199367824398179,
+            "support": 8066332
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.11150823016937703
+        },
+        {
+          "dev_pearson": -0.0900659427780814,
+          "dev_spearman": -0.1413653588283649,
+          "feature": "logit_return_30",
+          "holdout": {
+            "decile_response": -0.7598870509352256,
+            "directional_response": -0.4599471215646414,
+            "pearson": -0.14752174703745935,
+            "spearman": -0.33519937368308833,
+            "standardized_effect": -0.6424151669549155,
+            "support": 8066332
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.10826577574017171
+        },
+        {
+          "dev_pearson": -0.05275467616696726,
+          "dev_spearman": -0.1328587049929917,
+          "feature": "momentum_15",
+          "holdout": {
+            "decile_response": -0.7615468289379497,
+            "directional_response": -0.4695625611405566,
+            "pearson": -0.07599421888378038,
+            "spearman": -0.3256903798326287,
+            "standardized_effect": -0.6558451982147987,
+            "support": 8066332
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.10729702516872837
+        },
+        {
+          "dev_pearson": -0.03289682726959496,
+          "dev_spearman": -0.13438599838596285,
+          "feature": "trend_slope_60",
+          "holdout": {
+            "decile_response": -0.4600999187866669,
+            "directional_response": -0.20588752008258382,
+            "pearson": -0.02179975621417047,
+            "spearman": -0.184655759475608,
+            "standardized_effect": -0.28904072833585004,
+            "support": 6821538
+          },
+          "selection_label": "CROSS_FAMILY_CANDIDATE",
+          "train_spearman": -0.10714601668385257
+        }
+      ],
+      "target": "target_event_sign_5",
+      "train_dev_fit_rows": 500000
+    }
+  ],
+  "schema_version": 1,
+  "stage": "SEALED_HOLDOUT",
+  "targets_evaluated": 20,
+  "train_dev_shortlist_sha256": "44025aa2c5e5bddd97d88c81e649d86d6bf55d6cccec1d57c2aa7af12a9a7ec6"
+}

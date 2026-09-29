@@ -8,10 +8,83 @@
 - The accepted repository includes a separate, explicitly invoked public read-only Polymarket research recorder.
 - BUILD-006 SIG live REST governance/tracked-depth correction is accepted on `main`; its accepted 60-second credentialed smoke passed at the merged head.
 - BUILD-007 / PR #20 is merged/accepted. Its ARM64 EC2 PyArrow/Parquet runtime/storage gate passed on 26 September 2026.
-- The live 2026 SIG ↔ Polymarket crosswalk is accepted on `main`; the remaining production-runtime gate is the mapping-bounded paired soak plus SSH independence/reboot recovery using accepted IDs.
+- The live 2026 SIG ↔ Polymarket crosswalk is accepted on `main`. CAPTURE-001's production-shaped paired soak, explicit collector restart, SSH-independence test and operator-controlled reboot recovery all passed on 29 September 2026 at reviewed head `0d9ef9eb7cadc123d7719d3b35db49d631d04d81`.
 - PR #47 is merged; routine Kaggle work uses the GitHub Actions manifest runner rather than EC2.
 
 The accepted EXPERIMENT-001A baseline used local SQLite/WAL research persistence. BUILD-007, now accepted on `main`, changes the live/supervised storage shape after the EC2 soak: market/token metadata and health remain in a small operational SQLite, while high-frequency panel/book-change/trade/depth history is written as immutable ZSTD Parquet shards.
+
+
+## CAPTURE-001 launch runbook — PR #57 branch only until accepted
+
+CAPTURE-001 reuses the BUILD-007 supervised collectors. Before deploying this branch, put the
+launch-specific research roots in `runtime.env` while keeping trading disabled:
+
+```text
+PREDICTIONS_CUP_SIG_RESEARCH_PATH=data/launch_20261001/sig
+PREDICTIONS_CUP_POLYMARKET_RESEARCH_PATH=data/launch_20261001/polymarket
+PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true
+PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS=<accepted mapping IDs>
+PREDICTIONS_CUP_TRADING_ENABLED=false
+```
+
+The SIG service still uses the accepted full-universe Realtime + broad scalar/BBO model. Full depth
+remains explicitly bounded by `PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS`; do not turn
+all Cup markets into tracked depth merely for research. Dirty tracked books use HIGH-priority
+governed REST, expiry-safety refresh uses NORMAL, and broad scalar/BBO sweeps use BACKGROUND.
+
+After install/restart, verify both process liveness and evidence:
+
+```bash
+sudo systemctl is-active predictions-cup-sig-capture predictions-cup-polymarket-capture
+sudo journalctl -u predictions-cup-sig-capture -n 100 --no-pager
+find data/launch_20261001/sig -type f -name '*.parquet' | tail
+find data/launch_20261001/polymarket -type f -name '*.parquet' | tail
+sqlite3 data/sig_realtime.sqlite3 \
+  "select observed_at,payload_json from capture_health order by id desc limit 3;"
+```
+
+The SIG health JSON must show a bounded research queue with `dropped_rows=0`,
+`storage_failures=0`, a sane queue high-water mark and acceptable
+`operational_sqlite_bytes`/`operational_wal_bytes` growth. Published shards must remain readable
+across service restart. A hard crash may lose only the not-yet-published in-memory shard; it must
+never mutate an already-published shard.
+
+Generate the first-hours package directly from capture artifacts:
+
+```bash
+python -m predictions_cup.analysis.first_hours \
+  --input data/launch_20261001/sig \
+  --polymarket-root data/launch_20261001/polymarket \
+  --execution-journal data/execution_journal.sqlite3 \
+  --mapping data/mappings/sig_polymarket_2026.json \
+  --output data/launch_20261001/first_hours
+```
+
+The output includes `summary.json`, `report.md`, market activity, economic BBO/update metrics,
+trade/markout diagnostics, tracked-depth summaries, 15-minute activity tables, direct mapped
+cross-venue response/latest-discrepancy tables and per-operation execution-lifecycle latency.
+Direct PM values are aligned through the accepted
+`SAME`/`COMPLEMENT` mapping direction before comparison. Treat response lags as nearest-subsequent
+economic changes rather than causal evidence. Treat aggressor classification as
+price-vs-prior-BBO inference with a freshness rule, not participant identity. No passive queue
+position is inferred.
+
+The final production gate for PR #57 is a mapping-bounded paired soak on the intended launch host,
+followed by collector restart, SSH disconnect/reconnect, operator-controlled reboot, readable-shard
+checks and a successful `first_hours` run. Existing BUILD-006/007 evidence validates the underlying
+governor/systemd/Parquet mechanisms but does not by itself validate the new SIG immutable layer.
+
+### Replacement VM / migration handoff
+
+A cold-start agent moving these collectors to another VM should begin with
+`docs/operations/VM_MIGRATION_QUICKSTART.md`, then run
+`scripts/install_runtime_services.sh` on the destination host. Do not copy rendered systemd units
+from the old VM because they contain absolute repo/home/Python paths.
+
+The migration runbook also documents the separate Remote Desktop Commander boot-service setup.
+RDC is out-of-band from the collectors: the accepted reboot test proved the SIG/Polymarket
+services can recover normally even when the ChatGPT-visible RDC control channel itself needs
+separate restoration.
 
 ## Kaggle execution — canonical GitHub Actions route
 
@@ -295,7 +368,7 @@ Observed acceptance evidence:
 The temporary test universe must not be treated as a production default. The accepted crosswalk is
 now the only production identity source.
 
-### Mapping-bounded production soak — still required
+### Accepted mapping-bounded production soak — 29 September 2026
 
 Populate `runtime.env` from the accepted crosswalk:
 
@@ -344,10 +417,11 @@ may source `trade.env`.
 ## Eventual operating expectations
 
 BUILD-007 / PR #20 is accepted on `main` as the supervised-process and automatic-restart collector
-layer. The ARM64 runtime/storage gate is live-validated. The remaining production claim is narrower: the mapping-bounded deployment still needs the final
-paired soak plus SSH independence/reboot recovery run with accepted production IDs. Collector-native reconciliation and
-journald visibility remain authoritative; BUILD-007 does not introduce a separate logging daemon or
-trading service.
+layer. The ARM64 runtime/storage gate is live-validated. CAPTURE-001's mapping-bounded production
+acceptance also passed the final paired soak, service restart, SSH independence and full-host reboot
+recovery checks with accepted production IDs on 29 September 2026. Collector-native reconciliation
+and journald visibility remain authoritative; BUILD-007 does not introduce a separate logging daemon
+or trading service.
 
 ## Repository state discipline
 

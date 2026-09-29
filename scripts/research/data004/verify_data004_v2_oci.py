@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Read-only verification of the published DATA-004 v2 manifest and payload."""
+
 from __future__ import annotations
 
 import hashlib
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -43,12 +44,24 @@ def main() -> None:
     import oci  # type: ignore[import-not-found]
 
     signer, config_obj = config.get_oci_signer_and_config()
-    client = oci.object_storage.ObjectStorageClient(config_obj, signer=signer) if signer else oci.object_storage.ObjectStorageClient(config_obj)
+    client = (
+        oci.object_storage.ObjectStorageClient(config_obj, signer=signer)
+        if signer
+        else oci.object_storage.ObjectStorageClient(config_obj)
+    )
     namespace = str(client.get_namespace().data)
     v2_local = json.loads(V2_MANIFEST_PATH.read_text(encoding="utf-8"))
     v1_local = json.loads(V1_MANIFEST_PATH.read_text(encoding="utf-8"))
-    v2_bytes = object_body_bytes(client.get_object(namespace_name=namespace, bucket_name=BUCKET, object_name=V2_MANIFEST_OBJECT))
-    v1_bytes = object_body_bytes(client.get_object(namespace_name=namespace, bucket_name=BUCKET, object_name=V1_PREFIX + "MANIFEST.json"))
+    v2_bytes = object_body_bytes(
+        client.get_object(
+            namespace_name=namespace, bucket_name=BUCKET, object_name=V2_MANIFEST_OBJECT
+        )
+    )
+    v1_bytes = object_body_bytes(
+        client.get_object(
+            namespace_name=namespace, bucket_name=BUCKET, object_name=V1_PREFIX + "MANIFEST.json"
+        )
+    )
     v2_remote_sha = sha256(v2_bytes)
     v1_remote_sha = sha256(v1_bytes)
     if v2_remote_sha != sha256(V2_MANIFEST_PATH.read_bytes()):
@@ -61,18 +74,25 @@ def main() -> None:
     previous_manifest_sha = previous_manifest.get("previous_manifest_sha256")
     previous_remote_sha = None
     if previous_manifest_object:
-        previous_bytes = object_body_bytes(client.get_object(namespace_name=namespace, bucket_name=BUCKET,
-                                                              object_name=previous_manifest_object))
+        previous_bytes = object_body_bytes(
+            client.get_object(
+                namespace_name=namespace, bucket_name=BUCKET, object_name=previous_manifest_object
+            )
+        )
         previous_remote_sha = sha256(previous_bytes)
         if previous_remote_sha != previous_manifest_sha:
             raise RuntimeError("archived pre-Addendum 4 v2 manifest differs from its recorded hash")
         if json.loads(previous_bytes).get("status") != "BLOCKED_QUALITY_GATE":
-            raise RuntimeError("archived pre-Addendum 4 v2 manifest does not retain the blocked status")
+            raise RuntimeError(
+                "archived pre-Addendum 4 v2 manifest does not retain the blocked status"
+            )
 
     object_sizes_checked = 0
     object_bytes_checked = 0
     for row in v2_local["files"]:
-        head = client.head_object(namespace_name=namespace, bucket_name=BUCKET, object_name=row["path"])
+        head = client.head_object(
+            namespace_name=namespace, bucket_name=BUCKET, object_name=row["path"]
+        )
         size = int(head.headers.get("content-length", -1))
         if size != int(row["bytes"]):
             raise RuntimeError(f"remote size mismatch for {row['path']}: {size} != {row['bytes']}")
@@ -85,15 +105,29 @@ def main() -> None:
     for day in ("2026-09-20", "2026-09-21"):
         v2_row, v1_row = v2_by_day[day], v1_by_day[day]
         for version, row in (("v2", v2_row), ("v1", v1_row)):
-            payload = object_body_bytes(client.get_object(namespace_name=namespace, bucket_name=BUCKET, object_name=row["path"]))
+            payload = object_body_bytes(
+                client.get_object(
+                    namespace_name=namespace, bucket_name=BUCKET, object_name=row["path"]
+                )
+            )
             actual = sha256(payload)
             expected = row["sha256"]
             if actual != expected:
-                raise RuntimeError(f"remote sample hash mismatch for {version} {day}: {actual} != {expected}")
-            sampled.append({"version": version, "date": day, "path": row["path"], "bytes": len(payload), "sha256": actual})
+                raise RuntimeError(
+                    f"remote sample hash mismatch for {version} {day}: {actual} != {expected}"
+                )
+            sampled.append(
+                {
+                    "version": version,
+                    "date": day,
+                    "path": row["path"],
+                    "bytes": len(payload),
+                    "sha256": actual,
+                }
+            )
 
     result = {
-        "verified_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "verified_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "bucket": BUCKET,
         "v2_manifest_object": V2_MANIFEST_OBJECT,
         "v2_manifest_sha256": v2_remote_sha,
@@ -108,7 +142,9 @@ def main() -> None:
         "sampled_parquet_hashes": sampled,
         "v1_payload_objects_modified": 0,
     }
-    path = LANE / ("data004_a4_oci_verify.json" if previous_manifest_object else "data004_a3_oci_verify.json")
+    path = LANE / (
+        "data004_a4_oci_verify.json" if previous_manifest_object else "data004_a3_oci_verify.json"
+    )
     path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(result, sort_keys=True), flush=True)
 

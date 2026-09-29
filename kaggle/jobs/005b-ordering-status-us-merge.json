@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "status",
+  "kernel": "polyleviathan/005b-ordering-falsification-us-merge",
+  "note": "Check whether a pre-existing corrected US merge version exists before arming downstream jobs."
+}
