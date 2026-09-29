@@ -51,7 +51,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     if data.get("schema_version") != 1:
         raise ValueError("schema_version must be 1")
     action = data.get("action")
-    if action not in {"auth_check", "run", "status", "output", "dataset_upload"}:
+    if action not in {"auth_check", "run", "status", "output", "logs", "dataset_upload"}:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
 
@@ -78,7 +78,7 @@ def canonical_kernel_from_push(
 ) -> str:
     text = (result.stdout or "") + "\n" + (result.stderr or "")
     match = re.search(
-        r"https://www\\.kaggle\\.com/code/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)",
+        r"https://(?:www\\.)?kaggle\\.com/code/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)",
         text,
     )
     if not match:
@@ -258,6 +258,10 @@ def main() -> int:
         kernel = kernel_from_manifest(data)
         download_outputs(data, kernel, output_dir)
         write_summary(["## Kaggle output download", "", f"Kernel: {kernel}"])
+    elif action == "logs":
+        kernel = kernel_from_manifest(data)
+        capture_logs(kernel, output_dir)
+        write_summary(["## Kaggle logs", "", f"Kernel: {kernel}"])
     elif action == "dataset_upload":
         upload_dataset(data, output_dir, manifest_path)
 
