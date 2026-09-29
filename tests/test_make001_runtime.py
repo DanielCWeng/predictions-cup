@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
+import pytest
+
 from predictions_cup.config import AppSettings
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
@@ -447,4 +449,102 @@ def test_service_kill_drain_continues_after_one_failed_cancel_cycle() -> None:
     )
 
     assert runtime.calls == 3
+
+class _PmNotifyRuntime:
+    def __init__(self) -> None:
+        self.tokens: list[frozenset[str]] = []
+
+    def notify_polymarket(
+        self,
+        token_ids: set[str] | frozenset[str],
+        *,
+        observed_monotonic_ns: int | None = None,
+    ) -> None:
+        del observed_monotonic_ns
+        self.tokens.append(frozenset(token_ids))
+
+
+def test_maker_pm_handler_tolerates_unmapped_sibling_delta() -> None:
+    service = MakerService(
+        AppSettings(maker_enabled=True),
+        explicit_live_invocation=False,
+    )
+    service._pm_token_ids = ("required-token",)
+    observed = datetime(2026, 9, 29, 17, 0, tzinfo=UTC)
+    service.pm_books.apply_full_snapshot(
+        {
+            "event_type": "book",
+            "market": "0xmarket",
+            "asset_id": "required-token",
+            "timestamp": "1782753357257",
+            "bids": [{"price": "0.49", "size": "10"}],
+            "asks": [{"price": "0.51", "size": "10"}],
+        },
+        observed,
+    )
+    runtime = _PmNotifyRuntime()
+    payload = {
+        "event_type": "price_change",
+        "market": "0xmarket",
+        "timestamp": "1782753358257",
+        "price_changes": [
+            {
+                "asset_id": "required-token",
+                "price": "0.495",
+                "size": "9",
+                "side": "BUY",
+            },
+            {
+                "asset_id": "unmapped-sibling",
+                "price": "0.505",
+                "size": "11",
+                "side": "SELL",
+            },
+        ],
+    }
+
+    asyncio.run(
+        service._handle_pm_message(
+            payload,
+            observed,
+            cast(MakerRuntimeLoop, runtime),
+        )
+    )
+
+    assert runtime.tokens == [frozenset({"required-token"})]
+    assert service.pm_health.book_uninitialized_delta_count == 1
+    snapshot = service.pm_books.snapshot("required-token", 1)
+    assert snapshot is not None
+    assert str(snapshot.best_bid) == "0.495"
+
+
+def test_maker_pm_handler_reconnects_when_required_token_is_unseeded() -> None:
+    service = MakerService(
+        AppSettings(maker_enabled=True),
+        explicit_live_invocation=False,
+    )
+    service._pm_token_ids = ("required-token",)
+    observed = datetime(2026, 9, 29, 17, 0, tzinfo=UTC)
+    payload = {
+        "event_type": "price_change",
+        "market": "0xmarket",
+        "timestamp": "1782753358257",
+        "price_changes": [
+            {
+                "asset_id": "required-token",
+                "price": "0.495",
+                "size": "9",
+                "side": "BUY",
+            },
+        ],
+    }
+
+    with pytest.raises(RuntimeError, match="required mapped token"):
+        asyncio.run(
+            service._handle_pm_message(
+                payload,
+                observed,
+                cast(MakerRuntimeLoop, _PmNotifyRuntime()),
+            )
+        )
 
