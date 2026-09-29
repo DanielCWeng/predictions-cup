@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import math
 from dataclasses import replace
+from datetime import UTC, datetime
 from decimal import Decimal
+from typing import cast
 
 import pytest
 
@@ -34,6 +36,8 @@ from predictions_cup.maker import (
     ShadowMakerExecutionAdapter,
 )
 from predictions_cup.maker.contracts import FairValueResult
+from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
+from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.mapping.models import (
     MappingClass,
     MappingDirection,
@@ -680,6 +684,102 @@ def test_shadow_coordinator_uses_central_risk_and_does_not_duplicate_quote() -> 
         action.kind is QuoteLifecycleActionKind.KEEP
         for action in second.lifecycle_actions
     )
+
+
+class _DeadlineBridge:
+    tradeable_exchange_ids = frozenset({"36"})
+
+    def __init__(self, base: MakerMarketSnapshot) -> None:
+        self._base = base
+
+    def sig_exchanges_for_polymarket_token(self, token_id: str) -> frozenset[str]:
+        del token_id
+        return frozenset({"36"})
+
+    def build_many(
+        self,
+        exchange_ids: frozenset[str] | set[str] | tuple[str, ...],
+        *,
+        monotonic_now_ns: int,
+        **kwargs: object,
+    ) -> dict[str, MakerMarketSnapshot]:
+        del kwargs
+        if "36" not in exchange_ids:
+            return {}
+        return {
+            "36": replace(
+                self._base,
+                now_monotonic_ns=monotonic_now_ns,
+                runtime=replace(
+                    self._base.runtime,
+                    observation_monotonic_ns=monotonic_now_ns,
+                ),
+            )
+        }
+
+
+class _DeadlineClock:
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+    def __call__(self) -> int:
+        return self.value
+
+
+def test_freshness_deadline_cancels_resting_quote_without_feed_event() -> None:
+    max_age_ns = 100_000_000
+    snapshot = _maker_snapshot()
+    registry = QuoteRegistry()
+    adapter = ShadowMakerExecutionAdapter()
+    coordinator = MakerCoordinator(
+        engine=_engine(max_age_ns=max_age_ns),
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=max_age_ns,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+    clock = _DeadlineClock(NOW)
+    runtime = MakerRuntimeLoop(
+        bridge=cast(MakerSourceBridge, _DeadlineBridge(snapshot)),
+        coordinator=coordinator,
+        polymarket_feed_trusted=lambda: True,
+        wall_clock=lambda: datetime(2026, 9, 29, 14, 0, tzinfo=UTC),
+        mono_clock=clock,
+        runtime_session_id="freshness-expiry",
+    )
+
+    runtime.notify_sig({"36"}, observed_monotonic_ns=NOW)
+    first = asyncio.run(runtime.drain_once())
+    assert first is not None
+    assert registry.state("36").bid is not None
+    assert registry.state("36").ask is not None
+
+    # No source notification occurs here. The deadline itself must wake MAKE.
+    clock.value = NOW + max_age_ns - 1
+    assert asyncio.run(runtime.drain_once()) is None
+    assert registry.state("36").bid is not None
+    assert registry.state("36").ask is not None
+
+    clock.value = NOW + max_age_ns
+    expired = asyncio.run(runtime.drain_once())
+    assert expired is not None
+    assert any(
+        decision.gate.reason in {
+            "sig_bbo_stale",
+            "account_stale",
+            "inventory_stale",
+            "fv_stale",
+        }
+        for decision in expired.decisions
+    )
+    assert registry.state("36").bid is None
+    assert registry.state("36").ask is None
 
 
 def test_global_kill_cancels_resting_quotes_even_in_shadow() -> None:
