@@ -132,7 +132,11 @@ def evaluate_risk(
             if state_age_ns > context.max_state_age_ns:
                 return _deny("depth_state_stale")
 
-        intent_id = f"{opportunity.strategy_id}:{opportunity.decision_observation_ns}:{index}"
+        intent_id = (
+            f"{opportunity.strategy_id}:"
+            f"{opportunity.decision_observation_ns}:"
+            f"{leg.exchange_id}:{index}"
+        )
         known_intent_ids = context.existing_logical_intent_ids.union(
             order.logical_intent_id for order in snapshot.portfolio.orders
         )
