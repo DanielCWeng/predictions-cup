@@ -36,10 +36,7 @@ from predictions_cup.maker.adapters import (
 from predictions_cup.maker.coordinator import MakerCoordinator
 from predictions_cup.maker.factory import MakerRuntimeComponents, build_maker_components
 from predictions_cup.maker.noop_recorder import NoopSigRealtimeRecorder
-from predictions_cup.maker.recovery import (
-    maker_unresolved_envelopes,
-    reconcile_maker_quote_registry,
-)
+from predictions_cup.maker.recovery import reconcile_maker_quote_registry
 from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.mapping.models import MappingDocument
@@ -176,7 +173,6 @@ class MakerService:
                     permit=permit,
                     reservations=self.core.reservations,
                 )
-                captured_maker_envelopes = maker_unresolved_envelopes(journal)
                 recovery = await recover_startup(
                     journal=journal,
                     rest=rest,
@@ -200,7 +196,6 @@ class MakerService:
                     authoritative=authoritative,
                     quotes=self.core.quotes,
                     observed_monotonic_ns=monotonic_ns(),
-                    envelopes=captured_maker_envelopes,
                 )
                 adapter = LiveMakerExecutionAdapter(
                     live_sink,
