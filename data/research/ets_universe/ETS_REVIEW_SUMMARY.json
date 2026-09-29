@@ -1,0 +1,112 @@
+{
+  "accepted_edge_count": 42306,
+  "accepted_ets_market_count": 18265,
+  "candidate_row_count_including_direct": 37410,
+  "canonical_mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
+  "direct_duplicate_row_count": 601,
+  "gamma_candidates_sha256": "eac7b93154d029c4c4639196d6a8496bc12421ddcf60d2f539bc9ac1ba81a1c3",
+  "non_direct_candidate_row_count": 36809,
+  "rejected_candidate_count": 18544,
+  "relationship_class_edge_counts": {
+    "CHAMBER_CONTROL": 207,
+    "CONDITIONAL_OUTCOME": 19199,
+    "JOINT_OUTCOME": 624,
+    "MULTI_RACE_COMBO": 87,
+    "OTHER_ECONOMICALLY_LINKED": 237,
+    "PIVOTAL_RACE": 275,
+    "SAME_STATE_RELATED": 2911,
+    "SEAT_EXACT": 10,
+    "SEAT_RANGE": 8,
+    "SEAT_THRESHOLD": 352,
+    "TARGET_CONSTITUENT_OF_AGGREGATE": 18396
+  },
+  "review_decision_counts": {
+    "ACCEPTED": 18265,
+    "DIRECT_DUPLICATE": 601,
+    "REJECTED_GAMMA_SEMANTIC_CONFLICT": 19,
+    "REJECTED_LOCAL_OFFICE": 710,
+    "REJECTED_NONVOTING_DELEGATE": 17,
+    "REJECTED_NON_ELECTORAL_LEGISLATION": 20,
+    "REJECTED_NON_US_OR_UNANCHORED": 13033,
+    "REJECTED_NO_ELECTORAL_SEMANTICS": 98,
+    "REJECTED_NO_EXPLICIT_ECONOMIC_LINK": 1214,
+    "REJECTED_POLICY_MEASURE": 58,
+    "REJECTED_UNTRADEABLE_MAP_MARKET": 24,
+    "REJECTED_UNVERIFIED_IDENTITY": 13,
+    "REJECTED_WRONG_OR_UNPROVEN_CYCLE": 3338
+  },
+  "review_ledger_sha256": "d4e7007997728ac3f557040014d8727ef4f3e950797880268fab83bc63e90054",
+  "review_status_counts": {
+    "REJECTED": 18544,
+    "SEMANTIC_REVIEWED_ACCEPTED": 42306
+  },
+  "schema_version": 1,
+  "unresolved_candidate_rule": "Each unresolved market is rejected from the frozen tradable set; the live Gamma identity check for discovery's unresolved rows is retained in the lane evidence.",
+  "unresolved_identity_candidates": [
+    {
+      "condition_id": "",
+      "market_id": "506549",
+      "question": "Will Trump say \"Congo\" at Wisconsin rally?"
+    },
+    {
+      "condition_id": "",
+      "market_id": "1073387",
+      "question": "Will Trump admin release any more Epstein related files by January 24?"
+    },
+    {
+      "condition_id": "",
+      "market_id": "1123343",
+      "question": "Trump invokes War Powers against Venezuela by January 31?"
+    },
+    {
+      "condition_id": "",
+      "market_id": "1123344",
+      "question": "Trump invokes War Powers against Venezuela by January 15?"
+    },
+    {
+      "condition_id": "",
+      "market_id": "1296853",
+      "question": "Will House and Senate pass funding bill by January 31, 2026?"
+    },
+    {
+      "condition_id": "",
+      "market_id": "1296854",
+      "question": "Will House and Senate pass funding bill by February 1, 2026?"
+    },
+    {
+      "condition_id": "",
+      "market_id": "1363004",
+      "question": "Will Leavitt say \"Valentine\" during the next press briefing?"
+    },
+    {
+      "condition_id": "",
+      "market_id": "2036094",
+      "question": "U.S. forces seize another oil tanker by May 15?"
+    },
+    {
+      "condition_id": "",
+      "market_id": "2036095",
+      "question": "U.S. forces seize another oil tanker by May 31?"
+    },
+    {
+      "condition_id": "",
+      "market_id": "2118850",
+      "question": "Houthis successfully target shipping by May 31?"
+    },
+    {
+      "condition_id": "",
+      "market_id": "2181944",
+      "question": "Will Tennessee use a new congressional map for the 2026 United States midterm elections?"
+    },
+    {
+      "condition_id": "",
+      "market_id": "2181945",
+      "question": "Will Mississippi use a new congressional map for the 2026 United States midterm elections?"
+    },
+    {
+      "condition_id": "",
+      "market_id": "3020414",
+      "question": "Will Benjamin Netanyahu be arrested by October 31?"
+    }
+  ]
+}

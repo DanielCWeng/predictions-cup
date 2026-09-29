@@ -104,11 +104,18 @@ def main() -> None:
 
     discovery_events = find_one_under(INPUT, "ETS_DISCOVERY_EVENTS.json")
     discovery_audit = find_one_under(INPUT, "ETS_DISCOVERY_AUDIT.json")
+    discovery_candidates = find_one_under(INPUT, "ETS_CANDIDATES.csv")
     audit = read_json(discovery_audit)
     if audit.get("canonical_mapping_sha256") != freeze.get("canonical_sig_mapping_sha256"):
         raise RuntimeError("discovery metadata and frozen universe use different canonical mappings")
     if sha256(discovery_events) != audit.get("event_snapshot_sha256"):
         raise RuntimeError("Gamma event metadata checksum does not match discovery audit")
+    if sha256(discovery_candidates) != freeze.get("gamma_candidate_snapshot_sha256"):
+        raise RuntimeError("Gamma candidate metadata checksum does not match the universe freeze")
+    if sha256(discovery_candidates) != audit.get("candidates_sha256"):
+        raise RuntimeError("Gamma candidate metadata checksum does not match discovery audit")
+    if sha256(discovery_audit) != freeze.get("discovery_audit_sha256"):
+        raise RuntimeError("discovery audit checksum does not match the universe freeze")
 
     inventory_rows = list(csv.DictReader(inventory_path.open(encoding="utf-8-sig", newline="")))
     expected_by_cid: dict[str, dict[str, Any]] = {}
@@ -154,6 +161,10 @@ def main() -> None:
     # Retain the actual Gamma payload with the immutable output, not only its future API URL.
     gamma_target = WORK / "GAMMA_DISCOVERY_METADATA.json"
     shutil.copyfile(discovery_events, gamma_target)
+    candidates_target = WORK / "GAMMA_DISCOVERY_CANDIDATES.csv"
+    shutil.copyfile(discovery_candidates, candidates_target)
+    audit_target = WORK / "ETS_DISCOVERY_AUDIT.json"
+    shutil.copyfile(discovery_audit, audit_target)
     freeze_target = WORK / "ETS_UNIVERSE_FREEZE.json"
     inventory_target = WORK / "ETS_TOKEN_INVENTORY.csv"
     shutil.copyfile(freeze_path, freeze_target)
@@ -231,7 +242,7 @@ def main() -> None:
         with gzip.GzipFile(filename="", mode="wb", fileobj=raw_handle, mtime=0) as compressed:
             compressed.write((json.dumps(source_evidence, separators=(",", ":"), sort_keys=True) + "\n").encode())
     files = sorted(output_files, key=lambda row: row["path"])
-    supporting_files = [gamma_target, freeze_target, inventory_target, coverage_target, source_evidence_path]
+    supporting_files = [gamma_target, candidates_target, audit_target, freeze_target, inventory_target, coverage_target, source_evidence_path]
     supporting_file_records = [
         {"path": path.relative_to(WORK).as_posix(), "bytes": path.stat().st_size, "sha256": sha256(path)}
         for path in supporting_files
@@ -262,6 +273,8 @@ def main() -> None:
         "canonical_sig_mapping_sha256": freeze["canonical_sig_mapping_sha256"],
         "ets_universe_freeze_sha256": sha256(freeze_path),
         "gamma_metadata_sha256": sha256(gamma_target),
+        "gamma_candidate_snapshot_sha256": sha256(candidates_target),
+        "discovery_audit_sha256": sha256(audit_target),
         "accepted_ets_market_count": freeze["accepted_ets_market_count"],
         "cid_count": freeze["unique_cid_count"], "token_count": freeze["unique_token_count"],
         "orderbook_market_count_with_any_rows": len(markets_with_rows),
@@ -283,6 +296,8 @@ def main() -> None:
         "source_evidence_bytes": source_evidence_path.stat().st_size,
         "gamma_metadata_path": "GAMMA_DISCOVERY_METADATA.json",
         "gamma_metadata_bytes": gamma_target.stat().st_size,
+        "gamma_candidate_snapshot_path": "GAMMA_DISCOVERY_CANDIDATES.csv",
+        "gamma_candidate_snapshot_bytes": candidates_target.stat().st_size,
         "ordering_semantics": "PMXT observable receive-time normalization; no claim of FULL_EVENT_REPLAY; same-millisecond order is not recoverable",
         "fill_ordering_semantics": "fills are a separate OCI handoff ordered by block_number, log_index; no tx_hash ordering",
         "known_gaps": [

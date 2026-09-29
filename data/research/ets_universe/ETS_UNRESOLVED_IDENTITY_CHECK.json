@@ -1,0 +1,149 @@
+{
+  "fetched_at": "2026-09-29T05:09:42.588474Z",
+  "markets": {
+    "1073387": {
+      "active": false,
+      "closed": false,
+      "conditionId": "",
+      "endDate": "2026-01-17T00:00:00Z",
+      "http_status": 200,
+      "id": "1073387",
+      "outcomes": "[\"Yes\", \"No\"]",
+      "question": "Will Trump admin release any more Epstein related files by January 24?",
+      "slug": "will-trump-admin-release-any-more-epstein-related-files-by-january-24"
+    },
+    "1123343": {
+      "active": false,
+      "closed": false,
+      "conditionId": "",
+      "endDate": "2025-12-31T00:00:00Z",
+      "http_status": 200,
+      "id": "1123343",
+      "outcomes": "[\"Yes\", \"No\"]",
+      "question": "Trump invokes War Powers against Venezuela by January 31?",
+      "slug": "trump-invokes-war-powers-against-venezuela-by-january-31-156"
+    },
+    "1123344": {
+      "active": false,
+      "closed": false,
+      "conditionId": "",
+      "endDate": "2025-12-31T00:00:00Z",
+      "http_status": 200,
+      "id": "1123344",
+      "outcomes": "[\"Yes\", \"No\"]",
+      "question": "Trump invokes War Powers against Venezuela by January 15?",
+      "slug": "trump-invokes-war-powers-against-venezuela-by-january-15"
+    },
+    "1296853": {
+      "active": false,
+      "closed": false,
+      "conditionId": "",
+      "endDate": "2026-01-30T00:00:00Z",
+      "http_status": 200,
+      "id": "1296853",
+      "outcomes": "[\"Yes\", \"No\"]",
+      "question": "Will House and Senate pass funding bill by January 31, 2026?",
+      "slug": "will-house-and-senate-pass-funding-bill-by-january-31-2026"
+    },
+    "1296854": {
+      "active": false,
+      "closed": false,
+      "conditionId": "",
+      "endDate": "2026-01-30T00:00:00Z",
+      "http_status": 200,
+      "id": "1296854",
+      "outcomes": "[\"Yes\", \"No\"]",
+      "question": "Will House and Senate pass funding bill by February 1, 2026?",
+      "slug": "will-house-and-senate-pass-funding-bill-by-february-1-2026"
+    },
+    "1363004": {
+      "active": false,
+      "closed": false,
+      "conditionId": "",
+      "endDate": "2026-02-10T00:00:00Z",
+      "http_status": 200,
+      "id": "1363004",
+      "outcomes": "[\"Yes\", \"No\"]",
+      "question": "Will Leavitt say \"Valentine\" during the next press briefing?",
+      "slug": "will-leavitt-say-valentine-during-the-next-press-briefing"
+    },
+    "2036094": {
+      "active": false,
+      "closed": false,
+      "conditionId": "",
+      "endDate": "2026-05-15T00:00:00Z",
+      "http_status": 200,
+      "id": "2036094",
+      "outcomes": "[\"Yes\", \"No\"]",
+      "question": "U.S. forces seize another oil tanker by May 15?",
+      "slug": "us-forces-seize-another-oil-tanker-by-may-15"
+    },
+    "2036095": {
+      "active": false,
+      "closed": false,
+      "conditionId": "",
+      "endDate": "2026-05-31T00:00:00Z",
+      "http_status": 200,
+      "id": "2036095",
+      "outcomes": "[\"Yes\", \"No\"]",
+      "question": "U.S. forces seize another oil tanker by May 31?",
+      "slug": "us-forces-seize-another-oil-tanker-by-may-31"
+    },
+    "2118850": {
+      "active": false,
+      "closed": false,
+      "conditionId": "",
+      "endDate": "2026-05-31T00:00:00Z",
+      "http_status": 200,
+      "id": "2118850",
+      "outcomes": "[\"Yes\", \"No\"]",
+      "question": "Houthis successfully target shipping by May 31?",
+      "slug": "houthis-successfully-target-shipping-by-may-31"
+    },
+    "2181944": {
+      "active": false,
+      "closed": false,
+      "conditionId": "",
+      "endDate": "2026-11-03T00:00:00Z",
+      "http_status": 200,
+      "id": "2181944",
+      "outcomes": "[\"Yes\", \"No\"]",
+      "question": "Will Tennessee use a new congressional map for the 2026 United States midterm elections?",
+      "slug": "will-tennessee-use-a-new-congressional-map-for-the-2026-united-states-midterm-elections"
+    },
+    "2181945": {
+      "active": false,
+      "closed": false,
+      "conditionId": "",
+      "endDate": "2026-11-03T00:00:00Z",
+      "http_status": 200,
+      "id": "2181945",
+      "outcomes": "[\"Yes\", \"No\"]",
+      "question": "Will Mississippi use a new congressional map for the 2026 United States midterm elections?",
+      "slug": "will-mississippi-use-a-new-congressional-map-for-the-2026-united-states-midterm-elections"
+    },
+    "3020414": {
+      "active": false,
+      "closed": false,
+      "conditionId": "",
+      "endDate": "2026-11-01T03:59:00Z",
+      "http_status": 200,
+      "id": "3020414",
+      "outcomes": "[\"Yes\", \"No\"]",
+      "question": "Will Benjamin Netanyahu be arrested by October 31?",
+      "slug": "will-benjamin-netanyahu-be-arrested-by-october-31"
+    },
+    "506549": {
+      "active": false,
+      "closed": false,
+      "conditionId": "",
+      "endDate": "2024-09-07T12:00:00Z",
+      "http_status": 200,
+      "id": "506549",
+      "outcomes": "[\"Yes\", \"No\"]",
+      "question": "Will Trump say \"Congo\" at Wisconsin rally?",
+      "slug": "will-trump-say-congo-at-wisconsin-rally"
+    }
+  },
+  "source": "https://gamma-api.polymarket.com/markets/{market_id}"
+}

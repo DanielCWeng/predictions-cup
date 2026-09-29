@@ -75,6 +75,24 @@ def _csv_cell(value: Any) -> Any:
     return value
 
 
+GAMMA_REVIEW_FIELDS = (
+    "market_id", "event_id", "event_title", "event_slug", "condition_id", "question", "slug",
+    "clob_token_ids", "outcomes", "created_at", "start_date", "end_date", "active", "closed",
+    "resolved", "resolution_time", "resolution_source", "archived",
+    "accepting_orders", "enable_order_book", "neg_risk", "tags", "discovery_methods",
+    "identity_status", "market_type",
+)
+
+
+def compact_gamma_metadata(row: dict[str, str]) -> dict[str, Any]:
+    """Retain identity/lifecycle data; bind the full Gamma text by SHA-256."""
+    compact: dict[str, Any] = {key: row.get(key, "") for key in GAMMA_REVIEW_FIELDS if key in row}
+    for source, destination in (("description", "description_sha256"), ("resolution_criteria", "resolution_criteria_sha256")):
+        value = row.get(source, "") or ""
+        compact[destination] = hashlib.sha256(value.encode("utf-8")).hexdigest() if value else ""
+    return compact
+
+
 def accepted_records(mapping: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         r for r in mapping["records"]
@@ -183,8 +201,19 @@ def command_finalize(args: argparse.Namespace) -> None:
     mapping = read_json(args.mapping)
     acceptance = read_json(args.acceptance)
     gamma_metadata = Path(args.gamma_metadata)
+    discovery_audit_path = Path(args.discovery_audit)
+    discovery_audit = read_json(discovery_audit_path)
     candidates = read_csv(args.candidates)
     reviewed_edges = read_csv(args.review_edges)
+    candidate_snapshot_sha = sha256(args.candidates)
+    if discovery_audit.get("canonical_mapping_sha256") != sha256(args.mapping):
+        raise ValueError("discovery audit and current canonical SIG mapping SHA-256 differ")
+    if discovery_audit.get("candidates_sha256") != candidate_snapshot_sha:
+        raise ValueError("discovery audit does not bind the candidate CSV snapshot")
+    if discovery_audit.get("event_snapshot_sha256") != sha256(gamma_metadata):
+        raise ValueError("discovery audit does not bind the Gamma event snapshot")
+    if discovery_audit.get("fetched_at") != args.discovery_timestamp:
+        raise ValueError("discovery timestamp differs from the discovery audit")
     anchor_rows = make_anchor_rows(mapping)
     direct_market_ids, direct_cids, direct_tokens = direct_identity_sets(mapping)
     anchors_by_id = {r["sig_market_id"]: r for r in anchor_rows}
@@ -240,6 +269,13 @@ def command_finalize(args: argparse.Namespace) -> None:
             **{k: edge[k] for k in EDGE_FIELDS[4:]},
         })
 
+    for market_id, decisions in decisions_by_market.items():
+        decision_statuses = {row.get("review_status") for row in decisions}
+        if len(decision_statuses) != 1:
+            raise ValueError(f"candidate has conflicting accepted/rejected review decisions: {market_id}")
+        if decision_statuses == {"REJECTED"} and len(decisions) != 1:
+            raise ValueError(f"rejected candidate has more than one review decision: {market_id}")
+
     accepted_ids = {e["target_id"] for e in edges}
     if len(accepted_ids) != len(edges) and len({(e["target_id"], e["source_id"]) for e in edges}) != len(edges):
         raise ValueError("duplicate accepted ETS edge")
@@ -270,7 +306,7 @@ def command_finalize(args: argparse.Namespace) -> None:
         if not links:
             raise ValueError(f"accepted ETS market does not link to a SIG anchor: {market_id}")
         market_rows.append({
-            **row,
+            **compact_gamma_metadata(row),
             "existing_direct_mapping": False,
             "relationship_class_set": class_set,
             "linked_sig_market_ids": links,
@@ -306,7 +342,7 @@ def command_finalize(args: argparse.Namespace) -> None:
             status, reason = "PENDING_REVIEW", ""
         else:
             status, reason = "PENDING_REVIEW", "semantic review not recorded"
-        candidate_rows.append({**row, "candidate_status": status, "rejection_reason": reason})
+        candidate_rows.append({**compact_gamma_metadata(row), "candidate_status": status, "rejection_reason": reason})
         if status == "REJECTED":
             rejection_rows.append({
                 "market_id": market_id, "condition_id": row.get("condition_id", ""),
@@ -319,7 +355,7 @@ def command_finalize(args: argparse.Namespace) -> None:
         node_rows.append({
             "node_type": "SIG_ANCHOR", "node_id": anchor["sig_market_id"],
             "market_id": "", "event_id": "", "condition_id": "", "token_ids": [],
-            "question": anchor["sig_question"], "description": "", "slug": "", "event_slug": "",
+            "question": anchor["sig_question"], "description_sha256": "", "resolution_criteria_sha256": "", "slug": "", "event_slug": "",
             "mapping_class": anchor["mapping_class"], "existing_direct_mapping": False,
             "metadata_source": "canonical SIG crosswalk",
         })
@@ -333,7 +369,7 @@ def command_finalize(args: argparse.Namespace) -> None:
             "node_type": "DIRECT_POLYMARKET", "node_id": mid, "market_id": mid,
             "event_id": component.get("event_id", ""), "condition_id": component.get("condition_id", ""),
             "token_ids": component.get("token_ids", []), "question": component.get("question", ""),
-            "description": "", "slug": component.get("slug", ""), "event_slug": "",
+            "description_sha256": "", "resolution_criteria_sha256": "", "slug": component.get("slug", ""), "event_slug": "",
             "mapping_class": "", "existing_direct_mapping": True,
             "metadata_source": "canonical SIG crosswalk",
         })
@@ -342,7 +378,8 @@ def command_finalize(args: argparse.Namespace) -> None:
             "node_type": "ETS_MARKET", "node_id": row["market_id"], "market_id": row["market_id"],
             "event_id": row.get("event_id", ""), "condition_id": row["condition_id"],
             "token_ids": _json_field(row, "clob_token_ids", []), "question": row.get("question", ""),
-            "description": row.get("description", ""), "slug": row.get("slug", ""),
+            "description_sha256": row.get("description_sha256", ""),
+            "resolution_criteria_sha256": row.get("resolution_criteria_sha256", ""), "slug": row.get("slug", ""),
             "event_slug": row.get("event_slug", ""), "mapping_class": "",
             "existing_direct_mapping": False, "metadata_source": "Gamma snapshot",
         })
@@ -422,6 +459,9 @@ def command_finalize(args: argparse.Namespace) -> None:
         "mapping_acceptance_sha256": sha256(args.acceptance),
         "discovery_code_sha256": args.discovery_code_sha,
         "discovery_timestamp": args.discovery_timestamp,
+        "discovery_audit_sha256": sha256(discovery_audit_path),
+        "gamma_candidate_snapshot_sha256": candidate_snapshot_sha,
+        "semantic_review_ledger_sha256": sha256(args.review_edges),
         "freeze_timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "sig_anchor_count": len(anchor_rows),
         "candidate_ets_market_count": sum(1 for r in candidate_rows if r["market_id"] not in direct_market_ids and r.get("condition_id") not in direct_cids),
@@ -449,12 +489,17 @@ def command_finalize(args: argparse.Namespace) -> None:
         },
         "sha256": {
             "nodes": sha256(nodes_path), "edges": sha256(edges_path),
+            "candidates": sha256(OUT_DIR / "ETS_CANDIDATES.csv"),
+            "rejections": sha256(OUT_DIR / "ETS_REJECTIONS.csv"),
             "market_inventory": sha256(inventory_path), "cid_token_inventory": sha256(token_inventory_path),
             "condition_ids": sha256(OUT_DIR / "ETS_CONDITION_IDS.txt"),
             "token_ids": sha256(OUT_DIR / "ETS_TOKEN_IDS.txt"),
             "condition_token_map": sha256(OUT_DIR / "ETS_CONDITION_TOKEN_MAP.json"),
             "relationship_graph": sha256(graph_path),
             "gamma_metadata": sha256(gamma_metadata),
+            "gamma_candidate_snapshot": candidate_snapshot_sha,
+            "semantic_review_ledger": sha256(args.review_edges),
+            "discovery_audit": sha256(discovery_audit_path),
         },
     }
     if freeze["pending_candidate_count"] or freeze["pending_relationship_review_count"]:
@@ -481,6 +526,7 @@ def main() -> None:
     finalize.add_argument("--acceptance", type=Path, default=DEFAULT_ACCEPTANCE)
     finalize.add_argument("--candidates", type=Path, required=True)
     finalize.add_argument("--gamma-metadata", required=True)
+    finalize.add_argument("--discovery-audit", required=True)
     finalize.add_argument("--review-edges", type=Path, required=True)
     finalize.add_argument("--base-sha", required=True)
     finalize.add_argument("--discovery-code-sha", required=True)

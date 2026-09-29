@@ -371,7 +371,9 @@ def main() -> None:
         "source_list": [
             {"source": fill.get("source"), "version": fill.get("source_version"), "data_type": "on_chain_economic_fills"},
             {"source": orderbooks.get("source"), "versions": orderbooks.get("source_versions"), "data_type": "historical_orderbooks"},
-            {"source": "Gamma API", "metadata_sha256": freeze["sha256"]["gamma_metadata"], "data_type": "identity_lifecycle_resolution_metadata"},
+            {"source": "Gamma API", "event_snapshot_sha256": freeze["sha256"]["gamma_metadata"],
+             "candidate_snapshot_sha256": freeze["gamma_candidate_snapshot_sha256"],
+             "data_type": "identity_lifecycle_resolution_metadata"},
         ],
         "source_versions": {
             "fills": fill.get("source_version", "POLYLEVIATHAN_TRADES_LAKE_CANONICAL"),
@@ -386,6 +388,7 @@ def main() -> None:
         "sha256": {
             "ets_universe_freeze": sha256(freeze_path),
             "gamma_discovery_metadata": sha256(args.gamma_metadata),
+            "gamma_candidate_snapshot": freeze["gamma_candidate_snapshot_sha256"],
             "fill_manifest": sha256(args.fill_manifest),
             "orderbook_manifest": sha256(args.orderbook_manifest),
             "orderbook_coverage": sha256(args.orderbook_coverage),
@@ -468,11 +471,11 @@ def main() -> None:
     for market in markets:
         text = " ".join(market.get(key, "") for key in ("question", "event_title", "slug", "event_slug")).lower()
         classes = set(json.loads(market.get("relationship_class_set") or "[]"))
-        if "joint_chamber" in classes or "joint_outcome" in classes or "conditional_outcome" in classes:
+        if classes.intersection({"joint_chamber", "joint_outcome"}):
             family_market_counts["Balance of Power / joint outcomes"] += 1
-        if "house" in text and any(word in text for word in ("control", "majority", "seat", "seats")):
+        if "house" in text and classes.intersection({"chamber_control", "joint_chamber", "joint_outcome", "seat_exact", "seat_range", "seat_threshold"}):
             family_market_counts["House control / seat totals"] += 1
-        if "senate" in text and any(word in text for word in ("control", "majority", "seat", "seats")):
+        if "senate" in text and classes.intersection({"chamber_control", "joint_chamber", "joint_outcome", "seat_exact", "seat_range", "seat_threshold"}):
             family_market_counts["Senate control / seat totals"] += 1
         if classes.intersection({"SEAT_EXACT", "SEAT_RANGE", "SEAT_THRESHOLD"}):
             family_market_counts["Seat exact/range/threshold"] += 1
