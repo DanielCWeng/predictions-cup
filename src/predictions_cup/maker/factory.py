@@ -54,10 +54,7 @@ def build_maker_components(
 
     ms = 1_000_000
     engine = MakerEngine(
-        fair_value=DirectPolymarketFairValueProvider(
-            mapping,
-            max_age_ns=settings.maker_max_fv_age_ms * ms,
-        ),
+        fair_value=DirectPolymarketFairValueProvider(mapping),
         predictive=NullPredictiveAdjuster(),
         toxicity=NullToxicityProvider(),
         inventory=BinaryCaraInventoryModel(
