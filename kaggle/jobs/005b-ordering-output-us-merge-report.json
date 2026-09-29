@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "action": "output",
+  "kernel": "polyleviathan/005b-ordering-falsification-us-merge",
+  "output_file_pattern": ".*feature_target_build_report_US_2024\\.json$",
+  "note": "Fetch compact corrected US merge report only."
+}
