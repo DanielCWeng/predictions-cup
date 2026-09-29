@@ -2,9 +2,9 @@
   "schema_version": 1,
   "action": "run",
   "kernel_dir": "scripts/kaggle/r3_fv_001_structural_math",
-  "kernel": "polyleviathan/r3-fv-001-structural-math-corrected",
+  "kernel": "polyleviathan/r3-fv-001-corrected-structural-math",
   "poll_seconds": 20,
   "timeout_minutes": 180,
   "download_outputs": true,
-  "note": "Attempt 2 of the same frozen corrected R3 TRAIN/DEV structural-math experiment. The only code change handles an empty governorship inverse support set as INSUFFICIENT_SUPPORT instead of crashing. DATA-004 sources + DATA-003 targets only; FINAL remains unopened."
+  "note": "Attempt 3 of the same frozen corrected R3 TRAIN/DEV structural-math experiment. Only implementation fixes since attempt 1: empty governorship inverse support is recorded as INSUFFICIENT_SUPPORT instead of crashing, and Kaggle identity is bound to the confirmed canonical slug. DATA-004 sources + DATA-003 targets only. No thresholds, source-age rules, models, target definitions, or evaluation gates changed. FINAL remains unopened."
 }
