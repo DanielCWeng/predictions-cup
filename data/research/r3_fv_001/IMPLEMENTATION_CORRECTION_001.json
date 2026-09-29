@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "correction_id": "R3-IMPL-CORR-001",
+  "observed_after_attempt3": true,
+  "classification": "IMPLEMENTATION_CORRECTION_NOT_MODEL_REDESIGN",
+  "attempt3": {
+    "github_actions_run": 36640506573,
+    "artifact_id": 11066626337,
+    "artifact_zip_sha256": "4fdbdca6a3e64d9752b514df825d7c657f67d496f83a43f46256e47b94a83395",
+    "results_sha256": "7fedfdf140e8798d420fa5a5224444bbd77a118f447d51fc440ef7f259e40095",
+    "final_opened": false,
+    "final_rows_accessed": 0
+  },
+  "invalidated_method_outputs": {
+    "R3-S02-LOO-PRICE-QP": {
+      "reason": "Attempt 3 averaged unaligned raw P1 YES prices. That does not implement the frozen redundancy diagnostic because source YES semantics were not proven to match the held-out target event.",
+      "correction": "Use only V2 relationship class EXACT_EQUIVALENT, exclude literal existing-direct DATA-003/Polymarket IDs, and retain the same prior-block/24h causal-state rules."
+    },
+    "R3-S06-LATENT": {
+      "reason": "Attempt 3 required the full 907686-907692 count family to be explicitly listed in each race anchor's relevant_ids. The national Republican governorship count is structurally linked to every D/R governor race even when the assumption-free graph keeps only extreme bins for bounds.",
+      "correction": "Eligible targets are all DATA-003 D/R Governor targets. The count family, orientation, TRAIN-only zero-intercept beta, 24h source-age rule, DEV target, metrics and bootstrap remain unchanged."
+    }
+  },
+  "preserved_attempt3_outputs": {
+    "R3-S01-LP-BOUNDS": "Preserved as descriptive structural-identification evidence.",
+    "R3-S03-LOO-FAMILY-QP": "Preserved for the priority Georgia/Senate-House components.",
+    "R3-S04-LOO-FAMILY-KL": "Preserved for the priority Georgia/Senate-House components.",
+    "R3-S05-MAXENT": "Preserved for the priority Georgia/Senate-House components."
+  },
+  "no_changes": [
+    "DATA-004 source dataset",
+    "DATA-003 target dataset",
+    "TRAIN/DEV/FINAL split",
+    "FINAL lock",
+    "block_number/log_index causal ordering",
+    "24h primary source-age rule",
+    "6h/72h demotion-only support diagnostics",
+    "priority component IDs",
+    "inverse feature formula",
+    "inverse target",
+    "inverse TRAIN-only fitting rule",
+    "DEV metrics",
+    "bootstrap rule"
+  ],
+  "promotion_rule": "If the corrected S02/S06 implementation is positive, treat it as corrective DEV evidence only; no FINAL opening or promotion occurs automatically. No result-driven tuning is allowed.",
+  "final_opened": false
+}
