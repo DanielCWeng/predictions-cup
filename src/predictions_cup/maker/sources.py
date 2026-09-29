@@ -28,13 +28,18 @@ from predictions_cup.runtime.models import (
     RuntimeSnapshot,
     limit_price_to_ticks,
 )
-from predictions_cup.sig.realtime_state import ExchangeRuntimeState, MarketRuntimeState
+from predictions_cup.sig.realtime_state import (
+    ExchangeRuntimeState,
+    MarketRuntimeState,
+    RuntimeHealth,
+)
 
 
 class SigMakerState(Protocol):
     tournament_id: str
     states: dict[str, ExchangeRuntimeState]
     market_states: dict[str, MarketRuntimeState]
+    health: RuntimeHealth
 
 
 class AccountMakerState(Protocol):
@@ -231,6 +236,7 @@ class MakerSourceBridge:
             portfolio=self._account.runtime_portfolio(),
             observation_monotonic_ns=monotonic_now_ns,
         )
+        sig_connected = self._sig.health.connected
         return MakerMarketSnapshot(
             runtime=runtime,
             exchange_id=exchange_id,
@@ -238,9 +244,9 @@ class MakerSourceBridge:
             tournament_id=self._mapping.tournament_id,
             now_monotonic_ns=monotonic_now_ns,
             sig_bbo_observed_ns=bbo_observed_ns,
-            sig_bbo_trusted=bbo_trusted,
+            sig_bbo_trusted=bbo_trusted and sig_connected,
             sig_depth_observed_ns=depth_observed_ns,
-            sig_depth_trusted=sig_exchange.trusted,
+            sig_depth_trusted=sig_exchange.trusted and sig_connected,
             account_observed_ns=account_observed_ns,
             inventory_observed_ns=account_observed_ns,
             external_quotes=external_quotes,
