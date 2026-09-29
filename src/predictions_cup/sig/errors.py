@@ -86,6 +86,12 @@ class SigTransportError(SigApiError):
     pass
 
 
+class SigExecutionUncertainError(SigApiError):
+    """Placement/cancellation may have taken economic effect and must be reconciled."""
+
+    pass
+
+
 def error_from_payload(*, status_code: int, payload: object) -> SigApiError:
     try:
         envelope = ErrorEnvelope.model_validate(payload)

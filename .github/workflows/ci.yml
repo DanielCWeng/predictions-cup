@@ -46,3 +46,6 @@ jobs:
         run: |
           python -m predictions_cup.app
           python -m predictions_cup.app --smoke-test
+
+      - name: BUILD-009 benchmark smoke
+        run: python -m predictions_cup.benchmarks --smoke

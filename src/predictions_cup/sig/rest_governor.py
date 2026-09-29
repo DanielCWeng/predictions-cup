@@ -1,4 +1,4 @@
-"""Priority-aware pacing and shared cooldown for SIG REST traffic."""
+"""Priority-aware token-bucket pacing and shared cooldown for SIG REST traffic."""
 
 from __future__ import annotations
 
@@ -36,11 +36,12 @@ class RestGovernorSnapshot:
 
 
 class SigRestGovernor:
-    """One per-client request budget shared by every SIG REST caller.
+    """Shared average-rate token bucket with one token reserved for execution.
 
-    Requests are FIFO within each priority class. The worker waits for the next
-    pacing/cooldown slot before choosing work, so a HIGH request that arrives
-    while a BACKGROUND request is waiting for capacity can overtake it.
+    The default two-token bucket preserves the configured long-run request rate
+    while allowing one HIGH request to use reserved capacity immediately after a
+    read. NORMAL/BACKGROUND traffic may only consume capacity above the reserve.
+    A 429 cooldown always overrides the burst allowance.
     """
 
     def __init__(
@@ -48,6 +49,8 @@ class SigRestGovernor:
         *,
         rate_per_second: float,
         max_shared_cooldown_seconds: float = 8.0,
+        burst_capacity: float = 2.0,
+        high_priority_reserve: float = 1.0,
         sleep: SleepFn = asyncio.sleep,
         monotonic: MonotonicFn = time.monotonic,
         random_fn: RandomFn = random.random,
@@ -56,8 +59,17 @@ class SigRestGovernor:
             raise ValueError("rate_per_second must be positive")
         if max_shared_cooldown_seconds <= 0:
             raise ValueError("max_shared_cooldown_seconds must be positive")
+        if burst_capacity < 1.0:
+            raise ValueError("burst_capacity must be at least one request")
+        if high_priority_reserve < 0:
+            raise ValueError("high_priority_reserve must be non-negative")
+        if high_priority_reserve + 1.0 > burst_capacity:
+            raise ValueError(
+                "burst_capacity must leave one request above high_priority_reserve"
+            )
         self.rate_per_second = rate_per_second
-        self._interval_seconds = 1.0 / rate_per_second
+        self._burst_capacity = burst_capacity
+        self._high_priority_reserve = high_priority_reserve
         self._max_shared_cooldown_seconds = max_shared_cooldown_seconds
         self._sleep = sleep
         self._monotonic = monotonic
@@ -70,7 +82,10 @@ class SigRestGovernor:
         self._worker: asyncio.Task[None] | None = None
         self._sequence = 0
         self._closed = False
-        self._next_request_at = self._monotonic()
+
+        now = self._monotonic()
+        self._tokens = burst_capacity
+        self._last_refill_at = now
         self._cooldown_until = 0.0
         self._consecutive_429 = 0
 
@@ -163,37 +178,105 @@ class SigRestGovernor:
             if not future.done():
                 future.cancel()
 
+    def _refill(self, now: float) -> None:
+        elapsed = max(0.0, now - self._last_refill_at)
+        if elapsed:
+            self._tokens = min(
+                self._burst_capacity,
+                self._tokens + elapsed * self.rate_per_second,
+            )
+            self._last_refill_at = now
+
+    def _best_pending_priority(self) -> RestPriority | None:
+        for priority in (
+            RestPriority.HIGH,
+            RestPriority.NORMAL,
+            RestPriority.BACKGROUND,
+        ):
+            if self._pending[priority] > 0:
+                return priority
+        return None
+
+    def _capacity_delay(self, priority: RestPriority, now: float) -> float:
+        self._refill(now)
+        required = (
+            1.0
+            if priority is RestPriority.HIGH
+            else 1.0 + self._high_priority_reserve
+        )
+        token_delay = max(0.0, required - self._tokens) / self.rate_per_second
+        cooldown_delay = max(0.0, self._cooldown_until - now)
+        return max(token_delay, cooldown_delay)
+
+    async def _sleep_once(self, delay: float) -> None:
+        await self._sleep(delay)
+
+    async def _wait_interruptibly(self, delay: float) -> None:
+        if delay <= 0:
+            return
+        self._queue_event.clear()
+        sleeper: asyncio.Task[None] = asyncio.create_task(self._sleep_once(delay))
+        wake: asyncio.Task[bool] = asyncio.create_task(self._queue_event.wait())
+        done, _ = await asyncio.wait(
+            {sleeper, wake},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if wake in done:
+            sleeper.cancel()
+            with suppress(asyncio.CancelledError):
+                await sleeper
+        else:
+            wake.cancel()
+            with suppress(asyncio.CancelledError):
+                await wake
+
     async def _run(self) -> None:
         try:
             while not self._closed:
-                await self._queue_event.wait()
-                self._queue_event.clear()
-                while not self._queue.empty() and not self._closed:
-                    while True:
-                        now = self._monotonic()
-                        delay = max(
-                            0.0,
-                            self._next_request_at - now,
-                            self._cooldown_until - now,
-                        )
-                        if delay <= 0:
-                            break
-                        await self._sleep(delay)
+                if self._queue.empty():
+                    self._queue_event.clear()
+                    await self._queue_event.wait()
+                    continue
 
-                    try:
-                        priority_value, _, future = self._queue.get_nowait()
-                    except asyncio.QueueEmpty:
-                        break
+                priority = self._best_pending_priority()
+                if priority is None:
+                    await asyncio.sleep(0)
+                    continue
 
-                    priority = RestPriority(priority_value)
-                    self._pending[priority] = max(0, self._pending[priority] - 1)
-                    if future.cancelled():
-                        continue
+                delay = self._capacity_delay(priority, self._monotonic())
+                if delay > 0:
+                    await self._wait_interruptibly(delay)
+                    continue
 
-                    now = self._monotonic()
-                    self._next_request_at = now + self._interval_seconds
-                    self._requests_total += 1
-                    future.set_result(None)
+                try:
+                    priority_value, _, future = self._queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    continue
+
+                priority = RestPriority(priority_value)
+                self._pending[priority] = max(0, self._pending[priority] - 1)
+                if future.cancelled():
+                    continue
+
+                now = self._monotonic()
+                self._refill(now)
+                required = (
+                    1.0
+                    if priority is RestPriority.HIGH
+                    else 1.0 + self._high_priority_reserve
+                )
+                if now < self._cooldown_until or self._tokens + 1e-12 < required:
+                    # Capacity changed between peek and dequeue. Requeue without
+                    # completing the caller; preserve FIFO sequence ordering.
+                    self._pending[priority] += 1
+                    self._sequence += 1
+                    self._queue.put_nowait((int(priority), self._sequence, future))
+                    self._queue_event.set()
+                    continue
+
+                self._tokens = max(0.0, self._tokens - 1.0)
+                self._requests_total += 1
+                future.set_result(None)
         finally:
             if not self._closed and not self._queue.empty():
                 self._queue_event.set()

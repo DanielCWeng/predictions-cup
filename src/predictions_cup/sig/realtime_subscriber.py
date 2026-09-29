@@ -40,6 +40,7 @@ class SupabaseTournamentSubscriber:
         token_refresh_margin_seconds: float = 300.0,
         subscribe_timeout_seconds: float = 15.0,
         maintenance_interval_seconds: float = 1.0,
+        event_name: str = "market_batch",
         clock: Clock = lambda: datetime.now(UTC),
     ) -> None:
         if token_refresh_margin_seconds <= 0:
@@ -51,6 +52,9 @@ class SupabaseTournamentSubscriber:
         self._refresh_margin = timedelta(seconds=token_refresh_margin_seconds)
         self._subscribe_timeout_seconds = subscribe_timeout_seconds
         self._maintenance_interval = timedelta(seconds=maintenance_interval_seconds)
+        if not event_name.strip():
+            raise ValueError("event_name must not be blank")
+        self._event_name = event_name
         self._clock = clock
 
     async def run(
@@ -82,7 +86,7 @@ class SupabaseTournamentSubscriber:
 
         try:
             try:
-                await channel.on_broadcast("market_batch", handle_broadcast).subscribe(
+                await channel.on_broadcast(self._event_name, handle_broadcast).subscribe(
                     handle_status
                 )
                 status, _ = await asyncio.wait_for(

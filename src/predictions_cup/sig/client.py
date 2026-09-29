@@ -46,6 +46,14 @@ from predictions_cup.sig.realtime_models import (
     TournamentListStatus,
     TournamentPageDto,
 )
+from predictions_cup.sig.trading_dto import (
+    OrderFillsResponseDto,
+    OrderPageDto,
+    OrderReadDto,
+    OrderStatusFilter,
+    PortfolioFillPageDto,
+    PositionsResponseDto,
+)
 
 logger = logging.getLogger(__name__)
 ModelT = TypeVar("ModelT", bound=BaseModel)
@@ -380,6 +388,140 @@ class SigRestClient:
             cursor = self._require_next_cursor(
                 page.pagination.next_cursor, "/exchanges/{id}/trades"
             )
+
+    async def list_orders(
+        self,
+        *,
+        status: OrderStatusFilter = "open",
+        exchange_id: str | None = None,
+        market_id: str | None = None,
+        tournament_id: str | None = None,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> OrderPageDto:
+        self._require_range("limit", limit, 1, 200)
+        if exchange_id is not None and market_id is not None:
+            raise ValueError("exchange_id and market_id are mutually exclusive")
+        params: dict[str, str | int] = {"status": status, "limit": limit}
+        self._put_optional(params, "exchangeId", exchange_id)
+        self._put_optional(params, "marketId", market_id)
+        self._put_optional(params, "tournamentId", tournament_id)
+        self._put_optional(params, "cursor", cursor)
+        payload = await self._get_json(
+            "orders",
+            params=params,
+            route_template="/orders",
+        )
+        return self._validate(OrderPageDto, payload, route_template="/orders")
+
+    async def iter_orders(
+        self,
+        *,
+        status: OrderStatusFilter = "open",
+        exchange_id: str | None = None,
+        market_id: str | None = None,
+        tournament_id: str | None = None,
+        limit: int = 200,
+    ) -> AsyncIterator[OrderReadDto]:
+        cursor: str | None = None
+        while True:
+            page = await self.list_orders(
+                status=status,
+                exchange_id=exchange_id,
+                market_id=market_id,
+                tournament_id=tournament_id,
+                limit=limit,
+                cursor=cursor,
+            )
+            for order in page.data:
+                yield order
+            if not page.pagination.has_more:
+                return
+            cursor = self._require_next_cursor(page.pagination.next_cursor, "/orders")
+
+    async def get_order(self, order_id: int) -> OrderReadDto:
+        if order_id <= 0:
+            raise ValueError("order_id must be positive")
+        payload = await self._get_json(
+            f"orders/{order_id}",
+            route_template="/orders/{id}",
+        )
+        return self._validate(OrderReadDto, payload, route_template="/orders/{id}")
+
+    async def get_order_fills(
+        self,
+        order_id: int,
+        *,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> OrderFillsResponseDto:
+        if order_id <= 0:
+            raise ValueError("order_id must be positive")
+        self._require_range("limit", limit, 1, 200)
+        params: dict[str, str | int] = {"limit": limit}
+        self._put_optional(params, "cursor", cursor)
+        payload = await self._get_json(
+            f"orders/{order_id}/fills",
+            params=params,
+            route_template="/orders/{id}/fills",
+        )
+        return self._validate(
+            OrderFillsResponseDto,
+            payload,
+            route_template="/orders/{id}/fills",
+        )
+
+    async def list_portfolio_fills(
+        self,
+        *,
+        exchange_id: str | None = None,
+        market_id: str | None = None,
+        tournament_id: str | None = None,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> PortfolioFillPageDto:
+        self._require_range("limit", limit, 1, 200)
+        if exchange_id is not None and market_id is not None:
+            raise ValueError("exchange_id and market_id are mutually exclusive")
+        params: dict[str, str | int] = {"limit": limit}
+        self._put_optional(params, "exchangeId", exchange_id)
+        self._put_optional(params, "marketId", market_id)
+        self._put_optional(params, "tournamentId", tournament_id)
+        self._put_optional(params, "cursor", cursor)
+        payload = await self._get_json(
+            "portfolio/fills",
+            params=params,
+            route_template="/portfolio/fills",
+        )
+        return self._validate(
+            PortfolioFillPageDto,
+            payload,
+            route_template="/portfolio/fills",
+        )
+
+    async def get_default_positions(self) -> PositionsResponseDto:
+        """Read the API key's default context only; never use for an explicit tournament."""
+        payload = await self._get_json(
+            "portfolio/positions",
+            route_template="/portfolio/positions",
+        )
+        return self._validate(
+            PositionsResponseDto,
+            payload,
+            route_template="/portfolio/positions",
+        )
+
+    async def get_tournament_positions(self, tournament_slug: str) -> PositionsResponseDto:
+        self._require_identifier("tournament_slug", tournament_slug)
+        payload = await self._get_json(
+            f"tournaments/{tournament_slug}/portfolio/positions",
+            route_template="/tournaments/{slug}/portfolio/positions",
+        )
+        return self._validate(
+            PositionsResponseDto,
+            payload,
+            route_template="/tournaments/{slug}/portfolio/positions",
+        )
 
     async def _get_json(
         self,

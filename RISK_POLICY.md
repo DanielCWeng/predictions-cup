@@ -12,3 +12,13 @@ Non-negotiable architectural principles:
 - live limits remain TBD pending market observation and later tickets.
 
 No tournament-specific exposure values are defined in this repository foundation.
+
+
+## BUILD-009 branch status
+
+Draft PR #50 implements the central fail-closed Risk mechanism but does not choose tournament risk
+appetite. LIVE numeric caps remain externally configured and have no guessed repository defaults.
+Untrusted account/depth state and uncertain orders are explicitly conservative.
+
+This section describes branch-only capability under review; it is not accepted on `main` until
+BUILD-009 is independently reviewed and merged.

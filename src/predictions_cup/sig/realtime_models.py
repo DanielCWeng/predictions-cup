@@ -128,3 +128,65 @@ class MarketBatchDto(TransportModel):
     book_dirty: tuple[BookDirtyDto, ...] = Field(alias="bookDirty")
     market_settled: tuple[MarketSettledDto, ...] = Field(alias="marketSettled")
     delivery: RealtimeDeliveryDto
+
+
+class AccountFillDto(TransportModel):
+    order_id: int = Field(alias="orderId")
+    exchange_id: str = Field(alias="exchangeId")
+    market_id: str = Field(alias="marketId")
+    price: WireProbability
+    quantity: WireDecimal
+    executed_at: WireDateTime = Field(alias="executedAt")
+    tournament_id: str | None = Field(alias="tournamentId")
+
+
+class AccountOrderUpdateDto(TransportModel):
+    order_id: int = Field(alias="orderId")
+    exchange_id: str = Field(alias="exchangeId")
+    market_id: str = Field(alias="marketId")
+    open: bool
+    quantity_traded: WireDecimal = Field(alias="quantityTraded")
+    total_cost: WireDecimal = Field(alias="totalCost")
+    latest_trade_price: WireProbability | None = Field(alias="latestTradePrice")
+    tournament_id: str | None = Field(alias="tournamentId")
+    at: WireDateTime
+
+
+class AccountSettlementDto(TransportModel):
+    market_id: str = Field(alias="marketId")
+    exchange_id: str = Field(alias="exchangeId")
+    outcome_side: str = Field(alias="outcomeSide")
+    shares: WireDecimal
+    cost_basis: WireDecimal = Field(alias="costBasis")
+    payout: WireDecimal
+    realized_pnl: WireDecimal = Field(alias="realizedPnl")
+    settlement_outcome: str = Field(alias="settlementOutcome")
+    tournament_id: str | None = Field(alias="tournamentId")
+    at: WireDateTime
+
+
+class AccountRefundDto(TransportModel):
+    market_id: str = Field(alias="marketId")
+    exchange_id: str = Field(alias="exchangeId")
+    shares: WireDecimal
+    refund_amount: WireDecimal = Field(alias="refundAmount")
+    tournament_id: str | None = Field(alias="tournamentId")
+    at: WireDateTime
+
+
+class AccountCollateralChangeDto(TransportModel):
+    delta: WireDecimal
+    outstanding_advance_after: WireDecimal = Field(alias="outstandingAdvanceAfter")
+    component_id: str = Field(alias="componentId")
+    tournament_id: str | None = Field(alias="tournamentId")
+
+
+class AccountBatchDto(TransportModel):
+    fills: tuple[AccountFillDto, ...]
+    order_updates: tuple[AccountOrderUpdateDto, ...] = Field(alias="orderUpdates")
+    settlements: tuple[AccountSettlementDto, ...]
+    refunds: tuple[AccountRefundDto, ...]
+    collateral_changes: tuple[AccountCollateralChangeDto, ...] = Field(
+        alias="collateralChanges"
+    )
+    delivery: RealtimeDeliveryDto

@@ -1,4 +1,10 @@
-"""risk logical domain.
+"""Central synchronous trading-risk contracts for BUILD-009."""
 
-BUILD-001 provides only the package boundary. Domain behavior is intentionally not implemented.
-"""
+from predictions_cup.risk.core import (
+    RiskContext,
+    RiskDecision,
+    RiskLimits,
+    evaluate_risk,
+)
+
+__all__ = ["RiskContext", "RiskDecision", "RiskLimits", "evaluate_risk"]
