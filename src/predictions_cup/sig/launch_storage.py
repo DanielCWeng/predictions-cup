@@ -80,7 +80,7 @@ _SCHEMAS: dict[str, pa.Schema] = {
     "liquidity_events": pa.schema(
         [
             ("session_id", pa.string()),
-            ("connection_id", pa.string()),
+            ("connection_epoch", pa.int64()),
             ("schema_version", pa.string()),
             ("tournament_id", pa.string()),
             ("exchange_id", pa.string()),
@@ -100,7 +100,7 @@ _SCHEMAS: dict[str, pa.Schema] = {
     "strategy_events": pa.schema(
         [
             ("session_id", pa.string()),
-            ("connection_id", pa.string()),
+            ("connection_epoch", pa.int64()),
             ("schema_version", pa.string()),
             ("event_type", pa.string()),
             ("observed_at", _UTC_TIMESTAMP),
@@ -368,30 +368,8 @@ class LaunchSigRecorder(SigRealtimeRecorder):
     def capture_health_snapshot(self) -> dict[str, object]:
         snapshot = self._sink.health_snapshot()
         snapshot["session_id"] = self.session_id
-        snapshot["connection_id"] = self._connection_id
+        snapshot["connection_epoch"] = self._connection_epoch
         return snapshot
-
-    def begin_connection(self, *, reason: str, observed_at: datetime) -> str:
-        self._connection_id = uuid.uuid4().hex
-        self._emit_normalized(
-            event_type="CONNECTION_SESSION_START",
-            observed_at=observed_at,
-            provenance="LOCAL_CAPTURE_RUNTIME",
-            evidence_label="CONNECTION_CONTEXT",
-            reason=reason,
-            payload={"connection_id": self._connection_id},
-        )
-        return self._connection_id
-
-    def end_connection(self, *, outcome: str, observed_at: datetime) -> None:
-        self._emit_normalized(
-            event_type="CONNECTION_SESSION_END",
-            observed_at=observed_at,
-            provenance="LOCAL_CAPTURE_RUNTIME",
-            evidence_label="CONNECTION_CONTEXT",
-            reason=outcome,
-            payload={"connection_id": self._connection_id},
-        )
 
     def record_raw_batch(
         self,
@@ -746,6 +724,7 @@ class LaunchSigRecorder(SigRealtimeRecorder):
             "strategy_events",
             {
                 "session_id": self.session_id,
+                "connection_epoch": self._connection_epoch,
                 "schema_version": SCHEMA_VERSION,
                 "event_type": "SHADOW_MAKE",
                 "observed_at": _utc(observed_at),
@@ -780,6 +759,7 @@ class LaunchSigRecorder(SigRealtimeRecorder):
             "ets_state",
             {
                 "session_id": self.session_id,
+                "connection_epoch": self._connection_epoch,
                 "schema_version": SCHEMA_VERSION,
                 "observed_at": _utc(observed_at),
                 "monotonic_ns": time.monotonic_ns(),
@@ -880,6 +860,7 @@ class LaunchSigRecorder(SigRealtimeRecorder):
                     "liquidity_events",
                     {
                         "session_id": self.session_id,
+                        "connection_epoch": self._connection_epoch,
                         "schema_version": SCHEMA_VERSION,
                         "tournament_id": tournament_id,
                         "exchange_id": current.exchange_id,
@@ -941,6 +922,7 @@ class LaunchSigRecorder(SigRealtimeRecorder):
             "liquidity_events",
             {
                 "session_id": self.session_id,
+                "connection_epoch": self._connection_epoch,
                 "schema_version": SCHEMA_VERSION,
                 "tournament_id": tournament_id,
                 "exchange_id": current.exchange_id,
