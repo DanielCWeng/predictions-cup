@@ -52,6 +52,46 @@ R3/ETF, maths challengers and other bounded research may continue in parallel, b
 
 ---
 
+# Nice-to-haves before launch
+
+These are worth having **before 17:00 BST on 1 October only if the P0 hard gates are already green**.
+
+They are not allowed to delay SHADOW-002, LIVE-LEARN-001, RISK-002 or FULLSTACK-001.
+
+| Tier | Nice-to-have | Pre-launch target | Why it is valuable | Drop/defer rule |
+|---|---|---|---|---|
+| **A — strongly desirable** | **One-screen operator dashboard** | Read-only view of feed health, strategy states, risk/P&L, top markets, current dislocations, service status and kill-state | Reduces operator error and lets one person understand the whole system quickly | Defer if it becomes a bespoke UI project; plain HTML/terminal output is sufficient |
+| **A — strongly desirable** | **Automatic alerting / watchdogs** | Immediate alerts for feed stale, service death, capture lag, queue pressure, storage failure, risk halt, unresolved orders, clock drift and strategy crash | The stack may run unattended; failures need to become visible immediately | Keep alerts simple; do not build a complex notification platform |
+| **A — strongly desirable** | **Config + model/version snapshot at startup** | Persist exact git SHA, runtime config hash, mapping hash, strategy/model versions and environment identity with every session | Makes every live decision reproducible and prevents “what exactly was running?” ambiguity | Must be cheap; defer only if already provably captured elsewhere |
+| **A — strongly desirable** | **Clock/NTP drift monitor** | Record local wall-clock/monotonic health and alert on material drift | Lead/lag research is worthless if our observable clock is unreliable | Tiny implementation; should be done unless existing host monitoring already proves it |
+| **A — strongly desirable** | **Storage/disk runway monitor** | Estimate hours-to-full, shard growth, WAL growth, queue high-water and free disk | Prevents a silent evidence loss during the first long live session | Defer only if existing host monitoring covers the same metrics |
+| **A — strongly desirable** | **One-command operator status / recovery command** | Single command prints services, feeds, risk latch, unresolved orders, latest shard, learner freshness and exact SHA | Reduces recovery time under pressure | Do not build orchestration magic; a reliable status script is enough |
+| **A — strongly desirable** | **Basic correlated-event scenario caps** | Aggregate exposure by Senate/House/Governor/state/family and enforce simple scenario limits | Per-market limits alone can hide one giant election-direction bet | Sophisticated factor model may wait; basic grouping should exist if LIVE risk is enabled |
+| **B — useful if cheap** | **Kalshi read-only mapping/cache** | Even if full KALSHI-001 is unfinished, freeze the known six missing mappings and normalized adapter contract | Removes launch-time research and lets capture be added quickly once transport is ready | Defer full coverage/trading; six-hole read-only scope only |
+| **B — useful if cheap** | **Hard structural identity monitor** | Complement, exhaustive partition, NegRisk and other exact relationships calculated continuously from live BBOs | Gives a deterministic sanity/arb surface independent of predictive models | Shadow-only is enough pre-launch; executable trading logic can follow |
+| **B — useful if cheap** | **Signal/strategy feature dump** | Persist compact per-decision feature vectors for every challenger | Makes post-launch debugging and rapid retraining much easier | Do not log huge duplicated raw payloads; preserve references/hashes where possible |
+| **B — useful if cheap** | **Top-market attention board** | Rank markets by activity, spread, external gap, fill frequency and strategy interest | Helps focus human attention while the automatic market-selection engine is immature | Descriptive only; do not invent an opaque composite alpha score |
+| **B — useful if cheap** | **Launch-session replay checkpoint** | Produce a reproducible replay bundle/config from the rehearsal session | Lets us debug launch behaviour quickly without touching production capture | Defer if packaging work becomes large; raw evidence integrity is higher priority |
+| **B — useful if cheap** | **Automated PR/model intake contract** | New R3/Kalshi/research output can register a provider/version without modifying core SHADOW/RISK code | Prevents late research from destabilizing the runtime | Interface only; no generic plugin framework rewrite |
+| **C — optional** | **Human-readable launch dashboard polish** | Better charts/visualizations over already-available metrics | Helpful for cognition during long sessions | Drop immediately if it costs more than a small amount of engineering time |
+| **C — optional** | **Historical result browser / research UI** | Quick lookup of prior experiments and dispositions | Useful context, but not launch-critical | Post-launch unless essentially free |
+| **C — optional** | **Advanced factor/covariance risk** | Rich correlation model beyond basic scenario caps | Could improve capital efficiency later | First live-day project after enough actual SIG data exists |
+| **C — optional** | **Full Kalshi execution path** | Ability to trade Kalshi, not just observe it | Could broaden later monetisation | Explicitly post-launch; read-only is enough now |
+
+## Nice-to-have decision rule
+
+A nice-to-have is allowed into the remaining pre-launch queue only when all of the following are true:
+
+1. it can be built or verified without changing a frozen/core launch contract;
+2. it reduces launch risk, improves live observability, or adds an independent information source;
+3. it has a clear stop condition;
+4. it can be abandoned cleanly if a hard gate turns red;
+5. it does not create a second bespoke evaluation or execution path.
+
+If any hard gate is not green, nice-to-have work pauses immediately.
+
+---
+
 # The 40-hour execution schedule
 
 ## T-40h to T-32h — 30 Sep 00:10–08:00 BST
