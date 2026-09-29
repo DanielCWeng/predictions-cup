@@ -1,12 +1,6 @@
 {
   "schema_version": 1,
-  "action": "run",
-  "kernel_dir": "scripts/kaggle/pred006_final",
-  "kernel": "polyleviathan/pred006-final",
-  "poll_seconds": 20,
-  "timeout_minutes": 180,
-  "download_outputs": true,
-  "output_file_pattern": "(final_results\\.json|FINAL_REPORT\\.md|make_plugin_spec\\.json)$",
-  "run_nonce": "PRED006_ONE_SHOT_FINAL_20260929",
-  "note": "PRED-006 one-shot FINAL. Bound to split SHA 28d41fbb590f7f9abe59ca24e00841307fe13991c3c695748240fe127847f349 and shortlist freeze SHA 5deff02e70bbb63a7355390c4babfc1ed63dd8d5b112087a2e9ff9dddfe835f6. This is the sole permitted FINAL predictive evaluation. No rerun, retune, rescue, subsetting, or horizon/feature changes after outcome access."
+  "action": "status",
+  "kernel": "polyleviathan/pred006-one-shot-final",
+  "note": "PRED-006 FINAL has been consumed exactly once. This manifest is permanently read-only. Do not change it back to action=run; no rerun, retune, rescue, subsetting, or horizon/feature changes are permitted."
 }
