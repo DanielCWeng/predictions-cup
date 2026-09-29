@@ -16,6 +16,8 @@
     "polyleviathan/pred006-search-cross-market",
     "polyleviathan/pred006-search-participant-flow",
     "polyleviathan/pred006-search-interactions",
-    "polyleviathan/pred006-search-hazard-fee"
+    "polyleviathan/pred006-search-event-targets",
+    "polyleviathan/pred006-search-hazard-fee",
+    "polyleviathan/pred006-hazard-ablation"
   ]
 }
