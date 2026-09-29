@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "logs",
+  "kernel": "polyleviathan/005b-data003-seven-horizon-confirmation",
+  "note": "Read-only progress logs for fresh DATA-003 seven-horizon confirmation."
+}
