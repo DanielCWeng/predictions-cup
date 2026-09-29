@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B-ORDERING-FALSIFICATION",
+  "classification": "POST_HOC_FALSIFICATION_ONLY",
+  "claim": "For Polygon PoS mainnet over the 005B history, ordering by (block_number, log_index) is exactly equivalent to ordering by (block_timestamp, log_index).",
+  "authoritative_source": {
+    "repository": "0xPolygon/bor",
+    "commit": "b5a6adff454a697ac9cee829ae4c24216a38c265",
+    "verification_file": "consensus/bor/bor.go",
+    "verification_rule": "A header is rejected with ErrInvalidTimestamp when parent.Time + CalculatePeriod(number) > header.Time.",
+    "configuration_file": "params/config.go",
+    "chain": "BorMainnetChainConfig",
+    "chain_id": 137,
+    "period_seconds": {
+      "0": 2,
+      "80084800": 1
+    }
+  },
+  "logical_implication": [
+    "The configured mainnet period is strictly positive throughout the 005B history.",
+    "Therefore every valid child block has a strictly greater header timestamp than its parent.",
+    "Therefore two different valid Polygon mainnet blocks cannot share the same block timestamp.",
+    "Therefore block_number is strictly monotone with the stored block timestamp.",
+    "Within a block, log_index is the authoritative observable log sequence.",
+    "Consequently the requested true order (block_number, log_index) can be reconstructed without block-number inference as (timestamp, log_index), with tx_hash permitted only after log_index as a deterministic impossible-tie guard."
+  ],
+  "correction": {
+    "parent_pseudo_order": "timestamp, tx_hash, log_index",
+    "true_equivalent_order": "timestamp, log_index, tx_hash",
+    "scientific_change": "ORDERING_ONLY",
+    "feature_target_model_threshold_shortlist_changes": "NONE"
+  },
+  "hard_audit": "The corrected lane must fail if two 005B economic rows in one timestamp carry the same log_index, because strict timestamp-to-block uniqueness would then make block/log ordering non-unique for the retained economic-fill population.",
+  "parent_pr_preservation": "PR #45 artefacts remain byte-identical and are never overwritten."
+}
