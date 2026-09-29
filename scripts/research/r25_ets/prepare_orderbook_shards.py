@@ -4,11 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import csv
+import gzip
 import hashlib
 import json
 import shutil
 import subprocess
+import textwrap
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -18,6 +21,23 @@ ROOT = Path(__file__).resolve().parents[3]
 UNIVERSE = ROOT / "data/research/ets_universe"
 SOURCE_FIRST = datetime(2026, 2, 21, 18, tzinfo=timezone.utc)
 CODE_DATASET = "polyleviathan/sig-cup-predictions-cup-code"
+
+
+def embedded_script(template: Path, files: dict[str, Path], kernel_id: str, repository_commit: str) -> str:
+    entries = []
+    for name, source in sorted(files.items()):
+        compressed = gzip.compress(source.read_bytes(), compresslevel=9, mtime=0)
+        encoded = base64.b64encode(compressed).decode("ascii")
+        chunks = textwrap.wrap(encoded, width=100)
+        entries.append(f"    {name!r}: (\n" + "\n".join(f"        {chunk!r}" for chunk in chunks) + "\n    ),")
+    mapping = "{\n" + "\n".join(entries) + "\n}"
+    source = template.read_text(encoding="utf-8")
+    source = source.replace("EMBEDDED_INPUTS_B64: dict[str, str] = {}", f"EMBEDDED_INPUTS_B64: dict[str, str] = {mapping}")
+    source = source.replace('EMBEDDED_KERNEL_ID = ""', f"EMBEDDED_KERNEL_ID = {json.dumps(kernel_id)}")
+    source = source.replace('EMBEDDED_REPOSITORY_COMMIT = ""', f"EMBEDDED_REPOSITORY_COMMIT = {json.dumps(repository_commit)}")
+    if "EMBEDDED_INPUTS_B64: dict[str, str] = {}" in source or 'EMBEDDED_KERNEL_ID = ""' in source or 'EMBEDDED_REPOSITORY_COMMIT = ""' in source:
+        raise RuntimeError("could not fill all generated order-book kernel input placeholders")
+    return source
 
 
 def sha256(path: Path) -> str:
@@ -88,7 +108,6 @@ def main() -> None:
         kernel_id = f"polyleviathan/r25-ets-orderbooks-{shard_id}"
         kernel_dir = ROOT / f"scripts/kaggle/r25_ets_orderbooks_{shard_id}"
         kernel_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(shared_run, kernel_dir / "run.py")
         shutil.copyfile(freeze_path, kernel_dir / "ETS_UNIVERSE_FREEZE.json")
         shutil.copyfile(inventory_path, kernel_dir / "ETS_TOKEN_INVENTORY.csv")
         (kernel_dir / "REPOSITORY_COMMIT.txt").write_text(repository_commit + "\n", encoding="utf-8")
@@ -102,6 +121,16 @@ def main() -> None:
             "cid_token_inventory_sha256": inventory_sha,
         }
         (kernel_dir / "shard.json").write_text(json.dumps(shard, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        (kernel_dir / "run.py").write_text(embedded_script(
+            shared_run,
+            {
+                "ETS_TOKEN_INVENTORY.csv": inventory_path,
+                "ETS_UNIVERSE_FREEZE.json": freeze_path,
+                "shard.json": kernel_dir / "shard.json",
+            },
+            kernel_id,
+            repository_commit,
+        ), encoding="utf-8")
         metadata = {
             "id": kernel_id,
             "title": f"R25 ETS Orderbooks {shard_id}",
@@ -132,6 +161,15 @@ def main() -> None:
     shutil.copyfile(freeze_path, finalizer_dir / "ETS_UNIVERSE_FREEZE.json")
     shutil.copyfile(inventory_path, finalizer_dir / "ETS_TOKEN_INVENTORY.csv")
     (finalizer_dir / "REPOSITORY_COMMIT.txt").write_text(repository_commit + "\n", encoding="utf-8")
+    (finalizer_dir / "run.py").write_text(embedded_script(
+        ROOT / "scripts/kaggle/r25_ets_finalize/run_template.py",
+        {
+            "ETS_TOKEN_INVENTORY.csv": inventory_path,
+            "ETS_UNIVERSE_FREEZE.json": freeze_path,
+        },
+        "polyleviathan/r25-ets-finalize",
+        repository_commit,
+    ), encoding="utf-8")
     finalizer_metadata = {
         "id": "polyleviathan/r25-ets-finalize",
         "title": "R25 ETS Finalize",

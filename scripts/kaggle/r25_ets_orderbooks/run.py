@@ -6,7 +6,9 @@ ordering are imported from the accepted DATA-001 predictions_cup wheel.
 
 from __future__ import annotations
 
+import base64
 import csv
+import gzip
 import hashlib
 import json
 import os
@@ -22,6 +24,9 @@ from pathlib import Path
 from typing import Any
 
 
+EMBEDDED_INPUTS_B64: dict[str, str] = {}
+EMBEDDED_KERNEL_ID = ""
+EMBEDDED_REPOSITORY_COMMIT = ""
 INPUT = Path("/kaggle/input")
 WORK = Path("/kaggle/working/r25_ets_orderbooks")
 TMP = Path("/kaggle/tmp/r25_ets_orderbooks")
@@ -35,6 +40,11 @@ def find_one(name: str) -> Path:
     local = Path(__file__).resolve().parent / name
     if local.is_file() and not matches:
         return local
+    if not matches and name in EMBEDDED_INPUTS_B64:
+        embedded = WORK / "embedded_inputs" / name
+        embedded.parent.mkdir(parents=True, exist_ok=True)
+        embedded.write_bytes(gzip.decompress(base64.b64decode(EMBEDDED_INPUTS_B64[name])))
+        return embedded
     raise RuntimeError(f"expected one {name} under Kaggle inputs or kernel files, found {len(matches)}")
 
 
@@ -359,8 +369,8 @@ def main() -> None:
     manifest = {
         "schema_version": 1,
         "dataset_id": "POLYLEVIATHAN_R25_ETS_ORDERBOOKS",
-        "kernel_id": json.loads((Path(__file__).resolve().parent / "kernel-metadata.json").read_text())["id"],
-        "repository_commit": (Path(__file__).resolve().parent / "REPOSITORY_COMMIT.txt").read_text(encoding="utf-8").strip(),
+        "kernel_id": EMBEDDED_KERNEL_ID,
+        "repository_commit": EMBEDDED_REPOSITORY_COMMIT,
         "acquisition_script_sha256": sha256(Path(__file__).resolve()),
         "shard": shard,
         "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
