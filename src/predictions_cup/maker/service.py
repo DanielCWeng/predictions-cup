@@ -49,7 +49,10 @@ from predictions_cup.sig.account_reconciliation import (
     reconcile_account,
 )
 from predictions_cup.sig.account_runtime import AccountRealtimeController
-from predictions_cup.sig.account_state import AccountRealtimeStateEngine
+from predictions_cup.sig.account_state import (
+    AccountRealtimeStateEngine,
+    AccountTrustTransition,
+)
 from predictions_cup.sig.errors import SigApiError
 from predictions_cup.sig.governed_client import GovernedSigRestClient
 from predictions_cup.sig.realtime_models import MarketBatchDto
@@ -253,6 +256,10 @@ class MakerService:
                 authoritative_resync=account_resync,
                 execution_journal=journal,
             )
+            # The startup REST snapshot was sufficient for LIVE permit/recovery,
+            # but new maker placements must wait for a subscribed account socket
+            # plus the controller's while-subscribed authoritative reconciliation.
+            account_state.mark_untrusted(AccountTrustTransition.INITIAL)
 
             self._install_signal_handlers()
             runtime.notify_global(observed_monotonic_ns=monotonic_ns())
