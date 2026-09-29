@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "subexperiment": "R3-SEAT-LEADLAG-001",
+  "stage": "TRAIN_DEV_ONLY",
+  "frozen_before_performance": true,
+  "empirical_universe": {
+    "source": "DATA-004 P0 fills only",
+    "target": "DATA-003 accepted direct/reference fills only",
+    "house_event_id": "103166",
+    "senate_event_id": "106193",
+    "house_target_sig_market_id": "152",
+    "senate_target_sig_market_id": "154",
+    "data001_allowed": false,
+    "historical_analogue_families_allowed": false
+  },
+  "source_signal": {
+    "chronology": "At source block B, state includes source fills through B. Target baseline must be from a block < B; target response must be from a block > B.",
+    "max_component_age_seconds": 86400,
+    "house_scalar": "QP/KL coherent category projection followed by frozen 218-seat MaxEnt point: P(R>=220)+0.4*P(215-219).",
+    "senate_scalar": "QP/KL coherent category projection followed by T50=P(R seats>=50). T51 is excluded from candidate selection because settlement semantics remain unresolved.",
+    "delta": "current eligible source scalar minus immediately previous eligible source scalar",
+    "shock_threshold": "75th percentile of absolute non-zero delta estimated on TRAIN source events only, separately by family and geometry",
+    "cooldown_seconds": 30,
+    "deduplication": "If multiple shocks map to the same future target block, keep the earliest source shock only."
+  },
+  "outcomes": {
+    "primary": "first direct target update strictly after source block, provided observed within 300 seconds",
+    "diagnostics": [
+      "same construction within 30 seconds",
+      "same construction within 5 seconds"
+    ],
+    "no_update_rule": "Do not impute zero target move when no target fill is observed in the window; report coverage instead.",
+    "target_change": "future target price minus last target price strictly before source block"
+  },
+  "estimator": {
+    "fit": "zero-intercept beta=sum(delta_source*delta_target)/sum(delta_source^2) on TRAIN shocks only",
+    "predictor": "clip(target_before + beta*delta_source,0,1)",
+    "baseline": "target_before persistence / zero predicted target move",
+    "geometries": [
+      "QP",
+      "KL"
+    ]
+  },
+  "metrics": [
+    "shock counts and matched-response coverage",
+    "median/p90 response latency",
+    "MAE/RMSE vs persistence",
+    "absolute and relative MAE improvement",
+    "direction accuracy",
+    "first/second DEV-half stability",
+    "1000 UTC-day cluster bootstrap of MAE improvement"
+  ],
+  "primary_gate": {
+    "horizon_seconds": 300,
+    "minimum_train_rows": 50,
+    "minimum_dev_rows": 30,
+    "minimum_dev_day_clusters": 4,
+    "requirements": [
+      "QP and KL both have positive DEV absolute MAE improvement",
+      "QP and KL bootstrap lower 95% > 0",
+      "QP and KL first- and second-half DEV MAE improvement >= 0",
+      "QP and KL direction accuracy > 0.5"
+    ],
+    "rule": "5s/30s diagnostics may demote but never rescue a failed 300s primary.",
+    "no_post_result_rescue": true
+  },
+  "final_opened": false,
+  "final_rows_accessed": 0
+}
