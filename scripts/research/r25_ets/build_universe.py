@@ -33,6 +33,7 @@ RELATIONSHIP_CLASSES = {
 EDGE_FIELDS = [
     "source_type", "source_id", "target_type", "target_id", "relationship_class",
     "relationship_direction", "economic_rationale", "review_status", "confidence",
+    "existing_direct_mapping",
 ]
 
 
@@ -217,6 +218,13 @@ def command_finalize(args: argparse.Namespace) -> None:
     anchor_rows = make_anchor_rows(mapping)
     direct_market_ids, direct_cids, direct_tokens = direct_identity_sets(mapping)
     anchors_by_id = {r["sig_market_id"]: r for r in anchor_rows}
+    direct_sig_ids_by_market: dict[str, set[str]] = defaultdict(set)
+    direct_components_by_market: dict[str, dict[str, Any]] = {}
+    for record in accepted_records(mapping):
+        for component in canonical_components(record):
+            direct_market_id = str(component["market_id"])
+            direct_sig_ids_by_market[direct_market_id].add(str(record["sig_market_id"]))
+            direct_components_by_market.setdefault(direct_market_id, component)
 
     by_market: dict[str, dict[str, str]] = {}
     for candidate in candidates:
@@ -236,14 +244,13 @@ def command_finalize(args: argparse.Namespace) -> None:
         by_market[market_id] = candidate
 
     edges: list[dict[str, Any]] = []
+    direct_relationship_edges: list[dict[str, Any]] = []
     decisions_by_market: dict[str, list[dict[str, str]]] = defaultdict(list)
     for edge in reviewed_edges:
         market_id = str(edge.get("market_id") or "").strip()
         sig_id = str(edge.get("sig_market_id") or "").strip()
         if not market_id or market_id not in by_market:
             raise ValueError(f"review decision points to unknown candidate market: {market_id}")
-        if market_id in direct_market_ids:
-            raise ValueError(f"direct mapping market cannot enter adjacent ETS review: {market_id}")
         status = edge.get("review_status", "").strip()
         if status not in {"SEMANTIC_REVIEWED_ACCEPTED", "REJECTED", "PENDING_REVIEW"}:
             raise ValueError(f"invalid review status {status!r} for market {market_id}")
@@ -254,6 +261,28 @@ def command_finalize(args: argparse.Namespace) -> None:
         decisions_by_market[market_id].append(edge)
         if status != "SEMANTIC_REVIEWED_ACCEPTED":
             continue
+        is_direct = market_id in direct_market_ids
+        candidate_row = by_market[market_id]
+        candidate_cid = str(candidate_row.get("condition_id") or "")
+        if candidate_cid in direct_cids and not is_direct:
+            raise ValueError(f"candidate market ID conflicts with canonical direct condition identity: {market_id}")
+        edge_direct_flag = edge.get("existing_direct_mapping", "").strip().lower()
+        if is_direct:
+            if edge_direct_flag != "true":
+                raise ValueError(f"direct market relationship is missing existing_direct_mapping=true: {market_id}")
+            if sig_id in direct_sig_ids_by_market[market_id]:
+                raise ValueError(f"direct market review repeats its canonical SIG mapping: {market_id} -> {sig_id}")
+            canonical = direct_components_by_market[market_id]
+            candidate_tokens = _json_field(candidate_row, "clob_token_ids", [])
+            candidate_outcomes = _json_field(candidate_row, "outcomes", [])
+            if candidate_cid != str(canonical.get("condition_id") or ""):
+                raise ValueError(f"direct candidate condition ID differs from canonical mapping: {market_id}")
+            if candidate_tokens != [str(value) for value in canonical.get("token_ids", [])]:
+                raise ValueError(f"direct candidate token alignment differs from canonical mapping: {market_id}")
+            if canonical.get("outcomes") and candidate_outcomes != canonical["outcomes"]:
+                raise ValueError(f"direct candidate outcome alignment differs from canonical mapping: {market_id}")
+        elif edge_direct_flag == "true":
+            raise ValueError(f"non-direct ETS edge incorrectly carries existing_direct_mapping=true: {market_id}")
         for field in ("relationship_class", "relationship_direction", "economic_rationale", "confidence"):
             if not edge.get(field, "").strip():
                 raise ValueError(f"accepted edge missing {field}: market={market_id} SIG={sig_id}")
@@ -263,11 +292,12 @@ def command_finalize(args: argparse.Namespace) -> None:
             raise ValueError(f"accepted market absent from Gamma candidate inventory: {market_id}")
         if not by_market[market_id].get("condition_id"):
             raise ValueError(f"accepted candidate has no canonical condition ID: {market_id}")
-        edges.append({
+        materialized_edge = {
             "source_type": "SIG_ANCHOR", "source_id": sig_id,
-            "target_type": "ETS_MARKET", "target_id": market_id,
+            "target_type": "DIRECT_POLYMARKET" if is_direct else "ETS_MARKET", "target_id": market_id,
             **{k: edge[k] for k in EDGE_FIELDS[4:]},
-        })
+        }
+        (direct_relationship_edges if is_direct else edges).append(materialized_edge)
 
     for market_id, decisions in decisions_by_market.items():
         decision_statuses = {row.get("review_status") for row in decisions}
@@ -277,8 +307,13 @@ def command_finalize(args: argparse.Namespace) -> None:
             raise ValueError(f"rejected candidate has more than one review decision: {market_id}")
 
     accepted_ids = {e["target_id"] for e in edges}
-    if len(accepted_ids) != len(edges) and len({(e["target_id"], e["source_id"]) for e in edges}) != len(edges):
-        raise ValueError("duplicate accepted ETS edge")
+    accepted_direct_ids = {e["target_id"] for e in direct_relationship_edges}
+    accepted_edge_keys = [
+        (e["target_type"], e["target_id"], e["source_id"], e["relationship_class"])
+        for e in [*edges, *direct_relationship_edges]
+    ]
+    if len(set(accepted_edge_keys)) != len(accepted_edge_keys):
+        raise ValueError("duplicate accepted ETS/direct relationship edge")
     missing = accepted_ids - by_market.keys()
     if missing:
         raise ValueError(f"accepted markets absent from candidates: {sorted(missing)[:10]}")
@@ -331,10 +366,14 @@ def command_finalize(args: argparse.Namespace) -> None:
     rejection_rows: list[dict[str, Any]] = []
     for market_id, row in sorted(by_market.items(), key=lambda kv: (int(kv[0]) if kv[0].isdigit() else 0, kv[0])):
         decisions = decisions_by_market.get(market_id, [])
+        is_direct = market_id in direct_market_ids or row.get("condition_id") in direct_cids
         if market_id in accepted_ids:
             status, reason = "ACCEPTED_ETS", ""
-        elif market_id in direct_market_ids or row.get("condition_id") in direct_cids:
-            status, reason = "REJECTED", "duplicate of canonical direct mapping"
+        elif is_direct:
+            if market_id in accepted_direct_ids:
+                status, reason = "DIRECT_MAPPING_WITH_ACCEPTED_RELATIONSHIPS", "canonical direct contract; cross-anchor relationship retained in ETS_EDGES.csv"
+            else:
+                status, reason = "DIRECT_DUPLICATE", "canonical direct mapping; excluded from adjacent ETS market count"
         elif decisions and all(d.get("review_status") == "REJECTED" for d in decisions):
             status = "REJECTED"
             reason = "; ".join(sorted({d.get("rejection_reason", "semantic review rejected") for d in decisions}))
@@ -399,9 +438,11 @@ def command_finalize(args: argparse.Namespace) -> None:
                 "economic_rationale": "Canonical accepted SIG-to-Polymarket mapping; retained as an anchor node.",
                 "review_status": "CANONICAL_MAPPING_ACCEPTED",
                 "confidence": record.get("mapping_confidence", ""),
+                "existing_direct_mapping": True,
             })
-    all_edges = direct_edges + edges
+    all_edges = direct_edges + direct_relationship_edges + edges
     relationship_counts = Counter(e["relationship_class"] for e in edges)
+    direct_relationship_counts = Counter(e["relationship_class"] for e in direct_relationship_edges)
 
     def save_csv(filename: str, rows: list[dict[str, Any]], fields: list[str]) -> None:
         write_csv(OUT_DIR / filename, rows, fields)
@@ -472,7 +513,11 @@ def command_finalize(args: argparse.Namespace) -> None:
             for r in candidate_rows
         ),
         "rejected_direct_duplicate_count": sum(
-            r["candidate_status"] == "REJECTED" and (r["market_id"] in direct_market_ids or r.get("condition_id") in direct_cids)
+            r["candidate_status"] == "DIRECT_DUPLICATE"
+            for r in candidate_rows
+        ),
+        "direct_candidate_count": sum(
+            r["market_id"] in direct_market_ids or r.get("condition_id") in direct_cids
             for r in candidate_rows
         ),
         "pending_candidate_count": sum(
@@ -483,6 +528,9 @@ def command_finalize(args: argparse.Namespace) -> None:
         "unique_cid_count": len(cid_rows),
         "unique_token_count": len(all_tokens),
         "relationship_class_counts": dict(sorted(relationship_counts.items())),
+        "direct_relationship_class_counts": dict(sorted(direct_relationship_counts.items())),
+        "accepted_direct_relationship_edge_count": len(direct_relationship_edges),
+        "accepted_direct_relationship_market_count": len(accepted_direct_ids),
         "direct_anchor_counts": {
             "direct_market_ids": len(direct_market_ids), "direct_cids": len(direct_cids),
             "direct_tokens": len(direct_tokens),

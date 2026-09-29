@@ -109,8 +109,28 @@ def anchor_index(mapping: dict[str, Any]) -> dict[str, Any]:
     direct_markets: set[str] = set()
     direct_cids: set[str] = set()
     direct_events: set[str] = set()
+    direct_sig_ids_by_market: dict[str, set[str]] = {}
+    direct_sig_ids_by_cid: dict[str, set[str]] = {}
 
     for record in anchors:
+        # Collect direct identities before the race-title classifier can continue to
+        # the next anchor. House district anchors take that path frequently.
+        components = [record.get("direct_polymarket")] + (record.get("polymarket_components") or [])
+        for component in components:
+            if not isinstance(component, dict):
+                continue
+            market_id = str(component.get("market_id") or "").strip()
+            condition_id = str(component.get("condition_id") or "").strip()
+            sig_id = str(record.get("sig_market_id") or "")
+            if market_id:
+                direct_markets.add(market_id)
+                direct_sig_ids_by_market.setdefault(market_id, set()).add(sig_id)
+            if condition_id:
+                direct_cids.add(condition_id)
+                direct_sig_ids_by_cid.setdefault(condition_id, set()).add(sig_id)
+            if component.get("event_id"):
+                direct_events.add(str(component["event_id"]))
+
         title = str(record.get("sig_market_title") or "")
         sig_id = str(record.get("sig_market_id") or "")
         lower = title.lower()
@@ -139,17 +159,6 @@ def anchor_index(mapping: dict[str, Any]) -> dict[str, Any]:
                 senate_by_state.setdefault(state_match, {})[party] = sig_id
                 other_by_state.setdefault(state_match, []).append(sig_id)
 
-        components = [record.get("direct_polymarket")] + (record.get("polymarket_components") or [])
-        for component in components:
-            if not isinstance(component, dict):
-                continue
-            if component.get("market_id"):
-                direct_markets.add(str(component["market_id"]))
-            if component.get("condition_id"):
-                direct_cids.add(str(component["condition_id"]))
-            if component.get("event_id"):
-                direct_events.add(str(component["event_id"]))
-
     return {
         "anchors": anchors,
         "controls": controls,
@@ -160,6 +169,8 @@ def anchor_index(mapping: dict[str, Any]) -> dict[str, Any]:
         "direct_markets": direct_markets,
         "direct_cids": direct_cids,
         "direct_events": direct_events,
+        "direct_sig_ids_by_market": direct_sig_ids_by_market,
+        "direct_sig_ids_by_cid": direct_sig_ids_by_cid,
     }
 
 
@@ -316,6 +327,7 @@ def edge(market_id: str, sig_id: str, relation: str, direction: str, rationale: 
         "economic_rationale": rationale,
         "confidence": confidence,
         "rejection_reason": "",
+        "existing_direct_mapping": "false",
     }
 
 
@@ -329,14 +341,16 @@ def reject(market_id: str, reason: str) -> dict[str, str]:
         "economic_rationale": "",
         "confidence": "",
         "rejection_reason": reason,
+        "existing_direct_mapping": "false",
     }
 
 
 def review_candidate(row: dict[str, str], index: dict[str, Any]) -> tuple[str, list[dict[str, str]]]:
     market_id = str(row.get("market_id") or "").strip()
     cid = str(row.get("condition_id") or "").strip()
-    if market_id in index["direct_markets"] or cid in index["direct_cids"]:
-        return "DIRECT_DUPLICATE", []
+    direct_sig_ids = set(index["direct_sig_ids_by_market"].get(market_id, set()))
+    direct_sig_ids.update(index["direct_sig_ids_by_cid"].get(cid, set()))
+    is_direct = market_id in index["direct_markets"] or cid in index["direct_cids"]
 
     if row.get("identity_status") != "VERIFIED" or not cid:
         if re.search(r"congressional map|redistrict|district map", str(row.get("question") or ""), re.I):
@@ -472,6 +486,22 @@ def review_candidate(row: dict[str, str], index: dict[str, Any]) -> tuple[str, l
     added: list[dict[str, str]] = []
     id_to_anchor = {str(r.get("sig_market_id")): r for r in index["anchors"]}
 
+    def accept_links() -> tuple[str, list[dict[str, str]]]:
+        # A direct contract can also carry information about another SIG target,
+        # such as a district winner contributing to House control. Preserve those
+        # cross-anchor links while suppressing its tautological direct edge.
+        selected = [item for item in added if item["sig_market_id"] not in direct_sig_ids]
+        dedup: dict[tuple[str, str], dict[str, str]] = {}
+        for item in selected:
+            item["existing_direct_mapping"] = "true" if is_direct else "false"
+            dedup.setdefault((item["sig_market_id"], item["relationship_class"]), item)
+        if not dedup:
+            return ("DIRECT_DUPLICATE", []) if is_direct else ("REJECTED_NO_EXPLICIT_ECONOMIC_LINK", [reject(
+                market_id,
+                "A 2026 U.S. political/election reference is present, but Gamma settlement semantics do not establish a shared SIG race, chamber seat, party aggregate, or named multi-race relationship.",
+            )])
+        return ("ACCEPTED_DIRECT_RELATIONSHIP" if is_direct else "ACCEPTED", list(dedup.values()))
+
     def add_links(sig_ids: list[str], relation: str, direction: str, reason: str, confidence: str) -> None:
         for sig_id in sig_ids:
             if sig_id:
@@ -500,7 +530,7 @@ def review_candidate(row: dict[str, str], index: dict[str, Any]) -> tuple[str, l
         if related_ids:
             add_links(sorted(set(related_ids)), "MULTI_RACE_COMBO", "joint/nonlinear; exact combo semantics remain in the source contract",
                       "Gamma question and event scope enumerate multiple 2026 U.S. races/states. Each linked SIG anchor is a named race component; the combined payout remains one contract.", "MEDIUM")
-            return "ACCEPTED", list({(e["sig_market_id"], e["relationship_class"]): e for e in added}.values())
+            return accept_links()
 
     if has_dist:
         dist_key = (district[0], district[1])
@@ -655,18 +685,17 @@ def review_candidate(row: dict[str, str], index: dict[str, Any]) -> tuple[str, l
             add_links(same_state, "SAME_STATE_RELATED", "shared statewide partisan electorate; not the same office",
                       f"Gamma criteria identify a 2026 {state.title()} state-legislative contest; the shared state ballot/party control links it to the mapped {state.title()} SIG race.", "MEDIUM")
 
+    if not added and is_direct:
+        return "DIRECT_DUPLICATE", []
     if not added:
         return "REJECTED_NO_EXPLICIT_ECONOMIC_LINK", [reject(
             market_id,
             "A 2026 U.S. political/election reference is present, but Gamma settlement semantics do not establish a shared SIG race, chamber seat, party aggregate, or named multi-race relationship.",
         )]
 
-    # Normalize repeated links and keep only schema-supported relationship labels.
-    dedup: dict[tuple[str, str], dict[str, str]] = {}
-    for e in added:
-        key = (e["sig_market_id"], e["relationship_class"])
-        dedup.setdefault(key, e)
-    return "ACCEPTED", list(dedup.values())
+    # Normalize repeated links, suppress direct self-links, and keep only explicit
+    # economically meaningful edges.
+    return accept_links()
 
 
 def state_us_tag(labels: set[str]) -> bool:
@@ -689,18 +718,28 @@ def main() -> None:
     outcomes = Counter()
     statuses = Counter()
     classes = Counter()
+    direct_classes = Counter()
     accepted_markets: set[str] = set()
+    accepted_direct_markets: set[str] = set()
     rejected_markets: set[str] = set()
     for row in candidates:
         market_id = str(row.get("market_id") or "").strip()
         status, decisions = review_candidate(row, index)
+        if (
+            (market_id in index["direct_markets"] or str(row.get("condition_id") or "").strip() in index["direct_cids"])
+            and status not in {"DIRECT_DUPLICATE", "ACCEPTED_DIRECT_RELATIONSHIP"}
+        ):
+            # The canonical mapping remains authoritative even if this Gamma
+            # discovery row cannot support an additional semantic edge.
+            status, decisions = "DIRECT_DUPLICATE", []
         outcomes[status] += 1
         if status == "DIRECT_DUPLICATE":
             continue
-        if status == "ACCEPTED":
-            accepted_markets.add(market_id)
+        if status in {"ACCEPTED", "ACCEPTED_DIRECT_RELATIONSHIP"}:
+            is_direct = status == "ACCEPTED_DIRECT_RELATIONSHIP"
+            (accepted_direct_markets if is_direct else accepted_markets).add(market_id)
             for d in decisions:
-                classes[d["relationship_class"]] += 1
+                (direct_classes if is_direct else classes)[d["relationship_class"]] += 1
                 output_rows.append(d)
         else:
             rejected_markets.add(market_id)
@@ -711,6 +750,7 @@ def main() -> None:
     fields = [
         "market_id", "sig_market_id", "review_status", "relationship_class",
         "relationship_direction", "economic_rationale", "confidence", "rejection_reason",
+        "existing_direct_mapping",
     ]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", encoding="utf-8", newline="") as f:
@@ -729,10 +769,14 @@ def main() -> None:
         "non_direct_candidate_row_count": len(candidates) - outcomes["DIRECT_DUPLICATE"],
         "accepted_ets_market_count": len(accepted_markets),
         "accepted_edge_count": sum(classes.values()),
+        "accepted_direct_relationship_market_count": len(accepted_direct_markets),
+        "accepted_direct_relationship_edge_count": sum(direct_classes.values()),
         "rejected_candidate_count": len(rejected_markets),
+        "non_direct_candidate_row_count": len(candidates) - outcomes["DIRECT_DUPLICATE"] - len(accepted_direct_markets),
         "review_decision_counts": dict(sorted(outcomes.items())),
         "review_status_counts": dict(sorted(statuses.items())),
         "relationship_class_edge_counts": dict(sorted(classes.items())),
+        "direct_relationship_class_edge_counts": dict(sorted(direct_classes.items())),
         "unresolved_identity_candidates": [
             {"market_id": r.get("market_id"), "question": r.get("question"), "condition_id": r.get("condition_id")}
             for r in candidates if r.get("identity_status") != "VERIFIED"

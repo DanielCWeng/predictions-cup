@@ -1,28 +1,35 @@
 {
-  "accepted_edge_count": 42306,
-  "accepted_ets_market_count": 18265,
+  "accepted_direct_relationship_edge_count": 758,
+  "accepted_direct_relationship_market_count": 379,
+  "accepted_edge_count": 42096,
+  "accepted_ets_market_count": 18173,
   "candidate_row_count_including_direct": 37410,
   "canonical_mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
-  "direct_duplicate_row_count": 601,
+  "direct_duplicate_row_count": 314,
+  "direct_relationship_class_edge_counts": {
+    "CONDITIONAL_OUTCOME": 16,
+    "TARGET_CONSTITUENT_OF_AGGREGATE": 742
+  },
   "gamma_candidates_sha256": "eac7b93154d029c4c4639196d6a8496bc12421ddcf60d2f539bc9ac1ba81a1c3",
-  "non_direct_candidate_row_count": 36809,
+  "non_direct_candidate_row_count": 36717,
   "rejected_candidate_count": 18544,
   "relationship_class_edge_counts": {
     "CHAMBER_CONTROL": 207,
-    "CONDITIONAL_OUTCOME": 19199,
+    "CONDITIONAL_OUTCOME": 19193,
     "JOINT_OUTCOME": 624,
     "MULTI_RACE_COMBO": 87,
     "OTHER_ECONOMICALLY_LINKED": 237,
-    "PIVOTAL_RACE": 275,
+    "PIVOTAL_RACE": 255,
     "SAME_STATE_RELATED": 2911,
     "SEAT_EXACT": 10,
     "SEAT_RANGE": 8,
     "SEAT_THRESHOLD": 352,
-    "TARGET_CONSTITUENT_OF_AGGREGATE": 18396
+    "TARGET_CONSTITUENT_OF_AGGREGATE": 18212
   },
   "review_decision_counts": {
-    "ACCEPTED": 18265,
-    "DIRECT_DUPLICATE": 601,
+    "ACCEPTED": 18173,
+    "ACCEPTED_DIRECT_RELATIONSHIP": 379,
+    "DIRECT_DUPLICATE": 314,
     "REJECTED_GAMMA_SEMANTIC_CONFLICT": 19,
     "REJECTED_LOCAL_OFFICE": 710,
     "REJECTED_NONVOTING_DELEGATE": 17,
@@ -35,10 +42,10 @@
     "REJECTED_UNVERIFIED_IDENTITY": 13,
     "REJECTED_WRONG_OR_UNPROVEN_CYCLE": 3338
   },
-  "review_ledger_sha256": "d4e7007997728ac3f557040014d8727ef4f3e950797880268fab83bc63e90054",
+  "review_ledger_sha256": "ed74367e46e6cb39ec2ef0e2e9dc44d52d4f68f37785ebbd20be9c6a4f030b16",
   "review_status_counts": {
     "REJECTED": 18544,
-    "SEMANTIC_REVIEWED_ACCEPTED": 42306
+    "SEMANTIC_REVIEWED_ACCEPTED": 42854
   },
   "schema_version": 1,
   "unresolved_candidate_rule": "Each unresolved market is rejected from the frozen tradable set; the live Gamma identity check for discovery's unresolved rows is retained in the lane evidence.",
