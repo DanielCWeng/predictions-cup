@@ -45,6 +45,7 @@ class SigMakerState(Protocol):
 class AccountMakerState(Protocol):
     tournament_id: str
     last_accepted_observed_at: datetime | None
+    last_authoritative_observed_at: datetime | None
 
     def runtime_portfolio(self) -> RuntimePortfolio: ...
 
