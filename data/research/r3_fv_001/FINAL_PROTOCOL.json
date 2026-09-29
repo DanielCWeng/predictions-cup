@@ -48,5 +48,11 @@
   "execution_boundary": {
     "historical_claim": "This is a fair-value/repricing study using fills as observations; it is not historical proof of executable arbitrage, maker P&L, or queue position.",
     "deployment_decision": "Any competition deployment requires a separate live execution/risk translation after scientific confirmation."
-  }
+  },
+  "status": "BLOCKED_BY_DEV_STOP",
+  "dev_decision": "STOP_NO_INDEPENDENT_SIGNAL",
+  "entry_condition_satisfied": false,
+  "final_rows_accessed": 0,
+  "block_reason": "No LOO-FAMILY candidate passed the frozen DEV champion gate. Best LOO-FAMILY model was materially worse than persistence with its full market-cluster bootstrap interval below zero.",
+  "note": "The staged FINAL evaluator remains unlaunched. Do not create a FINAL run manifest for R3-FV-001."
 }
