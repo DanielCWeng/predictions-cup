@@ -193,6 +193,7 @@ def main():
     dead=[r for r in matrix if r.get("status")!="EVALUATED" or r.get("improvement_vs_best_baseline",0)<=0]
     (OUT/"dead_idea_ledger.json").write_text(json.dumps(dead,indent=2,sort_keys=True)+"\n")
     result={"schema_version":1,"experiment_id":"PRED-006","family":"hazard_fee","target":"time_to_next_price_change_hazard",
+            "split_manifest_sha256":sha256(locate("split_manifest.json","pred006-phase0-audit")),
             "features":FEATURES,"search_breadth":{"evaluations":len(ev),"horizons":list(HORIZONS),"models":len(specs()),"features":len(FEATURES)},
             "top_diagnostics":tops,"family_shortlist":short,"family_disposition":"DEV_CANDIDATES" if short else "NO_DEV_CANDIDATE",
             "final_rows_accessed_for_predictive_search":0,
