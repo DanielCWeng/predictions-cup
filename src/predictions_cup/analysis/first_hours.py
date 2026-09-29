@@ -382,7 +382,7 @@ def _analyse_execution(
 
         def metric(name: str) -> dict[str, float | None]:
             values = [
-                float(value)
+                float(str(value))
                 for row in operation_rows
                 if (value := row.get(name)) is not None
             ]
