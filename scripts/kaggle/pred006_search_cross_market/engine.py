@@ -67,8 +67,9 @@ def build_frame(final_start:int)->pd.DataFrame:
       select
         cast(condition_id as varchar) condition_id,
         lower(cast(tx_hash as varchar)) tx_hash,
-        any_value(cast(participant_address as varchar)) actor,
+        max(lower(cast(participant_address as varchar))) filter(where cast(order_is_match_taker_order as boolean)) actor,
         max(upper(cast(outcome_side as varchar))) filter(where cast(order_is_match_taker_order as boolean)) active_outcome,
+        max(upper(cast(participant_side as varchar))) filter(where cast(order_is_match_taker_order as boolean)) active_side,
         max(cast(size_shares as double)) filter(where cast(order_is_match_taker_order as boolean)) active_size,
         max(cast(value_usd as double)) filter(where cast(order_is_match_taker_order as boolean)) active_value,
         count(*) filter(where cast(order_is_match_taker_order as boolean)) active_rows
@@ -93,6 +94,7 @@ def build_frame(final_start:int)->pd.DataFrame:
         t.block_number,
         a.actor,
         a.active_outcome,
+        a.active_side,
         a.active_size,
         a.active_value,
         a.active_rows
@@ -194,7 +196,19 @@ def add_cross(df:pd.DataFrame)->pd.DataFrame:
 def add_flow(df:pd.DataFrame)->pd.DataFrame:
     n=len(df); ts=df["timestamp"].to_numpy(np.int64)
     outcome=df["active_outcome"].fillna("").astype(str).str.upper().to_numpy()
-    sign=np.where(outcome=="YES",1.0,np.where(outcome=="NO",-1.0,0.0))
+    side=df["active_side"].fillna("").astype(str).str.upper().to_numpy()
+    sign=np.select(
+        [
+            (outcome=="YES")&(side=="BUY"),
+            (outcome=="YES")&(side=="SELL"),
+            (outcome=="NO")&(side=="BUY"),
+            (outcome=="NO")&(side=="SELL"),
+        ],
+        [1.0,-1.0,-1.0,1.0],
+        default=0.0,
+    )
+    # Allocate taker intent over the observable passive fill fragments so
+    # multi-counterparty transactions sum to the transaction's economic flow.
     flow=sign*df["value_usd"].fillna(0).to_numpy(float)
     df["signed_flow"]=flow
     df["signed_flow_sqrt"]=np.sign(flow)*np.sqrt(np.abs(flow))
