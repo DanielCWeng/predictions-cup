@@ -184,9 +184,23 @@ class InventoryConfidenceSizePolicy:
                 / context.max_abs_inventory,
             ),
         )
+        bid_capacity = max(
+            0,
+            math.floor(context.max_abs_inventory - context.signed_inventory),
+        )
+        ask_capacity = max(
+            0,
+            math.floor(context.max_abs_inventory + context.signed_inventory),
+        )
         return QuoteSizes(
-            bid=self._scaled(confidence * toxicity_scale * bid_headroom),
-            ask=self._scaled(confidence * toxicity_scale * ask_headroom),
+            bid=min(
+                bid_capacity,
+                self._scaled(confidence * toxicity_scale * bid_headroom),
+            ),
+            ask=min(
+                ask_capacity,
+                self._scaled(confidence * toxicity_scale * ask_headroom),
+            ),
         )
 
     def _scaled(self, factor: float) -> int:
