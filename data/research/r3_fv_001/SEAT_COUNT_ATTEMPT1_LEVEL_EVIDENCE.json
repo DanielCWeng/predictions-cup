@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "subexperiment": "R3-SEAT-COUNT-001",
+  "stage": "ATTEMPT1_LEVEL_EVIDENCE",
+  "source_commit": "82e249df1c692ebda8f0072f5eadd08ce4acf213",
+  "output_recovery_commit": "0b66ae96d7080bf8d3146fc186585d421a5caf0b",
+  "github_actions_run": 36644580794,
+  "artifact_id": 11067866655,
+  "artifact_zip_sha256": "af74b393c562077b40a55eefd1d4c45d7c496719baa20715b2f219438a8cd7c7",
+  "empirical_universe": {
+    "source": "DATA-004",
+    "target": "DATA-003",
+    "data001_used": false,
+    "historical_analogues_used": false
+  },
+  "final_opened": false,
+  "final_rows_accessed": 0,
+  "residual_outputs_valid": false,
+  "residual_invalidation_source": "data/research/r3_fv_001/SEAT_COUNT_IMPLEMENTATION_CORRECTION_001.json",
+  "level_results": {
+    "house": {
+      "train_rows": 923,
+      "dev_rows": 48,
+      "qp": {
+        "baseline_mae": 0.003958333333333337,
+        "model_mae": 0.07288961999999995,
+        "mae_improvement": -0.0689312866666666,
+        "bootstrap_95": [
+          -0.09887999999999998,
+          -0.04080499999999988
+        ]
+      },
+      "kl": {
+        "baseline_mae": 0.003958333333333337,
+        "model_mae": 0.0694533869165231,
+        "mae_improvement": -0.06549505358318976,
+        "bootstrap_95": [
+          -0.1030347143451058,
+          -0.03622607457558151
+        ]
+      },
+      "lp": {
+        "qp_direct_coverage": 0.020833333333333332,
+        "kl_direct_coverage": 0.020833333333333332,
+        "qp_median_width": 0.04813333333333338,
+        "kl_median_width": 0.04958772613141341
+      },
+      "decision": "NEGATIVE_STATIC_LEVEL"
+    },
+    "senate_t50": {
+      "train_rows": 1357,
+      "dev_rows": 80,
+      "qp": {
+        "baseline_mae": 0.004375000000000004,
+        "model_mae": 0.01594267613636368,
+        "mae_improvement": -0.011567676136363676,
+        "bootstrap_95": [
+          -0.03182333333333332,
+          -0.0035195770750987877
+        ]
+      },
+      "kl": {
+        "baseline_mae": 0.004375000000000004,
+        "model_mae": 0.013173133062088439,
+        "mae_improvement": -0.008798133062088435,
+        "bootstrap_95": [
+          -0.02854426117251231,
+          -0.0024295593970296517
+        ]
+      },
+      "decision": "NEGATIVE_STATIC_LEVEL"
+    },
+    "senate_t51": {
+      "qp": {
+        "baseline_mae": 0.004375000000000004,
+        "model_mae": 0.13866253181818183,
+        "mae_improvement": -0.13428753181818182,
+        "bootstrap_95": [
+          -0.15112444848484846,
+          -0.12372134090909082
+        ]
+      },
+      "kl": {
+        "baseline_mae": 0.004375000000000004,
+        "model_mae": 0.1330348700806744,
+        "mae_improvement": -0.12865987008067442,
+        "bootstrap_95": [
+          -0.14790043950061002,
+          -0.11801892951938159
+        ]
+      },
+      "decision": "NEGATIVE_STATIC_LEVEL_AND_SEMANTICS_UNRESOLVED"
+    }
+  },
+  "scientific_interpretation": "The supported House/Senate count surfaces fail as contemporaneous point fair values on DEV. This falsifies the tested QP/KL+MaxEnt static constructions. It does not test whether aggregate changes lead later direct-target repricing.",
+  "next_step": "Complete corrected literal-next-update residual attempt, then test frozen event-time aggregate-change -> future direct-target repricing."
+}
