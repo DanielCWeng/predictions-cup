@@ -20,11 +20,11 @@ from predictions_cup.mapping.crosswalk import load_document
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="CAPTURE-001 first-hours forensic report")
-    parser.add_argument("--input", type=Path, required=True, help="SIG research root or launch root")
+    parser.add_argument(\n        "--input", type=Path, required=True, help="SIG research root or launch root"\n    )
     parser.add_argument("--output", type=Path, required=True, help="Report output directory")
     parser.add_argument("--polymarket-root", type=Path)
     parser.add_argument("--execution-journal", type=Path)
-    parser.add_argument("--mapping", type=Path, help="Accepted mapping JSON for direct cross-venue diagnostics")
+    parser.add_argument(\n        "--mapping",\n        type=Path,\n        help="Accepted mapping JSON for direct cross-venue diagnostics",\n    )
     return parser.parse_args()
 
 
@@ -149,7 +149,7 @@ def _analyse_sig(root: Path) -> tuple[dict[str, Any], dict[str, dict[str, int]],
                 at = row.get("local_receive_at")
                 revision = row.get("revision")
                 previous = row.get("previous_revision")
-                if isinstance(at, datetime) and isinstance(revision, int) and isinstance(previous, int):
+                if (\n                    isinstance(at, datetime)\n                    and isinstance(revision, int)\n                    and isinstance(previous, int)\n                ):
                     revision_rows.append((at, revision, previous))
     revision_rows.sort(key=lambda item: item[0])
     revision_gaps = 0
@@ -360,9 +360,19 @@ def _report(summary: dict[str, Any]) -> str:
         "",
         "## Capture integrity",
         "",
-        f"- SIG capture window: {sig['capture_window']['start']} to {sig['capture_window']['end']}.",
-        f"- Raw SIG batches: {sig['raw_batches']:,}; validation failures: {sig['raw_validation_failures']:,}.",
-        f"- Captured revision gaps: {sig['revision_gaps_detected_from_capture']:,}; duplicate revisions: {sig['duplicate_revisions']:,}.",
+        (
+            f"- SIG capture window: {sig['capture_window']['start']} "
+            f"to {sig['capture_window']['end']}."
+        ),
+        (
+            f"- Raw SIG batches: {sig['raw_batches']:,}; "
+            f"validation failures: {sig['raw_validation_failures']:,}."
+        ),
+        (
+            "- Captured revision gaps: "
+            f"{sig['revision_gaps_detected_from_capture']:,}; "
+            f"duplicate revisions: {sig['duplicate_revisions']:,}."
+        ),
         "",
         "## SIG market structure",
         "",
@@ -397,9 +407,18 @@ def _report(summary: dict[str, Any]) -> str:
             "",
             "- SIG bookDirty is an observed invalidation, not an order-level delta.",
             "- Aggregate depth reductions are labelled ambiguous unless stronger evidence exists.",
-            "- The supplied SIG market feed does not expose persistent participant, maker, taker, aggressor, or order-lifecycle identity for anonymous market activity.",
-            "- Passive queue position is not reconstructed. Shadow passive fills require an explicit separate simulation rule.",
-            "- These summaries are descriptive first-hours diagnostics, not a confirmed 005F transfer or a validated trading edge.",
+            (
+                "- The supplied SIG market feed does not expose persistent participant, "
+                "maker, taker, aggressor, or order-lifecycle identity for anonymous activity."
+            ),
+            (
+                "- Passive queue position is not reconstructed. Shadow passive fills "
+                "require an explicit separate simulation rule."
+            ),
+            (
+                "- These summaries are descriptive first-hours diagnostics, not a "
+                "confirmed 005F transfer or a validated trading edge."
+            ),
             "",
         ]
     )
