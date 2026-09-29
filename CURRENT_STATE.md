@@ -1,7 +1,7 @@
 # Current State
 
 **As of:** 29 September 2026  
-**Canonical main before this documentation pass:** `bbd152eb13f827b9ede36e444ac597eb0274443d`  
+**005B closeout integration base:** `08d7eddfa8e0ea823990ceadd43332ca393cd0a4`  
 **Phase:** ACCEPTED LIVE MAPPING + REPLAY/RESEARCH FOUNDATION; NO TRADING CAPABILITY.
 
 This file describes accepted repository state. GitHub merge state and the actual contents of `main`
@@ -122,27 +122,18 @@ DATA-002 role annotation is strong enough to use, but participant identity, make
 liquidity response and broad role-aware flow did not produce a robust general mechanism. The sole
 surviving same-family PRE 5s cell is economically tiny and is a replication candidate only.
 
-### EXPERIMENT-005B — BLOCKED / NOT ACCEPTED
+### EXPERIMENT-005B — CLOSED / HISTORICAL SIGNAL FAILED FRESH TRANSFER
 
-PR #45 remains open and unmerged.
+The complete 005B chain is accepted as a scientific record, with a negative current-universe disposition.
 
-The original experiment has a strong freeze/HOLDOUT chain and interesting realised-movement results,
-but its claimed causal same-second ordering uses `timestamp → tx_hash → log_index`. Transaction hash
-is not chronological transaction order, so same-block observations can be misordered.
+- PR #45 preserves the original historical atlas/HOLDOUT evidence.
+- PR #51 corrected observable ordering to canonical Polygon `block_number, log_index` and found material contamination: 59.87% of rows changed family-order rank, 88.90% had at least one changed feature and 52.03% had at least one changed target.
+- Despite that contamination, all seven clock realised-movement findings survived the corrected historical rerun. That corrected HOLDOUT is `POST_HOC_FALSIFICATION_ONLY`; it is not fresh confirmation.
+- The transfer specification was frozen before DATA-003 predictive evaluation and carried exactly the seven historical movement models with no reselection, tuning, replacement or mapping-class subsetting.
+- PR #52 then ran the fresh DATA-003 confirmation on the accepted mapped 2026 universe. The pre-evaluation block/order gate passed with 77,554 economic fills across 43,222 Polygon blocks and zero missing block numbers/timestamps, timestamp mismatches or duplicate `(block_number, log_index)` groups.
+- Fresh transfer failed **0 / 7**. Every horizon has negative MAE improvement versus persistence and a condition-cluster bootstrap interval entirely below zero.
 
-Required bounded follow-up:
-
-- branch: `experiment/005b-ordering-falsification`;
-- remediation implementation is present at `8c99a5e6a2c1f0e2e690b23fcb2c7881bb21bb0d` with a frozen
-  POST_HOC_FALSIFICATION_ONLY protocol and block-aware reconstruction code, but no empirical
-  falsification results are committed yet;
-- reconstruct true observable ordering from block/log order;
-- quantify affected observations;
-- rerun the exact frozen specification;
-- preserve original outputs byte-for-byte;
-- treat all corrected HOLDOUT comparison as `POST_HOC_FALSIFICATION_ONLY`.
-
-No 005B finding is canonical until that blocker is resolved.
+Final disposition: the historical movement-state relationship is a valid historical research finding but the seven frozen historical models **do not transfer to DATA-003 and must not be treated as current SIG-universe predictive alpha**. No event-time finding transfers as a rescue. See `data/experiments/experiment_005b/FINAL_DISPOSITION.md`.
 
 ### EXPERIMENT-005C — merged / accepted negative-downgraded record
 
@@ -230,22 +221,23 @@ These are runtime-acceptance tasks, not mapping-discovery tasks.
 
 ## Immediate programme direction
 
-1. Complete the bounded 005B causal-order falsification without redesign.
-2. Close broad predictive discovery.
-3. Establish simple baseline engines for the five approved monetisation families.
+1. Keep EXPERIMENT-005B closed: its seven historical movement models failed fresh DATA-003 transfer 0/7 and are not current-universe alpha.
+2. Keep broad predictive discovery closed unless MASTER preregisters genuinely new hypotheses with fresh evidence.
+3. Establish simple baseline engines for the approved monetisation families.
 4. Build common shadow/evaluation machinery.
-5. Replicate important historical findings on DATA-003 / the actual mapped 2026 universe.
+5. Replicate other historically important findings on DATA-003 / live mapped evidence before promotion.
 6. Use live SIG evidence to promote or demote mechanisms after launch.
 7. Iterate continuously without turning isolated findings into new strategy programmes.
 
 ## Branch state
 
-After the 28 September reconciliation:
+005B closeout branch state:
 
-- merged: PR #38, #41, #42, #43, #44, #47 and #48;
-- open/blocked: PR #45 only;
-- historical, backup, preregistration, review and superseded research branches may remain on GitHub
-  as provenance refs but are not canonical capability unless merged into `main`.
+- PR #45: merged historical evidence layer;
+- PR #51: ordering-correction provenance layer, superseded for integration by the final closeout branch after its evidence was preserved byte-for-byte;
+- PR #52: fresh DATA-003 confirmation provenance layer, superseded for integration after its evidence was preserved byte-for-byte;
+- final accepted state is the consolidated 005B evidence chain on `main`;
+- historical, backup, preregistration, review and superseded research branches may remain on GitHub as provenance refs but are not canonical capability unless merged into `main`.
 
 ## Repository state discipline
 
