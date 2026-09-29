@@ -2,5 +2,5 @@
   "schema_version": 1,
   "action": "status",
   "kernel": "polyleviathan/005b-data003-seven-horizon-confirmation",
-  "note": "Read-only status check for fresh DATA-003 confirmation v2."
+  "note": "Read-only status check for fresh DATA-003 confirmation v2 — round 2."
 }
