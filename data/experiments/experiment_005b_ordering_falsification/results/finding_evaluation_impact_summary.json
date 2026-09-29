@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B-ORDERING-FALSIFICATION",
+  "classification": "DIAGNOSIS_ONLY_POST_HOC_FALSIFICATION",
+  "source": {
+    "workflow_run_id": 36551981065,
+    "workflow_head_sha": "462bf5ed0a613bf34d8425a363552aa4c697b452",
+    "kaggle_kernel": "polyleviathan/005b-ordering-falsification-impact-audit",
+    "kernel_status": "COMPLETE",
+    "artifact_id": 11024782899,
+    "artifact_digest": "sha256:12da1483e3e8322f4c4ec931b5be6d754fc14d935af4a64ef705779f4cb5bd33",
+    "raw_output": "005b_ordering_falsification/impact_audit/finding_evaluation_impact_audit.json",
+    "script": "scripts/kaggle/experiment_005b_ordering_impact_audit/run.py",
+    "job_manifest": "kaggle/jobs/005b-ordering-impact-audit.json"
+  },
+  "definition": {
+    "evaluation_population": "Exact original HOLDOUT eligibility per finding: raw_split=HOLDOUT, timestamp >= dev_end_timestamp+300, target non-null, label endpoint non-null.",
+    "affected_evaluation_row": "Either evaluation membership differs between original and corrected matrices, or a common evaluation row has at least one selected-model feature, target value, or label endpoint changed.",
+    "note": "Counts sum row-target evaluations. A physical fill can appear in multiple target horizons and is therefore intentionally counted once per frozen finding it contributes to."
+  },
+  "totals": {
+    "seven_movement_findings": {
+      "original_eval_rows": 42634330,
+      "corrected_eval_rows": 42634330,
+      "eval_union_rows": 43504528,
+      "common_eval_rows": 41764132,
+      "membership_changed_rows": 1740396,
+      "selected_feature_changed_rows": 24467733,
+      "target_changed_rows": 20910061,
+      "label_endpoint_changed_rows": 0,
+      "affected_eval_rows": 28917151,
+      "affected_eval_rate": 0.6646929027709484
+    },
+    "six_event_time_findings": {
+      "original_eval_rows": 48395546,
+      "corrected_eval_rows": 48395546,
+      "eval_union_rows": 48395989,
+      "common_eval_rows": 48395103,
+      "membership_changed_rows": 886,
+      "selected_feature_changed_rows": 27029010,
+      "target_changed_rows": 8805160,
+      "label_endpoint_changed_rows": 8525463,
+      "affected_eval_rows": 28122302,
+      "affected_eval_rate": 0.581087453342466
+    },
+    "all_thirteen_findings": {
+      "original_eval_rows": 91029876,
+      "corrected_eval_rows": 91029876,
+      "eval_union_rows": 91900517,
+      "common_eval_rows": 90159235,
+      "membership_changed_rows": 1741282,
+      "selected_feature_changed_rows": 51496743,
+      "target_changed_rows": 29715221,
+      "label_endpoint_changed_rows": 8525463,
+      "affected_eval_rows": 57039453,
+      "affected_eval_rate": 0.6206652025689909
+    }
+  },
+  "by_target": {
+    "target_clock_realised_movement_1": {"eval_union_rows": 4230634, "affected_eval_rows": 3330240, "affected_eval_rate": 0.7871727972686836, "membership_changed_rows": 1257072, "selected_feature_changed_rows": 2024393, "target_changed_rows": 1109075},
+    "target_clock_realised_movement_5": {"eval_union_rows": 5279352, "affected_eval_rows": 3825513, "affected_eval_rate": 0.7246179076523028, "membership_changed_rows": 226364, "selected_feature_changed_rows": 3459722, "target_changed_rows": 2129085},
+    "target_clock_realised_movement_15": {"eval_union_rows": 6093501, "affected_eval_rows": 4077198, "affected_eval_rate": 0.6691059868538628, "membership_changed_rows": 100954, "selected_feature_changed_rows": 3746693, "target_changed_rows": 2730586},
+    "target_clock_realised_movement_30": {"eval_union_rows": 6506868, "affected_eval_rows": 4200050, "affected_eval_rate": 0.6454795148756668, "membership_changed_rows": 64382, "selected_feature_changed_rows": 3809388, "target_changed_rows": 3157452},
+    "target_clock_realised_movement_60": {"eval_union_rows": 6845106, "affected_eval_rows": 4330325, "affected_eval_rate": 0.6326162078425082, "membership_changed_rows": 43478, "selected_feature_changed_rows": 3842041, "target_changed_rows": 3544341},
+    "target_clock_realised_movement_120": {"eval_union_rows": 7116061, "affected_eval_rows": 4463951, "affected_eval_rate": 0.6273064550739518, "membership_changed_rows": 29836, "selected_feature_changed_rows": 3786429, "target_changed_rows": 3904543},
+    "target_clock_realised_movement_300": {"eval_union_rows": 7433006, "affected_eval_rows": 4689874, "affected_eval_rate": 0.6309525379099654, "membership_changed_rows": 18310, "selected_feature_changed_rows": 3799067, "target_changed_rows": 4334979},
+    "target_event_sign_1": {"eval_union_rows": 8069794, "affected_eval_rows": 4819152, "affected_eval_rate": 0.5971840173367499, "membership_changed_rows": 58, "selected_feature_changed_rows": 4541721, "target_changed_rows": 1240886, "label_endpoint_changed_rows": 1257956},
+    "target_event_sign_2": {"eval_union_rows": 8068945, "affected_eval_rows": 3933031, "affected_eval_rate": 0.4874281582040775, "membership_changed_rows": 88, "selected_feature_changed_rows": 3450935, "target_changed_rows": 1411075, "label_endpoint_changed_rows": 1475771},
+    "target_event_sign_5": {"eval_union_rows": 8066420, "affected_eval_rows": 4552519, "affected_eval_rate": 0.5643791173779694, "membership_changed_rows": 176, "selected_feature_changed_rows": 4442786, "target_changed_rows": 1459716, "label_endpoint_changed_rows": 1460922},
+    "target_event_sign_10": {"eval_union_rows": 8062205, "affected_eval_rows": 4939568, "affected_eval_rate": 0.6126820144116901, "membership_changed_rows": 194, "selected_feature_changed_rows": 4876782, "target_changed_rows": 1447939, "label_endpoint_changed_rows": 1434946},
+    "target_event_price_change_5": {"eval_union_rows": 8066420, "affected_eval_rows": 4921616, "affected_eval_rate": 0.6101363430121417, "membership_changed_rows": 176, "selected_feature_changed_rows": 4840004, "target_changed_rows": 1604540, "label_endpoint_changed_rows": 1460922},
+    "target_event_price_change_10": {"eval_union_rows": 8062205, "affected_eval_rows": 4956416, "affected_eval_rate": 0.6147717652924976, "membership_changed_rows": 194, "selected_feature_changed_rows": 4876782, "target_changed_rows": 1641004, "label_endpoint_changed_rows": 1434946}
+  },
+  "by_family_all_thirteen_row_target_evaluations": {
+    "US_2024": {"eval_union_rows": 85870428, "affected_eval_rows": 55102531, "affected_eval_rate": 0.6416939135321417},
+    "CAN_2025": {"eval_union_rows": 3117, "affected_eval_rows": 0, "affected_eval_rate": 0.0},
+    "COL_2026": {"eval_union_rows": 1714085, "affected_eval_rows": 481184, "affected_eval_rate": 0.2807235347138561},
+    "HUN_2026": {"eval_union_rows": 4126264, "affected_eval_rows": 1427411, "affected_eval_rate": 0.34593302803698456},
+    "PER_2026": {"eval_union_rows": 186623, "affected_eval_rows": 28327, "affected_eval_rate": 0.15178729309892136}
+  },
+  "interpretation": {
+    "movement_exposure": "66.47% of frozen movement finding row-target evaluations were materially exposed to the ordering correction, with the strongest exposure at 1s (78.72%) and declining toward longer clock horizons (62.73%-63.10% at 120-300s).",
+    "event_exposure": "58.11% of frozen event-time row-target evaluations were affected; rates range from 48.74% (+2 sign) to 61.48% (+10 price change).",
+    "family_concentration": "Exposure is concentrated in US_2024 (64.17% of its frozen finding row-target evaluations affected), consistent with its much higher same-block multi-transaction collision rate. The audit is diagnostic only."
+  }
+}
