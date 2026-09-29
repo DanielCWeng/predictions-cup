@@ -59,9 +59,12 @@ python -m predictions_cup.analysis.first_hours \
 ```
 
 The output includes `summary.json`, `report.md`, market activity, economic BBO/update metrics,
-trade/markout diagnostics, tracked-depth summaries and 15-minute activity tables. Treat aggressor
-classification as price-vs-prior-BBO inference with a freshness rule, not participant identity.
-No passive queue position is inferred.
+trade/markout diagnostics, tracked-depth summaries, 15-minute activity tables and direct mapped
+cross-venue response/latest-discrepancy tables. Direct PM values are aligned through the accepted
+`SAME`/`COMPLEMENT` mapping direction before comparison. Treat response lags as nearest-subsequent
+economic changes rather than causal evidence. Treat aggressor classification as
+price-vs-prior-BBO inference with a freshness rule, not participant identity. No passive queue
+position is inferred.
 
 The final production gate for PR #57 is a mapping-bounded paired soak on the intended launch host,
 followed by collector restart, SSH disconnect/reconnect, operator-controlled reboot, readable-shard
