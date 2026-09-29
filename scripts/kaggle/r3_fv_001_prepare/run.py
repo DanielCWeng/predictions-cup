@@ -89,7 +89,7 @@ def pct_direct_row(con: duckdb.DuckDBPyConnection, view: str, frac: float) -> tu
         f"""
         select ts, block_number
         from {view}
-        order by block_number, timestamp
+        order by block_number, ts
         limit 1 offset {idx - 1}
         """
     ).fetchone()
