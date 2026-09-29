@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
+from predictions_cup.config import AppSettings
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import (
@@ -30,6 +31,7 @@ from predictions_cup.maker.recovery import (
     reconcile_maker_quote_registry,
 )
 from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
+from predictions_cup.maker.service import MakerService
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.risk.core import RiskDecision
 from predictions_cup.runtime.models import OrderAction, OutcomeSide
@@ -375,4 +377,32 @@ def test_runtime_paces_global_work_and_requeues_remaining_exchanges() -> None:
         "make-runtime-paced-1",
         "make-runtime-paced-2",
     ]
+
+class _KillDrainRuntime:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def drain_once(self) -> MakerCycleResult | None:
+        self.calls += 1
+        if self.calls == 1:
+            raise RuntimeError("simulated uncertain cancel")
+        if self.calls == 2:
+            return MakerCycleResult((), (), (), ())
+        return None
+
+
+def test_service_kill_drain_continues_after_one_failed_cancel_cycle() -> None:
+    service = MakerService(
+        AppSettings(maker_enabled=True),
+        explicit_live_invocation=False,
+    )
+    runtime = _KillDrainRuntime()
+
+    asyncio.run(
+        service._best_effort_kill_drain(
+            cast(MakerRuntimeLoop, runtime),
+        )
+    )
+
+    assert runtime.calls == 3
 
