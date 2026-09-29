@@ -1,0 +1,22 @@
+{
+  "id": "polyleviathan/005b-data003-seven-horizon-confirmation",
+  "title": "005B DATA003 Seven Horizon Confirmation",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": [
+    "polyleviathan/sig-cup-data-003-sig-actual-fills"
+  ],
+  "competition_sources": [],
+  "kernel_sources": [
+    "polyleviathan/005b-ordering-falsification-us-merge",
+    "polyleviathan/005b-ordering-falsification-features-can-2025",
+    "polyleviathan/005b-ordering-falsification-features-col-2026",
+    "polyleviathan/005b-ordering-falsification-features-hun-2026",
+    "polyleviathan/005b-ordering-falsification-features-per-2026"
+  ]
+}
