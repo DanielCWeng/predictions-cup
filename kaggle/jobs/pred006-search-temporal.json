@@ -3,9 +3,10 @@
   "action": "run",
   "kernel_dir": "scripts/kaggle/pred006_search_temporal",
   "kernel": "polyleviathan/pred006-search-temporal",
-  "poll_seconds": 30,
+  "poll_seconds": 20,
   "timeout_minutes": 180,
   "download_outputs": true,
   "output_file_pattern": "(hypothesis_ledger|dead_idea_ledger|results_summary)\\.json$|experiment_matrix\\.csv$",
-  "note": "PRED-006 TRAIN/DEV search family temporal; consumes frozen Phase-0 split; FINAL predictive outcomes excluded."
+  "run_nonce": "PRED006_SEARCH_LAUNCH_SPLIT_28d41fbb_20260929",
+  "note": "PRED-006 temporal TRAIN/DEV search. Bound to committed split 28d41fbb590f7f9abe59ca24e00841307fe13991c3c695748240fe127847f349; FINAL predictive outcomes excluded."
 }
