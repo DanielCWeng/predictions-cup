@@ -473,7 +473,7 @@ def main() -> None:
                     }
                 )
                 target_cell_count += 1
-                participating_targets[horizon].add(f"{regime}|{target}")
+                participating_targets[horizon].add(target)
 
                 minute = tt // (60 * NS)
                 for m in np.unique(minute):
