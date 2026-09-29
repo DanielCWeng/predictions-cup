@@ -15,6 +15,7 @@ from predictions_cup.maker.contracts import (
     MakerTrace,
     PredictiveAdjustment,
     QuoteSide,
+    QuoteWidths,
     ToxicityEstimate,
 )
 from predictions_cup.maker.coordinator import (
@@ -81,6 +82,7 @@ __all__ = [
     "QuoteLifecycleManager",
     "QuoteRegistry",
     "QuoteSide",
+    "QuoteWidths",
     "ShadowMakerExecutionAdapter",
     "ToxicityEstimate",
     "build_maker_components",
