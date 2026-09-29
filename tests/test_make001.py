@@ -578,6 +578,83 @@ def _engine_with_provider(provider: object) -> MakerEngine:
     )
 
 
+class _MalformedFairValue:
+    provider_id = "malformed-fv"
+    version = "v1"
+
+    def fair_value(self, snapshot: MakerMarketSnapshot) -> object:
+        del snapshot
+        return object()
+
+
+class _MalformedPredictive:
+    model_id = "malformed-pred"
+    version = "v1"
+
+    def adjust(
+        self,
+        snapshot: MakerMarketSnapshot,
+        fair_value: FairValueResult,
+    ) -> object:
+        del snapshot, fair_value
+        return object()
+
+
+class _MalformedSpread:
+    policy_id = "malformed-spread"
+    version = "v1"
+
+    def widths(self, context: object) -> object:
+        del context
+        return object()
+
+
+def test_malformed_plugin_return_types_fail_closed() -> None:
+    malformed_fv = _engine_with_provider(_MalformedFairValue()).quote(
+        _maker_snapshot()
+    )
+    assert malformed_fv.desired is None
+    assert malformed_fv.gate.reason == "fair_value_plugin_malformed"
+
+    predictive_engine = MakerEngine(
+        fair_value=DirectPolymarketFairValueProvider(_mapping()),
+        predictive=_MalformedPredictive(),  # type: ignore[arg-type]
+        toxicity=NullToxicityProvider(),
+        inventory=BinaryCaraInventoryModel(),
+        spread=ConservativeSpreadPolicy(),
+        size=InventoryConfidenceSizePolicy(),
+        eligibility=ConservativeEligibilityPolicy(
+            max_bbo_age_ns=100_000_000,
+            max_fv_age_ns=100_000_000,
+            max_account_age_ns=100_000_000,
+            max_inventory_age_ns=100_000_000,
+            max_optional_signal_age_ns=100_000_000,
+        ),
+    )
+    malformed_signal = predictive_engine.quote(_maker_snapshot())
+    assert malformed_signal.desired is None
+    assert malformed_signal.gate.reason == "signal_plugin_malformed"
+
+    spread_engine = MakerEngine(
+        fair_value=DirectPolymarketFairValueProvider(_mapping()),
+        predictive=NullPredictiveAdjuster(),
+        toxicity=NullToxicityProvider(),
+        inventory=BinaryCaraInventoryModel(),
+        spread=_MalformedSpread(),  # type: ignore[arg-type]
+        size=InventoryConfidenceSizePolicy(),
+        eligibility=ConservativeEligibilityPolicy(
+            max_bbo_age_ns=100_000_000,
+            max_fv_age_ns=100_000_000,
+            max_account_age_ns=100_000_000,
+            max_inventory_age_ns=100_000_000,
+            max_optional_signal_age_ns=100_000_000,
+        ),
+    )
+    malformed_spread = spread_engine.quote(_maker_snapshot())
+    assert malformed_spread.desired is None
+    assert malformed_spread.gate.reason == "quote_policy_exception"
+
+
 def test_plugin_exception_and_nan_output_suspend() -> None:
     broken = _engine_with_provider(_BrokenFairValue()).quote(_maker_snapshot())
     assert broken.desired is None
