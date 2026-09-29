@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "action": "auth_check",
+  "note": "Read-only owned-kernel listing to resolve the exact active R3 discovery slug/account. Does not push, rerun, or alter any kernel."
+}
