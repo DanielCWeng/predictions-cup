@@ -347,7 +347,7 @@ def data004_economic_audit(root: Path) -> tuple[pd.DataFrame, dict]:
         select
             cast(block_number as bigint) block_number,
             cast(log_index as bigint) log_index,
-            cast(timestamp as bigint) ts,
+            cast("timestamp" as bigint) ts,
             cast(condition_id as varchar) condition_id,
             cast(market_id as varchar) market_id,
             cast(event_id as varchar) event_id,
