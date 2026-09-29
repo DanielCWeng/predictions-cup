@@ -321,6 +321,41 @@ def test_bridge_marks_external_quotes_untrusted_when_pm_feed_is_down() -> None:
     assert snapshot is not None
     assert snapshot.external_quotes["yes-token"].trusted is False
 
+def test_bridge_keeps_cancellable_snapshot_when_sig_exchange_state_disappears() -> None:
+    wall_now = datetime(2026, 9, 29, 14, 0, tzinfo=UTC)
+    bridge = MakerSourceBridge(
+        mapping=_mapping(),
+        sig_state=_SigState(
+            tournament_id="t1",
+            states={},
+            market_states={},
+            health=RuntimeHealth(connected=True),
+        ),
+        account_state=_AccountState(
+            tournament_id="t1",
+            last_accepted_observed_at=wall_now,
+            portfolio=RuntimePortfolio(account_trusted=True),
+        ),
+        polymarket_books=_PmBooks({"yes-token": _pm_snapshot(wall_now)}),
+    )
+
+    snapshot = bridge.build(
+        "36",
+        wall_now=wall_now,
+        monotonic_now_ns=1_000_000,
+        polymarket_feed_trusted=True,
+    )
+
+    assert snapshot is not None
+    assert snapshot.runtime.markets[0].status == "unknown"
+    assert snapshot.sig_bbo_trusted is False
+    assert snapshot.sig_depth_trusted is False
+    book = snapshot.runtime.book("36")
+    assert book is not None
+    assert book.bids == ()
+    assert book.asks == ()
+
+
 def test_bridge_revokes_sig_bbo_and_depth_trust_when_realtime_disconnects() -> None:
     wall_now = datetime(2026, 9, 29, 14, 0, tzinfo=UTC)
     observed = wall_now
