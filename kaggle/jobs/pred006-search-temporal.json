@@ -7,6 +7,6 @@
   "timeout_minutes": 180,
   "download_outputs": true,
   "output_file_pattern": "(hypothesis_ledger|dead_idea_ledger|results_summary)\\.json$|experiment_matrix\\.csv$",
-  "run_nonce": "PRED006_SEARCH_RELAUNCH_V2_SCHEMA_ONLY_20260929",
-  "note": "PRED-006 temporal TRAIN/DEV search. Bound to committed split 28d41fbb590f7f9abe59ca24e00841307fe13991c3c695748240fe127847f349; FINAL predictive outcomes excluded. Relaunch V2 changes schema plumbing only (side field / reserved alias); scientific spec unchanged."
+  "run_nonce": "PRED006_SEARCH_RELAUNCH_V3_BLOCK_SAFE_20260929",
+  "note": "PRED-006 temporal TRAIN/DEV search. Bound to committed split 28d41fbb590f7f9abe59ca24e00841307fe13991c3c695748240fe127847f349; FINAL predictive outcomes excluded. Relaunch V3 uses condition-block-end observations and strictly post-block targets; prior V2 was invalidated before predictive result inspection."
 }
