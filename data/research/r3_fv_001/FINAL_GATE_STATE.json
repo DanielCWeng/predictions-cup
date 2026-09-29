@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "final_opened": false,
+  "final_rows_accessed": 0,
+  "state": "LOCKED_STRUCTURAL_SEARCH_INCOMPLETE",
+  "supersedes_gate_reason": "The earlier FINAL block based solely on STOP_NO_INDEPENDENT_SIGNAL is no longer the governing reason.",
+  "current_reason": "Correct-universe Ridge/HGB screen is preserved as a null, but commissioned LP/QP/KL/MaxEnt/inverse structural methods are still under TRAIN/DEV evaluation.",
+  "unlock_conditions": [
+    "Complete structural TRAIN/DEV programme",
+    "Freeze one champion and at most two challengers",
+    "Freeze exact assumptions and semantic exclusions",
+    "Freeze parameters, target definitions, metrics and pass criteria",
+    "No post-DEV rescue or historical-data substitution"
+  ]
+}
