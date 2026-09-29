@@ -12,7 +12,6 @@ import pytest
 from pydantic import SecretStr
 
 from predictions_cup.config import AppSettings
-
 from predictions_cup.execution.interlocks import LiveExecutionPermit, assert_live_interlocks
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
