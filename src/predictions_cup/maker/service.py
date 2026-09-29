@@ -563,8 +563,13 @@ class MakerService:
 
 
 def _mapped_token_ids(mapping: MappingDocument) -> tuple[str, ...]:
+    # Polymarket price_change frames may contain both outcome tokens for a
+    # subscribed market even when MAKE only consumes one aligned token for FV.
+    # Seed/subscribe the full outcome-token set so every delta has an
+    # authoritative snapshot base; MakerSourceBridge still exposes only the
+    # mapped/aligned token(s) to the fair-value provider.
     token_ids = {
-        identity.mapped_token_id
+        token_id
         for record in mapping.records
         for identity in (
             (record.direct_polymarket,)
@@ -572,6 +577,7 @@ def _mapped_token_ids(mapping: MappingDocument) -> tuple[str, ...]:
             else record.polymarket_components
         )
         if identity is not None
+        for token_id in identity.token_ids
     }
     return tuple(sorted(token_ids))
 
