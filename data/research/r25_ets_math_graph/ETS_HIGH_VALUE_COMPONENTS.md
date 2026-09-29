@@ -41,7 +41,7 @@ The 13 U.S. House popular-vote margin bins (`1395450`–`1395462`) plus a full-e
 
 The 11 national House-turnout candidates (`1399389`–`1399399`) span the documented voting-Representative turnout bands. Their description excludes Delegates and the Resident Commissioner and specifies boundary handling. Turnout does not structurally identify any winner. Of the remaining turnout candidates, 321 local thresholds are metadata-only; retain their IDs and descriptions but do not request fills under this phase.
 
-The 10 voter-group outcome contracts, 31 race closeness thresholds, 45 cross-race comparison contracts, and 28 county contracts are P2/P3 feature candidates. Any forecast use needs an outcome-blind, event-clustered, held-out test. Keep the 12 state-chamber-control and one pre-election House-majority contracts metadata-only due target/rule mismatch.
+The 34 nonstructural P2 feature contracts and 104 P3 contracts include the 10 voter-group outcomes, 31 race closeness thresholds, 45 cross-race comparisons, and 28 county outcomes. They remain lower-priority feature candidates. Any forecast use needs an outcome-blind, event-clustered, held-out test. Keep the 12 state-chamber-control and one pre-election House-majority contracts metadata-only due target/rule mismatch.
 
 ## 6. Semantic hazards to carry into downstream code
 

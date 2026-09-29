@@ -48,7 +48,7 @@ The Florida regular-versus-special Senate mismatch needs manual identity resolut
 
 ## 6. Translate estimates into an execution study only after calibration
 
-An eventual SIG reference price can be compared to a source estimate only after computing uncertainty, venue timing, and execution costs. A discrepancy alone is not arbitrage. A later execution study needs current SIG books, fill probability, queue/depth, fees, capital lockup, cancellation risk, and exact settlement alignment. The 797 P0/P1 candidates are only the proposed later order-book scope; no order-book request was made in this phase.
+An eventual SIG reference price can be compared to a source estimate only after computing uncertainty, venue timing, and execution costs. A discrepancy alone is not arbitrage. A later execution study needs current SIG books, fill probability, queue/depth, fees, capital lockup, cancellation risk, and exact settlement alignment. The 797 flagged candidates span P0=210, P1=88, and structurally relevant P2=499; the 34 predictive-feature P2 rows are not book-needed. This is only the proposed later order-book scope; no order-book request was made in this phase.
 
 ## 7. Do not fit weights yet
 

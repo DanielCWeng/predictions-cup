@@ -16,11 +16,11 @@
   },
   "survived_markets": 1269,
   "acquisition_class_counts": {
-    "FILLS_P1": 210,
-    "METADATA_ONLY": 334,
+    "FILLS_P0": 210,
+    "FILLS_P1": 88,
+    "FILLS_P2": 533,
     "FILLS_P3": 104,
-    "FILLS_P2": 34,
-    "FILLS_P0": 587,
+    "METADATA_ONLY": 334,
     "DROP": 10
   },
   "book_needed_later_market_count": 797,
@@ -15993,6 +15993,39 @@
       ],
       "rank_or_df_note": null,
       "price_or_outcome_history_used": false
+    }
+  ],
+  "ets_only_fv_coverage_counts": {
+    "EXACT": 220,
+    "TIGHT_BOUNDS": 5,
+    "MODEL_DEPENDENT": 4,
+    "SOFT_ONLY": 0,
+    "NO_EXTERNAL_FV": 2
+  },
+  "adds_beyond_direct_counts": {
+    "none": 2,
+    "redundant-echo": 142,
+    "independent-constraint": 9,
+    "dependence-info": 78
+  },
+  "v2_margin_bin_markets_for_derived_baselines": 0,
+  "v2_direct_winner_refresh_markets_for_derived_baselines": 88,
+  "v2_derived_baseline_anchors_with_direct_winner_refresh": 87,
+  "p0_question_groups": [
+    {
+      "group": "count distributions and count comparisons",
+      "markets": 147,
+      "later_question": "Do aggregate count surfaces tighten valid LP bounds on linked SIG targets, and how much within-bucket mass remains unidentified? Comparisons are modeled separately from disjoint count buckets."
+    },
+    {
+      "group": "Senate×House count joints",
+      "markets": 13,
+      "later_question": "Do cross-chamber seat-count cells add dependence constraints after the marginal count surfaces, and do their changes precede linked SIG chamber prices?"
+    },
+    {
+      "group": "race-level joint cells",
+      "markets": 50,
+      "later_question": "Do two-, three-, four-race, and partial joint cells tighten assumption-free marginal bounds or add dependence information after retaining explicit Other residuals?"
     }
   ]
 }
