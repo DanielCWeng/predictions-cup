@@ -13,6 +13,7 @@ from predictions_cup.maker.contracts import (
     PredictiveAdjustment,
     QuoteContext,
     QuoteSizes,
+    QuoteWidths,
     ToxicityEstimate,
 )
 from predictions_cup.runtime.models import SIG_TICK
@@ -127,19 +128,25 @@ class ConservativeSpreadPolicy:
         self._volatility_multiplier = volatility_multiplier
         self._toxicity = toxicity_half_spread_ticks * _TICK
 
-    def half_spread(self, context: QuoteContext) -> float:
+    def widths(self, context: QuoteContext) -> QuoteWidths:
         volatility = context.snapshot.volatility or 0.0
         toxic = max(
             context.toxicity.update_hazard,
             context.toxicity.adverse_selection,
         )
-        return max(
+        half_width = max(
             _TICK * 0.5,
             self._base
             + self._uncertainty_multiplier * context.raw_fair_value.uncertainty
             + self._volatility_multiplier * volatility
             + self._toxicity * toxic,
         )
+        return QuoteWidths(bid=half_width, ask=half_width)
+
+    def half_spread(self, context: QuoteContext) -> float:
+        """Backward-compatible scalar view of the symmetric baseline policy."""
+        widths = self.widths(context)
+        return max(widths.bid, widths.ask)
 
 
 class InventoryConfidenceSizePolicy:
