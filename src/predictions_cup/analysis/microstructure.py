@@ -186,7 +186,7 @@ def analyze_sig_microstructure(
         "best_ask",
         "payload_json",
     )
-    columns = tuple(column for column in requested if column in dataset.schema.names)
+    columns = [column for column in requested if column in dataset.schema.names]
     scanner = dataset.scanner(columns=columns, batch_size=65_536)
     for batch in scanner.to_batches():
         for row in batch.to_pylist():
