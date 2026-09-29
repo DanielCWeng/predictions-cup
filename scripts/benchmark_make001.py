@@ -18,8 +18,8 @@ import sys
 import tempfile
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.models import ExecutionMode
