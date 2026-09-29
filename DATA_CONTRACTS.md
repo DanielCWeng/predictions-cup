@@ -245,11 +245,16 @@ participant/order identity and no per-order expiration metadata. Any aggressor c
 by the forensic library is therefore a derived price-vs-prior-BBO diagnostic with an explicit BBO
 freshness rule, not maker/taker identity from SIG.
 
-Operational SQLite remains the small state/health surface and now includes `capture_health`.
-LaunchSigRecorder merges immutable-writer queue depth/capacity, published row/shard counts,
-dropped-row count, storage-failure count and last-publish time into the one-second health snapshot.
-Queue exhaustion or writer failure raises visibly; already-published Parquet shards remain
-immutable.
+SIG operational SQLite remains the accepted normalized BUILD-005 replay-compatibility surface and
+now also includes `capture_health`. Unlike BUILD-007 Polymarket operational SQLite, it is therefore
+**not metadata-only** on this branch. CAPTURE-001 keeps that compatibility deliberately rather than
+silently breaking deterministic replay, while the durable research/raw layer is immutable Parquet.
+
+LaunchSigRecorder merges immutable-writer queue depth/capacity/high-water, published row/shard
+counts, dropped-row count, storage-failure count, last-publish time and current SQLite/WAL bytes
+into the one-second health snapshot. Queue exhaustion or writer failure raises visibly;
+already-published Parquet shards remain immutable. Any unacceptable SQLite/WAL growth during the
+final launch soak is a blocker rather than evidence to be hidden or reclassified.
 
 The detailed field dictionary, launch commands, evidence limitations and soak gate live in
 `docs/implementation/CAPTURE_001_LAUNCH_FORENSICS.md`.
