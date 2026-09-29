@@ -177,7 +177,7 @@ def aggregate_features(
         out[name] = values
     out["source_support_1s"] = den["ew1"]
     out["source_support_5s"] = den["ew5"]
-    return out
+    out["delayed_source_support_1s"] = np.asarray([0.0] * n)\n    out["delayed_source_support_5s"] = np.asarray([0.0] * n)\n    for token in source_tokens:\n        series = series_by_token[token]\n        delayed_times = times - seconds_ns(300)\n        _, dvalid1 = feature_move(series, delayed_times, 1, freshness_ns)\n        _, dvalid5 = feature_move(series, delayed_times, 5, freshness_ns)\n        out["delayed_source_support_1s"][dvalid1] += 1.0\n        out["delayed_source_support_5s"][dvalid5] += 1.0\n    return out
 
 
 def fit_predict(
@@ -332,6 +332,8 @@ def main() -> None:
                 & np.isfinite(features["ew5"])
                 & np.isfinite(features["attn1"])
                 & np.isfinite(features["attn5"])
+                & (features["delayed_source_support_1s"] >= MIN_SOURCES)
+                & (features["delayed_source_support_5s"] >= MIN_SOURCES)
                 & np.isfinite(features["delay1"])
                 & np.isfinite(features["delay5"])
             )
