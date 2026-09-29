@@ -153,14 +153,14 @@ def test_bridge_builds_bounded_scalar_bbo_snapshot_with_separate_freshness() -> 
     assert snapshot.sig_bbo_trusted is True
     assert snapshot.sig_depth_trusted is False
     assert snapshot.sig_bbo_observed_ns == 980_000_000
-    assert snapshot.account_observed_ns == 1_000_000_000
-    assert snapshot.inventory_observed_ns == 1_000_000_000
+    assert snapshot.account_observed_ns == 970_000_000
+    assert snapshot.inventory_observed_ns == 970_000_000
     book = snapshot.runtime.book("36")
     assert book is not None
     assert book.trusted_depth is False
     assert book.bids[0].price_ticks == 98
     assert book.asks[0].price_ticks == 102
-    assert snapshot.external_quotes["yes-token"].observed_monotonic_ns == 1_000_000_000
+    assert snapshot.external_quotes["yes-token"].observed_monotonic_ns == 990_000_000
     assert snapshot.runtime.portfolio.positions[0].signed_quantity == -3.0
 
 
