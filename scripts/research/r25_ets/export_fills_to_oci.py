@@ -163,6 +163,7 @@ def refresh_object_metadata(client: Any, namespace: str, bucket: str, source: di
 
 def assert_tx_block_map(custody: Any, day: str) -> Any:
     import polars as pl
+    custody = custody.filter(pl.col("block_number").is_not_null())
     conflicts = (
         custody.group_by("tx_hash")
         .agg(pl.col("block_number").n_unique().alias("block_count"))
@@ -171,7 +172,7 @@ def assert_tx_block_map(custody: Any, day: str) -> Any:
     if conflicts.height:
         examples = conflicts.head(5).to_dicts()
         raise ValueError(f"custody has transaction hashes with conflicting block_number on {day}: {examples}")
-    return custody.select("tx_hash", "block_number").unique(subset=["tx_hash"], keep="first")
+    return custody.select("tx_hash", "block_number").unique(subset=["tx_hash", "block_number"], keep="first")
 
 
 def main() -> None:
@@ -296,11 +297,14 @@ def main() -> None:
                 "trade_object": trade, "custody_object": custody_meta,
             })
             continue
+        source_fill_rows = fills.height
+        day_unexported_rows = 0
         refresh_object_metadata(client, namespace, args.bucket, trade)
         if day not in custody_objects:
             record_block_gap(day, "fills exist but no same-day custody object is available for a block_number join", fills)
             day_coverage.append({
-                "date": day, "fill_rows": fills.height, "block_joined_rows": 0,
+                "date": day, "fill_rows": 0, "source_matched_fill_rows": source_fill_rows,
+                "unexported_fill_rows": source_fill_rows, "block_joined_rows": 0,
                 "status": "BLOCKED_BLOCK_NUMBER_PROVENANCE", "trade_object": trade,
                 "custody_object": None,
             })
@@ -315,7 +319,8 @@ def main() -> None:
         if txs.height == 0:
             record_block_gap(day, "matched fills have no transaction hashes", fills)
             day_coverage.append({
-                "date": day, "fill_rows": fills.height, "block_joined_rows": 0,
+                "date": day, "fill_rows": 0, "source_matched_fill_rows": source_fill_rows,
+                "unexported_fill_rows": source_fill_rows, "block_joined_rows": 0,
                 "status": "BLOCKED_BLOCK_NUMBER_PROVENANCE", "trade_object": trade,
                 "custody_object": custody_meta,
             })
@@ -325,7 +330,8 @@ def main() -> None:
         if not needed_custody.issubset(custody_schema.names()):
             record_block_gap(day, "custody source lacks tx_hash/block_number identity fields", fills)
             day_coverage.append({
-                "date": day, "fill_rows": fills.height, "block_joined_rows": 0,
+                "date": day, "fill_rows": 0, "source_matched_fill_rows": source_fill_rows,
+                "unexported_fill_rows": source_fill_rows, "block_joined_rows": 0,
                 "status": "BLOCKED_BLOCK_NUMBER_PROVENANCE", "trade_object": trade,
                 "custody_object": custody_meta,
             })
@@ -339,32 +345,55 @@ def main() -> None:
         if custody_matches.height == 0:
             record_block_gap(day, "no custody block-number rows match any fill transaction", fills)
             day_coverage.append({
-                "date": day, "fill_rows": fills.height, "block_joined_rows": 0,
+                "date": day, "fill_rows": 0, "source_matched_fill_rows": source_fill_rows,
+                "unexported_fill_rows": source_fill_rows, "block_joined_rows": 0,
                 "status": "BLOCKED_BLOCK_NUMBER_PROVENANCE", "trade_object": trade,
                 "custody_object": custody_meta,
             })
             continue
-        try:
-            tx_block = assert_tx_block_map(custody_matches, day)
-        except ValueError as exc:
-            record_block_gap(day, str(exc), fills)
-            day_coverage.append({
-                "date": day, "fill_rows": fills.height, "block_joined_rows": 0,
-                "status": "BLOCKED_BLOCK_NUMBER_PROVENANCE", "trade_object": trade,
-                "custody_object": custody_meta,
-            })
-            continue
-        joined = fills.join(tx_block, on="tx_hash", how="left")
-        unmatched = joined.filter(pl.col("block_number").is_null())
-        null_identity = joined.filter(pl.col("tx_hash").is_null() | pl.col("log_index").is_null() | pl.col("block_number").is_null())
-        if unmatched.height or null_identity.height:
+
+        tx_block_counts = (
+            custody_matches.group_by("tx_hash")
+            .agg(pl.col("block_number").drop_nulls().n_unique().alias("block_count"))
+        )
+        bad_tx_hashes = tx_block_counts.filter(pl.col("block_count") != 1).select("tx_hash")
+        if bad_tx_hashes.height:
+            bad_fills = fills.join(bad_tx_hashes, on="tx_hash", how="semi")
             record_block_gap(
-                day,
-                f"{unmatched.height} fills lack custody block matches and {null_identity.height} fills have null on-chain identity fields",
-                fills,
+                day, "custody rows have zero or conflicting non-null block_number values for transaction hashes",
+                bad_fills,
             )
+            day_unexported_rows += bad_fills.height
+            fills = fills.join(bad_tx_hashes, on="tx_hash", how="anti")
+            if not fills.height:
+                day_coverage.append({
+                    "date": day, "fill_rows": 0, "source_matched_fill_rows": source_fill_rows,
+                    "unexported_fill_rows": day_unexported_rows, "block_joined_rows": 0,
+                    "status": "BLOCKED_BLOCK_NUMBER_PROVENANCE", "trade_object": trade,
+                    "custody_object": custody_meta,
+                })
+                continue
+            txs = fills.select(pl.col("tx_hash").drop_nulls().unique().alias("tx_hash"))
+            custody_matches = custody_matches.join(txs.lazy(), on="tx_hash", how="semi")
+
+        tx_block = assert_tx_block_map(custody_matches, day)
+        joined = fills.join(tx_block, on="tx_hash", how="left")
+        null_identity = joined.filter(
+            pl.col("tx_hash").is_null() | pl.col("log_index").is_null() | pl.col("block_number").is_null()
+        )
+        if null_identity.height:
+            record_block_gap(
+                day, f"{null_identity.height} fills lack a custody block match or have null on-chain identity fields",
+                null_identity,
+            )
+            day_unexported_rows += null_identity.height
+            joined = joined.filter(
+                pl.col("tx_hash").is_not_null() & pl.col("log_index").is_not_null() & pl.col("block_number").is_not_null()
+            )
+        if not joined.height:
             day_coverage.append({
-                "date": day, "fill_rows": fills.height, "block_joined_rows": 0,
+                "date": day, "fill_rows": 0, "source_matched_fill_rows": source_fill_rows,
+                "unexported_fill_rows": day_unexported_rows, "block_joined_rows": 0,
                 "status": "BLOCKED_BLOCK_NUMBER_PROVENANCE", "trade_object": trade,
                 "custody_object": custody_meta,
             })
@@ -377,14 +406,23 @@ def main() -> None:
         )
         conflicting = duplicate_stats.filter(pl.col("content_n") > 1)
         if conflicting.height:
-            record_block_gap(day, f"conflicting canonical fill keys: {conflicting.head(5).to_dicts()}", fills)
+            conflict_keys = conflicting.select(DEDUP_KEY)
+            conflicting_fills = joined.join(conflict_keys, on=DEDUP_KEY, how="semi")
+            record_block_gap(
+                day, f"conflicting canonical fill keys: {conflicting.head(5).to_dicts()}", conflicting_fills,
+            )
+            day_unexported_rows += conflicting_fills.height
+            joined = joined.join(conflict_keys, on=DEDUP_KEY, how="anti")
+        if not joined.height:
             day_coverage.append({
-                "date": day, "fill_rows": fills.height, "block_joined_rows": 0,
-                "status": "BLOCKED_CONFLICTING_DUPLICATES", "trade_object": trade,
+                "date": day, "fill_rows": 0, "source_matched_fill_rows": source_fill_rows,
+                "unexported_fill_rows": day_unexported_rows, "block_joined_rows": 0,
+                "status": "BLOCKED_NO_UNAMBIGUOUS_FILL_ROWS", "trade_object": trade,
                 "custody_object": custody_meta,
             })
             continue
-        dropped = int((duplicate_stats["n"].sum() or 0) - duplicate_stats.height)
+        safe_duplicates = duplicate_stats.filter(pl.col("content_n") == 1)
+        dropped = int((safe_duplicates["n"].sum() or 0) - safe_duplicates.height)
         total_duplicates += dropped
         joined = joined.unique(subset=DEDUP_KEY, keep="first", maintain_order=True)
 
@@ -466,7 +504,8 @@ def main() -> None:
             finally:
                 local_path.unlink(missing_ok=True)
         day_coverage.append({
-            "date": day, "fill_rows": day_rows, "block_joined_rows": day_rows,
+            "date": day, "fill_rows": day_rows, "source_matched_fill_rows": source_fill_rows,
+            "unexported_fill_rows": day_unexported_rows, "block_joined_rows": day_rows,
             "duplicate_rows_removed": dropped, "file_count": day_file_count,
             "status": "EXPORTED", "trade_object": trade, "custody_object": custody_meta,
         })
