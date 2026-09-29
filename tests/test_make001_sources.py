@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -33,7 +33,7 @@ class _SigState:
     tournament_id: str
     states: dict[str, ExchangeRuntimeState]
     market_states: dict[str, MarketRuntimeState]
-    health: _Health = _Health()
+    health: _Health = field(default_factory=_Health)
 
 
 @dataclass
