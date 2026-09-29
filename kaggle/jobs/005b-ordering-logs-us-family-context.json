@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "logs",
+  "kernel": "polyleviathan/005b-ordering-falsification-us-family-context",
+  "note": "Read-only progress diagnostics for remaining corrected US family-context kernel."
+}
