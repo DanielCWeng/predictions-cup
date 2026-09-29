@@ -373,6 +373,29 @@ def test_quote_ticks_are_passive_valid_and_never_cross() -> None:
             assert quote.bid_ticks < quote.ask_ticks
 
 
+def test_probability_boundary_drops_side_instead_of_narrowing_required_spread() -> None:
+    high = _engine().quote(
+        _maker_snapshot(
+            external={"token-yes": _external(bid=0.97, ask=0.99)}
+        )
+    )
+    low = _engine().quote(
+        _maker_snapshot(
+            external={"token-yes": _external(bid=0.01, ask=0.03)}
+        )
+    )
+
+    assert high.desired is not None
+    assert high.desired.ask_ticks is None
+    assert high.desired.ask_size == 0
+    assert high.desired.bid_ticks is not None
+
+    assert low.desired is not None
+    assert low.desired.bid_ticks is None
+    assert low.desired.bid_size == 0
+    assert low.desired.ask_ticks is not None
+
+
 @pytest.mark.parametrize(
     ("field", "reason"),
     (
