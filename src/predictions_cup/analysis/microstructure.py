@@ -217,12 +217,12 @@ def analyze_sig_microstructure(
                 if metrics is not None:
                     depths[exchange_id].append((observed, *metrics))
 
-    for values in quotes.values():
-        values.sort(key=lambda item: item.at)
-    for values in trades.values():
-        values.sort(key=lambda item: item.at)
-    for values in depths.values():
-        values.sort(key=lambda item: item[0])
+    for quote_values in quotes.values():
+        quote_values.sort(key=lambda item: item.at)
+    for trade_values in trades.values():
+        trade_values.sort(key=lambda item: item.at)
+    for depth_values in depths.values():
+        depth_values.sort(key=lambda item: item[0])
 
     market_rows: list[dict[str, object]] = []
     all_lifetimes: list[float] = []
@@ -383,17 +383,17 @@ def analyze_sig_microstructure(
     depth_rows: list[dict[str, object]] = []
     all_bid_depth: list[float] = []
     all_ask_depth: list[float] = []
-    for exchange_id, values in sorted(depths.items()):
-        bid_depth = [item[1] for item in values]
-        ask_depth = [item[2] for item in values]
-        bid_share = [item[3] for item in values if item[3] is not None]
-        ask_share = [item[4] for item in values if item[4] is not None]
+    for exchange_id, depth_values in sorted(depths.items()):
+        bid_depth = [item[1] for item in depth_values]
+        ask_depth = [item[2] for item in depth_values]
+        bid_share = [item[3] for item in depth_values if item[3] is not None]
+        ask_share = [item[4] for item in depth_values if item[4] is not None]
         all_bid_depth.extend(bid_depth)
         all_ask_depth.extend(ask_depth)
         depth_rows.append(
             {
                 "exchange_id": exchange_id,
-                "depth_snapshots": len(values),
+                "depth_snapshots": len(depth_values),
                 "bid_depth_p50": _percentiles(bid_depth)["p50"],
                 "ask_depth_p50": _percentiles(ask_depth)["p50"],
                 "bid_top_level_share_p50": _percentiles(
