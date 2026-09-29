@@ -235,6 +235,20 @@ replacement, inventory and simulation metadata that does not belong in the wire 
 Passive hypothetical fills require an explicit MAKE simulation rule. CAPTURE never assumes queue
 priority.
 
+
+## SIG SQLite compatibility exception
+
+CAPTURE-001 does not pretend SIG operational SQLite became metadata-only. BUILD-005's accepted SIG
+replay loaders still consume the normalized SQLite tables, so this branch preserves them while
+mirroring durable research evidence into Parquet. That is the compelling compatibility exception
+to the BUILD-007 Polymarket storage shape.
+
+The new raw full-universe evidence is **not** duplicated into SQLite. The one-second
+`capture_health` row records current SQLite and WAL bytes alongside Parquet queue/high-water,
+publication, drop and failure counters. The final live soak must show acceptable SQLite/WAL growth;
+if it does not, launch is blocked and the replay loader must be migrated rather than silently
+sacrificing evidence.
+
 ## Replay
 
 The existing BUILD-005 replay loaders continue to consume operational SIG SQLite and immutable
