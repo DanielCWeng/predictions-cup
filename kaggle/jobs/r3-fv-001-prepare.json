@@ -8,7 +8,7 @@
   "download_outputs": true,
   "output_file_pattern": "(R3_SPLIT_MANIFEST|DIRECT_CHRONOLOGY_AUDIT|DATA004_ECONOMIC_AUDIT|SEMANTIC_GRAPH_SUMMARY|DIRECT_INFORMATION_FAMILY_SEED)\\.(json|csv)$",
   "note": "R3 non-predictive prepare gate only: support/chronology split and semantic family construction. Must not evaluate FINAL performance.",
-  "attempt": 4,
-  "retry_reason": "Clean uncontended retry after normalizing the final stale direct chronology alias (order by block_number, ts). Prior attempts failed before any performance or FINAL access.",
+  "attempt": 5,
+  "retry_reason": "Attempt 4 cleared split construction and failed only on the later DATA-004 DuckDB alias; branch head now normalizes DATA-004 timestamp -> ts and has been statically scanned for remaining SQL timestamp aliases.",
   "definitive": true
 }
