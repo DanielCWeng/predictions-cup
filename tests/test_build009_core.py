@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import json
 from collections.abc import Mapping
 from decimal import Decimal
 from pathlib import Path
@@ -43,6 +44,11 @@ from predictions_cup.strategy.core import (
     Opportunity,
     StrategyFamily,
     StrategyRegistry,
+)
+from predictions_cup.sig.trading_dto import (
+    BatchOrderRequestDto,
+    MultiLegOrderRequestDto,
+    SingleOrderRequestDto,
 )
 from predictions_cup.strategy.kernels import KernelRegistry, default_kernel_registry
 
@@ -647,3 +653,59 @@ def test_shadow_sink_only_fills_immediately_executable_crosses() -> None:
         snapshot,
     )
     assert partial_event.state is LifecycleState.PARTIALLY_FILLED
+
+def test_generated_placement_envelopes_validate_against_transport_dtos() -> None:
+    first = RuntimeOrderIntent(
+        intent_id="dto-1",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=1,
+        limit_price_ticks=100,
+        strategy_id="fixture",
+        decision_observation_ns=1,
+    )
+    second = RuntimeOrderIntent(
+        intent_id="dto-2",
+        exchange_id="37",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.NO,
+        action=OrderAction.SELL,
+        quantity=2,
+        limit_price_ticks=120,
+        strategy_id="fixture",
+        decision_observation_ns=1,
+    )
+    single = ExecutionEnvelope.placement(
+        logical_operation_id="dto-single",
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        sink_mode=ExecutionMode.LIVE,
+        idempotency_key="dto-single",
+        intents=(first,),
+        created_monotonic_ns=1,
+    )
+    batch = ExecutionEnvelope.placement(
+        logical_operation_id="dto-batch",
+        operation_kind=OperationKind.BEST_EFFORT_BATCH,
+        sink_mode=ExecutionMode.LIVE,
+        idempotency_key="dto-batch",
+        intents=(first, second),
+        created_monotonic_ns=1,
+    )
+    multi = ExecutionEnvelope.placement(
+        logical_operation_id="dto-multi",
+        operation_kind=OperationKind.ATOMIC_MULTI_LEG,
+        sink_mode=ExecutionMode.LIVE,
+        idempotency_key="dto-multi",
+        intents=(first, second),
+        created_monotonic_ns=1,
+        relationship_constraint="22222222-2222-2222-2222-222222222222",
+    )
+
+    SingleOrderRequestDto.model_validate(json.loads(single.payload_json))
+    BatchOrderRequestDto.model_validate(json.loads(batch.payload_json))
+    MultiLegOrderRequestDto.model_validate(json.loads(multi.payload_json))
+
