@@ -474,7 +474,7 @@ def test_bridge_restores_canonical_market_identity_for_open_order_risk() -> None
     assert order.market_id == "m1"
     assert order.reserved_exposure == 4.0
 
-def test_trusted_sources_preserve_actual_old_observation_age() -> None:
+def test_trusted_live_sources_use_effective_current_freshness_when_quiet() -> None:
     wall_now = datetime(2026, 9, 29, 14, 1, tzinfo=UTC)
     old = wall_now - timedelta(minutes=5)
     sig = _SigState(
@@ -520,12 +520,18 @@ def test_trusted_sources_preserve_actual_old_observation_age() -> None:
     )
 
     assert snapshot is not None
-    assert snapshot.account_observed_ns == 300_000_000_000
-    assert snapshot.inventory_observed_ns == 300_000_000_000
+    # Account trust is restored only after a subscribed socket plus authoritative
+    # reconciliation; a quiet trusted channel therefore keeps inventory current.
+    assert snapshot.account_observed_ns == 600_000_000_000
+    assert snapshot.inventory_observed_ns == 600_000_000_000
+    # Polymarket reconnect performs a fresh CLOB seed and websocket liveness is
+    # monitored separately, so no economic mutation is required to keep FV fresh.
     assert (
         snapshot.external_quotes["yes-token"].observed_monotonic_ns
-        == 300_000_000_000
+        == 600_000_000_000
     )
+    # SIG scalar BBO still preserves its actual periodic REST refresh age.
+    assert snapshot.sig_bbo_observed_ns == 599_000_000_000
     assert snapshot.runtime.portfolio.account_trusted is True
     assert snapshot.external_quotes["yes-token"].trusted is True
 
