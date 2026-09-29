@@ -173,6 +173,48 @@ def test_restart_rebuilds_only_journal_proven_maker_quote(tmp_path: Path) -> Non
         journal.close()
 
 
+def test_reconciled_journal_history_still_tracks_resting_maker_quote(
+    tmp_path: Path,
+) -> None:
+    journal = _journal_with_open_maker(tmp_path / "reconciled-history.sqlite3")
+    quotes = QuoteRegistry()
+    try:
+        journal.mark_state(
+            "maker-op-1",
+            LifecycleState.RECONCILING,
+            230,
+        )
+        journal.mark_state(
+            "maker-op-1",
+            LifecycleState.RECONCILED,
+            240,
+        )
+        assert maker_unresolved_envelopes(journal) == ()
+
+        # A later process restart must still recover the currently open SIG
+        # order from durable MAKE attribution even though BUILD-009 execution
+        # recovery correctly considers the operation reconciled.
+        reconcile_maker_quote_registry(
+            journal=journal,
+            authoritative=_authoritative(),
+            quotes=quotes,
+            observed_monotonic_ns=300,
+        )
+        active = quotes.state("36").bid
+        assert active is not None
+        assert active.exchange_order_id == 91
+
+        reconcile_maker_quote_registry(
+            journal=journal,
+            authoritative=_authoritative(open_order=False),
+            quotes=quotes,
+            observed_monotonic_ns=400,
+        )
+        assert quotes.state("36").bid is None
+    finally:
+        journal.close()
+
+
 class _AckingLiveSink:
     def __init__(self, journal: ExecutionJournal) -> None:
         self.journal = journal
