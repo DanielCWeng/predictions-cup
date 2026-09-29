@@ -233,6 +233,10 @@ class QuoteRegistry:
     def __init__(self) -> None:
         self._states: dict[str, MakerQuoteState] = {}
 
+    @property
+    def exchange_ids(self) -> frozenset[str]:
+        return frozenset(self._states)
+
     def state(self, exchange_id: str) -> MakerQuoteState:
         return self._states.get(exchange_id, MakerQuoteState(exchange_id=exchange_id))
 
