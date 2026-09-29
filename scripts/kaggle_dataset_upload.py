@@ -76,7 +76,11 @@ def verify_package(data: dict[str, Any], work: Path) -> tuple[Path, dict[str, An
 
     package_manifest_path = package_root / "MANIFEST.json"
     package_manifest = load_json(package_manifest_path)
-    require_equal("package version", package_manifest.get("version"), data["expected_package_version"])
+    require_equal(
+        "package version",
+        package_manifest.get("version"),
+        data["expected_package_version"],
+    )
     require_equal("package status", package_manifest.get("status"), data["expected_status"])
     require_equal(
         "package source manifest sha256",
@@ -93,14 +97,26 @@ def verify_package(data: dict[str, Any], work: Path) -> tuple[Path, dict[str, An
         data["expected_oci_manifest_sha256"],
     )
     source_manifest = load_json(source_manifest_path)
-    require_equal("OCI source version", source_manifest.get("version"), data["expected_package_version"])
+    require_equal(
+        "OCI source version",
+        source_manifest.get("version"),
+        data["expected_package_version"],
+    )
     require_equal("OCI source status", source_manifest.get("status"), data["expected_status"])
     expected_counts = data.get("expected_counts", {})
     for key, expected in expected_counts.items():
-        require_equal(f"OCI source count {key}", source_manifest.get("counts", {}).get(key), expected)
+        require_equal(
+            f"OCI source count {key}",
+            source_manifest.get("counts", {}).get(key),
+            expected,
+        )
 
     listed_files = package_manifest.get("files", [])
-    require_equal("package manifest file count", len(listed_files), int(data["expected_file_count"]))
+    require_equal(
+        "package manifest file count",
+        len(listed_files),
+        int(data["expected_file_count"]),
+    )
     for row in listed_files:
         rel = Path(str(row["path"]))
         candidate = (package_root / rel).resolve()
@@ -183,7 +199,13 @@ def parse_cli_csv(text: str, header_prefix: str) -> list[dict[str, str]]:
         return []
     rows = []
     for row in csv.DictReader(lines[start:]):
-        rows.append({str(k): ("" if v is None else str(v)) for k, v in row.items() if k is not None})
+        rows.append(
+            {
+                str(k): ("" if v is None else str(v))
+                for k, v in row.items()
+                if k is not None
+            }
+        )
     return rows
 
 
