@@ -56,6 +56,19 @@ def main() -> None:
     if v1_remote_sha != sha256(V1_MANIFEST_PATH.read_bytes()):
         raise RuntimeError("remote v1 lifecycle manifest differs from its supersession annotation")
 
+    previous_manifest = v2_local.get("addendum_4", {})
+    previous_manifest_object = previous_manifest.get("previous_manifest_object")
+    previous_manifest_sha = previous_manifest.get("previous_manifest_sha256")
+    previous_remote_sha = None
+    if previous_manifest_object:
+        previous_bytes = object_body_bytes(client.get_object(namespace_name=namespace, bucket_name=BUCKET,
+                                                              object_name=previous_manifest_object))
+        previous_remote_sha = sha256(previous_bytes)
+        if previous_remote_sha != previous_manifest_sha:
+            raise RuntimeError("archived pre-Addendum 4 v2 manifest differs from its recorded hash")
+        if json.loads(previous_bytes).get("status") != "BLOCKED_QUALITY_GATE":
+            raise RuntimeError("archived pre-Addendum 4 v2 manifest does not retain the blocked status")
+
     object_sizes_checked = 0
     object_bytes_checked = 0
     for row in v2_local["files"]:
@@ -84,6 +97,8 @@ def main() -> None:
         "bucket": BUCKET,
         "v2_manifest_object": V2_MANIFEST_OBJECT,
         "v2_manifest_sha256": v2_remote_sha,
+        "v2_previous_manifest_object": previous_manifest_object,
+        "v2_previous_manifest_sha256": previous_remote_sha,
         "v1_status_manifest_object": V1_PREFIX + "MANIFEST.json",
         "v1_status_manifest_sha256": v1_remote_sha,
         "v1_status": v1_local["status"],
@@ -93,7 +108,7 @@ def main() -> None:
         "sampled_parquet_hashes": sampled,
         "v1_payload_objects_modified": 0,
     }
-    path = LANE / "data004_a3_oci_verify.json"
+    path = LANE / ("data004_a4_oci_verify.json" if previous_manifest_object else "data004_a3_oci_verify.json")
     path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(result, sort_keys=True), flush=True)
 

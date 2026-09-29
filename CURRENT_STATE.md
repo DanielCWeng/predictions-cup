@@ -101,7 +101,7 @@ Key quality facts:
 DATA-003 is the preferred fresh mapped-universe replication/evaluation surface for findings that need
 to transfer from historical election families into the actual Cup universe.
 
-## DATA-004 — ETS P0/P1 graph universe (BLOCKED / IN REVIEW)
+## DATA-004 — ETS P0/P1 graph universe (ACCEPTED_V2 / PR IN REVIEW)
 
 DATA-004 v2 freezes 298 selected Gamma markets (210 P0 and 88 P1), their 596 outcome tokens, 1,596
 market-graph links, and 134 selected SIG exchange IDs. The comparison plan covers 231 accepted SIG
@@ -120,10 +120,12 @@ custody blocks on 2026-09-20/21, the unique timestamp mapping agreed with custod
 validation rows from 2026-09-15 through 2026-09-19. All 4,989 gap rows map uniquely; v2 has zero
 missing/imputed blocks and zero per-token ordering failures.
 
-Conservation is the only failed v2 gate: 96,587 of 96,630 `(tx_hash, condition_id)` groups match
-exactly, while 43 retain a ±0.0001-share difference. A targeted source lookup found no out-of-scope
-fill rows for these transactions. Keep the corpus blocked until those residuals are explained; do
-not expand scope or start R3. PR #59 remains open, so this branch is not canonical `main`.
+Addendum 4 verified the `size_shares` precision across all 231,964 rows: the maximum observed is
+four decimal places. The 43 groups with an exact ±0.0001-share difference are classified as
+`PRECISION_ROUNDING_4DP`; all satisfy `abs(taker_size - maker_size) <= 0.0001 * max(maker_rows, 1)`.
+No fill values changed, no residuals remain unexplained, and all v2 quality gates pass with status
+`ACCEPTED_V2`. PR #59 remains open, so this branch is not yet canonical on `main`; the separate R3
+pilot and any scope expansion remain future decisions.
 
 ## Research programme state
 
@@ -265,10 +267,10 @@ These are runtime-acceptance tasks, not mapping-discovery tasks.
 
 ## Branch state
 
-After the 28 September reconciliation and DATA-004 v2 addendum:
+After the 28 September reconciliation and DATA-004 Addendum 4:
 
 - merged: PR #38, #41, #42, #43, #44, #47 and #48;
-- open/blocked: PR #45, #50 and #59;
+- open/blocked: PR #45 and #50; PR #59 remains open with DATA-004 v2 accepted and merge pending;
 - historical, backup, preregistration, review and superseded research branches may remain on GitHub
   as provenance refs but are not canonical capability unless merged into `main`.
 

@@ -1,6 +1,6 @@
 # DATA-004 — ETS P0/P1 Fill Corpus
 
-**Status:** v2 `BLOCKED_QUALITY_GATE`; PR #59 remains open. Kaggle upload is pending team handoff.
+**Status:** v2 `ACCEPTED_V2`; PR #59 remains open for merge. Kaggle upload is pending team handoff.
 **Branch:** `data/data004-ets-p0p1-fills`.
 **Current OCI source copy:** `polymarket-bot-state/research/data004_ets_p0p1/v2/`.
 
@@ -31,7 +31,8 @@ side, price/size/value, maker/taker addresses, source object provenance, outcome
 graph links. `side` is preserved verbatim. `economic_direction` is derived only from registered
 signed-order semantics; `order_role` uses the registered exchange-address set. Neither is a
 strategy label. Source numeric fields retain the upstream Parquet schema; conservation sums use
-`Decimal(str(value))` without an epsilon tolerance.
+`Decimal(str(value))` and the Addendum 4 gate applies the measured source quantum without changing
+any fill values.
 
 ## v1 and v2 versioning
 
@@ -68,11 +69,16 @@ levels, so it was not a valid conservation key.
 The v2 gate groups the taker-order rows (`order_is_match_taker_order=true`, meaning an exchange
 counterparty) and maker-order rows by `(tx_hash, condition_id)`. It sums all applicable same-token
 price levels and the binary complement relationship (the other token at `1-p`) using exact decimal
-arithmetic and no epsilon tolerance. There are 96,630 groups: 96,587 match exactly, zero are
-one-sided, and 43 retain a residual of exactly ±0.0001 shares. A targeted read-only source lookup
-scanned only those 43 transaction hashes on their source dates: it found zero out-of-scope fill
-rows, so none is classified as an explained scope residual. All 43 unexplained residuals are listed
-individually in `maker_taker_tx_condition_residuals.csv`. The gate remains failed.
+arithmetic. Of 96,630 groups, 96,587 match exactly, zero are one-sided, and 43 differ by exactly
+±0.0001 shares. The scope audit found no out-of-scope fill rows for those transactions.
+
+Addendum 4 verifies all 231,964 `size_shares` values in the 343 Parquet partitions: the maximum
+observed precision is four decimal places (30,809 rows have four places). The source lake stores
+share sizes at four decimal places while the on-chain amounts have six. The gate accepts each
+`(tx_hash, condition_id)` group when `abs(taker_size - maker_size) <= 0.0001 ×
+max(maker_rows, 1)`. All 43 differences are exactly one source quantum and pass this tolerance;
+their cause class is `PRECISION_ROUNDING_4DP`. The maximum applicable tolerance among those groups
+is 0.0015 shares. The CSV retains all 43 groups. No fill values were rounded, imputed or changed.
 
 ## Coverage and gate outcome
 
@@ -81,12 +87,9 @@ has fills, and the zero-fill file is empty. Source-day inventory retains the mea
 and documents custody gaps separately from the final v2 block-number coverage. All 298 markets
 remain within their Gamma creation/end bounds.
 
-v2 passes universe scope, Gamma outcome alignment, graph/anchor links, key completeness,
-deduplication, block provenance, ordering, core-field completeness, price bounds, condition
-identity, lifecycle bounds, source-date coverage and per-market coverage. Only
-`maker_taker_size_symmetry` fails because of the 43 exact-decimal residual groups; therefore v2
-remains `BLOCKED_QUALITY_GATE`. Do not expand beyond P0/P1 or begin R3 predictive/fair-value work
-until those residuals are explained.
+v2 passes every gate, including `maker_taker_size_symmetry` at the measured source quantum, and is
+`ACCEPTED_V2`. This acceptance covers the frozen P0/P1 corpus. It does not run an R3 predictive or
+fair-value test, and any pilot or scope expansion remains a separate decision.
 
 ## Delivery and evidence
 
@@ -103,9 +106,9 @@ outcome-based graph changes, or R3/FV tests are part of DATA-004.
 Evidence:
 
 - `data/research/data004_ets_p0p1/v2/data004_manifest.json` — v2 source, counts, objects and gates.
-- `data/research/data004_ets_p0p1/v2/data004_quality.json` — gate summary and each failure.
+- `data/research/data004_ets_p0p1/v2/data004_quality.json` — accepted gate summary; no failed gates.
 - `data/research/data004_ets_p0p1/v2/block_timestamp_evidence.json` — validation and timestamp map.
-- `data/research/data004_ets_p0p1/v2/maker_taker_conservation.json` — exact-decimal gate method.
+- `data/research/data004_ets_p0p1/v2/maker_taker_conservation.json` — exact-decimal source-quantum gate method.
 - `data/research/data004_ets_p0p1/v2/maker_taker_scope_audit.json` — targeted source check.
 - `data/research/data004_ets_p0p1/v2/maker_taker_tx_condition_residuals.csv` — all 43 residuals.
 - `data/research/data004_ets_p0p1/v2/data004_baseline_pairing.json` — frozen DATA-003 pairing plan.

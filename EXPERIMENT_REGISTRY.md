@@ -28,7 +28,7 @@ status does not imply alpha, strategy promotion or execution readiness.
 | Dataset | Scope | Status | Use |
 |---|---|---|---|
 | DATA-003 | Accepted SIG mapping actual-market fills with DATA-002 fee evidence | MERGED / ACCEPTED | Actual mapped-universe replication; explicit custody gaps. |
-| DATA-004 | Frozen ETS P0/P1 Polymarket market-graph fills with block provenance and DATA-003 anchor pairing | BLOCKED / IN REVIEW | v2 resolves 4,989 custody-gap blocks using a unique timestamp join validated on 9,803 custody-known fills and passes ordering. 43 exact-decimal maker/taker size residuals remain unexplained; do not expand scope or start R3. Kaggle upload is pending team handoff; OCI v2 is the source copy. |
+| DATA-004 | Frozen ETS P0/P1 Polymarket market-graph fills with block provenance and DATA-003 anchor pairing | ACCEPTED_V2 / PR #59 OPEN | All quality gates pass. Across 231,964 rows, `size_shares` has at most four decimal places; the 43 exact ±0.0001-share groups pass the `0.0001 × max(maker_rows, 1)` source-quantum tolerance and are labeled `PRECISION_ROUNDING_4DP`. OCI v2 is the source copy; Kaggle upload is pending team handoff. The open PR is not yet canonical on `main`. |
 
 ## Registry discipline
 

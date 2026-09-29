@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish the corrected DATA-004 v2 objects and annotate the rejected v1 manifest."""
+"""Verify/publish DATA-004 v2 payloads and version its reviewed manifest."""
 from __future__ import annotations
 
 import hashlib
@@ -97,8 +97,16 @@ def main() -> None:
     import oci  # type: ignore[import-not-found]
 
     manifest = json.loads(V2_MANIFEST_PATH.read_text(encoding="utf-8"))
-    if manifest.get("version") != "v2" or manifest.get("status") != "BLOCKED_QUALITY_GATE":
-        raise RuntimeError("refusing to publish a non-v2 or not-yet-reviewed manifest")
+    if manifest.get("version") != "v2" or manifest.get("status") not in {"BLOCKED_QUALITY_GATE", "ACCEPTED_V2"}:
+        raise RuntimeError("refusing to publish a non-v2 or unreviewed manifest")
+    if manifest.get("status") == "ACCEPTED_V2":
+        addendum_4 = manifest.get("addendum_4", {})
+        if (
+            addendum_4.get("status") != "ACCEPTED_V2"
+            or addendum_4.get("fill_values_changed") != 0
+            or not addendum_4.get("source_quantum_tolerance", {}).get("all_groups_within_tolerance")
+        ):
+            raise RuntimeError("accepted v2 manifest lacks the Addendum 4 source-quantum evidence")
     v1_manifest = json.loads(V1_MANIFEST_PATH.read_text(encoding="utf-8"))
     if v1_manifest.get("original_manifest_sha256") != V1_ORIGINAL_MANIFEST_SHA or v1_manifest.get("status") != "BLOCKED_SUPERSEDED":
         raise RuntimeError("v1 source manifest lacks the required blocked/superseded annotation")
@@ -150,10 +158,38 @@ def main() -> None:
     manifest_sha = sha256(manifest_bytes)
     final_name = V2_PREFIX + "MANIFEST.json"
     disk_gate("before_v2_final_manifest", reserve_bytes=len(manifest_bytes) + (1 << 20))
+    manifest_transition: dict[str, Any] | None = None
     if head_or_none(client, namespace, final_name) is not None:
         existing = get_object_bytes(client, namespace, final_name)
         if sha256(existing) != manifest_sha:
-            raise RuntimeError("refusing to overwrite a finalized, different v2 MANIFEST.json")
+            old_manifest = json.loads(existing)
+            new_manifest = json.loads(manifest_bytes)
+            addendum_4 = new_manifest.get("addendum_4", {})
+            expected_old_sha = addendum_4.get("previous_manifest_sha256")
+            archive_name = addendum_4.get("previous_manifest_object")
+            if (
+                old_manifest.get("status") != "BLOCKED_QUALITY_GATE"
+                or new_manifest.get("status") != "ACCEPTED_V2"
+                or expected_old_sha != sha256(existing)
+                or old_manifest.get("files") != new_manifest.get("files")
+                or not archive_name
+            ):
+                raise RuntimeError("refusing v2 manifest transition that is not the Addendum 4 acceptance of unchanged payload objects")
+            archived = head_or_none(client, namespace, archive_name)
+            if archived is None:
+                client.put_object(namespace_name=namespace, bucket_name=BUCKET, object_name=archive_name, put_object_body=existing)
+            else:
+                archived_payload = get_object_bytes(client, namespace, archive_name)
+                if sha256(archived_payload) != sha256(existing):
+                    raise RuntimeError(f"blocked v2 manifest archive already exists with different bytes: {archive_name}")
+            client.put_object(namespace_name=namespace, bucket_name=BUCKET, object_name=final_name, put_object_body=manifest_bytes)
+            manifest_transition = {
+                "from_status": old_manifest.get("status"),
+                "to_status": new_manifest.get("status"),
+                "previous_manifest_object": archive_name,
+                "previous_manifest_sha256": sha256(existing),
+                "payload_file_list_unchanged": True,
+            }
     else:
         client.put_object(namespace_name=namespace, bucket_name=BUCKET, object_name=final_name, put_object_body=manifest_bytes)
     final_head = client.head_object(namespace_name=namespace, bucket_name=BUCKET, object_name=final_name)
@@ -192,7 +228,8 @@ def main() -> None:
         "upload_actions": {action: sum(row["action"] == action for row in uploaded) for action in {row["action"] for row in uploaded}},
         "objects": uploaded,
     }
-    path = LANE / "data004_a3_oci_publish.json"
+    path = LANE / ("data004_a4_oci_publish.json" if json.loads(manifest_bytes).get("status") == "ACCEPTED_V2" else "data004_a3_oci_publish.json")
+    record["manifest_transition"] = manifest_transition
     write_json(path, record)
     print(json.dumps({"v2_objects": record["v2_objects"], "v2_bytes": record["v2_bytes"],
                       "v2_manifest_sha256": manifest_sha, "v1_manifest_sha256": v1_sha,

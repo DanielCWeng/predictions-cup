@@ -91,17 +91,22 @@ def copy_review_files() -> None:
 
 
 def write_docs(manifest: dict[str, Any], quality: dict[str, Any]) -> None:
+    counts = manifest["counts"]
+    validation = manifest["validation"]
+    symmetry = validation["symmetry"]
+    precision = validation["size_shares_precision"]
+    status = manifest["status"]
     (PACKAGE / "README.md").write_text(
-        """# DATA-004 — ETS P0/P1 Polymarket fills (v2)
+        f"""# DATA-004 — ETS P0/P1 Polymarket fills (v2)
 
-**Status: BLOCKED_QUALITY_GATE.** This is a frozen data package for review; it contains no predictive result.
+**Status: {status}.** This is a frozen fill corpus; it contains no predictive result.
 
 The private Kaggle dataset ID is `polyleviathan/sig-cup-data-004-ets-p0p1-fills`. Delivery is **Kaggle (pending team upload)**; the immutable OCI source copy is `polymarket-bot-state/research/data004_ets_p0p1/v2/`, with final manifest `research/data004_ets_p0p1/v2/MANIFEST.json`.
 
 ## Scope
 
-- 298 markets: 210 P0 and 88 P1; 298 conditions and 596 Gamma-aligned outcome tokens.
-- 231,964 rows from 2025-10-14T00:40:19Z through 2026-09-21T23:58:24Z.
+- {counts['markets']:,} markets: 210 P0 and 88 P1; {counts['conditions']:,} conditions and {counts['tokens']:,} Gamma-aligned outcome tokens.
+- {counts['deduped_fill_rows']:,} rows from {counts['earliest_fill_utc']} through {counts['latest_fill_utc']}.
 - Full history is partitioned by UTC date under `fills/date=YYYY-MM-DD/`.
 - The package retains metadata for the full 1,279-market / 2,558-token candidate universe. The 797 `book_needed_later` markets have no acquired fills.
 - `data004_baseline_pairing.json` preserves the plan for 231 accepted DATA-003 anchors (140 EXACT, 87 DERIVED, 4 NEAR); no DATA-003 source fills were reacquired.
@@ -112,14 +117,14 @@ v2 reuses every v1 fill row and does not rescan the trade lake. The 4,989 rows o
 
 ## Review outcome
 
-All 231,964 rows now have a block number and pass strict per-token `(block_number, log_index)` ordering. Deduplication, universe/token alignment, source-date coverage, price bounds, core field completeness, lifecycle bounds and per-market coverage remain passing. Maker/taker conservation is the one remaining failed gate: 96,587 of 96,630 `(tx_hash, condition_id)` groups match exactly under exact-decimal summation; 43 have an unexplained difference of exactly 0.0001 shares. A targeted source lookup found no out-of-scope fills for those hashes. Each is listed in `maker_taker_tx_condition_residuals.csv`; see `QUALITY.json` and `COVERAGE.md` before use.
+All rows have a block number and pass strict per-token `(block_number, log_index)` ordering. Deduplication, universe/token alignment, source-date coverage, price bounds, core-field completeness, lifecycle bounds, per-market coverage and maker/taker conservation pass. The 43 non-zero maker/taker residual groups are classified as `PRECISION_ROUNDING_4DP`; each is within the accepted source-quantum tolerance of `0.0001 × max(maker_rows, 1)` shares. Across all {precision['rows_scanned']:,} `size_shares` values, the maximum observed precision is {precision['max_decimal_places_observed']} decimal places. No fill values were changed. The residuals remain individually listed in `maker_taker_tx_condition_residuals.csv`; see `QUALITY.json` and `COVERAGE.md` for the gate evidence.
 
 This package contains no order-book history, R3 predictive/fair-value test or outcome-driven graph change.
 """,
         encoding="utf-8",
     )
     (PACKAGE / "COVERAGE.md").write_text(
-        f"""# DATA-004 v2 coverage and quality
+        f"""# DATA-004 v2 coverage and quality — {status}
 
 ## Source and fill history
 
@@ -133,13 +138,13 @@ The custody join supplied 226,975 block numbers. Custody objects are absent for 
 
 ## Maker/taker conservation
 
-The gate groups all taker-order rows (`order_is_match_taker_order=true`, equivalent to an exchange counterparty) and maker rows by `(tx_hash, condition_id)`. It sums the serialized Parquet share values using `Decimal(str(value))`, pairing the two binary outcome-token sides, without an epsilon tolerance. 96,587 groups match exactly; 43 of 96,630 have a residual of exactly ±0.0001 shares; no groups are one-sided. A targeted read-only lookup of the 43 transaction hashes in their source trade objects found zero out-of-scope fill rows, so none of these residuals is classified as an explained scope residual. All 43 are listed individually in `maker_taker_tx_condition_residuals.csv` with transaction, condition, date, row counts, maker/taker totals and source-scope checks.
+The gate groups all taker-order rows (`order_is_match_taker_order=true`, equivalent to an exchange counterparty) and maker rows by `(tx_hash, condition_id)`, summing serialized Parquet values with `Decimal(str(value))`. The source lake stores `size_shares` at four decimal places; the full {precision['rows_scanned']:,}-row check observed a maximum of {precision['max_decimal_places_observed']} decimal places. Of {symmetry['groups_checked']:,} groups, {symmetry['exact_equal_size_groups']:,} match exactly and {symmetry['precision_rounding_groups']:,} have residuals of exactly ±0.0001 shares. The accepted condition is `abs(taker_size - maker_size) <= 0.0001 × max(maker_rows, 1)` shares. This allows at most one source quantum per summed maker row and accounts for source rounding of the on-chain six-decimal amounts; no fill values are changed. There are no one-sided groups or unexplained residuals. The 43 precision-rounding groups are listed individually in `maker_taker_tx_condition_residuals.csv`.
 
-Price-indexed buckets are retained only as descriptive diagnostics: the taker row can aggregate multiple maker price levels, so those buckets are not the transaction-condition conservation gate. No size tolerance or silent rounding was applied.
+Price-indexed buckets are retained only as descriptive diagnostics: the taker row can aggregate multiple maker price levels, so those buckets are not the transaction-condition conservation gate. The source-quantum tolerance applies only to the gate; no `size_shares` values were rounded or changed.
 
 ## Gate status and research boundary
 
-`QUALITY.json` contains the full gate summary. The block-provenance and ordering defects from v1 are cleared. The 43 unexplained exact-decimal conservation residuals remain a failed gate, so DATA-004 remains `BLOCKED_QUALITY_GATE`; do not expand beyond P0/P1 or start R3 predictive/fair-value work until they are resolved.
+`QUALITY.json` contains the full gate summary; all gates pass and the v2 corpus is `ACCEPTED_V2`. The 43 sub-quantum residuals are reported as `PRECISION_ROUNDING_4DP`, not as missing data. This acceptance covers the frozen P0/P1 corpus only; any later R3 pilot or scope expansion remains a separate decision.
 """,
         encoding="utf-8",
     )
