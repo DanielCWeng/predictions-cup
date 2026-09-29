@@ -279,9 +279,17 @@ def _analyse_polymarket(root: Path | None) -> tuple[dict[str, Any], dict[str, fl
     )
 
 
-def _analyse_execution(path: Path | None) -> dict[str, Any]:
+def _delta_ms(start: int | None, end: int | None) -> float | None:
+    if start is None or end is None or end < start:
+        return None
+    return (end - start) / 1_000_000.0
+
+
+def _analyse_execution(
+    path: Path | None,
+) -> tuple[dict[str, Any], list[dict[str, object]]]:
     if path is None or not path.exists():
-        return {"available": False}
+        return {"available": False}, []
     connection = sqlite3.connect(path)
     try:
         columns = {
@@ -289,31 +297,112 @@ def _analyse_execution(path: Path | None) -> dict[str, Any]:
             for row in connection.execute("PRAGMA table_info(execution_events)").fetchall()
         }
         if not columns:
-            return {"available": False}
+            return {"available": False}, []
         event_counts = {
             str(event_type): int(count)
             for event_type, count in connection.execute(
                 "SELECT event_type, COUNT(*) FROM execution_events GROUP BY event_type"
             ).fetchall()
         }
-        decision_latency_ms: list[float] = []
-        if {"decision_monotonic_ns", "decision_observation_ns"} <= columns:
-            for decision, observed in connection.execute(
+        has_decision = {
+            "decision_monotonic_ns",
+            "decision_observation_ns",
+        } <= columns
+        if has_decision:
+            raw_rows = connection.execute(
                 """
-                SELECT decision_monotonic_ns, decision_observation_ns
+                SELECT logical_operation_id, event_type, observed_monotonic_ns,
+                       decision_observation_ns, decision_monotonic_ns
                 FROM execution_events
-                WHERE decision_monotonic_ns IS NOT NULL
-                  AND decision_observation_ns IS NOT NULL
+                ORDER BY event_id
                 """
-            ):
-                delta = int(decision) - int(observed)
-                if delta >= 0:
-                    decision_latency_ms.append(delta / 1_000_000.0)
-        return {
-            "available": True,
-            "event_counts": event_counts,
-            "decision_from_observation_ms": _percentiles(decision_latency_ms),
-        }
+            ).fetchall()
+        else:
+            raw_rows = [
+                (operation_id, event_type, observed_ns, None, None)
+                for operation_id, event_type, observed_ns in connection.execute(
+                    """
+                    SELECT logical_operation_id, event_type, observed_monotonic_ns
+                    FROM execution_events
+                    ORDER BY event_id
+                    """
+                ).fetchall()
+            ]
+
+        events_by_operation: dict[str, dict[str, int]] = defaultdict(dict)
+        decision_by_operation: dict[str, tuple[int | None, int | None]] = {}
+        for operation_id, event_type, observed_ns, decision_observed, decision_ns in raw_rows:
+            operation = str(operation_id)
+            event = str(event_type)
+            observed = int(observed_ns)
+            existing = events_by_operation[operation].get(event)
+            if existing is None or observed < existing:
+                events_by_operation[operation][event] = observed
+            if event == "SUBMISSION":
+                current = decision_by_operation.get(operation)
+                candidate = (
+                    None if decision_observed is None else int(decision_observed),
+                    None if decision_ns is None else int(decision_ns),
+                )
+                if current is None or current == (None, None):
+                    decision_by_operation[operation] = candidate
+
+        operation_rows: list[dict[str, object]] = []
+        for operation, events in sorted(events_by_operation.items()):
+            submission = events.get("SUBMISSION")
+            if submission is None:
+                continue
+            decision_observed, decision = decision_by_operation.get(
+                operation,
+                (None, None),
+            )
+            dispatch = events.get("NETWORK_DISPATCH")
+            ack = events.get("ACK")
+            fill_candidates = [
+                value
+                for name in ("REALTIME_FILL", "FILL")
+                if (value := events.get(name)) is not None
+            ]
+            fill = min(fill_candidates) if fill_candidates else None
+            operation_rows.append(
+                {
+                    "logical_operation_id": operation,
+                    "observation_to_decision_ms": _delta_ms(
+                        decision_observed,
+                        decision,
+                    ),
+                    "decision_to_submission_ms": _delta_ms(decision, submission),
+                    "submission_to_dispatch_ms": _delta_ms(submission, dispatch),
+                    "dispatch_to_ack_ms": _delta_ms(dispatch, ack),
+                    "dispatch_to_fill_ms": _delta_ms(dispatch, fill),
+                    "observation_to_ack_ms": _delta_ms(decision_observed, ack),
+                    "observation_to_fill_ms": _delta_ms(decision_observed, fill),
+                }
+            )
+
+        def metric(name: str) -> dict[str, float | None]:
+            values = [
+                float(value)
+                for row in operation_rows
+                if (value := row.get(name)) is not None
+            ]
+            return _percentiles(values)
+
+        return (
+            {
+                "available": True,
+                "event_counts": event_counts,
+                "operations_with_submission": len(operation_rows),
+                "observation_to_decision_ms": metric("observation_to_decision_ms"),
+                "decision_to_submission_ms": metric("decision_to_submission_ms"),
+                "submission_to_dispatch_ms": metric("submission_to_dispatch_ms"),
+                "dispatch_to_ack_ms": metric("dispatch_to_ack_ms"),
+                "dispatch_to_fill_ms": metric("dispatch_to_fill_ms"),
+                "observation_to_ack_ms": metric("observation_to_ack_ms"),
+                "observation_to_fill_ms": metric("observation_to_fill_ms"),
+            },
+            operation_rows,
+        )
     finally:
         connection.close()
 
@@ -525,7 +614,7 @@ def run(
         bucket_rows,
     ) = analyze_sig_microstructure(sig_root)
     pm, pm_mid = _analyse_polymarket(pm_root)
-    execution = _analyse_execution(journal)
+    execution, execution_rows = _analyse_execution(journal)
     cross_response, cross_response_rows = analyze_direct_cross_venue(
         sig_root=sig_root,
         polymarket_root=pm_root,
@@ -567,6 +656,7 @@ def run(
     _write_rows(output_root / "activity_15m.csv", bucket_rows)
     _write_rows(output_root / "cross_venue_diagnostics.csv", cross_response_rows)
     _write_rows(output_root / "cross_venue_latest.csv", cross)
+    _write_rows(output_root / "execution_latency.csv", execution_rows)
     return summary
 
 
