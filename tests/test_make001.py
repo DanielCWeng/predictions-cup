@@ -71,7 +71,11 @@ def _mapping(
     mapping_class: MappingClass = MappingClass.EXACT,
     direction: MappingDirection = MappingDirection.SAME,
 ) -> MappingDocument:
-    direct = _identity("token-yes") if mapping_class in {MappingClass.EXACT, MappingClass.NEAR} else None
+    direct = (
+        _identity("token-yes")
+        if mapping_class in {MappingClass.EXACT, MappingClass.NEAR}
+        else None
+    )
     components: tuple[PolymarketContractIdentity, ...] = ()
     semantic_notes: str | None = "reviewed direct mapping"
     resolution_notes: str | None = "same outcome"
