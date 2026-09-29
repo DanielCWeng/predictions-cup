@@ -12,7 +12,7 @@ import asyncio
 import logging
 import signal
 from contextlib import suppress
-from datetime import UTC, datetime
+from datetime import datetime
 from time import monotonic_ns
 
 from pydantic import ValidationError
