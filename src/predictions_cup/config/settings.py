@@ -49,7 +49,8 @@ class AppSettings(BaseSettings):
     maker_mapping_path: Path = Path("data/mappings/sig_polymarket_2026.json")
     maker_max_abs_inventory: float = Field(default=10.0, gt=0.0)
     maker_base_size: int = Field(default=2, gt=0, le=2_147_483_647)
-    maker_base_half_spread_ticks: float = Field(default=1.0, gt=0.0)
+    maker_minimum_size: int = Field(default=1, gt=0, le=2_147_483_647)
+    maker_base_half_spread_ticks: float = Field(default=1.0, ge=0.5)
     maker_inventory_risk_aversion: float = Field(default=1.0, ge=0.0)
     maker_variance_horizon: float = Field(default=1.0, ge=0.0)
     maker_variance_floor: float = Field(default=0.000025, ge=0.0)
@@ -63,25 +64,6 @@ class AppSettings(BaseSettings):
     maker_max_signal_age_ms: int = Field(default=1_000, gt=0)
     maker_require_trusted_depth: bool = False
     maker_max_depth_age_ms: int = Field(default=1_000, gt=0)
-    maker_min_replace_ticks: int = Field(default=1, gt=0)
-    maker_min_replace_size: int = Field(default=1, gt=0)
-    maker_min_requote_interval_ms: int = Field(default=0, ge=0)
-
-    # MAKE-001 is explicitly opt-in. LIVE is still separately guarded by the
-    # BUILD-009 execution_mode/trading_enabled/interlock controls.
-    maker_enabled: bool = False
-    maker_mapping_path: Path = Path("data/mappings/sig_polymarket_2026.json")
-    maker_max_abs_inventory: float = Field(default=10.0, gt=0.0)
-    maker_base_size: int = Field(default=2, gt=0, le=2_147_483_647)
-    maker_minimum_size: int = Field(default=1, gt=0, le=2_147_483_647)
-    maker_base_half_spread_ticks: float = Field(default=1.0, ge=0.5)
-    maker_bbo_max_age_ms: int = Field(default=1_000, gt=0)
-    maker_fv_max_age_ms: int = Field(default=1_000, gt=0)
-    maker_account_max_age_ms: int = Field(default=2_000, gt=0)
-    maker_inventory_max_age_ms: int = Field(default=2_000, gt=0)
-    maker_signal_max_age_ms: int = Field(default=1_000, gt=0)
-    maker_require_trusted_depth: bool = False
-    maker_depth_max_age_ms: int = Field(default=1_000, gt=0)
     maker_min_replace_ticks: int = Field(default=1, gt=0)
     maker_min_replace_size: int = Field(default=1, gt=0)
     maker_min_requote_interval_ms: int = Field(default=0, ge=0)
@@ -202,7 +184,14 @@ class AppSettings(BaseSettings):
             "maker_mapping_path": str(self.maker_mapping_path),
             "maker_max_abs_inventory": self.maker_max_abs_inventory,
             "maker_base_size": self.maker_base_size,
+            "maker_minimum_size": self.maker_minimum_size,
             "maker_base_half_spread_ticks": self.maker_base_half_spread_ticks,
+            "maker_inventory_risk_aversion": self.maker_inventory_risk_aversion,
+            "maker_variance_horizon": self.maker_variance_horizon,
+            "maker_variance_floor": self.maker_variance_floor,
+            "maker_uncertainty_multiplier": self.maker_uncertainty_multiplier,
+            "maker_volatility_multiplier": self.maker_volatility_multiplier,
+            "maker_toxicity_half_spread_ticks": self.maker_toxicity_half_spread_ticks,
             "maker_max_bbo_age_ms": self.maker_max_bbo_age_ms,
             "maker_max_fv_age_ms": self.maker_max_fv_age_ms,
             "maker_max_account_age_ms": self.maker_max_account_age_ms,
@@ -210,22 +199,6 @@ class AppSettings(BaseSettings):
             "maker_max_signal_age_ms": self.maker_max_signal_age_ms,
             "maker_require_trusted_depth": self.maker_require_trusted_depth,
             "maker_max_depth_age_ms": self.maker_max_depth_age_ms,
-            "maker_min_replace_ticks": self.maker_min_replace_ticks,
-            "maker_min_replace_size": self.maker_min_replace_size,
-            "maker_min_requote_interval_ms": self.maker_min_requote_interval_ms,
-            "maker_enabled": self.maker_enabled,
-            "maker_mapping_path": str(self.maker_mapping_path),
-            "maker_max_abs_inventory": self.maker_max_abs_inventory,
-            "maker_base_size": self.maker_base_size,
-            "maker_minimum_size": self.maker_minimum_size,
-            "maker_base_half_spread_ticks": self.maker_base_half_spread_ticks,
-            "maker_bbo_max_age_ms": self.maker_bbo_max_age_ms,
-            "maker_fv_max_age_ms": self.maker_fv_max_age_ms,
-            "maker_account_max_age_ms": self.maker_account_max_age_ms,
-            "maker_inventory_max_age_ms": self.maker_inventory_max_age_ms,
-            "maker_signal_max_age_ms": self.maker_signal_max_age_ms,
-            "maker_require_trusted_depth": self.maker_require_trusted_depth,
-            "maker_depth_max_age_ms": self.maker_depth_max_age_ms,
             "maker_min_replace_ticks": self.maker_min_replace_ticks,
             "maker_min_replace_size": self.maker_min_replace_size,
             "maker_min_requote_interval_ms": self.maker_min_requote_interval_ms,
