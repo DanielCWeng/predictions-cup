@@ -1,9 +1,9 @@
+import pathlib
 import subprocess
 import sys
-from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 def test_r25_ets_math_graph_reproducibility() -> None:
