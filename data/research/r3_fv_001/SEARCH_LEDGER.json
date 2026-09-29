@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "final_opened": false,
+  "entries": [
+    {
+      "method_id": "R3-S01-LP-BOUNDS",
+      "stage": "PLANNED",
+      "decision": "CONTINUE",
+      "reason": "Hard/partial-identification layer must precede point models; establishes what DATA-004 actually identifies."
+    },
+    {
+      "method_id": "R3-S02-LOO-PRICE-QP",
+      "stage": "PLANNED",
+      "decision": "CONTINUE",
+      "reason": "Required recoverability/redundancy comparator; cannot establish independent information by itself."
+    },
+    {
+      "method_id": "R3-S03-LOO-FAMILY-QP",
+      "stage": "PLANNED",
+      "decision": "PRIORITY",
+      "reason": "Primary test of genuinely indirect information after removing the full direct information family."
+    },
+    {
+      "method_id": "R3-S04-LOO-FAMILY-KL",
+      "stage": "PLANNED",
+      "decision": "CHALLENGER",
+      "reason": "Tests whether probability-aware geometry materially improves the LOO-FAMILY estimate, especially near 0/1."
+    },
+    {
+      "method_id": "R3-S05-MAXENT",
+      "stage": "PLANNED",
+      "decision": "CHALLENGER",
+      "reason": "Useful only where hard constraints leave a nontrivial identified set; must remain inside LP bounds."
+    },
+    {
+      "method_id": "R3-S06-LATENT",
+      "stage": "PLANNED",
+      "decision": "CONTINUE_IF_SUPPORT",
+      "reason": "Needed for scalable count-to-race inversion but carries stronger dependence assumptions."
+    },
+    {
+      "method_id": "R3-S07-DYNAMIC",
+      "stage": "DEFERRED_UNTIL_STATIC",
+      "decision": "WAIT",
+      "reason": "Do not build temporal complexity before static structural information demonstrates incremental value."
+    },
+    {
+      "method_id": "R3-P01-FLOW",
+      "stage": "DEFERRED_UNTIL_CORE",
+      "decision": "WAIT",
+      "reason": "Flow is predictive-only and must not contaminate structural identification."
+    },
+    {
+      "method_id": "R3-P02-HAZARD",
+      "stage": "OPTIONAL",
+      "decision": "WAIT",
+      "reason": "PRED-006 is movement hazard, not direction/FV; test only as freshness weighting after core R3 exists."
+    }
+  ],
+  "controls": {
+    "final_rule": "Freeze champion/challengers, features, assumptions, parameters, horizons, metrics and pass criteria before one-shot within-R3 FINAL.",
+    "leakage": [
+      "Use block_number,log_index chronology",
+      "No later rows in same block",
+      "Explicit DirectInformationFamily exclusions",
+      "No future rows"
+    ],
+    "semantic": [
+      "Hard edges require settlement-semantic proof",
+      "Other/tie/runoff/recount/bucket semantics preserved",
+      "Predictive-only edges never enter hard feasible set"
+    ],
+    "scope": [
+      "P0/P1 DATA-004 only",
+      "No P2/P3 rescue"
+    ]
+  }
+}
