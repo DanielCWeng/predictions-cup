@@ -306,9 +306,19 @@ class SigRealtimeStateEngine:
 
     def mark_connected(self) -> None:
         self.health.connected = True
+        observed_at = self._clock()
+        self._recorder.record_health(
+            observed_at=observed_at,
+            payload=self.health_snapshot(),
+        )
 
     def mark_disconnected(self) -> None:
         self.health.connected = False
+        observed_at = self._clock()
+        self._recorder.record_health(
+            observed_at=observed_at,
+            payload=self.health_snapshot(),
+        )
 
     async def maintenance(self, observed_at: datetime) -> None:
         """Schedule staggered tracked refreshes and cheap broad-universe BBO work."""
@@ -331,6 +341,11 @@ class SigRealtimeStateEngine:
                 name="sig-bulk-price-refresh",
             )
             self._track_background_task(task)
+
+        self._recorder.record_health(
+            observed_at=observed_at,
+            payload=self.health_snapshot(),
+        )
 
     async def refresh_stale_open_books(
         self,
