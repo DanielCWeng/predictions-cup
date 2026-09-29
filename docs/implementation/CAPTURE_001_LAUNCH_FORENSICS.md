@@ -314,6 +314,39 @@ producers to raise `CaptureStorageError`. Neither path silently discards evidenc
 Already-published Parquet shards are immutable. Restart creates new uniquely named shards. Temporary
 files are never published as final shards.
 
+
+## Synthetic persistence burst evidence — 29 September 2026
+
+The new SIG immutable writer was exercised on the current ARM64 EC2 runtime host at benchmark code
+head `27f2a4b4aa308320597defb9e13efe8413795296`:
+
+```bash
+python -m predictions_cup.analysis.capture_benchmark \
+  --output /tmp/capture001_bench \
+  --rows 50000 \
+  --queue-max 200000 \
+  --max-rows-per-shard 5000 \
+  --shard-seconds 60
+```
+
+Observed result:
+
+- 50,000 raw SIG batches emitted and **50,000 / 50,000 read back**;
+- producer throughput: **5,099.7 rows/s**;
+- end-to-end producer + immutable flush throughput: **5,039.4 rows/s**;
+- enqueue/serialization latency: **p50 94.1 us, p95 228.2 us, p99 1,084.5 us**;
+- queue high-water: **807 / 200,000**; depth before close: 43;
+- dropped rows: **0**;
+- storage failures: **0**;
+- published files: 11; published bytes: 1,401,208;
+- Python `tracemalloc` peak: 6,723,063 bytes;
+- Parquet readback scan: ~5.1 ms.
+
+This is a deliberately adversarial local persistence burst, not a claim about SIG network throughput.
+It validates bounded producer/backpressure behaviour, row-cap shard rolling, atomic publication and
+readback on the launch-class host. It does **not** replace the final credentialed paired
+SIG/Polymarket soak, systemd restart, SSH-independence and reboot gate below.
+
 ## Launch operation
 
 Recommended runtime values:
