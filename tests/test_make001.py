@@ -239,10 +239,7 @@ def _engine(
     max_inventory: float = 10.0,
     max_age_ns: int = 100_000_000,
 ) -> MakerEngine:
-    provider = DirectPolymarketFairValueProvider(
-        _mapping(mapping_class=mapping_class, direction=direction),
-        max_age_ns=max_age_ns,
-    )
+    provider = DirectPolymarketFairValueProvider(_mapping(mapping_class=mapping_class, direction=direction))
     return MakerEngine(
         fair_value=provider,
         predictive=NullPredictiveAdjuster(),
@@ -262,7 +259,7 @@ def _engine(
 
 
 def test_direct_pm_same_complement_and_staleness_fail_closed() -> None:
-    same = DirectPolymarketFairValueProvider(_mapping(), max_age_ns=100)
+    same = DirectPolymarketFairValueProvider(_mapping())
     snapshot = replace(
         _maker_snapshot(),
         now_monotonic_ns=1_000,
@@ -273,10 +270,7 @@ def test_direct_pm_same_complement_and_staleness_fail_closed() -> None:
     assert result.value == pytest.approx(0.5)
     assert result.uncertainty == pytest.approx(0.01)
 
-    complement = DirectPolymarketFairValueProvider(
-        _mapping(direction=MappingDirection.COMPLEMENT),
-        max_age_ns=100,
-    )
+    complement = DirectPolymarketFairValueProvider(_mapping(direction=MappingDirection.COMPLEMENT))
     snapshot = replace(
         snapshot,
         external_quotes={
@@ -295,10 +289,7 @@ def test_direct_pm_same_complement_and_staleness_fail_closed() -> None:
 
 
 def test_derived_partition_sum_and_no_trade_are_explicit() -> None:
-    provider = DirectPolymarketFairValueProvider(
-        _mapping(mapping_class=MappingClass.DERIVED),
-        max_age_ns=100_000_000,
-    )
+    provider = DirectPolymarketFairValueProvider(_mapping(mapping_class=MappingClass.DERIVED))
     result = provider.fair_value(
         _maker_snapshot(mapping_class=MappingClass.DERIVED)
     )
@@ -306,10 +297,7 @@ def test_derived_partition_sum_and_no_trade_are_explicit() -> None:
     assert result.value == pytest.approx(0.5)
     assert result.mapping_class == "DERIVED"
 
-    no_trade = DirectPolymarketFairValueProvider(
-        _mapping(mapping_class=MappingClass.NO_TRADE),
-        max_age_ns=100_000_000,
-    )
+    no_trade = DirectPolymarketFairValueProvider(_mapping(mapping_class=MappingClass.NO_TRADE))
     result = no_trade.fair_value(_maker_snapshot())
     assert result.usable is False
     assert result.reason == "mapping_not_directly_tradeable"
