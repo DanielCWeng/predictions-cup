@@ -2,7 +2,7 @@
   "schema_version": 1,
   "action": "run",
   "kernel_dir": "scripts/kaggle/r25_ets_discovery",
-  "kernel": "polyleviathan/r25-ets-discovery",
+  "kernel": "polyleviathan/r2-5-ets-universe-discovery",
   "poll_seconds": 30,
   "timeout_minutes": 300,
   "download_outputs": true,
