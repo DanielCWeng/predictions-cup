@@ -10,6 +10,7 @@ import asyncio
 from collections.abc import Awaitable, Callable, Iterable
 from datetime import UTC, datetime
 from time import monotonic_ns
+from uuid import uuid4
 
 from predictions_cup.maker.coordinator import (
     MakerCoordinator,
@@ -39,6 +40,7 @@ class MakerRuntimeLoop:
         fail_closed_on_observer_error: bool = False,
         wall_clock: WallClock = lambda: datetime.now(UTC),
         mono_clock: MonoClock = monotonic_ns,
+        runtime_session_id: str | None = None,
     ) -> None:
         self._bridge = bridge
         self._coordinator = coordinator
@@ -48,6 +50,10 @@ class MakerRuntimeLoop:
         self._observer_fail_closed = fail_closed_on_observer_error
         self._wall_clock = wall_clock
         self._mono_clock = mono_clock
+        session_id = uuid4().hex if runtime_session_id is None else runtime_session_id
+        if not session_id.strip():
+            raise ValueError("runtime_session_id must not be blank")
+        self._runtime_session_id = session_id
         self._wake = asyncio.Event()
         self._pending_exchanges: set[str] = set()
         self._global_recheck = False
@@ -141,7 +147,9 @@ class MakerRuntimeLoop:
         started = self._mono_clock()
         result = await self._coordinator.on_state_change(
             MakerStateChange(
-                event_id=f"make-runtime-{self._sequence}",
+                event_id=(
+                    f"make-runtime-{self._runtime_session_id}-{self._sequence}"
+                ),
                 observed_monotonic_ns=now_ns,
                 exchange_ids=frozenset(snapshots),
                 global_recheck=global_recheck,
@@ -169,7 +177,10 @@ class MakerRuntimeLoop:
                     )
                     if all_snapshots:
                         await self._coordinator.halt_all(
-                            event_id=f"make-observer-failure-{self._sequence}",
+                            event_id=(
+                                f"make-observer-failure-"
+                                f"{self._runtime_session_id}-{self._sequence}"
+                            ),
                             observed_monotonic_ns=self._mono_clock(),
                             snapshots=all_snapshots,
                             reason="observer_failure",
