@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "action": "output",
+  "kernel": "polyleviathan/r2-5-ets-universe-discovery",
+  "download_outputs": true,
+  "output_file_pattern": "(ETS_CANDIDATES\\.csv|ETS_DISCOVERY_AUDIT\\.json|ETS_DISCOVERY_EVENTS\\.json)$"
+}
