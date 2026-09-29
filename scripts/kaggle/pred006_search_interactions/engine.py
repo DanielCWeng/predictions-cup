@@ -379,8 +379,9 @@ def main(family:str):
     for h in HORIZONS:
         delta,ab=target_arrays(df,h)
         for target_type,yall in (("delta",delta),("abs_move",ab)):
-            trainmask=(df["timestamp"].to_numpy(np.int64)<dev_start-h)&np.isfinite(yall)
-            devmask=(df["timestamp"].to_numpy(np.int64)>=dev_start)&(df["timestamp"].to_numpy(np.int64)<final_start-h)&np.isfinite(yall)
+            purge=int(split["selection_rule"]["target_purge_seconds"])
+            trainmask=(df["timestamp"].to_numpy(np.int64)<dev_start-purge)&np.isfinite(yall)
+            devmask=(df["timestamp"].to_numpy(np.int64)>=dev_start)&(df["timestamp"].to_numpy(np.int64)<final_start-purge)&np.isfinite(yall)
             tr=df.loc[trainmask].reset_index(drop=True); dv=df.loc[devmask].reset_index(drop=True)
             ytr=yall[trainmask]; ydv=yall[devmask]
             if len(tr)<MIN_TRAIN or len(dv)<MIN_DEV or dv["condition_id"].nunique()<MIN_CONDITIONS:
