@@ -57,6 +57,7 @@ class AccountAuthoritativeSnapshot:
                 # One currency unit/share is the conservative settlement bound.
                 gross_exposure=float(abs(position.quantity)),
                 signed_quantity=float(position.quantity),
+                signed_quantity=float(position.quantity),
             )
             for position in self.positions
             if position.quantity != 0
