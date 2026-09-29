@@ -50,7 +50,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     if data.get("schema_version") != 1:
         raise ValueError("schema_version must be 1")
     action = data.get("action")
-    if action not in {"auth_check", "run", "status", "output"}:
+    if action not in {"auth_check", "run", "status", "output", "dataset_upload"}:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
 
@@ -114,6 +114,31 @@ def download_outputs(data: dict[str, Any], kernel: str, output_dir: Path) -> Non
     if pattern:
         args.extend(["--file-pattern", pattern])
     run_command(args)
+
+
+def upload_dataset(data: dict[str, Any], output_dir: Path, manifest_path: Path) -> None:
+    helper = ROOT / "scripts" / "kaggle_dataset_upload.py"
+    if not helper.is_file():
+        raise FileNotFoundError(helper)
+    run_command(
+        [
+            sys.executable,
+            str(helper),
+            "--manifest",
+            str(manifest_path.relative_to(ROOT)),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    write_summary(
+        [
+            "## Kaggle dataset upload",
+            "",
+            f"- Manifest: {manifest_path.relative_to(ROOT)}",
+            f"- Dataset: {data.get('dataset_ref', '')}",
+            "- Safety: archive/package hashes verified before create/reuse",
+        ]
+    )
 
 
 def run_kernel(data: dict[str, Any], output_dir: Path) -> None:
@@ -209,6 +234,8 @@ def main() -> int:
         kernel = kernel_from_manifest(data)
         download_outputs(data, kernel, output_dir)
         write_summary(["## Kaggle output download", "", f"Kernel: {kernel}"])
+    elif action == "dataset_upload":
+        upload_dataset(data, output_dir, manifest_path)
 
     return 0
 
