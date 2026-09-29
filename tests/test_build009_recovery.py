@@ -1,21 +1,44 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import pytest
+from pydantic import SecretStr
 
+from predictions_cup.config import AppSettings
+
+from predictions_cup.execution.interlocks import assert_live_interlocks
 from predictions_cup.execution.journal import ExecutionJournal
+from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import ExecutionMode, LifecycleState, OperationKind
 from predictions_cup.execution.planner import build_execution_plan
+from predictions_cup.execution.recovery import recover_startup
 from predictions_cup.execution.replacement import quote_replacement_allowed
+from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.risk.core import RiskContext, RiskDecision, evaluate_risk
-from predictions_cup.runtime import RuntimeOrderState, RuntimePortfolio, RuntimeSnapshot
+from predictions_cup.runtime import (
+    OrderAction,
+    OutcomeSide,
+    RuntimeOrderState,
+    RuntimePortfolio,
+    RuntimeSnapshot,
+)
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
 from predictions_cup.sig.account_state import (
     AccountRealtimeStateEngine,
     AccountTrustTransition,
+)
+from predictions_cup.sig.trading_client import SigTradingClient
+from predictions_cup.sig.trading_dto import (
+    OrderFillsResponseDto,
+    OrderReadDto,
+    PositionsResponseDto,
+    SingleOrderResponseDto,
 )
 from predictions_cup.strategy.core import NoTrade
 
@@ -294,3 +317,184 @@ def test_no_trade_remains_first_class_risk_result() -> None:
     )
     assert decision.approved is False
     assert decision.reason == "fixture"
+
+class _RecoveryRestFixture:
+    def iter_orders(
+        self,
+        *,
+        status: str = "open",
+        exchange_id: str | None = None,
+        market_id: str | None = None,
+        tournament_id: str | None = None,
+        limit: int = 200,
+    ):
+        del status, exchange_id, market_id, tournament_id, limit
+
+        async def empty():
+            if False:
+                yield OrderReadDto.model_validate({})
+
+        return empty()
+
+    async def get_order(self, order_id: int) -> OrderReadDto:
+        raise AssertionError(f"unexpected get_order({order_id})")
+
+    async def get_order_fills(
+        self,
+        order_id: int,
+        *,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> OrderFillsResponseDto:
+        del order_id, limit, cursor
+        raise AssertionError("unexpected get_order_fills")
+
+    async def get_tournament_positions(
+        self,
+        tournament_slug: str,
+    ) -> PositionsResponseDto:
+        assert tournament_slug == "cup"
+        return PositionsResponseDto.model_validate(
+            {
+                "positions": [],
+                "summary": {
+                    "totalMarketValue": "0",
+                    "totalCostBasis": "0",
+                    "totalUnrealizedPnl": "0",
+                },
+            }
+        )
+
+
+class _RecoveryTradingFixture:
+    def __init__(self) -> None:
+        self.payloads: list[str] = []
+
+    async def place_order_payload(
+        self,
+        payload_json: str,
+    ) -> SingleOrderResponseDto:
+        self.payloads.append(payload_json)
+        return SingleOrderResponseDto.model_validate(
+            {
+                "orderId": 91,
+                "exchangeId": "36",
+                "open": True,
+                "remainingQuantity": "1",
+                "action": "buy",
+                "side": "yes",
+                "price": "0.5",
+                "quantity": 1,
+                "terminalReasonCode": None,
+                "quantityTraded": "0",
+                "totalCost": "0",
+                "fillPrice": None,
+                "all": None,
+            }
+        )
+
+
+def _recovery_permit():
+    settings = AppSettings(
+        sig_trade_credential=SecretStr("trade-secret"),
+        tournament_id="t1",
+        tournament_slug="cup",
+        trading_enabled=True,
+        execution_mode="LIVE",
+        global_kill_switch=False,
+        risk_max_order_size=10,
+        risk_max_gross_exposure=100.0,
+        risk_max_per_market_exposure=100.0,
+        risk_max_open_order_exposure=100.0,
+        risk_max_concurrent_open_orders=10,
+    )
+    return assert_live_interlocks(
+        settings,
+        explicit_live_invocation=True,
+        account_trusted=True,
+    )
+
+
+def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
+    tmp_path: Path,
+) -> None:
+    from predictions_cup.execution.models import RuntimeOrderIntent
+
+    intent = RuntimeOrderIntent(
+        intent_id="intent-recovery",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=1,
+        limit_price_ticks=100,
+        strategy_id="fixture",
+        decision_observation_ns=123,
+    )
+    decision = RiskDecision(
+        approved=True,
+        reason="approved",
+        execution_mode=ExecutionMode.LIVE,
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        intents=(intent,),
+        strategy_family="FV-TAKE",
+        strategy_id="fixture",
+        signal_value=0.025,
+        fair_value=0.55,
+        decision_observation_ns=123,
+    )
+    plan = build_execution_plan(
+        decision,
+        logical_operation_id="op-recovery",
+        created_monotonic_ns=456,
+    )
+
+    path = tmp_path / "recovery.sqlite3"
+    first = ExecutionJournal(path)
+    first.record_before_dispatch(
+        plan.envelope,
+        plan.intents,
+        audit=plan.audit,
+        submitted_monotonic_ns=480,
+    )
+    first.mark_state("op-recovery", LifecycleState.UNCERTAIN, 500)
+    first.close()
+
+    journal = ExecutionJournal(path)
+    reservations = ExecutionReservationBook()
+    trading = _RecoveryTradingFixture()
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, trading),
+        journal=journal,
+        permit=_recovery_permit(),
+        reservations=reservations,
+        clock_ns=iter(range(600, 900)).__next__,
+    )
+    try:
+        # Fresh LIVE remains blocked: recovery authority does not weaken the
+        # normal reservation gate.
+        with pytest.raises(ValueError, match="missing its synchronous reservation"):
+            asyncio.run(sink.dispatch(plan))
+
+        result = asyncio.run(
+            recover_startup(
+                journal=journal,
+                rest=cast(object, _RecoveryRestFixture()),
+                live_sink=sink,
+                tournament_id="t1",
+                tournament_slug="cup",
+                clock_ns=iter(range(900, 1200)).__next__,
+            )
+        )
+
+        assert trading.payloads == [plan.envelope.payload_json]
+        resent = json.loads(trading.payloads[0])
+        original = json.loads(plan.envelope.payload_json)
+        assert resent["idempotencyKey"] == original["idempotencyKey"]
+        assert reservations.intent_ids() == frozenset()
+        assert result.safe_to_resume_live is True
+        assert result.unresolved_operation_ids == ()
+    finally:
+        journal.close()
+
