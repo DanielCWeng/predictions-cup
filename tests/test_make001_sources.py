@@ -152,14 +152,14 @@ def test_bridge_builds_bounded_scalar_bbo_snapshot_with_separate_freshness() -> 
     assert snapshot.sig_bbo_trusted is True
     assert snapshot.sig_depth_trusted is False
     assert snapshot.sig_bbo_observed_ns == 980_000_000
-    assert snapshot.account_observed_ns == 970_000_000
-    assert snapshot.inventory_observed_ns == 970_000_000
+    assert snapshot.account_observed_ns == 1_000_000_000
+    assert snapshot.inventory_observed_ns == 1_000_000_000
     book = snapshot.runtime.book("36")
     assert book is not None
     assert book.trusted_depth is False
     assert book.bids[0].price_ticks == 98
     assert book.asks[0].price_ticks == 102
-    assert snapshot.external_quotes["yes-token"].observed_monotonic_ns == 990_000_000
+    assert snapshot.external_quotes["yes-token"].observed_monotonic_ns == 1_000_000_000
     assert snapshot.runtime.portfolio.positions[0].signed_quantity == -3.0
 
 
@@ -437,4 +437,55 @@ def test_bridge_restores_canonical_market_identity_for_open_order_risk() -> None
     assert order.exchange_id == "36"
     assert order.market_id == "m1"
     assert order.reserved_exposure == 4.0
+
+def test_quiet_trusted_account_and_pm_feed_remain_fresh_without_mutation() -> None:
+    wall_now = datetime(2026, 9, 29, 14, 1, tzinfo=UTC)
+    old = wall_now - timedelta(minutes=5)
+    sig = _SigState(
+        tournament_id="t1",
+        states={
+            "36": ExchangeRuntimeState(
+                exchange_id="36",
+                market_id="m1",
+                tournament_id="t1",
+                scalar_best_bid=Decimal("0.49"),
+                scalar_best_ask=Decimal("0.51"),
+                last_scalar_observed_at=wall_now - timedelta(seconds=1),
+            )
+        },
+        market_states={
+            "m1": MarketRuntimeState(
+                market_id="m1",
+                title="fixture",
+                status="open",
+                settled_with=None,
+                last_rest_observed_at=wall_now - timedelta(seconds=1),
+            )
+        },
+        health=RuntimeHealth(connected=True),
+    )
+    bridge = MakerSourceBridge(
+        mapping=_mapping(),
+        sig_state=sig,
+        account_state=_AccountState(
+            tournament_id="t1",
+            last_accepted_observed_at=old,
+            last_authoritative_observed_at=old,
+            portfolio=RuntimePortfolio(account_trusted=True),
+        ),
+        polymarket_books=_PmBooks({"yes-token": _pm_snapshot(old)}),
+    )
+
+    snapshot = bridge.build(
+        "36",
+        wall_now=wall_now,
+        monotonic_now_ns=9_000_000_000,
+        polymarket_feed_trusted=True,
+    )
+
+    assert snapshot is not None
+    assert snapshot.account_observed_ns == 9_000_000_000
+    assert snapshot.inventory_observed_ns == 9_000_000_000
+    assert snapshot.external_quotes["yes-token"].observed_monotonic_ns == 9_000_000_000
+    assert snapshot.external_quotes["yes-token"].trusted is True
 
