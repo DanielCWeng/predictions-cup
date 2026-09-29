@@ -8,6 +8,7 @@ machine-readable JSON for the exact checked-out commit.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import math
 import os
@@ -18,11 +19,13 @@ import sys
 import tempfile
 import time
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 from predictions_cup.execution.journal import ExecutionJournal
-from predictions_cup.execution.models import ExecutionMode
+from predictions_cup.execution.models import ExecutionMode, LifecycleState
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.maker import (
     BinaryCaraInventoryModel,
@@ -30,15 +33,24 @@ from predictions_cup.maker import (
     ConservativeSpreadPolicy,
     DirectPolymarketFairValueProvider,
     ExternalQuoteState,
+    ActiveQuote,
     InventoryConfidenceSizePolicy,
     MakerConfig,
+    MakerCoordinator,
+    MakerCycleResult,
     MakerEngine,
     MakerMarketSnapshot,
+    MakerQuoteState,
+    MakerRuntimeLoop,
+    MakerSourceBridge,
+    MakerStateChange,
     NullPredictiveAdjuster,
     NullToxicityProvider,
     QuoteLifecycleManager,
     QuoteRegistry,
+    QuoteSide,
 )
+from predictions_cup.maker.contracts import QuoteContext
 from predictions_cup.mapping.crosswalk import load_document
 from predictions_cup.mapping.models import MappingClass, MappingStatus
 from predictions_cup.risk.core import RiskContext, RiskLimits, evaluate_risk
@@ -49,6 +61,7 @@ from predictions_cup.runtime.models import (
     RuntimeLevel,
     RuntimeMarket,
     RuntimePortfolio,
+    RuntimePosition,
     RuntimeSnapshot,
 )
 from predictions_cup.strategy.core import CandidateLeg, Opportunity, StrategyFamily
@@ -204,6 +217,72 @@ def _build_fixture(mapping_path: Path):
     return document, engine, snapshots
 
 
+
+class _BenchmarkBridge:
+    def __init__(self, snapshot: MakerMarketSnapshot) -> None:
+        self._snapshot = snapshot
+        self.tradeable_exchange_ids = frozenset({snapshot.exchange_id})
+
+    def sig_exchanges_for_polymarket_token(self, token_id: str) -> frozenset[str]:
+        del token_id
+        return frozenset({self._snapshot.exchange_id})
+
+    def build_many(
+        self,
+        exchange_ids: frozenset[str] | set[str] | tuple[str, ...],
+        **kwargs: object,
+    ) -> dict[str, MakerMarketSnapshot]:
+        del kwargs
+        return {
+            exchange_id: self._snapshot
+            for exchange_id in exchange_ids
+            if exchange_id == self._snapshot.exchange_id
+        }
+
+
+class _BenchmarkCoordinator:
+    def __init__(self, engine: MakerEngine) -> None:
+        self._engine = engine
+
+    async def on_state_change(
+        self,
+        change: MakerStateChange,
+        snapshots: Mapping[str, MakerMarketSnapshot],
+    ) -> MakerCycleResult:
+        del change
+        for snapshot in snapshots.values():
+            self._engine.quote(snapshot)
+        return MakerCycleResult((), (), (), ())
+
+    def activate_kill_switch(self, reason: str) -> None:
+        del reason
+
+
+async def _runtime_cycle_measure(
+    iterations: int,
+    *,
+    engine: MakerEngine,
+    snapshot: MakerMarketSnapshot,
+) -> list[int]:
+    bridge = _BenchmarkBridge(snapshot)
+    coordinator = _BenchmarkCoordinator(engine)
+    runtime = MakerRuntimeLoop(
+        bridge=cast(MakerSourceBridge, bridge),
+        coordinator=cast(MakerCoordinator, coordinator),
+        polymarket_feed_trusted=lambda: True,
+    )
+    durations: list[int] = []
+    for _ in range(iterations):
+        started = time.perf_counter_ns()
+        runtime.notify_sig(
+            {snapshot.exchange_id},
+            observed_monotonic_ns=started,
+        )
+        await runtime.drain_once()
+        durations.append(time.perf_counter_ns() - started)
+    return durations
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -241,11 +320,43 @@ def main() -> int:
     pred = NullPredictiveAdjuster()
     tox = NullToxicityProvider()
     fair = provider.fair_value(representative)
+    prediction = pred.adjust(representative, fair)
+    toxicity = tox.estimate(representative, fair)
     plugin_durations = _measure(
         args.iterations,
         lambda: (
             pred.adjust(representative, fair),
             tox.estimate(representative, fair),
+        ),
+    )
+    if fair.value is None:
+        raise RuntimeError("representative FV unexpectedly unavailable")
+    quote_context = QuoteContext(
+        snapshot=representative,
+        raw_fair_value=fair,
+        adjusted_fair_value=fair.value,
+        prediction=prediction,
+        toxicity=toxicity,
+        signed_inventory=0.0,
+        max_abs_inventory=10.0,
+    )
+    inventory_model = BinaryCaraInventoryModel()
+    reservation_durations = _measure(
+        args.iterations,
+        lambda: inventory_model.reservation_price(quote_context),
+    )
+    reservation = inventory_model.reservation_price(quote_context)
+    spread_policy = ConservativeSpreadPolicy()
+    size_policy = InventoryConfidenceSizePolicy(base_size=4)
+    policy_context = replace(
+        quote_context,
+        reservation_price=reservation,
+    )
+    spread_size_durations = _measure(
+        args.iterations,
+        lambda: (
+            spread_policy.half_spread(policy_context),
+            size_policy.sizes(policy_context),
         ),
     )
 
@@ -259,6 +370,59 @@ def main() -> int:
             current=registry.state(representative.exchange_id),
             now_monotonic_ns=NOW,
         ),
+    )
+    if desired is None or desired.bid_ticks is None or desired.bid_size <= 0:
+        raise RuntimeError("representative maker bid unavailable for lifecycle benchmark")
+    bid_only = replace(desired, ask_ticks=None, ask_size=0)
+    old_ticks = max(1, desired.bid_ticks - 2)
+    replace_state = MakerQuoteState(
+        exchange_id=representative.exchange_id,
+        bid=ActiveQuote(
+            side=QuoteSide.BID,
+            price_ticks=old_ticks,
+            size=desired.bid_size,
+            remaining_size=desired.bid_size,
+            logical_operation_id="make-bench-old",
+            exchange_order_id=99,
+            lifecycle_state=LifecycleState.OPEN,
+            observed_monotonic_ns=NOW - 1,
+        ),
+    )
+    replacement_durations = _measure(
+        args.iterations,
+        lambda: lifecycle.decide(
+            desired=bid_only,
+            current=replace_state,
+            now_monotonic_ns=NOW,
+        ),
+    )
+
+    inventory_runtime = replace(
+        representative.runtime,
+        portfolio=RuntimePortfolio(
+            positions=(
+                RuntimePosition(
+                    exchange_id=representative.exchange_id,
+                    market_id=representative.market_id,
+                    tournament_id=representative.tournament_id,
+                    gross_exposure=5.0,
+                    signed_quantity=5.0,
+                ),
+            ),
+            account_trusted=True,
+        ),
+    )
+    inventory_snapshot = replace(representative, runtime=inventory_runtime)
+    inventory_requote_durations = _measure(
+        args.iterations,
+        lambda: engine.quote(inventory_snapshot),
+    )
+    runtime_cycle_durations = asyncio.run(
+        _runtime_cycle_measure(
+            min(args.iterations, 5_000),
+            engine=engine,
+            snapshot=representative,
+        )
     )
 
     universe_durations: list[int] = []
@@ -379,8 +543,13 @@ def main() -> int:
         "stages": {
             "direct_pm_fv": _stats(fv_durations),
             "null_predictive_toxicity_plugins": _stats(plugin_durations),
+            "binary_cara_reservation_price": _stats(reservation_durations),
+            "spread_and_size_policy": _stats(spread_size_durations),
             "maker_quote_total": _stats(quote_durations),
-            "quote_lifecycle": _stats(lifecycle_durations),
+            "maker_inventory_requote_total": _stats(inventory_requote_durations),
+            "source_event_to_maker_cycle_completion": _stats(runtime_cycle_durations),
+            "quote_lifecycle_initial": _stats(lifecycle_durations),
+            "quote_lifecycle_material_replace_cancel": _stats(replacement_durations),
             "central_risk": _stats(risk_durations),
             "execution_plan_serialization": _stats(serialization_durations),
             "journal_predispatch": _stats(journal_durations),
