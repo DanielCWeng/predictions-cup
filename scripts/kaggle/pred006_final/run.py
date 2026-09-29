@@ -195,6 +195,29 @@ def diagnostics(dev,y,p,b):
       "top_decile_share_positive_condition_gain":share
     }
 
+def group_stability(frame,y,p,b,col,min_rows=20):
+    labels=frame[col].fillna("__MISSING__").astype(str).to_numpy()
+    rows=[]
+    for label in sorted(set(labels)):
+        m=labels==label
+        if int(m.sum())<min_rows: continue
+        bb=float(np.mean((y[m]-b[m])**2)); mm=float(np.mean((y[m]-p[m])**2))
+        rows.append({"group":label,"rows":int(m.sum()),"conditions":int(frame.loc[m,"condition_id"].nunique()),
+                     "baseline_brier":bb,"candidate_brier":mm,
+                     "relative_brier_improvement":float((bb-mm)/bb) if bb else 0.0})
+    return rows
+
+def market_stability(frame,y,p,b,min_rows=10):
+    rows=group_stability(frame,y,p,b,"sig_market_id",min_rows)
+    if not rows:
+        return {"markets_with_support":0,"positive_fraction":None,"median_relative_improvement":None,"p10":None,"p90":None,"best":[],"worst":[]}
+    vals=np.asarray([r["relative_brier_improvement"] for r in rows],float)
+    ordered=sorted(rows,key=lambda r:r["relative_brier_improvement"])
+    return {"markets_with_support":len(rows),"positive_fraction":float(np.mean(vals>0)),
+            "median_relative_improvement":float(np.median(vals)),
+            "p10":float(np.quantile(vals,.10)),"p90":float(np.quantile(vals,.90)),
+            "best":ordered[-5:][::-1],"worst":ordered[:5]}
+
 def evaluate_candidate(df,split,cand):
     if cand["family"]!="hazard_fee" or cand["target_type"]!="next_price_change_hazard":
         raise RuntimeError(f"unsupported frozen candidate family/target {cand['family']} {cand['target_type']}")
@@ -230,7 +253,10 @@ def evaluate_candidate(df,split,cand):
       "final_sig_markets":int(fin.sig_market_id.nunique()),
       "best_frozen_baseline_on_final":bname,"baseline_metrics":bmets,
       "candidate_metrics":met,"relative_brier_improvement_vs_best_baseline":float(rel),
-      "diagnostics":d,"calibration_bins":calibration(yf,pp),"pass":passed
+      "diagnostics":d,"calibration_bins":calibration(yf,pp),
+      "mapping_class_stability":group_stability(fin,yf,pp,bp,"mapping_class",20),
+      "sig_market_stability":market_stability(fin,yf,pp,bp,10),
+      "pass":passed
     }
 
 def main():
