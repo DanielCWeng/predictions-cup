@@ -247,9 +247,11 @@ class _BenchmarkCoordinator:
         snapshots: Mapping[str, MakerMarketSnapshot],
     ) -> MakerCycleResult:
         del change
-        for snapshot in snapshots.values():
+        decisions = tuple(
             self._engine.quote(snapshot)
-        return MakerCycleResult((), (), (), ())
+            for _, snapshot in sorted(snapshots.items())
+        )
+        return MakerCycleResult(decisions, (), (), ())
 
     def activate_kill_switch(self, reason: str) -> None:
         del reason
