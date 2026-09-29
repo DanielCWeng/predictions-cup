@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "experiment_id": "PRED-007",
+  "disposition": "NO_MACHINE_SPEED_INDEX_SIGNAL",
+  "classification": "HISTORICAL_MECHANISM_EXPLORATION_ONLY",
+  "branch": "experiment/pred-007-event-triggered-index",
+  "base_main_sha": "249e3ec4cebcb2e6495e88f9ab93d0c8ce90326a",
+  "launch_commit_sha": "0ab156f7569362b310160d09d0bc599618aea971",
+  "workflow_run_id": 36635588276,
+  "workflow_job_id": 109635331480,
+  "ci_run_id": 36635588234,
+  "artifact_id": 11064940492,
+  "artifact_zip_sha256": "bdcd4dd6c9fb8dd8f7c2ef109f0162f92a5b50bbfd557ab95f85da6167eed537",
+  "canonical_kernel": "polyleviathan/pred007-event-triggered-index",
+  "raw_output_sha256": {
+    "PRED007_RESULTS.json": "56f86e73e6eeb2e7240548bd2c447b22e18b17f4c64ea34c44eb3814dd01c247",
+    "CELL_RESULTS.csv": "d0839b63b7d4fbcf5f93fa325c30ac6047cef590aed154231cec5f663b8db3dc",
+    "COVERAGE.csv": "868f8a525b868d00d17db6e173f31347afa03024e8d8d269a79e52ebf01f4e81"
+  },
+  "scientific_controls": {
+    "same_event_siblings_excluded": true,
+    "target_does_not_create_decision_clock": true,
+    "decision_clock": "ONE_SECOND_BUCKET_ENDS_WITH_AT_LEAST_ONE_CROSS_EVENT_SOURCE_BBO_CHANGE",
+    "train_fraction": 0.6,
+    "embargo_seconds": 30,
+    "shock_threshold": "TRAIN_90TH_PERCENTILE_ABS_ATTN_INDEX_1S",
+    "top_source_comparator": "TRAIN_HIGHEST_BBO_CHANGE_COUNT_OUTCOME_BLIND",
+    "delayed_control_seconds": 300,
+    "bootstrap": "1000_DRAW_REGIME_X_UTC_MINUTE_CLUSTER",
+    "fresh_confirmation": false,
+    "post_result_rescue_permitted": false
+  },
+  "coverage": {
+    "coverage_rows": 94,
+    "cell_rows": 420,
+    "evaluated_cells": 95,
+    "insufficient_cells": 325,
+    "evaluated_target_regime_pairs_per_horizon": 19,
+    "unique_evaluated_target_markets": 17,
+    "event_minute_clusters": 5734,
+    "evaluated_regimes": [
+      "colombia_runoff",
+      "peru_first_round",
+      "peru_runoff"
+    ],
+    "evaluated_event_families": [
+      "COL_2026",
+      "PER_2026"
+    ],
+    "hungary": "NO_TARGET_HAD_AT_LEAST_3_CROSS_EVENT_SOURCES_AFTER_PRIMARY_ANTI_LEAKAGE_EXCLUSION",
+    "colombia_first_round": "TARGETS_BUILT_BUT_ZERO_COMMON_SHOCK_EVALUATION_ROWS",
+    "zero_shock_threshold_warning": "Several source pools had TRAIN q90(abs(attn_index_1s)) equal to zero; the frozen rule was not changed after outcome inspection.",
+    "positive_threshold_diagnostic": {
+      "classification": "POST_RESULT_DEMOTION_ONLY",
+      "target_regime_cells_per_horizon": 7,
+      "approximately_eval_rows_per_horizon": 144000,
+      "row_weighted_relative_mse_improvement_vs_own": {
+        "1": -0.000024806818034626155,
+        "2": -0.000009096656860406862,
+        "5": -0.00003591109967868954,
+        "10": -0.000027357449861668325,
+        "30": -0.000004295703186593341
+      },
+      "interpretation": "The cells whose preregistered TRAIN shock threshold was strictly positive were still negative on average; this diagnostic may demote/explain only and cannot promote PRED-007."
+    }
+  },
+  "horizons": [
+    {
+      "seconds": 1,
+      "shock_eval_rows": 867897,
+      "targets": 17,
+      "relative_mse_improvement_vs_own": -0.0002866625227132485,
+      "delta_mse_vs_own": -4.084870570183318e-08,
+      "bootstrap_vs_own_95": [-5.024743210047776e-08, -3.2840177549768496e-08],
+      "delta_mse_vs_top_source": -3.6033956105519086e-08,
+      "bootstrap_vs_top_95": [-4.6453820454648616e-08, -2.71789788997898e-08],
+      "delta_mse_vs_delayed_attn": -2.596890614666392e-08,
+      "event_family_delta_mse_vs_own": {
+        "COL_2026": -9.122587647777587e-08,
+        "PER_2026": -2.070723011956315e-09
+      },
+      "gate_pass": false
+    },
+    {
+      "seconds": 2,
+      "shock_eval_rows": 867493,
+      "targets": 17,
+      "relative_mse_improvement_vs_own": -0.00030218630020511367,
+      "delta_mse_vs_own": -8.763774635536628e-08,
+      "bootstrap_vs_own_95": [-1.1198662993038411e-07, -6.785550856613922e-08],
+      "delta_mse_vs_top_source": -6.73724501183366e-08,
+      "bootstrap_vs_top_95": [-9.303577362589338e-08, -4.364070682231336e-08],
+      "delta_mse_vs_delayed_attn": -7.225627508406539e-08,
+      "event_family_delta_mse_vs_own": {
+        "COL_2026": -1.9904547664931007e-07,
+        "PER_2026": -1.881302110583629e-09
+      },
+      "gate_pass": false
+    },
+    {
+      "seconds": 5,
+      "shock_eval_rows": 866816,
+      "targets": 17,
+      "relative_mse_improvement_vs_own": -0.0006875045369015399,
+      "delta_mse_vs_own": -4.417352027541549e-07,
+      "bootstrap_vs_own_95": [-5.721266872978186e-07, -2.8836079757101715e-07],
+      "delta_mse_vs_top_source": -2.656796125219374e-07,
+      "bootstrap_vs_top_95": [-4.33821136108744e-07, -7.835651289711497e-08],
+      "delta_mse_vs_delayed_attn": -2.7758974103606126e-07,
+      "event_family_delta_mse_vs_own": {
+        "COL_2026": -1.0025519689014535e-06,
+        "PER_2026": -1.0044766096326651e-08
+      },
+      "gate_pass": false
+    },
+    {
+      "seconds": 10,
+      "shock_eval_rows": 866146,
+      "targets": 17,
+      "relative_mse_improvement_vs_own": -0.0016949009698213815,
+      "delta_mse_vs_own": -2.0293900553068885e-06,
+      "bootstrap_vs_own_95": [-2.4335996179671004e-06, -1.6935091016163084e-06],
+      "delta_mse_vs_top_source": -1.1287740520161608e-06,
+      "bootstrap_vs_top_95": [-1.7601516092955086e-06, -4.6254433705863656e-07],
+      "delta_mse_vs_delayed_attn": -1.6174334016679057e-06,
+      "event_family_delta_mse_vs_own": {
+        "COL_2026": -4.630379307091963e-06,
+        "PER_2026": -2.727055100072326e-08
+      },
+      "gate_pass": false
+    },
+    {
+      "seconds": 30,
+      "shock_eval_rows": 864267,
+      "targets": 17,
+      "relative_mse_improvement_vs_own": -0.001570012466343298,
+      "delta_mse_vs_own": -4.9568761389547836e-06,
+      "bootstrap_vs_own_95": [-6.705754000054673e-06, -3.7336401490572043e-06],
+      "delta_mse_vs_top_source": -4.8883656571066125e-06,
+      "bootstrap_vs_top_95": [-6.4844413566847785e-06, -3.667094528963656e-06],
+      "delta_mse_vs_delayed_attn": -4.233927393684184e-06,
+      "event_family_delta_mse_vs_own": {
+        "COL_2026": -1.1368214997671132e-05,
+        "PER_2026": -2.172826437497825e-08
+      },
+      "gate_pass": false
+    }
+  ],
+  "primary_survivor_horizons_seconds": [],
+  "future_live_confirmation_required": false,
+  "interpretation": "The frozen event-triggered attention-weighted cross-event index does not improve held-out Polymarket target repricing over target-own history, the fixed top-attention single source, or the delayed-index control at any tested horizon. This closes PRED-007 as specified; it does not prove every possible observed aggregate contract or SIG-direct aggregate signal is useless."
+}
