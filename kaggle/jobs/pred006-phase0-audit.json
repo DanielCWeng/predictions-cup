@@ -2,9 +2,9 @@
   "schema_version": 1,
   "action": "run",
   "kernel_dir": "scripts/kaggle/pred006_phase0",
-  "kernel": "polyleviathan/pred006-phase0-audit",
+  "kernel": "polyleviathan/pred006-phase0-audit-and-split-freeze",
   "poll_seconds": 30,
-  "timeout_minutes": 90,
+  "timeout_minutes": 60,
   "download_outputs": true,
   "output_file_pattern": "(split_manifest|chronology_audit|universe_characterization)\\.json$",
   "note": "PRED-006 Phase 0 only: freeze chronology split and characterize DATA-003 without computing predictive targets or model performance."

@@ -62,7 +62,7 @@ def main():
       join read_parquet('{q(bts)}') b using(block_number)
     """)
     audit=con.execute("""
-      select count(*) rows,
+      select count(*) as n_rows,
              count(distinct condition_id) conditions,
              count(distinct sig_market_id) sig_markets,
              count(distinct block_number) blocks,
