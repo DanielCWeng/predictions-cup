@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -15,11 +16,13 @@ from predictions_cup.execution.models import (
     RuntimeOrderIntent,
 )
 from predictions_cup.execution.planner import build_execution_plan
+from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.maker.adapters import LiveMakerExecutionAdapter
 from predictions_cup.maker.contracts import MakerMarketSnapshot, QuoteSide
 from predictions_cup.maker.coordinator import (
     MakerCoordinator,
     MakerCycleResult,
+    MakerStateChange,
 )
 from predictions_cup.maker.lifecycle import QuoteRegistry
 from predictions_cup.maker.recovery import (
@@ -35,7 +38,7 @@ from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnaps
 from predictions_cup.sig.trading_dto import OrderReadDto
 
 
-def _plan():
+def _plan() -> ExecutionPlan:
     intent = RuntimeOrderIntent(
         intent_id="make-direct-pm:123:0",
         exchange_id="36",
@@ -161,8 +164,9 @@ def test_restart_rebuilds_only_journal_proven_maker_quote(tmp_path: Path) -> Non
             envelopes=captured,
         )
         assert quotes.state("36").bid is None
-        assert quotes.state("99").bid is not None
-        assert quotes.state("99").bid.exchange_order_id == 999
+        unrelated = quotes.state("99").bid
+        assert unrelated is not None
+        assert unrelated.exchange_order_id == 999
     finally:
         journal.close()
 
@@ -171,7 +175,7 @@ class _AckingLiveSink:
     def __init__(self, journal: ExecutionJournal) -> None:
         self.journal = journal
 
-    async def dispatch(self, plan) -> ExecutionEvent:
+    async def dispatch(self, plan: ExecutionPlan) -> ExecutionEvent:
         self.journal.record_before_dispatch(
             plan.envelope,
             plan.intents,
@@ -240,8 +244,8 @@ class _Bridge:
 
     def build_many(
         self,
-        exchange_ids,
-        **kwargs,
+        exchange_ids: frozenset[str] | set[str] | tuple[str, ...],
+        **kwargs: object,
     ) -> dict[str, MakerMarketSnapshot]:
         del kwargs
         return {
@@ -255,7 +259,11 @@ class _Coordinator:
         self.calls: list[frozenset[str]] = []
         self.killed = False
 
-    async def on_state_change(self, change, snapshots) -> MakerCycleResult:
+    async def on_state_change(
+        self,
+        change: MakerStateChange,
+        snapshots: Mapping[str, MakerMarketSnapshot],
+    ) -> MakerCycleResult:
         del change
         self.calls.append(frozenset(snapshots))
         return MakerCycleResult((), (), (), ())
