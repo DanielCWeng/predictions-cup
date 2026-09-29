@@ -6,5 +6,5 @@
   "poll_seconds": 60,
   "timeout_minutes": 330,
   "download_outputs": false,
-  "note": "Fresh confirmation of the unchanged seven realised-movement horizons on disjoint DATA-003."
+  "note": "Fresh seven-horizon DATA-003 confirmation v2; engineering retry after mount-layout discovery fix. Scientific protocol unchanged."
 }
