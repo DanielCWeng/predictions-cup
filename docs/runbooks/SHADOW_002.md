@@ -51,7 +51,7 @@ bus = ShadowBus(
         StructuralFairValueCandidate(),  # hook-only until R3 publishes provider
     ),
     store=store,
-    queue_capacity=1,
+    queue_capacity=512,
     candidate_timeout_seconds=0.050,
     trading_enabled=False,
 )
@@ -94,8 +94,9 @@ MAKE, execution mode or any order state.
 
 ## Backpressure policy
 
-Each candidate owns a bounded queue. When full, SHADOW coalesces the oldest pending
-state and keeps the newest state. It increments explicit skipped/coalesced counters.
+Each candidate owns a bounded queue. The production default is 512 entries so one
+237-market global sweep is retained with headroom. When full, SHADOW coalesces the
+oldest pending state and keeps the newest state. It increments explicit skipped/coalesced counters.
 
 Interpretation:
 
