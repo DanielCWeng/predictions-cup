@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/experiment_005b_data003_confirmation",
+  "kernel": "polyleviathan/005b-data003-seven-horizon-confirmation",
+  "poll_seconds": 60,
+  "timeout_minutes": 330,
+  "download_outputs": false,
+  "note": "Fresh confirmation of the unchanged seven realised-movement horizons on disjoint DATA-003."
+}
