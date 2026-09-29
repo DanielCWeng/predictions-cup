@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import math
 from dataclasses import replace
+from decimal import Decimal
 
 import pytest
 
@@ -102,7 +103,7 @@ def _mapping(
         sig_outcome_label="YES",
         mapping_class=mapping_class,
         mapping_direction=direction,
-        mapping_confidence=0.99,
+        mapping_confidence=Decimal("0.99"),
         status=MappingStatus.VERIFIED,
         direct_polymarket=direct,
         polymarket_components=components,
@@ -118,7 +119,7 @@ def _runtime(
     account_trusted: bool = True,
     status: str = "open",
 ) -> RuntimeSnapshot:
-    positions = ()
+    positions: tuple[RuntimePosition, ...] = ()
     if signed_inventory != 0.0:
         positions = (
             RuntimePosition(
@@ -362,14 +363,13 @@ def test_quote_ticks_are_passive_valid_and_never_cross() -> None:
     ),
 )
 def test_stale_internal_sources_cancel_quotes(field: str, reason: str) -> None:
-    kwargs: dict[str, int] = {}
     if field == "bbo":
-        kwargs["bbo_observed_ns"] = NOW - 100_000_001
+        snapshot = _maker_snapshot(bbo_observed_ns=NOW - 100_000_001)
     elif field == "account":
-        kwargs["account_observed_ns"] = NOW - 100_000_001
+        snapshot = _maker_snapshot(account_observed_ns=NOW - 100_000_001)
     else:
-        kwargs["inventory_observed_ns"] = NOW - 100_000_001
-    decision = _engine().quote(_maker_snapshot(**kwargs))
+        snapshot = _maker_snapshot(inventory_observed_ns=NOW - 100_000_001)
+    decision = _engine().quote(snapshot)
     assert decision.desired is None
     assert decision.gate.mode is GateMode.CANCEL
     assert decision.gate.reason == reason
