@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "action": "dataset_upload",
+  "dataset_ref": "polyleviathan/sig-cup-data-004-ets-p0p1-fills",
+  "archive_path": "data/kaggle_handoff/data004/sig-cup-data-004-ets-p0p1-fills.tar.zst",
+  "checksum_path": "data/kaggle_handoff/data004/sig-cup-data-004-ets-p0p1-fills.tar.zst.sha256",
+  "package_root": "sig-cup-data-004-ets-p0p1-fills",
+  "expected_archive_sha256": "fe8f0cd99efbe55854e494f283b11c3f50a41016443735a804b13bbd26883c50",
+  "expected_oci_manifest_sha256": "f38c54291c96d0a34ed52fb383e51dfbc7273d195c9882dc82d374f6ba5dde53",
+  "expected_package_version": "v2",
+  "expected_status": "ACCEPTED_V2",
+  "expected_file_count": 369,
+  "expected_scope": {
+    "markets": 298,
+    "conditions": 298,
+    "tokens": 596,
+    "p0_markets": 210,
+    "p1_markets": 88
+  },
+  "expected_counts": {
+    "markets": 298,
+    "conditions": 298,
+    "tokens": 596,
+    "deduped_fill_rows": 231964
+  },
+  "existing_policy": "reuse_if_manifest_matches"
+}
