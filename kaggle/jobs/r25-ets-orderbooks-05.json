@@ -1,0 +1,10 @@
+{
+  "action": "run",
+  "download_outputs": true,
+  "kernel": "polyleviathan/r25-ets-orderbooks-05",
+  "kernel_dir": "scripts/kaggle/r25_ets_orderbooks_05",
+  "output_file_pattern": "(ETS_ORDERBOOK_MANIFEST\\.json|ETS_ORDERBOOK_COVERAGE\\.csv|ETS_ORDERBOOK_SHARD_SUMMARY\\.json)$",
+  "poll_seconds": 30,
+  "schema_version": 1,
+  "timeout_minutes": 330
+}

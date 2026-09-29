@@ -1,0 +1,21 @@
+{
+  "code_file": "run.py",
+  "competition_sources": [],
+  "dataset_sources": [],
+  "enable_gpu": false,
+  "enable_internet": false,
+  "enable_tpu": false,
+  "id": "polyleviathan/r25-ets-finalize",
+  "is_private": true,
+  "kernel_sources": [
+    "polyleviathan/r2-5-ets-universe-discovery",
+    "polyleviathan/r25-ets-orderbooks-01",
+    "polyleviathan/r25-ets-orderbooks-02",
+    "polyleviathan/r25-ets-orderbooks-03",
+    "polyleviathan/r25-ets-orderbooks-04",
+    "polyleviathan/r25-ets-orderbooks-05"
+  ],
+  "kernel_type": "script",
+  "language": "python",
+  "title": "R25 ETS Finalize"
+}

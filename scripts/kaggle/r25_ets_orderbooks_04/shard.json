@@ -1,0 +1,9 @@
+{
+  "cid_token_inventory_sha256": "18c574ced83feb36f07666c50226b9ff969cbc1177495f141676368c5e2232e9",
+  "end_exclusive": "2026-08-16T09:00:00Z",
+  "partition_method": "five contiguous, equal-hour UTC time intervals",
+  "shard_id": "04",
+  "start_basis": "first verified PMXT archive hour; at least one market lacks both a creation and start date",
+  "start_inclusive": "2026-07-03T11:00:00Z",
+  "universe_freeze_sha256": "020705151d6aae7759a125967457ed9e7594747b33afc1ea15c59edfaedb7b7a"
+}

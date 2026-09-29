@@ -129,7 +129,6 @@ def main() -> None:
         }
         (jobs_root / f"r25-ets-orderbooks-{shard_id}.json").write_text(json.dumps(job, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     finalizer_dir = ROOT / "scripts/kaggle/r25_ets_finalize"
-    shutil.copyfile(ROOT / "scripts/kaggle/r25_ets_finalize/run.py", finalizer_dir / "run.py")
     shutil.copyfile(freeze_path, finalizer_dir / "ETS_UNIVERSE_FREEZE.json")
     shutil.copyfile(inventory_path, finalizer_dir / "ETS_TOKEN_INVENTORY.csv")
     (finalizer_dir / "REPOSITORY_COMMIT.txt").write_text(repository_commit + "\n", encoding="utf-8")
