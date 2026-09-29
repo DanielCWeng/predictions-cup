@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "status",
+  "kernel": "polyleviathan/r3-fv-001-discovery",
+  "note": "Read-only status probe for the already-launched R3-FV-001 TRAIN/DEV discovery kernel. Does not push, rerun, download outputs, or alter scientific state."
+}
