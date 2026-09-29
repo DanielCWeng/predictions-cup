@@ -139,6 +139,23 @@ class SigRealtimeRecorder:
     def close(self) -> None:
         self._connection.close()
 
+    def record_raw_batch(
+        self,
+        *,
+        topic: str,
+        payload: object,
+        observed_at: datetime,
+        monotonic_receive_ns: int,
+        parsed_at: datetime,
+        validation_error: str | None,
+    ) -> None:
+        """Optional raw-evidence hook used by CAPTURE-001.
+
+        The accepted operational recorder deliberately keeps raw high-frequency payloads
+        out of SQLite. LaunchSigRecorder overrides this hook and writes immutable Parquet.
+        """
+        return None
+
     def record_delivery(
         self,
         *,
