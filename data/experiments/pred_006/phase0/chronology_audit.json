@@ -1,0 +1,15 @@
+{
+  "blocks": 43222,
+  "conditions": 685,
+  "duplicate_block_log_groups": 0,
+  "economic_rows": 77554,
+  "max_timestamp": 1790035179,
+  "min_timestamp": 1772236965,
+  "missing_block_numbers": 0,
+  "missing_block_timestamps": 0,
+  "schema_version": 1,
+  "sig_markets": 229,
+  "timestamp_mismatches": 0,
+  "upstream_gate_protocol_commit": "b42d01a32ed7c4cfa4c5ea24610920b346fe0aba",
+  "upstream_gate_report_sha256": "e13ae1473fee9dd74603cbf018f749c9a316e4a9dc42e0e661cdcb9e0e350e11"
+}
