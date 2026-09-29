@@ -34,8 +34,6 @@ from predictions_cup.maker.lifecycle import (
     QuoteLifecycleManager,
     QuoteRegistry,
 )
-from predictions_cup.maker.safety import MakerKillSwitch
-from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.maker.policies import (
     AvellanedaStoikovInventoryModel,
     ConservativeEligibilityPolicy,
@@ -44,6 +42,9 @@ from predictions_cup.maker.policies import (
     NullPredictiveAdjuster,
     NullToxicityProvider,
 )
+from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
+from predictions_cup.maker.safety import MakerKillSwitch
+from predictions_cup.maker.sources import MakerSourceBridge
 
 __all__ = [
     "ActiveQuote",
@@ -67,6 +68,7 @@ __all__ = [
     "MakerKillSwitch",
     "MakerQuoteState",
     "MakerRuntimeComponents",
+    "MakerRuntimeLoop",
     "MakerSourceBridge",
     "MakerStateChange",
     "MakerTrace",
