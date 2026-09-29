@@ -25,7 +25,7 @@ from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.models import ExecutionMode
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.maker import (
-    AvellanedaStoikovInventoryModel,
+    BinaryCaraInventoryModel,
     ConservativeEligibilityPolicy,
     ConservativeSpreadPolicy,
     DirectPolymarketFairValueProvider,
@@ -108,7 +108,7 @@ def _build_fixture(mapping_path: Path):
         fair_value=provider,
         predictive=NullPredictiveAdjuster(),
         toxicity=NullToxicityProvider(),
-        inventory=AvellanedaStoikovInventoryModel(),
+        inventory=BinaryCaraInventoryModel(),
         spread=ConservativeSpreadPolicy(),
         size=InventoryConfidenceSizePolicy(base_size=4),
         eligibility=ConservativeEligibilityPolicy(
