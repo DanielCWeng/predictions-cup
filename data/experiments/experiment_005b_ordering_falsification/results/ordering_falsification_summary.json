@@ -1,0 +1,11 @@
+{
+  "classification": "POST_HOC_FALSIFICATION_ONLY",
+  "downstream_disposition": "CARRY_UNCHANGED_MOVEMENT_HYPOTHESIS_TO_FRESH_DATA_003",
+  "movement_horizon_count": 7,
+  "movement_horizons_not_falsified": 7,
+  "movement_materially_survives": true,
+  "new_candidates_introduced": 0,
+  "parent_holdout_sha256": "94db3e2319d376078e9f80f5e28d04215dcade53d76c1ec749af8bcc0fa8972a",
+  "parent_train_dev_freeze_sha256": "44025aa2c5e5bddd97d88c81e649d86d6bf55d6cccec1d57c2aa7af12a9a7ec6",
+  "schema_version": 1
+}
