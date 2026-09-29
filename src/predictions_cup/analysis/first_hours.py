@@ -342,7 +342,10 @@ def _cross_venue(
                 "sig_minus_polymarket": sig_value - pm_value,
             }
         )
-    rows.sort(\n        key=lambda item: abs(float(str(item["sig_minus_polymarket"]))), reverse=True\n    )
+    rows.sort(
+        key=lambda item: abs(float(str(item["sig_minus_polymarket"]))),
+        reverse=True,
+    )
     return rows
 
 
