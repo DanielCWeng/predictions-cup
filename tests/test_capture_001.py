@@ -189,17 +189,52 @@ def test_launch_recorder_persists_replayable_evidence_and_first_hours_report(
     assert decreased
     assert all(row["evidence_label"] == "AMBIGUOUS_DEPTH_DECREASE" for row in decreased)
 
+    journal_path = tmp_path / "execution.sqlite3"
+    execution = sqlite3.connect(journal_path)
+    execution.execute(
+        """
+        CREATE TABLE execution_events (
+            event_id INTEGER PRIMARY KEY,
+            logical_operation_id TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            observed_monotonic_ns INTEGER NOT NULL,
+            decision_observation_ns INTEGER,
+            decision_monotonic_ns INTEGER
+        )
+        """
+    )
+    execution.executemany(
+        """
+        INSERT INTO execution_events (
+            event_id, logical_operation_id, event_type, observed_monotonic_ns,
+            decision_observation_ns, decision_monotonic_ns
+        ) VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (1, "op-1", "SUBMISSION", 300_000_000, 100_000_000, 200_000_000),
+            (2, "op-1", "NETWORK_DISPATCH", 400_000_000, None, None),
+            (3, "op-1", "ACK", 550_000_000, None, None),
+            (4, "op-1", "REALTIME_FILL", 800_000_000, None, None),
+        ],
+    )
+    execution.commit()
+    execution.close()
+
     report_root = tmp_path / "first_hours"
     summary = run(
         input_root=root,
         output_root=report_root,
         polymarket_root=None,
-        execution_journal=None,
+        execution_journal=journal_path,
         mapping_path=None,
     )
     assert summary["sig"]["raw_batches"] == 1
     assert summary["sig"]["event_counts"]["TRADE"] == 1
     assert summary["sig"]["bbo_rows"] == 1
+    assert summary["execution"]["observation_to_decision_ms"]["p50"] == 100.0
+    assert summary["execution"]["submission_to_dispatch_ms"]["p50"] == 100.0
+    assert summary["execution"]["dispatch_to_ack_ms"]["p50"] == 150.0
+    assert summary["execution"]["dispatch_to_fill_ms"]["p50"] == 400.0
     assert (report_root / "summary.json").exists()
     assert (report_root / "report.md").exists()
     assert (report_root / "market_activity.csv").exists()
@@ -207,6 +242,7 @@ def test_launch_recorder_persists_replayable_evidence_and_first_hours_report(
     assert (report_root / "markouts.csv").exists()
     assert (report_root / "depth_summary.csv").exists()
     assert (report_root / "activity_15m.csv").exists()
+    assert (report_root / "execution_latency.csv").exists()
 
     connection = sqlite3.connect(tmp_path / "sig.sqlite3")
     health_row = connection.execute(
