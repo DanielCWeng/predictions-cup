@@ -17,9 +17,9 @@
     },
     {
       "method_id": "R3-S03-LOO-FAMILY-QP",
-      "stage": "PLANNED",
-      "decision": "PRIORITY",
-      "reason": "Primary test of genuinely indirect information after removing the full direct information family."
+      "stage": "DEV_COMPLETE",
+      "decision": "STOP",
+      "reason": "Frozen DEV discovery found no independent next-update signal; all LOO-FAMILY candidate MAE improvements were negative with bootstrap intervals below zero."
     },
     {
       "method_id": "R3-S04-LOO-FAMILY-KL",
@@ -41,21 +41,21 @@
     },
     {
       "method_id": "R3-S07-DYNAMIC",
-      "stage": "DEFERRED_UNTIL_STATIC",
-      "decision": "WAIT",
-      "reason": "Do not build temporal complexity before static structural information demonstrates incremental value."
+      "stage": "NOT_REACHED",
+      "decision": "STOP",
+      "reason": "Core static LOO-FAMILY discovery failed the frozen DEV gate; downstream dynamic/flow/hazard augmentation is not opened in R3."
     },
     {
       "method_id": "R3-P01-FLOW",
-      "stage": "DEFERRED_UNTIL_CORE",
-      "decision": "WAIT",
-      "reason": "Flow is predictive-only and must not contaminate structural identification."
+      "stage": "NOT_REACHED",
+      "decision": "STOP",
+      "reason": "Core static LOO-FAMILY discovery failed the frozen DEV gate; downstream dynamic/flow/hazard augmentation is not opened in R3."
     },
     {
       "method_id": "R3-P02-HAZARD",
-      "stage": "OPTIONAL",
-      "decision": "WAIT",
-      "reason": "PRED-006 is movement hazard, not direction/FV; test only as freshness weighting after core R3 exists."
+      "stage": "NOT_REACHED",
+      "decision": "STOP",
+      "reason": "Core static LOO-FAMILY discovery failed the frozen DEV gate; downstream dynamic/flow/hazard augmentation is not opened in R3."
     }
   ],
   "controls": {
@@ -75,5 +75,49 @@
       "P0/P1 DATA-004 only",
       "No P2/P3 rescue"
     ]
+  },
+  "dev_discovery": {
+    "status": "STOP_NO_INDEPENDENT_SIGNAL",
+    "kaggle_kernel": "polyleviathan/r3-fv-001-structural-discovery",
+    "kaggle_last_run_time": "2026-09-29T20:41:42.487000Z",
+    "output_recovery_actions_run_id": 36632235437,
+    "output_artifact_id": 11062795819,
+    "output_artifact_sha256": "0265ec42cb490328449fa52e1e1cbfaa4ca669cb4535d7a1dd5f512494e11e2b",
+    "split_manifest_sha256": "cea20a374a8ed5822e361e7c8584cf3a2599fc80bcba3b2522efdf707e572225",
+    "final_rows_accessed": 0,
+    "loo_family_support": {
+      "train_events": 11365,
+      "train_markets": 5,
+      "dev_events": 4389,
+      "dev_markets": 29
+    },
+    "best_loo_family_candidate": {
+      "mode": "LOO_FAMILY_SEMANTIC",
+      "model_id": "blend_ridge",
+      "baseline_persistence_mae": 0.00550604010025063,
+      "model_mae": 0.03440094738147165,
+      "absolute_mae_improvement": -0.028894907281221016,
+      "relative_mae_improvement": -5.247856309638164,
+      "bootstrap_95": {
+        "lower": -0.04910677052286493,
+        "median": -0.028717040221835174,
+        "upper": -0.014999807945466997
+      },
+      "dev_sig_markets": 29,
+      "champion_gate_pass": false
+    },
+    "loo_price_best_control": {
+      "model_id": "blend_ridge",
+      "baseline_persistence_mae": 0.005931613113330442,
+      "model_mae": 0.01503134854823915,
+      "absolute_mae_improvement": -0.009099735434908707,
+      "bootstrap_95": {
+        "lower": -0.022489368710545618,
+        "median": -0.00890003331985676,
+        "upper": -0.004073069255516063
+      }
+    },
+    "semantic_and_strict_identical_source_support": true,
+    "note": "Frozen stop rule triggered. No FINAL evaluation permitted."
   }
 }
