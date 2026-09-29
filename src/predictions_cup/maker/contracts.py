@@ -239,6 +239,7 @@ class MakerDecision:
     desired: DesiredQuote | None
     gate: GateDecision
     trace: MakerTrace
+    next_recheck_monotonic_ns: int | None = None
 
 
 class FairValueProvider(Protocol):
@@ -299,3 +300,8 @@ class EligibilityPolicy(Protocol):
     version: str
 
     def gate(self, context: QuoteContext) -> GateDecision: ...
+
+    def next_recheck_monotonic_ns(
+        self,
+        context: QuoteContext,
+    ) -> int | None: ...
