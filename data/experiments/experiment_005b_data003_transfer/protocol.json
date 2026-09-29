@@ -1,0 +1,210 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B-DATA003-TRANSFER",
+  "classification": "FRESH_CONFIRMATION",
+  "parent_ordering_falsification": {
+    "commit": "3bdf0393e2791f3fbbfa8bceb0740c3905b92fa8",
+    "summary_disposition": "CARRY_UNCHANGED_MOVEMENT_HYPOTHESIS_TO_FRESH_DATA_003",
+    "movement_horizons_not_falsified": 7,
+    "movement_horizon_count": 7,
+    "parent_train_dev_freeze_sha256": "44025aa2c5e5bddd97d88c81e649d86d6bf55d6cccec1d57c2aa7af12a9a7ec6",
+    "parent_holdout_sha256": "94db3e2319d376078e9f80f5e28d04215dcade53d76c1ec749af8bcc0fa8972a"
+  },
+  "data_003": {
+    "dataset_ref": "polyleviathan/sig-cup-data-003-sig-actual-fills",
+    "dataset_id": "sigfills-20260928",
+    "rows": 132928,
+    "sig_markets": 231,
+    "population": "accepted SIG Cup mapped 2026 universe",
+    "historical_005b_condition_overlap": 0,
+    "historical_005b_token_overlap": 0,
+    "extraction_cutoff_utc": "2026-09-28T18:52:11Z"
+  },
+  "carry_forward": {
+    "targets": [
+      "target_clock_realised_movement_1",
+      "target_clock_realised_movement_5",
+      "target_clock_realised_movement_15",
+      "target_clock_realised_movement_30",
+      "target_clock_realised_movement_60",
+      "target_clock_realised_movement_120",
+      "target_clock_realised_movement_300"
+    ],
+    "models": {
+      "target_clock_realised_movement_1": {
+        "features": [
+          "realised_vol_5",
+          "absolute_return_5",
+          "recent_max_move_900",
+          "absolute_return_30",
+          "absolute_return_15",
+          "absolute_return_60",
+          "absolute_return_120",
+          "absolute_return_300"
+        ],
+        "model_name": "hist_gradient_boosting",
+        "params": {
+          "l2_regularization": 1,
+          "learning_rate": 0.05,
+          "max_iter": 100,
+          "max_leaf_nodes": 15
+        }
+      },
+      "target_clock_realised_movement_5": {
+        "features": [
+          "realised_vol_5",
+          "recent_max_move_900",
+          "absolute_return_5",
+          "absolute_return_30",
+          "absolute_return_60",
+          "absolute_return_15",
+          "absolute_return_120",
+          "absolute_return_300"
+        ],
+        "model_name": "ridge",
+        "params": {
+          "alpha": 10
+        }
+      },
+      "target_clock_realised_movement_15": {
+        "features": [
+          "realised_vol_5",
+          "recent_max_move_900",
+          "absolute_return_300",
+          "absolute_return_60",
+          "absolute_return_120",
+          "absolute_return_30",
+          "absolute_return_15",
+          "absolute_return_900"
+        ],
+        "model_name": "hist_gradient_boosting",
+        "params": {
+          "l2_regularization": 1,
+          "learning_rate": 0.05,
+          "max_iter": 100,
+          "max_leaf_nodes": 15
+        }
+      },
+      "target_clock_realised_movement_30": {
+        "features": [
+          "recent_max_move_900",
+          "realised_vol_5",
+          "absolute_return_300",
+          "absolute_return_120",
+          "absolute_return_60",
+          "absolute_return_900",
+          "absolute_return_30",
+          "absolute_return_15"
+        ],
+        "model_name": "hist_gradient_boosting",
+        "params": {
+          "l2_regularization": 1,
+          "learning_rate": 0.05,
+          "max_iter": 100,
+          "max_leaf_nodes": 15
+        }
+      },
+      "target_clock_realised_movement_60": {
+        "features": [
+          "recent_max_move_900",
+          "absolute_return_300",
+          "realised_vol_5",
+          "absolute_return_900",
+          "absolute_return_120",
+          "absolute_return_60",
+          "absolute_return_30",
+          "absolute_return_15"
+        ],
+        "model_name": "hist_gradient_boosting",
+        "params": {
+          "l2_regularization": 1,
+          "learning_rate": 0.05,
+          "max_iter": 100,
+          "max_leaf_nodes": 15
+        }
+      },
+      "target_clock_realised_movement_120": {
+        "features": [
+          "recent_max_move_900",
+          "absolute_return_300",
+          "absolute_return_900",
+          "absolute_return_120",
+          "realised_vol_5",
+          "absolute_return_60",
+          "distance_recent_low_300",
+          "absolute_return_30"
+        ],
+        "model_name": "hist_gradient_boosting",
+        "params": {
+          "l2_regularization": 1,
+          "learning_rate": 0.05,
+          "max_iter": 100,
+          "max_leaf_nodes": 15
+        }
+      },
+      "target_clock_realised_movement_300": {
+        "features": [
+          "recent_max_move_900",
+          "absolute_return_900",
+          "absolute_return_300",
+          "absolute_return_120",
+          "absolute_return_60",
+          "realised_vol_5",
+          "distance_recent_low_300",
+          "absolute_return_30"
+        ],
+        "model_name": "hist_gradient_boosting",
+        "params": {
+          "l2_regularization": 1,
+          "learning_rate": 0.05,
+          "max_iter": 100,
+          "max_leaf_nodes": 15
+        }
+      }
+    },
+    "carry_forward_spec_sha256": "1973b32871ded25c40ea7dea1e8ceaa00443f7e1a5dcbabf45232bd197539c2e",
+    "new_targets_allowed": false,
+    "new_features_allowed": false,
+    "new_models_allowed": false,
+    "retuning_allowed": false,
+    "event_time_targets_allowed": false
+  },
+  "feature_target_rules": {
+    "ordering": [
+      "block_number",
+      "log_index"
+    ],
+    "price_feature_definitions": "identical to frozen EXPERIMENT-005B",
+    "clock_target_definitions": "identical to frozen EXPERIMENT-005B",
+    "historical_fit_population": "corrected 005B TRAIN+DEV using original deterministic per-family LIMIT 100000 sampling and 300-second embargo",
+    "historical_fit_sources": "ordering-corrected five-family matrices only"
+  },
+  "primary_confirmation_rule": {
+    "per_horizon": {
+      "model_mae_lt_all_four_original_named_baselines": true,
+      "market_bootstrap_lower_2_5_gt_zero": true
+    },
+    "overall": "all seven horizons must pass the per-horizon rule for full seven-horizon confirmation",
+    "baselines": [
+      "persistence",
+      "own_recent_price",
+      "current_absolute_movement",
+      "recent_activity"
+    ]
+  },
+  "diagnostics_only": {
+    "mapping_class": [
+      "EXACT",
+      "DERIVED",
+      "NEAR"
+    ],
+    "window_id": "report only",
+    "predictive_ic": "report only",
+    "calendar_block_bootstrap": "report only"
+  },
+  "interpretation": {
+    "success": "fresh confirmation on disjoint actual mapped SIG population",
+    "partial": "report exact horizons passing; do not backfill/reselect",
+    "failure": "do not redesign from DATA-003; historical 005B remains discovery evidence only"
+  }
+}
