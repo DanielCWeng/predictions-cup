@@ -414,6 +414,39 @@ class SigRealtimeStateEngine:
             )
         self._last_bulk_price_refresh_at = self._clock()
 
+    async def refresh_exchange_prices(
+        self,
+        exchange_ids: Iterable[str],
+        *,
+        reason: str,
+        priority: RestPriority = RestPriority.HIGH,
+    ) -> None:
+        """Refresh only affected scalar BBOs through the shared REST governor."""
+        requested_ids = tuple(sorted(set(exchange_ids)))
+        if not requested_ids:
+            return
+        unknown = set(requested_ids).difference(self.states)
+        if unknown:
+            raise ValueError(
+                f"price refresh requested unknown exchanges: {sorted(unknown)!r}"
+            )
+
+        for index in range(0, len(requested_ids), 100):
+            requested = requested_ids[index : index + 100]
+            async with self._rest.priority(priority):
+                response = await self._rest.get_bulk_prices(
+                    requested,
+                    tournament_id=self.tournament_id,
+                )
+            observed_at = self._clock()
+            self.health.bulk_price_refresh_count += 1
+            self._apply_bulk_prices(
+                response,
+                requested=requested,
+                observed_at=observed_at,
+                reason=reason,
+            )
+
     async def handle_raw_batch(
         self,
         topic: str,
