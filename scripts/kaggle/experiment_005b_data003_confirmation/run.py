@@ -101,15 +101,53 @@ def connect() -> duckdb.DuckDBPyConnection:
     return con
 
 
-def locate_data003_zip() -> Path:
-    matches = sorted(Path("/kaggle/input").rglob("fills.zip"))
-    if len(matches) != 1:
-        raise RuntimeError(f"expected one DATA-003 fills.zip, found {matches}")
-    return matches[0]
+def locate_data003_fills() -> tuple[str, Path]:
+    input_root = Path("/kaggle/input")
+    zip_matches = sorted(input_root.rglob("fills.zip"))
+    if len(zip_matches) == 1:
+        return "zip", zip_matches[0]
+    if len(zip_matches) > 1:
+        raise RuntimeError(
+            f"multiple DATA-003 fills.zip candidates: {zip_matches}"
+        )
+
+    parquet_matches = sorted(
+        path
+        for path in input_root.rglob("*.parquet")
+        if "sig-cup-data-003-sig-actual-fills" in str(path)
+        and "/fills/" in str(path).replace("\\", "/")
+    )
+    if parquet_matches:
+        parents = {
+            next(
+                parent
+                for parent in path.parents
+                if parent.name == "fills"
+            )
+            for path in parquet_matches
+        }
+        if len(parents) != 1:
+            raise RuntimeError(
+                f"multiple DATA-003 fills roots: {sorted(map(str, parents))}"
+            )
+        return "directory", next(iter(parents))
+
+    top = sorted(str(path) for path in input_root.glob("*"))
+    raise RuntimeError(
+        "DATA-003 fills were not mounted as fills.zip or fills/*.parquet; "
+        f"top-level Kaggle inputs={top}"
+    )
 
 
 def extract_fills() -> Path:
-    source = locate_data003_zip()
+    mode, source = locate_data003_fills()
+    if mode == "directory":
+        if not any(source.rglob("*.parquet")):
+            raise RuntimeError(
+                f"DATA-003 fills directory has no parquet files: {source}"
+            )
+        return source
+
     root = OUT / "data003_fills"
     if root.exists() and any(root.rglob("*.parquet")):
         return root
