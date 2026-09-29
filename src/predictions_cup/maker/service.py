@@ -14,6 +14,7 @@ import signal
 from contextlib import suppress
 from datetime import datetime
 from time import monotonic_ns
+from typing import cast
 
 from pydantic import ValidationError
 
@@ -38,6 +39,7 @@ from predictions_cup.maker.recovery import (
     maker_unresolved_envelopes,
     reconcile_maker_quote_registry,
 )
+from predictions_cup.maker.noop_recorder import NoopSigRealtimeRecorder
 from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.mapping.models import MappingDocument
@@ -93,7 +95,7 @@ class MakerService:
             ),
         )
         rest = GovernedSigRestClient(self.settings, governor=governor)
-        sig_recorder = SigRealtimeRecorder(self.settings.sig_realtime_storage_path)
+        sig_recorder = cast(SigRealtimeRecorder, NoopSigRealtimeRecorder())
         journal: ExecutionJournal | None = None
         trading: SigTradingClient | None = None
         sig_state: SigRealtimeStateEngine | None = None
@@ -321,7 +323,6 @@ class MakerService:
             self.pm_ws.stop()
             if sig_state is not None:
                 await sig_state.aclose()
-            sig_recorder.close()
             if trading is not None:
                 await trading.aclose()
             if journal is not None:
