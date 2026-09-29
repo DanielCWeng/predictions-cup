@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/r3_fv_001_p0_simplex_leadlag",
+  "kernel": "polyleviathan/r3-fv-001-p0-simplex-leadlag",
+  "poll_seconds": 20,
+  "timeout_minutes": 120,
+  "download_outputs": true,
+  "note": "Frozen R3-P0-SIMPLEX-LEADLAG-001. Seven predeclared narrow source-target pairs; CLR distribution shocks, TRAIN-only q75 thresholds and ridge, 300s primary with 30s/5s diagnostics. DATA-004->DATA-003 only. No FINAL."
+}
