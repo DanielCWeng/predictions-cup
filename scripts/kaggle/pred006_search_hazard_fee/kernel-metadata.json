@@ -1,0 +1,19 @@
+{
+  "id": "polyleviathan/pred006-search-hazard-fee",
+  "title": "PRED006 Search Hazard Fee",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [
+    "polyleviathan/sig-cup-data-003-sig-actual-fills"
+  ],
+  "competition_sources": [],
+  "kernel_sources": [
+    "polyleviathan/005b-data003-block-gate",
+    "polyleviathan/pred006-phase0-audit"
+  ]
+}
