@@ -421,6 +421,89 @@ def test_malformed_accepted_execution_response_is_uncertain(
     asyncio.run(scenario())
 
 
+
+@pytest.mark.parametrize("operation", ("single", "batch", "multi"))
+def test_well_formed_generic_500_execution_response_is_uncertain(
+    operation: str,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(
+            500,
+            json=_error("INTERNAL_ERROR", "internal failure"),
+        )
+
+    async def scenario() -> None:
+        governor = SigRestGovernor(rate_per_second=1_000_000_000)
+        try:
+            async with SigTradingClient(
+                _settings(),
+                governor=governor,
+                transport=httpx.MockTransport(handler),
+                retry_policy=RetryPolicy(max_attempts=1),
+            ) as client:
+                with pytest.raises(SigExecutionUncertainError) as caught:
+                    if operation == "single":
+                        await client.place_order(
+                            SingleOrderRequestDto(
+                                exchangeId="36",
+                                side="yes",
+                                action="buy",
+                                quantity=1,
+                                price=Decimal("0.42"),
+                                idempotencyKey="generic-500-single",
+                            )
+                        )
+                    elif operation == "batch":
+                        await client.place_batch(
+                            BatchOrderRequestDto(
+                                idempotencyKey="generic-500-batch",
+                                orders=(
+                                    OrderInputDto(
+                                        exchangeId="36",
+                                        side="yes",
+                                        action="buy",
+                                        quantity=1,
+                                        price=Decimal("0.42"),
+                                    ),
+                                ),
+                            )
+                        )
+                    else:
+                        await client.place_multi_leg(
+                            MultiLegOrderRequestDto(
+                                idempotencyKey="generic-500-multi",
+                                legs=(
+                                    OrderInputDto(
+                                        exchangeId="36",
+                                        side="yes",
+                                        action="buy",
+                                        quantity=1,
+                                        price=Decimal("0.42"),
+                                        tournamentId="t1",
+                                    ),
+                                    OrderInputDto(
+                                        exchangeId="37",
+                                        side="no",
+                                        action="buy",
+                                        quantity=1,
+                                        price=Decimal("0.58"),
+                                        tournamentId="t1",
+                                    ),
+                                ),
+                                relationshipConstraint=(
+                                    "22222222-2222-2222-2222-222222222222"
+                                ),
+                            )
+                        )
+                assert caught.value.status_code == 500
+                assert caught.value.code == "INTERNAL_ERROR"
+        finally:
+            await governor.aclose()
+
+    asyncio.run(scenario())
+
+
 def test_invalid_json_after_accepted_execution_is_uncertain() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         del request
