@@ -254,6 +254,30 @@ class ConservativeEligibilityPolicy:
         self._widen_toxicity_at = widen_toxicity_at
         self._suspend_toxicity_at = suspend_toxicity_at
 
+    def next_recheck_monotonic_ns(
+        self,
+        context: QuoteContext,
+    ) -> int | None:
+        snapshot = context.snapshot
+        deadlines = [
+            snapshot.sig_bbo_observed_ns + self._max_bbo_age_ns,
+            snapshot.account_observed_ns + self._max_account_age_ns,
+            snapshot.inventory_observed_ns + self._max_inventory_age_ns,
+            context.raw_fair_value.observed_monotonic_ns + self._max_fv_age_ns,
+            context.prediction.observed_monotonic_ns + self._max_signal_age_ns,
+            context.toxicity.observed_monotonic_ns + self._max_signal_age_ns,
+        ]
+        if self._require_depth:
+            if (
+                snapshot.sig_depth_observed_ns is None
+                or self._max_depth_age_ns is None
+            ):
+                return snapshot.now_monotonic_ns
+            deadlines.append(
+                snapshot.sig_depth_observed_ns + self._max_depth_age_ns
+            )
+        return min(deadlines)
+
     def gate(self, context: QuoteContext) -> GateDecision:
         snapshot = context.snapshot
         market = snapshot.runtime.market(snapshot.market_id)
@@ -343,7 +367,7 @@ class ConservativeEligibilityPolicy:
     @staticmethod
     def _stale(now_ns: int, observed_ns: int, max_age_ns: int) -> bool:
         age = now_ns - observed_ns
-        return age < 0 or age > max_age_ns
+        return age < 0 or age >= max_age_ns
 
 
 def with_quote_math(
