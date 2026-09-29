@@ -1,0 +1,945 @@
+{
+  "addendum_1": {
+    "anchors_with_zero_edges_after": [],
+    "anchors_with_zero_edges_before": [
+      {
+        "sig_exchange_id": "886",
+        "sig_market_id": "197",
+        "sig_question": "Will the Democratic Party win the AZ-01 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "887",
+        "sig_market_id": "198",
+        "sig_question": "Will the Republican Party win the AZ-01 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "888",
+        "sig_market_id": "199",
+        "sig_question": "Will the Democratic Party win the AZ-06 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "889",
+        "sig_market_id": "200",
+        "sig_question": "Will the Republican Party win the AZ-06 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "894",
+        "sig_market_id": "205",
+        "sig_question": "Will the Democratic Party win the CO-03 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "895",
+        "sig_market_id": "206",
+        "sig_question": "Will the Republican Party win the CO-03 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "896",
+        "sig_market_id": "207",
+        "sig_question": "Will the Democratic Party win the CO-04 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "897",
+        "sig_market_id": "208",
+        "sig_question": "Will the Republican Party win the CO-04 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "898",
+        "sig_market_id": "209",
+        "sig_question": "Will the Democratic Party win the CO-08 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "899",
+        "sig_market_id": "210",
+        "sig_question": "Will the Republican Party win the CO-08 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "900",
+        "sig_market_id": "211",
+        "sig_question": "Will the Democratic Party win the FL-09 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "902",
+        "sig_market_id": "213",
+        "sig_question": "Will the Democratic Party win the IA-01 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "903",
+        "sig_market_id": "214",
+        "sig_question": "Will the Republican Party win the IA-01 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "904",
+        "sig_market_id": "215",
+        "sig_question": "Will the Democratic Party win the IA-02 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "905",
+        "sig_market_id": "216",
+        "sig_question": "Will the Republican Party win the IA-02 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "906",
+        "sig_market_id": "217",
+        "sig_question": "Will the Democratic Party win the IA-03 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "907",
+        "sig_market_id": "218",
+        "sig_question": "Will the Republican Party win the IA-03 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "908",
+        "sig_market_id": "219",
+        "sig_question": "Will the Democratic Party win the KY-04 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "909",
+        "sig_market_id": "220",
+        "sig_question": "Will the Republican Party win the KY-04 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "910",
+        "sig_market_id": "221",
+        "sig_question": "Will the Democratic Party win the ME-02 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "911",
+        "sig_market_id": "222",
+        "sig_question": "Will the Republican Party win the ME-02 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "912",
+        "sig_market_id": "223",
+        "sig_question": "Will the Democratic Party win the MT-01 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "913",
+        "sig_market_id": "224",
+        "sig_question": "Will the Republican Party win the MT-01 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "914",
+        "sig_market_id": "225",
+        "sig_question": "Will the Democratic Party win the NE-02 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "915",
+        "sig_market_id": "226",
+        "sig_question": "Will the Republican Party win the NE-02 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "916",
+        "sig_market_id": "227",
+        "sig_question": "Will the Democratic Party win the NJ-07 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "917",
+        "sig_market_id": "228",
+        "sig_question": "Will the Republican Party win the NJ-07 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "922",
+        "sig_market_id": "233",
+        "sig_question": "Will the Democratic Party win the PA-01 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "923",
+        "sig_market_id": "234",
+        "sig_question": "Will the Republican Party win the PA-01 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "924",
+        "sig_market_id": "235",
+        "sig_question": "Will the Democratic Party win the PA-07 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "925",
+        "sig_market_id": "236",
+        "sig_question": "Will the Republican Party win the PA-07 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "926",
+        "sig_market_id": "237",
+        "sig_question": "Will the Democratic Party win the PA-08 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "927",
+        "sig_market_id": "238",
+        "sig_question": "Will the Republican Party win the PA-08 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "930",
+        "sig_market_id": "241",
+        "sig_question": "Will the Democratic Party win the SC-01 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "931",
+        "sig_market_id": "242",
+        "sig_question": "Will the Republican Party win the SC-01 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "938",
+        "sig_market_id": "249",
+        "sig_question": "Will the Republican Party win the VA-01 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "939",
+        "sig_market_id": "250",
+        "sig_question": "Will the Republican Party win the VA-02 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "940",
+        "sig_market_id": "251",
+        "sig_question": "Will the Democratic Party win the VA-07 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1007",
+        "sig_market_id": "318",
+        "sig_question": "Will the Democratic Party win the AL-02 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1008",
+        "sig_market_id": "319",
+        "sig_question": "Will the Republican Party win the AL-02 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1009",
+        "sig_market_id": "320",
+        "sig_question": "Will the Democratic Party win the FL-07 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1010",
+        "sig_market_id": "321",
+        "sig_question": "Will the Republican Party win the FL-07 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1011",
+        "sig_market_id": "322",
+        "sig_question": "Will the Republican Party win the FL-09 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1019",
+        "sig_market_id": "330",
+        "sig_question": "Will the Democratic Party win the MI-07 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1020",
+        "sig_market_id": "331",
+        "sig_question": "Will the Republican Party win the MI-07 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1023",
+        "sig_market_id": "334",
+        "sig_question": "Will the Democratic Party win the MN-01 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1024",
+        "sig_market_id": "335",
+        "sig_question": "Will the Republican Party win the MN-01 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1025",
+        "sig_market_id": "336",
+        "sig_question": "Will the Democratic Party win the MN-02 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1026",
+        "sig_market_id": "337",
+        "sig_question": "Will the Republican Party win the MN-02 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1027",
+        "sig_market_id": "338",
+        "sig_question": "Will the Democratic Party win the MN-05 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1028",
+        "sig_market_id": "339",
+        "sig_question": "Will the Republican Party win the MN-05 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1029",
+        "sig_market_id": "340",
+        "sig_question": "Will the Democratic Party win the TN-05 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1030",
+        "sig_market_id": "341",
+        "sig_question": "Will the Republican Party win the TN-05 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1031",
+        "sig_market_id": "342",
+        "sig_question": "Will the Democratic Party win the VA-01 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1032",
+        "sig_market_id": "343",
+        "sig_question": "Will the Democratic Party win the VA-02 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1033",
+        "sig_market_id": "344",
+        "sig_question": "Will the Democratic Party win the VA-05 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1034",
+        "sig_market_id": "345",
+        "sig_question": "Will the Republican Party win the VA-05 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1035",
+        "sig_market_id": "346",
+        "sig_question": "Will the Republican Party win the VA-07 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1036",
+        "sig_market_id": "347",
+        "sig_question": "Will the Democratic Party win the WA-03 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1037",
+        "sig_market_id": "348",
+        "sig_question": "Will the Republican Party win the WA-03 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1038",
+        "sig_market_id": "349",
+        "sig_question": "Will the Democratic Party win the WI-01 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1039",
+        "sig_market_id": "350",
+        "sig_question": "Will the Republican Party win the WI-01 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1040",
+        "sig_market_id": "351",
+        "sig_question": "Will the Democratic Party win the WI-03 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1041",
+        "sig_market_id": "352",
+        "sig_question": "Will the Republican Party win the WI-03 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1064",
+        "sig_market_id": "375",
+        "sig_question": "Will the Democratic Party win the NH-01 House race?",
+        "v2_edge_count": 0
+      },
+      {
+        "sig_exchange_id": "1065",
+        "sig_market_id": "376",
+        "sig_question": "Will the Republican Party win the NH-01 House race?",
+        "v2_edge_count": 0
+      }
+    ],
+    "edge_count_delta": 1349,
+    "edges_after_before_addendum2": 6115,
+    "edges_before": 4766,
+    "existing_edges_reclassified_as_same_contest": 99,
+    "market_count_delta": 0,
+    "markets_after_before_addendum2": 1510,
+    "markets_before": 1510,
+    "pre_addendum_chamber_only_aggregate_or_joint_markets": 198,
+    "pre_addendum_chamber_only_market_count": 669,
+    "pre_addendum_chamber_only_non_sig_nonaggregate_markets": 0,
+    "pre_addendum_chamber_only_same_contest_markets": 471,
+    "rule6_excluded_edge_count_after_recheck": 8297,
+    "rule6_excluded_market_count_after_recheck": 4111,
+    "rule6_exclusions_under_prior_predicate": 4042,
+    "rule6_markets_reclassified_to_rule6": 69,
+    "rule6_recheck_dropped_edges": 0,
+    "rule6_recheck_dropped_markets": 0,
+    "same_contest_edges_added": 1349
+  },
+  "addendum_2": {
+    "bare_letter_question_matches_v1": 2168,
+    "catch_all_other_than_listed_question_matches_v1": 1,
+    "edge_count_delta": -924,
+    "edges_after": 5191,
+    "edges_before": 6115,
+    "edges_dropped": 924,
+    "groupItemTitle_field": null,
+    "house_winner_hand_check_rows": [
+      {
+        "market_id": "3520720",
+        "party": "Republican",
+        "question": "Will the Republican Party candidate win the 2026 SC-01 House election by 12%-15%?",
+        "verdict": "PASS: explicit Republican Party/candidate outcome"
+      },
+      {
+        "market_id": "4167342",
+        "party": "Republican",
+        "question": "Will a Republican Party candidate win the 2026 CA-48 House election by 3% or more?",
+        "verdict": "PASS: explicit Republican Party/candidate outcome"
+      },
+      {
+        "market_id": "3519709",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 NY-13 House election by 45%-55%?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "3408696",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 IA-01 House election by 3%-6%?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "3405550",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 CO-04 House election by 0%-3%?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "3524390",
+        "party": "Republican",
+        "question": "Will the Republican Party candidate win the 2026 TN-05 House election by 9%-12%?",
+        "verdict": "PASS: explicit Republican Party/candidate outcome"
+      },
+      {
+        "market_id": "3523408",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 VA-01 House election by 12% or more?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "3523840",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 TX-28 House election by 12%-15%?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "3489841",
+        "party": "Republican",
+        "question": "Will the Republican Party candidate win the 2026 KY-04 House election by 20%-25%?",
+        "verdict": "PASS: explicit Republican Party/candidate outcome"
+      },
+      {
+        "market_id": "3520721",
+        "party": "Republican",
+        "question": "Will the Republican Party candidate win the 2026 SC-01 House election by 9%-12%?",
+        "verdict": "PASS: explicit Republican Party/candidate outcome"
+      },
+      {
+        "market_id": "3405553",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 CO-04 House election by 9%-12%?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "3491699",
+        "party": "Republican",
+        "question": "Will the Republican Party candidate win the 2026 MI-07 House election by 3%-6%?",
+        "verdict": "PASS: explicit Republican Party/candidate outcome"
+      },
+      {
+        "market_id": "3408693",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 IA-01 House election by 12%-15%?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "3491736",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 MI-10 House election by 9%-12%?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "3523902",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 TX-23 House election by 3%-6%?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "3408768",
+        "party": "Republican",
+        "question": "Will the Republican Party candidate win the 2026 IA-03 House election by 3%-6%?",
+        "verdict": "PASS: explicit Republican Party/candidate outcome"
+      },
+      {
+        "market_id": "3520596",
+        "party": "Republican",
+        "question": "Will the Republican Party candidate win the 2026 PA-10 House election by 0%-3%?",
+        "verdict": "PASS: explicit Republican Party/candidate outcome"
+      },
+      {
+        "market_id": "3520619",
+        "party": "Republican",
+        "question": "Will the Republican Party candidate win the 2026 PA-08 House election by 0%-3%?",
+        "verdict": "PASS: explicit Republican Party/candidate outcome"
+      },
+      {
+        "market_id": "3519467",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 NJ-07 House election by 0%-3%?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "3405602",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 CO-08 House election by 6%-9%?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "3407989",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 FL-07 House election by 0%-3%?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "3523844",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 TX-28 House election by 0%-3%?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "4170003",
+        "party": "Democratic",
+        "question": "Will a Democratic Party candidate win the 2026 WA-03 House election by 6%-9%?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "3519657",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 NY-17 House election by 6%-9%?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "3399275",
+        "party": "Republican",
+        "question": "Will the Republican Party candidate win the 2026 AZ-06 House election by 0%-3%?",
+        "verdict": "PASS: explicit Republican Party/candidate outcome"
+      },
+      {
+        "market_id": "3408397",
+        "party": "Republican",
+        "question": "Will the Republican Party candidate win the 2026 FL-13 House election by 3%-6%?",
+        "verdict": "PASS: explicit Republican Party/candidate outcome"
+      },
+      {
+        "market_id": "3523903",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 TX-23 House election by 6%-9%?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "3518948",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 NE-02 House election by 25% or more?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "3492094",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 MT-01 House election by 6%-9%?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      },
+      {
+        "market_id": "3405601",
+        "party": "Democratic",
+        "question": "Will the Democratic Party candidate win the 2026 CO-08 House election by 9%-12%?",
+        "verdict": "PASS: explicit Democratic Party/candidate outcome"
+      }
+    ],
+    "market_count_delta": -231,
+    "markets_after": 1279,
+    "markets_before": 1510,
+    "new_rule5_pattern_market_hits_v1": 2187,
+    "question_regex_fallback_used": true,
+    "retained_markets_dropped": 231,
+    "unique_cids_dropped": 231,
+    "unique_tokens_dropped": 462,
+    "zero_edge_anchors_after": [
+      {
+        "eligible_text_match_market_count": 0,
+        "retained_text_match_market_count": 0,
+        "rule4_primary_match_market_count": 10,
+        "rule5_placeholder_match_market_count": 9,
+        "sig_exchange_id": "910",
+        "sig_market_id": "221",
+        "sig_question": "Will the Democratic Party win the ME-02 House race?",
+        "v1_text_match_market_count": 19,
+        "v2_edge_count": 0
+      },
+      {
+        "eligible_text_match_market_count": 0,
+        "retained_text_match_market_count": 0,
+        "rule4_primary_match_market_count": 10,
+        "rule5_placeholder_match_market_count": 9,
+        "sig_exchange_id": "911",
+        "sig_market_id": "222",
+        "sig_question": "Will the Republican Party win the ME-02 House race?",
+        "v1_text_match_market_count": 19,
+        "v2_edge_count": 0
+      }
+    ]
+  },
+  "ambiguous_edge_count": 52,
+  "ambiguous_market_count": 40,
+  "ambiguous_reason_counts": {
+    "Dated forecast/odds level contract resolves to a projected probability or forecast status rather than an election result; rule-2 aggregate fit is ambiguous.": 40
+  },
+  "analysis_only": [
+    "No new Gamma discovery",
+    "No fill export",
+    "No order-book acquisition",
+    "No Kaggle job",
+    "No OCI write",
+    "No repository/worktree write",
+    "No predictive or historical behavior analysis"
+  ],
+  "anchor_edge_count_distribution": {
+    "0": 2,
+    "3": 2,
+    "8": 18,
+    "9": 8,
+    "10": 88,
+    "11": 2,
+    "12": 6,
+    "13": 8,
+    "14": 3,
+    "15": 25,
+    "16": 7,
+    "17": 6,
+    "18": 2,
+    "20": 12,
+    "21": 5,
+    "22": 6,
+    "23": 10,
+    "24": 7,
+    "25": 2,
+    "28": 2,
+    "30": 2,
+    "37": 2,
+    "44": 2,
+    "468": 1,
+    "478": 1,
+    "486": 1,
+    "589": 1
+  },
+  "edge_count_partition_components": {
+    "addendum1_added_same_contest_edges": 1349,
+    "addendum1_added_same_contest_edges_retained_after_addendum2": 1019,
+    "addendum1_rule6_dropped_market_edges": 0,
+    "ambiguous_market_edges": 52,
+    "excluded_market_edges_by_rule": {
+      "3": 342,
+      "4": 6319,
+      "5": 22842,
+      "6": 8297
+    },
+    "reconciled_to_v1_ets_edge_count": 42096,
+    "retained_v2_edges": 5191,
+    "retained_v2_edges_after_addendum1": 5191,
+    "retained_v2_edges_before_addendum1": 4172,
+    "unsupported_edges_pruned_from_retained_markets": 72
+  },
+  "excluded_edges_by_rule": {
+    "3": 342,
+    "4": 6319,
+    "5": 22842,
+    "6": 8297
+  },
+  "excluded_market_count": 16854,
+  "excluded_markets_by_rule": {
+    "3": 49,
+    "4": 2727,
+    "5": 9967,
+    "6": 4111
+  },
+  "groupItemTitle_field": null,
+  "hand_check_requested_per_rule": 30,
+  "hand_check_seed": 20260929,
+  "lifecycle_parse": "closed=true or active=false => closed; active=true and closed=false => open; otherwise unknown. This parse treats inactive rows as closed even when raw closed=false.",
+  "median_v2_edges_per_anchor_all_231": 10,
+  "median_v2_edges_per_nonzero_anchor": 10,
+  "output_sha256": {
+    "ETS_V2_AMBIGUOUS.csv": "bb6d7c11931b08774f812fc28435b484f46d6e153a6235c6a9e734cb344cbe5f",
+    "ETS_V2_EDGES.csv": "3e4cc8b18f7964026e57f38568b2ebd91d9383fdbd3f9bfeeba938478d5178b6",
+    "ETS_V2_EXCLUSIONS.csv": "ff177f9c977e94daa01148082c298739474696a9a10e8d8426d4789dba701040",
+    "ETS_V2_MARKET_INVENTORY.csv": "af3a5701e582052fd815f5ed21d48e9d8724fe297fca288d3981a6accce854e5"
+  },
+  "placeholder_patterns": [
+    "case-insensitive Person/Candidate/Option/Party label followed by one or two uppercase ASCII letters",
+    "another outcome/candidate/party/person, someone else, other person/candidate, candidate not listed above (unnamed outcome phrases)",
+    "literal Other as the subject of a winner/place/advance question, plus outcome label exactly Other",
+    "an outcome label exactly Other/another outcome/another candidate/another party",
+    "Addendum 2: question prefix Will [A-Z]{1,2} (win|be), unless frozen groupItemTitle is present, in which case the group title is preferred",
+    "Addendum 2: catch-all candidate/party/person outcomes described as other than the listed/named/above outcomes"
+  ],
+  "primary_patterns": [
+    "case-insensitive primary/primaries, nominee/nomination/nominate, first-round/first round, candidacy, endorse/endorsed/endorses/endorsing/endorsement(s), retire/retired/retiring/retirement(s), advance to/from runoff",
+    "checked market question, event title, event slug, and market slug; tags were not used as semantic evidence"
+  ],
+  "primary_placeholder_overlap": 4766,
+  "pruned_edges_on_retained_markets": 72,
+  "removed_edge_counts": {
+    "rule3_no_specific_relationship": 35,
+    "rule3_same_state_only": 1493,
+    "rule4_primary_market": 3111,
+    "rule5_placeholder_market": 9310,
+    "rule6_chamber_only_constituent": 23381
+  },
+  "resolution_status_limitation": "The v1 snapshot resolved field is blank for all source inventory rows; this scope recut did not fetch Gamma or infer resolution.",
+  "retained_edge_counts_by_relationship_class": {
+    "CHAMBER_CONTROL": 97,
+    "CONDITIONAL_OUTCOME": 2113,
+    "JOINT_OUTCOME": 620,
+    "OTHER_ECONOMICALLY_LINKED": 95,
+    "PIVOTAL_RACE": 168,
+    "SAME_STATE_RELATED": 28,
+    "SEAT_EXACT": 10,
+    "SEAT_RANGE": 8,
+    "SEAT_THRESHOLD": 352,
+    "TARGET_CONSTITUENT_OF_AGGREGATE": 1700
+  },
+  "retained_market_counts_by_lifecycle": {
+    "closed": 12,
+    "open": 1267
+  },
+  "retained_market_counts_by_office": {
+    "Governor": 153,
+    "House": 436,
+    "Senate": 405,
+    "aggregate": 285
+  },
+  "retained_market_counts_by_relationship_class": {
+    "CHAMBER_CONTROL": 97,
+    "CONDITIONAL_OUTCOME": 987,
+    "JOINT_OUTCOME": 29,
+    "OTHER_ECONOMICALLY_LINKED": 44,
+    "PIVOTAL_RACE": 76,
+    "SAME_STATE_RELATED": 13,
+    "SEAT_EXACT": 10,
+    "SEAT_RANGE": 8,
+    "SEAT_THRESHOLD": 22,
+    "TARGET_CONSTITUENT_OF_AGGREGATE": 850
+  },
+  "schema_version": 1,
+  "scope_candidates_after_primary_placeholder_filters": 1279,
+  "scope_date": "2026-09-29",
+  "scope_qualification_ladder": {
+    "1": {
+      "cumulative_edge_count": 16994,
+      "cumulative_market_count": 6285,
+      "rule_edge_count": 16994,
+      "rule_market_count": 6285
+    },
+    "2": {
+      "cumulative_edge_count": 18332,
+      "cumulative_market_count": 6559,
+      "rule_edge_count": 1437,
+      "rule_market_count": 299
+    },
+    "3": {
+      "cumulative_edge_count": 18536,
+      "cumulative_market_count": 6621,
+      "rule_edge_count": 915,
+      "rule_market_count": 150
+    }
+  },
+  "scope_rule_market_counts": {
+    "1_direct_sig_race_adjacency": 1051,
+    "2_genuine_aggregate": 241,
+    "3_explicit_related_general_or_joint": 89,
+    "4_primary_markets_flagged_v1": 7493,
+    "5_placeholder_markets_flagged_v1": 9967,
+    "6_chamber_fanout_edges_removed": 23381,
+    "7_volume_or_liquidity_filter": 0
+  },
+  "scope_rule_market_counts_note": "Rule 1/2/3 retained market counts overlap. Rule 4/5 are v1 pattern hits before exclusive precedence; rule 6 is the count of all chamber-control edges pruned, including edges on markets primarily excluded under other rules; Addendum 1 adds text-derived same-contest edges after baseline reconciliation; rule 7 is zero because no liquidity/volume filter is applied.",
+  "source_freeze_sha256": "020705151d6aae7759a125967457ed9e7594747b33afc1ea15c59edfaedb7b7a",
+  "token_parse": "JSON arrays in frozen clob_token_ids; distinct IDs counted without volume/liquidity filtering.",
+  "top_15_anchors_by_v2_edge_count": [
+    {
+      "sig_exchange_id": "840",
+      "sig_market_id": "151",
+      "sig_question": "Will the Democratic Party win the U.S. House?",
+      "v2_edge_count": 589
+    },
+    {
+      "sig_exchange_id": "841",
+      "sig_market_id": "152",
+      "sig_question": "Will the Republican Party win the U.S. House?",
+      "v2_edge_count": 486
+    },
+    {
+      "sig_exchange_id": "843",
+      "sig_market_id": "154",
+      "sig_question": "Will the Republican Party win the U.S. Senate?",
+      "v2_edge_count": 478
+    },
+    {
+      "sig_exchange_id": "842",
+      "sig_market_id": "153",
+      "sig_question": "Will the Democratic Party win the U.S. Senate?",
+      "v2_edge_count": 468
+    },
+    {
+      "sig_exchange_id": "982",
+      "sig_market_id": "293",
+      "sig_question": "Will the Democratic Party win the Texas Senate?",
+      "v2_edge_count": 44
+    },
+    {
+      "sig_exchange_id": "983",
+      "sig_market_id": "294",
+      "sig_question": "Will the Republican Party win the Texas Senate?",
+      "v2_edge_count": 44
+    },
+    {
+      "sig_exchange_id": "1047",
+      "sig_market_id": "358",
+      "sig_question": "Will the Democratic Party win the Michigan Senate?",
+      "v2_edge_count": 37
+    },
+    {
+      "sig_exchange_id": "1048",
+      "sig_market_id": "359",
+      "sig_question": "Will the Republican Party win the Michigan Senate?",
+      "v2_edge_count": 37
+    },
+    {
+      "sig_exchange_id": "848",
+      "sig_market_id": "159",
+      "sig_question": "Will the Democratic Party win the Arizona Governor?",
+      "v2_edge_count": 30
+    },
+    {
+      "sig_exchange_id": "849",
+      "sig_market_id": "160",
+      "sig_question": "Will the Republican Party win the Arizona Governor?",
+      "v2_edge_count": 30
+    },
+    {
+      "sig_exchange_id": "871",
+      "sig_market_id": "182",
+      "sig_question": "Will the Democratic Party win the Nevada Governor?",
+      "v2_edge_count": 28
+    },
+    {
+      "sig_exchange_id": "872",
+      "sig_market_id": "183",
+      "sig_question": "Will the Republican Party win the Nevada Governor?",
+      "v2_edge_count": 28
+    },
+    {
+      "sig_exchange_id": "1003",
+      "sig_market_id": "314",
+      "sig_question": "Will the Democratic Party win the Wisconsin Governor?",
+      "v2_edge_count": 25
+    },
+    {
+      "sig_exchange_id": "1004",
+      "sig_market_id": "315",
+      "sig_question": "Will the Republican Party win the Wisconsin Governor?",
+      "v2_edge_count": 25
+    },
+    {
+      "sig_exchange_id": "873",
+      "sig_market_id": "184",
+      "sig_question": "Will the Democratic Party win the New York Governor?",
+      "v2_edge_count": 24
+    }
+  ],
+  "v1_addendum2_only_placeholder_hits": 2187,
+  "v1_addendum2_other_subject_new_hits": 18,
+  "v1_addendum2_pattern_market_hits": 2977,
+  "v1_ets_edge_count": 42096,
+  "v1_input_sha256": {
+    "ETS_EDGES.csv": "be9ffa944d36e0c785eb98c7f865765777584767b814d7e59e2ed396b844df11",
+    "ETS_MARKET_INVENTORY.csv": "9d9c8988b9f059756b72e2ea0ecc91a39a76ed33ac197bf8ffb3c5b9e9ed8af4",
+    "ETS_NODES.csv": "a942f9c997be1ff8fa250dac35888d05fa906acf07c2837abe259e65484b9bc3",
+    "ETS_REJECTIONS.csv": "859302c65cfe993ab5a1f8665b1262c4cba3c84dcfe20b3163cd7f2d0f0d10c2",
+    "ETS_REVIEW_EDGES.csv": "ed74367e46e6cb39ec2ef0e2e9dc44d52d4f68f37785ebbd20be9c6a4f030b16",
+    "ETS_REVIEW_METHODOLOGY.md": "6dbc2f9fa7d5da467e32559862bd1d30159f8d0254eaf54b9e5f0bb4cb9db548",
+    "ETS_UNIVERSE_FREEZE.json": "020705151d6aae7759a125967457ed9e7594747b33afc1ea15c59edfaedb7b7a",
+    "SIG_ANCHOR_UNIVERSE.csv": "4816077ad8414d85d2c0b4ad7908e6e6360f8101ded6a7c34aa719b9e2fcbb5f"
+  },
+  "v1_market_count": 18173,
+  "v1_placeholder_bare_letter_question_hits": 2168,
+  "v1_placeholder_letter_slot_hits": 6369,
+  "v1_placeholder_other_than_listed_hits": 1,
+  "v1_placeholder_phrase_only_hits": 1411,
+  "v1_placeholder_unnamed_phrase_hits": 1411,
+  "v1_placeholders_detected": 9967,
+  "v1_primary_markets_detected": 7493,
+  "v1_sig_anchor_count": 231,
+  "v1_total_edge_file_rows": 43547,
+  "v2_duplicate_cid_rows": 0,
+  "v2_edge_count": 5191,
+  "v2_market_count": 1279,
+  "v2_markets_missing_token_ids": 0,
+  "v2_placeholders_kept": 0,
+  "v2_raw_closed_false_active_false_count": 2,
+  "v2_raw_closed_true_count": 10,
+  "v2_unique_cid_count": 1279,
+  "v2_unique_token_count": 2558
+}
