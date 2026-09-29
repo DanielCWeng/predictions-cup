@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "action": "output",
+  "kernel": "polyleviathan/r3-fv-001-structural-discovery",
+  "output_file_pattern": "(DISCOVERY_RESULTS|SELECTION_DECISION|FAMILY_AUDIT|FEATURE_SCHEMA)\\.json$|DEV_PREDICTION_SAMPLE\\.csv$",
+  "note": "Read-only recovery of completed R3-FV-001 TRAIN/DEV discovery outputs from the canonical Kaggle slug. Does not rerun or alter the kernel."
+}
