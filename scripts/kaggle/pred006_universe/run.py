@@ -47,7 +47,7 @@ def main() -> None:
 
     overview = con.execute(f"""
         SELECT
-          COUNT(*) AS rows,
+          COUNT(*) AS row_count,
           COUNT(DISTINCT condition_id) AS conditions,
           COUNT(DISTINCT token_id) AS tokens,
           COUNT(DISTINCT sig_market_id) AS sig_markets,
@@ -65,7 +65,7 @@ def main() -> None:
 
     mapping = con.execute(f"""
         SELECT UPPER(CAST(mapping_class AS VARCHAR)) AS mapping_class,
-               COUNT(*) AS rows,
+               COUNT(*) AS row_count,
                COUNT(DISTINCT condition_id) AS conditions,
                COUNT(DISTINCT sig_market_id) AS sig_markets
         FROM {fill_rel}
@@ -74,7 +74,7 @@ def main() -> None:
 
     daily = con.execute(f"""
         SELECT CAST(to_timestamp(CAST(timestamp AS BIGINT)) AS DATE) AS utc_date,
-               COUNT(*) AS rows,
+               COUNT(*) AS row_count,
                COUNT(DISTINCT condition_id) AS active_conditions,
                COUNT(DISTINCT sig_market_id) AS active_sig_markets,
                COUNT(DISTINCT participant_address) AS participants
@@ -84,7 +84,7 @@ def main() -> None:
 
     hour = con.execute(f"""
         SELECT CAST(strftime(to_timestamp(CAST(timestamp AS BIGINT)), '%H') AS INTEGER) AS utc_hour,
-               COUNT(*) AS rows,
+               COUNT(*) AS row_count,
                COUNT(DISTINCT condition_id) AS conditions,
                COUNT(DISTINCT participant_address) AS participants
         FROM {fill_rel}
@@ -162,7 +162,7 @@ def main() -> None:
     simultaneous = con.execute(f"""
         WITH x AS (
           SELECT CAST(timestamp AS BIGINT) AS timestamp,
-                 COUNT(*) AS rows,
+                 COUNT(*) AS row_count,
                  COUNT(DISTINCT condition_id) AS conditions,
                  COUNT(DISTINCT sig_market_id) AS sig_markets
           FROM {fill_rel}
@@ -170,10 +170,10 @@ def main() -> None:
         )
         SELECT
           COUNT(*) AS distinct_timestamps,
-          SUM(CASE WHEN rows > 1 THEN rows ELSE 0 END) AS rows_at_shared_timestamps,
+          SUM(CASE WHEN row_count > 1 THEN row_count ELSE 0 END) AS row_count_at_shared_timestamps,
           SUM(CASE WHEN conditions > 1 THEN 1 ELSE 0 END) AS multi_condition_timestamps,
           SUM(CASE WHEN sig_markets > 1 THEN 1 ELSE 0 END) AS multi_sig_market_timestamps,
-          MAX(rows) AS max_rows_same_timestamp,
+          MAX(row_count) AS max_rows_same_timestamp,
           MAX(conditions) AS max_conditions_same_timestamp
         FROM x
     """).fetchdf()
@@ -193,7 +193,7 @@ def main() -> None:
 
     fee = con.execute(f"""
         SELECT CAST(fee_evidence AS VARCHAR) AS fee_evidence,
-               COUNT(*) AS rows,
+               COUNT(*) AS row_count,
                COUNT(DISTINCT condition_id) AS conditions
         FROM {fee_rel}
         GROUP BY 1 ORDER BY rows DESC
@@ -201,7 +201,7 @@ def main() -> None:
 
     windows = con.execute(f"""
         SELECT CAST(window_id AS VARCHAR) AS window_id,
-               COUNT(*) AS rows,
+               COUNT(*) AS row_count,
                COUNT(DISTINCT condition_id) AS conditions,
                MIN(CAST(timestamp AS BIGINT)) AS min_ts,
                MAX(CAST(timestamp AS BIGINT)) AS max_ts
@@ -254,7 +254,7 @@ def main() -> None:
     path = OUT / "universe_audit.json"
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     print("PRED006_UNIVERSE_RESULT=" + json.dumps({
-      "rows": payload["overview"][0]["rows"],
+      "rows": payload["overview"][0]["row_count"],
       "conditions": payload["overview"][0]["conditions"],
       "sig_markets": payload["overview"][0]["sig_markets"],
       "participants": payload["overview"][0]["participants"],

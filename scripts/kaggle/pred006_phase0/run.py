@@ -101,18 +101,18 @@ def main():
       from chron group by 1 order by 1
     """).fetchdf().to_dict("records")
     monthly=con.execute("""
-      select strftime(to_timestamp(timestamp),'%Y-%m') month,
+      select strftime(to_timestamp(timestamp),'%Y-%m') AS month_key,
              count(*) AS row_count, count(distinct condition_id) AS condition_count,
              count(distinct sig_market_id) AS sig_market_count
       from chron group by 1 order by 1
     """).fetchdf().to_dict("records")
     price=con.execute("""
       select
-        avg(p_yes) mean_p,
-        quantile_cont(p_yes,0.01) p01, quantile_cont(p_yes,0.05) p05,
-        quantile_cont(p_yes,0.25) p25, quantile_cont(p_yes,0.5) p50,
-        quantile_cont(p_yes,0.75) p75, quantile_cont(p_yes,0.95) p95,
-        quantile_cont(p_yes,0.99) p99
+        avg(p_yes) AS mean_p,
+        quantile_cont(p_yes,0.01) AS p01, quantile_cont(p_yes,0.05) AS p05,
+        quantile_cont(p_yes,0.25) AS p25, quantile_cont(p_yes,0.5) AS p50,
+        quantile_cont(p_yes,0.75) AS p75, quantile_cont(p_yes,0.95) AS p95,
+        quantile_cont(p_yes,0.99) AS p99
       from chron
     """).fetchone()
     same_block=con.execute("""

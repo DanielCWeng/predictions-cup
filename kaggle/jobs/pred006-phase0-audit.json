@@ -7,5 +7,5 @@
   "timeout_minutes": 60,
   "download_outputs": true,
   "output_file_pattern": "(split_manifest|chronology_audit|universe_characterization)\\.json$",
-  "note": "PRED-006 Phase 0 rerun after DuckDB alias parser fix. Non-predictive chronology/split freeze only."
+  "note": "PRED-006 Phase 0 rerun after reserved-alias cleanup. Non-predictive chronology/split freeze only."
 }
