@@ -23566,8 +23566,11 @@
       "tokens": 596
     }
   },
-  "immutable_after_manifest_publication": true,
+  "immutability_note": "v1 Parquet payload objects are unchanged; this status manifest received a lifecycle annotation because v1 was never accepted.",
+  "immutable_after_manifest_publication": false,
   "object_prefix": "research/data004_ets_p0p1/v1/",
+  "original_manifest_sha256": "048bd5a59642f14c174316590adbdce220f9efabbf571a3a8348da30bc33ce72",
+  "quality_status": "BLOCKED_QUALITY_GATE",
   "repository_source_commit": "2c6cc87fb743c73fe04eed4a65c339c97f381817",
   "runtime_controls": {
     "polars_max_threads": 2,
@@ -39247,7 +39250,12 @@
     "trade_lake": "Polyleviathan canonical daily OCI trades Parquet",
     "trade_prefix": "trades/"
   },
-  "status": "BLOCKED_QUALITY_GATE",
+  "status": "BLOCKED_SUPERSEDED",
+  "superseded_by": {
+    "note": "v2 reuses v1 fill rows and re-derives only missing block numbers, ordering, and gate outputs.",
+    "oci_manifest": "research/data004_ets_p0p1/v2/MANIFEST.json",
+    "version": "v2"
+  },
   "timestamp_semantics": "UTC block timestamp from the upstream trades lake at one-second resolution; not a receive-time claim",
   "universe": {
     "acquisition_list_path": "data/research/r25_ets_math_graph/ETS_FILL_ACQUISITION.csv",

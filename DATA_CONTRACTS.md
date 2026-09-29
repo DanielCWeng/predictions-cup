@@ -213,41 +213,41 @@ families — the manifest confirms zero condition/token overlap between the two 
 See `docs/implementation/DATA_003_SIG_ACTUAL_FILLS.md`.
 
 
-## ETS P0/P1 market-graph fills — DATA-004 (BLOCKED / IN REVIEW)
+## ETS P0/P1 market-graph fills — DATA-004 (v2 BLOCKED / IN REVIEW)
 
-DATA-004 is an immutable Polymarket fill corpus for the frozen ETS acquisition and relationship
-graphs in `data/research/r25_ets_math_graph/`. Its universe is 298 Gamma-verified markets / 298
-conditions / 596 aligned outcome tokens: 210 `FILLS_P0` and 88 `FILLS_P1`. It preserves the
-market-graph edges, selected SIG exchange IDs, anchor classifications, and a frozen comparison
-plan against DATA-003. Metadata for all 1,279 frozen candidates / 2,558 tokens remains available;
-fill history is acquired only for P0/P1.
+DATA-004 v2 is the corrected review version of the frozen ETS acquisition and relationship graph
+corpus in `data/research/r25_ets_math_graph/`. The universe remains 298 Gamma-verified markets,
+298 conditions and 596 aligned outcome tokens: 210 `FILLS_P0` and 88 `FILLS_P1`. It preserves the
+market-graph links, SIG anchor classifications, and a pairing plan for 231 accepted DATA-003
+anchors. Metadata for all 1,279 frozen candidates / 2,558 tokens remains available; fill history is
+acquired only for P0/P1.
 
-- Each fill is keyed by `(tx_hash, log_index, token_id)` and retains source transaction, condition,
-  token, side, timestamp, participant addresses, exact decimal price/size/value, and source object
-  provenance. `block_number` is joined from canonical custody on transaction hash; missing or
-  conflicting custody evidence remains null and explicit, never imputed.
-- `side` retains the source signed-order value. `economic_direction` is `BUY`/`SELL` only when the
-  signed-order semantics support it; unknown values remain `UNKNOWN`. `order_role` is derived only
-  from registered exchange addresses. Neither field is a strategy label.
-- The source trade lake is Polyleviathan OCI (`polymarket-bot-state/trades/`) with the companion
-  custody prefix. Its live inventory is recorded in the manifest. Delivery is **Kaggle (pending
-  upload)** at `polyleviathan/sig-cup-data-004-ets-p0p1-fills`; the immutable OCI source copy is at
-  `research/data004_ets_p0p1/v1/`. Package and archive hashes are in
-  `data/manifests/fills/data_004_kaggle_run.json`. DATA-003 remains a separate Kaggle corpus.
-- `data004_baseline_pairing.json` maps the accepted 231 SIG anchors to DATA-003 market identities
-  and preserves direct/derived/near mapping semantics and graph relationships. It is a comparison
-  plan only; DATA-003 source histories are not reacquired or copied into DATA-004.
-- Metadata, fill-key completeness, custody-derived block provenance, chronological order,
-  economic bounds, maker/taker size symmetry, source-date completeness, and per-market/token/event
-  coverage are explicit gates. The gate outcome and any source gaps are recorded in the manifest;
-  a failed gate blocks research promotion while preserving the immutable source evidence.
-- DATA-004 v1 has 231,964 raw and retained fill rows. Its quality status is
-  `BLOCKED_QUALITY_GATE`: 4,989 rows lack custody-derived block numbers on 2026-09-20/21, making
-  those rows unorderable, and the source-limited maker/taker match-equivalent size audit has
-  4,418 mismatched and 124,293 one-sided buckets. No blocks were imputed. All 298 markets have
-  observed fills; no market has a zero-fill classification.
+- Each fill is keyed by `(tx_hash, log_index, token_id)` and retains the source event fields,
+  market/event context, SIG graph links and trade/custody object provenance. The serialized Parquet
+  prices/sizes/values retain the source schema; the conservation audit applies `Decimal(str(value))`
+  with no epsilon tolerance. Signed `side` remains separate from economic direction.
+- For the custody-object gap on 2026-09-20/21, v2 derives `block_number` from the fill's Unix-second
+  timestamp only when `public.block_timestamps` has exactly one block at that `ts`. The method was
+  validated against all 9,803 custody-known fills on 2026-09-15 through 2026-09-19 with 100%
+  agreement. All 4,989 gap rows map uniquely; their provenance is
+  `block_timestamps_unique_ts`. v2 has zero missing or imputed blocks and passes strict per-token
+  `(block_number, log_index)` ordering. v1's fill objects remain unchanged and are marked
+  `BLOCKED_SUPERSEDED` in their status manifest.
+- The corrected size-conservation gate groups by `(tx_hash, condition_id)`, summing all taker-order
+  rows against maker-order rows with exact Decimal arithmetic. 96,587 of 96,630 groups match
+  exactly; 43 groups retain a difference of exactly ±0.0001 shares. A targeted read-only source
+  lookup found no out-of-scope fill rows for those 43 transactions. They are individually listed in
+  `maker_taker_tx_condition_residuals.csv`, remain unexplained, and keep v2
+  `BLOCKED_QUALITY_GATE`.
+- OCI is the immutable source copy at `research/data004_ets_p0p1/v2/`. Delivery is **Kaggle (pending
+  team upload)** at `polyleviathan/sig-cup-data-004-ets-p0p1-fills`; the package and archive are
+  prepared under `/home/ubuntu/inbox/data004_20260929/` and handed off in
+  `data/kaggle_handoff/data004/`. The source manifest, quality gates, and upload record are in
+  `data/research/data004_ets_p0p1/v2/` and `data/manifests/fills/data_004_kaggle_run.json`.
+- `data004_baseline_pairing.json` remains a plan only. DATA-003 source histories were not reacquired
+  or copied into DATA-004. There is no order-book history or R3 predictive/fair-value result.
 
-See `docs/implementation/DATA_004_ETS_P0P1_FILLS.md`.
+See `docs/implementation/DATA_004_ETS_P0P1_FILLS.md` and the seven-item campaign report.
 
 
 ## Strategy / execution boundary

@@ -1,0 +1,64 @@
+{
+  "decimal_conversion": "Decimal(str(Parquet value)); price complement computed as Decimal(1) - price; no epsilon tolerance.",
+  "grouping": [
+    "tx_hash",
+    "condition_id",
+    "canonical_token_id",
+    "canonical_price"
+  ],
+  "maker_rows_in_buckets": 135334,
+  "maker_size_total": "10265429.4071",
+  "method": "Decimal aggregation by (tx_hash, condition_id, complementary token-price class); token A at p is paired with token B at 1-p, and same-token same-price rows share the same class.",
+  "pass_before_scope_attribution": false,
+  "per_tx_condition_conservation": {
+    "exact_equal_size_groups": 96587,
+    "grouping": [
+      "tx_hash",
+      "condition_id"
+    ],
+    "groups_checked": 96630,
+    "max_abs_size_delta": "0.0001",
+    "method": "Group all order_is_match_taker_order rows against maker rows by (tx_hash, condition_id); sum size_shares using Decimal(str(value)) and no tolerance. This includes same-token price levels and the condition's complementary token at 1-p within the transaction-condition total.",
+    "mismatched_size_groups": 43,
+    "one_sided_groups": 0,
+    "pass_before_scope_attribution": false,
+    "residual_groups": 43,
+    "residuals_csv": "maker_taker_tx_condition_residuals.csv",
+    "residuals_sha256": "5dda9b6d53b53fca55aefb3b13a89d989395801e5f4264de893bc0650e0a2d12"
+  },
+  "price_indexed_diagnostic": {
+    "exact_equal_size_buckets": 89752,
+    "groups_checked": 113080,
+    "interpretation": "Descriptive only: a taker order's price/size can aggregate multiple maker order price levels, so price-indexed buckets are not the transaction-condition conservation gate.",
+    "max_abs_size_delta": "30000.0",
+    "mismatched_size_buckets": 74,
+    "one_sided_buckets": 23254,
+    "paired_buckets": 89826
+  },
+  "residual_buckets": 23328,
+  "residual_buckets_by_cause": {
+    "UNEXPLAINED_RESIDUAL": 43,
+    "exact_groups": 96587,
+    "one_sided_groups": 0,
+    "outside_scope_explained_residual": 0
+  },
+  "residual_cause_counts": {
+    "UNEXPLAINED_RESIDUAL": 43
+  },
+  "scope": {
+    "conditions": 298,
+    "fill_rows": 231964,
+    "markets": 298,
+    "tokens": 596
+  },
+  "scope_audit": {
+    "outside_scope_fill_rows": 0,
+    "remaining_unexplained_residuals_csv": "maker_taker_tx_condition_residuals.csv",
+    "remaining_unexplained_residuals_sha256": "5dda9b6d53b53fca55aefb3b13a89d989395801e5f4264de893bc0650e0a2d12",
+    "transactions_checked": 43,
+    "unexplained_residual_groups": 43
+  },
+  "taker_rows_in_buckets": 96630,
+  "taker_size_total": "10265429.4068",
+  "unknown_role_rows_excluded": 0
+}

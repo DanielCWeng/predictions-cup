@@ -103,23 +103,27 @@ to transfer from historical election families into the actual Cup universe.
 
 ## DATA-004 — ETS P0/P1 graph universe (BLOCKED / IN REVIEW)
 
-DATA-004 freezes 298 selected Gamma markets (210 P0 and 88 P1), their 596 outcome tokens, 1,596
+DATA-004 v2 freezes 298 selected Gamma markets (210 P0 and 88 P1), their 596 outcome tokens, 1,596
 market-graph links, and 134 selected SIG exchange IDs. The comparison plan covers 231 accepted SIG
 anchors and records their direct/derived/near DATA-003 source identities without copying or
-reacquiring those histories. The immutable source copy is in OCI at
-`research/data004_ets_p0p1/v1/`; Kaggle delivery is pending manual upload. The prepared archive hash
-and command are in `data/manifests/fills/data_004_kaggle_run.json`. This branch carries the
-manifest, gate evidence, per-market/condition/token/event/date coverage, full source-day inventory,
-and samples. The Kaggle package also retains metadata for all 1,279 frozen candidates / 2,558 tokens
-and the complete 5,422-row market graph; only P0/P1 fill histories were acquired. The final status
-and measured row counts are in
-`data/research/data004_ets_p0p1/v1/data004_manifest.json` and the campaign lane's `REPORT.md`.
+reacquiring those histories. OCI v2 is the source copy at
+`research/data004_ets_p0p1/v2/`; Kaggle delivery is pending team upload from the GitHub package under
+`data/kaggle_handoff/data004/`. The upload record is in
+`data/manifests/fills/data_004_kaggle_run.json`. This branch carries the manifest, gate evidence,
+per-market/condition/token/event/date coverage, source-day inventory, residual audit and samples.
+The package retains metadata for all 1,279 frozen candidates / 2,558 tokens and the complete
+5,422-row market graph; only P0/P1 fill histories were acquired.
 
-The manifest records 231,964 fills and five failed gate entries: missing block provenance on 4,989
-rows across 2026-09-20/21, unorderable rows from that gap, and an unresolved maker/taker size audit
-with 4,418 mismatched and 124,293 one-sided groups. All 298 markets have fills. Keep the corpus
-blocked until the provenance gap and symmetry audit are resolved; do not expand the scope or start
-R3. This branch does not change canonical `main`.
+The v1 Parquet objects remain unchanged. Its status manifest is `BLOCKED_SUPERSEDED` and points to
+v2. v2 reuses all 231,964 v1 rows without rescanning the trade lake. For the 4,989 rows missing
+custody blocks on 2026-09-20/21, the unique timestamp mapping agreed with custody on all 9,803
+validation rows from 2026-09-15 through 2026-09-19. All 4,989 gap rows map uniquely; v2 has zero
+missing/imputed blocks and zero per-token ordering failures.
+
+Conservation is the only failed v2 gate: 96,587 of 96,630 `(tx_hash, condition_id)` groups match
+exactly, while 43 retain a ±0.0001-share difference. A targeted source lookup found no out-of-scope
+fill rows for these transactions. Keep the corpus blocked until those residuals are explained; do
+not expand scope or start R3. PR #59 remains open, so this branch is not canonical `main`.
 
 ## Research programme state
 
@@ -261,10 +265,10 @@ These are runtime-acceptance tasks, not mapping-discovery tasks.
 
 ## Branch state
 
-After the 28 September reconciliation:
+After the 28 September reconciliation and DATA-004 v2 addendum:
 
 - merged: PR #38, #41, #42, #43, #44, #47 and #48;
-- open/blocked: PR #45 only;
+- open/blocked: PR #45, #50 and #59;
 - historical, backup, preregistration, review and superseded research branches may remain on GitHub
   as provenance refs but are not canonical capability unless merged into `main`.
 

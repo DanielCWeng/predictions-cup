@@ -28,7 +28,7 @@ status does not imply alpha, strategy promotion or execution readiness.
 | Dataset | Scope | Status | Use |
 |---|---|---|---|
 | DATA-003 | Accepted SIG mapping actual-market fills with DATA-002 fee evidence | MERGED / ACCEPTED | Actual mapped-universe replication; explicit custody gaps. |
-| DATA-004 | Frozen ETS P0/P1 Polymarket market-graph fills with block provenance and DATA-003 anchor pairing | BLOCKED / IN REVIEW | 4,989 rows lack custody block provenance and maker/taker symmetry remains unresolved; do not expand scope or start R3. Kaggle upload is pending; OCI is the immutable source copy. |
+| DATA-004 | Frozen ETS P0/P1 Polymarket market-graph fills with block provenance and DATA-003 anchor pairing | BLOCKED / IN REVIEW | v2 resolves 4,989 custody-gap blocks using a unique timestamp join validated on 9,803 custody-known fills and passes ordering. 43 exact-decimal maker/taker size residuals remain unexplained; do not expand scope or start R3. Kaggle upload is pending team handoff; OCI v2 is the source copy. |
 
 ## Registry discipline
 

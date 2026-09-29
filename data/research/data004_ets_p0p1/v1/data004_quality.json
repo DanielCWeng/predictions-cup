@@ -1483,6 +1483,11 @@
       "tokens": 596
     }
   },
+  "lifecycle_status": "BLOCKED_SUPERSEDED",
   "status": "BLOCKED_QUALITY_GATE",
+  "superseded_by": {
+    "manifest": "data/research/data004_ets_p0p1/v2/data004_manifest.json",
+    "version": "v2"
+  },
   "version": "v1"
 }

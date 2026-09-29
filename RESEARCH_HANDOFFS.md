@@ -13,7 +13,7 @@ Accepted research is implementation input, not automatic strategy promotion.
 | EXPERIMENT-005E | Participant-behaviour primary hypothesis is null. | Do not promote participant ecology as primary price alpha; secondary flow diagnostics require fresh preregistration. | MERGED |
 | EXPERIMENT-005F | Economic-BBO age robustly predicts update hazard across PRE/ACTIVE and ACTIVE jump hazard; long-delay persistence is substantial. | Treat staleness/renewal as a persistent state feature for later baseline/shadow engines, not short-lived causal lead-lag. | MERGED |
 | DATA-003 | Fresh fills scoped to the accepted 2026 SIG mapping are available with explicit coverage gaps. | Preferred surface for actual-universe replication before live promotion. | MERGED / ACCEPTED |
-| DATA-004 | Frozen ETS P0/P1 Polymarket fills retain the mathematical market graph, SIG anchors, and DATA-003 comparison plan. | Resolve the 2026-09-20/21 custody gap and maker/taker symmetry audit before scope expansion or R3; package is ready for manual Kaggle upload with OCI as the immutable source copy. | BLOCKED / IN REVIEW |
+| DATA-004 | Frozen ETS P0/P1 Polymarket fills retain the mathematical market graph, SIG anchors, and DATA-003 comparison plan. v2 resolves all block numbers with a 100%-validated unique timestamp join and passes per-token ordering. | Investigate 43 exact-decimal ±0.0001-share maker/taker residuals (no out-of-scope rows found) before scope expansion or R3. OCI v2 is the source copy; the Kaggle package is pending team upload from the GitHub handoff. | BLOCKED / IN REVIEW |
 
 No handoff in this file creates execution capability. Strategy/fair-value/risk/execution modules remain
 separately gated.
