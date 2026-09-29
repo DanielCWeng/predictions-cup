@@ -668,13 +668,15 @@ class LaunchSigRecorder(SigRealtimeRecorder):
         observed_at: datetime,
         payload: dict[str, object],
     ) -> None:
-        super().record_health(observed_at=observed_at, payload=payload)
+        combined = dict(payload)
+        combined["research_storage"] = self.capture_health_snapshot()
+        super().record_health(observed_at=observed_at, payload=combined)
         self._emit_normalized(
             event_type="CAPTURE_HEALTH",
             observed_at=observed_at,
             provenance="LOCAL_STATE_ENGINE",
             evidence_label="LOCAL_HEALTH_STATE",
-            payload=payload,
+            payload=combined,
         )
 
     def record_transition(
