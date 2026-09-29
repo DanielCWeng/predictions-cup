@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "attempt": "PRED006_HAZARD_V3",
+  "github_actions_run": 36596965491,
+  "disposition": "METHODOLOGICALLY_INVALIDATED_AFTER_DEV_RESULT_INSPECTION_BEFORE_SHORTLIST_FREEZE",
+  "reason": "Hazard V3 retained row-level economic fills, so later fills in the same Polygon block could be treated as future observations. This violates the frozen block-end observability rule.",
+  "observed_dev_result_note": "V3 appeared strong on DEV, but those metrics are excluded from selection and conclusions.",
+  "correction": "V4 aggregates all contemporaneous fields to condition-block-end and requires the target price change to occur in a strictly later Polygon block.",
+  "final_rows_accessed": false,
+  "final_effect": "None; FINAL remains sealed.",
+  "fresh_confirmation_status": "V4 is a corrected DEV rerun, not fresh confirmation."
+}

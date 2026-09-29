@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "attempt": "PRED006_SEARCH_ATTEMPT_2",
+  "github_actions_run": 36584784354,
+  "disposition": "METHODOLOGICALLY_INVALIDATED_BEFORE_RESULT_INSPECTION",
+  "predictive_metrics_inspected": false,
+  "reason": "Row-level observations could treat later fills from the same Polygon block as future/actionable. V3 moves the observation unit to condition-block-end and targets only post-block states.",
+  "final_rows_accessed": false,
+  "effect": "Attempt 2 outputs, if any, are excluded from all ledgers, selection and conclusions."
+}

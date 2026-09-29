@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "status",
+  "kernel": "polyleviathan/pred006-one-shot-final",
+  "note": "PRED-006 FINAL has been consumed exactly once. This manifest is permanently read-only. Do not change it back to action=run; no rerun, retune, rescue, subsetting, or horizon/feature changes are permitted."
+}
