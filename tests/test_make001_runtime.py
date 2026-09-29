@@ -324,21 +324,21 @@ def test_runtime_session_namespace_prevents_operation_identity_reuse_after_resta
     bridge = _Bridge()
     first = _Coordinator()
     second = _Coordinator()
-    common = {
-        "bridge": cast(MakerSourceBridge, bridge),
-        "polymarket_feed_trusted": lambda: True,
-        "wall_clock": lambda: datetime(2026, 9, 29, 14, 0, tzinfo=UTC),
-        "mono_clock": lambda: 100,
-    }
     runtime_a = MakerRuntimeLoop(
+        bridge=cast(MakerSourceBridge, bridge),
         coordinator=cast(MakerCoordinator, first),
+        polymarket_feed_trusted=lambda: True,
+        wall_clock=lambda: datetime(2026, 9, 29, 14, 0, tzinfo=UTC),
+        mono_clock=lambda: 100,
         runtime_session_id="session-a",
-        **common,
     )
     runtime_b = MakerRuntimeLoop(
+        bridge=cast(MakerSourceBridge, bridge),
         coordinator=cast(MakerCoordinator, second),
+        polymarket_feed_trusted=lambda: True,
+        wall_clock=lambda: datetime(2026, 9, 29, 14, 0, tzinfo=UTC),
+        mono_clock=lambda: 100,
         runtime_session_id="session-b",
-        **common,
     )
 
     runtime_a.notify_sig({"36"}, observed_monotonic_ns=90)
