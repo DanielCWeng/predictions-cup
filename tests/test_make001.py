@@ -239,7 +239,12 @@ def _engine(
     max_inventory: float = 10.0,
     max_age_ns: int = 100_000_000,
 ) -> MakerEngine:
-    provider = DirectPolymarketFairValueProvider(_mapping(mapping_class=mapping_class, direction=direction))
+    provider = DirectPolymarketFairValueProvider(
+        _mapping(
+            mapping_class=mapping_class,
+            direction=direction,
+        )
+    )
     return MakerEngine(
         fair_value=provider,
         predictive=NullPredictiveAdjuster(),
