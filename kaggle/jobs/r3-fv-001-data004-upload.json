@@ -23,5 +23,7 @@
     "tokens": 596,
     "deduped_fill_rows": 231964
   },
-  "existing_policy": "reuse_if_manifest_matches"
+  "existing_policy": "reuse_if_manifest_matches",
+  "attempt": 2,
+  "retry_reason": "Kaggle datasets status returned 403 for an absent/private slug; existence now uses exact owned-dataset search before create."
 }
