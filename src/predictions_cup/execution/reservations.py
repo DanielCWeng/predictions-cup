@@ -78,6 +78,19 @@ class ExecutionReservationBook:
             for intent_id in intent_ids
         )
 
+    def release_operation(self, logical_operation_id: str) -> int:
+        """Release only reservations owned by one conclusively dead operation."""
+        if not logical_operation_id.strip():
+            raise ValueError("logical_operation_id must not be blank")
+        intent_ids = tuple(
+            intent_id
+            for intent_id, reservation in self._by_intent.items()
+            if reservation.logical_operation_id == logical_operation_id
+        )
+        for intent_id in intent_ids:
+            del self._by_intent[intent_id]
+        return len(intent_ids)
+
     def intent_ids(self) -> frozenset[str]:
         return frozenset(self._by_intent)
 
