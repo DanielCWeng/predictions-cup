@@ -5,6 +5,6 @@
   "kernel": "polyleviathan/r3-fv-001-structural-math-corrected",
   "poll_seconds": 20,
   "timeout_minutes": 180,
-  "output_dir": "data/research/r3_fv_001/structural_math_run",
-  "note": "Corrected R3 TRAIN/DEV structural-math run. DATA-004 sources + DATA-003 targets only. FINAL must remain unopened."
+  "download_outputs": true,
+  "note": "Attempt 2 of the same frozen corrected R3 TRAIN/DEV structural-math experiment. The only code change handles an empty governorship inverse support set as INSUFFICIENT_SUPPORT instead of crashing. DATA-004 sources + DATA-003 targets only; FINAL remains unopened."
 }
