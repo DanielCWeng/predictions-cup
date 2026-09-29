@@ -15,7 +15,7 @@ from predictions_cup.maker.lifecycle import (
     QuoteRegistry,
 )
 from predictions_cup.maker.policies import (
-    AvellanedaStoikovInventoryModel,
+    BinaryCaraInventoryModel,
     ConservativeEligibilityPolicy,
     ConservativeSpreadPolicy,
     InventoryConfidenceSizePolicy,
@@ -60,10 +60,8 @@ def build_maker_components(
         ),
         predictive=NullPredictiveAdjuster(),
         toxicity=NullToxicityProvider(),
-        inventory=AvellanedaStoikovInventoryModel(
+        inventory=BinaryCaraInventoryModel(
             risk_aversion=settings.maker_inventory_risk_aversion,
-            variance_horizon=settings.maker_variance_horizon,
-            variance_floor=settings.maker_variance_floor,
         ),
         spread=ConservativeSpreadPolicy(
             base_half_spread_ticks=settings.maker_base_half_spread_ticks,
