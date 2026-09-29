@@ -166,26 +166,11 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                             settings.sig_realtime_token_refresh_margin_seconds
                         ),
                     )
-                    recorder.begin_connection(
-                        reason=reason.value,
-                        observed_at=datetime.now(UTC),
-                    )
-                    try:
-                        outcome = await subscriber.run(
-                            on_batch=engine.handle_raw_batch,
-                            on_connected=engine.mark_connected,
-                            stop_event=stop_event,
-                            on_maintenance=engine.maintenance,
-                        )
-                    except Exception:
-                        recorder.end_connection(
-                            outcome="exception",
-                            observed_at=datetime.now(UTC),
-                        )
-                        raise
-                    recorder.end_connection(
-                        outcome=outcome.value,
-                        observed_at=datetime.now(UTC),
+                    outcome = await subscriber.run(
+                        on_batch=engine.handle_raw_batch,
+                        on_connected=engine.mark_connected,
+                        stop_event=stop_event,
+                        on_maintenance=engine.maintenance,
                     )
                 except SigApiError as exc:
                     engine.mark_disconnected()
