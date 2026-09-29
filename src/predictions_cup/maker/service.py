@@ -233,6 +233,14 @@ class MakerService:
                 coordinator=coordinator,
                 polymarket_feed_trusted=lambda: self.pm_health.websocket_connected,
                 telemetry=self.telemetry,
+                # LIVE writes are paced one exchange at a time so the asyncio
+                # shell regains control between governed REST operations and
+                # snapshots the next market from current state.
+                max_exchanges_per_cycle=(
+                    1
+                    if self.core.risk_context.mode is ExecutionMode.LIVE
+                    else None
+                ),
             )
 
             async def account_resync() -> AccountAuthoritativeSnapshot:
