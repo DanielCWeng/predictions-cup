@@ -53,6 +53,41 @@ def test_defaults_load_without_credentials(
     assert settings.polymarket_research_path == Path("data/polymarket_research")
 
 
+def test_maker_freshness_defaults_cover_sig_refresh_intervals(
+    clean_config_env: None,
+) -> None:
+    del clean_config_env
+    settings = AppSettings()
+
+    assert settings.maker_max_bbo_age_ms >= int(
+        settings.sig_realtime_bulk_price_refresh_seconds * 1_000
+    )
+    assert settings.maker_max_depth_age_ms >= int(
+        settings.sig_realtime_open_book_refresh_seconds * 1_000
+    )
+
+
+def test_maker_rejects_freshness_windows_shorter_than_sig_refresh_contracts(
+    clean_config_env: None,
+) -> None:
+    del clean_config_env
+    with pytest.raises(ValidationError):
+        AppSettings.model_validate(
+            {
+                "maker_max_bbo_age_ms": 1_000,
+                "sig_realtime_bulk_price_refresh_seconds": 10.0,
+            }
+        )
+    with pytest.raises(ValidationError):
+        AppSettings.model_validate(
+            {
+                "maker_require_trusted_depth": True,
+                "maker_max_depth_age_ms": 1_000,
+                "sig_realtime_open_book_refresh_seconds": 30.0,
+            }
+        )
+
+
 def test_tracked_depth_runtime_configuration_is_external_and_nonsecret(
     clean_config_env: None,
     tmp_path: Path,
