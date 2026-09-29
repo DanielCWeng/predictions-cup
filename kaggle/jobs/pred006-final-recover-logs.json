@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "logs",
+  "kernel": "polyleviathan/pred006-one-shot-final",
+  "note": "Recovery of logs from the already-completed one-shot PRED-006 FINAL kernel. Read-only; does not push or rerun the kernel."
+}
