@@ -263,7 +263,7 @@ def _engine(
     )
 
 
-def test_direct_pm_same_complement_and_staleness_fail_closed() -> None:
+def test_direct_pm_preserves_value_orientation_and_source_observation_age() -> None:
     same = DirectPolymarketFairValueProvider(_mapping())
     snapshot = replace(
         _maker_snapshot(),
@@ -290,7 +290,9 @@ def test_direct_pm_same_complement_and_staleness_fail_closed() -> None:
             "token-yes": _external(bid=0.29, ask=0.31, observed_ns=899)
         },
     )
-    assert complement.fair_value(stale).usable is False
+    stale_result = complement.fair_value(stale)
+    assert stale_result.usable is True
+    assert stale_result.observed_monotonic_ns == 899
 
 
 def test_derived_partition_sum_and_no_trade_are_explicit() -> None:
