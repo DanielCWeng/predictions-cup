@@ -49,7 +49,7 @@ def _scanner(root: Path, stream: str, columns: tuple[str, ...]) -> Any | None:
     if not files:
         return None
     dataset = ds.dataset([str(path) for path in files], format="parquet")
-    available = tuple(column for column in columns if column in dataset.schema.names)
+    available = [column for column in columns if column in dataset.schema.names]
     return dataset.scanner(columns=available, batch_size=65_536)
 
 
