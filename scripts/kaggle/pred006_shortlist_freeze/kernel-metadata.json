@@ -11,7 +11,7 @@
   "dataset_sources": [],
   "competition_sources": [],
   "kernel_sources": [
-    "polyleviathan/pred006-phase0-audit",
+    "polyleviathan/pred006-phase0-audit-and-split-freeze",
     "polyleviathan/pred006-search-temporal",
     "polyleviathan/pred006-search-cross-market",
     "polyleviathan/pred006-search-participant-flow",
