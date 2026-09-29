@@ -1,3 +1,4 @@
+# ruff: noqa
 from __future__ import annotations
 
 import csv
@@ -128,57 +129,78 @@ def aggregate_features(
 ) -> dict[str, Any]:
     if len(times) == 0:
         return {}
-    counts = {}
+
+    counts: dict[str, int] = {}
     for token in source_tokens:
         series = series_by_token[token]
         counts[token] = int(np.count_nonzero(series.times_ns < train_cutoff))
+
     top_source = sorted(source_tokens, key=lambda tok: (-counts[tok], tok))[0]
     raw_w = {tok: math.sqrt(1.0 + counts[tok]) for tok in source_tokens}
 
     n = len(times)
-    sums = {name: np.zeros(n, dtype=float) for name in ("ew1", "ew5", "attn1", "attn5", "delay1", "delay5")}
-    den = {name: np.zeros(n, dtype=float) for name in ("ew1", "ew5", "attn1", "attn5", "delay1", "delay5")}
+    names = ("ew1", "ew5", "attn1", "attn5", "delay1", "delay5")
+    sums = {name: np.zeros(n, dtype=float) for name in names}
+    den = {name: np.zeros(n, dtype=float) for name in names}
+    support = {name: np.zeros(n, dtype=float) for name in names}
     top1 = np.full(n, np.nan)
     top5 = np.full(n, np.nan)
     freshness_ns = seconds_ns(FRESHNESS_SECONDS)
+    delayed_times = times - seconds_ns(300)
 
     for token in source_tokens:
         series = series_by_token[token]
         move1, valid1 = feature_move(series, times, 1, freshness_ns)
         move5, valid5 = feature_move(series, times, 5, freshness_ns)
-        delayed_times = times - seconds_ns(300)
         delay1, dvalid1 = feature_move(series, delayed_times, 1, freshness_ns)
         delay5, dvalid5 = feature_move(series, delayed_times, 5, freshness_ns)
         weight = raw_w[token]
 
         sums["ew1"][valid1] += move1[valid1]
         den["ew1"][valid1] += 1.0
+        support["ew1"][valid1] += 1.0
+
         sums["ew5"][valid5] += move5[valid5]
         den["ew5"][valid5] += 1.0
+        support["ew5"][valid5] += 1.0
+
         sums["attn1"][valid1] += weight * move1[valid1]
         den["attn1"][valid1] += weight
+        support["attn1"][valid1] += 1.0
+
         sums["attn5"][valid5] += weight * move5[valid5]
         den["attn5"][valid5] += weight
+        support["attn5"][valid5] += 1.0
+
         sums["delay1"][dvalid1] += weight * delay1[dvalid1]
         den["delay1"][dvalid1] += weight
+        support["delay1"][dvalid1] += 1.0
+
         sums["delay5"][dvalid5] += weight * delay5[dvalid5]
         den["delay5"][dvalid5] += weight
+        support["delay5"][dvalid5] += 1.0
 
         if token == top_source:
             top1 = move1
             top5 = move5
 
-    out: dict[str, Any] = {"top_source": top_source, "source_update_counts_train": counts}
-    for name in sums:
+    out: dict[str, Any] = {
+        "top_source": top_source,
+        "source_update_counts_train": counts,
+        "top1": top1,
+        "top5": top5,
+    }
+    for name in names:
         values = np.full(n, np.nan)
-        need = MIN_SOURCES if name != "top1" and name != "top5" else 1
         mask = den[name] > 0
         values[mask] = sums[name][mask] / den[name][mask]
         out[name] = values
-    out["source_support_1s"] = den["ew1"]
-    out["source_support_5s"] = den["ew5"]
-    out["delayed_source_support_1s"] = np.asarray([0.0] * n)\n    out["delayed_source_support_5s"] = np.asarray([0.0] * n)\n    for token in source_tokens:\n        series = series_by_token[token]\n        delayed_times = times - seconds_ns(300)\n        _, dvalid1 = feature_move(series, delayed_times, 1, freshness_ns)\n        _, dvalid5 = feature_move(series, delayed_times, 5, freshness_ns)\n        out["delayed_source_support_1s"][dvalid1] += 1.0\n        out["delayed_source_support_5s"][dvalid5] += 1.0\n    return out
 
+    out["source_support_1s"] = support["ew1"]
+    out["source_support_5s"] = support["ew5"]
+    out["delayed_source_support_1s"] = support["delay1"]
+    out["delayed_source_support_5s"] = support["delay5"]
+    return out
 
 def fit_predict(
     fit_ols: Any,
