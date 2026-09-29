@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "action": "wait_output",
+  "kernel": "polyleviathan/005b-data003-seven-horizon-confirmation",
+  "poll_seconds": 60,
+  "timeout_minutes": 330,
+  "output_file_pattern": ".*(data003_confirmation_results\\.json|FINAL_REPORT\\.md)$",
+  "note": "Wait for fresh seven-horizon DATA-003 confirmation to finish, then download only the compact result JSON and report."
+}
