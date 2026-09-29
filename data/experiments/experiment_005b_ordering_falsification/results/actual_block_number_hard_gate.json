@@ -1,0 +1,126 @@
+{
+  "all_families_pass": true,
+  "classification": "POST_HOC_FALSIFICATION_ONLY",
+  "experiment_id": "EXPERIMENT-005B-ORDERING-FALSIFICATION",
+  "failures": [],
+  "families": [
+    {
+      "block_count": 2427167,
+      "block_timestamp_sha256": "f2af7ea6fdad9994ba19cd16fbc84bf23bc9e4175614920dadb34ef39089b65c",
+      "checks": {
+        "distinct_blocks_sharing_timestamp": true,
+        "duplicate_block_log_groups": true,
+        "economic_rows": true,
+        "mapped_block_count": true,
+        "mapped_tx_count": true,
+        "missing_block_numbers": true,
+        "missing_block_timestamps": true,
+        "parent_canonical_sha256": true,
+        "timestamp_mismatches": true,
+        "tx_count": true
+      },
+      "economic_rows": 7890463,
+      "family": "US_2024",
+      "passed": true,
+      "report_sha256": "1d3f45ac07abf0f3a5786fcc523d4b2d8cb51cde31da475418e68d8ed86ec552",
+      "tx_block_sha256": "364749641a7c3a7e0e251b376f924d92ec7b38923443306b18a9fe3339e477e6",
+      "tx_count": 6821998
+    },
+    {
+      "block_count": 214121,
+      "block_timestamp_sha256": "047eb3be2519be06315a749b333e5cf6e8f90e31f271dcfd481961bf7c3d4907",
+      "checks": {
+        "distinct_blocks_sharing_timestamp": true,
+        "duplicate_block_log_groups": true,
+        "economic_rows": true,
+        "mapped_block_count": true,
+        "mapped_tx_count": true,
+        "missing_block_numbers": true,
+        "missing_block_timestamps": true,
+        "parent_canonical_sha256": true,
+        "timestamp_mismatches": true,
+        "tx_count": true
+      },
+      "economic_rows": 512901,
+      "family": "CAN_2025",
+      "passed": true,
+      "report_sha256": "e491463901fda4b630e93d22402155f68311f8b2da07dd7ece7a22f6190fe856",
+      "tx_block_sha256": "e5f020282037dd8e079a1ca0c36329d0632db98cba65564778abfd15720265e0",
+      "tx_count": 340791
+    },
+    {
+      "block_count": 167374,
+      "block_timestamp_sha256": "cc5f3149435c7ed7cb5b3a554b7a490e22c7651a31efa36a4c136b9115ab05e4",
+      "checks": {
+        "distinct_blocks_sharing_timestamp": true,
+        "duplicate_block_log_groups": true,
+        "economic_rows": true,
+        "mapped_block_count": true,
+        "mapped_tx_count": true,
+        "missing_block_numbers": true,
+        "missing_block_timestamps": true,
+        "parent_canonical_sha256": true,
+        "timestamp_mismatches": true,
+        "tx_count": true
+      },
+      "economic_rows": 412863,
+      "family": "COL_2026",
+      "passed": true,
+      "report_sha256": "e22a9f313ab72488c2156f83ae9d39bcf9b3b026bb5ede2a36c53783d0a4f2cb",
+      "tx_block_sha256": "e9ea949eb3b002cb1270f417e3c1f94f3f2f016cf6e24543936ec1e6f78e4a4d",
+      "tx_count": 279775
+    },
+    {
+      "block_count": 182850,
+      "block_timestamp_sha256": "e441abeb64aeaeb1d6a7e10ea458c449a6ace4060df776e64a56d61eda3f7774",
+      "checks": {
+        "distinct_blocks_sharing_timestamp": true,
+        "duplicate_block_log_groups": true,
+        "economic_rows": true,
+        "mapped_block_count": true,
+        "mapped_tx_count": true,
+        "missing_block_numbers": true,
+        "missing_block_timestamps": true,
+        "parent_canonical_sha256": true,
+        "timestamp_mismatches": true,
+        "tx_count": true
+      },
+      "economic_rows": 505395,
+      "family": "HUN_2026",
+      "passed": true,
+      "report_sha256": "37c1c4141b70e6a777faabfb884d055944a2f82ae0e81074f61e0293cbfe3026",
+      "tx_block_sha256": "421e870bf4dd106a4b65c16ac33980d6b3bdbb6dade6f4f4bae36f0362225a93",
+      "tx_count": 333329
+    },
+    {
+      "block_count": 230812,
+      "block_timestamp_sha256": "aa85d184bf9ec488ea901b49bab2a5ffa69097a1f3adb052c5339f1e0265eadc",
+      "checks": {
+        "distinct_blocks_sharing_timestamp": true,
+        "duplicate_block_log_groups": true,
+        "economic_rows": true,
+        "mapped_block_count": true,
+        "mapped_tx_count": true,
+        "missing_block_numbers": true,
+        "missing_block_timestamps": true,
+        "parent_canonical_sha256": true,
+        "timestamp_mismatches": true,
+        "tx_count": true
+      },
+      "economic_rows": 750233,
+      "family": "PER_2026",
+      "passed": true,
+      "report_sha256": "427b9c3d4a50e95de655fb7d470013da9707bcc0db33240798865a6586403420",
+      "tx_block_sha256": "a66a5559e8d58fe76bf4f5fe2f6995a7fbd46c2e844c1a9d878ea6d3d94e8c32",
+      "tx_count": 460795
+    }
+  ],
+  "schema_version": 1,
+  "source": "Polygon archival JSON-RPC",
+  "stage": "ACTUAL_BLOCK_NUMBER_HARD_GATE",
+  "totals": {
+    "block_count": 3222324,
+    "economic_rows": 10071855,
+    "tx_count": 8236688
+  }
+}
