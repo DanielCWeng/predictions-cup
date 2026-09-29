@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
   "action": "status",
-  "kernel": "polyleviathan/pred006-final",
-  "note": "Read-only monitoring probe for the already-launched one-shot PRED-006 FINAL kernel. Does not push, rerun, download outputs, or alter scientific state."
+  "kernel": "polyleviathan/pred006-one-shot-final",
+  "note": "Read-only monitoring probe for the already-launched PRED-006 FINAL execution. Candidate slug derived from the Kaggle title; does not push, rerun, download outputs, or alter scientific state."
 }
