@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
 """Offline reproducibility audit for the frozen R2.5 ETS mathematical graph."""
 
+import collections
 import csv
 import hashlib
 import json
-from collections import Counter
-from pathlib import Path
-from typing import Any
+import pathlib
+import typing
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 GRAPH = ROOT / "data/research/r25_ets_math_graph"
 SOURCE = ROOT / "data/research/r25_ets_v2_market_review"
 MANIFEST = GRAPH / "ETS_REPRODUCIBILITY_MANIFEST.json"
 
 
-def sha256(path: Path) -> str:
+def sha256(path: pathlib.Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def csv_rows(path: Path) -> list[dict[str, str]]:
+def csv_rows(path: pathlib.Path) -> list[dict[str, str]]:
     with path.open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
 
@@ -29,7 +29,7 @@ def require(condition: bool, message: str) -> None:
         raise RuntimeError(message)
 
 
-def verify_hashes(manifest: dict[str, Any]) -> dict[str, str]:
+def verify_hashes(manifest: dict[str, typing.Any]) -> dict[str, str]:
     observed: dict[str, str] = {}
     for name, spec in manifest["exact_outputs"].items():
         path = GRAPH / name
@@ -41,7 +41,7 @@ def verify_hashes(manifest: dict[str, Any]) -> dict[str, str]:
     return observed
 
 
-def verify_source_and_gamma(manifest: dict[str, Any]) -> dict[str, int]:
+def verify_source_and_gamma(manifest: dict[str, typing.Any]) -> dict[str, int]:
     source_rows = csv_rows(SOURCE / "ETS_V2_MARKETS_FOR_REVIEW.csv")
     audit_rows = csv_rows(GRAPH / "ETS_GAMMA_SEMANTIC_AUDIT.csv")
     source_spec = manifest["source_universe"]
@@ -109,7 +109,7 @@ def verify_source_and_gamma(manifest: dict[str, Any]) -> dict[str, int]:
     }
 
 
-def verify_acquisition(manifest: dict[str, Any]) -> dict[str, int]:
+def verify_acquisition(manifest: dict[str, typing.Any]) -> dict[str, int]:
     rows = csv_rows(GRAPH / "ETS_FILL_ACQUISITION.csv")
     require(len(rows) == 1279, "fill-acquisition row count drift")
     require("market_id" in rows[0], "fill-acquisition market_id missing")
@@ -123,7 +123,7 @@ def verify_acquisition(manifest: dict[str, Any]) -> dict[str, int]:
         None,
     )
     require(tier_key is not None, "fill-acquisition tier column missing")
-    counts = Counter(row[tier_key] for row in rows)
+    counts = collections.Counter(row[tier_key] for row in rows)
     require(dict(counts) == manifest["acquisition_class_counts"], "acquisition tier drift")
     require(len({row["market_id"] for row in rows}) == len(rows), "duplicate acquisition market")
     return dict(counts)
