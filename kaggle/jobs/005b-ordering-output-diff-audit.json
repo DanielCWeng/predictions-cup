@@ -1,10 +1,7 @@
 {
   "schema_version": 1,
-  "action": "wait_output",
+  "action": "output",
   "kernel": "polyleviathan/005b-ordering-falsification-diff-audit",
-  "allow_missing": true,
-  "poll_seconds": 60,
-  "timeout_minutes": 330,
   "output_file_pattern": ".*matrix_difference_audit\\.json$",
-  "note": "Wait for corrected matrix-difference audit to exist and complete, then download only its compact report."
+  "note": "Fetch old-vs-corrected matrix difference audit."
 }
