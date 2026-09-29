@@ -469,9 +469,16 @@ class MakerService:
             elif kind == "price_change":
                 result = self.pm_books.apply_price_change(payload, observed_at)
                 changed_tokens.update(result.changed_tokens)
-                if result.uninitialized_deltas:
+                self.pm_health.book_uninitialized_delta_count += (
+                    result.uninitialized_deltas
+                )
+                missing_required = result.uninitialized_token_ids.intersection(
+                    self._pm_token_ids
+                )
+                if missing_required:
                     raise RuntimeError(
-                        "Polymarket delta arrived before authoritative seed"
+                        "Polymarket delta arrived before authoritative seed "
+                        f"for {len(missing_required)} required mapped token(s)"
                     )
             elif kind == "last_trade_price":
                 token_id = _pm_single_token(payload)
