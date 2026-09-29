@@ -350,3 +350,29 @@ def test_runtime_session_namespace_prevents_operation_identity_reuse_after_resta
     assert second.event_ids == ["make-runtime-session-b-1"]
     assert first.event_ids[0] != second.event_ids[0]
 
+def test_runtime_paces_global_work_and_requeues_remaining_exchanges() -> None:
+    bridge = _Bridge()
+    coordinator = _Coordinator()
+    runtime = MakerRuntimeLoop(
+        bridge=cast(MakerSourceBridge, bridge),
+        coordinator=cast(MakerCoordinator, coordinator),
+        polymarket_feed_trusted=lambda: True,
+        wall_clock=lambda: datetime(2026, 9, 29, 14, 0, tzinfo=UTC),
+        mono_clock=lambda: 100,
+        runtime_session_id="paced",
+        max_exchanges_per_cycle=1,
+    )
+
+    runtime.notify_account(observed_monotonic_ns=90)
+    asyncio.run(runtime.drain_once())
+    asyncio.run(runtime.drain_once())
+
+    assert coordinator.calls == [
+        frozenset({"36"}),
+        frozenset({"37"}),
+    ]
+    assert coordinator.event_ids == [
+        "make-runtime-paced-1",
+        "make-runtime-paced-2",
+    ]
+
