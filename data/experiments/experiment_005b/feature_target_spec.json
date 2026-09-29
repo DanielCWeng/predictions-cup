@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "spec_id": "FEATURE_TARGET_SPEC_V1",
+  "design_parent_commit": "1ad933fe586d0c07da7ea06801af05a0a808f385",
+  "predictive_outcomes_inspected_before_this_spec": false,
+  "windows_seconds": [
+    5,
+    15,
+    30,
+    60,
+    120,
+    300,
+    900
+  ],
+  "clock_horizons_seconds": [
+    1,
+    5,
+    15,
+    30,
+    60,
+    120,
+    300
+  ],
+  "event_trade_horizons": [
+    1,
+    2,
+    5,
+    10
+  ],
+  "ordering": "timestamp, tx_hash, log_index; a deterministic micro-order is added within tied seconds so rolling frames never see later same-second fills",
+  "logit_clip_epsilon": 0.000001,
+  "jump_threshold_probability_points": 0.02,
+  "volatility": "sqrt(sum(one-trade price_change^2)) over the backward window",
+  "trend_slope": "OLS slope of p_yes on deterministic micro-time, reported per second",
+  "burstiness": "stddev(interarrival_seconds)/(mean(interarrival_seconds)+1e-9)",
+  "return_streak": "consecutive non-zero one-trade return signs through the current economic fill",
+  "large_trade_threshold": "TRAIN-only market q90 of size_shares with family TRAIN q90 fallback when market TRAIN count <100",
+  "activity_reference": "TRAIN-only market median 60s trade_count with family TRAIN median fallback when market TRAIN count <100",
+  "context": {
+    "family": "rolling leave-target-out aggregates across other market updates in the same election family",
+    "event": "rolling leave-target-out aggregates across other market updates sharing event_id",
+    "exclusion": "subtract the complete target condition contribution mechanically from aggregate sums/counts",
+    "price_movement": "mean one-trade canonical YES price change of non-target updates in the window",
+    "activity": "number of non-target economic fills in the window",
+    "dispersion": "population standard deviation of non-target one-trade price changes",
+    "fraction_up_down": "fraction of non-target price-changing updates with positive/negative sign",
+    "note": "These are causal update-weighted context measures. They do not require book coverage or carry forward a future trade."
+  },
+  "clock_targets": {
+    "selection": "last subsequent economic fill at or before decision+h using a strictly-following deterministic frame",
+    "no_observation": "NULL/NO_FUTURE_OBSERVATION when the frame contains no later economic fill",
+    "observed_stasis": "zero change only when a later economic fill exists and has the same canonical price",
+    "realised_movement": "sqrt(sum(one-trade price_change^2)) over subsequent fills inside the horizon"
+  },
+  "event_targets": "LEAD by 1/2/5/10 economic fills in deterministic market order",
+  "split": "family-wide synchronized 60/20/20 time-span boundaries; target-specific purge and 300s embargo are applied in screening/model stages",
+  "feature_groups": {
+    "price_history": [
+      "price_yes",
+      "logit_price",
+      "price_change_W",
+      "logit_return_W",
+      "momentum_W",
+      "momentum_short_minus_long_30_300",
+      "reversal_30_300",
+      "return_streak",
+      "acceleration_15_60",
+      "previous_jump_size",
+      "distance_recent_high_300",
+      "distance_recent_low_300",
+      "trend_slope_60",
+      "trend_slope_300"
+    ],
+    "movement_state": [
+      "realised_vol_W",
+      "absolute_return_W",
+      "recent_max_move_W",
+      "jump_frequency_W",
+      "stasis_fraction_W",
+      "direction_change_frequency_W"
+    ],
+    "anonymous_activity": [
+      "trade_count_W",
+      "notional_value_W",
+      "share_volume_W",
+      "mean_trade_size_W",
+      "median_trade_size_W",
+      "trade_size_variance_W",
+      "trade_size_q90_W",
+      "max_trade_size_W",
+      "large_trade_share_W",
+      "last_interarrival_seconds",
+      "mean_interarrival_W",
+      "burstiness_W",
+      "activity_acceleration_30_300",
+      "activity_vs_train_history_60"
+    ],
+    "family_context": [
+      "loo_family_price_movement_W",
+      "loo_family_activity_W",
+      "loo_family_dispersion_W",
+      "loo_family_fraction_up_W",
+      "loo_family_fraction_down_W"
+    ],
+    "event_context": [
+      "loo_event_price_movement_W",
+      "loo_event_activity_W",
+      "loo_event_dispersion_W",
+      "loo_event_fraction_up_W",
+      "loo_event_fraction_down_W",
+      "common_event_momentum_30",
+      "market_minus_event_momentum_30"
+    ]
+  }
+}

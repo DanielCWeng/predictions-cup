@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "spec_id": "SEALED_HOLDOUT_V1",
+  "stage3_freeze_required": true,
+  "gate_path": "data/experiments/experiment_005b/holdout_gate.json",
+  "gate_requirements": [
+    "expected_train_dev_shortlist_sha256 must be non-placeholder",
+    "shortlist freeze must report holdout_touched=false",
+    "gate must record the Git commit that added the exact shortlist freeze hash before HOLDOUT is queried"
+  ],
+  "refit_policy": {
+    "training_population": "TRAIN plus DEV decisions strictly before dev_end-300s, with target label_end < dev_end",
+    "model_fit_cap_total": 500000,
+    "sampling": "deterministic hash(condition_id, tx_hash, log_index), balanced by family where possible",
+    "hyperparameters": "exact DEV-selected model and params; no HOLDOUT tuning",
+    "features": "exact frozen model feature list"
+  },
+  "holdout_population": {
+    "start": "timestamp >= dev_end+300s",
+    "target_validity": "target non-null and label_end present",
+    "evaluation": "all valid rows; no target-value sampling"
+  },
+  "scalar_shortlist_policy": {
+    "per_target": "Evaluate every frozen TRAIN/DEV row with promoted_candidate=true exactly once on HOLDOUT, preserving frozen order. HOLDOUT never selects among them.",
+    "metrics": [
+      "pearson",
+      "spearman",
+      "directional_response",
+      "decile_response",
+      "standardized_effect",
+      "support",
+      "market_count",
+      "family_sign_consistency"
+    ],
+    "reselection": "NONE"
+  },
+  "model_metrics": {
+    "regression": [
+      "mse",
+      "mae",
+      "mse_improvement_vs_persistence",
+      "mae_improvement_vs_persistence",
+      "predictive_ic",
+      "directional_accuracy"
+    ],
+    "classification": [
+      "accuracy",
+      "multiclass_brier",
+      "expected_calibration_error"
+    ],
+    "concentration": [
+      "family_support_share",
+      "market_support_share",
+      "per_family_metric_direction"
+    ]
+  },
+  "baseline_comparators": {
+    "persistence": "zero future change for price-change targets; TRAIN+DEV mean for positive movement targets; majority/prior for sign classification",
+    "own_recent_price": "price_change_30",
+    "current_absolute_movement": "absolute_return_30",
+    "recent_activity": "trade_count_30",
+    "comparator_fit": "TRAIN+DEV only with the same final purge/embargo and no HOLDOUT selection"
+  },
+  "uncertainty": {
+    "hierarchical_bootstrap": "resample election family, then market within family, on market-level metric differences",
+    "calendar_block_bootstrap": "resample contiguous 3-day blocks of day-level metric differences",
+    "replicates": 1000,
+    "seed": 505005
+  },
+  "interpretation": {
+    "no_single_p_value_gate": true,
+    "candidate_labels": [
+      "DISCOVERY_ONLY",
+      "WITHIN_FAMILY_STABLE",
+      "REGIME_SPECIFIC_CANDIDATE",
+      "CROSS_FAMILY_CANDIDATE"
+    ],
+    "executable_alpha_claim": false
+  }
+}

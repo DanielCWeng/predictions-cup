@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "status": "CLOSED",
+  "expected_train_dev_shortlist_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "gate_commit": "PENDING",
+  "note": "Template only. HOLDOUT kernel must fail until Stage 3 output is independently downloaded, reviewed, hash-bound and committed here."
+}

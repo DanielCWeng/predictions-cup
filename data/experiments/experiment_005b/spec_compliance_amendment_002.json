@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "amendment_id": "SPEC_COMPLIANCE_002",
+  "type": "pre_predictive_implementation_clarification",
+  "predictive_design_motivation": "source task compliance only",
+  "prior_outcome_motivated": false,
+  "predictive_005b_outcomes_inspected": false,
+  "changes": [
+    "Adds explicit leave-target-out election-family context alongside event_id context, both required by the source brief.",
+    "Freezes causal same-second ordering and exact formulas/thresholds needed to turn the already-frozen feature names into executable columns."
+  ],
+  "invariant": "No TRAIN, DEV or HOLDOUT 005B predictive response was inspected before this amendment."
+}

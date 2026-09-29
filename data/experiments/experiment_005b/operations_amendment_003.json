@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B",
+  "amendment_id": "OPERATIONS_003",
+  "type": "compute_capacity_correction",
+  "predictive_design_changed": false,
+  "prior_outcome_motivated": false,
+  "old_assumption": "3 shared Kaggle batch-CPU sessions",
+  "corrected_capacity": 5,
+  "launch_rule": "Only submit 005B while fewer than five shared Kaggle batch-CPU jobs are RUNNING or QUEUED.",
+  "scientific_invariant": "No feature, target, split, screening, shortlist, model, threshold or HOLDOUT policy changes."
+}
