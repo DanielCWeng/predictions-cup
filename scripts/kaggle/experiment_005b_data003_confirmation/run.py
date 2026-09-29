@@ -410,20 +410,6 @@ def build_data003_matrix() -> Path:
             f"SELECT COUNT(*) FROM read_parquet('{eq}')"
         ).fetchone()[0]
     )
-    mismatches = int(
-        con.execute(
-            f"""
-            SELECT COUNT(*)
-            FROM read_parquet('{oq}')
-            WHERE timestamp<>(
-              SELECT block_timestamp
-              FROM read_parquet('{bq}') b
-              WHERE b.block_number=read_parquet.block_number
-              LIMIT 1
-            )
-            """
-        ).fetchone()[0]
-    ) if False else 0
     con.close()
     if rows != source_rows:
         raise RuntimeError(
