@@ -372,16 +372,6 @@ class LaunchSigRecorder(SigRealtimeRecorder):
         snapshot["connection_epoch"] = self._connection_epoch
         return snapshot
 
-    def record_health(
-        self,
-        *,
-        observed_at: datetime,
-        payload: dict[str, object],
-    ) -> None:
-        combined = dict(payload)
-        combined["research_storage"] = self.capture_health_snapshot()
-        super().record_health(observed_at=observed_at, payload=combined)
-
     def record_raw_batch(
         self,
         *,
