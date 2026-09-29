@@ -7,7 +7,9 @@ from decimal import Decimal
 
 import pytest
 
-from predictions_cup.execution.models import ExecutionMode, LifecycleState
+from predictions_cup.execution.models import ExecutionEvent, ExecutionMode, LifecycleState
+from predictions_cup.execution.reservations import ExecutionReservationBook
+from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.maker import (
     ActiveQuote,
     BinaryCaraInventoryModel,
@@ -40,7 +42,7 @@ from predictions_cup.mapping.models import (
     MarketMapping,
     PolymarketContractIdentity,
 )
-from predictions_cup.risk.core import RiskContext
+from predictions_cup.risk.core import RiskContext, RiskLimits
 from predictions_cup.runtime.models import (
     RuntimeBook,
     RuntimeLevel,
@@ -831,4 +833,157 @@ def test_quote_invariants_over_probability_inventory_grid() -> None:
                 assert quote.bid_ticks is None
             if inventory <= -10.0:
                 assert quote.ask_ticks is None
+
+def test_placement_uncertainty_retains_reservation_and_blocks_duplicate_exposure() -> None:
+    registry = QuoteRegistry()
+    reservations = ExecutionReservationBook()
+    dispatch_calls = 0
+
+    async def uncertain_place(
+        plan: ExecutionPlan,
+        snapshot: MakerMarketSnapshot,
+    ) -> ExecutionEvent:
+        nonlocal dispatch_calls
+        del plan, snapshot
+        dispatch_calls += 1
+        raise RuntimeError("simulated transport uncertainty")
+
+    async def unused_cancel(
+        active: ActiveQuote,
+        logical_operation_id: str,
+        tournament_id: str,
+    ) -> ExecutionEvent:
+        del active, logical_operation_id, tournament_id
+        raise AssertionError("cancel should not run")
+
+    coordinator = MakerCoordinator(
+        engine=_engine(),
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.LIVE,
+            kill_switch=False,
+            limits=RiskLimits(
+                max_order_size=10,
+                max_gross_exposure=100.0,
+                max_per_market_exposure=100.0,
+                max_open_order_exposure=100.0,
+                max_concurrent_open_orders=100,
+            ),
+            max_state_age_ns=100_000_000,
+        ),
+        placement_dispatch=uncertain_place,
+        cancel_dispatch=unused_cancel,
+        reservations=reservations,
+    )
+    snapshot = _maker_snapshot()
+
+    with pytest.raises(RuntimeError, match="transport uncertainty"):
+        asyncio.run(
+            coordinator.on_state_change(
+                MakerStateChange(
+                    event_id="uncertain-place-1",
+                    observed_monotonic_ns=NOW,
+                    exchange_ids=frozenset({"36"}),
+                ),
+                {"36": snapshot},
+            )
+        )
+
+    state = registry.state("36")
+    assert state.bid is not None
+    assert state.ask is not None
+    assert state.bid.lifecycle_state is LifecycleState.UNCERTAIN
+    assert state.ask.lifecycle_state is LifecycleState.UNCERTAIN
+    assert reservations.intent_ids()
+    assert dispatch_calls == 1
+
+    second = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id="uncertain-place-2",
+                observed_monotonic_ns=NOW + 1,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": replace(snapshot, now_monotonic_ns=NOW + 1)},
+        )
+    )
+    assert dispatch_calls == 1
+    assert second.risk_decisions == ()
+    assert second.execution_events == ()
+    assert all(
+        action.kind is QuoteLifecycleActionKind.WAIT_RECONCILIATION
+        for action in second.lifecycle_actions
+    )
+
+
+def test_cancel_uncertainty_blocks_replacement_until_reconciliation() -> None:
+    registry = QuoteRegistry()
+    registry.apply_authoritative(
+        exchange_id="36",
+        side=QuoteSide.BID,
+        price_ticks=90,
+        size=2,
+        remaining_size=2,
+        logical_operation_id="old-bid",
+        exchange_order_id=91,
+        lifecycle_state=LifecycleState.OPEN,
+        observed_monotonic_ns=NOW - 1,
+    )
+
+    async def unused_place(
+        plan: ExecutionPlan,
+        snapshot: MakerMarketSnapshot,
+    ) -> ExecutionEvent:
+        del plan, snapshot
+        raise AssertionError("replacement must not place in cancel cycle")
+
+    async def uncertain_cancel(
+        active: ActiveQuote,
+        logical_operation_id: str,
+        tournament_id: str,
+    ) -> ExecutionEvent:
+        del active, logical_operation_id, tournament_id
+        raise RuntimeError("simulated cancel uncertainty")
+
+    coordinator = MakerCoordinator(
+        engine=_engine(),
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+        ),
+        placement_dispatch=unused_place,
+        cancel_dispatch=uncertain_cancel,
+    )
+    snapshot = _maker_snapshot(
+        external={"token-yes": _external(bid=0.59, ask=0.61)}
+    )
+
+    with pytest.raises(RuntimeError, match="cancel uncertainty"):
+        asyncio.run(
+            coordinator.on_state_change(
+                MakerStateChange(
+                    event_id="uncertain-cancel-1",
+                    observed_monotonic_ns=NOW,
+                    exchange_ids=frozenset({"36"}),
+                ),
+                {"36": snapshot},
+            )
+        )
+
+    active = registry.state("36").bid
+    assert active is not None
+    assert active.lifecycle_state is LifecycleState.UNCERTAIN
+
+    actions = QuoteLifecycleManager().decide(
+        desired=_engine().quote(snapshot).desired,
+        current=registry.state("36"),
+        now_monotonic_ns=NOW + 1,
+    )
+    bid = next(action for action in actions if action.side is QuoteSide.BID)
+    assert bid.kind is QuoteLifecycleActionKind.WAIT_RECONCILIATION
 
