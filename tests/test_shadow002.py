@@ -4,6 +4,7 @@ import asyncio
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -360,7 +361,7 @@ def _mapping(direction: MappingDirection = MappingDirection.SAME) -> MappingDocu
                 sig_outcome_label="Yes",
                 mapping_class=MappingClass.EXACT,
                 mapping_direction=direction,
-                mapping_confidence=0.99,
+                mapping_confidence=Decimal("0.99"),
                 status=MappingStatus.VERIFIED,
                 direct_polymarket=identity,
             ),
