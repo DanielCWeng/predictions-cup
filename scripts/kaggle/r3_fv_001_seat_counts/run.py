@@ -293,7 +293,18 @@ def build_family(
     family: str,
 ) -> pd.DataFrame:
     rows = []
-    for ev in base[base["sig_market_id"] == target].itertuples(index=False):
+    target_base = base[base["sig_market_id"] == target].sort_values(
+        ["ts", "block_number"]
+    ).copy()
+    target_base["next_y"] = target_base["y"].shift(-1)
+    target_base["next_split"] = target_base["split"].shift(-1)
+    target_base["next_ts"] = target_base["ts"].shift(-1)
+    target_base.loc[
+        target_base["next_split"] != target_base["split"],
+        ["next_y", "next_ts"],
+    ] = np.nan
+
+    for ev in target_base.itertuples(index=False):
         state = lookup.complete(ids, int(ev.block_number), int(ev.ts))
         if state is None:
             continue
@@ -325,13 +336,7 @@ def build_family(
         else:
             raise ValueError(family)
         rows.append(row)
-    out = pd.DataFrame(rows).sort_values(["ts", "block_number"])
-    if len(out):
-        out["next_y"] = out["y"].shift(-1)
-        out["next_split"] = out["split"].shift(-1)
-        out["next_ts"] = out["ts"].shift(-1)
-        out.loc[out["next_split"] != out["split"], ["next_y", "next_ts"]] = np.nan
-    return out
+    return pd.DataFrame(rows).sort_values(["ts", "block_number"])
 
 
 def bootstrap_days(frame: pd.DataFrame, base_col: str, pred_col: str, y_col: str, seed: int):
