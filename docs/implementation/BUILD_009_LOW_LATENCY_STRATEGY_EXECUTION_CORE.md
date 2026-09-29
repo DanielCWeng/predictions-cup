@@ -371,26 +371,33 @@ It records:
 Required BUILD-009 acceptance runs are:
 
 1. correctness + approximately 3,000-iteration representative timings;
-2. warm-up followed by at least 1,000,000 iterations for hot-path kernels/decision loop;
-3. a repeated million-iteration run to check stability.
+2. an explicit 100,000-iteration intermediate stage;
+3. warm-up followed by at least 1,000,000 iterations for hot-path kernels/decision loop;
+4. a repeated million-iteration run to inspect target-host stability.
 
 The EC2 host is used only for these speed measurements. Repository edits and correctness CI are
 performed directly on the GitHub branch.
 
-### Final acceptance evidence
+### Post-review correction evidence
 
 Benchmarked code SHA:
 
-`8a56dec7ed2c0992ed9c86a911edf3a82786cc74`
+`7ea841e0b26a312465a3deb68bc504ea311569ef`
 
-That exact SHA passed GitHub CI run #2380:
+That exact SHA passed GitHub CI run #2467:
 
 - Ruff: pass;
 - shell validation: pass;
 - strict mypy: pass;
-- pytest: **533 passed, 2 skipped**;
+- pytest: **547 passed, 2 skipped**;
 - application smoke: pass;
 - BUILD-009 benchmark smoke: pass.
+
+This SHA includes the independent-review correction pass: Risk-bound execution mode, explicit LIVE
+permit gating, synchronous local execution reservations, worst-case gross reservation accounting,
+fail-closed Realtime fill handling, malformed accepted-response uncertainty, depth-aware SHADOW
+fills, a burst-capable reserved HIGH-priority REST token bucket, longer trading-connection
+keepalive, exact journaled payload bytes on the wire, and journal identity-path reductions.
 
 Target host:
 
@@ -407,6 +414,9 @@ Commands used:
 python -m predictions_cup.benchmarks \
   --calls 3000 --warmup 3000 --repeats 3 \
   --include-journal --journal-calls 1000
+
+python -m predictions_cup.benchmarks \
+  --calls 100000 --warmup 3000 --repeats 3
 
 python -m predictions_cup.benchmarks \
   --calls 1000000 --warmup 3000 --repeats 3
@@ -427,33 +437,40 @@ median of the per-repeat percentile estimates.
 
 | Component | Mean | p50 | p95 | p99 | Throughput |
 |---|---:|---:|---:|---:|---:|
-| Decimal/tick round-trip | 0.862 us | 0.821 us | 0.846 us | 0.862 us | ~1.16m/s |
-| M-038 reference logit | 0.215 us | 0.178 us | 0.181 us | 0.181 us | ~4.64m/s |
-| M-041 exact CARA | 0.433 us | 0.395 us | 0.397 us | 0.397 us | ~2.31m/s |
-| Strategy evaluation | 4.570 us | 4.518 us | 4.671 us | 4.754 us | ~219k/s |
-| Central Risk | 7.716 us | 7.536 us | 7.933 us | 8.079 us | ~130k/s |
-| Execution-plan construction | 19.099 us | 19.221 us | 20.121 us | 20.352 us | ~52.4k/s |
-| Decision -> null sink | **37.570 us** | **37.306 us** | **38.265 us** | **38.604 us** | **~26.6k/s** |
-| SQLite/WAL pre-dispatch durability | **1.545 ms** | **1.226 ms** | **2.377 ms** | **2.695 ms** | **~647/s** |
+| Decimal/tick round-trip | 0.851 us | 0.799 us | 0.855 us | 0.912 us | ~1.17m/s |
+| M-038 reference logit | 0.204 us | 0.179 us | 0.179 us | 0.180 us | ~4.91m/s |
+| M-041 exact CARA | 0.446 us | 0.398 us | 0.411 us | 0.434 us | ~2.24m/s |
+| Strategy evaluation | 4.600 us | 4.572 us | 4.677 us | 4.693 us | ~217k/s |
+| Central Risk | **8.392 us** | **8.250 us** | **8.507 us** | **8.659 us** | ~119k/s |
+| Execution-plan construction | **19.238 us** | **19.185 us** | **19.934 us** | **20.013 us** | ~52.0k/s |
+| Decision -> null sink | **38.525 us** | **38.746 us** | **39.613 us** | **41.341 us** | **~26.0k/s** |
+| SQLite/WAL pre-dispatch durability | **1.563 ms** | **1.220 ms** | **2.412 ms** | **2.849 ms** | **~640/s** |
 
 The WAL cost is intentionally outside the calculation hot path. It is the measured price of
 persisting execution identity with `synchronous=FULL` before a LIVE network write.
 
-#### Clean million-call stability battery
+#### Explicit 100k intermediate battery
 
 | Component | Mean | p50 | p95 | p99 | Throughput |
 |---|---:|---:|---:|---:|---:|
-| Decimal/tick round-trip | 0.834 us | 0.818 us | 0.889 us | 0.950 us | ~1.20m/s |
-| M-038 reference logit | 0.202 us | 0.178 us | 0.179 us | 0.189 us | ~4.95m/s |
-| M-041 exact CARA | 0.429 us | 0.407 us | 0.411 us | 0.459 us | ~2.33m/s |
-| Strategy evaluation | 4.573 us | 4.459 us | 4.768 us | 5.167 us | ~219k/s |
-| Central Risk | 7.800 us | 7.685 us | 8.149 us | 9.025 us | ~128k/s |
-| Execution-plan construction | 19.692 us | 19.365 us | 23.476 us | 38.103 us | ~50.8k/s |
-| Decision -> null sink | **38.466 us** | **37.584 us** | **39.521 us** | **43.014 us** | **~26.0k/s** |
+| Central Risk | **8.623 us** | **8.418 us** | **9.037 us** | **9.729 us** | ~116k/s |
+| Execution-plan construction | **19.668 us** | **19.438 us** | **20.708 us** | **22.491 us** | ~50.8k/s |
+| Decision -> null sink | **39.722 us** | **38.965 us** | **40.887 us** | **42.935 us** | **~25.2k/s** |
 
-The three million-call end-to-end means were **38.538 us, 38.270 us and 38.466 us**. The
-peak-to-peak spread was ~0.268 us, about **0.7%** of the median run, so the internal path was stable
-on the target host.
+#### Repeated million-call target-host battery
+
+| Component | Mean | p50 | p95 | p99 | Throughput |
+|---|---:|---:|---:|---:|---:|
+| Central Risk | **9.166 us** | **8.399 us** | **10.714 us** | **90.295 us** | ~109k/s |
+| Execution-plan construction | **21.736 us** | **19.059 us** | **26.792 us** | **119.869 us** | ~46.0k/s |
+| Decision -> null sink | **45.585 us** | **39.234 us** | **80.414 us** | **143.141 us** | **~21.9k/s** |
+
+The three million-call end-to-end means were **45.585 us, 43.765 us and 48.307 us**. Their
+peak-to-peak spread was **4.542 us (~9.96% of the median run)**. This replaces the pre-review
+0.7%-spread claim: the corrected million-call run was materially noisier. During this run the host
+also had the live Polymarket recorder and SIG capture processes running, so the long-run target-host
+figures are treated as observed shared-host performance rather than an isolated CPU stability claim.
+The 3k and 100k stages remain much tighter and all correctness checks passed.
 
 SIG's documented ~250 ms Realtime batching remains an upstream feed property and is not included in
 these internal processing figures. These benchmarks likewise do not claim Internet/SIG HTTP
@@ -463,16 +480,27 @@ The million-call run is deliberately not a generic GitHub-hosted hard latency ga
 
 ## Remaining acceptance work
 
-Technical BUILD-009 acceptance is complete on the benchmarked code SHA above:
+The independent-review correction pass is implemented on the benchmarked code SHA above:
 
-- canonical decision/execution path reconciled;
-- lint/type/test/application/benchmark smoke green;
-- startup and account-stream recovery regressions green;
-- 3k representative/journal and repeated 1m target-host benchmarks complete;
+- all six safety/correctness findings have direct regression coverage;
+- same-state approvals and in-flight/UNCERTAIN operations reserve Risk synchronously;
+- worst-case gross exposure includes open/uncertain reservation exposure;
+- unsigned/delayed Realtime fills invalidate account trust and force authoritative reconciliation;
+- accepted malformed execution responses are UNCERTAIN;
+- SHADOW aggressive fills are quantity/depth aware;
+- HIGH-priority execution has reserved REST burst capacity;
+- the trading client uses a longer persistent keepalive and LIVE sends the exact journaled bytes;
+- lint/type/test/application/benchmark smoke is green;
+- 3k, explicit 100k and repeated 1m target-host batteries are complete;
 - real SIG orders sent: **NO**.
 
-The PR remains **draft** until independent review. A bounded real placement/cancel smoke is a
-separate MASTER-authorized gate and was not performed as part of BUILD-009 implementation.
+The PR remains **draft pending correction re-review**. The review's suggested post-response journal
+transaction batching / dedicated SQLite executor, large-portfolio indexing and pure-Python
+micro-optimisations are intentionally not folded into this safety correction; they are non-blocking
+latency follow-ups and should not weaken `synchronous=FULL` durability without separate evidence.
+A full decision-to-socket integration benchmark is likewise a follow-up; the correction adds direct
+regressions for reserved HIGH-priority capacity and exact wire bytes instead. A bounded real
+placement/cancel smoke is a separate MASTER-authorized gate and was not performed.
 
 ## Scope exclusions
 
