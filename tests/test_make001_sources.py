@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -25,17 +25,11 @@ from predictions_cup.sig.realtime_state import (
 
 
 @dataclass
-class _Health:
-    connected: bool = True
-
-
-@dataclass
 class _SigState:
     tournament_id: str
     states: dict[str, ExchangeRuntimeState]
     market_states: dict[str, MarketRuntimeState]
     health: RuntimeHealth
-    health: _Health = field(default_factory=_Health)
 
 
 @dataclass
