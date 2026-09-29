@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/experiment_005b_data003_schema_inspect",
+  "kernel": "polyleviathan/005b-data003-schema-inspect",
+  "poll_seconds": 20,
+  "timeout_minutes": 30,
+  "download_outputs": true,
+  "output_file_pattern": ".*schema_report\\.json$",
+  "note": "Schema-only DATA-003 inspection. No predictive target evaluation."
+}
