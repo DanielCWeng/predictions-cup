@@ -17,6 +17,7 @@ import pyarrow.dataset as ds
 
 from predictions_cup.analysis.microstructure import analyze_sig_microstructure
 from predictions_cup.mapping.crosswalk import load_document
+from predictions_cup.mapping.models import MappingDirection
 
 
 def parse_args() -> argparse.Namespace:
@@ -330,17 +331,27 @@ def _cross_venue(
         if direct is None or direct.mapped_token_id is None:
             continue
         sig_value = sig_mid.get(record.sig_exchange_id)
-        pm_value = pm_mid.get(direct.mapped_token_id)
-        if sig_value is None or pm_value is None:
+        pm_raw_value = pm_mid.get(direct.mapped_token_id)
+        if sig_value is None or pm_raw_value is None:
             continue
+        if record.mapping_direction is MappingDirection.COMPLEMENT:
+            pm_aligned_value = 1.0 - pm_raw_value
+        else:
+            pm_aligned_value = pm_raw_value
         rows.append(
             {
                 "sig_exchange_id": record.sig_exchange_id,
                 "polymarket_token_id": direct.mapped_token_id,
                 "mapping_class": record.mapping_class.value,
+                "mapping_direction": (
+                    None
+                    if record.mapping_direction is None
+                    else record.mapping_direction.value
+                ),
                 "sig_mid": sig_value,
-                "polymarket_mid": pm_value,
-                "sig_minus_polymarket": sig_value - pm_value,
+                "polymarket_raw_mid": pm_raw_value,
+                "polymarket_aligned_mid": pm_aligned_value,
+                "sig_minus_polymarket": sig_value - pm_aligned_value,
             }
         )
     rows.sort(
@@ -447,8 +458,12 @@ def _report(summary: dict[str, Any]) -> str:
     ]
     for row in cross[:20]:
         lines.append(
-            "- SIG {sig_exchange_id}: SIG {sig_mid:.4f}, PM {polymarket_mid:.4f}, "
-            "difference {sig_minus_polymarket:+.4f}.".format(**row)
+            (
+                "- SIG {sig_exchange_id}: SIG {sig_mid:.4f}, "
+                "PM aligned {polymarket_aligned_mid:.4f} "
+                "({mapping_direction}), difference "
+                "{sig_minus_polymarket:+.4f}."
+            ).format(**row)
         )
     lines.extend(
         [
