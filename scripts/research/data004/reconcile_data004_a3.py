@@ -5,6 +5,7 @@ This script consumes the already-packaged v1 fills. It never scans the trade lak
 The unique timestamp -> block mapping is supplied as a JSON file produced by a
 read-only query of public.block_timestamps after validation against custody-known rows.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -16,7 +17,7 @@ import shutil
 import subprocess
 import time
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -61,26 +62,40 @@ def disk_gate(path: Path, stage: str, reserve_bytes: int = 0) -> int:
     log = LANE / "data004_a3_disk_check.jsonl"
     started = time.monotonic()
     while True:
-        result = subprocess.run(["df", "-B1", "--output=avail", str(path)], check=True, text=True, capture_output=True)
+        result = subprocess.run(
+            ["df", "-B1", "--output=avail", str(path)], check=True, text=True, capture_output=True
+        )
         available = int([line.strip() for line in result.stdout.splitlines() if line.strip()][-1])
         with log.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps({
-                "checked_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                "stage": stage,
-                "available_bytes": available,
-                "reserve_bytes": reserve_bytes,
-                "min_free_required_bytes": MIN_FREE_BYTES,
-                "hard_floor_bytes": HARD_MIN_FREE_BYTES,
-            }, sort_keys=True) + "\n")
+            handle.write(
+                json.dumps(
+                    {
+                        "checked_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                        "stage": stage,
+                        "available_bytes": available,
+                        "reserve_bytes": reserve_bytes,
+                        "min_free_required_bytes": MIN_FREE_BYTES,
+                        "hard_floor_bytes": HARD_MIN_FREE_BYTES,
+                    },
+                    sort_keys=True,
+                )
+                + "\n"
+            )
             handle.flush()
             os.fsync(handle.fileno())
         if available < HARD_MIN_FREE_BYTES:
             raise RuntimeError(f"disk is below the 5 GiB hard floor at {stage}: {available}")
-        if available >= MIN_FREE_BYTES + reserve_bytes and available - reserve_bytes >= HARD_MIN_FREE_BYTES:
+        if (
+            available >= MIN_FREE_BYTES + reserve_bytes
+            and available - reserve_bytes >= HARD_MIN_FREE_BYTES
+        ):
             return available
         if time.monotonic() - started >= 2 * 60 * 60:
             raise RuntimeError(f"disk gate timed out at {stage}: {available}")
-        print(f"PAUSED disk gate stage={stage} free_bytes={available}; rechecking in 5 minutes", flush=True)
+        print(
+            f"PAUSED disk gate stage={stage} free_bytes={available}; rechecking in 5 minutes",
+            flush=True,
+        )
         time.sleep(300)
 
 
@@ -105,18 +120,32 @@ def analyze_conservation(fill_dir: Path, output_dir: Path) -> dict[str, Any]:
     if not paths:
         raise RuntimeError(f"no date-partitioned fill Parquet files under {fill_dir}")
     lf = pl.scan_parquet([str(path) for path in paths], low_memory=True, hive_partitioning=False)
-    selected = lf.select([
-        "timestamp", "tx_hash", "condition_id", "market_id", "event_id", "token_id",
-        "price", "size_shares", "order_is_match_taker_order", "acquisition_class",
-    ]).collect(engine="streaming")
+    selected = lf.select(
+        [
+            "timestamp",
+            "tx_hash",
+            "condition_id",
+            "market_id",
+            "event_id",
+            "token_id",
+            "price",
+            "size_shares",
+            "order_is_match_taker_order",
+            "acquisition_class",
+        ]
+    ).collect(engine="streaming")
     if selected.height != 231_964:
         raise RuntimeError(f"expected the 231,964 v1 fill rows; found {selected.height}")
 
     tokens_by_condition: dict[str, set[str]] = defaultdict(set)
     for condition, token in selected.select(["condition_id", "token_id"]).iter_rows():
         tokens_by_condition[str(condition)].add(str(token))
-    if len(tokens_by_condition) != 298 or any(len(tokens) != 2 for tokens in tokens_by_condition.values()):
-        raise RuntimeError("complementary-token mapping is not exactly two tokens per selected condition")
+    if len(tokens_by_condition) != 298 or any(
+        len(tokens) != 2 for tokens in tokens_by_condition.values()
+    ):
+        raise RuntimeError(
+            "complementary-token mapping is not exactly two tokens per selected condition"
+        )
 
     grouped: dict[tuple[str, str, str, Decimal], dict[str, Any]] = {}
     by_tx_condition: dict[tuple[str, str], dict[str, Any]] = {}
@@ -137,34 +166,40 @@ def analyze_conservation(fill_dir: Path, output_dir: Path) -> dict[str, Any]:
         else:
             raise RuntimeError(f"token {token} is absent from condition {condition}")
         key = (str(row["tx_hash"]), condition, anchor_token, anchor_price)
-        bucket = grouped.setdefault(key, {
-            "timestamp": int(row["timestamp"]),
-            "market_id": str(row["market_id"]),
-            "event_id": str(row["event_id"] or ""),
-            "acquisition_class": str(row["acquisition_class"] or ""),
-            "taker_rows": 0,
-            "maker_rows": 0,
-            "taker_size": Decimal(0),
-            "maker_size": Decimal(0),
-            "taker_tokens": Counter(),
-            "maker_tokens": Counter(),
-        })
+        bucket = grouped.setdefault(
+            key,
+            {
+                "timestamp": int(row["timestamp"]),
+                "market_id": str(row["market_id"]),
+                "event_id": str(row["event_id"] or ""),
+                "acquisition_class": str(row["acquisition_class"] or ""),
+                "taker_rows": 0,
+                "maker_rows": 0,
+                "taker_size": Decimal(0),
+                "maker_size": Decimal(0),
+                "taker_tokens": Counter(),
+                "maker_tokens": Counter(),
+            },
+        )
         size = dec(row["size_shares"])
         token_price = decimal_text(price)
         role_key = "taker" if role else "maker"
         bucket[f"{role_key}_rows"] += 1
         bucket[f"{role_key}_size"] += size
         bucket[f"{role_key}_tokens"][f"{token}:{token_price}"] += 1
-        tx_condition = by_tx_condition.setdefault((str(row["tx_hash"]), condition), {
-            "timestamp": int(row["timestamp"]),
-            "market_id": str(row["market_id"]),
-            "event_id": str(row["event_id"] or ""),
-            "acquisition_class": str(row["acquisition_class"] or ""),
-            "taker_rows": 0,
-            "maker_rows": 0,
-            "taker_size": Decimal(0),
-            "maker_size": Decimal(0),
-        })
+        tx_condition = by_tx_condition.setdefault(
+            (str(row["tx_hash"]), condition),
+            {
+                "timestamp": int(row["timestamp"]),
+                "market_id": str(row["market_id"]),
+                "event_id": str(row["event_id"] or ""),
+                "acquisition_class": str(row["acquisition_class"] or ""),
+                "taker_rows": 0,
+                "maker_rows": 0,
+                "taker_size": Decimal(0),
+                "maker_size": Decimal(0),
+            },
+        )
         tx_condition[f"{role_key}_rows"] += 1
         tx_condition[f"{role_key}_size"] += size
 
@@ -191,33 +226,53 @@ def analyze_conservation(fill_dir: Path, output_dir: Path) -> dict[str, Any]:
         abs_delta = abs(delta)
         max_abs_delta = max(max_abs_delta, abs_delta)
         if taker_rows == 0 or maker_rows == 0 or delta != 0:
-            residuals.append({
-                "tx_hash": tx_hash,
-                "condition_id": condition,
-                "market_id": bucket["market_id"],
-                "event_id": bucket["event_id"],
-                "acquisition_class": bucket["acquisition_class"],
-                "timestamp": bucket["timestamp"],
-                "utc_date": datetime.fromtimestamp(bucket["timestamp"], timezone.utc).date().isoformat(),
-                "canonical_token_id": token,
-                "canonical_price": decimal_text(price),
-                "taker_rows": taker_rows,
-                "taker_size": decimal_text(bucket["taker_size"]),
-                "maker_rows": maker_rows,
-                "maker_size": decimal_text(bucket["maker_size"]),
-                "residual_size_taker_minus_maker": decimal_text(delta),
-                "taker_token_price_buckets": json.dumps(bucket["taker_tokens"], sort_keys=True),
-                "maker_token_price_buckets": json.dumps(bucket["maker_tokens"], sort_keys=True),
-                "cause_class": "UNCLASSIFIED_REQUIRES_SCOPE_ATTRIBUTION",
-            })
+            residuals.append(
+                {
+                    "tx_hash": tx_hash,
+                    "condition_id": condition,
+                    "market_id": bucket["market_id"],
+                    "event_id": bucket["event_id"],
+                    "acquisition_class": bucket["acquisition_class"],
+                    "timestamp": bucket["timestamp"],
+                    "utc_date": datetime.fromtimestamp(bucket["timestamp"], UTC).date().isoformat(),
+                    "canonical_token_id": token,
+                    "canonical_price": decimal_text(price),
+                    "taker_rows": taker_rows,
+                    "taker_size": decimal_text(bucket["taker_size"]),
+                    "maker_rows": maker_rows,
+                    "maker_size": decimal_text(bucket["maker_size"]),
+                    "residual_size_taker_minus_maker": decimal_text(delta),
+                    "taker_token_price_buckets": json.dumps(bucket["taker_tokens"], sort_keys=True),
+                    "maker_token_price_buckets": json.dumps(bucket["maker_tokens"], sort_keys=True),
+                    "cause_class": "UNCLASSIFIED_REQUIRES_SCOPE_ATTRIBUTION",
+                }
+            )
 
     output_dir.mkdir(parents=True, exist_ok=True)
     csv_path = output_dir / "maker_taker_residual_buckets.csv"
-    fields = list(residuals[0]) if residuals else [
-        "tx_hash", "condition_id", "market_id", "event_id", "acquisition_class", "timestamp", "utc_date",
-        "canonical_token_id", "canonical_price", "taker_rows", "taker_size", "maker_rows", "maker_size",
-        "residual_size_taker_minus_maker", "taker_token_price_buckets", "maker_token_price_buckets", "cause_class",
-    ]
+    fields = (
+        list(residuals[0])
+        if residuals
+        else [
+            "tx_hash",
+            "condition_id",
+            "market_id",
+            "event_id",
+            "acquisition_class",
+            "timestamp",
+            "utc_date",
+            "canonical_token_id",
+            "canonical_price",
+            "taker_rows",
+            "taker_size",
+            "maker_rows",
+            "maker_size",
+            "residual_size_taker_minus_maker",
+            "taker_token_price_buckets",
+            "maker_token_price_buckets",
+            "cause_class",
+        ]
+    )
     csv_tmp = csv_path.with_suffix(".csv.tmp")
     with csv_tmp.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
@@ -265,26 +320,43 @@ def analyze_conservation(fill_dir: Path, output_dir: Path) -> dict[str, Any]:
             tx_condition_mismatched += 1
         tx_condition_max_abs_delta = max(tx_condition_max_abs_delta, abs(delta))
         if delta != 0:
-            tx_condition_residuals.append({
-                "tx_hash": tx_hash,
-                "condition_id": condition,
-                "market_id": bucket["market_id"],
-                "event_id": bucket["event_id"],
-                "acquisition_class": bucket["acquisition_class"],
-                "timestamp": bucket["timestamp"],
-                "utc_date": datetime.fromtimestamp(bucket["timestamp"], timezone.utc).date().isoformat(),
-                "taker_rows": bucket["taker_rows"],
-                "taker_size": decimal_text(bucket["taker_size"]),
-                "maker_rows": bucket["maker_rows"],
-                "maker_size": decimal_text(bucket["maker_size"]),
-                "residual_size_taker_minus_maker": decimal_text(delta),
-                "cause_class": "UNCLASSIFIED_REQUIRES_SCOPE_ATTRIBUTION",
-            })
+            tx_condition_residuals.append(
+                {
+                    "tx_hash": tx_hash,
+                    "condition_id": condition,
+                    "market_id": bucket["market_id"],
+                    "event_id": bucket["event_id"],
+                    "acquisition_class": bucket["acquisition_class"],
+                    "timestamp": bucket["timestamp"],
+                    "utc_date": datetime.fromtimestamp(bucket["timestamp"], UTC).date().isoformat(),
+                    "taker_rows": bucket["taker_rows"],
+                    "taker_size": decimal_text(bucket["taker_size"]),
+                    "maker_rows": bucket["maker_rows"],
+                    "maker_size": decimal_text(bucket["maker_size"]),
+                    "residual_size_taker_minus_maker": decimal_text(delta),
+                    "cause_class": "UNCLASSIFIED_REQUIRES_SCOPE_ATTRIBUTION",
+                }
+            )
     tx_csv = output_dir / "maker_taker_tx_condition_residuals.csv"
-    tx_fields = list(tx_condition_residuals[0]) if tx_condition_residuals else [
-        "tx_hash", "condition_id", "market_id", "event_id", "acquisition_class", "timestamp", "utc_date",
-        "taker_rows", "taker_size", "maker_rows", "maker_size", "residual_size_taker_minus_maker", "cause_class",
-    ]
+    tx_fields = (
+        list(tx_condition_residuals[0])
+        if tx_condition_residuals
+        else [
+            "tx_hash",
+            "condition_id",
+            "market_id",
+            "event_id",
+            "acquisition_class",
+            "timestamp",
+            "utc_date",
+            "taker_rows",
+            "taker_size",
+            "maker_rows",
+            "maker_size",
+            "residual_size_taker_minus_maker",
+            "cause_class",
+        ]
+    )
     tx_tmp = tx_csv.with_suffix(".csv.tmp")
     with tx_tmp.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=tx_fields)
@@ -324,7 +396,9 @@ def classify_scope_residuals(fill_dir: Path, output_dir: Path) -> dict[str, Any]
     fill_paths = sorted(fill_dir.glob("date=*/*.parquet"))
     scope_conditions = set()
     for path in fill_paths:
-        scope_conditions.update(pl.read_parquet(path, columns=["condition_id"])["condition_id"].drop_nulls().to_list())
+        scope_conditions.update(
+            pl.read_parquet(path, columns=["condition_id"])["condition_id"].drop_nulls().to_list()
+        )
     scope_conditions = {str(value) for value in scope_conditions}
 
     # The exporter uses Sonar's local OCI S3 configuration. This loads credentials
@@ -339,7 +413,11 @@ def classify_scope_residuals(fill_dir: Path, output_dir: Path) -> dict[str, Any]
     from pnl_common import _oci_s3_storage_options  # type: ignore[import-not-found]
 
     signer, config_obj = config.get_oci_signer_and_config()
-    client = oci.object_storage.ObjectStorageClient(config_obj, signer=signer) if signer else oci.object_storage.ObjectStorageClient(config_obj)
+    client = (
+        oci.object_storage.ObjectStorageClient(config_obj, signer=signer)
+        if signer
+        else oci.object_storage.ObjectStorageClient(config_obj)
+    )
     namespace = str(client.get_namespace().data)
     storage_options = _oci_s3_storage_options(namespace)
     registry = json.loads((sonar_root / "infra_registry.json").read_text(encoding="utf-8"))
@@ -377,7 +455,17 @@ def classify_scope_residuals(fill_dir: Path, output_dir: Path) -> dict[str, Any]
         rows = (
             pl.scan_parquet(path, storage_options=storage_options, low_memory=True)
             .filter(pl.col("tx_hash").is_in(sorted(day_hashes)))
-            .select(["timestamp", "tx_hash", "log_index", "condition_id", "token_id", "size_shares", "taker_address"])
+            .select(
+                [
+                    "timestamp",
+                    "tx_hash",
+                    "log_index",
+                    "condition_id",
+                    "token_id",
+                    "size_shares",
+                    "taker_address",
+                ]
+            )
             .collect(engine="streaming")
         )
         for row in rows.iter_rows(named=True):
@@ -426,27 +514,35 @@ def classify_scope_residuals(fill_dir: Path, output_dir: Path) -> dict[str, Any]
             cause = "SOURCE_DUPLICATE_KEYS_REVIEW"
         elif stats["source_missing_condition_rows"]:
             cause = "SOURCE_CONDITION_MISSING_REVIEW"
-        elif stats["outside_scope_rows"] and outside_delta == -tx_delta and scoped_source_delta == tx_delta:
+        elif (
+            stats["outside_scope_rows"]
+            and outside_delta == -tx_delta
+            and scoped_source_delta == tx_delta
+        ):
             cause = "EXPLAINED_SCOPE_RESIDUAL_CROSS_CONDITION"
         else:
             cause = "UNEXPLAINED_RESIDUAL"
         cause_counts[cause] += 1
-        checked_rows.append({
-            **row,
-            "cause_class": cause,
-            "source_rows_for_tx": stats["source_rows"],
-            "outside_scope_rows_for_tx": stats["outside_scope_rows"],
-            "outside_scope_condition_ids": json.dumps(sorted(value for value in stats["outside_scope_conditions"] if value)),
-            "scoped_source_taker_size": decimal_text(stats["in_scope_taker_size"]),
-            "scoped_source_maker_size": decimal_text(stats["in_scope_maker_size"]),
-            "scoped_source_delta": decimal_text(scoped_source_delta),
-            "outside_scope_taker_size": decimal_text(stats["outside_scope_taker_size"]),
-            "outside_scope_maker_size": decimal_text(stats["outside_scope_maker_size"]),
-            "outside_scope_delta": decimal_text(outside_delta),
-            "transaction_delta": decimal_text(tx_delta),
-            "transaction_delta_balances_across_scope": outside_delta == -tx_delta,
-            "source_duplicate_key_rows": stats["source_duplicate_key_rows"],
-        })
+        checked_rows.append(
+            {
+                **row,
+                "cause_class": cause,
+                "source_rows_for_tx": stats["source_rows"],
+                "outside_scope_rows_for_tx": stats["outside_scope_rows"],
+                "outside_scope_condition_ids": json.dumps(
+                    sorted(value for value in stats["outside_scope_conditions"] if value)
+                ),
+                "scoped_source_taker_size": decimal_text(stats["in_scope_taker_size"]),
+                "scoped_source_maker_size": decimal_text(stats["in_scope_maker_size"]),
+                "scoped_source_delta": decimal_text(scoped_source_delta),
+                "outside_scope_taker_size": decimal_text(stats["outside_scope_taker_size"]),
+                "outside_scope_maker_size": decimal_text(stats["outside_scope_maker_size"]),
+                "outside_scope_delta": decimal_text(outside_delta),
+                "transaction_delta": decimal_text(tx_delta),
+                "transaction_delta_balances_across_scope": outside_delta == -tx_delta,
+                "source_duplicate_key_rows": stats["source_duplicate_key_rows"],
+            }
+        )
 
     csv_path = output_dir / "maker_taker_tx_condition_residuals.csv"
     fields = list(checked_rows[0])
@@ -463,19 +559,31 @@ def classify_scope_residuals(fill_dir: Path, output_dir: Path) -> dict[str, Any]
         "transactions_checked": len(all_hashes),
         "residual_groups": len(residuals),
         "utc_dates_scanned": sorted(hashes_by_day),
-        "source_rows_read_after_dedup": sum(value["source_rows"] for value in source_by_hash.values()),
-        "source_duplicate_key_rows": sum(value["source_duplicate_key_rows"] for value in source_by_hash.values()),
+        "source_rows_read_after_dedup": sum(
+            value["source_rows"] for value in source_by_hash.values()
+        ),
+        "source_duplicate_key_rows": sum(
+            value["source_duplicate_key_rows"] for value in source_by_hash.values()
+        ),
         "cause_counts": dict(cause_counts),
-        "remaining_unexplained_residuals": [row for row in checked_rows if row["cause_class"] != "EXPLAINED_SCOPE_RESIDUAL_CROSS_CONDITION"],
+        "remaining_unexplained_residuals": [
+            row
+            for row in checked_rows
+            if row["cause_class"] != "EXPLAINED_SCOPE_RESIDUAL_CROSS_CONDITION"
+        ],
         "residuals_csv": csv_path.name,
         "residuals_sha256": sha256_file(csv_path),
-        "maximum_transaction_residual_abs": decimal_text(max((abs(value) for value in tx_delta_seen.values()), default=Decimal(0))),
+        "maximum_transaction_residual_abs": decimal_text(
+            max((abs(value) for value in tx_delta_seen.values()), default=Decimal(0))
+        ),
     }
     json_write(output_dir / "maker_taker_scope_audit.json", audit)
     return audit
 
 
-def build_v2_local(package_root: Path, block_evidence_path: Path, output_dir: Path) -> dict[str, Any]:
+def build_v2_local(
+    package_root: Path, block_evidence_path: Path, output_dir: Path
+) -> dict[str, Any]:
     """Patch only the two custody-gap partitions and write corrected v2 gate outputs."""
     import polars as pl
     import pyarrow as pa
@@ -488,12 +596,19 @@ def build_v2_local(package_root: Path, block_evidence_path: Path, output_dir: Pa
     v1_quality = json.loads(v1_quality_path.read_text(encoding="utf-8"))
     block_evidence = json.loads(block_evidence_path.read_text(encoding="utf-8"))
     if block_evidence.get("validation", {}).get("pass") is not True:
-        raise RuntimeError("unique timestamp derivation was not validated at 100%; refusing v2 patch")
+        raise RuntimeError(
+            "unique timestamp derivation was not validated at 100%; refusing v2 patch"
+        )
     if block_evidence.get("derivation", {}).get("pass") is not True:
         raise RuntimeError("timestamp derivation evidence does not cover every missing-block fill")
-    if v1_manifest.get("version") != "v1" or v1_manifest.get("status") not in {"BLOCKED_QUALITY_GATE", "BLOCKED_SUPERSEDED"}:
+    if v1_manifest.get("version") != "v1" or v1_manifest.get("status") not in {
+        "BLOCKED_QUALITY_GATE",
+        "BLOCKED_SUPERSEDED",
+    }:
         raise RuntimeError("expected the original blocked or superseded v1 source manifest")
-    original_v1_manifest_sha = str(v1_manifest.get("original_manifest_sha256") or sha256_file(v1_manifest_path))
+    original_v1_manifest_sha = str(
+        v1_manifest.get("original_manifest_sha256") or sha256_file(v1_manifest_path)
+    )
     annotated_v1_manifest_sha = sha256_file(v1_manifest_path)
     if not package_root.is_dir():
         raise RuntimeError(f"Kaggle package is missing: {package_root}")
@@ -510,7 +625,11 @@ def build_v2_local(package_root: Path, block_evidence_path: Path, output_dir: Pa
             raise RuntimeError(f"expected one v1 fill Parquet for {day}, found {len(files)}")
         source_path = files[0]
         source_sha = sha256_file(source_path)
-        disk_gate(source_path.parent, f"before_v2_block_patch_{day}", reserve_bytes=source_path.stat().st_size * 2)
+        disk_gate(
+            source_path.parent,
+            f"before_v2_block_patch_{day}",
+            reserve_bytes=source_path.stat().st_size * 2,
+        )
         # ParquetFile reads the file schema directly; pq.read_table treats a
         # date=YYYY-MM-DD parent directory as a Hive dataset and appends `date`.
         table = pq.ParquetFile(source_path).read()
@@ -523,30 +642,50 @@ def build_v2_local(package_root: Path, block_evidence_path: Path, output_dir: Pa
         blocks = table["block_number"].to_pylist()
         provenance = table["block_number_provenance"].to_pylist()
         replaced = 0
-        for i, (timestamp, block_number) in enumerate(zip(timestamp_values, blocks)):
+        for i, (timestamp, block_number) in enumerate(zip(timestamp_values, blocks, strict=False)):
             if block_number is None:
                 if int(timestamp) not in timestamp_map:
-                    raise RuntimeError(f"no unique timestamp mapping for {day} row at ts={timestamp}")
+                    raise RuntimeError(
+                        f"no unique timestamp mapping for {day} row at ts={timestamp}"
+                    )
                 blocks[i] = timestamp_map[int(timestamp)]
                 provenance[i] = "block_timestamps_unique_ts"
                 replaced += 1
             elif provenance[i] == "block_timestamps_unique_ts":
                 if timestamp_map.get(int(timestamp)) != int(block_number):
-                    raise RuntimeError(f"existing unique-ts block disagrees with evidence for ts={timestamp}")
+                    raise RuntimeError(
+                        f"existing unique-ts block disagrees with evidence for ts={timestamp}"
+                    )
                 replaced += 1
             elif provenance[i] != "CUSTODY_TX_HASH_JOIN":
-                raise RuntimeError(f"unexpected non-custody block provenance in v1 row: {provenance[i]}")
+                raise RuntimeError(
+                    f"unexpected non-custody block provenance in v1 row: {provenance[i]}"
+                )
         if replaced != (1625 if day == "2026-09-20" else 3364):
             raise RuntimeError(f"unexpected patched row count for {day}: {replaced}")
-        table = table.set_column(block_idx, table.schema.field(block_idx), pa.array(blocks, type=table.schema.field(block_idx).type))
-        table = table.set_column(prov_idx, table.schema.field(prov_idx), pa.array(provenance, type=table.schema.field(prov_idx).type))
+        table = table.set_column(
+            block_idx,
+            table.schema.field(block_idx),
+            pa.array(blocks, type=table.schema.field(block_idx).type),
+        )
+        table = table.set_column(
+            prov_idx,
+            table.schema.field(prov_idx),
+            pa.array(provenance, type=table.schema.field(prov_idx).type),
+        )
         token_ids = table["token_id"].to_pylist()
         log_indexes = table["log_index"].to_pylist()
         tx_hashes = table["tx_hash"].to_pylist()
         fill_ids = table["fill_id"].to_pylist()
         row_order = sorted(
             range(table.num_rows),
-            key=lambda i: (str(token_ids[i]), int(blocks[i]), int(log_indexes[i]), str(tx_hashes[i]), str(fill_ids[i])),
+            key=lambda i: (
+                str(token_ids[i]),
+                int(blocks[i]),
+                int(log_indexes[i]),
+                str(tx_hashes[i]),
+                str(fill_ids[i]),
+            ),
         )
         table = table.take(pa.array(row_order, type=pa.int64()))
         temp_path = source_path.with_name(source_path.name + ".tmp")
@@ -576,11 +715,21 @@ def build_v2_local(package_root: Path, block_evidence_path: Path, output_dir: Pa
     shutil.copy2(block_evidence_path, output_dir / "block_timestamp_evidence.json")
 
     parquet_paths = sorted((package_root / "fills").glob("date=*/*.parquet"))
-    scan = pl.scan_parquet([str(path) for path in parquet_paths], low_memory=True, hive_partitioning=False)
+    scan = pl.scan_parquet(
+        [str(path) for path in parquet_paths], low_memory=True, hive_partitioning=False
+    )
     row_count = int(scan.select(pl.len()).collect(engine="streaming").item())
-    missing_block_rows = int(scan.filter(pl.col("block_number").is_null()).select(pl.len()).collect(engine="streaming").item())
+    missing_block_rows = int(
+        scan.filter(pl.col("block_number").is_null())
+        .select(pl.len())
+        .collect(engine="streaming")
+        .item()
+    )
     provenance_df = scan.group_by("block_number_provenance").len().collect(engine="streaming")
-    provenance_mix = {str(row["block_number_provenance"]): int(row["len"]) for row in provenance_df.iter_rows(named=True)}
+    provenance_mix = {
+        str(row["block_number_provenance"]): int(row["len"])
+        for row in provenance_df.iter_rows(named=True)
+    }
     ordering_frame = (
         scan.filter(pl.col("block_number").is_not_null() & pl.col("log_index").is_not_null())
         .sort(["token_id", "block_number", "log_index", "tx_hash", "fill_id"], nulls_last=True)
@@ -590,14 +739,26 @@ def build_v2_local(package_root: Path, block_evidence_path: Path, output_dir: Pa
         )
         .filter(
             pl.col("_prior_block").is_not_null()
-            & ((pl.col("block_number") < pl.col("_prior_block"))
-               | ((pl.col("block_number") == pl.col("_prior_block")) & (pl.col("log_index") <= pl.col("_prior_log"))))
+            & (
+                (pl.col("block_number") < pl.col("_prior_block"))
+                | (
+                    (pl.col("block_number") == pl.col("_prior_block"))
+                    & (pl.col("log_index") <= pl.col("_prior_log"))
+                )
+            )
         )
-        .group_by("token_id").len().collect(engine="streaming")
+        .group_by("token_id")
+        .len()
+        .collect(engine="streaming")
     )
-    ordering_failures = [{"token_id": str(row["token_id"]), "rows": int(row["len"])} for row in ordering_frame.iter_rows(named=True)]
+    ordering_failures = [
+        {"token_id": str(row["token_id"]), "rows": int(row["len"])}
+        for row in ordering_frame.iter_rows(named=True)
+    ]
     if row_count != 231_964 or missing_block_rows != 0 or ordering_failures:
-        raise RuntimeError(f"v2 block/order gate failed: rows={row_count} missing={missing_block_rows} ordering={ordering_failures[:3]}")
+        raise RuntimeError(
+            f"v2 block/order gate failed: rows={row_count} missing={missing_block_rows} ordering={ordering_failures[:3]}"
+        )
     if provenance_mix != {"CUSTODY_TX_HASH_JOIN": 226_975, "block_timestamps_unique_ts": 4_989}:
         raise RuntimeError(f"unexpected v2 block provenance mix: {provenance_mix}")
 
@@ -609,11 +770,21 @@ def build_v2_local(package_root: Path, block_evidence_path: Path, output_dir: Pa
     scope_audit = json.loads(scope_audit_path.read_text(encoding="utf-8"))
     conservation = json.loads(conservation_path.read_text(encoding="utf-8"))
     if scope_audit.get("cause_counts") != {"UNEXPLAINED_RESIDUAL": 43} or len(residuals) != 43:
-        raise RuntimeError("expected 43 individually documented, unexplained transaction-condition residuals")
-    if any(Decimal(row["residual_size_taker_minus_maker"]) not in (Decimal("0.0001"), Decimal("-0.0001")) for row in residuals):
+        raise RuntimeError(
+            "expected 43 individually documented, unexplained transaction-condition residuals"
+        )
+    if any(
+        Decimal(row["residual_size_taker_minus_maker"])
+        not in (Decimal("0.0001"), Decimal("-0.0001"))
+        for row in residuals
+    ):
         raise RuntimeError("unexpected exact-decimal residual magnitude")
     price_rows_path = output_dir / "maker_taker_residual_buckets.csv"
-    price_rows = list(csv.DictReader(price_rows_path.open(encoding="utf-8", newline=""))) if price_rows_path.exists() else []
+    price_rows = (
+        list(csv.DictReader(price_rows_path.open(encoding="utf-8", newline="")))
+        if price_rows_path.exists()
+        else []
+    )
     conservation.pop("residuals_csv", None)
     conservation.pop("residuals_sha256", None)
     if "price_indexed_diagnostic" not in conservation:
@@ -662,8 +833,10 @@ def build_v2_local(package_root: Path, block_evidence_path: Path, output_dir: Pa
     v2_manifest["status"] = "BLOCKED_QUALITY_GATE"
     v2_manifest["object_prefix"] = "research/data004_ets_p0p1/v2/"
     v2_manifest["immutable_after_manifest_publication"] = True
-    v2_manifest["immutability_note"] = "v2 fill and metadata objects, source manifest, and gate outputs are immutable after publication."
-    v2_manifest["created_at_utc"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    v2_manifest["immutability_note"] = (
+        "v2 fill and metadata objects, source manifest, and gate outputs are immutable after publication."
+    )
+    v2_manifest["created_at_utc"] = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     v2_manifest["supersedes"] = {
         "version": "v1",
         "original_manifest_sha256": original_v1_manifest_sha,
@@ -689,7 +862,9 @@ def build_v2_local(package_root: Path, block_evidence_path: Path, output_dir: Pa
         "v1_manifest_sha256_before_supersession": original_v1_manifest_sha,
         "v1_manifest_sha256_after_supersession_annotation": annotated_v1_manifest_sha,
         "block_timestamp_evidence": "block_timestamp_evidence.json",
-        "block_timestamp_evidence_sha256": sha256_file(output_dir / "block_timestamp_evidence.json"),
+        "block_timestamp_evidence_sha256": sha256_file(
+            output_dir / "block_timestamp_evidence.json"
+        ),
         "derivation_script": "scripts/research/data004/reconcile_data004_a3.py",
         "derivation_script_sha256": sha256_file(Path(__file__).resolve()),
         "conservation": "maker_taker_conservation.json",
@@ -709,7 +884,9 @@ def build_v2_local(package_root: Path, block_evidence_path: Path, output_dir: Pa
     for file_record in v1_manifest["files"]:
         item = dict(file_record)
         old_path = item["path"]
-        item["path"] = old_path.replace("research/data004_ets_p0p1/v1/", "research/data004_ets_p0p1/v2/", 1)
+        item["path"] = old_path.replace(
+            "research/data004_ets_p0p1/v1/", "research/data004_ets_p0p1/v2/", 1
+        )
         item["object_prefix"] = "research/data004_ets_p0p1/v2/"
         if item.get("kind") == "fills":
             local_partition = package_root / "fills" / f"date={item['date']}"
@@ -718,11 +895,13 @@ def build_v2_local(package_root: Path, block_evidence_path: Path, output_dir: Pa
                 raise RuntimeError(f"expected one packaged fill object for {item['date']}")
             local_file = local_files[0]
             sha = sha256_file(local_file)
-            item.update({
-                "path": f"research/data004_ets_p0p1/v2/fills/date={item['date']}/{local_file.name}",
-                "bytes": local_file.stat().st_size,
-                "sha256": sha,
-            })
+            item.update(
+                {
+                    "path": f"research/data004_ets_p0p1/v2/fills/date={item['date']}/{local_file.name}",
+                    "bytes": local_file.stat().st_size,
+                    "sha256": sha,
+                }
+            )
             if item["date"] in rewritten_files:
                 item["derived_block_rows"] = rewritten_files[item["date"]]["derived_block_rows"]
             total_bytes += int(item["bytes"])
@@ -752,12 +931,23 @@ def build_v2_local(package_root: Path, block_evidence_path: Path, output_dir: Pa
         "unexplained_residuals": residuals,
         "pass": False,
     }
-    for coverage_key in ("coverage_by_market", "coverage_by_token", "coverage_by_event", "coverage_by_date"):
+    for coverage_key in (
+        "coverage_by_market",
+        "coverage_by_token",
+        "coverage_by_event",
+        "coverage_by_date",
+    ):
         rows = v2_manifest["validation"].get(coverage_key, [])
         for row in rows:
             if "missing_block_rows" in row:
                 row["missing_block_rows"] = 0
-    for coverage_file in ("market_coverage.csv", "condition_coverage.csv", "token_coverage.csv", "event_coverage.csv", "date_coverage.csv"):
+    for coverage_file in (
+        "market_coverage.csv",
+        "condition_coverage.csv",
+        "token_coverage.csv",
+        "event_coverage.csv",
+        "date_coverage.csv",
+    ):
         path = output_dir / coverage_file
         with path.open(encoding="utf-8", newline="") as handle:
             reader = csv.DictReader(handle)
@@ -774,8 +964,12 @@ def build_v2_local(package_root: Path, block_evidence_path: Path, output_dir: Pa
         "missing_block_number_rows": 0,
         "imputed_block_number_rows": 0,
         "custody_known_rows_validated": block_evidence["validation"]["custody_known_rows_checked"],
-        "custody_timestamp_agreement_rows": block_evidence["validation"]["custody_known_rows_checked"],
-        "timestamp_derived_rows": block_evidence["derivation"]["fill_rows_with_exactly_one_timestamp_match"],
+        "custody_timestamp_agreement_rows": block_evidence["validation"][
+            "custody_known_rows_checked"
+        ],
+        "timestamp_derived_rows": block_evidence["derivation"][
+            "fill_rows_with_exactly_one_timestamp_match"
+        ],
         "pass": True,
     }
     v2_gates["ordering"] = {
@@ -811,27 +1005,42 @@ def build_v2_local(package_root: Path, block_evidence_path: Path, output_dir: Pa
     }
     json_write(output_dir / "data004_quality.json", quality)
     json_write(LANE / "data004_quality.json", quality)
-    json_write(LANE / "data004_a3_gate_summary.json", {
-        "dataset_id": "DATA-004", "version": "v2", "status": v2_manifest["status"],
-        "quality_manifest": "data/research/data004_ets_p0p1/v2/data004_quality.json",
-        "unexplained_residual_groups": 43,
-        "block_number_missing_rows": 0,
-        "ordering_failures": ordering_failures,
-        "gates_failed": [failure["gate"] for failure in failures],
-    })
-    return {"status": v2_manifest["status"], "files": len(new_files), "parquet_bytes": total_bytes,
-            "row_count": row_count, "provenance_mix": provenance_mix, "failures": [f["gate"] for f in failures],
-            "rewritten_files": rewritten_files}
+    json_write(
+        LANE / "data004_a3_gate_summary.json",
+        {
+            "dataset_id": "DATA-004",
+            "version": "v2",
+            "status": v2_manifest["status"],
+            "quality_manifest": "data/research/data004_ets_p0p1/v2/data004_quality.json",
+            "unexplained_residual_groups": 43,
+            "block_number_missing_rows": 0,
+            "ordering_failures": ordering_failures,
+            "gates_failed": [failure["gate"] for failure in failures],
+        },
+    )
+    return {
+        "status": v2_manifest["status"],
+        "files": len(new_files),
+        "parquet_bytes": total_bytes,
+        "row_count": row_count,
+        "provenance_mix": provenance_mix,
+        "failures": [f["gate"] for f in failures],
+        "rewritten_files": rewritten_files,
+    }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--fill-dir", type=Path, default=INBOX / PACKAGE_NAME / "fills")
-    parser.add_argument("--output-dir", type=Path, default=ROOT / "data/research/data004_ets_p0p1/v2")
+    parser.add_argument(
+        "--output-dir", type=Path, default=ROOT / "data/research/data004_ets_p0p1/v2"
+    )
     parser.add_argument("--analyze-only", action="store_true")
     parser.add_argument("--classify-scope", action="store_true")
     parser.add_argument("--build-v2", action="store_true")
-    parser.add_argument("--block-evidence", type=Path, default=LANE / "data004_a3_block_timestamp_evidence.json")
+    parser.add_argument(
+        "--block-evidence", type=Path, default=LANE / "data004_a3_block_timestamp_evidence.json"
+    )
     args = parser.parse_args()
     if os.geteuid() == 0:
         raise RuntimeError("run as ubuntu; do not read Sonar/.env as root")
@@ -839,10 +1048,16 @@ def main() -> None:
     if sum(modes) != 1:
         raise RuntimeError("select exactly one of --analyze-only, --classify-scope, or --build-v2")
     if args.build_v2:
-        result = build_v2_local(args.fill_dir.resolve().parent, args.block_evidence.resolve(), args.output_dir.resolve())
+        result = build_v2_local(
+            args.fill_dir.resolve().parent, args.block_evidence.resolve(), args.output_dir.resolve()
+        )
     else:
         disk_gate(args.output_dir.parent, "before_conservation_audit", reserve_bytes=2 * (1 << 20))
-        result = analyze_conservation(args.fill_dir.resolve(), args.output_dir.resolve()) if args.analyze_only else classify_scope_residuals(args.fill_dir.resolve(), args.output_dir.resolve())
+        result = (
+            analyze_conservation(args.fill_dir.resolve(), args.output_dir.resolve())
+            if args.analyze_only
+            else classify_scope_residuals(args.fill_dir.resolve(), args.output_dir.resolve())
+        )
     print(json.dumps(result, sort_keys=True), flush=True)
 
 

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Apply the DATA-004 Addendum 4 source-quantum conservation disposition."""
+
 from __future__ import annotations
 
 import csv
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -29,7 +30,9 @@ def sha256_file(path: Path) -> str:
 
 
 def write_json(path: Path, value: Any) -> None:
-    path.write_text(json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
 
 
 def measure_size_precision() -> dict[str, Any]:
@@ -66,10 +69,26 @@ def main() -> None:
     quality = json.loads(quality_path.read_text(encoding="utf-8"))
     conservation = json.loads(conservation_path.read_text(encoding="utf-8"))
     scope_audit = json.loads(audit_path.read_text(encoding="utf-8"))
-    if manifest.get("status") == STATUS and quality.get("status") == STATUS and quality.get("all_gates_pass"):
-        print(json.dumps({"status": STATUS, "already_applied": True, "manifest_sha256": sha256_file(manifest_path)}, sort_keys=True))
+    if (
+        manifest.get("status") == STATUS
+        and quality.get("status") == STATUS
+        and quality.get("all_gates_pass")
+    ):
+        print(
+            json.dumps(
+                {
+                    "status": STATUS,
+                    "already_applied": True,
+                    "manifest_sha256": sha256_file(manifest_path),
+                },
+                sort_keys=True,
+            )
+        )
         return
-    if manifest.get("status") != "BLOCKED_QUALITY_GATE" or quality.get("status") != "BLOCKED_QUALITY_GATE":
+    if (
+        manifest.get("status") != "BLOCKED_QUALITY_GATE"
+        or quality.get("status") != "BLOCKED_QUALITY_GATE"
+    ):
         raise RuntimeError("Addendum 4 may only transition the existing blocked v2 artifacts")
     old_manifest_sha = sha256_file(manifest_path)
 
@@ -107,7 +126,9 @@ def main() -> None:
         "pass_condition": "abs(taker_size - maker_size) <= source_quantum_shares * max(maker_rows, 1)",
         "maximum_maker_rows_in_rounding_groups": max(maker_counts),
         "maximum_applicable_tolerance_shares": str(QUANTUM * max(maker_counts)),
-        "maximum_observed_absolute_residual_shares": str(max(abs(Decimal(row["residual_size_taker_minus_maker"])) for row in residuals)),
+        "maximum_observed_absolute_residual_shares": str(
+            max(abs(Decimal(row["residual_size_taker_minus_maker"])) for row in residuals)
+        ),
         "maximum_residual_to_tolerance_ratio": str(max(ratios)),
         "rounding_group_count": len(residuals),
         "all_groups_within_tolerance": True,
@@ -127,7 +148,9 @@ def main() -> None:
     write_json(audit_path, scope_audit)
     audit_sha = sha256_file(audit_path)
 
-    conservation["method"] = "Decimal aggregation by (tx_hash, condition_id), with acceptance at the measured 4-decimal source quantum; fill values are not rounded or changed."
+    conservation["method"] = (
+        "Decimal aggregation by (tx_hash, condition_id), with acceptance at the measured 4-decimal source quantum; fill values are not rounded or changed."
+    )
     conservation["pass_at_source_quantum"] = True
     conservation["source_precision_evidence"] = precision
     conservation["source_quantum_tolerance"] = source_quantum_tolerance
@@ -150,22 +173,24 @@ def main() -> None:
         "scope_audit_sha256": audit_sha,
     }
     gate_summary = conservation["per_tx_condition_conservation"]
-    gate_summary.update({
-        "method": "Group taker-order rows against maker rows by (tx_hash, condition_id), sum size_shares using Decimal(str(value)), then compare at the 4-decimal source quantum.",
-        "mismatched_size_groups": len(residuals),
-        "precision_rounding_groups": len(residuals),
-        "unexplained_residual_groups": 0,
-        "pass_before_scope_attribution": True,
-        "strict_exact_equality_pass": False,
-        "pass_at_source_quantum": True,
-        "pass": True,
-        "residual_cause_counts": {"PRECISION_ROUNDING_4DP": len(residuals)},
-        "residuals_csv": "maker_taker_tx_condition_residuals.csv",
-        "residuals_sha256": residual_sha,
-        "precision_rounding_residuals": residuals,
-        "tolerance": source_quantum_tolerance,
-        "source_precision_evidence": precision,
-    })
+    gate_summary.update(
+        {
+            "method": "Group taker-order rows against maker rows by (tx_hash, condition_id), sum size_shares using Decimal(str(value)), then compare at the 4-decimal source quantum.",
+            "mismatched_size_groups": len(residuals),
+            "precision_rounding_groups": len(residuals),
+            "unexplained_residual_groups": 0,
+            "pass_before_scope_attribution": True,
+            "strict_exact_equality_pass": False,
+            "pass_at_source_quantum": True,
+            "pass": True,
+            "residual_cause_counts": {"PRECISION_ROUNDING_4DP": len(residuals)},
+            "residuals_csv": "maker_taker_tx_condition_residuals.csv",
+            "residuals_sha256": residual_sha,
+            "precision_rounding_residuals": residuals,
+            "tolerance": source_quantum_tolerance,
+            "source_precision_evidence": precision,
+        }
+    )
     gate_summary.pop("unexplained_residuals", None)
     conservation["pass_before_scope_attribution"] = True
     conservation["strict_exact_equality_pass"] = False
@@ -207,13 +232,19 @@ def main() -> None:
         "residuals_reclassified": len(residuals),
         "fill_values_changed": 0,
         "note": "Only v2 quality/manifest metadata changed; no fill Parquet objects or fill values were changed.",
-        "applied_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "applied_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     }
-    manifest["immutability_note"] = "Fill and metadata payload objects are immutable. Addendum 4 updates the v2 quality disposition and manifest only; no fill object or fill value changed."
-    manifest["source"]["notes_addendum_4"] = "All 43 exact 0.0001-share residuals pass at the measured 4-decimal source quantum; maximum size_shares precision across all 231,964 rows is four decimal places."
+    manifest["immutability_note"] = (
+        "Fill and metadata payload objects are immutable. Addendum 4 updates the v2 quality disposition and manifest only; no fill object or fill value changed."
+    )
+    manifest["source"]["notes_addendum_4"] = (
+        "All 43 exact 0.0001-share residuals pass at the measured 4-decimal source quantum; maximum size_shares precision across all 231,964 rows is four decimal places."
+    )
     write_json(manifest_path, manifest)
 
-    quality["generated_from"] = "v2 fill rows with Addendum 3 block derivation and Addendum 4 source-quantum gate"
+    quality["generated_from"] = (
+        "v2 fill rows with Addendum 3 block derivation and Addendum 4 source-quantum gate"
+    )
     quality["all_gates_pass"] = True
     quality["status"] = STATUS
     quality["gates"]["maker_taker_size_symmetry"] = symmetry
@@ -221,24 +252,38 @@ def main() -> None:
     quality["source_precision_evidence"] = precision
     write_json(quality_path, quality)
     write_json(LANE / "data004_quality.json", quality)
-    write_json(LANE / "data004_a4_gate_summary.json", {
-        "dataset_id": "DATA-004",
-        "version": "v2",
-        "status": STATUS,
-        "all_gates_pass": True,
-        "fill_rows": precision["rows_scanned"],
-        "size_shares_max_decimal_places": precision["max_decimal_places_observed"],
-        "size_shares_decimal_places_histogram": precision["decimal_places_histogram"],
-        "groups_checked": 96630,
-        "exact_equal_size_groups": 96587,
-        "precision_rounding_groups": len(residuals),
-        "unexplained_residual_groups": 0,
-        "tolerance": source_quantum_tolerance,
-        "previous_manifest_sha256": old_manifest_sha,
-        "new_manifest_sha256": sha256_file(manifest_path),
-        "gates_failed": [],
-    })
-    print(json.dumps({"status": STATUS, "fill_rows": precision["rows_scanned"], "max_decimal_places": precision["max_decimal_places_observed"], "precision_rounding_groups": len(residuals), "manifest_sha256": sha256_file(manifest_path)}, sort_keys=True))
+    write_json(
+        LANE / "data004_a4_gate_summary.json",
+        {
+            "dataset_id": "DATA-004",
+            "version": "v2",
+            "status": STATUS,
+            "all_gates_pass": True,
+            "fill_rows": precision["rows_scanned"],
+            "size_shares_max_decimal_places": precision["max_decimal_places_observed"],
+            "size_shares_decimal_places_histogram": precision["decimal_places_histogram"],
+            "groups_checked": 96630,
+            "exact_equal_size_groups": 96587,
+            "precision_rounding_groups": len(residuals),
+            "unexplained_residual_groups": 0,
+            "tolerance": source_quantum_tolerance,
+            "previous_manifest_sha256": old_manifest_sha,
+            "new_manifest_sha256": sha256_file(manifest_path),
+            "gates_failed": [],
+        },
+    )
+    print(
+        json.dumps(
+            {
+                "status": STATUS,
+                "fill_rows": precision["rows_scanned"],
+                "max_decimal_places": precision["max_decimal_places_observed"],
+                "precision_rounding_groups": len(residuals),
+                "manifest_sha256": sha256_file(manifest_path),
+            },
+            sort_keys=True,
+        )
+    )
 
 
 if __name__ == "__main__":

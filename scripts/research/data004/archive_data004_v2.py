@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Build the compressed DATA-004 v2 Kaggle handoff and record its checksum."""
+
 from __future__ import annotations
 
 import hashlib
@@ -7,9 +8,8 @@ import json
 import os
 import subprocess
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
 INBOX = Path("/home/ubuntu/inbox/data004_20260929")
@@ -36,18 +36,32 @@ def disk_gate(stage: str, reserve_bytes: int) -> int:
     log = Path("/home/ubuntu/campaigns/data004_20260929/data004_a3_disk_check.jsonl")
     started = time.monotonic()
     while True:
-        result = subprocess.run(["df", "-B1", "--output=avail", str(INBOX)], check=True, text=True, capture_output=True)
+        result = subprocess.run(
+            ["df", "-B1", "--output=avail", str(INBOX)], check=True, text=True, capture_output=True
+        )
         available = int([line.strip() for line in result.stdout.splitlines() if line.strip()][-1])
         with log.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps({"stage": stage, "available_bytes": available, "reserve_bytes": reserve_bytes,
-                                     "checked_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}) + "\n")
+            handle.write(
+                json.dumps(
+                    {
+                        "stage": stage,
+                        "available_bytes": available,
+                        "reserve_bytes": reserve_bytes,
+                        "checked_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                    }
+                )
+                + "\n"
+            )
         if available < HARD_MIN_FREE_BYTES:
             raise RuntimeError(f"disk below hard 5 GiB floor at {stage}: {available}")
         if available >= MIN_FREE_BYTES + reserve_bytes:
             return available
         if time.monotonic() - started > 2 * 60 * 60:
             raise RuntimeError(f"disk gate timed out at {stage}: {available}")
-        print(f"PAUSED disk gate stage={stage} free_bytes={available}; rechecking in 5 minutes", flush=True)
+        print(
+            f"PAUSED disk gate stage={stage} free_bytes={available}; rechecking in 5 minutes",
+            flush=True,
+        )
         time.sleep(300)
 
 
@@ -74,35 +88,51 @@ def main() -> None:
     archive_bytes = temp.stat().st_size
     os.replace(temp, ARCHIVE)
     SHA_FILE.write_text(f"{digest}  {ARCHIVE.name}\n", encoding="utf-8")
-    members = subprocess.run(["tar", "--zstd", "-tf", str(ARCHIVE)], check=True, text=True, capture_output=True).stdout.splitlines()
+    members = subprocess.run(
+        ["tar", "--zstd", "-tf", str(ARCHIVE)], check=True, text=True, capture_output=True
+    ).stdout.splitlines()
     run = json.loads(RUN_RECORD.read_text(encoding="utf-8")) if RUN_RECORD.exists() else {}
-    run.update({
-        "dataset_ref": "polyleviathan/sig-cup-data-004-ets-p0p1-fills",
-        "dataset_metadata_path": f"{PACKAGE_NAME}/dataset-metadata.json",
-        "visibility": "private",
-        "version": "v2",
-        "status": "PENDING_TEAM_UPLOAD",
-        "source_archive": str(ARCHIVE),
-        "source_archive_bytes": archive_bytes,
-        "source_archive_sha256": digest,
-        "source_archive_sha256_file": str(SHA_FILE),
-        "uncompressed_bytes": expected_uncompressed,
-        "file_count": len(package_manifest["files"]),
-        "archive_member_count": len(members),
-        "oci_manifest_object": "research/data004_ets_p0p1/v2/MANIFEST.json",
-        "oci_manifest_sha256": sha256_file(MANIFEST),
-        "original_v1_oci_manifest_sha256": "048bd5a59642f14c174316590adbdce220f9efabbf571a3a8348da30bc33ce72",
-        "superseded_v1_manifest_sha256": "73bbb42db50b9fa3ece571e1e9a7f246f0b1dcdc82479679e9d74e9ac0249ff9",
-        "upload_command": "kaggle datasets create -p sig-cup-data-004-ets-p0p1-fills --dir-mode zip",
-        "upload_command_cwd": str(INBOX),
-        "note": "Prepared for the team to upload manually from the GitHub handoff. This host has no Kaggle CLI or credentials; no upload was attempted.",
-        "github_handoff_repo_path": "data/kaggle_handoff/data004/",
-        "generated_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    })
+    run.update(
+        {
+            "dataset_ref": "polyleviathan/sig-cup-data-004-ets-p0p1-fills",
+            "dataset_metadata_path": f"{PACKAGE_NAME}/dataset-metadata.json",
+            "visibility": "private",
+            "version": "v2",
+            "status": "PENDING_TEAM_UPLOAD",
+            "source_archive": str(ARCHIVE),
+            "source_archive_bytes": archive_bytes,
+            "source_archive_sha256": digest,
+            "source_archive_sha256_file": str(SHA_FILE),
+            "uncompressed_bytes": expected_uncompressed,
+            "file_count": len(package_manifest["files"]),
+            "archive_member_count": len(members),
+            "oci_manifest_object": "research/data004_ets_p0p1/v2/MANIFEST.json",
+            "oci_manifest_sha256": sha256_file(MANIFEST),
+            "original_v1_oci_manifest_sha256": "048bd5a59642f14c174316590adbdce220f9efabbf571a3a8348da30bc33ce72",
+            "superseded_v1_manifest_sha256": "73bbb42db50b9fa3ece571e1e9a7f246f0b1dcdc82479679e9d74e9ac0249ff9",
+            "upload_command": "kaggle datasets create -p sig-cup-data-004-ets-p0p1-fills --dir-mode zip",
+            "upload_command_cwd": str(INBOX),
+            "note": "Prepared for the team to upload manually from the GitHub handoff. This host has no Kaggle CLI or credentials; no upload was attempted.",
+            "github_handoff_repo_path": "data/kaggle_handoff/data004/",
+            "generated_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        }
+    )
     RUN_RECORD.write_text(json.dumps(run, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(json.dumps({"archive": str(ARCHIVE), "bytes": archive_bytes, "sha256": digest,
-                      "uncompressed_bytes": expected_uncompressed, "files": len(package_manifest["files"]),
-                      "members": len(members), "status": run["status"]}, sort_keys=True), flush=True)
+    print(
+        json.dumps(
+            {
+                "archive": str(ARCHIVE),
+                "bytes": archive_bytes,
+                "sha256": digest,
+                "uncompressed_bytes": expected_uncompressed,
+                "files": len(package_manifest["files"]),
+                "members": len(members),
+                "status": run["status"],
+            },
+            sort_keys=True,
+        ),
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

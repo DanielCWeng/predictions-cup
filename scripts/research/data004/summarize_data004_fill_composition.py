@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Summarize the exported DATA-004 fill rows by direction, side, role and tier."""
+
 from __future__ import annotations
 
 import argparse
@@ -8,10 +9,9 @@ import os
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_FILL_DIR = Path("/home/ubuntu/inbox/data004_20260929/sig-cup-data-004-ets-p0p1-fills/fills")
@@ -42,24 +42,37 @@ def disk_gate(path: Path, stage: str, reserve_bytes: int = 0) -> int:
         )
         available = int([line.strip() for line in result.stdout.splitlines() if line.strip()][-1])
         with log_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps({
-                "checked_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                "stage": stage,
-                "available_bytes": available,
-                "reserve_bytes": reserve_bytes,
-                "min_free_required_bytes": MIN_FREE_BYTES,
-                "hard_floor_bytes": HARD_MIN_FREE_BYTES,
-            }, sort_keys=True) + "\n")
+            handle.write(
+                json.dumps(
+                    {
+                        "checked_at_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                        "stage": stage,
+                        "available_bytes": available,
+                        "reserve_bytes": reserve_bytes,
+                        "min_free_required_bytes": MIN_FREE_BYTES,
+                        "hard_floor_bytes": HARD_MIN_FREE_BYTES,
+                    },
+                    sort_keys=True,
+                )
+                + "\n"
+            )
             handle.flush()
             os.fsync(handle.fileno())
         if available < HARD_MIN_FREE_BYTES:
-            raise RuntimeError(f"disk is already below the 5 GiB hard floor at {stage}: {available}")
+            raise RuntimeError(
+                f"disk is already below the 5 GiB hard floor at {stage}: {available}"
+            )
         if available >= MIN_FREE_BYTES and available - reserve_bytes >= HARD_MIN_FREE_BYTES:
             return available
         elapsed = time.monotonic() - started
         if elapsed >= 2 * 60 * 60:
-            raise RuntimeError(f"disk gate timed out after two hours at {stage}: {available} bytes free")
-        print(f"PAUSED disk gate stage={stage} free_bytes={available}; recheck in 5 minutes", flush=True)
+            raise RuntimeError(
+                f"disk gate timed out after two hours at {stage}: {available} bytes free"
+            )
+        print(
+            f"PAUSED disk gate stage={stage} free_bytes={available}; recheck in 5 minutes",
+            flush=True,
+        )
         time.sleep(300)
 
 
@@ -70,7 +83,9 @@ def write_json(path: Path, value: Any) -> None:
     os.replace(tmp, path)
 
 
-def update_package(summary: dict[str, Any], summary_path: Path, package_root: Path) -> dict[str, Any]:
+def update_package(
+    summary: dict[str, Any], summary_path: Path, package_root: Path
+) -> dict[str, Any]:
     package_root = package_root.resolve()
     manifest_path = package_root / "MANIFEST.json"
     readme_path = package_root / "README.md"
@@ -88,12 +103,14 @@ def update_package(summary: dict[str, Any], summary_path: Path, package_root: Pa
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["files"] = [row for row in manifest["files"] if row.get("path") != relative.as_posix()]
-    manifest["files"].append({
-        "path": relative.as_posix(),
-        "bytes": package_summary.stat().st_size,
-        "sha256": sha256_file(package_summary),
-        "source": "summarized from the 343 finalized OCI fill Parquet objects",
-    })
+    manifest["files"].append(
+        {
+            "path": relative.as_posix(),
+            "bytes": package_summary.stat().st_size,
+            "sha256": sha256_file(package_summary),
+            "source": "summarized from the 343 finalized OCI fill Parquet objects",
+        }
+    )
     manifest["files"].sort(key=lambda row: row["path"])
     readme_text = readme_path.read_text(encoding="utf-8")
     if "`fill_composition.json`" not in readme_text:
@@ -113,7 +130,11 @@ def update_package(summary: dict[str, Any], summary_path: Path, package_root: Pa
     if "## Fill composition" not in coverage_text:
         coverage_text += section
 
-    disk_gate(package_root, "before_refresh_package_manifest", reserve_bytes=manifest_path.stat().st_size + 4096)
+    disk_gate(
+        package_root,
+        "before_refresh_package_manifest",
+        reserve_bytes=manifest_path.stat().st_size + 4096,
+    )
     readme_path.write_text(readme_text, encoding="utf-8")
     coverage_path.write_text(coverage_text, encoding="utf-8")
     for name in ("README.md", "COVERAGE.md"):
@@ -124,7 +145,15 @@ def update_package(summary: dict[str, Any], summary_path: Path, package_root: Pa
     write_json(manifest_path, manifest)
     disk_gate(archive_path.parent, "before_refresh_archive", reserve_bytes=300 * (1 << 20))
     subprocess.run(
-        ["tar", "--zstd", "-cf", str(archive_path), "-C", str(archive_path.parent), package_root.name],
+        [
+            "tar",
+            "--zstd",
+            "-cf",
+            str(archive_path),
+            "-C",
+            str(archive_path.parent),
+            package_root.name,
+        ],
         check=True,
         text=True,
         capture_output=True,
@@ -133,15 +162,17 @@ def update_package(summary: dict[str, Any], summary_path: Path, package_root: Pa
         ["tar", "--zstd", "-tf", str(archive_path)], check=True, text=True, capture_output=True
     ).stdout.splitlines()
     files = [path for path in package_root.rglob("*") if path.is_file()]
-    run.update({
-        "source_archive_bytes": archive_path.stat().st_size,
-        "source_archive_sha256": sha256_file(archive_path),
-        "uncompressed_bytes": sum(path.stat().st_size for path in files),
-        "file_count": len(files),
-        "archive_member_count": len(members),
-        "generated_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "status": "PENDING_MANUAL_UPLOAD",
-    })
+    run.update(
+        {
+            "source_archive_bytes": archive_path.stat().st_size,
+            "source_archive_sha256": sha256_file(archive_path),
+            "uncompressed_bytes": sum(path.stat().st_size for path in files),
+            "file_count": len(files),
+            "archive_member_count": len(members),
+            "generated_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            "status": "PENDING_MANUAL_UPLOAD",
+        }
+    )
     write_json(record_path, run)
     return run
 
@@ -170,10 +201,7 @@ def main() -> None:
 
     def counts_for(column: str) -> dict[str, int]:
         result = (
-            scan.group_by(column)
-            .len()
-            .sort(column, nulls_last=True)
-            .collect(engine="streaming")
+            scan.group_by(column).len().sort(column, nulls_last=True).collect(engine="streaming")
         )
         counts: dict[str, int] = {}
         for row in result.iter_rows(named=True):
