@@ -80,7 +80,7 @@ def main() -> None:
 
     source_ids = kernel_sources()
     orderbook_ids = sorted(source for source in source_ids if "/r25-ets-orderbooks-" in source)
-    discovery_ids = [source for source in source_ids if "/r25-ets-discovery" in source]
+    discovery_ids = [source for source in source_ids if source == "polyleviathan/r2-5-ets-universe-discovery"]
     if len(orderbook_ids) != 5 or len(set(orderbook_ids)) != 5 or len(discovery_ids) != 1:
         raise RuntimeError(f"finalizer requires five order-book shards and one discovery source: {source_ids}")
 

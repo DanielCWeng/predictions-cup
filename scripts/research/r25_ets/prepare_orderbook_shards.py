@@ -104,7 +104,7 @@ def main() -> None:
         (kernel_dir / "shard.json").write_text(json.dumps(shard, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         metadata = {
             "id": kernel_id,
-            "title": f"R2.5 ETS PMXT order-book shard {shard_id}",
+            "title": f"R25 ETS Orderbooks {shard_id}",
             "code_file": "run.py",
             "language": "python",
             "kernel_type": "script",
@@ -135,7 +135,7 @@ def main() -> None:
     (finalizer_dir / "REPOSITORY_COMMIT.txt").write_text(repository_commit + "\n", encoding="utf-8")
     finalizer_metadata = {
         "id": "polyleviathan/r25-ets-finalize",
-        "title": "R2.5 ETS immutable historical data output",
+        "title": "R25 ETS Finalize",
         "code_file": "run.py",
         "language": "python",
         "kernel_type": "script",
@@ -146,7 +146,7 @@ def main() -> None:
         "dataset_sources": [],
         "competition_sources": [],
         "kernel_sources": [
-            "polyleviathan/r25-ets-discovery",
+            "polyleviathan/r2-5-ets-universe-discovery",
             *[f"polyleviathan/r25-ets-orderbooks-{i:02d}" for i in range(1, 6)],
         ],
     }

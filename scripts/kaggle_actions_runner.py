@@ -147,6 +147,9 @@ def run_kernel(data: dict[str, Any], output_dir: Path) -> None:
     while time.monotonic() < deadline:
         result = run_command(["kaggle", "kernels", "status", declared_kernel], check=False)
         last_status = ((result.stdout or "") + (result.stderr or "")).strip()
+        if result.returncode != 0:
+            terminal = "failed"
+            break
         lowered = last_status.lower()
         if "complete" in lowered:
             terminal = "complete"

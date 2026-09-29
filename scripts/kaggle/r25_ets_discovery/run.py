@@ -349,7 +349,7 @@ def main() -> None:
                     dest.add(str(component[field]))
 
     audit: dict[str, Any] = {
-        "kernel": "polyleviathan/r25-ets-discovery",
+        "kernel": "polyleviathan/r2-5-ets-universe-discovery",
         "api_base": API,
         "api_docs": "https://docs.polymarket.com/market-data/discover-markets",
         "fetched_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
