@@ -13,6 +13,7 @@ Accepted research is implementation input, not automatic strategy promotion.
 | EXPERIMENT-005E | Participant-behaviour primary hypothesis is null. | Do not promote participant ecology as primary price alpha; secondary flow diagnostics require fresh preregistration. | MERGED |
 | EXPERIMENT-005F | Economic-BBO age robustly predicts update hazard across PRE/ACTIVE and ACTIVE jump hazard; long-delay persistence is substantial. | Treat staleness/renewal as a persistent state feature for later baseline/shadow engines, not short-lived causal lead-lag. | MERGED |
 | DATA-003 | Fresh fills scoped to the accepted 2026 SIG mapping are available with explicit coverage gaps. | Preferred surface for actual-universe replication before live promotion. | MERGED / ACCEPTED |
+| DATA-004 | Frozen ETS P0/P1 Polymarket fills retain the mathematical market graph, SIG anchors, and DATA-003 comparison plan. v2 resolves all blocks with a 100%-validated unique timestamp join, passes per-token ordering, and passes every quality gate at the measured source quantum. | The 43 exact ±0.0001-share groups are classified `PRECISION_ROUNDING_4DP` and pass `0.0001 × max(maker_rows, 1)`; all 231,964 sizes have at most four decimal places. The corpus is accepted for the frozen P0/P1 scope. OCI v2 is the source copy; Kaggle upload is pending team handoff. Any pilot or scope expansion is a separate decision. | MERGED / ACCEPTED_V2 |
 
 No handoff in this file creates execution capability. Strategy/fair-value/risk/execution modules remain
 separately gated.

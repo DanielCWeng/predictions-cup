@@ -23,6 +23,13 @@ status does not imply alpha, strategy promotion or execution readiness.
 | MM-001 | Are selective passive market-making economics positive after fills/costs? | PLANNED BASELINE ENGINE / REQUIRES FILL MODEL | Belongs to MAKE. No passive fill model or executable maker claim yet. |
 | LIVE-REPLICATION | Do accepted historical findings transfer to the actual mapped 2026 universe? | ACTIVE PROGRAMME / 005B TRANSFER NEGATIVE | DATA-003 is the preferred replication surface. 005B provides a completed negative transfer example: 0/7 frozen movement models pass. |
 
+## Research datasets
+
+| Dataset | Scope | Status | Use |
+|---|---|---|---|
+| DATA-003 | Accepted SIG mapping actual-market fills with DATA-002 fee evidence | MERGED / ACCEPTED | Actual mapped-universe replication; explicit custody gaps. |
+| DATA-004 | Frozen ETS P0/P1 Polymarket market-graph fills with block provenance and DATA-003 anchor pairing | MERGED / ACCEPTED_V2 | All quality gates pass. Across 231,964 rows, `size_shares` has at most four decimal places; the 43 exact ±0.0001-share groups pass the `0.0001 × max(maker_rows, 1)` source-quantum tolerance and are labeled `PRECISION_ROUNDING_4DP`. OCI v2 is the source copy; Kaggle upload is pending team handoff. |
+
 ## Registry discipline
 
 - The approved monetisation families are `FV-TAKE`, `MAKE`, `STRUCT`, `PRED`, `EVENT` and

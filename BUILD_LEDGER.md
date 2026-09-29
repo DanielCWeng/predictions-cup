@@ -4,6 +4,7 @@ Status semantics:
 
 - `MERGED / ACCEPTED` — accepted functionality/evidence exists on `main`.
 - `MERGED / ACCEPTED RESEARCH` — accepted empirical record exists on `main`; this does not imply strategy promotion.
+- `ACCEPTED_Vn / IN REVIEW` — a version's quality gate is accepted on an open branch/PR; it is not canonical on `main` until merge.
 - `BLOCKED / IN REVIEW` — implementation/evidence exists on a branch/PR but has a known blocker and is not canonical.
 - `PLANNED` — no accepted implementation exists.
 - An unmerged branch must never be described as implemented on `main`.
@@ -36,6 +37,7 @@ Status semantics:
 | EXPERIMENT-005F — Microstructure/liquidity atlas | MERGED / ACCEPTED RESEARCH | `experiment/005f-microstructure-liquidity-atlas` | #44 | head `060b58b0...`; merge `4efa3dd002abc1cbf1997acdf8734adee2e13f4c` | Qualified state-hazard support; strongest result is persistent economic-BBO age / renewal hazard. |
 | INFRA — GitHub Actions → Kaggle runner | MERGED / ACCEPTED | `infra/kaggle-actions-runner` | #47 | head `3781d40f...`; merge `793ff521c64ad15e12377d3c75d1053ad76582a7` | Canonical routine Kaggle execution path; max five parallel jobs. |
 | DATA-003 — SIG actual-market fills | MERGED / ACCEPTED | `data/003-sig-actual-fills` | #48 | head `a9ef91fa...`; merge `3e4f9ac350ba6a33dfbc9a300a00a933efdfce42` | 132,928 mapped-universe fills; fill-complete evidence; explicit custody gaps; zero DATA-001/002 overlap. |
+| DATA-004 — ETS P0/P1 market-graph fills | ACCEPTED_V2 / IN REVIEW | `data/data004-ets-p0p1-fills` | #59 | v2 Addendum 4 update in PR; merge pending | All gates pass for 231,964 fills across 298 markets. The 43 exact ±0.0001-share groups are classified `PRECISION_ROUNDING_4DP`; all are within the measured 4-dp source-quantum tolerance. No fill values changed. OCI source is at v2; Kaggle upload is pending team handoff from GitHub. PR remains open, so this branch is not canonical on `main`. |
 
 ## Closed / superseded branch-only work
 

@@ -49,6 +49,7 @@ The repository contains:
 - DATA-001 historical replay corpus;
 - DATA-002 fee/refund/rebate and role-attribution evidence;
 - DATA-003 actual mapped-2026-universe Polymarket fills;
+- DATA-004 ETS P0/P1 market-graph fills (`ACCEPTED_V2`), with frozen graph/pairing evidence and OCI source copy;
 - repository-native GitHub Actions → Kaggle execution via PR #47.
 
 Routine Kaggle compute now uses:
@@ -99,6 +100,31 @@ Key quality facts:
 
 DATA-003 is the preferred fresh mapped-universe replication/evaluation surface for findings that need
 to transfer from historical election families into the actual Cup universe.
+
+## DATA-004 — ETS P0/P1 graph universe (ACCEPTED_V2 / MERGED)
+
+DATA-004 v2 freezes 298 selected Gamma markets (210 P0 and 88 P1), their 596 outcome tokens, 1,596
+market-graph links, and 134 selected SIG exchange IDs. The comparison plan covers 231 accepted SIG
+anchors and records their direct/derived/near DATA-003 source identities without copying or
+reacquiring those histories. OCI v2 is the source copy at
+`research/data004_ets_p0p1/v2/`; Kaggle delivery is pending team upload from the GitHub package under
+`data/kaggle_handoff/data004/`. The upload record is in
+`data/manifests/fills/data_004_kaggle_run.json`. This branch carries the manifest, gate evidence,
+per-market/condition/token/event/date coverage, source-day inventory, residual audit and samples.
+The package retains metadata for all 1,279 frozen candidates / 2,558 tokens and the complete
+5,422-row market graph; only P0/P1 fill histories were acquired.
+
+The v1 Parquet objects remain unchanged. Its status manifest is `BLOCKED_SUPERSEDED` and points to
+v2. v2 reuses all 231,964 v1 rows without rescanning the trade lake. For the 4,989 rows missing
+custody blocks on 2026-09-20/21, the unique timestamp mapping agreed with custody on all 9,803
+validation rows from 2026-09-15 through 2026-09-19. All 4,989 gap rows map uniquely; v2 has zero
+missing/imputed blocks and zero per-token ordering failures.
+
+Addendum 4 verified the `size_shares` precision across all 231,964 rows: the maximum observed is
+four decimal places. The 43 groups with an exact ±0.0001-share difference are classified as
+`PRECISION_ROUNDING_4DP`; all satisfy `abs(taker_size - maker_size) <= 0.0001 * max(maker_rows, 1)`.
+No fill values changed, no residuals remain unexplained, and all v2 quality gates pass with status
+`ACCEPTED_V2`. DATA-004 v2 is accepted on `main`; the separate R3 pilot and any scope expansion remain future decisions.
 
 ## Research programme state
 

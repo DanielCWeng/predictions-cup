@@ -1,0 +1,31 @@
+{
+  "counts_by": {
+    "acquisition_class": {
+      "FILLS_P0": 86224,
+      "FILLS_P1": 145740
+    },
+    "economic_direction": {
+      "BUY": 150984,
+      "SELL": 80980
+    },
+    "economic_direction_status": {
+      "RECONSTRUCTED_FROM_SIGNED_ORDER_SIDE": 231964
+    },
+    "order_is_match_taker_order": {
+      "False": 135334,
+      "True": 96630
+    },
+    "order_role": {
+      "MAKER": 135334,
+      "TAKER": 96630
+    },
+    "side": {
+      "buy": 150984,
+      "sell": 80980
+    }
+  },
+  "dataset_id": "DATA-004",
+  "fill_rows": 231964,
+  "parquet_files": 343,
+  "version": "v1"
+}

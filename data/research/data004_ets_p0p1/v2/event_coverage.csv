@@ -1,0 +1,100 @@
+event_id,event_slug,event_title,fill_rows,markets_with_rows,conditions_with_rows,tokens_with_rows,first_fill_utc,last_fill_utc,missing_block_rows
+101856,how-many-republican-governors-after-the-2026-midterm-elections,How many Republican Governors after the 2026 midterm elections?,8248,7,7,14,2025-12-15T22:02:23Z,2026-09-21T18:16:54Z,0
+103166,republican-house-seats-after-the-2026-midterm-elections,Republican House seats after the 2026 midterm elections?,10598,10,10,20,2025-12-19T09:55:18Z,2026-09-21T19:50:03Z,0
+1038915,senate-three-way-combo-texas-michigan-maine,"Senate Three-Way Combo: Texas, Michigan, Maine",253,8,8,16,2026-09-17T18:42:31Z,2026-09-21T16:46:23Z,0
+106193,republican-senate-seats-after-the-2026-midterm-elections-927,Republican Senate seats after the 2026 midterm elections?,31301,11,11,22,2025-12-19T13:49:02Z,2026-09-21T23:08:15Z,0
+162226,will-democrats-win-all-core-four-senate-races,"Will Democrats win all ""core four"" senate races?",1421,1,1,2,2026-01-14T03:12:04Z,2026-09-21T22:28:30Z,0
+528267,will-republicans-win-any-senate-or-governors-election-in-a-biden-trump-state,Will Republicans win any Senate or Governor's Election in a Biden-Trump state?,366,1,1,2,2026-05-27T16:02:55Z,2026-09-18T15:48:42Z,0
+57141,arizona-governor-winner-2026,Arizona Governor Election Winner,2718,2,2,4,2025-10-14T00:40:19Z,2026-09-21T18:11:24Z,0
+57154,alabama-governor-winner-2026,Alabama Governor Election Winner,799,1,1,2,2025-10-14T01:25:21Z,2026-09-21T23:27:16Z,0
+57155,arkansas-governor-winner-2026,Arkansas Governor Election Winner,498,1,1,2,2025-10-14T01:44:35Z,2026-09-19T14:17:47Z,0
+57156,colorado-governor-winner-2026,Colorado Governor Election Winner,602,1,1,2,2025-10-14T03:27:15Z,2026-09-21T14:25:05Z,0
+57159,connecticut-governor-winner-2026,Connecticut Governor Election Winner,579,1,1,2,2025-10-14T01:37:59Z,2026-08-19T20:20:46Z,0
+57160,florida-governor-winner-2026,Florida Governor Election Winner,3639,2,2,4,2025-10-14T05:59:43Z,2026-09-21T18:05:33Z,0
+57161,georgia-governor-winner-2026,Georgia Governor Election Winner,3827,2,2,4,2025-10-14T01:46:31Z,2026-09-21T03:53:08Z,0
+57162,hawaii-governor-winner-2026,Hawaii Governor Election Winner,492,1,1,2,2025-10-14T03:31:03Z,2026-09-10T08:08:30Z,0
+57163,idaho-governor-winner-2026,Idaho Governor Election Winner,630,1,1,2,2025-10-14T05:57:07Z,2026-09-19T08:11:45Z,0
+57164,illinois-governor-winner-2026,Illinois Governor Election Winner,307,1,1,2,2025-10-14T06:29:35Z,2026-09-21T14:13:36Z,0
+57169,iowa-governor-winner-2026,Iowa Governor Election Winner,4474,2,2,4,2025-10-14T05:45:29Z,2026-09-21T20:24:10Z,0
+57172,kansas-governor-winner-2026,Kansas Governor Election Winner,1983,2,2,4,2025-10-14T03:12:33Z,2026-09-21T08:12:36Z,0
+57173,maine-governor-winner-2026,Maine Governor Election Winner,1724,2,2,4,2025-10-14T07:13:01Z,2026-09-18T13:24:14Z,0
+57174,maryland-governor-winner-2026,Maryland Governor Election Winner,624,1,1,2,2025-10-14T05:19:07Z,2026-09-21T12:02:53Z,0
+57175,massachusetts-governor-winner-2026,Massachusetts Governor Election Winner,1100,1,1,2,2025-10-14T03:01:09Z,2026-09-19T21:45:38Z,0
+57176,michigan-governor-winner-2026,Michigan Governor Election Winner,8381,2,2,4,2025-10-14T04:17:45Z,2026-09-18T22:46:10Z,0
+57177,minnesota-governor-winner-2026,Minnesota Governor Election Winner,1709,1,1,2,2025-10-14T05:07:57Z,2026-09-21T17:27:49Z,0
+57178,nebraska-governor-winner-2026,Nebraska Governor Election Winner,616,1,1,2,2025-10-14T06:31:05Z,2026-09-20T00:41:31Z,0
+57181,nevada-governor-winner-2026,Nevada Governor Election Winner,3905,2,2,4,2025-10-14T05:44:51Z,2026-09-21T20:03:46Z,0
+57182,new-hampshire-governor-winner-2026,New Hampshire Governor Election Winner,2064,2,2,4,2025-10-16T15:58:27Z,2026-09-21T14:57:08Z,0
+57183,new-mexico-governor-winner-2026,New Mexico Governor Election Winner,1446,2,2,4,2025-10-14T07:24:17Z,2026-09-21T17:38:34Z,0
+57184,new-york-governor-winner-2026,New York Governor Election Winner,1370,1,1,2,2025-10-14T03:43:13Z,2026-09-20T22:16:31Z,0
+57186,oklahoma-governor-winner-2026,Oklahoma Governor Election Winner,724,1,1,2,2025-10-14T06:31:21Z,2026-09-21T21:28:34Z,0
+57187,oregon-governor-winner-2026,Oregon Governor Election Winner,1827,2,2,4,2025-10-14T06:32:21Z,2026-09-21T19:39:33Z,0
+57206,pennsylvania-governor-winner-2026,Pennsylvania Governor Election Winner,671,1,1,2,2025-10-14T07:38:13Z,2026-09-21T20:45:34Z,0
+57207,rhode-island-governor-winner-2026,Rhode Island Governor Election Winner,4784,1,1,2,2025-10-14T03:10:15Z,2026-09-18T13:39:35Z,0
+57208,south-carolina-governor-winner-2026,South Carolina Governor Election Winner,1095,2,2,4,2025-10-14T06:36:09Z,2026-09-16T11:29:22Z,0
+57209,south-dakota-governor-winner-2026,South Dakota Governor Election Winner,565,1,1,2,2025-10-15T03:16:23Z,2026-09-20T06:26:58Z,0
+57210,tennessee-governor-winner-2026,Tennessee Governor Election Winner,423,1,1,2,2025-10-14T01:53:41Z,2026-09-17T14:54:04Z,0
+57222,texas-governor-winner-2026,Texas Governor Election Winner,3991,2,2,4,2025-10-14T11:28:33Z,2026-09-21T21:58:52Z,0
+57225,vermont-governor-winner-2026,Vermont Governor Election Winner,2437,1,1,2,2025-10-14T03:44:25Z,2026-09-21T03:40:58Z,0
+57226,wisconsin-governor-winner-2026,Wisconsin Governor Election Winner,8992,2,2,4,2025-10-14T07:34:15Z,2026-09-21T14:24:11Z,0
+57227,wyoming-governor-winner-2026,Wyoming Governor Election Winner,685,1,1,2,2025-12-31T22:19:43Z,2026-09-18T11:17:18Z,0
+57637,alabama-senate-election-winner-154,Alabama Senate Election Winner,377,1,1,2,2025-10-14T03:43:31Z,2026-09-18T13:20:17Z,0
+57639,arkansas-senate-election-winner,Arkansas Senate Election Winner,887,1,1,2,2025-10-14T03:43:17Z,2026-09-21T15:34:20Z,0
+57640,colorado-senate-election-winner,Colorado Senate Election Winner,825,1,1,2,2025-10-15T09:10:47Z,2026-09-21T14:24:48Z,0
+57641,delaware-senate-election-winner,Delaware Senate Election Winner,531,1,1,2,2025-10-14T05:51:31Z,2026-09-18T13:32:24Z,0
+57643,idaho-senate-election-winner,Idaho Senate Election Winner,865,1,1,2,2025-10-14T08:17:31Z,2026-09-21T20:56:22Z,0
+57646,illinois-senate-election-winner,Illinois Senate Election Winner,1032,1,1,2,2025-10-27T17:00:31Z,2026-09-21T18:28:42Z,0
+57647,iowa-senate-election-winner,Iowa Senate Election Winner,7820,2,2,4,2025-10-14T05:00:55Z,2026-09-21T21:45:34Z,0
+57648,kansas-senate-election-winner,Kansas Senate Election Winner,1741,1,1,2,2025-10-14T04:41:19Z,2026-09-21T22:31:36Z,0
+57649,kentucky-senate-election-winner,Kentucky Senate Election Winner,842,1,1,2,2025-10-14T04:01:37Z,2026-09-18T00:59:09Z,0
+57655,massachusetts-senate-election-winner,Massachusetts Senate Election Winner,606,1,1,2,2025-10-14T07:21:35Z,2026-09-18T23:21:57Z,0
+57658,michigan-senate-election-winner,Michigan Senate Election Winner,12145,2,2,4,2025-10-15T06:17:53Z,2026-09-21T22:01:24Z,0
+57659,minnesota-senate-election-winner,Minnesota Senate Election Winner,2637,2,2,4,2025-10-18T08:22:28Z,2026-09-21T16:59:14Z,0
+57660,montana-senate-election-winner,Montana Senate Election Winner,3536,2,2,4,2025-10-16T07:01:23Z,2026-09-21T16:44:27Z,0
+57661,new-hampshire-senate-election-winner,New Hampshire Senate Election Winner,3269,2,2,4,2025-10-14T19:09:39Z,2026-09-21T23:27:55Z,0
+57662,new-jersey-senate-election-winner,New Jersey Senate Election Winner,1710,2,2,4,2025-10-14T05:07:29Z,2026-09-21T20:53:16Z,0
+57663,new-mexico-senate-election-winner,New Mexico Senate Election Winner,906,2,2,4,2025-10-15T14:00:13Z,2026-09-19T19:04:41Z,0
+57664,north-carolina-senate-election-winner,North Carolina Senate Election Winner,4325,2,2,4,2025-10-14T07:04:59Z,2026-09-21T17:13:07Z,0
+57667,oregon-senate-election-winner,Oregon Senate Election Winner,500,1,1,2,2025-10-15T13:53:15Z,2026-09-21T14:13:45Z,0
+57668,rhode-island-senate-election-winner,Rhode Island Senate Election Winner,649,1,1,2,2025-10-14T03:14:05Z,2026-09-21T15:00:46Z,0
+57669,south-carolina-senate-election-winner,South Carolina Senate Election Winner,1619,1,1,2,2025-11-21T21:28:15Z,2026-09-21T04:29:03Z,0
+57670,south-dakota-senate-election-winner,South Dakota Senate Election Winner,1019,1,1,2,2025-10-14T03:00:07Z,2026-09-21T20:24:21Z,0
+57671,tennessee-senate-election-winner,Tennessee Senate Election Winner,887,1,1,2,2025-10-14T05:38:05Z,2026-09-03T01:06:21Z,0
+57672,texas-senate-election-winner,Texas Senate Election Winner,19656,2,2,4,2025-10-14T12:36:47Z,2026-09-21T23:51:09Z,0
+57673,virginia-senate-election-winner,Virginia Senate Election Winner,1536,2,2,4,2025-10-14T12:36:53Z,2026-09-21T14:24:56Z,0
+57674,west-virginia-senate-election-winner,West Virginia Senate Election Winner,629,2,2,4,2025-10-14T05:34:33Z,2026-09-18T13:23:41Z,0
+57675,wyoming-senate-election-winner,Wyoming Senate Election Winner,410,1,1,2,2025-10-14T05:28:09Z,2026-09-17T18:04:12Z,0
+57678,mississippi-senate-election-winner,Mississippi Senate Election Winner,1252,1,1,2,2025-10-14T05:24:55Z,2026-09-21T18:03:54Z,0
+57679,oklahoma-senate-election-winner,Oklahoma Senate Election Winner,577,1,1,2,2025-10-19T13:39:43Z,2026-09-20T06:11:40Z,0
+57681,florida-senate-election-winner,Florida Senate Election Winner,3271,2,2,4,2025-10-14T12:36:19Z,2026-09-21T19:15:31Z,0
+633839,how-many-senate-and-house-seats-will-republicans-have-after-the-midterms-20260625152833634,How many Senate and House seats will Republicans have after the midterms?,3583,13,13,26,2026-06-25T17:57:43Z,2026-09-21T19:01:52Z,0
+659973,how-many-senate-and-governor-elections-will-republicans-win-in-states-won-by-kamala-20260702152603469,How many Senate and Governor elections will Republicans win in states won by Kamala?,3618,7,7,14,2026-07-03T04:07:55Z,2026-09-21T22:28:01Z,0
+812886,texas-senate-and-governor-combo-20260807213940452,Texas Senate and Governor Combo,501,4,4,8,2026-08-09T08:37:36Z,2026-09-21T22:21:07Z,0
+833406,how-many-house-seats-will-the-democrats-win-in-south-carolina,How many House seats will the Democrats win in South Carolina?,489,4,4,8,2026-08-11T22:12:07Z,2026-09-21T18:42:15Z,0
+833407,how-many-house-seats-will-the-democrats-win-in-alabama,How many House seats will the Democrats win in Alabama?,907,4,4,8,2026-08-11T17:22:33Z,2026-09-21T11:49:50Z,0
+833416,how-many-house-seats-will-the-democrats-win-in-minnesota,How many House seats will the Democrats win in Minnesota?,253,5,5,10,2026-08-12T04:34:55Z,2026-09-21T12:10:24Z,0
+833417,how-many-house-seats-will-the-democrats-win-in-wisconsin,How many House seats will the Democrats win in Wisconsin?,746,5,5,10,2026-08-11T14:52:03Z,2026-09-21T12:17:06Z,0
+833418,how-many-house-seats-will-the-democrats-win-in-new-jersey,How many House seats will the Democrats win in New Jersey?,313,5,5,10,2026-08-11T16:55:15Z,2026-09-21T23:17:00Z,0
+833419,how-many-house-seats-will-the-democrats-win-in-colorado,How many House seats will the Democrats win in Colorado?,304,5,5,10,2026-08-11T14:50:06Z,2026-09-21T03:56:49Z,0
+833436,how-many-house-seats-will-the-democrats-win-in-north-carolina,How many House seats will the Democrats win in North Carolina?,1523,5,5,10,2026-08-13T02:41:13Z,2026-09-21T16:20:58Z,0
+833437,how-many-house-seats-will-the-democrats-win-in-nevada,How many House seats will the Democrats win in Nevada?,1733,5,5,10,2026-08-11T20:42:42Z,2026-09-21T11:59:39Z,0
+833438,how-many-house-seats-will-the-democrats-win-in-iowa,How many House seats will the Democrats win in Iowa?,605,5,5,10,2026-08-11T20:52:37Z,2026-09-21T21:35:57Z,0
+833439,how-many-house-seats-will-the-democrats-win-in-virginia,How many House seats will the Democrats win in Virginia?,866,6,6,12,2026-08-12T13:22:33Z,2026-09-21T21:05:07Z,0
+833440,how-many-house-seats-will-the-democrats-win-in-arizona,How many House seats will the Democrats win in Arizona?,1668,6,6,12,2026-08-11T20:08:39Z,2026-09-21T15:51:59Z,0
+833441,how-many-house-seats-will-the-democrats-win-in-michigan,How many House seats will the Democrats win in Michigan?,2382,7,7,14,2026-08-11T14:38:04Z,2026-09-21T19:49:30Z,0
+833450,how-many-house-seats-will-the-democrats-win-in-pennsylvania,How many House seats will the Democrats win in Pennsylvania?,1363,7,7,14,2026-08-11T14:37:48Z,2026-09-21T12:16:03Z,0
+833451,how-many-house-seats-will-the-democrats-win-in-new-york,How many House seats will the Democrats win in New York?,603,7,7,14,2026-08-11T21:39:00Z,2026-09-19T11:37:51Z,0
+833452,how-many-house-seats-will-the-democrats-win-in-texas,How many House seats will the Democrats win in Texas?,830,8,8,16,2026-08-11T14:27:19Z,2026-09-21T13:28:48Z,0
+833461,how-many-house-seats-will-the-democrats-win-in-california,How many House seats will the Democrats win in California?,1430,8,8,16,2026-08-11T14:40:01Z,2026-09-21T19:52:22Z,0
+833462,how-many-house-seats-will-the-democrats-win-in-florida,How many House seats will the Democrats win in Florida?,690,10,10,20,2026-08-11T17:21:06Z,2026-09-21T13:22:51Z,0
+833463,how-many-house-seats-will-the-democrats-win-in-ohio,How many House seats will the Democrats win in Ohio?,2674,7,7,14,2026-08-12T21:01:54Z,2026-09-21T18:24:01Z,0
+833577,iowa-senate-and-governor-combo-20260810203009113,Iowa Senate and Governor Combo,848,4,4,8,2026-08-11T19:36:16Z,2026-09-21T14:01:33Z,0
+833579,alaska-senate-and-governor-combo-20260810210432707,Alaska Senate and Governor Combo,965,4,4,8,2026-08-11T20:52:57Z,2026-09-21T13:18:41Z,0
+833596,michigan-senate-and-governor-combo-20260810212316503,Michigan Senate and Governor Combo,861,4,4,8,2026-08-11T18:27:22Z,2026-09-21T21:44:19Z,0
+833598,maine-senate-and-governor-combo-20260810214548823,Maine Senate and Governor Combo,786,4,4,8,2026-08-11T19:18:21Z,2026-09-19T20:28:11Z,0
+833599,ohio-senate-and-governor-combo-20260810215926194,Ohio Senate and Governor Combo,813,4,4,8,2026-08-11T21:37:37Z,2026-09-21T18:59:49Z,0
+833601,new-hampshire-senate-and-governor-combo-20260810221355675,New Hampshire Senate and Governor Combo,461,4,4,8,2026-08-11T18:44:42Z,2026-09-21T13:41:59Z,0
+872267,which-party-will-hold-more-governorships-after-the-midterms,Which party will hold more governorships after the midterms?,682,3,3,6,2026-08-18T22:04:13Z,2026-09-21T23:03:01Z,0
+877283,kansas-senate-and-governor-combo,Kansas Senate and Governor Combo,650,4,4,8,2026-08-19T23:15:40Z,2026-09-21T23:58:24Z,0
+877336,georgia-senate-and-governor-combo,Georgia Senate and Governor Combo,519,4,4,8,2026-08-19T23:10:54Z,2026-09-21T02:36:35Z,0
+877350,minnesota-senate-and-governor-combo,Minnesota Senate and Governor Combo,371,4,4,8,2026-08-19T23:04:55Z,2026-09-21T15:02:48Z,0

@@ -260,6 +260,45 @@ The detailed field dictionary, launch commands, evidence limitations and soak ga
 `docs/implementation/CAPTURE_001_LAUNCH_FORENSICS.md`.
 
 
+## ETS P0/P1 market-graph fills — DATA-004 (v2 ACCEPTED / MERGED)
+
+DATA-004 v2 is the corrected review version of the frozen ETS acquisition and relationship graph
+corpus in `data/research/r25_ets_math_graph/`. The universe remains 298 Gamma-verified markets,
+298 conditions and 596 aligned outcome tokens: 210 `FILLS_P0` and 88 `FILLS_P1`. It preserves the
+market-graph links, SIG anchor classifications, and a pairing plan for 231 accepted DATA-003
+anchors. Metadata for all 1,279 frozen candidates / 2,558 tokens remains available; fill history is
+acquired only for P0/P1.
+
+- Each fill is keyed by `(tx_hash, log_index, token_id)` and retains the source event fields,
+  market/event context, SIG graph links and trade/custody object provenance. The serialized Parquet
+  prices/sizes/values retain the source schema; the conservation audit sums with
+  `Decimal(str(value))` and applies the measured 4-decimal source quantum only as a gate tolerance.
+  Signed `side` remains separate from economic direction, and no fill values are rounded or changed.
+- For the custody-object gap on 2026-09-20/21, v2 derives `block_number` from the fill's Unix-second
+  timestamp only when `public.block_timestamps` has exactly one block at that `ts`. The method was
+  validated against all 9,803 custody-known fills on 2026-09-15 through 2026-09-19 with 100%
+  agreement. All 4,989 gap rows map uniquely; their provenance is
+  `block_timestamps_unique_ts`. v2 has zero missing or imputed blocks and passes strict per-token
+  `(block_number, log_index)` ordering. v1's fill objects remain unchanged and are marked
+  `BLOCKED_SUPERSEDED` in their status manifest.
+- The corrected size-conservation gate groups by `(tx_hash, condition_id)`, summing all taker-order
+  rows against maker-order rows with exact Decimal arithmetic. 96,587 of 96,630 groups match
+  exactly; 43 groups have residuals of exactly ±0.0001 shares and are classified
+  `PRECISION_ROUNDING_4DP`. Across all 231,964 rows, `size_shares` has a maximum of four decimal
+  places. Every group passes `abs(taker_size - maker_size) <= 0.0001 × max(maker_rows, 1)`, the
+  source-quantum tolerance for the lake's four-decimal serialization of six-decimal on-chain
+  amounts. The 43 groups remain listed in `maker_taker_tx_condition_residuals.csv`; they are
+  precision residuals and no longer fail the gate. The v2 corpus status is `ACCEPTED_V2`.
+- OCI is the immutable source copy at `research/data004_ets_p0p1/v2/`. Delivery is **Kaggle (pending
+  team upload)** at `polyleviathan/sig-cup-data-004-ets-p0p1-fills`; the package and archive are
+  prepared under `/home/ubuntu/inbox/data004_20260929/` and handed off in
+  `data/kaggle_handoff/data004/`. The source manifest, quality gates, and upload record are in
+  `data/research/data004_ets_p0p1/v2/` and `data/manifests/fills/data_004_kaggle_run.json`.
+- `data004_baseline_pairing.json` remains a plan only. DATA-003 source histories were not reacquired
+  or copied into DATA-004. There is no order-book history or R3 predictive/fair-value result.
+
+See `docs/implementation/DATA_004_ETS_P0P1_FILLS.md` and the seven-item campaign report.
+
 ## Strategy / execution boundary
 
 Accepted data contracts do not imply an accepted trading strategy. `OrderIntent`, `Order`,
