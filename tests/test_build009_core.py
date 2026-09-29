@@ -38,17 +38,17 @@ from predictions_cup.runtime import (
     ticks_to_limit_price,
 )
 from predictions_cup.runtime.telemetry import HotPathTelemetry
+from predictions_cup.sig.trading_dto import (
+    BatchOrderRequestDto,
+    MultiLegOrderRequestDto,
+    SingleOrderRequestDto,
+)
 from predictions_cup.strategy.core import (
     CandidateLeg,
     NoTrade,
     Opportunity,
     StrategyFamily,
     StrategyRegistry,
-)
-from predictions_cup.sig.trading_dto import (
-    BatchOrderRequestDto,
-    MultiLegOrderRequestDto,
-    SingleOrderRequestDto,
 )
 from predictions_cup.strategy.kernels import KernelRegistry, default_kernel_registry
 
