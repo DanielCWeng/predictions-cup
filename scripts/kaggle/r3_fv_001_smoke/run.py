@@ -105,10 +105,18 @@ def main() -> None:
         raise RuntimeError(f"package manifest file count mismatch: {len(listed)}")
 
     verified_bytes = 0
+    verified_manifest_files = 0
     fill_paths = []
     fill_manifest_rows = 0
+    intentional_mount_omissions = {
+        "dataset-metadata.json":
+            "Kaggle upload-control metadata is consumed by the dataset API and is not mounted "
+            "as dataset content; id/private fields were verified before creation."
+    }
     for row in listed:
         rel = str(row["path"])
+        if rel in intentional_mount_omissions:
+            continue
         path = resolve_manifest_path(root, expanded, rel)
         if path.stat().st_size != int(row["bytes"]):
             raise RuntimeError(f"byte-size mismatch for {rel}")
@@ -116,9 +124,16 @@ def main() -> None:
         if actual_sha != row["sha256"]:
             raise RuntimeError(f"sha256 mismatch for {rel}")
         verified_bytes += path.stat().st_size
+        verified_manifest_files += 1
         if rel.startswith("fills/") and rel.endswith(".parquet"):
             fill_paths.append(path)
             fill_manifest_rows += int(row.get("rows", 0))
+    expected_mounted_files = len(listed) - len(intentional_mount_omissions)
+    if verified_manifest_files != expected_mounted_files:
+        raise RuntimeError(
+            f"mounted manifest verification count mismatch: "
+            f"{verified_manifest_files} != {expected_mounted_files}"
+        )
 
     fill_paths = sorted(fill_paths)
     if not fill_paths:
@@ -180,8 +195,9 @@ def main() -> None:
         "quality_all_gates_pass": quality.get("all_gates_pass"),
         "source_manifest_sha256": source_sha,
         "package_manifest_sha256": sha256_file(package_manifest_path),
-        "manifest_file_count": len(listed),
-        "manifest_files_hash_verified": len(listed),
+        "source_package_manifest_file_count": len(listed),
+        "mounted_manifest_files_hash_verified": verified_manifest_files,
+        "intentional_mount_omissions": intentional_mount_omissions,
         "verified_bytes": verified_bytes,
         "fill_parquet_partitions": len(fill_paths),
         "fill_rows": len(chronology),
