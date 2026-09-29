@@ -3,5 +3,5 @@
   "action": "output",
   "kernel": "polyleviathan/005b-ordering-falsification-eval",
   "output_file_pattern": ".*holdout_results\\.json$",
-  "note": "Fetch corrected frozen post-hoc evaluator results."
+  "note": "Fetch compact post-hoc corrected evaluation only."
 }
