@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import bisect
 import json
-import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -265,7 +264,7 @@ def analyze_sig_microstructure(
 
         trade_intervals = [
             (right.at - left.at).total_seconds()
-            for left, right in zip(t, t[1:])
+            for left, right in zip(t, t[1:], strict=False)
             if right.at >= left.at
         ]
         all_trade_intervals.extend(trade_intervals)
@@ -307,7 +306,7 @@ def analyze_sig_microstructure(
                 "bbo_lifetime_seconds_p50": _percentiles(
                     [
                         (right - left).total_seconds()
-                        for left, right in zip(economic_times, economic_times[1:])
+                        for left, right in zip(economic_times, economic_times[1:], strict=False)
                     ]
                 )["p50"],
                 "bbo_lifetime_seconds_p90": _percentiles(
@@ -353,10 +352,11 @@ def analyze_sig_microstructure(
                     continue
                 candidates += 1
                 future_mid = future.mid
-                if side == "BUY":
-                    maker = trade.price - future_mid
-                else:
-                    maker = future_mid - trade.price
+                maker = (
+                    trade.price - future_mid
+                    if side == "BUY"
+                    else future_mid - trade.price
+                )
                 maker_value = float(maker)
                 maker_markouts.append(maker_value)
                 absolute_moves.append(abs(float(future_mid - trade.price)))
