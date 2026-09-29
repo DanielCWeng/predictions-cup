@@ -33,6 +33,7 @@ from predictions_cup.maker import (
     QuoteLifecycleManager,
     QuoteRegistry,
     QuoteSide,
+    QuoteWidths,
     ShadowMakerExecutionAdapter,
 )
 from predictions_cup.maker.contracts import FairValueResult
@@ -372,6 +373,47 @@ def test_quote_ticks_are_passive_valid_and_never_cross() -> None:
             assert quote.ask_ticks > 98
         if quote.bid_ticks is not None and quote.ask_ticks is not None:
             assert quote.bid_ticks < quote.ask_ticks
+
+
+class _AsymmetricSpreadPolicy:
+    policy_id = "asymmetric-fixture"
+    version = "v1"
+
+    def widths(self, context: object) -> QuoteWidths:
+        del context
+        return QuoteWidths(bid=0.02, ask=0.005)
+
+
+def test_asymmetric_spread_plugin_changes_bid_and_ask_independently() -> None:
+    engine = MakerEngine(
+        fair_value=DirectPolymarketFairValueProvider(_mapping()),
+        predictive=NullPredictiveAdjuster(),
+        toxicity=NullToxicityProvider(),
+        inventory=BinaryCaraInventoryModel(risk_aversion=0.0),
+        spread=_AsymmetricSpreadPolicy(),
+        size=InventoryConfidenceSizePolicy(base_size=2),
+        eligibility=ConservativeEligibilityPolicy(
+            max_bbo_age_ns=100_000_000,
+            max_fv_age_ns=100_000_000,
+            max_account_age_ns=100_000_000,
+            max_inventory_age_ns=100_000_000,
+            max_optional_signal_age_ns=100_000_000,
+        ),
+        config=MakerConfig(max_abs_inventory=10.0),
+    )
+    decision = engine.quote(_maker_snapshot(volatility=None))
+
+    assert decision.desired is not None
+    assert decision.desired.bid_ticks == 96
+    assert decision.desired.ask_ticks == 101
+    assert decision.trace.bid_half_spread == pytest.approx(0.02)
+    assert decision.trace.ask_half_spread == pytest.approx(0.005)
+    assert decision.trace.half_spread == pytest.approx(0.02)
+    assert decision.trace.sig_bbo_trusted is True
+    assert decision.trace.account_trusted is True
+    assert decision.trace.fv_trusted is True
+    assert decision.trace.prediction_trusted is True
+    assert decision.trace.toxicity_trusted is True
 
 
 def test_probability_boundary_drops_side_instead_of_narrowing_required_spread() -> None:
