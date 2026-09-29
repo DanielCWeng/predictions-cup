@@ -1,7 +1,8 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "experiment_id": "R3-FV-001",
   "created_before_expensive_research": true,
+  "finalised_after_corrected_structural_programme": true,
   "layer_classes": [
     "HARD_IDENTITY",
     "PARTIAL_IDENTIFICATION",
@@ -13,8 +14,9 @@
       "method_id": "R3-B00-DIRECT",
       "name": "Accepted direct Polymarket reference",
       "layer": "BASELINE",
-      "status": "PLANNED",
-      "purpose": "Causally observable FV_direct baseline with mapping-class and staleness semantics.",
+      "status": "PRODUCTION_BASELINE_ONLY",
+      "decision": "KEEP",
+      "evidence": "DATA-003 accepted direct/reference observations; persistence is the benchmark that R3 failed to beat robustly.",
       "assumptions": [
         "Accepted DATA-003 crosswalk semantics",
         "No future/same-block leakage"
@@ -28,8 +30,9 @@
       "method_id": "R3-S01-LP-BOUNDS",
       "name": "Assumption-free structural LP bounds",
       "layer": "PARTIAL_IDENTIFICATION",
-      "status": "PLANNED",
-      "purpose": "Compute identified sets from exact semantic constraints before point estimation.",
+      "status": "EXERCISED_RESEARCH_ONLY",
+      "decision": "KEEP_AS_DIAGNOSTIC_NOT_FV_SIGNAL",
+      "evidence": "Georgia bounds were mostly vacuous; House cross-chamber bounds were informative but wide; Senate hard-threshold interpretation failed semantic coverage.",
       "assumptions": [
         "Only reviewed hard identities enter constraints"
       ],
@@ -42,11 +45,12 @@
       "method_id": "R3-S02-LOO-PRICE-QP",
       "name": "LOO-PRICE weighted coherent projection",
       "layer": "MODEL_DEPENDENT",
-      "status": "PLANNED",
-      "purpose": "Recover hidden literal target quote while mechanically equivalent siblings remain; redundancy/recoverability test.",
+      "status": "NO_QUALIFIED_SIGNAL",
+      "decision": "KILL_FOR_2026_HISTORICAL_DEPLOYMENT",
+      "evidence": "Broad correct-universe LOO-PRICE Ridge control materially underperformed persistence. Corrected settlement-aligned nonliteral EXACT_EQUIVALENT comparator had zero usable rows.",
       "assumptions": [
         "Quadratic projection geometry",
-        "Freshness/support weights trained only on TRAIN/DEV"
+        "Strict direct-ID exclusion"
       ],
       "inputs": [
         "DATA-004",
@@ -57,8 +61,9 @@
       "method_id": "R3-S03-LOO-FAMILY-QP",
       "name": "LOO-FAMILY weighted coherent projection",
       "layer": "MODEL_DEPENDENT",
-      "status": "PLANNED",
-      "purpose": "Primary genuine indirect-information test with DirectInformationFamily(target) removed.",
+      "status": "NEGATIVE_DEV",
+      "decision": "KILL",
+      "evidence": "Broad LOO-FAMILY screen and tested Georgia / Senate-House coherent QP constructions were materially worse than persistence.",
       "assumptions": [
         "Explicit auditable family exclusion",
         "Quadratic projection geometry"
@@ -73,12 +78,12 @@
       "method_id": "R3-S04-LOO-FAMILY-KL",
       "name": "LOO-FAMILY Bernoulli-KL projection",
       "layer": "MODEL_DEPENDENT",
-      "status": "PLANNED",
-      "purpose": "Probability-geometry challenger near 0/1.",
+      "status": "NEGATIVE_DEV",
+      "decision": "KILL",
+      "evidence": "KL geometry did not rescue Georgia, Senate-House, supported seat-count level, residual, calibrated, or lead-lag tests.",
       "assumptions": [
         "Explicit family exclusion",
-        "Bernoulli-KL projection",
-        "TRAIN/DEV-selected weights only"
+        "Bernoulli-KL projection"
       ],
       "inputs": [
         "DATA-004",
@@ -89,8 +94,9 @@
       "method_id": "R3-S05-MAXENT",
       "name": "Maximum-entropy state reconstruction",
       "layer": "MODEL_DEPENDENT",
-      "status": "PLANNED",
-      "purpose": "Select a point inside partially identified structural state spaces without pretending it is exact.",
+      "status": "NEGATIVE_AS_POINT_FV",
+      "decision": "KILL_POINT_FV_KEEP_AS_COMPLETION_TOOL",
+      "evidence": "Maximum-entropy completion is mathematically valid as a stated selection rule inside underidentified sets, but its tested point estimates were not predictive enough to beat persistence.",
       "assumptions": [
         "Maximum-entropy selection within hard feasible set"
       ],
@@ -100,12 +106,14 @@
     },
     {
       "method_id": "R3-S06-LATENT",
-      "name": "Hierarchical latent election factor",
+      "name": "Hierarchical latent election factor / inverse aggregate model",
       "layer": "MODEL_DEPENDENT",
-      "status": "PLANNED",
-      "purpose": "Scale race/count reverse inference where explicit state enumeration is infeasible.",
+      "status": "SUPPORT_LIMITED_NOT_PROMOTED",
+      "decision": "DO_NOT_BUILD_LARGE_MODEL_PRE_LAUNCH",
+      "evidence": "The first count-to-constituent inverse had zero TRAIN support under the frozen governorship family. Generic LOO-FAMILY had only 5 TRAIN target markets versus 29 DEV, making a large supervised latent model primarily a cross-market extrapolation exercise after simpler structural models failed.",
       "assumptions": [
-        "Low-dimensional national/chamber/state dependence structure"
+        "Low-dimensional dependence",
+        "Requires honest TRAIN support"
       ],
       "inputs": [
         "DATA-004",
@@ -114,12 +122,14 @@
     },
     {
       "method_id": "R3-S07-DYNAMIC",
-      "name": "Dynamic coherent/state-space filter",
+      "name": "Dynamic structural information-leadership models",
       "layer": "MODEL_DEPENDENT",
-      "status": "PLANNED",
-      "purpose": "Sequentially update structural fair values with freshness-aware uncertainty.",
+      "status": "NO_QUALIFIED_HISTORICAL_CANDIDATE",
+      "decision": "KILL_HISTORICAL_ALPHA_CLAIM_KEEP_LIVE_MONITOR",
+      "evidence": "Scalar seat shocks and full CLR distribution shocks produced no pair passing the frozen 300s gate. Most DEV source shocks had no direct-target fill response inside 300s; isolated favorable Senate observations were one row / one day and not promotable.",
       "assumptions": [
-        "Past-only transition/filter parameters"
+        "Past-only state",
+        "TRAIN-only shock thresholds/weights"
       ],
       "inputs": [
         "DATA-004",
@@ -130,10 +140,11 @@
       "method_id": "R3-P01-FLOW",
       "name": "Flow-augmented structural residual model",
       "layer": "PREDICTIVE_ONLY",
-      "status": "PLANNED",
-      "purpose": "Test whether maker/taker and economic direction improve future repricing after core structural FV exists.",
+      "status": "NOT_OPENED",
+      "decision": "NO_RESCUE_SEARCH",
+      "evidence": "Commission required flow only after a core structural FV existed. No core R3 candidate survived TRAIN/DEV, so flow was not used to rescue the programme.",
       "assumptions": [
-        "Flow is predictive evidence, never a hard identity"
+        "Flow is predictive evidence only"
       ],
       "inputs": [
         "DATA-004",
@@ -144,11 +155,11 @@
       "method_id": "R3-P02-HAZARD",
       "name": "PRED-006 update-hazard freshness challenger",
       "layer": "PREDICTIVE_ONLY",
-      "status": "OPTIONAL_AFTER_CORE",
-      "purpose": "Test frozen 600s/1800s update hazard only as freshness/update-likelihood evidence.",
+      "status": "NOT_OPENED",
+      "decision": "NO_RESCUE_SEARCH",
+      "evidence": "PRED-006 hazard remains separate update-likelihood evidence. R3 produced no directional structural core worth augmenting, so hazard was not used as a post-hoc rescue.",
       "assumptions": [
-        "Not directional fair value",
-        "Requires parity with frozen PRED-006 features"
+        "Not directional fair value"
       ],
       "inputs": [
         "PRED-006 frozen candidates",
