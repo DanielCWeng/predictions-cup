@@ -69,7 +69,7 @@ def build_frame(final_start:int)->pd.DataFrame:
         lower(cast(tx_hash as varchar)) tx_hash,
         max(lower(cast(participant_address as varchar))) filter(where cast(order_is_match_taker_order as boolean)) actor,
         max(upper(cast(outcome_side as varchar))) filter(where cast(order_is_match_taker_order as boolean)) active_outcome,
-        max(upper(cast(participant_side as varchar))) filter(where cast(order_is_match_taker_order as boolean)) active_side,
+        max(upper(cast(side as varchar))) filter(where cast(order_is_match_taker_order as boolean)) active_side,
         max(cast(size_shares as double)) filter(where cast(order_is_match_taker_order as boolean)) active_size,
         max(cast(value_usd as double)) filter(where cast(order_is_match_taker_order as boolean)) active_value,
         count(*) filter(where cast(order_is_match_taker_order as boolean)) active_rows
@@ -79,7 +79,7 @@ def build_frame(final_start:int)->pd.DataFrame:
     """)
     df=con.execute(f"""
       select
-        cast(e.timestamp as bigint) timestamp,
+        cast(e.timestamp as bigint) AS event_ts,
         lower(cast(e.tx_hash as varchar)) tx_hash,
         cast(e.log_index as bigint) log_index,
         cast(e.condition_id as varchar) condition_id,
@@ -105,6 +105,7 @@ def build_frame(final_start:int)->pd.DataFrame:
       where cast(e.timestamp as bigint) < {int(final_start)}
       order by t.block_number, cast(e.log_index as bigint)
     """).df()
+    df = df.rename(columns={"event_ts": "timestamp"})
     con.close()
     if df.empty: raise RuntimeError("empty pre-final frame")
     if int(df["timestamp"].max()) >= int(final_start): raise RuntimeError("FINAL leaked into search frame")
