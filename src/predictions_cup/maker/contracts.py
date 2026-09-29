@@ -175,18 +175,6 @@ class QuoteContext:
 
 
 @dataclass(frozen=True, slots=True)
-class QuoteWidths:
-    bid: float
-    ask: float
-
-    def __post_init__(self) -> None:
-        if not math.isfinite(self.bid) or self.bid <= 0.0:
-            raise ValueError("bid quote width must be finite and positive")
-        if not math.isfinite(self.ask) or self.ask <= 0.0:
-            raise ValueError("ask quote width must be finite and positive")
-
-
-@dataclass(frozen=True, slots=True)
 class QuoteSizes:
     bid: int
     ask: int
@@ -244,14 +232,6 @@ class MakerTrace:
     gate_mode: GateMode
     reason: str
     decision_monotonic_ns: int
-    bid_half_spread: float | None = None
-    ask_half_spread: float | None = None
-    sig_bbo_trusted: bool = False
-    sig_depth_trusted: bool = False
-    account_trusted: bool = False
-    fv_trusted: bool = False
-    prediction_trusted: bool = False
-    toxicity_trusted: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,7 +285,7 @@ class SpreadPolicy(Protocol):
     policy_id: str
     version: str
 
-    def widths(self, context: QuoteContext) -> QuoteWidths: ...
+    def half_spread(self, context: QuoteContext) -> float: ...
 
 
 class SizePolicy(Protocol):
