@@ -1,0 +1,48 @@
+{
+  "active_flag_counts": {
+    "false": 77626,
+    "true": 55302
+  },
+  "group_structure": {
+    "groups_with_exactly_one_active": 55302,
+    "groups_with_one_active_and_passive": 55302,
+    "transaction_condition_groups": 55302
+  },
+  "outcome_column": "outcome_side",
+  "outcome_counts": {
+    "NO": 63365,
+    "YES": 69563
+  },
+  "parquet_files": 115,
+  "predictive_outcomes_accessed": false,
+  "rows": 132928,
+  "schema": [
+    {"name":"timestamp","type":"int64"},
+    {"name":"block","type":"int64"},
+    {"name":"tx_hash","type":"large_string"},
+    {"name":"log_index","type":"int64"},
+    {"name":"condition_id","type":"large_string"},
+    {"name":"token_id","type":"large_string"},
+    {"name":"outcome_side","type":"large_string"},
+    {"name":"participant_address","type":"large_string"},
+    {"name":"counterparty_address","type":"large_string"},
+    {"name":"maker_address","type":"large_string"},
+    {"name":"taker_address","type":"large_string"},
+    {"name":"side","type":"large_string"},
+    {"name":"price","type":"double"},
+    {"name":"size_shares","type":"double"},
+    {"name":"value_usd","type":"double"},
+    {"name":"order_is_match_taker_order","type":"bool"},
+    {"name":"is_exchange_taker","type":"bool"},
+    {"name":"exchange_if_taker_is_exchange","type":"large_string"},
+    {"name":"exchange_address","type":"large_string"},
+    {"name":"window_id","type":"large_string"},
+    {"name":"day","type":"large_string"},
+    {"name":"sig_market_id","type":"large_string"},
+    {"name":"mapping_class","type":"large_string"},
+    {"name":"mapping_direction","type":"large_string"}
+  ],
+  "schema_version": 1,
+  "source_mode": "DIRECT_PARQUET",
+  "stage": "DATA003_SCHEMA_ONLY"
+}

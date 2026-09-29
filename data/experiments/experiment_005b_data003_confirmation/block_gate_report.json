@@ -1,0 +1,51 @@
+{
+  "all_hard_gates_pass": true,
+  "block_count": 43222,
+  "block_timestamp_bytes": 141595,
+  "block_timestamp_path": "block_timestamp.parquet",
+  "block_timestamp_sha256": "42231574b442ab30721a6271311d914a08ec4aa80059e131690d2610e321853b",
+  "classification": "FRESH_CONFIRMATION_PRE_EVALUATION_GATE",
+  "dataset_ref": "polyleviathan/sig-cup-data-003-sig-actual-fills",
+  "distinct_blocks_sharing_timestamp": 0,
+  "duplicate_block_log_groups": 0,
+  "economic_rows": 77554,
+  "experiment_id": "EXPERIMENT-005B-DATA003-CONFIRMATION",
+  "mapped_block_count": 43222,
+  "mapped_tx_count": 55274,
+  "missing_block_numbers": 0,
+  "missing_block_timestamps": 0,
+  "parquet_files": 115,
+  "predictive_outcomes_accessed": false,
+  "protocol_commit": "b42d01a32ed7c4cfa4c5ea24610920b346fe0aba",
+  "reconstruction": {
+    "accepted_groups": 55274,
+    "economic_fills_bytes": 2981591,
+    "economic_fills_path": "economic_fills_DATA003.parquet",
+    "economic_fills_sha256": "4528926586ef41cdf785016fff657dbb3034bdc41973a307b99561dd0d9ce265",
+    "economic_rows": 77554,
+    "failure_counts": {
+      "active_count_not_one": 0,
+      "no_passive": 0,
+      "non_binary": 0,
+      "size_conservation": 28,
+      "yes_notional_conservation": 0
+    },
+    "participant_rows": 132928,
+    "rejected_groups": 28,
+    "source_block_nonnull_rows": 0,
+    "transaction_condition_groups": 55302
+  },
+  "rpc_methods": [
+    "eth_getTransactionByHash",
+    "eth_getBlockByNumber"
+  ],
+  "rpc_url": "https://tenderly.rpc.polygon.community/",
+  "schema_version": 1,
+  "source": "Polygon archival JSON-RPC",
+  "stage": "DATA003_ACTUAL_BLOCK_NUMBER_HARD_GATE",
+  "timestamp_mismatches": 0,
+  "tx_block_bytes": 2109655,
+  "tx_block_path": "tx_block_DATA003.parquet",
+  "tx_block_sha256": "e1af2075db53a547135bad8e61db6e2e2fe37eb830e6f40aab6f1e7a56246bbc",
+  "tx_count": 55274
+}

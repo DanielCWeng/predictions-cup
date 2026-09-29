@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "action": "wait_run",
+  "wait_kernel": "polyleviathan/005b-ordering-falsification-us-merge",
+  "allow_missing": true,
+  "wait_timeout_minutes": 240,
+  "kernel_dir": "scripts/kaggle/experiment_005b_ordering_falsification_eval",
+  "kernel": "polyleviathan/005b-ordering-falsification-eval",
+  "poll_seconds": 60,
+  "timeout_minutes": 180,
+  "download_outputs": false,
+  "note": "Wait for the first corrected US merge to exist and complete, then run the frozen post-hoc evaluator using only original promoted evidence."
+}

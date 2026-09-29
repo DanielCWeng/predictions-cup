@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXPERIMENT-005B-DATA003-FRESH-CONFIRMATION",
+  "status": "CONDITIONAL_NOT_ARMED",
+  "created_before_ordering_falsification_outcome": true,
+  "activation_condition": {
+    "required_source": "data/experiments/experiment_005b_ordering_falsification/results/FINAL_ORDERING_FALSIFICATION.json",
+    "required_field": "movement_materially_survives",
+    "required_value": true,
+    "otherwise": "DO_NOT_RUN"
+  },
+  "purpose": "Fresh external-population confirmation of the unchanged seven-horizon realised-movement hypothesis on the actual 2026 SIG-mapped Polymarket universe.",
+  "historical_parent_binding": {
+    "parent_experiment": "EXPERIMENT-005B",
+    "original_train_dev_freeze_sha256": "44025aa2c5e5bddd97d88c81e649d86d6bf55d6cccec1d57c2aa7af12a9a7ec6",
+    "original_holdout_sha256": "94db3e2319d376078e9f80f5e28d04215dcade53d76c1ec749af8bcc0fa8972a",
+    "evaluator_reference_commit": "76a52913f3a38a7c573ee7f9f53db6d651f301b1",
+    "corrected_ordering_gate_required": true
+  },
+  "fresh_dataset": {
+    "dataset_ref": "polyleviathan/sig-cup-data-003-sig-actual-fills",
+    "repository_manifest_ref": "bbd152eb13f827b9ede36e444ac597eb0274443d",
+    "manifest_path": "data/manifests/fills/data_003_manifest.json",
+    "quality_path": "data/manifests/fills/data_003_quality.json",
+    "extraction_cutoff_utc": "2026-09-28T18:52:11Z",
+    "fills": 132928,
+    "sig_markets_with_rows": 231,
+    "conditions": 693,
+    "tokens_with_rows": 1370,
+    "historical_005b_condition_overlap": 0,
+    "historical_005b_token_overlap": 0
+  },
+  "hypotheses": {
+    "targets": [
+      "target_clock_realised_movement_1",
+      "target_clock_realised_movement_5",
+      "target_clock_realised_movement_15",
+      "target_clock_realised_movement_30",
+      "target_clock_realised_movement_60",
+      "target_clock_realised_movement_120",
+      "target_clock_realised_movement_300"
+    ],
+    "candidate_models": "Exactly the original DEV-selected model/features/hyperparameters for these seven targets from the bound TRAIN/DEV freeze. No corrected-data or DATA-003 reselection.",
+    "new_targets_allowed": false,
+    "new_features_allowed": false,
+    "new_models_allowed": false,
+    "hyperparameter_changes_allowed": false,
+    "replacement_candidates_allowed": false
+  },
+  "ordering_and_data_validity": {
+    "ordering": "Recover actual Polygon block_number for every DATA-003 fill tx_hash, verify block-header timestamp, then order by block_number, log_index. tx_hash may only be an impossible-tie guard after log_index.",
+    "mapping_gate": "100% fill rows must map to non-null actual block_number; zero timestamp mismatches; zero duplicate (block_number,log_index) rows.",
+    "window_boundary_rule": "Feature lookbacks and target label endpoints may not cross DATA-003 window_id capture boundaries. Crossing observations become unsupported/missing; formulas are not altered.",
+    "unavailable_feature_rule": "If an original selected model feature cannot be materialized faithfully from DATA-003 without redefining its meaning or grouping, that target is INAPPLICABLE and cannot be replaced or simplified."
+  },
+  "fit_recipe": {
+    "historical_training_data": "Corrected-order 005B TRAIN/DEV fit surface only; do not train on parent/corrected HOLDOUT.",
+    "sampling": "Reuse the original HOLDOUT evaluator fit recipe exactly, including per-family 100000-row deterministic hash ordering/limit, 300s embargo, and label-end-before-DEV gate.",
+    "target_models": "Reuse each target's original DEV-selected feature list, estimator name and hyperparameters exactly."
+  },
+  "external_test": {
+    "rows": "All supported DATA-003 rows after exact target/feature support and window-boundary validity rules.",
+    "baselines": [
+      "persistence",
+      "own_recent_price",
+      "current_absolute_movement",
+      "recent_activity"
+    ],
+    "primary_metric": "MAE",
+    "uncertainty": "Same hierarchical market bootstrap definition as the original evaluator, with DATA-003 markets as the resampling units.",
+    "report_only_diagnostics": [
+      "predictive_ic",
+      "directional_accuracy",
+      "EXACT/DERIVED/NEAR mapping-class slices",
+      "per-window support and MAE improvement"
+    ]
+  },
+  "fresh_confirmation_rule": {
+    "per_horizon": "Candidate MAE must beat every original named baseline and hierarchical market-bootstrap lower_2_5 must be > 0.",
+    "package_level": "All seven original horizons must satisfy the per-horizon rule to label the seven-horizon movement package freshly replicated on DATA-003.",
+    "partial_result": "Any failures are reported as failures/partial transfer; no replacement horizon or model may be introduced."
+  },
+  "interpretation": {
+    "permitted": "fresh external-population confirmation or failure of the unchanged historical movement hypothesis",
+    "prohibited": [
+      "using DATA-003 to tune or select a model",
+      "introducing event-time direction as a rescue",
+      "treating replication as executable SIG profitability",
+      "reopening historical 005B candidate discovery"
+    ]
+  }
+}

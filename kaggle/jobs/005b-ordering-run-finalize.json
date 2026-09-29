@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/experiment_005b_ordering_finalize",
+  "kernel": "polyleviathan/005b-ordering-falsification-finalize",
+  "poll_seconds": 30,
+  "timeout_minutes": 60,
+  "download_outputs": false,
+  "note": "Deterministic post-hoc finalizer: original HOLDOUT + corrected evaluator + matrix-diff + passed five-family actual block-number gate."
+}
