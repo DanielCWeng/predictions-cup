@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "subexperiment": "R3-SEAT-COUNT-001",
+  "stage": "TRAIN_DEV_ONLY",
+  "frozen_before_performance": true,
+  "inputs": {
+    "source": "DATA-004 P0 fills only",
+    "target": "DATA-003 accepted direct/reference updates only",
+    "house_event_id": "103166",
+    "senate_event_id": "106193",
+    "house_market_ids": [
+      "919489",
+      "919490",
+      "919491",
+      "919492",
+      "919493",
+      "919494",
+      "919495",
+      "919496",
+      "919497",
+      "919498"
+    ],
+    "senate_market_ids": [
+      "943819",
+      "943820",
+      "943821",
+      "943822",
+      "943823",
+      "943824",
+      "943825",
+      "943826",
+      "943827",
+      "943828",
+      "943829"
+    ],
+    "house_target_sig_market_id": "152",
+    "senate_target_sig_market_id": "154",
+    "data001_allowed": false,
+    "historical_analogue_families_allowed": false
+  },
+  "chronology": {
+    "source_rule": "At target block B, use only source fills from blocks < B.",
+    "max_source_age_seconds": 86400,
+    "split_source": "R3_SPLIT_MANIFEST.json",
+    "final_opened": false
+  },
+  "coherent_projection": {
+    "QP": "Euclidean projection of latest category YES prices onto the probability simplex.",
+    "KL": "Positive-category I-projection implemented by normalization after epsilon floor.",
+    "no_target_quote_in_projection": true
+  },
+  "house": {
+    "semantics": "Republican House seat-count distribution; target is Republican U.S. House win reference.",
+    "majority_threshold_seats": 218,
+    "categories": [
+      "<190",
+      "190-194",
+      "195-199",
+      "200-204",
+      "205-209",
+      "210-214",
+      "215-219",
+      "220-224",
+      "225-229",
+      "230+"
+    ],
+    "lower_formula": "P(R seats >=220)",
+    "upper_formula": "P(R seats >=220)+P(215<=R seats<=219)",
+    "maxent_point_formula": "lower + (2/5)*P(215-219), uniform within the five integer states 215..219",
+    "midpoint_diagnostic": "lower + 0.5*P(215-219)",
+    "primary_point": "MAXENT"
+  },
+  "senate": {
+    "semantics": "Republican Senate seat-count distribution; target mapping is NEAR because win/control/tie-breaking wording may differ.",
+    "categories": [
+      "<=47",
+      "48",
+      "49",
+      "50",
+      "51",
+      "52",
+      "53",
+      "54",
+      "55",
+      "56",
+      ">=57"
+    ],
+    "variants": {
+      "T50": "P(R seats >=50)",
+      "T51": "P(R seats >=51)"
+    },
+    "rule": "Report both T50 and T51 side by side. DEV performance must not choose the settlement threshold. Neither variant may be called exact or promoted until the SIG settlement rule independently resolves the semantics."
+  },
+  "evaluations": {
+    "level_reconstruction": {
+      "baseline": "persistence: previous target price",
+      "target": "current target price",
+      "metrics": [
+        "MAE",
+        "RMSE",
+        "absolute MAE improvement",
+        "relative MAE improvement",
+        "direction accuracy"
+      ],
+      "uncertainty": "1000 UTC-day cluster bootstrap resamples of absolute-error improvement",
+      "stability": "first and second chronological DEV halves"
+    },
+    "structural_residual": {
+      "residual": "FV_current - target_current",
+      "target": "next target update minus target_current",
+      "fit": "zero-intercept beta on TRAIN only",
+      "prediction": "clip(target_current + beta*residual,0,1)",
+      "baseline": "target_current persistence",
+      "uncertainty": "1000 UTC-day cluster bootstrap resamples",
+      "stability": "first and second DEV halves"
+    }
+  },
+  "candidate_gate": {
+    "house_level": "QP and KL primary MAXENT versions both have positive DEV MAE improvement, bootstrap lower 95% > 0, and non-negative improvement in both DEV halves.",
+    "house_residual": "QP and KL residual models both have positive DEV MAE improvement, bootstrap lower 95% > 0, and non-negative improvement in both DEV halves.",
+    "senate": "No promotion from DEV alone; rule semantics must first be resolved independently, after which the matching frozen T50/T51 variant may be evaluated against the same statistical gate.",
+    "no_post_result_rescue": true
+  },
+  "final_opened": false,
+  "final_rows_accessed": 0
+}
