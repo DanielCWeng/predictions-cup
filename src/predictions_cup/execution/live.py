@@ -43,12 +43,66 @@ class SigLiveSink:
         self._clock_ns = clock_ns
 
     async def dispatch(self, plan: ExecutionPlan) -> ExecutionEvent:
+        return await self._dispatch_placement(plan, require_reservation=True)
+
+    async def dispatch_recovery(self, envelope: ExecutionEnvelope) -> ExecutionEvent:
+        """Redispatch one durable unresolved placement while fresh LIVE is blocked."""
+        self._assert_recovery_authority(envelope)
+        return await self._dispatch_placement(
+            ExecutionPlan(envelope=envelope, intents=()),
+            require_reservation=False,
+        )
+
+    def _assert_recovery_authority(self, envelope: ExecutionEnvelope) -> None:
+        durable = next(
+            (
+                candidate
+                for candidate in self._journal.unresolved()
+                if candidate.logical_operation_id == envelope.logical_operation_id
+            ),
+            None,
+        )
+        if durable is None:
+            raise ValueError("recovery dispatch requires an unresolved journal operation")
+        identity = (
+            durable.tournament_id,
+            durable.operation_kind,
+            durable.sink_mode,
+            durable.idempotency_key,
+            durable.payload_sha256,
+            durable.payload_json,
+            durable.intent_ids,
+        )
+        requested = (
+            envelope.tournament_id,
+            envelope.operation_kind,
+            envelope.sink_mode,
+            envelope.idempotency_key,
+            envelope.payload_sha256,
+            envelope.payload_json,
+            envelope.intent_ids,
+        )
+        if identity != requested:
+            raise ValueError("recovery dispatch does not match durable journal identity")
+        if durable.lifecycle_state not in {
+            LifecycleState.PENDING,
+            LifecycleState.UNCERTAIN,
+            LifecycleState.RECONCILING,
+        }:
+            raise ValueError("recovery dispatch requires a recoverable lifecycle state")
+
+    async def _dispatch_placement(
+        self,
+        plan: ExecutionPlan,
+        *,
+        require_reservation: bool,
+    ) -> ExecutionEvent:
         envelope = plan.envelope
         if envelope.sink_mode is not ExecutionMode.LIVE:
             raise ValueError("SigLiveSink accepts LIVE envelopes only")
         if envelope.tournament_id != self._permit.tournament_id:
             raise ValueError("LIVE permit tournament does not match execution envelope")
-        if not self._reservations.contains_operation(
+        if require_reservation and not self._reservations.contains_operation(
             envelope.logical_operation_id,
             envelope.intent_ids,
         ):
@@ -89,13 +143,22 @@ class SigLiveSink:
                 batch_response = await self._client.place_batch_payload(
                     envelope.payload_json
                 )
-                state = LifecycleState.ACKED
+                state = (
+                    LifecycleState.REJECTED
+                    if self._batch_conclusively_rejected(batch_response.results)
+                    else LifecycleState.ACKED
+                )
                 response_json = batch_response.model_dump_json(by_alias=True)
             else:
                 multi_response = await self._client.place_multi_leg_payload(
                     envelope.payload_json
                 )
-                state = LifecycleState.ACKED
+                state = (
+                    LifecycleState.REJECTED
+                    if multi_response.results
+                    and all(not result.ok for result in multi_response.results)
+                    else LifecycleState.ACKED
+                )
                 response_json = multi_response.model_dump_json(by_alias=True)
         except SigExecutionUncertainError:
             observed = self._clock_ns()
@@ -138,6 +201,7 @@ class SigLiveSink:
                 observed_monotonic_ns=observed,
                 terminal_status=LifecycleState.REJECTED.value,
             )
+            self._reservations.release_operation(envelope.logical_operation_id)
             raise
 
         observed = self._clock_ns()
@@ -271,12 +335,27 @@ class SigLiveSink:
             observed,
             response_json=response_json,
         )
+        if state is LifecycleState.REJECTED:
+            self._reservations.release_operation(envelope.logical_operation_id)
         return ExecutionEvent(
             logical_operation_id=envelope.logical_operation_id,
             state=state,
             observed_monotonic_ns=observed,
             simulated=False,
         )
+
+    @staticmethod
+    def _batch_conclusively_rejected(results: tuple[object, ...]) -> bool:
+        if not results:
+            return False
+        for result in results:
+            ok = getattr(result, "ok", None)
+            status = getattr(result, "status", None)
+            if ok is not False or not isinstance(status, int):
+                return False
+            if not 400 <= status < 500 or status == 409:
+                return False
+        return True
 
     async def cancel(self, envelope: ExecutionEnvelope) -> ExecutionEvent:
         if envelope.sink_mode is not ExecutionMode.LIVE:
