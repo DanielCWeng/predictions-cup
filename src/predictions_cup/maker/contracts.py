@@ -199,9 +199,12 @@ class DesiredQuote:
             raise ValueError("bid ticks outside SIG limit range")
         if self.ask_ticks is not None and not 1 <= self.ask_ticks <= 199:
             raise ValueError("ask ticks outside SIG limit range")
-        if self.bid_ticks is not None and self.ask_ticks is not None:
-            if self.bid_ticks >= self.ask_ticks:
-                raise ValueError("maker quote must have bid < ask")
+        if (
+            self.bid_ticks is not None
+            and self.ask_ticks is not None
+            and self.bid_ticks >= self.ask_ticks
+        ):
+            raise ValueError("maker quote must have bid < ask")
         if self.bid_size < 0 or self.ask_size < 0:
             raise ValueError("maker sizes must be non-negative")
 
