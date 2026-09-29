@@ -846,6 +846,14 @@ def fit_inverse(train: pd.DataFrame, x_col: str):
 
 def evaluate_inverse(frame: pd.DataFrame, method: str, seed: int):
     x_col = f"x_{method.lower()}"
+    if frame.empty or "split" not in frame.columns or x_col not in frame.columns:
+        return {
+            "status": "INSUFFICIENT_SUPPORT",
+            "method": method,
+            "train_rows": 0,
+            "dev_rows": 0,
+            "reason": "No complete current-universe governorship count-to-constituent rows under the frozen primary source-age rule.",
+        }, pd.DataFrame()
     train = frame[frame["split"] == "TRAIN"].copy()
     dev = frame[frame["split"] == "DEV"].copy()
     beta = fit_inverse(train, x_col)
