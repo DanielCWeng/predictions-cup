@@ -546,6 +546,20 @@ class ExecutionJournal:
         ).fetchone()
         return None if row is None else str(row[0])
 
+    def envelopes(self) -> tuple[ExecutionEnvelope, ...]:
+        """Return all durable execution envelopes, including terminal history."""
+        rows = self._connection.execute(
+            """
+            SELECT logical_operation_id, tournament_id, idempotency_key,
+                   operation_kind, sink_mode, payload_json, payload_sha256,
+                   intent_ids_json, lifecycle_state, created_monotonic_ns,
+                   relationship_constraint
+            FROM execution_envelopes
+            ORDER BY created_monotonic_ns, logical_operation_id
+            """
+        ).fetchall()
+        return self._decode_envelopes(rows)
+
     def unresolved(self) -> tuple[ExecutionEnvelope, ...]:
         terminal = (
             LifecycleState.FILLED.value,
@@ -565,9 +579,15 @@ class ExecutionJournal:
             """,
             terminal,
         ).fetchall()
+        return self._decode_envelopes(rows)
+
+    def _decode_envelopes(
+        self,
+        rows: list[tuple[object, ...]],
+    ) -> tuple[ExecutionEnvelope, ...]:
         result: list[ExecutionEnvelope] = []
         for row in rows:
-            intent_ids_raw = json.loads(row[7])
+            intent_ids_raw = json.loads(str(row[7]))
             if not isinstance(intent_ids_raw, list) or not all(
                 isinstance(value, str) for value in intent_ids_raw
             ):
@@ -583,7 +603,7 @@ class ExecutionJournal:
                     payload_sha256=str(row[6]),
                     intent_ids=tuple(intent_ids_raw),
                     lifecycle_state=LifecycleState(str(row[8])),
-                    created_monotonic_ns=int(row[9]),
+                    created_monotonic_ns=int(str(row[9])),
                     relationship_constraint=(
                         None if row[10] is None else str(row[10])
                     ),
