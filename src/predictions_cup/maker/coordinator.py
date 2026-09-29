@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from predictions_cup.execution.models import ExecutionEvent, ExecutionMode, LifecycleState
 from predictions_cup.execution.planner import build_execution_plan
@@ -18,6 +18,7 @@ from predictions_cup.maker.lifecycle import (
     QuoteLifecycleManager,
     QuoteRegistry,
 )
+from predictions_cup.maker.safety import MakerKillSwitch
 from predictions_cup.risk.core import RiskContext, RiskDecision, evaluate_risk
 from predictions_cup.runtime.models import OrderAction, OutcomeSide
 from predictions_cup.strategy.core import CandidateLeg, Opportunity, StrategyFamily
@@ -68,6 +69,7 @@ class MakerCoordinator:
         placement_dispatch: PlacementDispatcher,
         cancel_dispatch: CancelDispatcher,
         reservations: ExecutionReservationBook | None = None,
+        kill_switch: MakerKillSwitch | None = None,
     ) -> None:
         if risk_context.mode is ExecutionMode.LIVE and reservations is None:
             raise ValueError("LIVE maker requires BUILD-009 execution reservations")
@@ -78,6 +80,36 @@ class MakerCoordinator:
         self._placement_dispatch = placement_dispatch
         self._cancel_dispatch = cancel_dispatch
         self._reservations = reservations
+        self._kill_switch = kill_switch or MakerKillSwitch()
+        if risk_context.kill_switch:
+            self._kill_switch.activate("startup_configuration")
+
+    @property
+    def kill_switch(self) -> MakerKillSwitch:
+        return self._kill_switch
+
+    def activate_kill_switch(self, reason: str) -> None:
+        self._kill_switch.activate(reason)
+
+    async def halt_all(
+        self,
+        *,
+        event_id: str,
+        observed_monotonic_ns: int,
+        snapshots: Mapping[str, MakerMarketSnapshot],
+        reason: str,
+    ) -> MakerCycleResult:
+        """Latch the process kill switch and synchronously request global cancels."""
+        self._kill_switch.activate(reason)
+        return await self.on_state_change(
+            MakerStateChange(
+                event_id=event_id,
+                observed_monotonic_ns=observed_monotonic_ns,
+                exchange_ids=frozenset(),
+                global_recheck=True,
+            ),
+            snapshots,
+        )
 
     async def on_state_change(
         self,
@@ -101,7 +133,7 @@ class MakerCoordinator:
             decision = self._engine.quote(snapshot)
             decisions.append(decision)
             current = self._registry.state(exchange_id)
-            force_cancel = self._risk_context.kill_switch
+            force_cancel = self._kill_switch.active
             desired = None if force_cancel else decision.desired
             side_actions = self._lifecycle.decide(
                 desired=desired,
@@ -139,7 +171,11 @@ class MakerCoordinator:
                     f"{change.event_id}:make-cancel:{exchange_id}:{action.side.value}"
                 )
                 try:
-                    event = await self._cancel_dispatch(active, logical_id, snapshot.tournament_id)
+                    event = await self._cancel_dispatch(
+                        active,
+                        logical_id,
+                        snapshot.tournament_id,
+                    )
                 except BaseException:
                     self._registry.mark_lifecycle(
                         exchange_id=exchange_id,
@@ -185,7 +221,11 @@ class MakerCoordinator:
                 if self._reservations is None
                 else self._reservations.overlay_snapshot(snapshot.runtime)
             )
-            risk = evaluate_risk(opportunity, risk_snapshot, self._risk_context)
+            risk_context = replace(
+                self._risk_context,
+                kill_switch=self._kill_switch.active,
+            )
+            risk = evaluate_risk(opportunity, risk_snapshot, risk_context)
             risk_decisions.append(risk)
             if not risk.approved:
                 continue
