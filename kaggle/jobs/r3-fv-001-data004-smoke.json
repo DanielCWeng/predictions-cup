@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/r3_fv_001_smoke",
+  "kernel": "polyleviathan/r3-fv-001-data004-smoke",
+  "poll_seconds": 20,
+  "timeout_minutes": 30,
+  "download_outputs": true,
+  "output_file_pattern": "smoke_result\\.json$",
+  "note": "R3-FV-001 mandatory DATA-004 Kaggle smoke gate. No expensive fair-value research may start unless this passes."
+}
