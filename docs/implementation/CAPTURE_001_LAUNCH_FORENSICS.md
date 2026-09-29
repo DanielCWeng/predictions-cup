@@ -384,6 +384,61 @@ python -m predictions_cup.external.polymarket.recorder \
 For normal EC2 operation use the accepted BUILD-007 systemd units and runtime.env rather than
 interactive shells.
 
+## Validation evidence — 29 September 2026
+
+Local quality and artifact validation on the launch branch:
+
+- Ruff: **PASS**;
+- strict mypy: **PASS** across 191 source files;
+- full pytest: **576 passed, 3 skipped**;
+- focused CAPTURE-001 + SIG Realtime regression battery: **17 passed**;
+- normal application startup: **PASS**;
+- application smoke mode: **PASS**;
+- restart regression: previously published immutable shards remain readable and a new recorder
+  session appends distinct shards without publishing temp files;
+- first-hours report: **PASS** against a credentialed live SIG soak, producing report/summary,
+  market activity, microstructure, markout, depth and 15-minute activity outputs.
+
+Synthetic bounded-writer stress evidence:
+
+- 100,000 decoded raw events submitted;
+- producer rate: approximately **35,584 events/second**;
+- producer phase: **2.8102 seconds**;
+- drain/close: **0.1978 seconds**;
+- immutable Parquet shards: **10**;
+- rows read back: **100,000 / 100,000**;
+- queue depth after producer phase: **20,000 / 200,000**;
+- dropped rows: **0**;
+- storage failures: **0**;
+- process peak RSS: approximately **142 MiB**.
+
+A finite credentialed **read-only** SIG soak was then run from this branch without loading
+`trade.env`, with trading forced false and tracked full depth deliberately empty. Observed:
+
+- tournament universe: **237 markets / 237 exchanges**;
+- authoritative market enumeration: successful;
+- broad scalar/BBO seed: **3** bulk-price calls;
+- total governed REST requests: **7**;
+- HTTP 429s: **0**;
+- reconciliation failures: **0**;
+- tracked-depth exchanges: **0 by deliberate policy**;
+- queue high-water: **100 / 200,000**;
+- dropped rows: **0**;
+- storage failures: **0**;
+- normalized research rows published during the short soak: **475**;
+- published shards during the run: **1** before final close flush;
+- first-hours command consumed the resulting capture immediately after stop.
+
+The short credentialed window happened to receive no market Realtime batch, so it does **not**
+constitute live evidence for a raw `market_batch` arrival. Raw accepted/malformed batch capture,
+revision provenance and replayable decoded-payload publication are covered by direct regression
+tests and the 100,000-event writer stress test. A longer pre-launch paired soak should obtain live
+Realtime events before the branch is called fully production-validated.
+
+The first-hours live-soak report observed 237 broad BBO rows, a 73.4% two-sided BBO availability
+rate in that snapshot, no revision gaps, and no depth rows because full depth was intentionally
+untracked. The depth CSV now emits a schema header even when policy yields zero rows.
+
 ## Launch gate / soak checklist
 
 Before 1 October 17:00 BST, verify on the intended launch host:
