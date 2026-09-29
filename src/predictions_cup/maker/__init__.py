@@ -34,6 +34,7 @@ from predictions_cup.maker.lifecycle import (
     QuoteLifecycleManager,
     QuoteRegistry,
 )
+from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.maker.policies import (
     AvellanedaStoikovInventoryModel,
     ConservativeEligibilityPolicy,
@@ -64,6 +65,7 @@ __all__ = [
     "MakerMarketSnapshot",
     "MakerQuoteState",
     "MakerSnapshotAssembler",
+    "MakerSourceBridge",
     "MakerStateChange",
     "MakerTrace",
     "NullPredictiveAdjuster",
