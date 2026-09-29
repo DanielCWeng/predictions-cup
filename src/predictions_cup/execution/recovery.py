@@ -11,7 +11,6 @@ from typing import Protocol
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import ExecutionEnvelope, LifecycleState, OperationKind
-from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.runtime.models import RuntimePortfolio
 from predictions_cup.sig.account_reconciliation import reconcile_account
 from predictions_cup.sig.errors import SigExecutionUncertainError
@@ -95,9 +94,7 @@ async def recover_startup(
                     LifecycleState.UNCERTAIN,
                     LifecycleState.RECONCILING,
                 }:
-                    await live_sink.dispatch(
-                        ExecutionPlan(envelope=envelope, intents=())
-                    )
+                    await live_sink.dispatch_recovery(envelope)
             elif envelope.operation_kind is OperationKind.SINGLE_CANCELLATION:
                 await _recover_single_cancel(
                     journal=journal,
