@@ -41,6 +41,7 @@ class MakerRuntimeLoop:
         wall_clock: WallClock = lambda: datetime.now(UTC),
         mono_clock: MonoClock = monotonic_ns,
         runtime_session_id: str | None = None,
+        max_exchanges_per_cycle: int | None = None,
     ) -> None:
         self._bridge = bridge
         self._coordinator = coordinator
@@ -54,6 +55,9 @@ class MakerRuntimeLoop:
         if not session_id.strip():
             raise ValueError("runtime_session_id must not be blank")
         self._runtime_session_id = session_id
+        if max_exchanges_per_cycle is not None and max_exchanges_per_cycle <= 0:
+            raise ValueError("max_exchanges_per_cycle must be positive")
+        self._max_exchanges_per_cycle = max_exchanges_per_cycle
         self._wake = asyncio.Event()
         self._pending_exchanges: set[str] = set()
         self._global_recheck = False
@@ -128,6 +132,17 @@ class MakerRuntimeLoop:
             exchange_ids = self._bridge.tradeable_exchange_ids
         if not exchange_ids:
             return None
+
+        ordered_exchange_ids = tuple(sorted(exchange_ids))
+        limit = self._max_exchanges_per_cycle
+        if limit is not None and len(ordered_exchange_ids) > limit:
+            selected = ordered_exchange_ids[:limit]
+            deferred = ordered_exchange_ids[limit:]
+            exchange_ids = frozenset(selected)
+            self._pending_exchanges.update(deferred)
+            self._wake.set()
+        else:
+            exchange_ids = frozenset(ordered_exchange_ids)
 
         now_ns = self._mono_clock()
         if oldest_observed_ns is not None and now_ns >= oldest_observed_ns:
