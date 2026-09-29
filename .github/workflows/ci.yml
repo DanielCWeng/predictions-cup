@@ -49,3 +49,6 @@ jobs:
 
       - name: BUILD-009 benchmark smoke
         run: python -m predictions_cup.benchmarks --smoke
+
+      - name: MAKE-001 benchmark smoke
+        run: python scripts/benchmark_make001.py --iterations 20 --bursts 1 --journal-iterations 2
