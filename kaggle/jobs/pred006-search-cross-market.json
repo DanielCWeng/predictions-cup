@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/pred006_search_cross_market",
+  "kernel": "polyleviathan/pred006-search-cross-market",
+  "poll_seconds": 30,
+  "timeout_minutes": 180,
+  "download_outputs": true,
+  "output_file_pattern": "(hypothesis_ledger|dead_idea_ledger|results_summary)\\.json$|experiment_matrix\\.csv$",
+  "note": "PRED-006 TRAIN/DEV search family cross_market; consumes frozen Phase-0 split; FINAL predictive outcomes excluded."
+}
