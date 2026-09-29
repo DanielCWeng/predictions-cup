@@ -257,6 +257,7 @@ class _Bridge:
 class _Coordinator:
     def __init__(self) -> None:
         self.calls: list[frozenset[str]] = []
+        self.event_ids: list[str] = []
         self.killed = False
 
     async def on_state_change(
@@ -264,7 +265,7 @@ class _Coordinator:
         change: MakerStateChange,
         snapshots: Mapping[str, MakerMarketSnapshot],
     ) -> MakerCycleResult:
-        del change
+        self.event_ids.append(change.event_id)
         self.calls.append(frozenset(snapshots))
         return MakerCycleResult((), (), (), ())
 
@@ -318,3 +319,34 @@ def test_runtime_kill_switch_requests_global_recheck() -> None:
 
     assert coordinator.killed is True
     assert coordinator.calls == [frozenset({"36", "37"})]
+
+def test_runtime_session_namespace_prevents_operation_identity_reuse_after_restart() -> None:
+    bridge = _Bridge()
+    first = _Coordinator()
+    second = _Coordinator()
+    common = {
+        "bridge": cast(MakerSourceBridge, bridge),
+        "polymarket_feed_trusted": lambda: True,
+        "wall_clock": lambda: datetime(2026, 9, 29, 14, 0, tzinfo=UTC),
+        "mono_clock": lambda: 100,
+    }
+    runtime_a = MakerRuntimeLoop(
+        coordinator=cast(MakerCoordinator, first),
+        runtime_session_id="session-a",
+        **common,
+    )
+    runtime_b = MakerRuntimeLoop(
+        coordinator=cast(MakerCoordinator, second),
+        runtime_session_id="session-b",
+        **common,
+    )
+
+    runtime_a.notify_sig({"36"}, observed_monotonic_ns=90)
+    runtime_b.notify_sig({"36"}, observed_monotonic_ns=90)
+    asyncio.run(runtime_a.drain_once())
+    asyncio.run(runtime_b.drain_once())
+
+    assert first.event_ids == ["make-runtime-session-a-1"]
+    assert second.event_ids == ["make-runtime-session-b-1"]
+    assert first.event_ids[0] != second.event_ids[0]
+
