@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "stage": "FINAL_PROTOCOL_FROZEN_BEFORE_DEV_DECISION",
+  "frozen_while_discovery_run_id": 36628086250,
+  "final_start_utc": "2026-09-10T00:00:00+00:00",
+  "final_opened": false,
+  "entry_condition": {
+    "required_discovery_decision": "FREEZE_FOR_FINAL",
+    "required_candidate_modes": [
+      "LOO_FAMILY_SEMANTIC",
+      "LOO_FAMILY_STRICT"
+    ],
+    "no_loo_price_candidate_may_trigger_final": true,
+    "max_candidates": 3
+  },
+  "refit_rule": {
+    "data": "All eligible pre-FINAL TRAIN+DEV events under the frozen exclusion mode.",
+    "hyperparameters": "Use the exact inner-TRAIN-selected hyperparameters written by discovery; no retuning after DEV.",
+    "features": "Exact discovery feature schema and 6-hour freshness half-life; no new features, no flow, no PRED-006 hazard features.",
+    "chronology": "Same strict block-prior visibility rule; source state for target block B may use only source blocks < B."
+  },
+  "final_evaluation": {
+    "rows": "Only events with target timestamp >= 2026-09-10T00:00:00Z.",
+    "baseline": "Previous block-complete direct target probability for the same SIG market.",
+    "primary_metric": "MAE improvement versus persistence.",
+    "uncertainty": "Deterministic SIG-market cluster bootstrap, 400 resamples.",
+    "secondary_metrics": [
+      "relative MAE improvement",
+      "RMSE",
+      "residual Spearman correlation",
+      "directional accuracy at 0.5c and 1c model-dislocation thresholds",
+      "coverage by SIG market",
+      "coverage by mapping class"
+    ],
+    "reporting": "Report every frozen candidate; do not choose a different winner after looking at FINAL."
+  },
+  "confirmation_rule": {
+    "required_for_final_confirmation": [
+      "absolute MAE improvement > 0",
+      "relative MAE improvement >= 0.005",
+      "SIG-market cluster-bootstrap 95% lower bound of MAE improvement > 0"
+    ],
+    "champion_status": "The DEV-frozen champion is CONFIRMED only if it clears all three FINAL conditions.",
+    "challenger_status": "Challengers are reported as robustness checks only; a challenger cannot replace a failed champion post hoc.",
+    "failure_status": "If champion fails FINAL, classify R3 as not freshly confirmed regardless of any isolated challenger result."
+  },
+  "execution_boundary": {
+    "historical_claim": "This is a fair-value/repricing study using fills as observations; it is not historical proof of executable arbitrage, maker P&L, or queue position.",
+    "deployment_decision": "Any competition deployment requires a separate live execution/risk translation after scientific confirmation."
+  }
+}
