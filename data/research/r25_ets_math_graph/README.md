@@ -59,3 +59,42 @@ Outcome-blind handling follows [`docs/research/005_DISCOVERY_PRIOR_WORK_BOUNDARY
 9. **Invalid shortcuts:** Democratic Yes plus Republican Yes is not necessarily one; a closeness threshold gives no direction; turnout does not determine the winner; a national House popular-vote margin does not determine district winners; aggregate seat counts do not identify individual race probabilities without dependence assumptions; state-chamber control is not a governor result; candidacy/primary markets do not resolve general-election winners.
 10. **Smallest useful pilot:** Georgia Senate×Governor's four listed D/R joint cells (`3729337`–`3729340`) against already accepted Georgia Governor margin-partition and Senate winner sources, with SIG targets 166/167 and 258/259 (exchange IDs 855/856 and 947/948). First check rule alignment and partial-identification bounds; later measure held-out SIG quote response. This is a research design, not an arbitrage claim.
 11. **Next team action:** plan fill collection in P0/P1/P2/P3 order, separately scope the accepted direct/derived baseline sources already outside v2, then request later order-book snapshots for the 797 flagged candidates. Freeze the Georgia pilot and failure criteria before accessing outcome history.
+
+## Reproducibility freeze
+
+The original Gamma HTTP response bodies used during the semantic pass were not committed to Git.
+The repository therefore freezes an **equivalent immutable semantic projection** rather than
+claiming byte-for-byte raw-response preservation.
+
+The canonical frozen projection is
+[`ETS_GAMMA_SEMANTIC_AUDIT.csv`](ETS_GAMMA_SEMANTIC_AUDIT.csv). It preserves, for every one of
+the 1,279 candidates:
+
+- market / condition / token identity;
+- question and outcome metadata;
+- event ID / slug / title and event-family counts;
+- fetch endpoint and timestamp;
+- active / closed / start / end state;
+- group and neg-risk metadata;
+- SHA-256 of the full Gamma description fetched during the review;
+- the frozen description SHA-256 from the upstream v2 universe and the equality result.
+
+Its frozen SHA-256, together with the exact hashes of the graph outputs, is recorded in
+[`ETS_REPRODUCIBILITY_MANIFEST.json`](ETS_REPRODUCIBILITY_MANIFEST.json).
+
+Run the deterministic offline audit with:
+
+```bash
+python scripts/research/verify_r25_ets_math_graph.py
+```
+
+The verifier does not access Gamma or any outcome/price history. It checks the exact SHA-256 of the
+committed semantic snapshot and graph artifacts, proves the 1,279-market source universe is
+identical by market / condition / token / question, verifies all frozen description hashes still
+match, reconciles the 237 Gamma event families and lookup provenance, and checks the final
+P0/P1/P2/P3/metadata/drop acquisition counts.
+
+CI runs the same audit through `tests/test_r25_ets_reproducibility.py`. Any future edit to the
+frozen graph or semantic projection therefore requires an explicit manifest/version change rather
+than silently changing the research state.
+
