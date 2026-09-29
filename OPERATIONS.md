@@ -59,8 +59,9 @@ python -m predictions_cup.analysis.first_hours \
 ```
 
 The output includes `summary.json`, `report.md`, market activity, economic BBO/update metrics,
-trade/markout diagnostics, tracked-depth summaries, 15-minute activity tables and direct mapped
-cross-venue response/latest-discrepancy tables. Direct PM values are aligned through the accepted
+trade/markout diagnostics, tracked-depth summaries, 15-minute activity tables, direct mapped
+cross-venue response/latest-discrepancy tables and per-operation execution-lifecycle latency.
+Direct PM values are aligned through the accepted
 `SAME`/`COMPLEMENT` mapping direction before comparison. Treat response lags as nearest-subsequent
 economic changes rather than causal evidence. Treat aggressor classification as
 price-vs-prior-BBO inference with a freshness rule, not participant identity. No passive queue
