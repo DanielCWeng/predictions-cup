@@ -26,6 +26,7 @@ from predictions_cup.runtime import OrderAction, OutcomeSide
 from predictions_cup.sig.errors import SigClientRequestError, SigExecutionUncertainError
 from predictions_cup.sig.trading_client import SigTradingClient
 from predictions_cup.sig.trading_dto import (
+    BatchOrderResponseDto,
     MultiLegOrderRequestDto,
     MultiLegResponseDto,
     SingleOrderRequestDto,
@@ -96,16 +97,35 @@ class FakeRelationshipRejectedTradingClient(FakeTradingClient):
 
 
 class FakeUncertainTradingClient(FakeTradingClient):
+    @staticmethod
+    def _raise_uncertain(payload_json: str) -> None:
+        del payload_json
+        raise SigExecutionUncertainError(
+            status_code=500,
+            code="INTERNAL_ERROR",
+            safe_message="fixture generic server uncertainty",
+        )
+
     async def place_order_payload(
         self,
         payload_json: str,
     ) -> SingleOrderResponseDto:
-        del payload_json
-        raise SigExecutionUncertainError(
-            status_code=None,
-            code="TRANSPORT_OUTCOME_UNKNOWN",
-            safe_message="fixture uncertain",
-        )
+        self._raise_uncertain(payload_json)
+        raise AssertionError("unreachable")
+
+    async def place_batch_payload(
+        self,
+        payload_json: str,
+    ) -> BatchOrderResponseDto:
+        self._raise_uncertain(payload_json)
+        raise AssertionError("unreachable")
+
+    async def place_multi_leg_payload(
+        self,
+        payload_json: str,
+    ) -> MultiLegResponseDto:
+        self._raise_uncertain(payload_json)
+        raise AssertionError("unreachable")
 
 
 def _permit() -> LiveExecutionPermit:
@@ -426,6 +446,82 @@ def test_uncertain_dispatch_keeps_local_reservation_until_reconciliation(
         assert reservations.intent_ids() == frozenset({"intent-91"})
         unresolved = journal.unresolved()
         assert len(unresolved) == 1
+        assert unresolved[0].lifecycle_state is LifecycleState.UNCERTAIN
+    finally:
+        journal.close()
+
+@pytest.mark.parametrize(
+    "operation_kind",
+    (
+        OperationKind.SINGLE_PLACEMENT,
+        OperationKind.BEST_EFFORT_BATCH,
+        OperationKind.ATOMIC_MULTI_LEG,
+    ),
+)
+def test_generic_5xx_execution_outcome_stays_uncertain_and_reserved(
+    tmp_path: Path,
+    operation_kind: OperationKind,
+) -> None:
+    first = _intent()
+    intents = (first,)
+    relationship_constraint: str | None = None
+    if operation_kind is not OperationKind.SINGLE_PLACEMENT:
+        second = RuntimeOrderIntent(
+            intent_id="intent-92",
+            exchange_id="37",
+            market_id="m1",
+            tournament_id="t1",
+            outcome_side=OutcomeSide.NO,
+            action=OrderAction.BUY,
+            quantity=1,
+            limit_price_ticks=100,
+            strategy_id="fixture",
+            decision_observation_ns=100,
+        )
+        intents = (first, second)
+    if operation_kind is OperationKind.ATOMIC_MULTI_LEG:
+        relationship_constraint = "22222222-2222-2222-2222-222222222222"
+
+    decision = RiskDecision(
+        approved=True,
+        reason="approved",
+        execution_mode=ExecutionMode.LIVE,
+        operation_kind=operation_kind,
+        intents=intents,
+        relationship_constraint=relationship_constraint,
+        strategy_family="STRUCT" if relationship_constraint is not None else "FV-TAKE",
+        strategy_id="fixture",
+        signal_value=0.025,
+        fair_value=0.55,
+        decision_observation_ns=100,
+    )
+    plan = build_execution_plan(
+        decision,
+        logical_operation_id=f"op-5xx-{operation_kind.value}",
+        created_monotonic_ns=150,
+    )
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    ticks = iter((200, 300, 400))
+    journal = ExecutionJournal(tmp_path / f"{operation_kind.value}.sqlite3")
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, FakeUncertainTradingClient()),
+        journal=journal,
+        permit=_permit(),
+        reservations=reservations,
+        clock_ns=lambda: next(ticks),
+    )
+    try:
+        with pytest.raises(SigExecutionUncertainError) as caught:
+            asyncio.run(sink.dispatch(plan))
+        assert caught.value.status_code == 500
+        assert caught.value.code == "INTERNAL_ERROR"
+        assert reservations.intent_ids() == frozenset(
+            intent.intent_id for intent in plan.intents
+        )
+        unresolved = journal.unresolved()
+        assert len(unresolved) == 1
+        assert unresolved[0].logical_operation_id == plan.envelope.logical_operation_id
         assert unresolved[0].lifecycle_state is LifecycleState.UNCERTAIN
     finally:
         journal.close()
