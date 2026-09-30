@@ -13,6 +13,7 @@ class SpanName(StrEnum):
     DECISION_TO_DISPATCH = "decision_to_dispatch"
     DISPATCH_TO_RESPONSE = "dispatch_to_response"
     DISPATCH_TO_ACK = "dispatch_to_ack"
+    REQUEST_ENQUEUE_TO_ACK = "request_enqueue_to_ack"
     ACK_TO_FIRST_FILL = "ack_to_first_fill"
     DISPATCH_TO_FILL = "dispatch_to_fill"
     CANCEL_TO_CONFIRMATION = "cancel_to_confirmation"
@@ -45,6 +46,11 @@ _RULES: tuple[tuple[SpanName, ObservationKind, tuple[ObservationKind, ...]], ...
         (ObservationKind.RESPONSE_RECEIVED,),
     ),
     (SpanName.DISPATCH_TO_ACK, ObservationKind.REQUEST_DISPATCHED, (ObservationKind.ACK,)),
+    (
+        SpanName.REQUEST_ENQUEUE_TO_ACK,
+        ObservationKind.REQUEST_ENQUEUED,
+        (ObservationKind.ACK,),
+    ),
     (
         SpanName.ACK_TO_FIRST_FILL,
         ObservationKind.ACK,
