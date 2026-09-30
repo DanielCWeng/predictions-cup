@@ -390,6 +390,126 @@ def _fsync_directory(path: Path) -> None:
         os.close(descriptor)
 
 
+def _venue_observation_row(
+    *,
+    session_id: str,
+    connection_epoch: int,
+    observation: "VenueObservation",
+) -> dict[str, object]:
+    return {
+        "session_id": session_id,
+        "connection_epoch": connection_epoch,
+        "schema_version": SCHEMA_VERSION,
+        "kind": observation.kind.value,
+        "observed_at": _utc(observation.observed_at),
+        "monotonic_ns": observation.monotonic_ns,
+        "process_instance_id": observation.process_instance_id,
+        "source": observation.source,
+        "source_version": observation.source_version,
+        "provenance": observation.provenance,
+        "tournament_id": observation.tournament_id,
+        "market_id": observation.market_id,
+        "exchange_id": observation.exchange_id,
+        "strategy_family": observation.strategy_family,
+        "strategy_id": observation.strategy_id,
+        "logical_operation_id": observation.logical_operation_id,
+        "logical_intent_id": observation.logical_intent_id,
+        "idempotency_key": observation.idempotency_key,
+        "exchange_order_id": observation.exchange_order_id,
+        "fill_id": observation.fill_id,
+        "revision": observation.revision,
+        "source_timestamp": _utc(observation.source_timestamp),
+        "status_code": observation.status_code,
+        "detail_json": _json(dict(observation.detail)),
+    }
+
+
+def _competition_context_row(
+    *,
+    session_id: str,
+    connection_epoch: int,
+    snapshot: "CompetitionContextSnapshot",
+) -> dict[str, object]:
+    fields = {
+        field.name: {
+            "value": field.value,
+            "classification": field.classification.value,
+            "source": field.source,
+            "source_version": field.source_version,
+            "unavailable_reason": field.unavailable_reason,
+        }
+        for field in snapshot.fields
+    }
+    return {
+        "session_id": session_id,
+        "connection_epoch": connection_epoch,
+        "schema_version": SCHEMA_VERSION,
+        "observed_at": _utc(snapshot.observed_at),
+        "monotonic_ns": time.monotonic_ns(),
+        "tournament_id": snapshot.tournament_id,
+        "source": "SIG_PARTICIPANT_API",
+        "source_version": "api-1",
+        "fields_json": _json(fields),
+        "raw_tournament_json": _json(snapshot.raw_tournament),
+        "raw_account_json": _json(snapshot.raw_account),
+        "raw_leaderboard_json": _json(snapshot.raw_leaderboard),
+    }
+
+
+class ObservationCaptureRecorder:
+    """CAPTURE-001 writer for processes that do not own SIG operational SQLite."""
+
+    def __init__(
+        self,
+        research_root: Path,
+        *,
+        queue_max: int = 65_536,
+        shard_seconds: int = 60,
+        max_rows_per_shard: int = 100_000,
+        session_id: str | None = None,
+    ) -> None:
+        self.session_id = session_id or uuid.uuid4().hex
+        self._connection_epoch = 0
+        self._sink = ImmutableCaptureSink(
+            research_root,
+            shard_seconds=shard_seconds,
+            max_rows_per_shard=max_rows_per_shard,
+            queue_max=queue_max,
+        )
+
+    def close(self) -> None:
+        self._sink.close()
+
+    def capture_health_snapshot(self) -> dict[str, object]:
+        snapshot = self._sink.health_snapshot()
+        snapshot["session_id"] = self.session_id
+        snapshot["connection_epoch"] = self._connection_epoch
+        return snapshot
+
+    def record_venue_observation(self, observation: "VenueObservation") -> None:
+        self._sink.emit(
+            "venue_observations",
+            _venue_observation_row(
+                session_id=self.session_id,
+                connection_epoch=self._connection_epoch,
+                observation=observation,
+            ),
+        )
+
+    def record_competition_context(
+        self,
+        snapshot: "CompetitionContextSnapshot",
+    ) -> None:
+        self._sink.emit(
+            "competition_context",
+            _competition_context_row(
+                session_id=self.session_id,
+                connection_epoch=self._connection_epoch,
+                snapshot=snapshot,
+            ),
+        )
+
+
 class LaunchSigRecorder(SigRealtimeRecorder):
     """Accepted operational SQLite plus lossless-as-permitted immutable research capture."""
 
@@ -805,64 +925,24 @@ class LaunchSigRecorder(SigRealtimeRecorder):
     def record_venue_observation(self, observation: "VenueObservation") -> None:
         self._sink.emit(
             "venue_observations",
-            {
-                "session_id": self.session_id,
-                "connection_epoch": self._connection_epoch,
-                "schema_version": SCHEMA_VERSION,
-                "kind": observation.kind.value,
-                "observed_at": _utc(observation.observed_at),
-                "monotonic_ns": observation.monotonic_ns,
-                "process_instance_id": observation.process_instance_id,
-                "source": observation.source,
-                "source_version": observation.source_version,
-                "provenance": observation.provenance,
-                "tournament_id": observation.tournament_id,
-                "market_id": observation.market_id,
-                "exchange_id": observation.exchange_id,
-                "strategy_family": observation.strategy_family,
-                "strategy_id": observation.strategy_id,
-                "logical_operation_id": observation.logical_operation_id,
-                "logical_intent_id": observation.logical_intent_id,
-                "idempotency_key": observation.idempotency_key,
-                "exchange_order_id": observation.exchange_order_id,
-                "fill_id": observation.fill_id,
-                "revision": observation.revision,
-                "source_timestamp": _utc(observation.source_timestamp),
-                "status_code": observation.status_code,
-                "detail_json": _json(dict(observation.detail)),
-            },
+            _venue_observation_row(
+                session_id=self.session_id,
+                connection_epoch=self._connection_epoch,
+                observation=observation,
+            ),
         )
 
     def record_competition_context(
         self,
         snapshot: "CompetitionContextSnapshot",
     ) -> None:
-        fields = {
-            field.name: {
-                "value": field.value,
-                "classification": field.classification.value,
-                "source": field.source,
-                "source_version": field.source_version,
-                "unavailable_reason": field.unavailable_reason,
-            }
-            for field in snapshot.fields
-        }
         self._sink.emit(
             "competition_context",
-            {
-                "session_id": self.session_id,
-                "connection_epoch": self._connection_epoch,
-                "schema_version": SCHEMA_VERSION,
-                "observed_at": _utc(snapshot.observed_at),
-                "monotonic_ns": time.monotonic_ns(),
-                "tournament_id": snapshot.tournament_id,
-                "source": "SIG_PARTICIPANT_API",
-                "source_version": "api-1",
-                "fields_json": _json(fields),
-                "raw_tournament_json": _json(snapshot.raw_tournament),
-                "raw_account_json": _json(snapshot.raw_account),
-                "raw_leaderboard_json": _json(snapshot.raw_leaderboard),
-            },
+            _competition_context_row(
+                session_id=self.session_id,
+                connection_epoch=self._connection_epoch,
+                snapshot=snapshot,
+            ),
         )
 
     def record_ets_state(
