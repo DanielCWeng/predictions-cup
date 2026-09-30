@@ -496,7 +496,7 @@ def test_live_shadow_runtime_composes_frozen_candidates_and_live_learn(
         runtime = build_live_shadow_runtime(settings, core)
         await runtime.start()
 
-        observed = datetime(2026, 9, 30, 8, 0, tzinfo=UTC)
+        observed = datetime(2099, 1, 1, 8, 0, tzinfo=UTC)
         first = _maker_snapshot(now=NOW)
         runtime.observe(
             MakerStateChange(
