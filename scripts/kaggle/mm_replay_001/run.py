@@ -507,6 +507,8 @@ def edge_grid() -> list[MakerPolicy]:
 
 def run_mm(
     markets: dict[str, list[BookObservation]],
+    *,
+    edge_grid_reference_latency_ms: int | None,
 ) -> tuple[
     list[dict[str, Any]],
     list[dict[str, Any]],
@@ -527,48 +529,74 @@ def run_mm(
     )
     if queue_supported:
         models.append(QueueAwareFillModel())
-    policies = list(default_policies()) + edge_grid()
+
+    baseline_policies = list(default_policies())
+    edge_policies = edge_grid() if edge_grid_reference_latency_ms is not None else []
+    scenarios: list[tuple[MakerPolicy, Any, int, str]] = []
+    for policy in baseline_policies:
+        for model in models:
+            for reaction_delay_ms in CANCEL_LATENCIES_MS:
+                scenarios.append(
+                    (policy, model, reaction_delay_ms, "LATENCY_SWEEP")
+                )
+    if edge_grid_reference_latency_ms is not None:
+        if edge_grid_reference_latency_ms < 0:
+            raise InputContractError("edge_grid_reference_latency_ms must be non-negative")
+        conservative = ConservativeTradeFillModel()
+        for policy in edge_policies:
+            scenarios.append(
+                (
+                    policy,
+                    conservative,
+                    edge_grid_reference_latency_ms,
+                    "EDGE_GRID_REFERENCE_LATENCY",
+                )
+            )
+
     for market_id, observations in markets.items():
         if not observations:
             continue
         start, end = observations[0].timestamp_ns, observations[-1].timestamp_ns
-        for policy in policies:
-            for model in models:
-                results, summary = replay_market(
-                    observations,
-                    policy=policy,
-                    fill_model=model,
-                )
-                row = asdict(summary)
-                row.update(
-                    {
-                        "market_id": market_id,
-                        "category": observations[0].category,
-                    }
-                )
-                policy_rows.append(row)
-                breakdown.append(row)
-                for item in results:
-                    record = {
-                        "market_id": market_id,
-                        "timestamp_ns": item.fill.timestamp_ns,
-                        "split": split_for(item.fill.timestamp_ns, start, end),
-                        "policy_id": item.fill.policy_id,
-                        "fill_assumption": item.fill.assumption.value,
-                        "side": item.fill.side.value,
-                        "fill_price": item.fill.price,
-                        "size": item.fill.size,
-                        "reservation_fv": item.reservation_fv,
-                        "gross_spread_capture": item.gross_spread_capture,
-                        "fee_cost": item.fee_cost,
-                        "unwind_cost": item.unwind_cost,
-                        "estimated_edge_5m": item.estimated_edge_5m,
-                    }
-                    fill_rows.append(record)
-                    for horizon, value in item.markouts.items():
-                        markout_rows.append(
-                            {**record, "horizon_s": horizon, "markout": value}
-                        )
+        for policy, model, reaction_delay_ms, scenario_family in scenarios:
+            results, summary = replay_market(
+                observations,
+                policy=policy,
+                fill_model=model,
+                reaction_delay_ms=reaction_delay_ms,
+            )
+            row = asdict(summary)
+            row.update(
+                {
+                    "market_id": market_id,
+                    "category": observations[0].category,
+                    "scenario_family": scenario_family,
+                }
+            )
+            policy_rows.append(row)
+            breakdown.append(row)
+            for item in results:
+                record = {
+                    "market_id": market_id,
+                    "timestamp_ns": item.fill.timestamp_ns,
+                    "split": split_for(item.fill.timestamp_ns, start, end),
+                    "policy_id": item.fill.policy_id,
+                    "fill_assumption": item.fill.assumption.value,
+                    "reaction_delay_ms": item.reaction_delay_ms,
+                    "scenario_family": scenario_family,
+                    "side": item.fill.side.value,
+                    "fill_price": item.fill.price,
+                    "size": item.fill.size,
+                    "reservation_fv": item.reservation_fv,
+                    "gross_spread_capture": item.gross_spread_capture,
+                    "fee_cost": item.fee_cost,
+                    "unwind_cost": item.unwind_cost,
+                    "estimated_edge_5m": item.estimated_edge_5m,
+                }
+                fill_rows.append(record)
+                for horizon, value in item.markouts.items():
+                    markout_rows.append(
+                        {**record, "horizon_s": horizon, "markout": value}
+                    )
     return policy_rows, fill_rows, markout_rows, breakdown
 
 
@@ -819,7 +847,12 @@ def main() -> None:
     )
     attach_scores(markets, hazard_scores)
 
-    policy_rows, fill_rows, markout_rows, breakdown = run_mm(markets)
+    edge_latency_raw = manifest.get("edge_grid_reference_latency_ms")
+    edge_latency = int(edge_latency_raw) if edge_latency_raw is not None else None
+    policy_rows, fill_rows, markout_rows, breakdown = run_mm(
+        markets,
+        edge_grid_reference_latency_ms=edge_latency,
+    )
     convergence = [
         row
         for observations in markets.values()
