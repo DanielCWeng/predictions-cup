@@ -10,10 +10,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import signal
 from contextlib import suppress
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 from time import monotonic_ns
 from typing import cast
 
@@ -122,7 +124,12 @@ class MakerService:
         self._last_health: tuple[bool, bool, bool, datetime | None] | None = None
         self._observation_health_provider: ObservationHealthProvider | None = None
         self._observation_health_publisher: ObservationHealthStatusPublisher | None = None
-        status_root = self.settings.sig_research_path.parent / "runtime" / "status"
+        status_root = Path(
+            os.environ.get(
+                "PREDICTIONS_CUP_FULLSTACK_STATUS_DIR",
+                str(self.settings.sig_research_path.parent / "runtime" / "status"),
+            )
+        )
         self._shadow_status_publisher = RuntimeStatusPublisher(status_root / "shadow.json")
         self._live_learn_status_publisher = RuntimeStatusPublisher(
             status_root / "live-learn.json"
@@ -157,7 +164,17 @@ class MakerService:
             observe_recorder,
         )
         self._observation_health_publisher = ObservationHealthStatusPublisher(
-            default_observation_health_status_path(self.settings.sig_research_path),
+            Path(
+                os.environ.get(
+                    "PREDICTIONS_CUP_FULLSTACK_STATUS_DIR",
+                    str(
+                        default_observation_health_status_path(
+                            self.settings.sig_research_path
+                        ).parent
+                    ),
+                )
+            )
+            / "observe.json",
             process_instance_id=observe_recorder.session_id,
             owner="predictions-cup-maker.service",
         )
