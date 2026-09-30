@@ -169,6 +169,7 @@ def test_fixture_provider_cannot_pass_require_real(tmp_path: Path) -> None:
     os.environ["CALL_LOG"] = str(calls)
     values = _healthy_values(tmp_path)
     values["PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_ENABLED"] = "true"
+    values["PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_MODE"] = "EXTERNAL_SERVICE"
     status_dir = tmp_path / "status"
     status_dir.mkdir()
     values["PREDICTIONS_CUP_FULLSTACK_STATUS_DIR"] = str(status_dir)
@@ -177,6 +178,9 @@ def test_fixture_provider_cannot_pass_require_real(tmp_path: Path) -> None:
             {
                 "state": "DEGRADED",
                 "provider_mode": "fixture",
+                "capability_mode": "EXTERNAL_SERVICE",
+                "owner_services": ["predictions-cup-live-learn.service"],
+                "observed_at": datetime.now(UTC).isoformat(),
                 "reason": "fixture",
             }
         ),
@@ -364,8 +368,7 @@ def test_in_process_capabilities_do_not_spawn_adapter_units(tmp_path: Path) -> N
     values.update(
         {
             "PREDICTIONS_CUP_MAKER_ENABLED": "true",
-            "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_ENABLED": "true",
-            "PREDICTIONS_CUP_FULLSTACK_OBSERVE_ENABLED": "true",
+            "PREDICTIONS_CUP_LIVE_LEARN_ENABLED": "true",
             "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_MODE": "IN_PROCESS",
             "PREDICTIONS_CUP_FULLSTACK_OBSERVE_MODE": "IN_PROCESS",
         }
@@ -390,8 +393,7 @@ def test_in_process_safe_restart_restarts_owners_only_once(tmp_path: Path) -> No
     values.update(
         {
             "PREDICTIONS_CUP_MAKER_ENABLED": "true",
-            "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_ENABLED": "true",
-            "PREDICTIONS_CUP_FULLSTACK_OBSERVE_ENABLED": "true",
+            "PREDICTIONS_CUP_LIVE_LEARN_ENABLED": "true",
             "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_MODE": "IN_PROCESS",
             "PREDICTIONS_CUP_FULLSTACK_OBSERVE_MODE": "IN_PROCESS",
         }
@@ -447,8 +449,7 @@ def test_require_real_accepts_real_in_process_capability_health(tmp_path: Path) 
     values.update(
         {
             "PREDICTIONS_CUP_MAKER_ENABLED": "true",
-            "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_ENABLED": "true",
-            "PREDICTIONS_CUP_FULLSTACK_OBSERVE_ENABLED": "true",
+            "PREDICTIONS_CUP_LIVE_LEARN_ENABLED": "true",
             "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_MODE": "IN_PROCESS",
             "PREDICTIONS_CUP_FULLSTACK_OBSERVE_MODE": "IN_PROCESS",
             "PREDICTIONS_CUP_FULLSTACK_STATUS_DIR": str(status_dir),
@@ -460,34 +461,20 @@ def test_require_real_accepts_real_in_process_capability_health(tmp_path: Path) 
             "provider_mode": "real",
             "capability_mode": "IN_PROCESS",
             "owner_services": ["predictions-cup-maker.service"],
+            "observed_at": datetime.now(UTC).isoformat(),
             "reason": "LiveLearnEngine health healthy",
         },
         "observe": {
-            "state": "PASS",
-            "provider_mode": "real",
-            "capability_mode": "IN_PROCESS",
-            "owner_services": [
-                "predictions-cup-maker.service",
-                "predictions-cup-sig-capture.service",
-            ],
-            "reason": "OBSERVE emitter health healthy",
-        },
-        "risk": {
-            "state": "PASS",
-            "provider_mode": "real",
-            "source": "risk-002",
-            "active": False,
-            "reason": "risk healthy",
-        },
-        "account": {
-            "state": "PASS",
-            "provider_mode": "real",
-            "trusted": True,
-            "reason": "account trusted",
+            "schema_version": "observe-001-health-v1",
+            "observed_at": datetime.now(UTC).isoformat(),
+            "process_instance_id": "observe-test-process",
+            "owner": "predictions-cup-maker.service",
+            "health": {"state": "HEALTHY"},
         },
         "shadow": {
             "state": "PASS",
             "provider_mode": "real",
+            "observed_at": datetime.now(UTC).isoformat(),
             "reason": "shadow healthy",
         },
     }
@@ -531,6 +518,7 @@ def test_require_real_rejects_wrong_in_process_owner(tmp_path: Path) -> None:
                 "provider_mode": "real",
                 "capability_mode": "IN_PROCESS",
                 "owner_services": ["predictions-cup-live-learn.service"],
+                "observed_at": datetime.now(UTC).isoformat(),
                 "reason": "wrong owner",
             }
         ),
