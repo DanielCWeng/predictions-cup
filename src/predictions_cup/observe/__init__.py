@@ -29,6 +29,12 @@ from predictions_cup.observe.emitter import (
     InMemoryObservationSink,
     NullObservationEmitter,
 )
+from predictions_cup.observe.health import (
+    CaptureWriterHealth,
+    ObservationHealthProvider,
+    ObservationHealthSnapshot,
+    ObservationHealthState,
+)
 from predictions_cup.observe.spans import SpanName, VenueSpan, VenueSpanCollector
 from predictions_cup.observe.summary import (
     replay_operation,
@@ -40,6 +46,7 @@ __all__ = [
     "BoundedObservationEmitter",
     "CallbackObservationSink",
     "CaptureObservationSink",
+    "CaptureWriterHealth",
     "CompetitionContextProvider",
     "CompetitionContextSampler",
     "CompetitionContextSnapshot",
@@ -52,6 +59,9 @@ __all__ = [
     "InMemoryObservationSink",
     "NullObservationEmitter",
     "ObservationEmitter",
+    "ObservationHealthProvider",
+    "ObservationHealthSnapshot",
+    "ObservationHealthState",
     "ObservationKind",
     "ObservationSink",
     "SigOfficialCompetitionContextProvider",
