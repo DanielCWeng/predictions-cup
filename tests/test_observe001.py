@@ -12,6 +12,7 @@ from predictions_cup.observe import (
     CallbackObservationSink,
     CrossVenueMapping,
     EconomicChange,
+    EmitterHealth,
     FieldClassification,
     ObservationHealthProvider,
     ObservationHealthState,
@@ -384,6 +385,34 @@ class _DegradedCaptureHealth:
         }
 
 
+class _FailedCaptureHealth:
+    def capture_health_snapshot(self) -> dict[str, object]:
+        return {
+            "writer_alive": False,
+            "queue_depth": 0,
+            "queue_capacity": 16,
+            "queue_high_water": 16,
+            "written_rows": 10,
+            "written_shards": 1,
+            "dropped_rows": 0,
+            "storage_failures": 1,
+            "last_write_at": _AT,
+        }
+
+
+class _SinkFailureEmitterHealth:
+    def health(self) -> EmitterHealth:
+        return EmitterHealth(
+            queue_depth=0,
+            queue_capacity=16,
+            queue_high_water=1,
+            accepted=10,
+            dropped=0,
+            sink_failures=1,
+            worker_alive=True,
+        )
+
+
 def test_combined_observation_health_marks_capture_loss_degraded() -> None:
     emitter = BoundedObservationEmitter(
         CallbackObservationSink(lambda observation: None),
@@ -393,6 +422,29 @@ def test_combined_observation_health_marks_capture_loss_degraded() -> None:
         snapshot = ObservationHealthProvider(emitter, _DegradedCaptureHealth()).health()
         assert snapshot.state is ObservationHealthState.DEGRADED
         assert "CAPTURE_DROPPED_ROWS" in snapshot.reasons
+    finally:
+        emitter.close()
+
+
+def test_combined_observation_health_marks_sink_failure_degraded() -> None:
+    snapshot = ObservationHealthProvider(
+        _SinkFailureEmitterHealth(),
+        _DegradedCaptureHealth(),
+    ).health()
+    assert snapshot.state is ObservationHealthState.DEGRADED
+    assert "EMITTER_SINK_FAILURES" in snapshot.reasons
+
+
+def test_combined_observation_health_marks_storage_failure_blocked() -> None:
+    emitter = BoundedObservationEmitter(
+        CallbackObservationSink(lambda observation: None),
+        queue_max=16,
+    )
+    try:
+        snapshot = ObservationHealthProvider(emitter, _FailedCaptureHealth()).health()
+        assert snapshot.state is ObservationHealthState.BLOCKED
+        assert "CAPTURE_STORAGE_FAILURE" in snapshot.reasons
+        assert "CAPTURE_WRITER_NOT_ALIVE" in snapshot.reasons
     finally:
         emitter.close()
 
