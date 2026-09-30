@@ -161,7 +161,7 @@ pytest tests/test_shadow002.py tests/test_make001_runtime.py
 ruff check src/predictions_cup/shadow tests/test_shadow002.py scripts/benchmark_shadow002.py scripts/soak_shadow002.py
 mypy
 python scripts/benchmark_shadow002.py --markets 237 --candidates 6 --persistence-events 32
-python scripts/soak_shadow002.py --markets 237 --candidates 6 --cycles 10 --cycle-pause-ms 200
+python scripts/soak_shadow002.py --markets 237 --candidates 6 --cycles 20 --cycle-pause-ms 500
 ```
 
 The one-shot benchmark measures orchestration/evaluation overhead. The sustained
