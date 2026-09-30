@@ -443,7 +443,7 @@ def test_live_shadow_runtime_persists_one_snapshot_boundary_and_all_candidates(
                 observed_monotonic_ns=snapshot.now_monotonic_ns,
                 exchange_ids=frozenset({snapshot.exchange_id}),
             ),
-            datetime(2026, 9, 30, 8, 0, tzinfo=UTC),
+            datetime(2099, 1, 1, 8, 0, tzinfo=UTC),
             {snapshot.exchange_id: snapshot},
         )
         await runtime.bus.flush()
