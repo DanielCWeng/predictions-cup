@@ -302,7 +302,7 @@ class MakerCoordinator:
                 raise
 
             events.append(event)
-            if event.state in {
+            if event.simulated and event.state in {
                 LifecycleState.OPEN,
                 LifecycleState.PARTIALLY_FILLED,
                 LifecycleState.FILLED,
