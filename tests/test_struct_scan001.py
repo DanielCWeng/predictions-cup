@@ -15,7 +15,6 @@ from predictions_cup.analysis.structural_certificates import (
     exhaustive_partition_relationship,
 )
 
-
 NOW = datetime(2026, 10, 1, 16, 0, tzinfo=UTC)
 
 
