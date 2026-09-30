@@ -14,13 +14,18 @@ from predictions_cup.observe import (
     BoundedObservationEmitter,
     CallbackObservationSink,
     NullObservationEmitter,
+    ObservationEmitter,
     ObservationKind,
     VenueObservation,
 )
 
 
-def _sample(emitter: object, observation: VenueObservation, iterations: int) -> list[int]:
-    emit = getattr(emitter, "emit")
+def _sample(
+    emitter: ObservationEmitter,
+    observation: VenueObservation,
+    iterations: int,
+) -> list[int]:
+    emit = emitter.emit
     values: list[int] = []
     for _ in range(iterations):
         started = time.perf_counter_ns()
