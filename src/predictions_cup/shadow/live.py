@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from predictions_cup.config import AppSettings
-from predictions_cup.maker.coordinator import MakerStateChange
 from predictions_cup.maker.contracts import MakerMarketSnapshot
+from predictions_cup.maker.coordinator import MakerStateChange
 from predictions_cup.maker.direct_pm import DirectPolymarketFairValueProvider
 from predictions_cup.maker.factory import MakerRuntimeComponents
 from predictions_cup.mapping.models import MappingDocument
