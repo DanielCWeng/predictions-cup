@@ -42,6 +42,7 @@ def bound(**overrides: object) -> DatasetBinding:
         "kaggle_dataset_slug": "owner/current-data003-ob",
         "dataset_version": "1",
         "source": "current Cup historical order-book acquisition",
+        "source_venue": "POLYMARKET",
         "schema_version": "v1",
         "relation_to_data003": "DATA-003-linked current Cup mapped universe",
         "acquisition_version": "capture-v1",
