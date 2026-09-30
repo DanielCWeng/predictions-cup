@@ -91,7 +91,7 @@ def clock_health(
     runner: CommandRunner = _run,
     wall_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> dict[str, object]:
-    if threshold_seconds <= 0:
+    if threshold_seconds is not None and threshold_seconds <= 0:
         raise ValueError("clock threshold must be positive")
     checked_at = wall_clock().astimezone(UTC)
     monotonic_info = time.get_clock_info("monotonic")
@@ -132,6 +132,9 @@ def clock_health(
     elif not synchronized:
         state = "BLOCKED"
         reasons.append("CLOCK_NOT_SYNCHRONIZED")
+    elif threshold_seconds is None:
+        state = "NOT_CONFIGURED"
+        reasons.append("CLOCK_OFFSET_THRESHOLD_NOT_CONFIGURED")
     elif offset_seconds is not None and abs(offset_seconds) > threshold_seconds:
         state = "BLOCKED"
         reasons.append("CLOCK_OFFSET_EXCEEDS_THRESHOLD")
@@ -269,7 +272,7 @@ def storage_health(
         reasons.append("FILESYSTEM_FREE_WARNING")
 
     capture_dir = Path(
-        values.get("PREDICTIONS_CUP_SIG_RESEARCH_STORAGE_ROOT", "data/capture")
+        values.get("PREDICTIONS_CUP_SIG_RESEARCH_PATH", "data/sig_research")
     )
     capture = _bounded_tree_size(capture_dir)
     if not bool(capture["exists"]):
