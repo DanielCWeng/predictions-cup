@@ -1048,3 +1048,214 @@ def fair_value_convergence(
         for horizon_s in MARKOUT_HORIZONS_S:
             future_index = bisect_left(
                 timestamps,
+                observation.timestamp_ns + horizon_s * 1_000_000_000,
+                lo=index,
+            )
+            if future_index >= len(observations):
+                continue
+            future = observations[future_index]
+            future_mid = future.local_mid
+            future_external = future.external_fv
+            if future_mid is not None:
+                row[f"target_move_{horizon_s}s"] = future_mid - local_mid
+            if future_external is not None:
+                row[f"external_move_{horizon_s}s"] = future_external - external
+            if future_mid is not None and future_external is not None:
+                row[f"gap_{horizon_s}s"] = future_mid - future_external
+        rows.append(row)
+    return tuple(rows)
+
+
+def toxicity_bucket(score: float | None) -> str:
+    if score is None or not math.isfinite(score):
+        return "UNAVAILABLE"
+    if score < 0.20:
+        return "SAFE"
+    if score < 0.50:
+        return "NORMAL"
+    if score < 0.80:
+        return "CAUTION"
+    return "WITHDRAW"
+
+
+def _future_fv(
+    observations: Sequence[BookObservation],
+    timestamps: Sequence[int],
+    current_index: int,
+    horizon_s: int,
+) -> float | None:
+    target = observations[current_index].timestamp_ns + horizon_s * 1_000_000_000
+    future_index = bisect_left(timestamps, target, lo=current_index)
+    while future_index < len(observations):
+        value = observations[future_index].external_fv
+        if value is not None:
+            return value
+        future_index += 1
+    return None
+
+
+def _mean_or_none(values: Sequence[float]) -> float | None:
+    return sum(values) / len(values) if values else None
+
+
+@dataclass(frozen=True, slots=True)
+class _HistoricalSnapshot:
+    observed_at: datetime
+    observed_monotonic_ns: int
+
+
+class Frozen005FTransferAdapter:
+    """Historical bridge into the accepted CANDIDATE-RUNTIME-001 005F feature state."""
+
+    def __init__(self, *, scope_id: str, grid_origin_ns: int) -> None:
+        self._scope_id = scope_id
+
+        def resolve_scope(_snapshot: CanonicalShadowSnapshot) -> str:
+            return self._scope_id
+
+        self._state = IncrementalHazard005FState(
+            grid_origin_ns=grid_origin_ns,
+            scope_resolver=resolve_scope,
+        )
+
+    def observe(
+        self,
+        *,
+        timestamp_ns: int,
+        best_bid: float | None,
+        best_ask: float | None,
+        observed_monotonic_ns: int | None = None,
+        source_version: str = "mm-replay-001",
+        ambiguous: bool = False,
+    ) -> None:
+        self._state.observe(
+            Hazard005FBboObservation(
+                scope_id=self._scope_id,
+                timestamp_ns=timestamp_ns,
+                observed_monotonic_ns=(
+                    timestamp_ns if observed_monotonic_ns is None else observed_monotonic_ns
+                ),
+                best_bid=best_bid,
+                best_ask=best_ask,
+                source_version=source_version,
+                ambiguous=ambiguous,
+            )
+        )
+
+    def features(self, *, query_timestamp_ns: int) -> Mapping[str, float] | None:
+        observed_at = datetime.fromtimestamp(query_timestamp_ns / 1_000_000_000, tz=UTC)
+        historical = _HistoricalSnapshot(
+            observed_at=observed_at,
+            observed_monotonic_ns=query_timestamp_ns,
+        )
+        vector = self._state.feature_vector(cast(CanonicalShadowSnapshot, historical))
+        return None if vector is None else dict(vector.values)
+
+
+def default_policies() -> tuple[MakerPolicy, ...]:
+    return (
+        MakerPolicy(
+            policy_id="B0-local-mid",
+            anchor="LOCAL_MID",
+            inventory_gamma=0.0,
+            base_half_spread_ticks=1.0,
+            max_fv_age_ms=1000,
+            max_distance_ticks=8.0,
+            min_external_edge_ticks=0.0,
+        ),
+        MakerPolicy(
+            policy_id="B1-external-fv",
+            anchor="EXTERNAL_FV",
+            inventory_gamma=0.0,
+            base_half_spread_ticks=1.0,
+            max_fv_age_ms=1000,
+            max_distance_ticks=8.0,
+            min_external_edge_ticks=1.0,
+        ),
+        MakerPolicy(
+            policy_id="B2-external-fv-inventory",
+            anchor="EXTERNAL_FV",
+            inventory_gamma=0.02,
+            base_half_spread_ticks=1.0,
+            max_fv_age_ms=1000,
+            max_distance_ticks=8.0,
+            min_external_edge_ticks=1.0,
+        ),
+        MakerPolicy(
+            policy_id="B3-external-fv-toxicity",
+            anchor="EXTERNAL_FV",
+            inventory_gamma=0.02,
+            base_half_spread_ticks=1.0,
+            max_fv_age_ms=1000,
+            max_distance_ticks=8.0,
+            min_external_edge_ticks=1.0,
+            toxicity_widen_at=0.35,
+            toxicity_withdraw_at=0.80,
+            toxicity_extra_ticks=4.0,
+        ),
+    )
+
+
+def expected_output_schema() -> dict[str, Any]:
+    return {
+        "experiment": EXPERIMENT_ID,
+        "markout_horizons_s": list(MARKOUT_HORIZONS_S),
+        "cancel_latency_ms": list(CANCEL_LATENCIES_MS),
+        "fill_assumptions": [item.value for item in FillAssumption],
+        "policies": [asdict(policy) for policy in default_policies()],
+        "outputs": list(REQUIRED_OUTPUT_FILES),
+        "optional_outputs": list(OPTIONAL_OUTPUT_FILES),
+        "real_sig_orders": False,
+    }
+
+
+def _suggest_column_map(columns: Iterable[str]) -> dict[str, str]:
+    normalized = {name.lower(): name for name in columns}
+    result: dict[str, str] = {}
+    for canonical, candidates in COLUMN_SYNONYMS.items():
+        matches = [normalized[name.lower()] for name in candidates if name.lower() in normalized]
+        if len(matches) == 1:
+            result[canonical] = matches[0]
+    return result
+
+
+def _floor_tick(value: float) -> float:
+    return math.floor(value / TICK + 1e-12) * TICK
+
+
+def _ceil_tick(value: float) -> float:
+    return math.ceil(value / TICK - 1e-12) * TICK
+
+
+def _legal_probability(value: float | None) -> float | None:
+    if value is None or not math.isfinite(value):
+        return None
+    if value < TICK or value > 1.0 - TICK:
+        return None
+    return round(value, 12)
+
+
+def _maybe_str(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _maybe_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise InputContractError("boolean is not a valid integer manifest field")
+    return int(value)
+
+
+def _string_mapping(value: Any) -> dict[str, str]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise InputContractError("manifest mapping field must be an object")
+    result: dict[str, str] = {}
+    for key, item in cast(dict[Any, Any], value).items():
+        result[str(key)] = str(item)
+    return result
