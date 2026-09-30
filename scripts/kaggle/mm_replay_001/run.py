@@ -509,6 +509,8 @@ def run_mm(
     markets: dict[str, list[BookObservation]],
     *,
     edge_grid_reference_latency_ms: int | None,
+    fee_per_share: float | None,
+    terminal_unwind_cost_per_share: float | None,
 ) -> tuple[
     list[dict[str, Any]],
     list[dict[str, Any]],
@@ -562,6 +564,8 @@ def run_mm(
                 observations,
                 policy=policy,
                 fill_model=model,
+                fee_per_share=fee_per_share,
+                unwind_cost_per_share=terminal_unwind_cost_per_share,
                 reaction_delay_ms=reaction_delay_ms,
             )
             row = asdict(summary)
@@ -762,6 +766,15 @@ def final_report(
             "emitted automatically."
         ),
         "",
+        "## Accounting vs diagnostics",
+        "",
+        (
+            "MM_POLICY_RESULTS.csv contains cash/inventory terminal marked P&L separately "
+            "from 1s–5m diagnostic markouts. Net terminal P&L is populated only when "
+            "maker_fee_per_share and terminal_unwind_cost_per_share are explicitly bound "
+            "in the input manifest; otherwise those net fields remain null."
+        ),
+        "",
         "## Research boundaries",
         "",
         (
@@ -849,9 +862,15 @@ def main() -> None:
 
     edge_latency_raw = manifest.get("edge_grid_reference_latency_ms")
     edge_latency = int(edge_latency_raw) if edge_latency_raw is not None else None
+    fee_raw = manifest.get("maker_fee_per_share")
+    unwind_raw = manifest.get("terminal_unwind_cost_per_share")
+    fee_per_share = float(fee_raw) if fee_raw is not None else None
+    unwind_cost_per_share = float(unwind_raw) if unwind_raw is not None else None
     policy_rows, fill_rows, markout_rows, breakdown = run_mm(
         markets,
         edge_grid_reference_latency_ms=edge_latency,
+        fee_per_share=fee_per_share,
+        terminal_unwind_cost_per_share=unwind_cost_per_share,
     )
     convergence = [
         row
