@@ -44,6 +44,7 @@ def bind_dataset(args: argparse.Namespace) -> None:
             "kaggle_dataset_slug": args.slug,
             "dataset_version": args.version,
             "source": args.source,
+            "source_venue": args.source_venue,
             "schema_version": args.schema_version,
             "relation_to_data003": args.relation_to_data003,
             "acquisition_version": args.acquisition_version,
@@ -91,6 +92,7 @@ def reset_waiting(_args: argparse.Namespace) -> None:
         "kaggle_dataset_slug",
         "dataset_version",
         "source",
+        "source_venue",
         "schema_version",
         "relation_to_data003",
         "acquisition_version",
@@ -116,6 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
     bind.add_argument("slug")
     bind.add_argument("--version", required=True)
     bind.add_argument("--source", required=True)
+    bind.add_argument("--source-venue", required=True)
     bind.add_argument("--schema-version", required=True)
     bind.add_argument("--acquisition-version", required=True)
     bind.add_argument(
