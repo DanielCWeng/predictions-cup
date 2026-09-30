@@ -640,6 +640,22 @@ def test_merged_provider_stack_health_passes_require_real(tmp_path: Path) -> Non
         )
 
     status = collect_status(PROJECT_ROOT, values)
+    status["clock"] = {
+        "state": "HEALTHY",
+        "reason_codes": [],
+        "synchronized": True,
+        "estimated_offset_seconds": 0.0,
+    }
+    status["storage"] = {
+        "state": "HEALTHY",
+        "reason_codes": [],
+        "runway_hours": 100.0,
+    }
+    status["session"] = {
+        "state": "HEALTHY",
+        "session_id": "merged-provider-test",
+        "manifest_sha256": "fixture",
+    }
     health = evaluate_health(status, values, require_real=True)
 
     assert status["risk_halt"]["source"] == "risk-002"
