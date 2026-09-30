@@ -282,6 +282,102 @@ class BookObservation:
 
 
 @dataclass(frozen=True, slots=True)
+class GroupedBboObservation:
+    timestamp_ns: int
+    best_bid: float | None
+    best_ask: float | None
+    ambiguous: bool
+
+
+def group_bbo_for_005f(
+    observations: Sequence[BookObservation],
+) -> tuple[GroupedBboObservation, ...]:
+    """Group same-timestamp BBO evidence before frozen 005F reconstruction.
+
+    Repeated rows with the same BBO remain unambiguous. More than one distinct
+    finite bid or ask at the same timestamp is flagged ambiguous, matching the
+    frozen research validity gate rather than inventing an intratimestamp order.
+    """
+
+    if not observations:
+        return ()
+    groups: list[GroupedBboObservation] = []
+    index = 0
+    while index < len(observations):
+        timestamp_ns = observations[index].timestamp_ns
+        bids: set[float] = set()
+        asks: set[float] = set()
+        next_index = index
+        while (
+            next_index < len(observations)
+            and observations[next_index].timestamp_ns == timestamp_ns
+        ):
+            row = observations[next_index]
+            if row.best_bid is not None and math.isfinite(row.best_bid):
+                bids.add(row.best_bid)
+            if row.best_ask is not None and math.isfinite(row.best_ask):
+                asks.add(row.best_ask)
+            next_index += 1
+        groups.append(
+            GroupedBboObservation(
+                timestamp_ns=timestamp_ns,
+                best_bid=next(iter(bids)) if len(bids) == 1 else None,
+                best_ask=next(iter(asks)) if len(asks) == 1 else None,
+                ambiguous=len(bids) > 1 or len(asks) > 1,
+            )
+        )
+        index = next_index
+    return tuple(groups)
+
+
+def genuine_005f_change_times(
+    groups: Sequence[GroupedBboObservation],
+) -> tuple[int, ...]:
+    out: list[int] = []
+    previous: GroupedBboObservation | None = None
+    for current in groups:
+        valid = (
+            not current.ambiguous
+            and current.best_bid is not None
+            and current.best_ask is not None
+            and 0.0 < current.best_bid <= current.best_ask < 1.0
+        )
+        if previous is None:
+            previous = current
+            continue
+        previous_valid = (
+            not previous.ambiguous
+            and previous.best_bid is not None
+            and previous.best_ask is not None
+            and 0.0 < previous.best_bid <= previous.best_ask < 1.0
+        )
+        contiguous = (
+            valid
+            and previous_valid
+            and current.timestamp_ns - previous.timestamp_ns <= 300_000_000_000
+        )
+        same_bbo = (
+            contiguous
+            and math.isclose(
+                current.best_bid,
+                previous.best_bid,
+                rel_tol=0.0,
+                abs_tol=1e-12,
+            )
+            and math.isclose(
+                current.best_ask,
+                previous.best_ask,
+                rel_tol=0.0,
+                abs_tol=1e-12,
+            )
+        )
+        if contiguous and not same_bbo:
+            out.append(current.timestamp_ns)
+        previous = current
+    return tuple(out)
+
+
+@dataclass(frozen=True, slots=True)
 class BookDelta:
     market_id: str
     timestamp_ns: int
