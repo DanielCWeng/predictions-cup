@@ -228,6 +228,8 @@ def test_session_manifest_is_hashed_atomic_and_secret_free(tmp_path: Path) -> No
         "enabled_candidates_observed": [
             {"candidate_id": "c1", "candidate_version": "v1"}
         ],
+        "clock": {"state": "HEALTHY", "estimated_offset_seconds": 0.0},
+        "storage": {"state": "HEALTHY", "runway_hours": 12.0},
     }
     manifest = build_session_manifest(
         tmp_path,
@@ -242,6 +244,10 @@ def test_session_manifest_is_hashed_atomic_and_secret_free(tmp_path: Path) -> No
     shock = manifest["structural_shock_registry"]
     assert isinstance(shock, dict)
     assert shock["version"] == 1
+    launch_health = manifest["launch_health"]
+    assert isinstance(launch_health, dict)
+    assert launch_health["clock"] == snapshot["clock"]
+    assert launch_health["storage"] == snapshot["storage"]
     expected_hash_input = dict(manifest)
     expected_hash = str(expected_hash_input.pop("manifest_sha256"))
     assert content_hash(expected_hash_input) == expected_hash
