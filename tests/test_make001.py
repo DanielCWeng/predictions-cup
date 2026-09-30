@@ -9,6 +9,8 @@ from typing import cast
 
 import pytest
 
+from predictions_cup.execution.journal import ExecutionJournal
+from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import ExecutionEvent, ExecutionMode, LifecycleState
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
@@ -21,6 +23,7 @@ from predictions_cup.maker import (
     ExternalQuoteState,
     GateMode,
     InventoryConfidenceSizePolicy,
+    LiveMakerExecutionAdapter,
     MakerConfig,
     MakerCoordinator,
     MakerEngine,
@@ -45,6 +48,11 @@ from predictions_cup.mapping.models import (
     MappingStatus,
     MarketMapping,
     PolymarketContractIdentity,
+)
+from predictions_cup.observe import (
+    BoundedObservationEmitter,
+    InMemoryObservationSink,
+    ObservationKind,
 )
 from predictions_cup.risk.core import RiskContext, RiskLimits
 from predictions_cup.runtime.models import (
@@ -261,6 +269,192 @@ def _engine(
         ),
         config=MakerConfig(max_abs_inventory=max_inventory),
     )
+
+
+
+class _PerIntentBatchLiveSink:
+    def __init__(
+        self,
+        journal: ExecutionJournal,
+        *,
+        acked_intent_indices: frozenset[int],
+        omit_order_id_indices: frozenset[int] = frozenset(),
+    ) -> None:
+        self.journal = journal
+        self.acked_intent_indices = acked_intent_indices
+        self.omit_order_id_indices = omit_order_id_indices
+
+    async def dispatch(self, plan: ExecutionPlan) -> ExecutionEvent:
+        assert len(plan.intents) == 2
+        self.journal.record_before_dispatch(
+            plan.envelope,
+            plan.intents,
+            audit=plan.audit,
+            submitted_monotonic_ns=NOW + 10,
+        )
+        for index, intent in enumerate(plan.intents):
+            if index not in self.acked_intent_indices:
+                self.journal.record_event(
+                    logical_operation_id=plan.envelope.logical_operation_id,
+                    tournament_id=intent.tournament_id,
+                    logical_intent_id=intent.intent_id,
+                    event_type="REJECTED",
+                    observed_monotonic_ns=NOW + 20 + index,
+                    exchange_id=intent.exchange_id,
+                    terminal_status=LifecycleState.REJECTED.value,
+                )
+                continue
+            order_id = None if index in self.omit_order_id_indices else str(91 + index)
+            self.journal.record_event(
+                logical_operation_id=plan.envelope.logical_operation_id,
+                tournament_id=intent.tournament_id,
+                logical_intent_id=intent.intent_id,
+                event_type="ACK",
+                observed_monotonic_ns=NOW + 20 + index,
+                exchange_id=intent.exchange_id,
+                exchange_order_id=order_id,
+                terminal_status=LifecycleState.ACKED.value,
+            )
+        self.journal.mark_state(
+            plan.envelope.logical_operation_id,
+            LifecycleState.ACKED,
+            NOW + 30,
+        )
+        return ExecutionEvent(
+            logical_operation_id=plan.envelope.logical_operation_id,
+            state=LifecycleState.ACKED,
+            observed_monotonic_ns=NOW + 30,
+            simulated=False,
+            detail="fixture_best_effort_batch",
+        )
+
+
+def _live_two_sided_cycle(
+    tmp_path: Path,
+    *,
+    acked_intent_indices: frozenset[int],
+    omit_order_id_indices: frozenset[int] = frozenset(),
+) -> tuple[tuple[object, ...], QuoteRegistry]:
+    journal = ExecutionJournal(tmp_path / "live-batch.sqlite3")
+    quotes = QuoteRegistry()
+    observation_sink = InMemoryObservationSink()
+    emitter = BoundedObservationEmitter(observation_sink, queue_max=64)
+    live = _PerIntentBatchLiveSink(
+        journal,
+        acked_intent_indices=acked_intent_indices,
+        omit_order_id_indices=omit_order_id_indices,
+    )
+    adapter = LiveMakerExecutionAdapter(
+        cast(SigLiveSink, live),
+        journal=journal,
+        quotes=quotes,
+        observation_emitter=emitter,
+        observation_process_instance_id="live-batch-test",
+        wall_clock=lambda: datetime(2026, 10, 1, 16, 0, tzinfo=UTC),
+    )
+    coordinator = MakerCoordinator(
+        engine=_engine(),
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=quotes,
+        risk_context=RiskContext(
+            mode=ExecutionMode.LIVE,
+            kill_switch=False,
+            limits=RiskLimits(
+                max_order_size=10,
+                max_gross_exposure=100.0,
+                max_per_market_exposure=100.0,
+                max_open_order_exposure=100.0,
+                max_concurrent_open_orders=10,
+            ),
+            max_state_age_ns=1_000_000_000,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+        reservations=ExecutionReservationBook(),
+        observation_emitter=emitter,
+        observation_process_instance_id="live-batch-test",
+        wall_clock=lambda: datetime(2026, 10, 1, 16, 0, tzinfo=UTC),
+    )
+    try:
+        result = asyncio.run(
+            coordinator.on_state_change(
+                MakerStateChange(
+                    event_id="two-sided-live",
+                    observed_monotonic_ns=NOW,
+                    exchange_ids=frozenset({"36"}),
+                ),
+                {"36": _maker_snapshot()},
+            )
+        )
+        assert result.execution_events[0].state is LifecycleState.ACKED
+        emitter.close()
+        return tuple(observation_sink.observations), quotes
+    finally:
+        emitter.close()
+        journal.close()
+
+
+def test_live_two_sided_batch_two_acks_publish_two_authoritative_quotes(
+    tmp_path: Path,
+) -> None:
+    observations, quotes = _live_two_sided_cycle(
+        tmp_path,
+        acked_intent_indices=frozenset({0, 1}),
+    )
+    published = tuple(
+        item for item in observations if item.kind is ObservationKind.QUOTE_PUBLISHED
+    )
+    assert len(published) == 2
+    assert {item.logical_intent_id for item in published} == {
+        "make-direct-pm:1000000000:36:0",
+        "make-direct-pm:1000000000:36:1",
+    }
+    assert {item.exchange_order_id for item in published} == {"91", "92"}
+    assert {dict(item.detail)["side"] for item in published} == {"BID", "ASK"}
+    assert all(
+        dict(item.detail)["quote_key"].startswith("two-sided-live:make-place:36|36|")
+        for item in published
+    )
+    state = quotes.state("36")
+    assert state.bid is not None and state.bid.exchange_order_id == 91
+    assert state.ask is not None and state.ask.exchange_order_id == 92
+
+
+def test_live_two_sided_batch_ack_plus_reject_publishes_only_acknowledged_quote(
+    tmp_path: Path,
+) -> None:
+    observations, quotes = _live_two_sided_cycle(
+        tmp_path,
+        acked_intent_indices=frozenset({0}),
+    )
+    published = tuple(
+        item for item in observations if item.kind is ObservationKind.QUOTE_PUBLISHED
+    )
+    assert len(published) == 1
+    assert published[0].exchange_order_id == "91"
+    assert dict(published[0].detail)["side"] == "BID"
+    state = quotes.state("36")
+    assert state.bid is not None
+    assert state.ask is None
+
+
+def test_live_two_sided_batch_ack_without_order_identity_is_not_published(
+    tmp_path: Path,
+) -> None:
+    observations, quotes = _live_two_sided_cycle(
+        tmp_path,
+        acked_intent_indices=frozenset({0, 1}),
+        omit_order_id_indices=frozenset({1}),
+    )
+    published = tuple(
+        item for item in observations if item.kind is ObservationKind.QUOTE_PUBLISHED
+    )
+    assert len(published) == 1
+    assert published[0].exchange_order_id == "91"
+    state = quotes.state("36")
+    assert state.bid is not None
+    assert state.ask is not None
+    assert state.ask.exchange_order_id is None
 
 
 def test_direct_pm_preserves_value_orientation_and_source_observation_age() -> None:
