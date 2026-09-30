@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "status",
+  "kernel": "polyleviathan/pred007-event-triggered-index",
+  "note": "PRED-007 terminal read-only manifest. Frozen launch completed in GitHub Actions run 36635588276 with disposition NO_MACHINE_SPEED_INDEX_SIGNAL. Do not change back to action=run."
+}
