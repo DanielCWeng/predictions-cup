@@ -162,6 +162,28 @@ def test_live_provider_matches_exact_frozen_state_semantics() -> None:
     assert vector.values["rv_60"] > 0.0
 
 
+def test_precoalescing_observer_preserves_multiple_pm_bbo_changes() -> None:
+    provider = _provider()
+    _, exchange_id, token_id = _identity()
+    assert provider.scope_for_exchange(exchange_id) == token_id
+
+    for seconds, bid in ((0.0, 0.40), (5.0, 0.41), (10.0, 0.42)):
+        assert provider.observe_bbo(
+            scope_id=token_id,
+            observed_at=BASE + timedelta(seconds=seconds),
+            observed_monotonic_ns=BASE_MONO + int(seconds * NS),
+            best_bid=bid,
+            best_ask=0.60,
+            source_version="test-pm-ws",
+            trusted=True,
+        )
+
+    vector = provider.feature_vector(_snapshot(15.0, 0.42, 0.60))
+    assert vector is not None
+    assert vector.values["genuine_15"] == 2.0
+    assert vector.values["genuine_age_s"] == 5.0
+
+
 def test_live_provider_preserves_subsecond_genuine_change_time() -> None:
     provider = _provider()
     provider.feature_vector(_snapshot(0.0, 0.40, 0.60))
