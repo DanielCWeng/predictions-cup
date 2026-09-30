@@ -42,9 +42,13 @@ class Accepted005FScopeResolver:
                     "005F accepted mapping resolves one exchange to multiple tokens"
                 )
         self._exchange_to_token = exchange_to_token
+        self._accepted_tokens = frozenset(exchange_to_token.values())
 
     def resolve_exchange(self, exchange_id: str) -> str | None:
         return self._exchange_to_token.get(exchange_id)
+
+    def accepts_scope(self, scope_id: str) -> bool:
+        return scope_id in self._accepted_tokens
 
     def resolve_snapshot(
         self,
@@ -99,6 +103,42 @@ class Live005FStateProvider:
     def scope_for_exchange(self, exchange_id: str) -> str | None:
         return self._resolver.resolve_exchange(exchange_id)
 
+    def observe_bbo(
+        self,
+        *,
+        scope_id: str,
+        observed_at: datetime,
+        observed_monotonic_ns: int,
+        best_bid: float | None,
+        best_ask: float | None,
+        source_version: str,
+        trusted: bool,
+    ) -> bool:
+        """Ingest one accepted PM BBO boundary before MAKE/SHADOW coalescing."""
+        if not self._resolver.accepts_scope(scope_id):
+            return False
+        if observed_at.tzinfo is None or observed_at.utcoffset() is None:
+            raise ValueError("005F PM observed_at must be timezone-aware")
+        if observed_monotonic_ns < 0:
+            raise ValueError("005F observed_monotonic_ns must be non-negative")
+        if not source_version.strip():
+            raise ValueError("005F source_version must not be blank")
+
+        self._state.observe(
+            Hazard005FBboObservation(
+                scope_id=scope_id,
+                timestamp_ns=IncrementalHazard005FState.datetime_ns(observed_at),
+                observed_monotonic_ns=observed_monotonic_ns,
+                best_bid=best_bid,
+                best_ask=best_ask,
+                source_version=source_version,
+                ambiguous=not trusted,
+            )
+        )
+        self._last_observed_monotonic_ns[scope_id] = observed_monotonic_ns
+        self._accepted_observations += 1
+        return True
+
     def feature_vector(
         self,
         snapshot: CanonicalShadowSnapshot,
@@ -108,33 +148,25 @@ class Live005FStateProvider:
             self._unmapped_snapshots += 1
             return None
 
+        # Replay/backward-compatible fallback: live production feeds every accepted
+        # PM BBO at the websocket/order-book boundary before coalescing. Persisted
+        # SHADOW-only replays may still have only the latest external quote.
         quote = snapshot.maker.external_quotes.get(scope_id)
         if quote is not None:
             previous = self._last_observed_monotonic_ns.get(scope_id)
-            if (
-                previous is None
-                or quote.observed_monotonic_ns > previous
-            ):
+            if previous is None or quote.observed_monotonic_ns > previous:
                 if quote.observed_at is None:
                     self._missing_event_time += 1
                 else:
-                    self._state.observe(
-                        Hazard005FBboObservation(
-                            scope_id=scope_id,
-                            timestamp_ns=IncrementalHazard005FState.datetime_ns(
-                                quote.observed_at
-                            ),
-                            observed_monotonic_ns=quote.observed_monotonic_ns,
-                            best_bid=quote.best_bid,
-                            best_ask=quote.best_ask,
-                            source_version=quote.source_version,
-                            ambiguous=not quote.trusted,
-                        )
+                    self.observe_bbo(
+                        scope_id=scope_id,
+                        observed_at=quote.observed_at,
+                        observed_monotonic_ns=quote.observed_monotonic_ns,
+                        best_bid=quote.best_bid,
+                        best_ask=quote.best_ask,
+                        source_version=quote.source_version,
+                        trusted=quote.trusted,
                     )
-                    self._last_observed_monotonic_ns[scope_id] = (
-                        quote.observed_monotonic_ns
-                    )
-                    self._accepted_observations += 1
 
         return self._state.feature_vector(snapshot)
 
