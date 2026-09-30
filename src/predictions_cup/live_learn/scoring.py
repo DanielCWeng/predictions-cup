@@ -135,7 +135,9 @@ class QuoteEconomicsScorer:
                 component_status=statuses,
             )
 
-        total_filled = sum(fill.quantity for fill in execution.fills)
+        total_filled = 0.0
+        for fill in execution.fills:
+            total_filled += fill.quantity
         fill_rate = min(1.0, total_filled / execution.planned_quantity)
         metrics["fill_rate"] = fill_rate
         metrics["partial_fill_rate"] = (
@@ -152,10 +154,13 @@ class QuoteEconomicsScorer:
 
         priced = tuple(fill for fill in execution.fills if fill.price is not None)
         if priced:
-            weight = sum(fill.quantity for fill in priced)
-            avg_fill = sum(
-                fill.quantity * float(fill.price) for fill in priced
-            ) / weight
+            weight = 0.0
+            weighted_fill_price = 0.0
+            for fill in priced:
+                assert fill.price is not None
+                weight += fill.quantity
+                weighted_fill_price += fill.quantity * fill.price
+            avg_fill = weighted_fill_price / weight
             metrics["avg_fill_price"] = avg_fill
             initial_mid = context.initial.midpoint
             future_mid = context.future.midpoint
