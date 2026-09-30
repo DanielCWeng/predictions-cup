@@ -10,7 +10,11 @@ from typing import Protocol
 
 from predictions_cup.observe.contracts import FieldClassification
 from predictions_cup.sig.dto import AccountDto
-from predictions_cup.sig.realtime_models import TournamentLeaderboardDto, TournamentPageDto
+from predictions_cup.sig.realtime_models import (
+    TournamentLeaderboardDto,
+    TournamentListStatus,
+    TournamentPageDto,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,7 +45,7 @@ class CompetitionContextSnapshot:
 
 class CompetitionContextRest(Protocol):
     async def list_tournaments(
-        self, *, status: str = "any", limit: int = 50, offset: int = 0
+        self, *, status: TournamentListStatus = "any", limit: int = 50, offset: int = 0
     ) -> TournamentPageDto: ...
 
     async def get_account(self) -> AccountDto: ...
@@ -210,6 +214,8 @@ class CompetitionContextSampler:
         self._interval = timedelta(seconds=interval_seconds)
         self._next_due: datetime | None = None
         self._task: asyncio.Task[None] | None = None
+        self._failures = 0
+        self._last_error: str | None = None
 
     def maybe_schedule(self, now: datetime, *, force: bool = False) -> bool:
         if now.tzinfo is None or now.utcoffset() is None:
@@ -222,13 +228,26 @@ class CompetitionContextSampler:
         self._task = asyncio.create_task(self._capture_once(), name="observe-context-snapshot")
         return True
 
+    def health(self) -> dict[str, object]:
+        return {
+            "failures": self._failures,
+            "last_error": self._last_error,
+            "in_flight": self._task is not None and not self._task.done(),
+            "next_due": self._next_due,
+        }
+
     async def aclose(self) -> None:
         if self._task is not None:
             await self._task
 
     async def _capture_once(self) -> None:
-        snapshot = await self._provider.snapshot()
-        self._persist(snapshot)
+        try:
+            snapshot = await self._provider.snapshot()
+            self._persist(snapshot)
+            self._last_error = None
+        except Exception as exc:
+            self._failures += 1
+            self._last_error = type(exc).__name__
 
 
 def json_value(value: object | None) -> object | None:
