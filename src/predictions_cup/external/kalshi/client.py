@@ -217,6 +217,7 @@ class KalshiPublicClient:
         params: dict[str, str] | None = None,
     ) -> tuple[dict[str, Any], datetime]:
         # All callers above pass compile-time GET-only public market-data paths.
+        transient = {429, 500, 502, 503, 504}
         for attempt in range(1, self.max_attempts + 1):
             try:
                 async with (
@@ -227,25 +228,35 @@ class KalshiPublicClient:
                         headers={"Accept": "application/json"},
                     ) as response,
                 ):
-                        if response.status in {429, 500, 502, 503, 504}:
-                            if attempt == self.max_attempts:
-                                self._consecutive_failures += 1
-                                raise KalshiReadError(
-                                    f"Kalshi GET exhausted retries status={response.status}"
-                                )
-                            delay = self._retry_delay(
-                                response.headers.get("Retry-After"), attempt
+                    if response.status in transient:
+                        if attempt == self.max_attempts:
+                            self._consecutive_failures += 1
+                            raise KalshiReadError(
+                                f"Kalshi GET exhausted retries status={response.status}"
                             )
-                        else:
-                            response.raise_for_status()
-                            decoded = json.loads(await response.text())
-                            if not isinstance(decoded, dict):
-                                raise KalshiPayloadError("Kalshi response must be an object")
-                            observed = self._wall_clock().astimezone(UTC)
-                            self._last_success_at = observed
-                            self._consecutive_failures = 0
-                            return decoded, observed
-            except (aiohttp.ClientError, TimeoutError) as exc:
+                        delay = self._retry_delay(
+                            response.headers.get("Retry-After"), attempt
+                        )
+                    else:
+                        response.raise_for_status()
+                        decoded = json.loads(await response.text())
+                        if not isinstance(decoded, dict):
+                            raise KalshiPayloadError("Kalshi response must be an object")
+                        observed = self._wall_clock().astimezone(UTC)
+                        self._last_success_at = observed
+                        self._consecutive_failures = 0
+                        return decoded, observed
+            except aiohttp.ClientResponseError as exc:
+                self._consecutive_failures += 1
+                raise KalshiReadError(
+                    f"Kalshi public GET rejected status={exc.status}"
+                ) from exc
+            except (
+                aiohttp.ClientConnectionError,
+                aiohttp.ClientPayloadError,
+                aiohttp.ServerTimeoutError,
+                TimeoutError,
+            ) as exc:
                 if attempt == self.max_attempts:
                     self._consecutive_failures += 1
                     raise KalshiReadError("Kalshi public GET failed") from exc
