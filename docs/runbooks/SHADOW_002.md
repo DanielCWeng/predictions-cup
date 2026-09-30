@@ -96,8 +96,11 @@ Candidate statuses:
 - `EXCEPTION`: candidate raised;
 - `DISABLED`: control-plane state; disabled candidates are not evaluated.
 
-A candidate failure should not be treated as a reason to stop the other workers.
-Investigate the candidate health record and persisted decision.
+A candidate failure does not stop the other workers. On timeout the candidate is
+quarantined with at most one underlying in-flight call. Pending states for that
+candidate are skipped until the timed-out call returns; other candidates continue.
+Inspect `quarantined`, `in_flight`, `quarantine_count`, timeout count and skipped
+states before restarting a provider.
 
 ## Journal/restart check
 
