@@ -954,6 +954,22 @@ def _synthetic_status(values: dict[str, str]) -> tuple[dict[str, Any], dict[str,
             "reason": "synthetic baseline",
         },
         "disk": {"free_gib": 100.0},
+        "clock": {
+            "state": "HEALTHY",
+            "reason_codes": [],
+            "synchronized": True,
+            "estimated_offset_seconds": 0.0,
+        },
+        "storage": {
+            "state": "HEALTHY",
+            "reason_codes": [],
+            "runway_hours": 100.0,
+        },
+        "session": {
+            "state": "HEALTHY",
+            "session_id": "synthetic-failure-injection",
+            "manifest_sha256": "synthetic",
+        },
         "maker_enabled": True,
         "shadow_enabled": True,
     }
