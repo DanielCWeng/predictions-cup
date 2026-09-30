@@ -191,7 +191,7 @@ class _ContextRest:
         status: TournamentListStatus = "any",
         limit: int = 50,
         offset: int = 0,
-    ) -> TournamentPageDto:
+    ) -> tuple[TournamentPageDto, object]:
         del status, limit, offset
         raw: dict[str, object] = {
             "data": [
@@ -233,7 +233,7 @@ class _ContextRest:
         period: str = "all",
         limit: int = 50,
         offset: int = 0,
-    ) -> TournamentLeaderboardDto:
+    ) -> tuple[TournamentLeaderboardDto, object]:
         assert tournament_slug == "cup"
         del period, limit, offset
         raw: dict[str, object] = {
