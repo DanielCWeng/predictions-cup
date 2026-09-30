@@ -57,7 +57,7 @@ class CompetitionContextRest(Protocol):
         period: str = "all",
         limit: int = 50,
         offset: int = 0,
-    ) -> TournamentLeaderboardDto: ...
+    ) -> tuple[TournamentLeaderboardDto, object]: ...
 
 
 class CompetitionContextProvider(Protocol):
