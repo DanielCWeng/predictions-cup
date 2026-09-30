@@ -525,7 +525,11 @@ def build_session_manifest(
         },
         "mapping": snapshot.get("mapping"),
         "strategy_model_providers": snapshot.get("enabled_candidates_observed"),
+        "provider_versions": snapshot.get("service_versions"),
+        "capabilities": snapshot.get("capabilities"),
+        "risk_profile": snapshot.get("risk_profile"),
         "structural_shock_registry": artifact_identity(shock_path),
+        "host": snapshot.get("host"),
         "process": {
             "hostname": socket.gethostname(),
             "environment": values.get("PREDICTIONS_CUP_ENVIRONMENT", "development"),
@@ -608,7 +612,6 @@ def build_control_plane(
     execution = status.get("execution")
     execution_dict = execution if isinstance(execution, dict) else {}
     risk = status.get("risk_halt")
-    risk_dict = risk if isinstance(risk, dict) else {}
     overall_state = _canonical_state(health.get("state"))
     checks = health.get("checks")
     reason_codes = [
@@ -616,6 +619,23 @@ def build_control_plane(
         for item in checks
         if isinstance(item, dict) and _canonical_state(item.get("state")) != "HEALTHY"
     ] if isinstance(checks, list) else []
+    for name in ("clock", "storage", "session"):
+        surface = status.get(name)
+        surface_state = (
+            _canonical_state(surface.get("state"))
+            if isinstance(surface, dict)
+            else "UNKNOWN"
+        )
+        if surface_state != "HEALTHY":
+            reason_codes.append(f"{name}:{surface_state}")
+        if surface_state == "BLOCKED":
+            overall_state = "BLOCKED"
+        elif (
+            overall_state == "HEALTHY"
+            and surface_state in {"DEGRADED", "UNKNOWN", "NOT_CONFIGURED"}
+        ):
+            overall_state = "DEGRADED"
+    reason_codes = sorted(set(reason_codes))
     return {
         "schema_version": CONTROL_PLANE_SCHEMA,
         "identity": {
@@ -656,14 +676,7 @@ def build_control_plane(
             "observed": status.get("shadow_evidence"),
         },
         "risk": risk,
-        "execution": {
-            **execution_dict,
-            "fresh_economic_admission_possible": (
-                execution_dict.get("unresolved_count", 0) == 0
-                and not bool(risk_dict.get("active", True))
-                and _canonical_state(risk_dict.get("state")) == "HEALTHY"
-            ),
-        },
+        "execution": execution_dict,
         "storage": status.get("storage"),
         "clock": status.get("clock"),
         "versions": {
