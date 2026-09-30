@@ -4,8 +4,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from predictions_cup.analysis import live_diag
 from predictions_cup.mapping.models import MappingDirection
+from predictions_cup.analysis import live_diag
 
 
 BASE = datetime(2026, 10, 1, 16, 0, tzinfo=UTC)
