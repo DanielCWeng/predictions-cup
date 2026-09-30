@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from predictions_cup.config import AppSettings
+from predictions_cup.live_learn import LiveLearnEngine
 from predictions_cup.maker.contracts import MakerMarketSnapshot
 from predictions_cup.maker.coordinator import MakerStateChange
 from predictions_cup.maker.direct_pm import DirectPolymarketFairValueProvider
@@ -75,15 +76,33 @@ def build_live_shadow_runtime(
         queue_capacity=settings.shadow_persistence_queue_capacity,
         batch_size=settings.shadow_persistence_batch_size,
     )
-    store: ShadowEventStore = primary
+    mirrors: list[ShadowEventStore] = []
     if settings.shadow_capture_mirror_enabled:
-        mirror = CaptureStrategyEventStore(
-            settings.sig_research_path,
-            queue_capacity=settings.sig_capture_queue_max,
-            shard_seconds=settings.sig_capture_parquet_shard_seconds,
-            max_rows_per_shard=settings.sig_capture_parquet_max_rows_per_shard,
+        mirrors.append(
+            CaptureStrategyEventStore(
+                settings.sig_research_path,
+                queue_capacity=settings.sig_capture_queue_max,
+                shard_seconds=settings.sig_capture_parquet_shard_seconds,
+                max_rows_per_shard=settings.sig_capture_parquet_max_rows_per_shard,
+            )
         )
-        store = CompositeShadowEventStore(primary, (mirror,))
+    if settings.live_learn_enabled:
+        mirrors.append(
+            LiveLearnEngine.from_paths(
+                shadow_journal_path=settings.shadow_journal_path,
+                outcome_path=settings.live_learn_outcome_path,
+                report_root=settings.live_learn_report_path,
+                execution_journal_path=settings.execution_journal_path,
+                queue_capacity=settings.live_learn_queue_capacity,
+                evidence_grace_seconds=settings.live_learn_evidence_grace_seconds,
+                max_evidence_age_seconds=settings.live_learn_max_evidence_age_seconds,
+            )
+        )
+    store: ShadowEventStore = (
+        primary
+        if not mirrors
+        else CompositeShadowEventStore(primary, tuple(mirrors))
+    )
 
     direct_pm = DirectPolymarketFairValueProvider(core.mapping)
     bus = ShadowBus(
