@@ -116,8 +116,11 @@ class FeatureParityRecord:
 
 
 class ProbabilityScorer(Protocol):
-    scorer_id: str
-    artifact_hash: str
+    @property
+    def scorer_id(self) -> str: ...
+
+    @property
+    def artifact_hash(self) -> str: ...
 
     def score(self, values: tuple[float, ...]) -> float: ...
 
