@@ -26,6 +26,7 @@ from predictions_cup.shadow.frozen_runtime import (
     Frozen005FEvaluator,
     FrozenPred006Evaluator,
 )
+from predictions_cup.shadow.live_005f import Live005FStateProvider
 from predictions_cup.shadow.persistence import (
     CaptureStrategyEventStore,
     CompositeShadowEventStore,
@@ -109,12 +110,18 @@ def build_live_shadow_runtime(
     )
 
     direct_pm = DirectPolymarketFairValueProvider(core.mapping)
+    hazard_005f = Live005FStateProvider(
+        mapping=core.mapping,
+        grid_origin=settings.shadow_005f_grid_origin,
+    )
     bus = ShadowBus(
         (
             MakerCandidate(core.engine),
             DirectPmCandidate(direct_pm, mapping=core.mapping),
             Pred006Candidate(FrozenPred006Evaluator()),
-            Hazard005FCandidate(Frozen005FEvaluator()),
+            Hazard005FCandidate(
+                Frozen005FEvaluator(provider=hazard_005f)
+            ),
             StructuralFairValueCandidate(),
         ),
         store=store,
