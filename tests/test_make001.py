@@ -54,6 +54,7 @@ from predictions_cup.observe import (
     BoundedObservationEmitter,
     InMemoryObservationSink,
     ObservationKind,
+    VenueObservation,
 )
 from predictions_cup.risk.core import RiskContext, RiskLimits
 from predictions_cup.runtime.models import (
@@ -335,7 +336,7 @@ def _live_two_sided_cycle(
     *,
     acked_intent_indices: frozenset[int],
     omit_order_id_indices: frozenset[int] = frozenset(),
-) -> tuple[tuple[object, ...], QuoteRegistry]:
+) -> tuple[tuple[VenueObservation, ...], QuoteRegistry]:
     journal = ExecutionJournal(tmp_path / "live-batch.sqlite3")
     quotes = QuoteRegistry()
     observation_sink = InMemoryObservationSink()
