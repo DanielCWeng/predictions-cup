@@ -15,12 +15,16 @@ from predictions_cup.observe import (
     EmitterHealth,
     FieldClassification,
     ObservationHealthProvider,
+    ObservationHealthSnapshot,
     ObservationHealthState,
+    ObservationHealthStatusPublisher,
+    ObservationStatusState,
     ObservationKind,
     SigOfficialCompetitionContextProvider,
     VenueObservation,
     VenueSpanCollector,
     join_pm_to_sig,
+    read_observation_health_status,
     replay_operation,
     summarize_competition_context,
     summarize_cross_venue,
@@ -447,6 +451,137 @@ def test_combined_observation_health_marks_storage_failure_blocked() -> None:
         assert "CAPTURE_WRITER_NOT_ALIVE" in snapshot.reasons
     finally:
         emitter.close()
+
+
+def _status_snapshot(
+    state: ObservationHealthState,
+    *,
+    dropped: int = 0,
+    sink_failures: int = 0,
+    capture_dropped: int = 0,
+    storage_failures: int = 0,
+    writer_alive: bool = True,
+) -> ObservationHealthSnapshot:
+    reasons: tuple[str, ...] = ()
+    if state is ObservationHealthState.DEGRADED:
+        reasons = ("EMITTER_DROPPED_OBSERVATIONS",)
+    elif state is ObservationHealthState.BLOCKED:
+        reasons = ("CAPTURE_STORAGE_FAILURE",)
+    return ObservationHealthSnapshot(
+        state=state,
+        reasons=reasons,
+        emitter=EmitterHealth(
+            queue_depth=0,
+            queue_capacity=16,
+            queue_high_water=4,
+            accepted=10,
+            dropped=dropped,
+            sink_failures=sink_failures,
+            worker_alive=True,
+        ),
+        capture=CaptureWriterHealth(
+            writer_alive=writer_alive,
+            queue_depth=0,
+            queue_capacity=16,
+            queue_high_water=4,
+            written_rows=10,
+            written_shards=1,
+            dropped_rows=capture_dropped,
+            storage_failures=storage_failures,
+            last_write_at=_AT,
+        ),
+    )
+
+
+def test_cross_process_health_status_reader_detects_health_and_failure_states(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "runtime" / "observe_health.json"
+    clock = iter((0.0, 2.0, 4.0)).__next__
+    wall_times = iter(
+        (
+            _AT,
+            _AT + timedelta(seconds=2),
+            _AT + timedelta(seconds=4),
+        )
+    ).__next__
+    publisher = ObservationHealthStatusPublisher(
+        path,
+        process_instance_id="proc-health",
+        owner="maker",
+        min_interval_seconds=1.0,
+        monotonic_clock=clock,
+        wall_clock=wall_times,
+    )
+
+    assert publisher.publish(_status_snapshot(ObservationHealthState.HEALTHY))
+    healthy = read_observation_health_status(
+        path,
+        expected_owner="maker",
+        expected_process_instance_id="proc-health",
+        max_age_seconds=5,
+        now=_AT + timedelta(seconds=1),
+    )
+    assert healthy.state is ObservationStatusState.HEALTHY
+    assert healthy.healthy is True
+
+    assert publisher.publish(
+        _status_snapshot(
+            ObservationHealthState.DEGRADED,
+            dropped=1,
+        )
+    )
+    degraded = read_observation_health_status(
+        path,
+        expected_owner="maker",
+        max_age_seconds=5,
+        now=_AT + timedelta(seconds=3),
+    )
+    assert degraded.state is ObservationStatusState.DEGRADED
+    assert degraded.healthy is False
+
+    assert publisher.publish(
+        _status_snapshot(
+            ObservationHealthState.BLOCKED,
+            storage_failures=1,
+            writer_alive=False,
+        )
+    )
+    blocked = read_observation_health_status(
+        path,
+        expected_owner="maker",
+        max_age_seconds=5,
+        now=_AT + timedelta(seconds=5),
+    )
+    assert blocked.state is ObservationStatusState.BLOCKED
+    assert blocked.healthy is False
+
+    stale = read_observation_health_status(
+        path,
+        expected_owner="maker",
+        max_age_seconds=1,
+        now=_AT + timedelta(seconds=10),
+    )
+    assert stale.state is ObservationStatusState.STALE
+    assert stale.healthy is False
+
+    wrong_owner = read_observation_health_status(
+        path,
+        expected_owner="capture",
+        max_age_seconds=60,
+        now=_AT + timedelta(seconds=5),
+    )
+    assert wrong_owner.state is ObservationStatusState.OWNER_MISMATCH
+    assert wrong_owner.healthy is False
+
+    missing = read_observation_health_status(
+        tmp_path / "runtime" / "missing.json",
+        expected_owner="maker",
+        max_age_seconds=5,
+        now=_AT,
+    )
+    assert missing.state is ObservationStatusState.MISSING
+    assert missing.healthy is False
 
 
 class _ContextRest:
