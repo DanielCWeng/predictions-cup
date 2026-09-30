@@ -148,6 +148,49 @@ def test_spans_never_compare_monotonic_values_across_processes() -> None:
     assert VenueSpanCollector().collect(rows) == ()
 
 
+def test_reconnect_distribution_retains_multiple_reconnects() -> None:
+    rows = (
+        _obs(ObservationKind.RECONNECT_STARTED, 10_000_000, operation=None),
+        _obs(ObservationKind.RECONNECT_RESOLVED, 20_000_000, operation=None),
+        _obs(ObservationKind.RECONNECT_STARTED, 30_000_000, operation=None),
+        _obs(ObservationKind.RECONNECT_RESOLVED, 50_000_000, operation=None),
+    )
+    spans = tuple(
+        span
+        for span in VenueSpanCollector().collect(rows)
+        if span.name.value == "reconnect"
+    )
+    assert [span.duration_ns for span in spans] == [10_000_000, 20_000_000]
+
+
+def test_replay_uses_utc_across_process_restart() -> None:
+    late = VenueObservation(
+        kind=ObservationKind.RECONCILIATION_RESOLVED,
+        observed_at=_AT + timedelta(seconds=2),
+        monotonic_ns=1,
+        process_instance_id="aaa-new-process",
+        source="fixture",
+        source_version="observe-001",
+        provenance="test",
+        logical_operation_id="op-restart",
+    )
+    early = VenueObservation(
+        kind=ObservationKind.UNCERTAIN,
+        observed_at=_AT + timedelta(seconds=1),
+        monotonic_ns=999_999_999,
+        process_instance_id="zzz-old-process",
+        source="fixture",
+        source_version="observe-001",
+        provenance="test",
+        logical_operation_id="op-restart",
+    )
+    replay = replay_operation((late, early), "op-restart")
+    assert [item.kind for item in replay] == [
+        ObservationKind.UNCERTAIN,
+        ObservationKind.RECONCILIATION_RESOLVED,
+    ]
+
+
 def test_cross_venue_timing_is_descriptive_and_handles_complement() -> None:
     mapping = CrossVenueMapping("pm-no", "sig-1", "COMPLEMENT", "EXACT", "mapping-v1")
     pm = (
