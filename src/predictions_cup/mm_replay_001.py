@@ -16,7 +16,7 @@ import json
 import math
 from bisect import bisect_left
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -423,6 +423,7 @@ class Markout:
 class ReplayFillResult:
     fill: SimulatedFill
     quote_timestamp_ns: int
+    reaction_delay_ms: int
     reservation_fv: float
     gross_spread_capture: float
     markouts: Mapping[int, float]
@@ -435,6 +436,7 @@ class ReplayFillResult:
 class ReplaySummary:
     policy_id: str
     fill_assumption: FillAssumption
+    reaction_delay_ms: int
     quotes: int
     active_quotes: int
     fills: int
@@ -933,6 +935,32 @@ def quote_survives_reaction_delay(
     return event_timestamp_ns < cancel_effective_ns
 
 
+def _quote_equivalent(left: QuoteIntent, right: QuoteIntent) -> bool:
+    return (
+        left.bid == right.bid
+        and left.ask == right.ask
+        and math.isclose(left.bid_size, right.bid_size, rel_tol=0.0, abs_tol=1e-12)
+        and math.isclose(left.ask_size, right.ask_size, rel_tol=0.0, abs_tol=1e-12)
+    )
+
+
+def _deplete_quote(quote: QuoteIntent, fills: Sequence[SimulatedFill]) -> QuoteIntent:
+    bid_size = quote.bid_size
+    ask_size = quote.ask_size
+    for fill in fills:
+        if fill.side is Side.BUY:
+            bid_size = max(0.0, bid_size - fill.size)
+        else:
+            ask_size = max(0.0, ask_size - fill.size)
+    return replace(
+        quote,
+        bid=quote.bid if bid_size > 0.0 else None,
+        ask=quote.ask if ask_size > 0.0 else None,
+        bid_size=bid_size,
+        ask_size=ask_size,
+    )
+
+
 def replay_market(
     observations: Sequence[BookObservation],
     *,
@@ -941,22 +969,26 @@ def replay_market(
     base_size: float = 1.0,
     fee_per_share: float = 0.0,
     unwind_cost_per_share: float = 0.0,
+    reaction_delay_ms: int = 0,
 ) -> tuple[tuple[ReplayFillResult, ...], ReplaySummary]:
     if fee_per_share < 0.0 or unwind_cost_per_share < 0.0:
         raise ValueError("cost assumptions must be non-negative")
+    if reaction_delay_ms < 0:
+        raise ValueError("reaction_delay_ms must be non-negative")
     if not observations:
         return (
             (),
             ReplaySummary(
-                policy.policy_id,
-                fill_model.assumption,
-                0,
-                0,
-                0,
-                0.0,
-                None,
-                None,
-                None,
+                policy_id=policy.policy_id,
+                fill_assumption=fill_model.assumption,
+                reaction_delay_ms=reaction_delay_ms,
+                quotes=0,
+                active_quotes=0,
+                fills=0,
+                active_fraction=0.0,
+                mean_gross_spread_capture=None,
+                mean_markout_5m=None,
+                mean_estimated_edge_5m=None,
             ),
         )
     for previous, current in zip(observations, observations[1:], strict=False):
@@ -967,14 +999,33 @@ def replay_market(
 
     timestamps = [item.timestamp_ns for item in observations]
     inventory = 0.0
-    quote = build_quote(observations[0], policy, inventory=inventory, base_size=base_size)
+    current_quote = build_quote(
+        observations[0],
+        policy,
+        inventory=inventory,
+        base_size=base_size,
+    )
+    pending_quote: QuoteIntent | None = None
+    pending_effective_ns: int | None = None
+    reaction_delay_ns = reaction_delay_ms * 1_000_000
     quotes = 1
-    active_quotes = int(quote.bid is not None or quote.ask is not None)
+    active_quotes = int(
+        current_quote.bid is not None or current_quote.ask is not None
+    )
     results: list[ReplayFillResult] = []
 
     for index in range(1, len(observations)):
         event = observations[index]
-        event_fills = fill_model.fills(quote, event)
+        if (
+            pending_quote is not None
+            and pending_effective_ns is not None
+            and event.timestamp_ns >= pending_effective_ns
+        ):
+            current_quote = pending_quote
+            pending_quote = None
+            pending_effective_ns = None
+
+        event_fills = fill_model.fills(current_quote, event)
         for fill in event_fills:
             inventory += fill.size if fill.side is Side.BUY else -fill.size
             markout_values: dict[int, float] = {}
@@ -987,9 +1038,9 @@ def replay_market(
                         future_fv=future,
                     ).value
             gross = (
-                quote.reservation_fv - fill.price
+                current_quote.reservation_fv - fill.price
                 if fill.side is Side.BUY
-                else fill.price - quote.reservation_fv
+                else fill.price - current_quote.reservation_fv
             )
             fee_cost = fee_per_share * fill.size
             unwind_cost = unwind_cost_per_share * fill.size
@@ -1002,8 +1053,9 @@ def replay_market(
             results.append(
                 ReplayFillResult(
                     fill=fill,
-                    quote_timestamp_ns=quote.timestamp_ns,
-                    reservation_fv=quote.reservation_fv,
+                    quote_timestamp_ns=current_quote.timestamp_ns,
+                    reaction_delay_ms=reaction_delay_ms,
+                    reservation_fv=current_quote.reservation_fv,
                     gross_spread_capture=gross,
                     markouts=markout_values,
                     fee_cost=fee_cost,
@@ -1011,10 +1063,34 @@ def replay_market(
                     estimated_edge_5m=estimated,
                 )
             )
+        if event_fills:
+            current_quote = _deplete_quote(current_quote, event_fills)
 
-        quote = build_quote(event, policy, inventory=inventory, base_size=base_size)
+        desired_quote = build_quote(
+            event,
+            policy,
+            inventory=inventory,
+            base_size=base_size,
+        )
         quotes += 1
-        active_quotes += int(quote.bid is not None or quote.ask is not None)
+        active_quotes += int(
+            desired_quote.bid is not None or desired_quote.ask is not None
+        )
+
+        if reaction_delay_ms == 0:
+            current_quote = desired_quote
+            pending_quote = None
+            pending_effective_ns = None
+            continue
+
+        if _quote_equivalent(desired_quote, current_quote):
+            if pending_quote is not None:
+                pending_quote = desired_quote
+            continue
+
+        pending_quote = desired_quote
+        if pending_effective_ns is None:
+            pending_effective_ns = event.timestamp_ns + reaction_delay_ns
 
     gross_values = [item.gross_spread_capture for item in results]
     markouts_5m = [item.markouts[300] for item in results if 300 in item.markouts]
@@ -1026,6 +1102,7 @@ def replay_market(
     summary = ReplaySummary(
         policy_id=policy.policy_id,
         fill_assumption=fill_model.assumption,
+        reaction_delay_ms=reaction_delay_ms,
         quotes=quotes,
         active_quotes=active_quotes,
         fills=len(results),
