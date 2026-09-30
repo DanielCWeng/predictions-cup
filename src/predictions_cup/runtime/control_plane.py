@@ -214,6 +214,17 @@ def _bounded_tree_size(path: Path, *, max_entries: int = 5000) -> dict[str, obje
     }
 
 
+def _int_value(value: object) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float, str)):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
 def _file_with_wal(path: Path) -> dict[str, object]:
     values: dict[str, object] = {
         "path": str(path),
@@ -284,11 +295,11 @@ def storage_health(
     }
 
     if queue_health is not None:
-        depth = int(queue_health.get("queue_depth", 0) or 0)
-        capacity = int(queue_health.get("queue_capacity", 0) or 0)
-        high_water = int(queue_health.get("high_water_mark", 0) or 0)
-        drops = int(queue_health.get("dropped_rows", 0) or 0)
-        failures = int(queue_health.get("storage_failures", 0) or 0)
+        depth = _int_value(queue_health.get("queue_depth", 0))
+        capacity = _int_value(queue_health.get("queue_capacity", 0))
+        high_water = _int_value(queue_health.get("high_water_mark", 0))
+        drops = _int_value(queue_health.get("dropped_rows", 0))
+        failures = _int_value(queue_health.get("storage_failures", 0))
         fraction = depth / capacity if capacity > 0 else None
         warn_fraction = float(
             values.get("PREDICTIONS_CUP_FULLSTACK_QUEUE_WARN_FRACTION", "0.75")
@@ -318,7 +329,7 @@ def storage_health(
     )
     history_path = status_dir / "storage-history.json"
     previous = _load_history(history_path)
-    current_bytes = int(capture["bytes"])
+    current_bytes = _int_value(capture["bytes"])
     runway_hours: float | None = None
     runway_reason = "INSUFFICIENT_HISTORY"
     growth_bytes_per_hour: float | None = None
@@ -374,6 +385,11 @@ def _git(repo: Path, args: Sequence[str]) -> str | None:
     return output if rc == 0 and output else None
 
 
+def _git_dirty(repo: Path) -> bool | None:
+    rc, output = _run(("git", "-C", str(repo), "status", "--porcelain"))
+    return None if rc != 0 else bool(output)
+
+
 def build_session_manifest(
     repo: Path,
     values: Mapping[str, str],
@@ -384,7 +400,7 @@ def build_session_manifest(
     source_state: Mapping[str, object],
 ) -> dict[str, object]:
     ref = _git(repo, ("symbolic-ref", "--short", "-q", "HEAD"))
-    dirty = _git(repo, ("status", "--porcelain"))
+    dirty = _git_dirty(repo)
     shock_path = Path(
         values.get(
             "PREDICTIONS_CUP_STRUCTURAL_SHOCK_REGISTRY",
@@ -399,7 +415,7 @@ def build_session_manifest(
             "repository": "DanielCWeng/predictions-cup",
             "git_sha": snapshot.get("git_sha"),
             "ref": ref,
-            "dirty_tree": None if dirty is None else bool(dirty),
+            "dirty_tree": dirty,
         },
         "runtime_configuration": {
             "schema_version": snapshot.get("config_schema_version"),
