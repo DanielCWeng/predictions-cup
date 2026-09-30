@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-import predictions_cup.analysis.structural_certificates as structural
+from predictions_cup.analysis import structural_certificates as structural
 
 
 NOW = datetime(2026, 10, 1, 16, 0, tzinfo=UTC)
