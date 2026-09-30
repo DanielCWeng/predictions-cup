@@ -27,10 +27,12 @@ from predictions_cup.analysis.evidence import (
 from predictions_cup.live_learn.contracts import OutcomeStatus, outcome_from_record
 from predictions_cup.mapping.crosswalk import load_document
 from predictions_cup.mapping.models import MappingDirection
+from predictions_cup.runtime.models import SIG_TICK
 
 ANALYSIS_VERSION = "live-diag-001-v1"
 DEFAULT_THRESHOLDS_TICKS = (1, 2, 3, 5)
 DEFAULT_HORIZONS_SECONDS = (1, 5, 15, 30, 60, 300)
+SIG_TICK_SIZE = float(SIG_TICK)
 
 
 class ResearchStatus(StrEnum):
@@ -173,7 +175,7 @@ def construct_gap_episodes(
     sig_quotes: Sequence[Quote],
     external_quotes: Sequence[Quote],
     threshold_ticks: int,
-    tick_size: float = 0.01,
+    tick_size: float = SIG_TICK_SIZE,
 ) -> tuple[GapTrigger, ...]:
     """Create independent threshold-crossing episodes using only observable-as-of state."""
     if threshold_ticks <= 0 or tick_size <= 0:
@@ -216,7 +218,7 @@ def observe_snapback(
     sig_quotes: Sequence[Quote],
     external_quotes: Sequence[Quote],
     horizons_seconds: Sequence[int] = DEFAULT_HORIZONS_SECONDS,
-    tick_size: float = 0.01,
+    tick_size: float = SIG_TICK_SIZE,
 ) -> tuple[SnapbackObservation, ...]:
     """Score future residual gaps without feeding future evidence into the trigger."""
     sig = _economic(sig_quotes)
@@ -358,7 +360,7 @@ def analyze_lead_lag(
     external_quotes: Sequence[Quote],
     latency_ms: float,
     minimum_impulse_ticks: int = 1,
-    tick_size: float = 0.01,
+    tick_size: float = SIG_TICK_SIZE,
 ) -> tuple[LeadLagObservation, ...]:
     """Require the executable edge to survive the declared latency assumption."""
     if latency_ms < 0:
@@ -802,7 +804,7 @@ def analyze_live_diagnostics(
         "latency_assumption_source": latency_assumption_source,
         "thresholds_ticks": list(thresholds_ticks),
         "horizons_seconds": list(horizons_seconds),
-        "tick_size": 0.01,
+        "tick_size": SIG_TICK_SIZE,
         "trigger_rule": "threshold_crossing_rearms_only_below_threshold",
     }
     config_hash = canonical_config_hash(config)
@@ -911,7 +913,12 @@ def analyze_live_diagnostics(
                     if item.horizon_seconds == horizon
                 ]
                 metric = _median(values)
-                event_count = len(triggers)
+                supported_trigger_ids = {
+                    item.trigger_id
+                    for item in observations
+                    if item.horizon_seconds == horizon
+                }
+                event_count = len(supported_trigger_ids)
                 evidence.append(
                     AnalysisEvidence(
                         analysis_id="LIVE-DIAG-001:SNAPBACK",
