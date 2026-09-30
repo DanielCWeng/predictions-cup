@@ -20,8 +20,8 @@ from predictions_cup.shadow.contracts import (
     maker_snapshot_record,
 )
 from predictions_cup.sig.launch_storage import (
-    SCHEMA_VERSION as CAPTURE_SCHEMA_VERSION,
     ImmutableCaptureSink,
+    SCHEMA_VERSION as CAPTURE_SCHEMA_VERSION,
 )
 
 
