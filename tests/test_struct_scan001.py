@@ -9,6 +9,7 @@ from predictions_cup.analysis.structural_certificates import (
     BookLevel,
     ExecutableBook,
     LegAction,
+    StructuralRelationship,
     StructuralStatus,
     complement_relationship,
     evaluate_relationship,
@@ -37,7 +38,10 @@ def _book(
     )
 
 
-def _complement(*, action: LegAction = LegAction.BUY):
+def _complement(
+    *,
+    action: LegAction = LegAction.BUY,
+) -> StructuralRelationship:
     return complement_relationship(
         relationship_id="rel-complement",
         yes_instrument_id="yes",
