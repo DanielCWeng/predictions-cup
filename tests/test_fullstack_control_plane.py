@@ -47,6 +47,23 @@ def test_clock_health_accepts_synchronised_host_with_small_offset() -> None:
     assert result["estimated_offset_seconds"] == pytest.approx(-0.00012)
 
 
+def test_clock_health_requires_offset_evidence() -> None:
+    def runner(command: Sequence[str]) -> tuple[int, str]:
+        if command[0] == "timedatectl":
+            return 0, "yes"
+        return 127, ""
+
+    result = clock_health(
+        threshold_seconds=0.25,
+        runner=runner,
+        wall_clock=lambda: NOW,
+    )
+    assert result["state"] == "UNKNOWN"
+    reasons = result["reason_codes"]
+    assert isinstance(reasons, list)
+    assert "CLOCK_OFFSET_UNAVAILABLE" in reasons
+
+
 def test_clock_health_blocks_offset_boundary_and_unknown_inspection() -> None:
     def bad_offset(command: Sequence[str]) -> tuple[int, str]:
         if command[0] == "timedatectl":
@@ -191,7 +208,10 @@ def test_session_manifest_is_hashed_atomic_and_secret_free(tmp_path: Path) -> No
         "PREDICTIONS_CUP_EXECUTION_MODE": "SHADOW",
         "PREDICTIONS_CUP_STRUCTURAL_SHOCK_REGISTRY": str(tmp_path / "shock.json"),
     }
-    (tmp_path / "shock.json").write_text('{"tokens":["1"]}', encoding="utf-8")
+    (tmp_path / "shock.json").write_text(
+        '{"schema_version":1,"tokens":["1"]}',
+        encoding="utf-8",
+    )
     snapshot: dict[str, object] = {
         "git_sha": "abc",
         "config_schema_version": "v1",
@@ -211,6 +231,9 @@ def test_session_manifest_is_hashed_atomic_and_secret_free(tmp_path: Path) -> No
     )
     rendered = json.dumps(manifest, sort_keys=True)
     assert "DO_NOT_LEAK" not in rendered
+    shock = manifest["structural_shock_registry"]
+    assert isinstance(shock, dict)
+    assert shock["version"] == 1
     expected_hash_input = dict(manifest)
     expected_hash = str(expected_hash_input.pop("manifest_sha256"))
     assert content_hash(expected_hash_input) == expected_hash
