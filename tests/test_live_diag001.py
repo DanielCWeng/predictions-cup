@@ -6,7 +6,6 @@ import pytest
 
 from predictions_cup.analysis import live_diag
 
-
 BASE = datetime(2026, 10, 1, 16, 0, tzinfo=UTC)
 
 
