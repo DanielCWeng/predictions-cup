@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from collections.abc import Iterable
 import logging
 import signal
+from collections.abc import Iterable
 from contextlib import suppress
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -995,23 +995,37 @@ class MakerService:
                 result = self.pm_books.apply_price_change(payload, observed_at)
                 changed_tokens.update(result.changed_tokens)
                 if shadow_runtime is not None:
+                    grouped: dict[
+                        str,
+                        list[tuple[Decimal | None, Decimal | None, datetime]],
+                    ] = {}
                     for change in result.changes:
+                        grouped.setdefault(change.token_id, []).append(
+                            (change.best_bid, change.best_ask, change.observed_at)
+                        )
+                    for token_id, observations in grouped.items():
+                        states: set[tuple[float, float]] = set()
+                        invalid = False
+                        for bid, ask, _ in observations:
+                            if bid is None or ask is None or ask < bid:
+                                invalid = True
+                                continue
+                            states.add((float(bid), float(ask)))
+                        if not invalid and len(states) == 1:
+                            best_bid, best_ask = next(iter(states))
+                            trusted = True
+                        else:
+                            best_bid = None
+                            best_ask = None
+                            trusted = False
                         shadow_runtime.observe_polymarket_bbo(
-                            token_id=change.token_id,
-                            observed_at=change.observed_at,
+                            token_id=token_id,
+                            observed_at=observations[0][2],
                             observed_monotonic_ns=event_monotonic_ns,
-                            best_bid=(
-                                None
-                                if change.best_bid is None
-                                else float(change.best_bid)
-                            ),
-                            best_ask=(
-                                None
-                                if change.best_ask is None
-                                else float(change.best_ask)
-                            ),
+                            best_bid=best_bid,
+                            best_ask=best_ask,
                             source_version="clob-market-ws-v1",
-                            trusted=True,
+                            trusted=trusted,
                         )
                 self.pm_health.book_uninitialized_delta_count += (
                     result.uninitialized_deltas
