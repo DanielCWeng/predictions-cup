@@ -262,22 +262,21 @@ class SigLiveSink:
             self._reservations.release_operation(envelope.logical_operation_id)
             raise
 
-        response_received = self._clock_ns()
+        observed = self._clock_ns()
         self._observe(
             ObservationKind.RESPONSE_RECEIVED,
             envelope,
-            monotonic_ns=response_received,
+            monotonic_ns=observed,
             plan=plan,
             status_code=200,
         )
         self._observe(
             ObservationKind.RESPONSE_PARSED,
             envelope,
-            monotonic_ns=response_received,
+            monotonic_ns=observed,
             plan=plan,
             status_code=200,
         )
-        observed = self._clock_ns()
         self._journal.record_event(
             logical_operation_id=envelope.logical_operation_id,
             tournament_id=envelope.tournament_id,
@@ -605,20 +604,19 @@ class SigLiveSink:
             )
             raise
 
-        response_received = self._clock_ns()
+        observed = self._clock_ns()
         self._observe(
             ObservationKind.RESPONSE_RECEIVED,
             envelope,
-            monotonic_ns=response_received,
+            monotonic_ns=observed,
             status_code=200,
         )
         self._observe(
             ObservationKind.RESPONSE_PARSED,
             envelope,
-            monotonic_ns=response_received,
+            monotonic_ns=observed,
             status_code=200,
         )
-        observed = self._clock_ns()
         self._observe(
             ObservationKind.CANCEL_ACK,
             envelope,
