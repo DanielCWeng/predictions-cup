@@ -18,7 +18,7 @@ from typing import Any
 
 CONTROL_PLANE_SCHEMA = "fullstack-control-plane-v1"
 SESSION_MANIFEST_SCHEMA = "launch-session-manifest-v1"
-_STORAGE_HISTORY_SCHEMA = "storage-runway-history-v1"
+_STORAGE_HISTORY_SCHEMA = "storage-runway-history-v2"
 _CHRONY_OFFSET = re.compile(r"Last offset\s*:\s*([+-]?[0-9.eE-]+)\s+seconds")
 
 
@@ -289,16 +289,50 @@ def storage_health(
         state = "DEGRADED"
         reasons.append("FILESYSTEM_FREE_WARNING")
 
-    capture_dir = Path(
-        values.get("PREDICTIONS_CUP_SIG_RESEARCH_PATH", "data/sig_research")
-    )
-    capture = _bounded_tree_size(capture_dir)
+    tracked_paths: dict[str, dict[str, object]] = {
+        "sig_research": _bounded_tree_size(
+            Path(values.get("PREDICTIONS_CUP_SIG_RESEARCH_PATH", "data/sig_research"))
+        ),
+        "polymarket_research": _bounded_tree_size(
+            Path(
+                values.get(
+                    "PREDICTIONS_CUP_POLYMARKET_RESEARCH_PATH",
+                    "data/polymarket_research",
+                )
+            )
+        ),
+        "shadow_journal": _bounded_tree_size(
+            Path(
+                values.get(
+                    "PREDICTIONS_CUP_SHADOW_JOURNAL_PATH",
+                    "data/shadow_002/events.jsonl",
+                )
+            )
+        ),
+        "live_learn_outcomes": _bounded_tree_size(
+            Path(
+                values.get(
+                    "PREDICTIONS_CUP_LIVE_LEARN_OUTCOME_PATH",
+                    "data/live_learn/outcomes.jsonl",
+                )
+            )
+        ),
+    }
+    capture = tracked_paths["sig_research"]
     if not bool(capture["exists"]):
         if state == "HEALTHY":
             state = "DEGRADED"
         reasons.append("CAPTURE_PATH_MISSING")
     if bool(capture["truncated"]):
         reasons.append("CAPTURE_SIZE_BOUNDED_SAMPLE")
+    if (
+        str(values.get("PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED", "false")).lower()
+        in {"1", "true", "yes", "on"}
+        and not bool(tracked_paths["polymarket_research"]["exists"])
+    ):
+        if state == "HEALTHY":
+            state = "DEGRADED"
+        reasons.append("POLYMARKET_RESEARCH_PATH_MISSING")
 
     sqlite = {
         "sig_realtime": _file_with_wal(
@@ -360,37 +394,55 @@ def storage_health(
     else:
         queue = None
 
+    current_sizes: dict[str, int] = {
+        f"path:{name}": _int_value(surface.get("bytes", 0))
+        for name, surface in tracked_paths.items()
+    }
+    for name, surface in sqlite.items():
+        current_sizes[f"sqlite:{name}:db"] = _int_value(surface.get("bytes", 0))
+        current_sizes[f"sqlite:{name}:wal"] = _int_value(surface.get("wal_bytes", 0))
+    monitored_bytes = sum(current_sizes.values())
+
     status_dir = Path(
         values.get("PREDICTIONS_CUP_FULLSTACK_STATUS_DIR", "data/runtime/status")
     )
     history_path = status_dir / "storage-history.json"
     previous = _load_history(history_path)
-    current_bytes = _int_value(capture["bytes"])
     runway_hours: float | None = None
     runway_reason = "INSUFFICIENT_HISTORY"
     growth_bytes_per_hour: float | None = None
+    growth_by_path: dict[str, float] = {}
     if previous is not None:
         previous_at_raw = previous.get("observed_at")
-        previous_bytes = previous.get("capture_bytes")
-        if isinstance(previous_at_raw, str) and isinstance(previous_bytes, int):
+        previous_sizes_raw = previous.get("sizes")
+        if isinstance(previous_at_raw, str) and isinstance(previous_sizes_raw, dict):
             try:
                 previous_at = datetime.fromisoformat(previous_at_raw.replace("Z", "+00:00"))
             except ValueError:
                 previous_at = checked_at
-            elapsed_hours = (checked_at - previous_at.astimezone(UTC)).total_seconds() / 3600
-            growth = current_bytes - previous_bytes
-            if elapsed_hours > 0 and growth > 0:
-                growth_bytes_per_hour = growth / elapsed_hours
-                runway_hours = usage.free / growth_bytes_per_hour
-                runway_reason = "OBSERVED_GROWTH"
-            elif elapsed_hours > 0:
-                runway_reason = "NON_POSITIVE_GROWTH"
+            elapsed_hours = (
+                checked_at - previous_at.astimezone(UTC)
+            ).total_seconds() / 3600
+            if elapsed_hours > 0:
+                previous_total = 0
+                for name, current_size in current_sizes.items():
+                    previous_value = _int_value(previous_sizes_raw.get(name, 0))
+                    previous_total += previous_value
+                    growth_by_path[name] = (current_size - previous_value) / elapsed_hours
+                total_growth = monitored_bytes - previous_total
+                if total_growth > 0:
+                    growth_bytes_per_hour = total_growth / elapsed_hours
+                    runway_hours = usage.free / growth_bytes_per_hour
+                    runway_reason = "OBSERVED_GROWTH"
+                else:
+                    runway_reason = "NON_POSITIVE_GROWTH"
     atomic_json(
         history_path,
         {
             "schema_version": _STORAGE_HISTORY_SCHEMA,
             "observed_at": checked_at.isoformat(),
-            "capture_bytes": current_bytes,
+            "monitored_bytes": monitored_bytes,
+            "sizes": current_sizes,
         },
     )
 
@@ -407,11 +459,14 @@ def storage_health(
             "critical_free_gib": critical_gib,
         },
         "capture": capture,
+        "tracked_paths": tracked_paths,
         "sqlite": sqlite,
         "queue": queue,
+        "monitored_bytes": monitored_bytes,
         "runway_hours": runway_hours,
         "runway_reason": runway_reason,
         "observed_growth_bytes_per_hour": growth_bytes_per_hour,
+        "growth_bytes_per_hour_by_path": growth_by_path,
         "history_path": str(history_path),
     }
 
