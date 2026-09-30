@@ -34,12 +34,14 @@ def market_payload() -> dict[str, Any]:
 def test_market_parses_fixed_point_decimals_and_provenance() -> None:
     async def run() -> None:
         client = KalshiPublicClient(wall_clock=lambda: NOW)
-    
-        async def fake(\n            path: str, *, params: dict[str, str] | None = None\n        ) -> tuple[dict[str, Any], datetime]:
+
+        async def fake(
+            path: str, *, params: dict[str, str] | None = None
+        ) -> tuple[dict[str, Any], datetime]:
             assert path == "/markets/KXTEST-YES"
             assert params is None
             return {"market": market_payload()}, NOW
-    
+
         client._request_json = fake  # type: ignore[method-assign]
         market = await client.get_market("KXTEST-YES")
         assert market.yes_bid == Decimal("0.5600")
@@ -47,15 +49,17 @@ def test_market_parses_fixed_point_decimals_and_provenance() -> None:
         assert market.observed_at == NOW
         assert market.source_updated_at != market.observed_at
         assert market.api_version == "kalshi-trade-api-v2"
-    
 
     asyncio.run(run())
+
 
 def test_orderbook_is_bid_only_and_exact_decimal() -> None:
     async def run() -> None:
         client = KalshiPublicClient(wall_clock=lambda: NOW)
-    
-        async def fake(\n            path: str, *, params: dict[str, str] | None = None\n        ) -> tuple[dict[str, Any], datetime]:
+
+        async def fake(
+            path: str, *, params: dict[str, str] | None = None
+        ) -> tuple[dict[str, Any], datetime]:
             assert path == "/markets/KXTEST-YES/orderbook"
             assert params == {"depth": "2"}
             return {
@@ -64,44 +68,48 @@ def test_orderbook_is_bid_only_and_exact_decimal() -> None:
                     "no_dollars": [["0.4400", "4.25"]],
                 }
             }, NOW
-    
+
         client._request_json = fake  # type: ignore[method-assign]
         book = await client.get_orderbook("KXTEST-YES", depth=2)
         assert book.yes_bids[0].price == Decimal("0.5500")
         assert book.no_bids[0].quantity == Decimal("4.25")
-    
 
     asyncio.run(run())
+
 
 def test_markets_and_trades_preserve_cursor() -> None:
     async def run() -> None:
         client = KalshiPublicClient(wall_clock=lambda: NOW)
-    
-        async def fake(\n            path: str, *, params: dict[str, str] | None = None\n        ) -> tuple[dict[str, Any], datetime]:
+
+        async def fake(
+            path: str, *, params: dict[str, str] | None = None
+        ) -> tuple[dict[str, Any], datetime]:
             if path == "/markets":
                 return {"markets": [market_payload()], "cursor": "next"}, NOW
             assert path == "/markets/trades"
             return {
-                "trades": [{
-                    "trade_id": "t1",
-                    "ticker": "KXTEST-YES",
-                    "count_fp": "2.50",
-                    "yes_price_dollars": "0.5600",
-                    "no_price_dollars": "0.4400",
-                    "created_time": "2026-09-30T21:59:58Z",
-                }],
+                "trades": [
+                    {
+                        "trade_id": "t1",
+                        "ticker": "KXTEST-YES",
+                        "count_fp": "2.50",
+                        "yes_price_dollars": "0.5600",
+                        "no_price_dollars": "0.4400",
+                        "created_time": "2026-09-30T21:59:58Z",
+                    }
+                ],
                 "cursor": "trade-next",
             }, NOW
-    
+
         client._request_json = fake  # type: ignore[method-assign]
         markets = await client.list_markets(cursor="c", status="open")
         trades = await client.list_trades(ticker="KXTEST-YES")
         assert markets.cursor == "next"
         assert trades.cursor == "trade-next"
         assert trades.items[0].quantity == Decimal("2.50")
-    
 
     asyncio.run(run())
+
 
 def test_ticker_cannot_escape_public_routes() -> None:
     async def run() -> None:
