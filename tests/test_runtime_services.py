@@ -47,6 +47,8 @@ def test_systemd_units_are_read_only_and_supervised() -> None:
         assert "StandardOutput=journal" in unit
         assert "StandardError=journal" in unit
         assert "NoNewPrivileges=true" in unit
+        assert "SendSIGKILL=no" in unit
+        assert "PartOf=predictions-cup-runtime.target" in unit
 
     assert "ExecStart=@@PYTHON_BIN@@ -m predictions_cup.sig.capture --runtime-env-only" in sig
     assert "RestartSec=5s" in sig
@@ -85,6 +87,12 @@ def _write_runtime_env(
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     path.chmod(0o600)
     return secret
+
+
+def _append_runtime_env(path: Path, *lines: str) -> None:
+    existing = path.read_text(encoding="utf-8")
+    path.write_text(existing + "\n".join(lines) + "\n", encoding="utf-8")
+    path.chmod(0o600)
 
 
 def _installer_env(tmp_path: Path) -> tuple[dict[str, str], Path, Path]:
@@ -161,6 +169,9 @@ def test_installer_is_idempotent_and_renders_absolute_runtime_env(tmp_path: Path
     assert set(first_units) == {
         "predictions-cup-sig-capture.service",
         "predictions-cup-polymarket-capture.service",
+        "predictions-cup-maker.service",
+        "predictions-cup-live-learn.service",
+        "predictions-cup-observe.service",
     }
     for content in first_units.values():
         assert f"EnvironmentFile={runtime_env}" in content
@@ -168,6 +179,7 @@ def test_installer_is_idempotent_and_renders_absolute_runtime_env(tmp_path: Path
         assert "trade.env" not in content
         assert "--runtime-env-only" in content
         assert "UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL" in content
+        assert "SendSIGKILL=no" in content
     assert "--tracked-exchange-id" not in first_units[
         "predictions-cup-sig-capture.service"
     ]
@@ -285,3 +297,97 @@ def test_installer_rejects_trade_credential_without_printing_secret(tmp_path: Pa
     assert result.returncode != 0
     assert "PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL" in result.stderr
     assert "TEST_TRADE_SECRET_DO_NOT_PRINT" not in result.stdout + result.stderr
+
+
+
+def test_installer_in_process_capabilities_do_not_spawn_adapters(
+    tmp_path: Path,
+) -> None:
+    env, runtime_env, call_log = _installer_env(tmp_path)
+    _append_runtime_env(
+        runtime_env,
+        "PREDICTIONS_CUP_MAKER_ENABLED=true",
+        "PREDICTIONS_CUP_TOURNAMENT_SLUG=test-tournament",
+        "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_ENABLED=true",
+        "PREDICTIONS_CUP_FULLSTACK_OBSERVE_ENABLED=true",
+        "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_MODE=IN_PROCESS",
+        "PREDICTIONS_CUP_FULLSTACK_OBSERVE_MODE=IN_PROCESS",
+    )
+
+    result = subprocess.run(
+        ["bash", str(INSTALLER)],
+        cwd=PROJECT_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    calls = call_log.read_text(encoding="utf-8").splitlines()
+    assert "enable predictions-cup-maker.service" in calls
+    assert "restart predictions-cup-maker.service" in calls
+    assert "enable predictions-cup-live-learn.service" not in calls
+    assert "restart predictions-cup-live-learn.service" not in calls
+    assert "enable predictions-cup-observe.service" not in calls
+    assert "restart predictions-cup-observe.service" not in calls
+    assert "disable --now predictions-cup-live-learn.service" in calls
+    assert "disable --now predictions-cup-observe.service" in calls
+
+
+def test_installer_external_capabilities_keep_generic_service_option(
+    tmp_path: Path,
+) -> None:
+    env, runtime_env, call_log = _installer_env(tmp_path)
+    _append_runtime_env(
+        runtime_env,
+        "PREDICTIONS_CUP_MAKER_ENABLED=true",
+        "PREDICTIONS_CUP_TOURNAMENT_SLUG=test-tournament",
+        "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_ENABLED=true",
+        "PREDICTIONS_CUP_FULLSTACK_OBSERVE_ENABLED=true",
+        "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_MODE=EXTERNAL_SERVICE",
+        "PREDICTIONS_CUP_FULLSTACK_OBSERVE_MODE=EXTERNAL_SERVICE",
+        "PREDICTIONS_CUP_LIVE_LEARN_COMMAND=/bin/true",
+        "PREDICTIONS_CUP_OBSERVE_COMMAND=/bin/true",
+    )
+
+    result = subprocess.run(
+        ["bash", str(INSTALLER)],
+        cwd=PROJECT_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    calls = call_log.read_text(encoding="utf-8").splitlines()
+    assert "enable predictions-cup-live-learn.service" in calls
+    assert "restart predictions-cup-live-learn.service" in calls
+    assert "enable predictions-cup-observe.service" in calls
+    assert "restart predictions-cup-observe.service" in calls
+
+
+def test_installer_rejects_in_process_capability_without_owner_process(
+    tmp_path: Path,
+) -> None:
+    env, runtime_env, _ = _installer_env(tmp_path)
+    _append_runtime_env(
+        runtime_env,
+        "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_ENABLED=true",
+        "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_MODE=IN_PROCESS",
+    )
+
+    result = subprocess.run(
+        ["bash", str(INSTALLER)],
+        cwd=PROJECT_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "IN_PROCESS LIVE-LEARN requires PREDICTIONS_CUP_MAKER_ENABLED=true" in (
+        result.stderr
+    )

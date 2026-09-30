@@ -1,0 +1,8 @@
+# FULLSTACK-001 systemd template. Render with scripts/install_runtime_services.sh.
+[Unit]
+Description=Predictions Cup composed competition runtime
+Wants=network-online.target @@ACTIVE_UNITS@@
+After=network-online.target
+
+[Install]
+WantedBy=multi-user.target

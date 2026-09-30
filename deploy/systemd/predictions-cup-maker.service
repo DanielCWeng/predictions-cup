@@ -1,10 +1,10 @@
-# BUILD-007/FULLSTACK-001 systemd template. Render with scripts/install_runtime_services.sh.
+# FULLSTACK-001 systemd template. Render with scripts/install_runtime_services.sh.
 [Unit]
-Description=Predictions Cup read-only Polymarket capture
+Description=Predictions Cup MAKE + SHADOW + central Risk runtime
 Wants=network-online.target
-After=network-online.target
+After=network-online.target predictions-cup-sig-capture.service
 PartOf=predictions-cup-runtime.target
-StartLimitIntervalSec=600
+StartLimitIntervalSec=300
 StartLimitBurst=6
 
 [Service]
@@ -14,13 +14,13 @@ WorkingDirectory=@@REPO_ROOT@@
 EnvironmentFile=@@RUNTIME_ENV@@
 Environment=PYTHONUNBUFFERED=1
 UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL
-ExecStart=@@PYTHON_BIN@@ -m predictions_cup.external.polymarket.recorder --runtime-env-only --require-explicit-universe
+ExecStart=@@PYTHON_BIN@@ -m predictions_cup.maker.service --runtime-env-only
 Restart=on-failure
-RestartSec=30s
-RestartSteps=3
-RestartMaxDelaySec=120s
+RestartSec=5s
+RestartSteps=4
+RestartMaxDelaySec=60s
 KillSignal=SIGTERM
-TimeoutStopSec=60s
+TimeoutStopSec=90s
 SendSIGKILL=no
 StandardOutput=journal
 StandardError=journal
