@@ -226,3 +226,48 @@ duplicate Risk, MAKE or BUILD-009 recovery logic.
 For the reviewed #67/#66 shapes, configure LIVE-LEARN as IN_PROCESS owned by predictions-cup-maker.service and OBSERVE as IN_PROCESS owned by predictions-cup-maker.service plus predictions-cup-sig-capture.service. Status and launch snapshots record mode and owners. Under --require-real, missing real health, a mode mismatch, or owner mismatch is BLOCKED. EXTERNAL_SERVICE remains supported for future authoritative standalone providers.
 
 This avoids a second LIVE-LEARN replay/scoring consumer and duplicate OBSERVE instrumentation. Final #67/#69 integration in shadow/live.py must preserve both frozen evaluator wiring and the LIVE-LEARN ShadowEventStore mirror.
+
+## GENERIC-INFRA-001 control-plane additions
+
+Current real-host execution state for this branch is **BLOCKED_BY_HOST_MIGRATION**. No VM, systemd,
+reboot, SSH-survival or other host evidence was generated while that migration is in progress.
+
+`bash scripts/cupctl status --json` now emits the canonical machine-readable control-plane tree and
+atomically publishes `data/runtime/status/control-plane.json`. Its top-level surfaces are identity,
+session, services, feeds, queues, capture, observe, learner, candidates, risk, execution, storage,
+clock, versions and overall_health. Provider-specific detail remains intact under those surfaces.
+
+`snapshot` and `rehearse` create a canonical launch-session manifest under
+`data/runtime/sessions/<session-id>/manifest.json` and publish
+`data/runtime/status/session.json`. The manifest records code/ref/dirty identity where available,
+the non-secret config hash, mapping identity, observed candidate versions, process/host identity,
+initial source state, and the exact structural-shock registry hash. It is atomically replaced with
+file and directory fsync. Secret-like configuration is never copied into the manifest.
+
+Clock evidence uses replaceable host inspection. A real gate requires
+`PREDICTIONS_CUP_FULLSTACK_MAX_CLOCK_OFFSET_SECONDS` to be configured deliberately; missing sync
+inspection or a missing threshold never becomes healthy. Storage evidence uses bounded sampling,
+filesystem free capacity, capture queue/writer evidence, SQLite/WAL sizes and observed growth.
+Runway is null with `INSUFFICIENT_HISTORY` until two positive-growth samples exist.
+
+### ETS capture posture
+
+The canonical live structural-shock registry remains
+`data/capture/r3_live_shadow_polymarket_ids.json`, the accepted explicit 13-token capture-only
+shadow set. Its file identity is included in session provenance. The existing accepted mapped
+Polymarket capture remains the launch universe. Full DATA-004 P0/P1 ETS expansion is
+**DEFERRED_BY_DESIGN** and is not a hidden FULLSTACK health requirement.
+
+### Final real rehearsal
+
+Once the migrated host is ready, the final operator sequence remains:
+
+~~~bash
+bash scripts/cupctl status --json
+bash scripts/cupctl snapshot
+bash scripts/cupctl health --require-real
+sudo -E bash scripts/cupctl rehearse --require-real --safe-restart
+~~~
+
+`--require-real` additionally requires real healthy clock evidence, real healthy storage evidence
+and persisted session provenance. Simulation evidence cannot satisfy those gates.
