@@ -166,3 +166,26 @@ def test_ecology_never_claims_participant_identity() -> None:
     assert result["bbo_renewal_count"] == 2
     assert "BBO state lifetime" in str(result["terminology"])
     assert "participant identity" in str(result["terminology"])
+
+
+def test_market_selection_does_not_double_count_spread_and_markout() -> None:
+    maker_rows = [
+        {
+            "decision_id": f"d{index}",
+            "market_id": "m1",
+            "horizon_seconds": 15,
+            "fill_rate": 1.0,
+            "spread_capture": 0.01,
+            "post_fill_markout": 0.02,
+            "adverse_selection": 0.0,
+        }
+        for index in range(5)
+    ]
+    summary, rows = live_diag.analyze_market_selection(maker_rows)
+    assert summary["available"] is True
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["expected_edge"] == pytest.approx(0.02)
+    assert row["gross_mmev_before_risk_ops"] == pytest.approx(0.02)
+    assert row["MMEV"] is None
+    assert "MMEV_NOT_FORCED_WITH_MISSING_COSTS" in row["reasons"]
