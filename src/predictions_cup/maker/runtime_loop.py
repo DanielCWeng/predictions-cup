@@ -7,11 +7,12 @@ builds immutable snapshots from existing in-memory state, and invokes the maker.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from datetime import UTC, datetime
 from time import monotonic_ns
 from uuid import uuid4
 
+from predictions_cup.maker.contracts import MakerMarketSnapshot
 from predictions_cup.maker.coordinator import (
     MakerCoordinator,
     MakerCycleResult,
@@ -24,6 +25,7 @@ WallClock = Callable[[], datetime]
 MonoClock = Callable[[], int]
 FeedTrust = Callable[[], bool]
 CycleObserver = Callable[[MakerCycleResult], Awaitable[None]]
+SnapshotObserver = Callable[[MakerStateChange, datetime, Mapping[str, MakerMarketSnapshot]], None]
 
 
 class MakerRuntimeLoop:
@@ -37,6 +39,7 @@ class MakerRuntimeLoop:
         polymarket_feed_trusted: FeedTrust,
         telemetry: HotPathTelemetry | None = None,
         cycle_observer: CycleObserver | None = None,
+        snapshot_observer: SnapshotObserver | None = None,
         fail_closed_on_observer_error: bool = False,
         wall_clock: WallClock = lambda: datetime.now(UTC),
         mono_clock: MonoClock = monotonic_ns,
@@ -48,6 +51,7 @@ class MakerRuntimeLoop:
         self._pm_trusted = polymarket_feed_trusted
         self._telemetry = telemetry
         self._observer = cycle_observer
+        self._snapshot_observer = snapshot_observer
         self._observer_fail_closed = fail_closed_on_observer_error
         self._wall_clock = wall_clock
         self._mono_clock = mono_clock
@@ -177,16 +181,21 @@ class MakerRuntimeLoop:
             return None
 
         self._sequence += 1
+        change = MakerStateChange(
+            event_id=f"make-runtime-{self._runtime_session_id}-{self._sequence}",
+            observed_monotonic_ns=now_ns,
+            exchange_ids=frozenset(snapshots),
+            global_recheck=global_recheck,
+        )
+        if self._snapshot_observer is not None:
+            try:
+                self._snapshot_observer(change, wall_now, snapshots)
+            except Exception:
+                # SHADOW/research observation must never block or kill MAKE.
+                self._increment("maker_snapshot_observer_failures")
         started = self._mono_clock()
         result = await self._coordinator.on_state_change(
-            MakerStateChange(
-                event_id=(
-                    f"make-runtime-{self._runtime_session_id}-{self._sequence}"
-                ),
-                observed_monotonic_ns=now_ns,
-                exchange_ids=frozenset(snapshots),
-                global_recheck=global_recheck,
-            ),
+            change,
             snapshots,
         )
         finished = self._mono_clock()
