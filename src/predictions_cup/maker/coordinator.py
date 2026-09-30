@@ -340,6 +340,39 @@ class MakerCoordinator:
                     actions=place_actions,
                     event=event,
                 )
+            else:
+                # LIVE publication is emitted by LiveMakerExecutionAdapter at
+                # the authoritative per-intent ACK/QuoteRegistry transition.
+                # Replenishment remains a coordinator-derived lifecycle label,
+                # but is emitted only after that authoritative transition exists.
+                state = self._registry.state(exchange_id)
+                for action, intent in zip(place_actions, plan.intents, strict=True):
+                    if action.reason != "terminal_quote_refill":
+                        continue
+                    active = state.bid if action.side is QuoteSide.BID else state.ask
+                    if (
+                        active is None
+                        or active.logical_operation_id != logical_operation_id
+                        or active.exchange_order_id is None
+                        or active.exchange_order_id <= 0
+                    ):
+                        continue
+                    detail = (
+                        ("price_ticks", str(action.desired_ticks)),
+                        ("size", str(action.desired_size)),
+                        ("lifecycle_reason", action.reason),
+                        ("execution_state", active.lifecycle_state.value),
+                    )
+                    self._observe_quote(
+                        ObservationKind.QUOTE_REPLENISHED,
+                        logical_operation_id=logical_operation_id,
+                        snapshot=snapshot,
+                        side=action.side,
+                        observed_monotonic_ns=event.observed_monotonic_ns,
+                        exchange_order_id=active.exchange_order_id,
+                        logical_intent_id=intent.intent_id,
+                        detail=detail,
+                    )
 
         return MakerCycleResult(
             decisions=tuple(decisions),
