@@ -588,9 +588,12 @@ def recommend_market(
     """Create a research-only recommendation with explicit support gates."""
     if sample_count < 5 or independent_event_count < 5:
         return MarketRecommendation.NO_DATA, ("INSUFFICIENT_INDEPENDENT_EVENTS",)
-    if adverse_selection is not None and expected_edge is not None:
-        if adverse_selection > max(0.0, expected_edge):
-            return MarketRecommendation.WIDEN, ("ADVERSE_SELECTION_EXCEEDS_EDGE",)
+    if (
+        adverse_selection is not None
+        and expected_edge is not None
+        and adverse_selection > max(0.0, expected_edge)
+    ):
+        return MarketRecommendation.WIDEN, ("ADVERSE_SELECTION_EXCEEDS_EDGE",)
     if expected_edge is not None and expected_edge < 0:
         return MarketRecommendation.PAUSE, ("NEGATIVE_EXPECTED_EDGE",)
     if (
