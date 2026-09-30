@@ -332,10 +332,25 @@ def _render_human(
         "|---|---:|---:|---:|---:|---:|---:|---|",
     ]
     for row in rows:
+        coverage = _report_float(row.get("outcome_coverage"))
         lines.append(
-            "| {candidate_id}@{candidate_version} | {decisions} | {firing} | "
-            "{abstaining} | {matured_outcomes} | {scored_outcomes} | "
-            "{outcome_coverage:.3f} | {thin_evidence} |".format(**row)
+            "| "
+            + str(row.get("candidate_id", "UNKNOWN"))
+            + "@"
+            + str(row.get("candidate_version", "UNKNOWN"))
+            + " | "
+            + str(row.get("decisions", 0))
+            + " | "
+            + str(row.get("firing", 0))
+            + " | "
+            + str(row.get("abstaining", 0))
+            + " | "
+            + str(row.get("matured_outcomes", 0))
+            + " | "
+            + str(row.get("scored_outcomes", 0))
+            + f" | {coverage:.3f} | "
+            + str(row.get("thin_evidence", True))
+            + " |"
         )
         metrics = row.get("metrics")
         if isinstance(metrics, dict) and metrics:
@@ -353,11 +368,15 @@ def _render_human(
         ]
     )
     for item in matched:
+        delta = _report_float(item.get("candidate_minus_baseline_forecast_error"))
         lines.append(
-            "- {candidate_id} vs {baseline_id}: n={matched_support}, "
-            "forecast-error delta={candidate_minus_baseline_forecast_error:.6g}".format(
-                **item
-            )
+            "- "
+            + str(item.get("candidate_id", "UNKNOWN"))
+            + " vs "
+            + str(item.get("baseline_id", "UNKNOWN"))
+            + ": n="
+            + str(item.get("matched_support", 0))
+            + f", forecast-error delta={delta:.6g}"
         )
     lines.append(
         "No candidate is promoted automatically; thin or unmatched evidence remains descriptive."
@@ -380,3 +399,9 @@ def _atomic_write(path: Path, content: str) -> None:
         handle.flush()
         os.fsync(handle.fileno())
     os.replace(tmp, path)
+
+
+def _report_float(value: object) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return 0.0
+    return float(value)
