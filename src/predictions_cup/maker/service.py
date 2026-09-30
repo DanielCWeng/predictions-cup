@@ -266,6 +266,13 @@ class MakerService:
             if self.settings.shadow_enabled:
                 shadow_runtime = build_live_shadow_runtime(self.settings, self.core)
                 await shadow_runtime.start()
+                self._observe_005f_books(
+                    self._pm_token_ids,
+                    shadow_runtime,
+                    observed_monotonic_ns=monotonic_ns(),
+                    source_version="clob-rest-seed-v1",
+                    trusted=True,
+                )
 
             adapter: LiveMakerExecutionAdapter | ShadowMakerExecutionAdapter
             if self.core.risk_context.mode is ExecutionMode.LIVE:
@@ -492,8 +499,9 @@ class MakerService:
                             payload,
                             observed_at,
                             runtime,
+                            shadow_runtime,
                         ),
-                        lambda: self._before_pm_connect(runtime),
+                        lambda: self._before_pm_connect(runtime, shadow_runtime),
                     ),
                     name="make-polymarket",
                 ),
@@ -920,27 +928,90 @@ class MakerService:
                 f"Polymarket CLOB seed missing {len(missing)} mapped tokens"
             )
 
-    async def _before_pm_connect(self, runtime: MakerRuntimeLoop) -> None:
+    def _observe_005f_books(
+        self,
+        token_ids: set[str] | frozenset[str],
+        shadow_runtime: LiveShadowRuntime | None,
+        *,
+        observed_monotonic_ns: int,
+        source_version: str,
+        trusted: bool,
+    ) -> None:
+        if shadow_runtime is None:
+            return
+        for token_id in sorted(token_ids):
+            book = self.pm_books.snapshot(token_id, 1)
+            if book is None:
+                continue
+            shadow_runtime.observe_polymarket_bbo(
+                token_id=token_id,
+                observed_at=book.observed_at,
+                observed_monotonic_ns=observed_monotonic_ns,
+                best_bid=None if book.best_bid is None else float(book.best_bid),
+                best_ask=None if book.best_ask is None else float(book.best_ask),
+                source_version=source_version,
+                trusted=trusted,
+            )
+
+    async def _before_pm_connect(
+        self,
+        runtime: MakerRuntimeLoop,
+        shadow_runtime: LiveShadowRuntime | None,
+    ) -> None:
         self.pm_health.websocket_connected = False
         runtime.notify_global(observed_monotonic_ns=monotonic_ns())
         await self._seed_polymarket_books()
+        self._observe_005f_books(
+            self._pm_token_ids,
+            shadow_runtime,
+            observed_monotonic_ns=monotonic_ns(),
+            source_version="clob-rest-seed-v1",
+            trusted=True,
+        )
 
     async def _handle_pm_message(
         self,
         payload: JsonObject,
         observed_at: datetime,
         runtime: MakerRuntimeLoop,
+        shadow_runtime: LiveShadowRuntime | None,
     ) -> None:
         try:
             kind = event_type(payload)
             changed_tokens: set[str] = set()
+            event_monotonic_ns = monotonic_ns()
             if kind == "book":
-                changed_tokens.add(
-                    self.pm_books.apply_full_snapshot(payload, observed_at)
+                token_id = self.pm_books.apply_full_snapshot(payload, observed_at)
+                changed_tokens.add(token_id)
+                self._observe_005f_books(
+                    {token_id},
+                    shadow_runtime,
+                    observed_monotonic_ns=event_monotonic_ns,
+                    source_version="clob-market-ws-v1",
+                    trusted=True,
                 )
             elif kind == "price_change":
                 result = self.pm_books.apply_price_change(payload, observed_at)
                 changed_tokens.update(result.changed_tokens)
+                if shadow_runtime is not None:
+                    for change in result.changes:
+                        shadow_runtime.observe_polymarket_bbo(
+                            token_id=change.token_id,
+                            observed_at=change.observed_at,
+                            observed_monotonic_ns=event_monotonic_ns,
+                            best_bid=(
+                                None
+                                if change.best_bid is None
+                                else float(change.best_bid)
+                            ),
+                            best_ask=(
+                                None
+                                if change.best_ask is None
+                                else float(change.best_ask)
+                            ),
+                            source_version="clob-market-ws-v1",
+                            trusted=True,
+                        )
                 self.pm_health.book_uninitialized_delta_count += (
                     result.uninitialized_deltas
                 )
@@ -966,7 +1037,7 @@ class MakerService:
                 self.pm_health.last_valid_book_update_at = observed_at
                 runtime.notify_polymarket(
                     changed_tokens,
-                    observed_monotonic_ns=monotonic_ns(),
+                    observed_monotonic_ns=event_monotonic_ns,
                 )
         except (PayloadError, ValueError, KeyError, TypeError):
             runtime.activate_kill_switch("polymarket_state_failure")
