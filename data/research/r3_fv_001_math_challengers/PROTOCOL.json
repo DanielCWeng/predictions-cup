@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001M",
+  "parent_branch": "research/r3-fv-001-structural-fair-value",
+  "parent_head_at_fork": "53e625aa8eaba1e75136687de5c4e51036ba4897",
+  "external_math_branch": "research/r3-math-001-external-literature",
+  "external_math_head": "e46eac3cb8aa",
+  "data_policy": {
+    "target_and_direct_reference": "DATA-003 accepted current SIG-universe economic fills with block_number/log_index chronology",
+    "structural_sources": "DATA-004 accepted P0/P1 ETS fills",
+    "data001_used": false,
+    "p2_p3_used": false,
+    "final_accessed": false
+  },
+  "split_policy": "Reuse frozen R3_SPLIT_MANIFEST.json from r3-fv-001-prepare-v2; TRAIN+DEV only.",
+  "methods": [
+    "sharp LP / bucket-support bounds with source-ablation information value and dual diagnostics where available",
+    "coherent quadratic projection / forecast reconciliation",
+    "Bernoulli-KL / latent-state I-projection",
+    "maximum-entropy completion with prior sensitivity",
+    "one-factor common-logit + exact Poisson-binomial aggregate-to-constituent governor challenger"
+  ],
+  "components": [
+    "Georgia Governor x Senate joint system: 3729337-3729340 + explicit residual Other",
+    "Senate x House count surface: 2683257-2683269",
+    "Republican governorship count: 907686-907692"
+  ],
+  "falsification": [
+    "LOO-family direct-source intersection audit",
+    "same-block audit",
+    "stale-source / delayed-source stress",
+    "component-label shuffle placebo where meaningful",
+    "alternate weighting/reference measures",
+    "persistence and parent simple-model comparison"
+  ],
+  "parent_head_rebased_to": "473847e00ceb2c3968cc637af4589eb19938eb7b",
+  "parent_state_at_rebase": "STRUCTURAL_MATH_ACTIVE; parent S01/S03/S04/S05 preserved from attempt3, S02/S06 under implementation correction",
+  "challenger_novelty": [
+    "LP dual/sub-super replication diagnostics",
+    "identified-set source information value",
+    "I-projection reference-measure sensitivity",
+    "one-factor exact Poisson-binomial governor-count inverse challenger"
+  ],
+  "duplicate_parent_methods": "QP/KL/MaxEnt component calculations retained only as controlled comparators/validation or for the external-math extensions; not claimed as new inventions."
+}

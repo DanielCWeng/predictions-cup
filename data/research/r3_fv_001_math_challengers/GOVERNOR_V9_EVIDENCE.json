@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001M-GOV-V9",
+  "actions_run": 36646573101,
+  "artifact_id": 11069425063,
+  "artifact_zip_sha256": "5c4e7bd8289e5dea8f800acda6c07f424e9cd904ed62ec3ca15044928bd40799",
+  "binding": {
+    "target": "DATA-003",
+    "source": "DATA-004 P0/P1",
+    "data001_used": false
+  },
+  "final_opened": false,
+  "version": "V9_LEAN_GOVERNOR_INVERSE",
+  "decision": "DO_NOT_PROMOTE",
+  "support": {
+    "train_episodes": 0,
+    "dev_episodes": 14,
+    "sig_markets": 8,
+    "governor_target_count": 33
+  },
+  "result": {
+    "method": "GOV_ONE_FACTOR_EXACT_POISSON_BINOMIAL_LOO",
+    "baseline_mae": 0.0145,
+    "method_mae": 0.24509330252066414,
+    "absolute_mae_improvement": -0.2305933025206641,
+    "relative_mae_improvement": -15.902986380735454,
+    "bootstrap_lower_95": -0.33956848742088297,
+    "bootstrap_median": -0.22316869352511937,
+    "bootstrap_upper_95": -0.0988612848612355,
+    "first_half_abs_improvement": -0.10556771487860793,
+    "second_half_abs_improvement": -0.3556188901627203,
+    "direct_prior_blend_mae": 0.04778317299089608,
+    "inside_hard_interval_fraction": 1,
+    "mean_hard_interval_width": 1
+  },
+  "assumptions": "Primary LOO prediction removes target direct prior; single common Republican-governor logit factor; conditional Bernoulli independence; target and unobserved races exchangeable at TRAIN-selected base probability; exact Poisson-binomial count likelihood.",
+  "interpretation": "The episode-native aggregate-to-constituent governor inverse is both under-supported and decisively worse than DATA-003 persistence. The bootstrap interval is entirely negative. Close this historical path; do not spend launch time tuning it."
+}
