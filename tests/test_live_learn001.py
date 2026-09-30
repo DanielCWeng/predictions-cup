@@ -215,7 +215,7 @@ def test_exact_boundary_and_no_future_leakage(tmp_path: Path) -> None:
 def test_deterministic_replay_and_duplicate_inputs_are_idempotent(
     tmp_path: Path,
 ) -> None:
-    t0 = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)
+    t0 = datetime(2099, 1, 1, 12, 0, tzinfo=UTC)
 
     async def one(root: Path) -> list[dict[str, object]]:
         engine, _ = await _engine(root)
