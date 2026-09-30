@@ -39,5 +39,7 @@
   "status": "WAITING_FOR_DATA",
   "005f_regime_default": null,
   "edge_grid_reference_latency_ms": null,
-  "source_venue": null
+  "source_venue": null,
+  "maker_fee_per_share": null,
+  "terminal_unwind_cost_per_share": null
 }
