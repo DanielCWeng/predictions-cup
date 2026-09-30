@@ -1,0 +1,4688 @@
+{
+  "schema_version": "exposure-groups-v1",
+  "version": "sig-cup-2026-v1",
+  "generated_from": {
+    "path": "data/mappings/sig_polymarket_2026.json",
+    "blob_sha": "14823ac7043a451c587c6b7a0d3b684dbf7bb5d6",
+    "rule": "tournament ID for all markets; accepted direct/component Polymarket event IDs only; no title inference"
+  },
+  "hash_scope": "canonical compact JSON of memberships array",
+  "content_sha256": "4bdcddb3ed85416bb31e65f9aa0dd28fc635894c7cac6ab00c2e230314977bfb",
+  "coverage": {
+    "total_market_count": 237,
+    "grouped_market_count": 237,
+    "meaningful_group_coverage": 225,
+    "ambiguous_unassigned_count": 12,
+    "duplicate_conflicting_assignment_count": 0
+  },
+  "memberships": [
+    {
+      "market_id": "151",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:32225"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:32225",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "152",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:32225"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:32225",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "153",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:32224"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:32224",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "154",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:32224"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:32224",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "155",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:801985"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:801985",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "156",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:801985"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:801985",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "157",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802297"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802297",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "158",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802297"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802297",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "159",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:801988"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:801988",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "160",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:801988"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:801988",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "161",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        }
+      ]
+    },
+    {
+      "market_id": "162",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        }
+      ]
+    },
+    {
+      "market_id": "163",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802298"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802298",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "164",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802298"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802298",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "165",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802307"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802307",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "166",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802309"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802309",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "167",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802309"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802309",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "168",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802340"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802340",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "169",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802340"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802340",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "170",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802313"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802313",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "171",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802313"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802313",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "172",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802315"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802315",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "173",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802315"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802315",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "174",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802343"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802343",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "175",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802343"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802343",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "176",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802342"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802342",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "177",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802342"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802342",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "178",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803025"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803025",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "179",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803025"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803025",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "180",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803028"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803028",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "181",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803028"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803028",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "182",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803026"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803026",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "183",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803026"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803026",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "184",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803029"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803029",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "185",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803029"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803029",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "186",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803039"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803039",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "187",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803056"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803056",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "188",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803056"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803056",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "189",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803116"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803116",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "190",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803116"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803116",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "191",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        }
+      ]
+    },
+    {
+      "market_id": "192",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803118"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803118",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "193",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803118"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803118",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "194",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803119"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803119",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "195",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803154"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803154",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "196",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803154"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803154",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "197",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106050"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106050",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "198",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106050"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106050",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "199",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106056"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106056",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "200",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106056"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106056",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "201",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:90270"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:90270",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "202",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:90270"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:90270",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "203",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191383"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191383",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "204",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191383"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191383",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "205",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106058"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106058",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "206",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106058"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106058",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "207",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191390"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191390",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "208",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191390"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191390",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "209",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106059"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106059",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "210",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106059"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106059",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "211",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191407"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191407",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "212",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106073"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106073",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "213",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106077"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106077",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "214",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106077"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106077",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "215",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191441"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191441",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "216",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191441"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191441",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "217",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106082"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106082",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "218",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106082"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106082",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "219",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191476"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191476",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "220",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191476"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191476",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "221",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:726881"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:726881",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "222",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:726881"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:726881",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "223",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106114"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106114",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "224",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106114"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106114",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "225",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106115"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106115",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "226",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106115"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106115",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "227",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106135"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106135",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "228",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106135"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106135",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "229",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191567"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191567",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "230",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191567"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191567",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "231",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106170"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106170",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "232",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106170"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106170",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "233",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106186"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106186",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "234",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106186"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106186",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "235",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106187"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106187",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "236",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106187"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106187",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "237",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106211"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106211",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "238",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106211"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106211",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "239",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106216"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106216",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "240",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106216"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106216",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "241",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191617"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191617",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "242",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191617"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191617",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "243",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106219"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106219",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "244",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106219"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106219",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "245",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191653"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191653",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "246",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191653"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191653",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "247",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106221"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106221",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "248",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106221"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106221",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "249",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106232"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106232",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "250",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106233"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106233",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "251",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106234"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106234",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "252",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797145"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797145",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "253",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797145"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797145",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "254",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797153"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797153",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "255",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797153"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797153",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "256",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797154"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797154",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "257",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797154"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797154",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "258",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        }
+      ]
+    },
+    {
+      "market_id": "259",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        }
+      ]
+    },
+    {
+      "market_id": "260",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797234"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797234",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "261",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797234"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797234",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "262",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797208"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797208",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "263",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797208"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797208",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "264",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797209"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797209",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "265",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797209"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797209",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "266",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797243"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797243",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "267",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797243"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797243",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "268",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:59203"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:59203",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "269",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:59203"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:59203",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "270",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        }
+      ]
+    },
+    {
+      "market_id": "271",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        }
+      ]
+    },
+    {
+      "market_id": "272",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797282"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797282",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "273",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797282"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797282",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "274",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:801948"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:801948",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "275",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:801948"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:801948",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "276",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:801948"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:801948",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "277",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797298"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797298",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "278",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797298"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797298",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "279",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:59204"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:59204",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "280",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:59204"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:59204",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "281",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:59204"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:59204",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "282",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797292"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797292",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "283",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797292"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797292",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "284",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797294"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797294",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "285",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797294"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797294",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "286",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797307"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797307",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "287",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797309"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797309",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "288",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797309"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797309",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "289",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797325"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797325",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "290",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797325"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797325",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "291",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        }
+      ]
+    },
+    {
+      "market_id": "292",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:801942"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:801942",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "293",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797327"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797327",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "294",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797327"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797327",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "295",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797329"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797329",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "296",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797330"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797330",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "297",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797330"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797330",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "298",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802307"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802307",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "299",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802308"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802308",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "300",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802308"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802308",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "301",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802310"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802310",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "302",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802310"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802310",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "303",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802341"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802341",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "304",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802341"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802341",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "305",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803019"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803019",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "306",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803019"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803019",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "307",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803023"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803023",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "308",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803023"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803023",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "309",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803119"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803119",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "310",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803121"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803121",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "311",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803121"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803121",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "312",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803155"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803155",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "313",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803155"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803155",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "314",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803157"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803157",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "315",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803157"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803157",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "316",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803156"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803156",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "317",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803156"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803156",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "318",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:190872"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:190872",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "319",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:190872"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:190872",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "320",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191405"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191405",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "321",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191405"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191405",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "322",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191407"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191407",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "323",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106073"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106073",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "324",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191413"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191413",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "325",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191413"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191413",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "326",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191417"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191417",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "327",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191417"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191417",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "328",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191419"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191419",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "329",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191419"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191419",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "330",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106102"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106102",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "331",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106102"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106102",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "332",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106106"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106106",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "333",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106106"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106106",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "334",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191511"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191511",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "335",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191511"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191511",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "336",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106107"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106107",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "337",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106107"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106107",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "338",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191514"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191514",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "339",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191514"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191514",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "340",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191629"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191629",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "341",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191629"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191629",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "342",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106232"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106232",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "343",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106233"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106233",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "344",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191668"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191668",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "345",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:191668"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:191668",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "346",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106234"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106234",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "347",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106236"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106236",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "348",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106236"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106236",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "349",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106242"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106242",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "350",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106242"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106242",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "351",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106243"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106243",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "352",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106243"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106243",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "353",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797169"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797169",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "354",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797177"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797177",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "355",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797177"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797177",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "356",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797235"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797235",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "357",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797235"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797235",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "358",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797267"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797267",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "359",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797267"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797267",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "360",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:955164"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:955164",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "361",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:955164"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:955164",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "362",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797328"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797328",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "363",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797328"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797328",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "364",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797329"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797329",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "365",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797333"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797333",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "366",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797333"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797333",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "368",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        }
+      ]
+    },
+    {
+      "market_id": "369",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        }
+      ]
+    },
+    {
+      "market_id": "370",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802818"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802818",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "371",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:802818"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:802818",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "372",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803027"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803027",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "373",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803027"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803027",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "374",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803039"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803039",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "375",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106119"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106119",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "376",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:106119"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:106119",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "377",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        }
+      ]
+    },
+    {
+      "market_id": "378",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        }
+      ]
+    },
+    {
+      "market_id": "379",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797263"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797263",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "380",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797263"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797263",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "381",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797291"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797291",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "382",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797291"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797291",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "383",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797307"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797307",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "384",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803117"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803117",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "385",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:803117"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:803117",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "386",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797169"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797169",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "387",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797310"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797310",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    },
+    {
+      "market_id": "388",
+      "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+      "group_ids": [
+        "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "pm-event:797310"
+      ],
+      "provenance": [
+        {
+          "group_id": "tournament:bda92870-621e-47b0-bc3c-3602c5c26f55",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "explicit sig_tournament_id"
+        },
+        {
+          "group_id": "pm-event:797310",
+          "source": "data/mappings/sig_polymarket_2026.json",
+          "basis": "accepted mapped Polymarket event_id"
+        }
+      ]
+    }
+  ]
+}
