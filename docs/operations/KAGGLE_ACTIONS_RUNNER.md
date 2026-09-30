@@ -49,3 +49,24 @@ Large empirical outputs should normally remain on Kaggle. Prefer `output_file_pa
 The runner never places live trades. It only controls Kaggle kernel operations.
 
 The workflow has `contents: read` GitHub permissions. Kaggle credentials are provided only through the Actions secret.
+
+
+## Optional staged kernel payloads
+
+A run manifest may declare `stage_paths` when the Kaggle kernel needs repository
+files that should not be duplicated inside the kernel directory:
+
+```json
+{
+  "stage_paths": [
+    {"source": "src/predictions_cup", "destination": "predictions_cup"},
+    {"source": "data/example.json", "destination": "repo_context/example.json"}
+  ]
+}
+```
+
+The Actions runner copies the kernel directory to an ephemeral staging directory,
+copies each declared repository source beneath that staged kernel, and pushes only
+that ephemeral payload. Destinations are kernel-relative and may not escape the
+staging directory. Existing manifests without `stage_paths` keep the original
+behavior.
