@@ -19,6 +19,7 @@ from predictions_cup.observe import (
     VenueSpanCollector,
     join_pm_to_sig,
     replay_operation,
+    summarize_competition_context,
     summarize_cross_venue,
     summarize_observations,
 )
@@ -275,6 +276,11 @@ def test_official_context_exposes_rank_and_marks_super_signal_unavailable() -> N
     super_signal = snapshot.field("super_signal")
     assert super_signal.classification is FieldClassification.UNAVAILABLE
     assert super_signal.unavailable_reason == "ADMIN_ONLY_PARTICIPANT_KEY_UNSUPPORTED"
+    summary = summarize_competition_context(snapshot)
+    fields = summary["fields"]
+    assert isinstance(fields, dict)
+    assert fields["participant_rank"]["value"] == 3
+    assert fields["super_signal"]["classification"] == "unavailable"
 
 
 def test_capture001_persists_observation_and_context_streams(tmp_path: Path) -> None:
