@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 from collections import deque
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
+from datetime import datetime
 from time import monotonic_ns
 
+from predictions_cup.maker.contracts import MakerMarketSnapshot
 from predictions_cup.shadow.contracts import (
     CandidateOutput,
     CanonicalShadowSnapshot,
@@ -30,11 +32,14 @@ class CandidateHealth:
     candidate_id: str
     candidate_version: str
     enabled: bool
+    quarantined: bool
+    in_flight: bool
     queue_depth: int
     queue_high_water: int
     skipped_states: int
     failure_count: int
     timeout_count: int
+    quarantine_count: int
     last_success_monotonic_ns: int | None
     last_error: str | None
     evaluation_latency_p50_ns: int | None
@@ -51,6 +56,10 @@ class ShadowHealth:
     last_snapshot_age_ns: int | None
     snapshots_processed: int
     snapshots_dropped_or_coalesced: int
+    ingress_queue_depth: int
+    ingress_queue_high_water: int
+    ingress_rejected: int
+    ingress_error: str | None
     candidates: tuple[CandidateHealth, ...]
     persistence: PersistenceHealth
 
@@ -61,17 +70,33 @@ class _QueuedSnapshot:
     enqueued_ns: int
 
 
+@dataclass(frozen=True, slots=True)
+class _MakerIngress:
+    maker: MakerMarketSnapshot
+    observed_at: datetime
+    mapping_version: str
+    source_revision: str
+    source_provenance: Mapping[str, str]
+
+
+IngressItem = CanonicalShadowSnapshot | _MakerIngress
+
+
 @dataclass(slots=True)
 class _CandidateRuntime:
     candidate: ShadowCandidate
     queue: asyncio.Queue[_QueuedSnapshot]
     timeout_seconds: float
     enabled: bool = True
+    quarantined: bool = False
     task: asyncio.Task[None] | None = None
+    in_flight_task: asyncio.Task[CandidateOutput] | None = None
+    reaper_task: asyncio.Task[None] | None = None
     queue_high_water: int = 0
     skipped_states: int = 0
     failure_count: int = 0
     timeout_count: int = 0
+    quarantine_count: int = 0
     last_success_monotonic_ns: int | None = None
     last_error: str | None = None
     last_snapshot_monotonic_ns: int | None = None
@@ -88,6 +113,7 @@ class ShadowBus:
         *,
         store: ShadowEventStore | None = None,
         queue_capacity: int = 512,
+        ingress_capacity: int = 4096,
         candidate_timeout_seconds: float = 0.050,
         trading_enabled: bool = False,
         clock_ns: ClockNs = monotonic_ns,
@@ -96,6 +122,8 @@ class ShadowBus:
             raise ValueError("SHADOW-002 requires trading_enabled=false")
         if queue_capacity <= 0:
             raise ValueError("candidate queue capacity must be positive")
+        if ingress_capacity <= 0:
+            raise ValueError("ingress queue capacity must be positive")
         if candidate_timeout_seconds <= 0:
             raise ValueError("candidate timeout must be positive")
 
@@ -113,62 +141,70 @@ class ShadowBus:
                 timeout_seconds=candidate_timeout_seconds,
             )
 
+        self._ingress: asyncio.Queue[IngressItem] = asyncio.Queue(maxsize=ingress_capacity)
+        self._ingress_task: asyncio.Task[None] | None = None
+        self._ingress_high_water = 0
+        self._ingress_rejected = 0
+        self._ingress_error: str | None = None
         self._running = False
         self._paused = False
         self._snapshots_processed = 0
         self._dropped_or_coalesced = 0
         self._last_snapshot_monotonic_ns: int | None = None
-        self._last_publish_observed_ns: int | None = None
+        self._last_accepted_observed_ns: int | None = None
 
     async def start(self) -> None:
         if self._running:
             return
         await self._store.start()
         self._running = True
+        self._ingress_task = asyncio.create_task(
+            self._ingress_worker(),
+            name="shadow-ingress",
+        )
         for runtime in self._runtimes.values():
             runtime.task = asyncio.create_task(
                 self._worker(runtime),
                 name=f"shadow-{runtime.candidate.candidate_id}",
             )
 
+    def submit(self, snapshot: CanonicalShadowSnapshot) -> bool:
+        """Non-blocking launch-path ingress for an already frozen canonical state."""
+        self._require_running()
+        self._validate_submission_order(snapshot.observed_monotonic_ns)
+        return self._submit_ingress(snapshot)
+
+    def submit_maker(
+        self,
+        maker: MakerMarketSnapshot,
+        *,
+        observed_at: datetime,
+        mapping_version: str,
+        source_revision: str,
+        source_provenance: Mapping[str, str] | None = None,
+    ) -> bool:
+        """Non-blocking launch ingress from the exact immutable MAKE decision state."""
+        self._require_running()
+        self._validate_submission_order(maker.now_monotonic_ns)
+        item = _MakerIngress(
+            maker=maker,
+            observed_at=observed_at,
+            mapping_version=mapping_version,
+            source_revision=source_revision,
+            source_provenance=dict(source_provenance or {}),
+        )
+        return self._submit_ingress(item)
+
     async def publish(self, snapshot: CanonicalShadowSnapshot) -> None:
-        if not self._running:
-            raise RuntimeError("SHADOW bus is not started")
-        previous = self._last_publish_observed_ns
-        if previous is not None and snapshot.observed_monotonic_ns < previous:
-            raise ValueError("out-of-order observable state rejected")
-        self._last_publish_observed_ns = snapshot.observed_monotonic_ns
-        self._last_snapshot_monotonic_ns = snapshot.observed_monotonic_ns
-        self._snapshots_processed += 1
-
-        await self._store.persist_snapshot(snapshot)
-        if self._paused:
-            self._dropped_or_coalesced += 1
-            return
-
-        enqueued_ns = self._clock_ns()
-        for runtime in self._runtimes.values():
-            if not runtime.enabled:
-                continue
-            item = _QueuedSnapshot(snapshot=snapshot, enqueued_ns=enqueued_ns)
-            if runtime.queue.full():
-                try:
-                    runtime.queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    pass
-                else:
-                    runtime.queue.task_done()
-                    runtime.skipped_states += 1
-                    self._dropped_or_coalesced += 1
-            runtime.queue.put_nowait(item)
-            runtime.queue_high_water = max(
-                runtime.queue_high_water,
-                runtime.queue.qsize(),
-            )
+        """Awaitable direct path retained for tests/replay-oriented callers."""
+        self._require_running()
+        self._validate_submission_order(snapshot.observed_monotonic_ns)
+        await self._process_snapshot(snapshot)
 
     async def flush(self) -> None:
         if not self._running:
             return
+        await self._ingress.join()
         await asyncio.gather(
             *(runtime.queue.join() for runtime in self._runtimes.values())
         )
@@ -183,19 +219,38 @@ class ShadowBus:
             await self.flush()
         except Exception as exc:  # pragma: no cover - defensive persistence shutdown
             flush_error = exc
+
+        if self._ingress_task is not None:
+            self._ingress_task.cancel()
         for runtime in self._runtimes.values():
             if runtime.task is not None:
                 runtime.task.cancel()
+            if runtime.reaper_task is not None:
+                runtime.reaper_task.cancel()
         await asyncio.gather(
             *(
-                runtime.task
-                for runtime in self._runtimes.values()
-                if runtime.task is not None
+                task
+                for task in (
+                    self._ingress_task,
+                    *(
+                        runtime.task
+                        for runtime in self._runtimes.values()
+                        if runtime.task is not None
+                    ),
+                    *(
+                        runtime.reaper_task
+                        for runtime in self._runtimes.values()
+                        if runtime.reaper_task is not None
+                    ),
+                )
+                if task is not None
             ),
             return_exceptions=True,
         )
+        self._ingress_task = None
         for runtime in self._runtimes.values():
             runtime.task = None
+            runtime.reaper_task = None
         self._running = False
         try:
             await self._store.close()
@@ -206,20 +261,13 @@ class ShadowBus:
     def enable_candidate(self, candidate_id: str) -> None:
         runtime = self._candidate(candidate_id)
         runtime.enabled = True
-        runtime.last_error = None
+        if not runtime.quarantined:
+            runtime.last_error = None
 
     def disable_candidate(self, candidate_id: str) -> None:
         runtime = self._candidate(candidate_id)
         runtime.enabled = False
-        while True:
-            try:
-                runtime.queue.get_nowait()
-            except asyncio.QueueEmpty:
-                break
-            else:
-                runtime.queue.task_done()
-                runtime.skipped_states += 1
-                self._dropped_or_coalesced += 1
+        self._drain_candidate_queue(runtime)
 
     def pause(self) -> None:
         self._paused = True
@@ -242,15 +290,84 @@ class ShadowBus:
             ),
             snapshots_processed=self._snapshots_processed,
             snapshots_dropped_or_coalesced=self._dropped_or_coalesced,
+            ingress_queue_depth=self._ingress.qsize(),
+            ingress_queue_high_water=self._ingress_high_water,
+            ingress_rejected=self._ingress_rejected,
+            ingress_error=self._ingress_error,
             candidates=candidates,
             persistence=self._store.health,
         )
+
+    def _submit_ingress(self, item: IngressItem) -> bool:
+        if self._ingress_error is not None:
+            self._ingress_rejected += 1
+            return False
+        try:
+            self._ingress.put_nowait(item)
+        except asyncio.QueueFull:
+            self._ingress_rejected += 1
+            return False
+        self._ingress_high_water = max(self._ingress_high_water, self._ingress.qsize())
+        return True
+
+    async def _ingress_worker(self) -> None:
+        while True:
+            item = await self._ingress.get()
+            try:
+                if isinstance(item, CanonicalShadowSnapshot):
+                    snapshot = item
+                else:
+                    snapshot = CanonicalShadowSnapshot.freeze(
+                        item.maker,
+                        observed_at=item.observed_at,
+                        mapping_version=item.mapping_version,
+                        source_revision=item.source_revision,
+                        source_provenance=item.source_provenance,
+                    )
+                await self._process_snapshot(snapshot)
+            except Exception as exc:
+                self._ingress_error = f"{type(exc).__name__}:{exc}"
+                self._paused = True
+            finally:
+                self._ingress.task_done()
+
+    async def _process_snapshot(self, snapshot: CanonicalShadowSnapshot) -> None:
+        self._last_snapshot_monotonic_ns = snapshot.observed_monotonic_ns
+        self._snapshots_processed += 1
+
+        await self._store.persist_snapshot(snapshot)
+        if self._paused:
+            self._dropped_or_coalesced += 1
+            return
+
+        enqueued_ns = self._clock_ns()
+        for runtime in self._runtimes.values():
+            if not runtime.enabled or runtime.quarantined:
+                if runtime.quarantined:
+                    runtime.skipped_states += 1
+                    self._dropped_or_coalesced += 1
+                continue
+            item = _QueuedSnapshot(snapshot=snapshot, enqueued_ns=enqueued_ns)
+            if runtime.queue.full():
+                try:
+                    runtime.queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+                else:
+                    runtime.queue.task_done()
+                    runtime.skipped_states += 1
+                    self._dropped_or_coalesced += 1
+            runtime.queue.put_nowait(item)
+            runtime.queue_high_water = max(
+                runtime.queue_high_water,
+                runtime.queue.qsize(),
+            )
 
     async def _worker(self, runtime: _CandidateRuntime) -> None:
         while True:
             item = await runtime.queue.get()
             try:
-                if not runtime.enabled:
+                if not runtime.enabled or runtime.quarantined:
                     runtime.skipped_states += 1
                     self._dropped_or_coalesced += 1
                     continue
@@ -263,45 +380,61 @@ class ShadowBus:
         runtime: _CandidateRuntime,
         item: _QueuedSnapshot,
     ) -> None:
+        if runtime.in_flight_task is not None:
+            raise RuntimeError("candidate already has an in-flight evaluation")
+
         started = self._clock_ns()
         runtime.queue_delays_ns.append(max(0, started - item.enqueued_ns))
         status_failure = False
-        try:
-            output = await asyncio.wait_for(
-                asyncio.to_thread(runtime.candidate.evaluate, item.snapshot),
-                timeout=runtime.timeout_seconds,
-            )
-        except TimeoutError:
+        task = asyncio.create_task(
+            asyncio.to_thread(runtime.candidate.evaluate, item.snapshot),
+            name=f"shadow-eval-{runtime.candidate.candidate_id}",
+        )
+        runtime.in_flight_task = task
+        done, _ = await asyncio.wait({task}, timeout=runtime.timeout_seconds)
+
+        if not done:
             finished = self._clock_ns()
             runtime.timeout_count += 1
             runtime.failure_count += 1
-            runtime.last_error = "timeout"
+            runtime.quarantine_count += 1
+            runtime.quarantined = True
+            runtime.last_error = "timeout_inflight_quarantined"
             status_failure = True
             output = failure_output(
                 DecisionStatus.TIMEOUT,
-                "candidate_timeout",
+                "candidate_timeout_inflight_quarantined",
             )
-        except Exception as exc:
-            finished = self._clock_ns()
-            runtime.failure_count += 1
-            runtime.last_error = f"{type(exc).__name__}:{exc}"
-            status_failure = True
-            output = failure_output(
-                DecisionStatus.EXCEPTION,
-                "candidate_exception",
-                detail=runtime.last_error,
+            self._drain_candidate_queue(runtime)
+            runtime.reaper_task = asyncio.create_task(
+                self._reap_timed_out(runtime, task),
+                name=f"shadow-reap-{runtime.candidate.candidate_id}",
             )
         else:
-            finished = self._clock_ns()
-            if not isinstance(output, CandidateOutput):
-                output = failure_output(
-                    DecisionStatus.INVALID_OUTPUT,
-                    "candidate_returned_wrong_type",
-                    detail=type(output).__name__,
-                )
+            runtime.in_flight_task = None
+            try:
+                output = task.result()
+            except Exception as exc:
+                finished = self._clock_ns()
                 runtime.failure_count += 1
-                runtime.last_error = "invalid_output_type"
+                runtime.last_error = f"{type(exc).__name__}:{exc}"
                 status_failure = True
+                output = failure_output(
+                    DecisionStatus.EXCEPTION,
+                    "candidate_exception",
+                    detail=runtime.last_error,
+                )
+            else:
+                finished = self._clock_ns()
+                if not isinstance(output, CandidateOutput):
+                    output = failure_output(
+                        DecisionStatus.INVALID_OUTPUT,
+                        "candidate_returned_wrong_type",
+                        detail=type(output).__name__,
+                    )
+                    runtime.failure_count += 1
+                    runtime.last_error = "invalid_output_type"
+                    status_failure = True
 
         try:
             decision = decision_from_output(
@@ -345,6 +478,23 @@ class ShadowBus:
             runtime.last_success_monotonic_ns = finished
             runtime.last_error = None
 
+    async def _reap_timed_out(
+        self,
+        runtime: _CandidateRuntime,
+        task: asyncio.Task[CandidateOutput],
+    ) -> None:
+        try:
+            await asyncio.shield(task)
+        except Exception:
+            pass
+        finally:
+            if runtime.in_flight_task is task:
+                runtime.in_flight_task = None
+            runtime.quarantined = False
+            runtime.reaper_task = None
+            if runtime.enabled:
+                runtime.last_error = "timeout_completed_provider_recovered"
+
     def _candidate_health(
         self,
         runtime: _CandidateRuntime,
@@ -356,11 +506,14 @@ class ShadowBus:
             candidate_id=runtime.candidate.candidate_id,
             candidate_version=runtime.candidate.candidate_version,
             enabled=runtime.enabled,
+            quarantined=runtime.quarantined,
+            in_flight=runtime.in_flight_task is not None,
             queue_depth=runtime.queue.qsize(),
             queue_high_water=runtime.queue_high_water,
             skipped_states=runtime.skipped_states,
             failure_count=runtime.failure_count,
             timeout_count=runtime.timeout_count,
+            quarantine_count=runtime.quarantine_count,
             last_success_monotonic_ns=runtime.last_success_monotonic_ns,
             last_error=runtime.last_error,
             evaluation_latency_p50_ns=_percentile(values, 0.50),
@@ -369,6 +522,27 @@ class ShadowBus:
             queue_delay_p95_ns=_percentile(queue_delays, 0.95),
             last_snapshot_age_ns=_age(now, runtime.last_snapshot_monotonic_ns),
         )
+
+    def _drain_candidate_queue(self, runtime: _CandidateRuntime) -> None:
+        while True:
+            try:
+                runtime.queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            else:
+                runtime.queue.task_done()
+                runtime.skipped_states += 1
+                self._dropped_or_coalesced += 1
+
+    def _validate_submission_order(self, observed_monotonic_ns: int) -> None:
+        previous = self._last_accepted_observed_ns
+        if previous is not None and observed_monotonic_ns < previous:
+            raise ValueError("out-of-order observable state rejected")
+        self._last_accepted_observed_ns = observed_monotonic_ns
+
+    def _require_running(self) -> None:
+        if not self._running:
+            raise RuntimeError("SHADOW bus is not started")
 
     def _candidate(self, candidate_id: str) -> _CandidateRuntime:
         try:
