@@ -12,12 +12,14 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 
 from predictions_cup.models import OrderBook
+from predictions_cup.observe.context import CompetitionContextSnapshot
+from predictions_cup.observe.contracts import VenueObservation
 from predictions_cup.sig.dto import MarketDto, PriceSnapshotDto
 from predictions_cup.sig.realtime_models import (
     BookDirtyDto,
@@ -26,10 +28,6 @@ from predictions_cup.sig.realtime_models import (
     RealtimeTradeDto,
 )
 from predictions_cup.sig.realtime_storage import SigRealtimeRecorder
-
-if TYPE_CHECKING:
-    from predictions_cup.observe.context import CompetitionContextSnapshot
-    from predictions_cup.observe.contracts import VenueObservation
 
 SCHEMA_VERSION = "capture-001-v1"
 _UTC_TIMESTAMP = pa.timestamp("us", tz="UTC")
@@ -394,7 +392,7 @@ def _venue_observation_row(
     *,
     session_id: str,
     connection_epoch: int,
-    observation: "VenueObservation",
+    observation: VenueObservation,
 ) -> dict[str, object]:
     return {
         "session_id": session_id,
@@ -428,7 +426,7 @@ def _competition_context_row(
     *,
     session_id: str,
     connection_epoch: int,
-    snapshot: "CompetitionContextSnapshot",
+    snapshot: CompetitionContextSnapshot,
 ) -> dict[str, object]:
     fields = {
         field.name: {
@@ -486,7 +484,7 @@ class ObservationCaptureRecorder:
         snapshot["connection_epoch"] = self._connection_epoch
         return snapshot
 
-    def record_venue_observation(self, observation: "VenueObservation") -> None:
+    def record_venue_observation(self, observation: VenueObservation) -> None:
         self._sink.emit(
             "venue_observations",
             _venue_observation_row(
@@ -498,7 +496,7 @@ class ObservationCaptureRecorder:
 
     def record_competition_context(
         self,
-        snapshot: "CompetitionContextSnapshot",
+        snapshot: CompetitionContextSnapshot,
     ) -> None:
         self._sink.emit(
             "competition_context",
@@ -922,7 +920,7 @@ class LaunchSigRecorder(SigRealtimeRecorder):
             },
         )
 
-    def record_venue_observation(self, observation: "VenueObservation") -> None:
+    def record_venue_observation(self, observation: VenueObservation) -> None:
         self._sink.emit(
             "venue_observations",
             _venue_observation_row(
@@ -934,7 +932,7 @@ class LaunchSigRecorder(SigRealtimeRecorder):
 
     def record_competition_context(
         self,
-        snapshot: "CompetitionContextSnapshot",
+        snapshot: CompetitionContextSnapshot,
     ) -> None:
         self._sink.emit(
             "competition_context",
