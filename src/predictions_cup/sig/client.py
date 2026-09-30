@@ -43,6 +43,7 @@ from predictions_cup.sig.errors import (
 )
 from predictions_cup.sig.realtime_models import (
     RealtimeTokenDto,
+    TournamentLeaderboardDto,
     TournamentListStatus,
     TournamentPageDto,
 )
@@ -150,6 +151,31 @@ class SigRestClient:
         )
         return self._validate(
             RealtimeTokenDto, payload, route_template="/realtime/token"
+        )
+
+    async def get_tournament_leaderboard(
+        self,
+        tournament_slug: str,
+        *,
+        period: str = "all",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> TournamentLeaderboardDto:
+        self._require_identifier("tournament_slug", tournament_slug)
+        if period not in {"1d", "7d", "30d", "all"}:
+            raise ValueError("period must be one of 1d, 7d, 30d, all")
+        self._require_range("limit", limit, 1, 100)
+        if offset < 0:
+            raise ValueError("offset must be non-negative")
+        payload = await self._get_json(
+            f"tournaments/{tournament_slug}/leaderboard",
+            params={"period": period, "limit": limit, "offset": offset},
+            route_template="/tournaments/{slug}/leaderboard",
+        )
+        return self._validate(
+            TournamentLeaderboardDto,
+            payload,
+            route_template="/tournaments/{slug}/leaderboard",
         )
 
     async def list_markets(
