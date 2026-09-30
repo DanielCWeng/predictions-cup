@@ -57,7 +57,11 @@ so the kernel executes the same accepted 005F implementation tested in CI.
 - file hashes where available
 - market/token/time coverage
 - `grid_origin_ns_by_market`
+- `source_venue` / replay-laboratory interpretation
 - `005f_regime_default` only when a frozen regime is justified
 - `frozen_005f_artifact_dataset_slug` when original artifacts are supplied
+- `maker_fee_per_share`
+- `terminal_unwind_cost_per_share`
+- `edge_grid_reference_latency_ms` if the edge-threshold grid is run
 
 No DATA-001/Hungary/Colombia/Peru result has been used as evidence for this branch.
