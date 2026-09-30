@@ -5,7 +5,7 @@ import json
 import threading
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -443,7 +443,7 @@ def test_live_shadow_runtime_persists_one_snapshot_boundary_and_all_candidates(
                 observed_monotonic_ns=snapshot.now_monotonic_ns,
                 exchange_ids=frozenset({snapshot.exchange_id}),
             ),
-            datetime(2026, 9, 30, 8, 0, tzinfo=UTC),
+            datetime(2099, 1, 1, 8, 0, tzinfo=UTC),
             {snapshot.exchange_id: snapshot},
         )
         await runtime.bus.flush()
@@ -467,8 +467,113 @@ def test_live_shadow_runtime_persists_one_snapshot_boundary_and_all_candidates(
             "experiment-005f-hazard",
             "r3-ets-structural-fv",
         }
+        research = {item["candidate_id"]: item for item in decisions}
+        assert research["pred-006"]["abstain_reason"] == "model_artifact_missing"
+        assert (
+            research["experiment-005f-hazard"]["abstain_reason"]
+            == "required_orderbook_history_unavailable"
+        )
 
     asyncio.run(run())
+
+
+def test_live_shadow_runtime_composes_frozen_candidates_and_live_learn(
+    tmp_path: Path,
+) -> None:
+    async def run() -> None:
+        settings = AppSettings(
+            maker_enabled=True,
+            shadow_enabled=True,
+            shadow_capture_mirror_enabled=False,
+            live_learn_enabled=True,
+            shadow_journal_path=tmp_path / "live-shadow.jsonl",
+            live_learn_outcome_path=tmp_path / "live-learn" / "outcomes.jsonl",
+            live_learn_report_path=tmp_path / "live-learn" / "reports",
+            execution_journal_path=tmp_path / "execution.sqlite3",
+        )
+        mapping = _mapping()
+        core = build_maker_components(settings, mapping=mapping)
+        runtime = build_live_shadow_runtime(settings, core)
+        await runtime.start()
+
+        observed = datetime(2099, 1, 1, 8, 0, tzinfo=UTC)
+        first = _maker_snapshot(now=NOW)
+        runtime.observe(
+            MakerStateChange(
+                event_id="composition-1",
+                observed_monotonic_ns=first.now_monotonic_ns,
+                exchange_ids=frozenset({first.exchange_id}),
+            ),
+            observed,
+            {first.exchange_id: first},
+        )
+        await runtime.bus.flush()
+
+        second = _maker_snapshot(now=NOW + 1_000_000_000)
+        runtime.observe(
+            MakerStateChange(
+                event_id="composition-2",
+                observed_monotonic_ns=second.now_monotonic_ns,
+                exchange_ids=frozenset({second.exchange_id}),
+            ),
+            observed + timedelta(seconds=1),
+            {second.exchange_id: second},
+        )
+        await runtime.bus.flush()
+        await runtime.close()
+
+        shadow_records = [
+            json.loads(line)
+            for line in settings.shadow_journal_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        decisions = [
+            item for item in shadow_records if item["event_type"] == "decision"
+        ]
+        first_snapshot_id = shadow_records[0]["snapshot_id"]
+        first_decisions = [
+            item
+            for item in decisions
+            if item["input_snapshot_id"] == first_snapshot_id
+        ]
+        research = {item["candidate_id"]: item for item in first_decisions}
+        assert research["pred-006"]["abstain_reason"] == "model_artifact_missing"
+        assert (
+            research["experiment-005f-hazard"]["abstain_reason"]
+            == "required_orderbook_history_unavailable"
+        )
+
+        outcome_records = [
+            json.loads(line)
+            for line in settings.live_learn_outcome_path.read_text(
+                encoding="utf-8"
+            ).splitlines()
+            if line.strip()
+        ]
+        one_second = {
+            item["candidate_id"]: item
+            for item in outcome_records
+            if item["horizon_seconds"] == 1
+            and item["input_snapshot_id"] == shadow_records[0]["snapshot_id"]
+        }
+        assert "pred-006" in one_second
+        assert "experiment-005f-hazard" in one_second
+        assert one_second["pred-006"]["outcome_status"] == "INSUFFICIENT_HISTORY"
+        assert (
+            one_second["pred-006"]["missing_reason"]
+            == "decision_status:NOT_READY"
+        )
+        assert (
+            one_second["experiment-005f-hazard"]["outcome_status"]
+            == "INSUFFICIENT_HISTORY"
+        )
+        assert (
+            one_second["experiment-005f-hazard"]["missing_reason"]
+            == "decision_status:NOT_READY"
+        )
+
+    asyncio.run(run())
+
 
 def test_shadow_bus_refuses_live_trading_configuration() -> None:
     with pytest.raises(ValueError, match="trading_enabled=false"):

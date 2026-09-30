@@ -76,6 +76,14 @@ class AppSettings(BaseSettings):
     shadow_candidate_timeout_ms: int = Field(default=50, gt=0, le=60_000)
     shadow_capture_mirror_enabled: bool = True
 
+    # LIVE-LEARN-001 consumes SHADOW's durable decision stream. It never writes orders.
+    live_learn_enabled: bool = False
+    live_learn_outcome_path: Path = Path("data/live_learn/outcomes.jsonl")
+    live_learn_report_path: Path = Path("data/live_learn/reports")
+    live_learn_queue_capacity: int = Field(default=200_000, ge=1_000, le=2_000_000)
+    live_learn_evidence_grace_seconds: float = Field(default=5.0, ge=0.0, le=300.0)
+    live_learn_max_evidence_age_seconds: float = Field(default=15.0, gt=0.0, le=300.0)
+
     sig_realtime_storage_path: Path = Path("data/sig_realtime.sqlite3")
     sig_research_path: Path = Path("data/sig_research")
     sig_capture_queue_max: int = Field(default=200_000, ge=10_000, le=2_000_000)
@@ -127,6 +135,8 @@ class AppSettings(BaseSettings):
         "execution_journal_path",
         "maker_mapping_path",
         "shadow_journal_path",
+        "live_learn_outcome_path",
+        "live_learn_report_path",
     )
     @classmethod
     def reject_blank_storage_path(cls, value: Path) -> Path:
@@ -174,6 +184,8 @@ class AppSettings(BaseSettings):
     def validate_shadow_configuration(self) -> Self:
         if self.shadow_enabled and not self.maker_enabled:
             raise ValueError("shadow_enabled requires maker_enabled=true")
+        if self.live_learn_enabled and not self.shadow_enabled:
+            raise ValueError("live_learn_enabled requires shadow_enabled=true")
         return self
 
     @model_validator(mode="after")
@@ -246,6 +258,14 @@ class AppSettings(BaseSettings):
             "shadow_persistence_batch_size": self.shadow_persistence_batch_size,
             "shadow_candidate_timeout_ms": self.shadow_candidate_timeout_ms,
             "shadow_capture_mirror_enabled": self.shadow_capture_mirror_enabled,
+            "live_learn_enabled": self.live_learn_enabled,
+            "live_learn_outcome_path": str(self.live_learn_outcome_path),
+            "live_learn_report_path": str(self.live_learn_report_path),
+            "live_learn_queue_capacity": self.live_learn_queue_capacity,
+            "live_learn_evidence_grace_seconds": self.live_learn_evidence_grace_seconds,
+            "live_learn_max_evidence_age_seconds": (
+                self.live_learn_max_evidence_age_seconds
+            ),
             "sig_read_credential_configured": self.sig_read_credential is not None,
             "sig_trade_credential_configured": self.sig_trade_credential is not None,
             "sig_realtime_storage_path": str(self.sig_realtime_storage_path),
