@@ -661,7 +661,7 @@ def recommend_market(
     return MarketRecommendation.QUOTE_NORMAL, ("NO_MATERIAL_NEGATIVE_EVIDENCE",)
 
 
-def _depth_from_payload(payload_json: object) -> tuple[float, float] | None:
+def _depth_from_payload(payload_json: object) -> tuple[float | None, float | None] | None:
     if not isinstance(payload_json, str):
         return None
     try:
@@ -671,11 +671,10 @@ def _depth_from_payload(payload_json: object) -> tuple[float, float] | None:
     if not isinstance(payload, dict):
         return None
 
-    def total(name: str) -> float:
+    def top_size(name: str) -> float | None:
         raw = payload.get(name)
         if not isinstance(raw, list):
-            return 0.0
-        result = 0.0
+            return None
         for item in raw:
             if not isinstance(item, dict):
                 continue
@@ -683,11 +682,11 @@ def _depth_from_payload(payload_json: object) -> tuple[float, float] | None:
                 quantity = float(str(item.get("quantity")))
             except (TypeError, ValueError):
                 continue
-            if quantity >= 0:
-                result += quantity
-        return result
+            if math.isfinite(quantity) and quantity > 0:
+                return quantity
+        return None
 
-    return total("bids"), total("asks")
+    return top_size("bids"), top_size("asks")
 
 
 def _load_quotes(
@@ -725,7 +724,10 @@ def _load_quotes(
         batch_size=65_536,
     )
     result: dict[str, list[Quote]] = defaultdict(list)
-    depths: dict[str, list[tuple[datetime, float, float]]] = defaultdict(list)
+    depths: dict[
+        str,
+        list[tuple[datetime, float, float, float | None, float | None]],
+    ] = defaultdict(list)
     for batch in scanner.to_batches():
         for row in batch.to_pylist():
             if row.get("book_valid") is False:
@@ -740,8 +742,23 @@ def _load_quotes(
 
             if sig and row.get("event_type") == "DEPTH_SNAPSHOT":
                 parsed_depth = _depth_from_payload(row.get("payload_json"))
-                if parsed_depth is not None and trusted:
-                    depths[identity].append((observed, *parsed_depth))
+                try:
+                    depth_bid = float(str(row.get("best_bid")))
+                    depth_ask = float(str(row.get("best_ask")))
+                except (TypeError, ValueError):
+                    depth_bid = math.nan
+                    depth_ask = math.nan
+                if (
+                    parsed_depth is not None
+                    and trusted
+                    and math.isfinite(depth_bid)
+                    and math.isfinite(depth_ask)
+                    and depth_ask >= depth_bid
+                ):
+                    bid_size, ask_size = parsed_depth
+                    depths[identity].append(
+                        (observed, depth_bid, depth_ask, bid_size, ask_size)
+                    )
                 continue
             if sig and row.get("event_type") != "BBO_SNAPSHOT":
                 continue
@@ -782,10 +799,27 @@ def _load_quotes(
                 if index < 0:
                     enriched.append(quote)
                     continue
-                depth_at, bid_depth, ask_depth = series[index]
+                (
+                    depth_at,
+                    depth_bid,
+                    depth_ask,
+                    bid_depth,
+                    ask_depth,
+                ) = series[index]
                 if (
                     quote.observed_at - depth_at
                 ).total_seconds() > max_depth_age_seconds:
+                    enriched.append(quote)
+                    continue
+                if not (
+                    math.isclose(depth_bid, quote.best_bid, rel_tol=0.0, abs_tol=1e-12)
+                    and math.isclose(
+                        depth_ask,
+                        quote.best_ask,
+                        rel_tol=0.0,
+                        abs_tol=1e-12,
+                    )
+                ):
                     enriched.append(quote)
                     continue
                 enriched.append(
@@ -795,7 +829,7 @@ def _load_quotes(
                         best_ask=quote.best_ask,
                         bid_depth=bid_depth,
                         ask_depth=ask_depth,
-                        depth_observed_at=series[index][0],
+                        depth_observed_at=depth_at,
                         trusted=quote.trusted,
                     )
                 )
