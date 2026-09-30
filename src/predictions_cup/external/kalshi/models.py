@@ -104,6 +104,41 @@ class KalshiMarket:
         )
 
 
+
+@dataclass(frozen=True, slots=True)
+class KalshiEvent:
+    event_ticker: str
+    series_ticker: str | None
+    title: str | None
+    observed_at: datetime
+    api_version: str
+
+    @classmethod
+    def from_api(
+        cls,
+        payload: dict[str, Any],
+        *,
+        observed_at: datetime,
+        api_version: str,
+    ) -> "KalshiEvent":
+        event_ticker = payload.get("event_ticker", payload.get("ticker"))
+        if not isinstance(event_ticker, str) or not event_ticker.strip():
+            raise KalshiPayloadError("event response requires event_ticker/ticker")
+        series_ticker = payload.get("series_ticker")
+        title = payload.get("title")
+        if series_ticker is not None and not isinstance(series_ticker, str):
+            raise KalshiPayloadError("series_ticker must be a string when present")
+        if title is not None and not isinstance(title, str):
+            raise KalshiPayloadError("event title must be a string when present")
+        return cls(
+            event_ticker=event_ticker,
+            series_ticker=series_ticker,
+            title=title,
+            observed_at=observed_at.astimezone(UTC),
+            api_version=api_version,
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class KalshiBookLevel:
     price: Decimal
