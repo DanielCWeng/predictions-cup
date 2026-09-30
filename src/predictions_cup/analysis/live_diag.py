@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import bisect
+import json
 import os
 import random
 import statistics
@@ -608,6 +609,35 @@ def recommend_market(
     return MarketRecommendation.QUOTE_NORMAL, ("NO_MATERIAL_NEGATIVE_EVIDENCE",)
 
 
+def _depth_from_payload(payload_json: object) -> tuple[float, float] | None:
+    if not isinstance(payload_json, str):
+        return None
+    try:
+        payload = json.loads(payload_json)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    def total(name: str) -> float:
+        raw = payload.get(name)
+        if not isinstance(raw, list):
+            return 0.0
+        result = 0.0
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            try:
+                quantity = float(str(item.get("quantity")))
+            except (TypeError, ValueError):
+                continue
+            if quantity >= 0:
+                result += quantity
+        return result
+
+    return total("bids"), total("asks")
+
+
 def _load_quotes(
     root: Path,
     *,
@@ -623,41 +653,56 @@ def _load_quotes(
     required = {identity_column, "observed_at", "best_bid", "best_ask"}
     if not required <= set(dataset.schema.names):
         return {}
+
     columns = [identity_column, "observed_at", "best_bid", "best_ask"]
-    for optional in ("bid_depth", "ask_depth", "book_valid", "trust_state"):
+    for optional in (
+        "bid_depth",
+        "ask_depth",
+        "book_valid",
+        "trust_state",
+        "event_type",
+        "payload_json",
+    ):
         if optional in dataset.schema.names:
             columns.append(optional)
-    filter_expression = ds.field(identity_column).isin(sorted(identities))
-    if sig and "event_type" in dataset.schema.names:
-        columns.append("event_type")
-        filter_expression &= ds.field("event_type") == "BBO_SNAPSHOT"
-    result: dict[str, list[Quote]] = defaultdict(list)
+
     scanner = dataset.scanner(
         columns=columns,
-        filter=filter_expression,
+        filter=ds.field(identity_column).isin(sorted(identities)),
         batch_size=65_536,
     )
+    result: dict[str, list[Quote]] = defaultdict(list)
+    depths: dict[str, list[tuple[datetime, float, float]]] = defaultdict(list)
     for batch in scanner.to_batches():
         for row in batch.to_pylist():
             if row.get("book_valid") is False:
                 continue
             identity = row.get(identity_column)
             observed = row.get("observed_at")
-            bid = row.get("best_bid")
-            ask = row.get("best_ask")
             if not isinstance(identity, str) or not isinstance(observed, datetime):
                 continue
+            observed = observed.astimezone(UTC)
+            trust = row.get("trust_state")
+            trusted = trust not in {"UNTRUSTED", "INVALID", "STALE"}
+
+            if sig and row.get("event_type") == "DEPTH_SNAPSHOT":
+                parsed_depth = _depth_from_payload(row.get("payload_json"))
+                if parsed_depth is not None and trusted:
+                    depths[identity].append((observed, *parsed_depth))
+                continue
+            if sig and row.get("event_type") != "BBO_SNAPSHOT":
+                continue
+
             try:
-                bid_value = float(str(bid))
-                ask_value = float(str(ask))
+                bid_value = float(str(row.get("best_bid")))
+                ask_value = float(str(row.get("best_ask")))
             except (TypeError, ValueError):
                 continue
             if ask_value < bid_value:
                 continue
-            trust = row.get("trust_state")
             result[identity].append(
                 Quote(
-                    observed_at=observed.astimezone(UTC),
+                    observed_at=observed,
                     best_bid=bid_value,
                     best_ask=ask_value,
                     bid_depth=(
@@ -670,14 +715,37 @@ def _load_quotes(
                         if row.get("ask_depth") is None
                         else float(str(row["ask_depth"]))
                     ),
-                    trusted=trust not in {"UNTRUSTED", "INVALID", "STALE"},
+                    trusted=trusted,
                 )
             )
+
+    if sig:
+        for identity, quotes in result.items():
+            series = sorted(depths.get(identity, []), key=lambda item: item[0])
+            depth_times = [item[0] for item in series]
+            enriched: list[Quote] = []
+            for quote in quotes:
+                index = bisect.bisect_right(depth_times, quote.observed_at) - 1
+                if index < 0:
+                    enriched.append(quote)
+                    continue
+                _, bid_depth, ask_depth = series[index]
+                enriched.append(
+                    Quote(
+                        observed_at=quote.observed_at,
+                        best_bid=quote.best_bid,
+                        best_ask=quote.best_ask,
+                        bid_depth=bid_depth,
+                        ask_depth=ask_depth,
+                        trusted=quote.trusted,
+                    )
+                )
+            result[identity] = enriched
+
     return {
         key: tuple(sorted(values, key=lambda item: item.observed_at))
         for key, values in result.items()
     }
-
 
 def _align_quotes(
     quotes: Sequence[Quote],
