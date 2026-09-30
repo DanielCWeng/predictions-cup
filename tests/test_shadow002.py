@@ -530,8 +530,11 @@ def test_live_shadow_runtime_composes_frozen_candidates_and_live_learn(
         decisions = [
             item for item in shadow_records if item["event_type"] == "decision"
         ]
+        first_snapshot_id = shadow_records[0]["snapshot_id"]
         first_decisions = [
-            item for item in decisions if item["input_snapshot_id"] == shadow_records[0]["snapshot_id"]
+            item
+            for item in decisions
+            if item["input_snapshot_id"] == first_snapshot_id
         ]
         research = {item["candidate_id"]: item for item in first_decisions}
         assert research["pred-006"]["abstain_reason"] == "model_artifact_missing"
