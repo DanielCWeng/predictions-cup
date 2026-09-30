@@ -21,6 +21,12 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol, cast
 
+from predictions_cup.observe import (
+    ObservationStatusState,
+    default_observation_health_status_path,
+    read_observation_health_status,
+)
+
 SCHEMA_VERSION = "fullstack-001-v1"
 SIG = "predictions-cup-sig-capture.service"
 PM = "predictions-cup-polymarket-capture.service"
@@ -192,13 +198,18 @@ def capability_configs(values: dict[str, str]) -> dict[str, CapabilityConfig]:
         values,
         "PREDICTIONS_CUP_FULLSTACK_OBSERVE_MODE",
     )
+    live_enabled = env_flag(values, "PREDICTIONS_CUP_LIVE_LEARN_ENABLED") or env_flag(
+        values,
+        "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_ENABLED",
+    )
+    observe_enabled = env_flag(values, "PREDICTIONS_CUP_MAKER_ENABLED") or env_flag(
+        values,
+        "PREDICTIONS_CUP_FULLSTACK_OBSERVE_ENABLED",
+    )
     return {
         "live_learn": CapabilityConfig(
             name="live_learn",
-            enabled=env_flag(
-                values,
-                "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_ENABLED",
-            ),
+            enabled=live_enabled,
             mode=live_mode,
             owner_services=_owner_services(
                 values,
@@ -211,15 +222,12 @@ def capability_configs(values: dict[str, str]) -> dict[str, CapabilityConfig]:
         ),
         "observe": CapabilityConfig(
             name="observe",
-            enabled=env_flag(
-                values,
-                "PREDICTIONS_CUP_FULLSTACK_OBSERVE_ENABLED",
-            ),
+            enabled=observe_enabled,
             mode=observe_mode,
             owner_services=_owner_services(
                 values,
                 "PREDICTIONS_CUP_FULLSTACK_OBSERVE_OWNER_SERVICES",
-                (MAKE, SIG),
+                (MAKE,),
             ),
             external_service=OBSERVE
             if observe_mode is CapabilityMode.EXTERNAL_SERVICE
@@ -390,6 +398,109 @@ def _provider(values: dict[str, str], name: str) -> dict[str, Any] | None:
     return _json(_status_dir(values) / f"{name}.json")
 
 
+def _accepted_status_dir(values: dict[str, str]) -> Path:
+    research = Path(values.get("PREDICTIONS_CUP_SIG_RESEARCH_PATH", "data/sig_research"))
+    return research.parent / "runtime" / "status"
+
+
+def _risk_provider(values: dict[str, str]) -> dict[str, Any] | None:
+    path = Path(values.get("PREDICTIONS_CUP_RISK_STATE_PATH", "data/risk_002.sqlite3"))
+    row = _row(path, "SELECT payload_json FROM risk_state WHERE singleton = 1")
+    payload = _decode_json(row[0]) if row else None
+    if payload is None:
+        return None
+    halt = payload.get("global_halt")
+    halt_dict = halt if isinstance(halt, dict) else {}
+    active = bool(halt_dict.get("active", False))
+    exposure = payload.get("exposure")
+    exposure_dict = exposure if isinstance(exposure, dict) else {}
+    trusted = (
+        bool(payload.get("account_trusted", False))
+        and bool(payload.get("marks_trusted", False))
+        and bool(payload.get("reconciliation_complete", False))
+        and bool(exposure_dict.get("trusted", False))
+    )
+    reason = (
+        str(halt_dict.get("reason", "global_risk_halt"))
+        if active
+        else "risk_002_reconciled"
+        if trusted
+        else "risk_002_not_reconciled_or_untrusted"
+    )
+    return {
+        "state": GateState.PASS.value if trusted else GateState.BLOCKED.value,
+        "provider_mode": "real",
+        "source": "risk-002",
+        "path": str(path),
+        "active": active,
+        "reason": reason,
+        "account_trusted": bool(payload.get("account_trusted", False)),
+        "marks_trusted": bool(payload.get("marks_trusted", False)),
+        "reconciliation_complete": bool(payload.get("reconciliation_complete", False)),
+        "account_observed_monotonic_ns": payload.get("account_observed_monotonic_ns"),
+        "global_halt": halt,
+        "strategy_halts": payload.get("strategy_halts", []),
+        "current_equity": payload.get("current_equity"),
+        "peak_session_equity": payload.get("peak_session_equity"),
+        "drawdown": payload.get("drawdown"),
+        "realised_pnl": payload.get("realised_pnl"),
+        "unrealised_pnl": payload.get("unrealised_pnl"),
+        "exposure": exposure_dict,
+    }
+
+
+def _account_provider(risk: dict[str, Any] | None) -> dict[str, Any] | None:
+    if risk is None:
+        return None
+    trusted = bool(risk.get("account_trusted", False)) and bool(
+        risk.get("reconciliation_complete", False)
+    )
+    return {
+        "state": GateState.PASS.value if trusted else GateState.BLOCKED.value,
+        "provider_mode": "real",
+        "source": "risk-002-authoritative-account",
+        "trusted": trusted,
+        "reason": "account_reconciled" if trusted else "account_untrusted_or_unreconciled",
+        "observed_monotonic_ns": risk.get("account_observed_monotonic_ns"),
+    }
+
+
+def _in_process_provider(values: dict[str, str], name: str) -> dict[str, Any] | None:
+    return _json(_accepted_status_dir(values) / f"{name}.json")
+
+
+def _observe_provider(values: dict[str, str], capability: CapabilityConfig) -> dict[str, Any] | None:
+    if capability.mode is CapabilityMode.EXTERNAL_SERVICE:
+        return _provider(values, "observe")
+    path = default_observation_health_status_path(
+        Path(values.get("PREDICTIONS_CUP_SIG_RESEARCH_PATH", "data/sig_research"))
+    )
+    status = read_observation_health_status(
+        path,
+        expected_owner="predictions-cup-maker.service",
+        max_age_seconds=float(
+            values.get("PREDICTIONS_CUP_FULLSTACK_MAX_PROVIDER_AGE_SECONDS", "5")
+        ),
+    )
+    mapped = {
+        ObservationStatusState.HEALTHY: GateState.PASS,
+        ObservationStatusState.DEGRADED: GateState.DEGRADED,
+    }
+    state = mapped.get(status.state, GateState.BLOCKED)
+    return {
+        "state": state.value,
+        "provider_mode": "real",
+        "capability_mode": CapabilityMode.IN_PROCESS.value,
+        "owner_services": list(capability.owner_services),
+        "reason": status.reason or status.state.value.lower(),
+        "observed_at": None if status.observed_at is None else status.observed_at.isoformat(),
+        "process_instance_id": status.process_instance_id,
+        "owner": status.owner,
+        "health": None if status.health is None else dict(status.health),
+        "status_path": str(path),
+    }
+
+
 def _shadow_evidence(values: dict[str, str]) -> dict[str, Any]:
     path = Path(
         values.get(
@@ -408,8 +519,15 @@ def _shadow_evidence(values: dict[str, str]) -> dict[str, Any]:
 def collect_status(repo: Path, values: dict[str, str]) -> dict[str, Any]:
     usage = shutil.disk_usage(repo)
     pm = _pm(values) if env_flag(values, "PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED") else None
-    risk = _provider(values, "risk")
     capabilities = capability_configs(values)
+    risk = _risk_provider(values)
+    live_learn = (
+        _provider(values, "live-learn")
+        if capabilities["live_learn"].mode is CapabilityMode.EXTERNAL_SERVICE
+        else _in_process_provider(values, "live-learn")
+    )
+    observe = _observe_provider(values, capabilities["observe"]) if capabilities["observe"].enabled else None
+    shadow = _in_process_provider(values, "shadow")
     return {
         "schema_version": SCHEMA_VERSION,
         "observed_at": datetime.now(UTC).isoformat(),
@@ -422,8 +540,8 @@ def collect_status(repo: Path, values: dict[str, str]) -> dict[str, Any]:
         "services": [asdict(_service(unit)) for unit in configured_services(values)],
         "sig": _sig(values),
         "polymarket": pm,
-        "account": _provider(values, "account"),
-        "shadow": _provider(values, "shadow"),
+        "account": _account_provider(risk),
+        "shadow": shadow,
         "shadow_evidence": _shadow_evidence(values),
         "risk_halt": risk
         or {
@@ -432,8 +550,8 @@ def collect_status(repo: Path, values: dict[str, str]) -> dict[str, Any]:
             "reason": "startup_global_kill_switch",
         },
         "execution": _execution(values),
-        "live_learn": _provider(values, "live-learn"),
-        "observe": _provider(values, "observe"),
+        "live_learn": live_learn,
+        "observe": observe,
         "capabilities": {
             name: {
                 "enabled": config.enabled,
