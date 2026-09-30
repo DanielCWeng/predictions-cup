@@ -13,15 +13,15 @@ from predictions_cup.observe import (
     CrossVenueMapping,
     EconomicChange,
     FieldClassification,
-    ObservationKind,
-    SigOfficialCompetitionContextProvider,
-    VenueObservation,
-    VenueSpanCollector,
     join_pm_to_sig,
+    ObservationKind,
     replay_operation,
+    SigOfficialCompetitionContextProvider,
     summarize_competition_context,
     summarize_cross_venue,
     summarize_observations,
+    VenueObservation,
+    VenueSpanCollector,
 )
 from predictions_cup.sig.dto import AccountDto
 from predictions_cup.sig.launch_storage import LaunchSigRecorder
