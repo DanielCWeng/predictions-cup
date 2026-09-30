@@ -459,9 +459,9 @@ def analyze_lead_lag(
             if response_at is None
             else (response_at - current.observed_at).total_seconds()
         )
-        gross_edge, _, depth = _active_edge(current.midpoint, trigger)
+        gross_edge, _, trigger_depth = _active_edge(current.midpoint, trigger)
         if (
-            depth is not None
+            trigger_depth is not None
             and (
                 trigger.depth_observed_at is None
                 or (
@@ -469,16 +469,36 @@ def analyze_lead_lag(
                 ).total_seconds() > max_depth_age_seconds
             )
         ):
-            depth = None
+            trigger_depth = None
+        delayed_at = current.observed_at + timedelta(milliseconds=latency_ms)
         delayed = _asof(
             sig,
-            current.observed_at + timedelta(milliseconds=latency_ms),
+            delayed_at,
             max_age_seconds=max_quote_age_seconds,
         )
         delayed_edge: float | None = None
         delayed_price: float | None = None
+        delayed_depth: float | None = None
         if delayed is not None:
-            delayed_edge, delayed_price, _ = _active_edge(current.midpoint, delayed)
+            delayed_edge, delayed_price, delayed_depth = _active_edge(
+                current.midpoint,
+                delayed,
+            )
+            if (
+                delayed_depth is not None
+                and (
+                    delayed.depth_observed_at is None
+                    or (
+                        delayed_at - delayed.depth_observed_at
+                    ).total_seconds() > max_depth_age_seconds
+                )
+            ):
+                delayed_depth = None
+        depth = (
+            min(trigger_depth, delayed_depth)
+            if trigger_depth is not None and delayed_depth is not None
+            else None
+        )
 
         half_life: float | None = None
         if gross_edge > 0:
