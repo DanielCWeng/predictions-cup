@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
-from datetime import datetime
+from datetime import UTC, datetime
 from time import monotonic_ns
 from typing import Protocol, cast
 from uuid import uuid4
@@ -241,7 +241,7 @@ class AccountRealtimeController:
             emitter.emit(
                 VenueObservation(
                     kind=kind,
-                    observed_at=datetime.now().astimezone(),
+                    observed_at=datetime.now(UTC),
                     monotonic_ns=monotonic_ns,
                     process_instance_id=self._observation_process_instance_id,
                     source="SIG_ACCOUNT_REALTIME",
