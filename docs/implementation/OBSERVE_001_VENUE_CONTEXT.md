@@ -116,7 +116,7 @@ boundary:
 | `RECONNECT_STARTED` | SIG Realtime recovery preparation begins | observed local boundary |
 | `RECONNECT_RESOLVED` | authoritative recovery/resubscribe preparation completes | observed local boundary |
 | `REALTIME_REVISION_GAP` | delivery.previousRevision does not match last accepted revision | observed protocol state |
-| `QUOTE_PUBLISHED` | MAKE local lifecycle accepted a placement result for a desired quote | derived |
+| `QUOTE_PUBLISHED` | SHADOW: conclusive local placement state; LIVE: authoritative per-intent ACK with usable order identity accepted into the QuoteRegistry | normalized/derived |
 | `QUOTE_WITHDRAWN` | MAKE local lifecycle observed a successful cancellation result | derived |
 | `QUOTE_REPLENISHED` | MAKE placed after terminal quote state with lifecycle reason `terminal_quote_refill` | derived |
 
@@ -187,15 +187,18 @@ The quote lifetime is a MAKE lifecycle duration. It is **not** passive queue-pos
 
 ## Quote mechanics
 
-MAKE emits local lifecycle markers only where it has canonical operation identity and a
-conclusive local state. A batch-level `ACKED` state is not treated as proof that every requested
-leg became a resting quote; OBSERVE deliberately omits `QUOTE_PUBLISHED` in that ambiguous case.
+MAKE emits quote lifecycle markers only where identity is conclusive. SHADOW publication remains
+derived from a conclusive simulated placement state. LIVE publication is emitted at the same
+per-intent boundary that activates an authoritative quote in `QuoteRegistry`: an ACK must have a
+positive exchange-order ID and a matching canonical logical intent. Aggregate
+`BEST_EFFORT_BATCH=ACKED` is never treated as proof for all legs; each leg is considered
+independently, so rejected or identity-ambiguous legs emit no publication marker.
 
 Every quote lifecycle observation carries a deterministic `quote_key` comprising operation,
-exchange and side. `QUOTE_PUBLISHED` also carries the canonical BUILD-009 logical intent ID when
-available. Quote lifetime is matched by canonical intent/order identity when possible and otherwise
-by the side-specific quote key. A fill without an unambiguous intent/order match never terminates a
-quote lifetime.
+exchange and side. LIVE `QUOTE_PUBLISHED` also carries the canonical BUILD-009 logical intent ID
+and authoritative exchange order ID. Quote lifetime is matched by canonical intent/order identity
+when possible and otherwise by the side-specific quote key for our own withdrawal evidence. A fill
+without an unambiguous intent/order match never terminates a quote lifetime.
 
 This supports later reconstruction of:
 
@@ -352,9 +355,25 @@ The snapshot exposes:
 - CAPTURE queue depth/capacity/high-water, written rows/shards, dropped rows, storage failures and writer liveness;
 - an explicit `HEALTHY`, `DEGRADED` or `BLOCKED` state plus machine-readable reasons.
 
-MAKE exposes the current snapshot through `MakerService.observation_health()`, so FULLSTACK can
-consume runtime OBSERVE health directly without parsing logs. Observation health remains
-informational/operational evidence only and cannot bypass or stop BUILD-009 Risk.
+MAKE exposes the current in-process snapshot through `MakerService.observation_health()`.
+For process-boundary consumers, `ObservationHealthStatusPublisher` atomically writes the same
+canonical `ObservationHealthSnapshot.to_dict()` payload to a small JSON status document at:
+
+```text
+<parent of PREDICTIONS_CUP_SIG_RESEARCH_PATH>/runtime/observe_health.json
+```
+
+The status envelope includes UTC `observed_at`, the observation process instance ID and
+`owner="maker"`. Publication is immediate on health-state/counter-signature change and otherwise
+bounded to a one-second cadence. The atomic temp-write/fsync/replace path is deliberately outside
+the execution hot path.
+
+`read_observation_health_status()` gives FULLSTACK/operator tooling a typed cross-process reader.
+It returns explicit `MISSING`, `STALE`, `OWNER_MISMATCH`, `PROCESS_MISMATCH` or `INVALID`
+states instead of treating absent/stale evidence as healthy. Observation health remains
+informational/operational evidence only and cannot bypass or stop BUILD-009 Risk. Publication
+failure is caught by MAKE and does not affect BUILD-009 execution; failed attempts are themselves
+cadence-bounded.
 
 ## Backpressure and failure policy
 
@@ -481,7 +500,8 @@ Deployment implications:
 - Super Signal is unavailable to participant credentials in the supplied official contract;
 - cross-venue elapsed time is descriptive observable-time sequencing, not causal lead-lag;
 - context sampling currently uses a fixed 60-second deadline;
-- observation drops are counted but cannot be reconstructed after the fact.
+- dropped observation payloads themselves cannot be reconstructed after the fact, but their loss
+  counters/state are externally published while the owner process is alive.
 
 ## Safety statement
 
