@@ -247,6 +247,8 @@ class MakerService:
                     live_sink,
                     journal=journal,
                     quotes=self.core.quotes,
+                    observation_emitter=observation_emitter,
+                    observation_process_instance_id=observe_recorder.session_id,
                 )
             else:
                 if self.explicit_live_invocation:
