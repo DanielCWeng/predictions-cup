@@ -130,8 +130,8 @@ class KalshiPublicClient:
         safe = self._ticker(ticker)
         params: dict[str, str] | None = None
         if depth is not None:
-            if depth <= 0:
-                raise ValueError("depth must be positive")
+            if not 1 <= depth <= 100:
+                raise ValueError("depth must be between 1 and 100")
             params = {"depth": str(depth)}
         raw, observed = await self._request_json(
             f"/markets/{safe}/orderbook", params=params
