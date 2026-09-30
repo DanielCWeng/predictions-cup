@@ -97,8 +97,25 @@ Therefore the launch-wired evaluator deliberately returns:
 
 `NOT_READY:model_artifact_missing`
 
-This reason has priority. No coefficient substitute, retraining, refitting, or
-model reconstruction occurs in this lane.
+This reason has priority. Arbitrary scorer injection is not authorization.
+`FrozenPred006Evaluator` additionally requires a
+`Pred006ArtifactManifest` with schema
+`pred006-artifact-manifest-v1`. The manifest binds both C01 and C02 to:
+
+- the frozen PRED-006 research ID;
+- the exact shortlist freeze/spec identity;
+- the exact 25-feature schema hash;
+- explicit per-candidate serialized-artifact SHA-256 values;
+- non-empty provenance.
+
+With no authorized manifest, injected scorers remain NOT_READY. A manifest hash
+mismatch also fails closed. The repository intentionally ships no production
+manifest because no authorized serialized PRED-006 fitted artifacts exist.
+Tests and the benchmark use clearly marked synthetic-only manifests solely to
+exercise the runtime path.
+
+No coefficient substitute, retraining, refitting, or model reconstruction occurs
+in this lane.
 
 The separately frozen future-confirmation protocol permits a pre-window
 historical refit, but that is a separate explicitly authorized scientific step
@@ -108,13 +125,24 @@ and is intentionally not performed here.
 
 `IncrementalPred006FeatureState` consumes an upstream
 `Pred006BlockObservation` representing one complete DATA-003-equivalent
-condition/block-end economic observation.
+condition/block-end economic observation. Each observation now carries its Polygon
+`block_number` as first-class chronology/provenance.
+
+The frozen source orders complete observations by Polygon block number. Runtime
+state therefore enforces strictly increasing `block_number` independently for
+each `scope_id × window_id`. Duplicate or reordered blocks are rejected. Equal
+Unix-second timestamps remain legal when block numbers increase; in that case
+`since_prev == 0.0`. A timestamp regression across increasing blocks is also
+rejected as malformed source evidence. Chronology is never inferred from
+second-resolution timestamp alone.
+
+The block number is retained in `Pred006FeatureVector` and emitted in candidate
+payload provenance as `feature_block_number`.
 
 It incrementally reproduces the FINAL feature formulas. The state is keyed by the
 research condition/window scope; SHADOW-to-research identity is supplied through an
 explicit injected scope resolver. There is no implicit assumption that a SIG market
 ID equals a Polymarket condition ID.
-
 
 - probability clipping at `1e-4` for logit only;
 - block observation `size_log` / `value_log`;
@@ -204,20 +232,26 @@ It reconstructs the research state needed by the accepted coordinates:
    runtime never assumes SIG market ID equals token ID;
 2. apply the frozen grouped-BBO validity gate: finite values, bid > 0,
    ask < 1, bid <= ask, and no ambiguous same-timestamp group;
-3. a transition is contiguous only when both current and previous BBO are valid
-   and the observation gap is <=300s;
-4. a genuine change is a contiguous best-bid or best-ask change;
-5. establish/re-establish transitions are not genuine changes;
-6. genuine changes are counted in 5-second capture bins;
-7. evaluation is on the frozen 15-second clock grid;
-8. `genuine_15` / `genuine_60` use the same left-open/right-closed capture-bin
+3. preserve the grouped observation time as exact integer nanoseconds throughout
+   runtime state;
+4. a transition is contiguous only when both current and previous BBO are valid
+   and the exact nanosecond gap is <=300s;
+5. a genuine change is a contiguous best-bid or best-ask change;
+6. establish/re-establish transitions are not genuine changes;
+7. genuine changes are assigned to 5-second bins by integer-nanosecond floor;
+8. evaluation query time is aligned to the frozen 15-second grid from an exact
+   `grid_origin_ns`;
+9. `genuine_15` / `genuine_60` use the same left-open/right-closed capture-bin
    boundary as the research `rolling_counts`;
-9. price returns use logit midpoint and require the same state segment;
-10. `rv_60` is the square root of the rolling sum of up to four 15-second
-   returns with at least two finite observations.
+10. `genuine_age_s` is computed from the exact nanosecond difference and may
+    therefore be fractional;
+11. price returns use logit midpoint and require the same state segment;
+12. `rv_60` is the square root of the rolling sum of up to four 15-second
+    returns with at least two finite observations.
 
 The grid origin is mandatory. The runtime will not silently choose an origin,
-because the historical grid was anchored at the regime-window start.
+because the historical grid was anchored at the regime-window start. The
+candidate payload records `grid_time_ns`, not a truncated second.
 
 Top-depth-only state updates are not required by the three accepted coordinates:
 they do not change midpoint, segment, genuine counts, or last genuine-BBO time.
@@ -261,13 +295,34 @@ no MAKE promotion.
 - PRED rolling feature parity fixture;
 - PRED missing-history NaN semantics;
 - per-feature current live parity classification;
-- mandatory PRED `model_artifact_missing`;
+- mandatory PRED `model_artifact_missing` even when arbitrary scorers are injected;
+- PRED manifest hash authorization and mismatch rejection;
+- equal-second/increasing-block chronology plus duplicate/reorder rejection;
 - separate C01/C02 output without invented aggregation;
 - exact 005F genuine-age and 5s-bin boundary fixture;
+- 005F sub-second genuine changes and fractional `genuine_age_s`;
+- exact continuity immediately below and above 300 seconds;
 - mandatory 005F grid origin;
 - missing order-book history fail-closed path;
 - separate ACTIVE update/jump coordinates;
-- PRE update-only behavior without invented jump output.
+- PRE update-only behavior without invented jump output;
+- committed golden parity vectors for PRED-006 and 005F.
+
+The golden fixture is
+`tests/fixtures/candidate_runtime001_golden.json`. Its provenance pins the
+original research source files by Git blob SHA:
+
+- `scripts/kaggle/pred006_final/run.py` ->
+  `a146521068b0091b9096b5b94a535f4b8c9fd20c`, function `add_features`;
+- `scripts/kaggle/experiment_005f_fit_freeze/run.py` ->
+  `b31606371c528775c355807a6ccfd147cd422ecc`, including
+  `rolling_counts`, `asof_from_states`, and `build_clock`.
+
+The fixture includes equal-second PRED blocks, the complete expected frozen
+25-feature vector, sub-second 005F BBO changes straddling a 5-second bin
+boundary, fractional genuine age, and 300-second ±1ns continuity cases. A test
+recomputes the Git blob identities from the checked-out original research source
+before accepting the fixture provenance.
 
 Existing SHADOW tests continue to cover unwired generic extension points,
 candidate isolation, durability, and non-trading construction.
@@ -312,10 +367,9 @@ No performance acceptance threshold changes research semantics.
 4. The 005F manifest names fitted artifacts, but the joblib binaries are not
    committed in the repository. They must be recovered exactly and hash-checked;
    they must not be refit in this lane.
-5. Historical fixture rows with the complete frozen feature vectors are not
-   committed. Parity tests therefore use deterministic formula fixtures derived
-   directly from the frozen code; model score parity cannot be claimed without
-   the serialized artifacts.
+5. Golden feature-vector parity is now committed and source-pinned, but model
+   score parity still cannot be claimed without the original serialized fitted
+   artifacts.
 
 ## Configuration and migration
 
