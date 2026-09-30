@@ -17,7 +17,6 @@ from predictions_cup.analysis.live_diag import (
     recommend_market,
     summarize_inventory,
 )
-from predictions_cup.mapping.models import MappingDirection
 
 
 BASE = datetime(2026, 10, 1, 16, 0, tzinfo=UTC)
@@ -41,6 +40,8 @@ def _quote(
 
 
 def test_complement_alignment() -> None:
+    from predictions_cup.mapping.models import MappingDirection
+
     assert align_probability(0.2, MappingDirection.SAME) == pytest.approx(0.2)
     assert align_probability(0.2, MappingDirection.COMPLEMENT) == pytest.approx(0.8)
 
