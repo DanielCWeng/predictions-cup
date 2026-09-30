@@ -13,7 +13,7 @@ from pathlib import Path
 from time import perf_counter_ns
 from typing import Protocol
 
-from predictions_cup.sig import launch_storage as capture_storage
+import predictions_cup.sig.launch_storage as capture_storage
 from predictions_cup.shadow.contracts import (
     CandidateDecision,
     CanonicalShadowSnapshot,
