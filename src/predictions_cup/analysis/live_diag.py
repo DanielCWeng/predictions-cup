@@ -1054,6 +1054,8 @@ def analyze_live_diagnostics(
     mapping_path: Path | None,
     output_root: Path | None = None,
     live_learn_outcomes: Path | None = None,
+    shadow_journal: Path | None = None,
+    inventory_limit: float | None = None,
     latency_ms: float = 100.0,
     latency_assumption_source: str = "fixed_sensitivity",
     thresholds_ticks: Sequence[int] = DEFAULT_THRESHOLDS_TICKS,
@@ -1073,6 +1075,14 @@ def analyze_live_diagnostics(
     config_hash = canonical_config_hash(config)
     git_sha = os.environ.get("PREDICTIONS_CUP_GIT_SHA", "UNKNOWN")
     maker_summary, maker_rows = analyze_maker_outcomes(live_learn_outcomes)
+    inventory_summary, inventory_rows, inventory_by_market = analyze_inventory_history(
+        shadow_journal,
+        inventory_limit=inventory_limit,
+    )
+    market_selection_summary, market_selection_rows = analyze_market_selection(
+        maker_rows,
+        inventory_by_market=inventory_by_market,
+    )
     if (
         polymarket_root is None
         or mapping_path is None
@@ -1088,10 +1098,14 @@ def analyze_live_diagnostics(
             "status": ResearchStatus.INSUFFICIENT_EVIDENCE.value,
             "reasons": ["MISSING_POLYMARKET_OR_MAPPING_INPUT"],
             "maker_economics": maker_summary,
+            "inventory_recycling": inventory_summary,
+            "market_selection": market_selection_summary,
         }
         if output_root is not None:
             write_evidence(output_root=output_root, snapshot=snapshot, records=())
             _write_rows(output_root / "maker_economics.parquet", maker_rows)
+            _write_rows(output_root / "inventory_recycling.parquet", inventory_rows)
+            _write_rows(output_root / "market_selection.parquet", market_selection_rows)
         return snapshot
 
     document = load_document(mapping_path)
@@ -1304,13 +1318,8 @@ def analyze_live_diagnostics(
         "lead_lag": lead_lag_rows,
         "maker_economics": maker_summary,
         "opponent_venue_ecology": ecology_rows,
-        "inventory_recycling": {
-            "status": "AWAITING_CANONICAL_INVENTORY_HISTORY",
-            "reason": (
-                "RISK-002 current state is authoritative; "
-                "no separate history is inferred here."
-            ),
-        },
+        "inventory_recycling": inventory_summary,
+        "market_selection": market_selection_summary,
         "risk_group_status": "UNAVAILABLE_NOT_INFERRED",
         "limitations": [
             "Passive touch is not treated as a fill.",
@@ -1331,6 +1340,8 @@ def analyze_live_diagnostics(
         _write_rows(output_root / "snapback.parquet", snapback_rows)
         _write_rows(output_root / "lead_lag.parquet", lead_lag_rows)
         _write_rows(output_root / "maker_economics.parquet", maker_rows)
+        _write_rows(output_root / "inventory_recycling.parquet", inventory_rows)
+        _write_rows(output_root / "market_selection.parquet", market_selection_rows)
         _write_rows(
             output_root / "opponent_venue_ecology.parquet",
             ecology_rows,
