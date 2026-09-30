@@ -212,6 +212,8 @@ class MakerService:
                     live_sink=live_sink,
                     tournament_id=tournament_id,
                     tournament_slug=tournament_slug,
+                    observation_emitter=observation_emitter,
+                    observation_process_instance_id=observe_recorder.session_id,
                 )
                 if not recovery.safe_to_resume_live:
                     raise RuntimeError(
