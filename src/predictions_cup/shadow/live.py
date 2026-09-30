@@ -40,7 +40,12 @@ class LiveShadowRuntime:
 
     bus: ShadowBus
     mapping_version: str
+    live_learn: LiveLearnEngine | None = None
     rejected_boundaries: int = 0
+
+    @property
+    def live_learn_health(self):
+        return None if self.live_learn is None else self.live_learn.health
 
     async def start(self) -> None:
         await self.bus.start()
@@ -81,6 +86,7 @@ def build_live_shadow_runtime(
         batch_size=settings.shadow_persistence_batch_size,
     )
     mirrors: list[ShadowEventStore] = []
+    live_learn: LiveLearnEngine | None = None
     if settings.shadow_capture_mirror_enabled:
         mirrors.append(
             CaptureStrategyEventStore(
@@ -91,17 +97,16 @@ def build_live_shadow_runtime(
             )
         )
     if settings.live_learn_enabled:
-        mirrors.append(
-            LiveLearnEngine.from_paths(
-                shadow_journal_path=settings.shadow_journal_path,
-                outcome_path=settings.live_learn_outcome_path,
-                report_root=settings.live_learn_report_path,
-                execution_journal_path=settings.execution_journal_path,
-                queue_capacity=settings.live_learn_queue_capacity,
-                evidence_grace_seconds=settings.live_learn_evidence_grace_seconds,
-                max_evidence_age_seconds=settings.live_learn_max_evidence_age_seconds,
-            )
+        live_learn = LiveLearnEngine.from_paths(
+            shadow_journal_path=settings.shadow_journal_path,
+            outcome_path=settings.live_learn_outcome_path,
+            report_root=settings.live_learn_report_path,
+            execution_journal_path=settings.execution_journal_path,
+            queue_capacity=settings.live_learn_queue_capacity,
+            evidence_grace_seconds=settings.live_learn_evidence_grace_seconds,
+            max_evidence_age_seconds=settings.live_learn_max_evidence_age_seconds,
         )
+        mirrors.append(live_learn)
     store: ShadowEventStore = (
         primary
         if not mirrors
@@ -126,6 +131,7 @@ def build_live_shadow_runtime(
     return LiveShadowRuntime(
         bus=bus,
         mapping_version=_mapping_version(core.mapping),
+        live_learn=live_learn,
     )
 
 
