@@ -832,7 +832,7 @@ def analyze_maker_outcomes(
         for row in rows
         if row["spread_capture"] is not None
     ]
-    summary = {
+    summary: dict[str, object] = {
         "available": True,
         "sample_count": len(rows),
         "independent_event_count": len(decisions),
