@@ -26,8 +26,16 @@ def replay_operation(
 ) -> tuple[VenueObservation, ...]:
     return tuple(
         sorted(
-            (item for item in observations if item.logical_operation_id == logical_operation_id),
-            key=lambda item: (item.process_instance_id, item.monotonic_ns),
+            (
+                item
+                for item in observations
+                if item.logical_operation_id == logical_operation_id
+            ),
+            key=lambda item: (
+                item.observed_at_utc,
+                item.process_instance_id,
+                item.monotonic_ns,
+            ),
         )
     )
 
