@@ -219,12 +219,14 @@ class KalshiPublicClient:
         # All callers above pass compile-time GET-only public market-data paths.
         for attempt in range(1, self.max_attempts + 1):
             try:
-                async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                    async with session.get(
+                async with (
+                    aiohttp.ClientSession(timeout=self.timeout) as session,
+                    session.get(
                         f"{self.base_url}{path}",
                         params=params or {},
                         headers={"Accept": "application/json"},
-                    ) as response:
+                    ) as response,
+                ):
                         if response.status in {429, 500, 502, 503, 504}:
                             if attempt == self.max_attempts:
                                 self._consecutive_failures += 1
@@ -243,7 +245,7 @@ class KalshiPublicClient:
                             self._last_success_at = observed
                             self._consecutive_failures = 0
                             return decoded, observed
-            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            except (aiohttp.ClientError, TimeoutError) as exc:
                 if attempt == self.max_attempts:
                     self._consecutive_failures += 1
                     raise KalshiReadError("Kalshi public GET failed") from exc
