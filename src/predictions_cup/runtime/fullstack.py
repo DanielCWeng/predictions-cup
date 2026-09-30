@@ -399,8 +399,7 @@ def _provider(values: dict[str, str], name: str) -> dict[str, Any] | None:
 
 
 def _accepted_status_dir(values: dict[str, str]) -> Path:
-    research = Path(values.get("PREDICTIONS_CUP_SIG_RESEARCH_PATH", "data/sig_research"))
-    return research.parent / "runtime" / "status"
+    return _status_dir(values)
 
 
 def _risk_provider(values: dict[str, str]) -> dict[str, Any] | None:
@@ -466,15 +465,30 @@ def _account_provider(risk: dict[str, Any] | None) -> dict[str, Any] | None:
 
 
 def _in_process_provider(values: dict[str, str], name: str) -> dict[str, Any] | None:
-    return _json(_accepted_status_dir(values) / f"{name}.json")
+    provider = _json(_accepted_status_dir(values) / f"{name}.json")
+    if provider is None:
+        return None
+    age = _age(provider.get("observed_at"))
+    max_age = float(
+        values.get("PREDICTIONS_CUP_FULLSTACK_MAX_PROVIDER_AGE_SECONDS", "5")
+    )
+    if age is None or age > max_age:
+        return {
+            **provider,
+            "state": GateState.BLOCKED.value,
+            "reason": "provider_status_stale",
+            "status_age_seconds": age,
+        }
+    return {**provider, "status_age_seconds": age}
 
 
-def _observe_provider(values: dict[str, str], capability: CapabilityConfig) -> dict[str, Any] | None:
+def _observe_provider(
+    values: dict[str, str],
+    capability: CapabilityConfig,
+) -> dict[str, Any] | None:
     if capability.mode is CapabilityMode.EXTERNAL_SERVICE:
         return _provider(values, "observe")
-    path = default_observation_health_status_path(
-        Path(values.get("PREDICTIONS_CUP_SIG_RESEARCH_PATH", "data/sig_research"))
-    )
+    path = _accepted_status_dir(values) / "observe.json"
     status = read_observation_health_status(
         path,
         expected_owner="predictions-cup-maker.service",
@@ -526,7 +540,11 @@ def collect_status(repo: Path, values: dict[str, str]) -> dict[str, Any]:
         if capabilities["live_learn"].mode is CapabilityMode.EXTERNAL_SERVICE
         else _in_process_provider(values, "live-learn")
     )
-    observe = _observe_provider(values, capabilities["observe"]) if capabilities["observe"].enabled else None
+    observe = (
+        _observe_provider(values, capabilities["observe"])
+        if capabilities["observe"].enabled
+        else None
+    )
     shadow = _in_process_provider(values, "shadow")
     return {
         "schema_version": SCHEMA_VERSION,
