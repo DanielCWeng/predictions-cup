@@ -50,6 +50,7 @@ class ExecutionReservationBook:
                     reserved_exposure=float(intent.quantity),
                     open=False,
                     uncertain=True,
+                    strategy_id=intent.strategy_id,
                 ),
             )
             if existing is not None:

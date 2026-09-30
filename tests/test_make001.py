@@ -5,10 +5,13 @@ import math
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import cast
 
 import pytest
 
+from predictions_cup.execution.journal import ExecutionJournal
+from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import ExecutionEvent, ExecutionMode, LifecycleState
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
@@ -21,6 +24,7 @@ from predictions_cup.maker import (
     ExternalQuoteState,
     GateMode,
     InventoryConfidenceSizePolicy,
+    LiveMakerExecutionAdapter,
     MakerConfig,
     MakerCoordinator,
     MakerEngine,
@@ -45,6 +49,22 @@ from predictions_cup.mapping.models import (
     MappingStatus,
     MarketMapping,
     PolymarketContractIdentity,
+)
+from predictions_cup.observe import (
+    BoundedObservationEmitter,
+    InMemoryObservationSink,
+    ObservationKind,
+    VenueObservation,
+)
+from predictions_cup.risk import (
+    CapitalRiskState,
+    HaltScope,
+    RiskContextSource,
+    RiskExposureSnapshot,
+    RiskMark,
+    RiskValuationPosition,
+    trip_global_halt,
+    trip_strategy_halt,
 )
 from predictions_cup.risk.core import RiskContext, RiskLimits
 from predictions_cup.runtime.models import (
@@ -261,6 +281,281 @@ def _engine(
         ),
         config=MakerConfig(max_abs_inventory=max_inventory),
     )
+
+
+def _maker_capital() -> CapitalRiskState:
+    return CapitalRiskState(
+        session_id=TOURNAMENT,
+        session_start_equity=Decimal("100"),
+        session_start_unrealised_pnl=Decimal("0"),
+        realised_pnl=Decimal("0"),
+        unrealised_pnl=Decimal("0"),
+        current_equity=Decimal("100"),
+        peak_session_equity=Decimal("100"),
+        drawdown=Decimal("0"),
+        net_external_cash_flow=Decimal("0"),
+        exposure=RiskExposureSnapshot(
+            gross_exposure=0.0,
+            net_directional_exposure=0.0,
+            open_order_exposure=0.0,
+            uncertain_order_exposure=0.0,
+            trusted=True,
+            strategy_attribution_complete=True,
+            group_classification_complete=True,
+        ),
+        account_trusted=True,
+        account_observed_monotonic_ns=NOW,
+        marks_trusted=True,
+        oldest_mark_observed_monotonic_ns=NOW,
+        reconciliation_complete=True,
+        global_halt=None,
+        strategy_halts=(),
+        limit_profile_version="v1",
+    )
+
+
+def _seed_resting_quotes(registry: QuoteRegistry) -> None:
+    registry.apply_authoritative(
+        exchange_id="36",
+        side=QuoteSide.BID,
+        price_ticks=99,
+        size=2,
+        remaining_size=2,
+        logical_operation_id="old-bid",
+        exchange_order_id=91,
+        lifecycle_state=LifecycleState.OPEN,
+        observed_monotonic_ns=NOW - 1,
+    )
+    registry.apply_authoritative(
+        exchange_id="36",
+        side=QuoteSide.ASK,
+        price_ticks=101,
+        size=2,
+        remaining_size=2,
+        logical_operation_id="old-ask",
+        exchange_order_id=92,
+        lifecycle_state=LifecycleState.OPEN,
+        observed_monotonic_ns=NOW - 1,
+    )
+
+
+
+class _PerIntentBatchLiveSink:
+    def __init__(
+        self,
+        journal: ExecutionJournal,
+        *,
+        acked_intent_indices: frozenset[int],
+        omit_order_id_indices: frozenset[int] = frozenset(),
+    ) -> None:
+        self.journal = journal
+        self.acked_intent_indices = acked_intent_indices
+        self.omit_order_id_indices = omit_order_id_indices
+
+    async def dispatch(self, plan: ExecutionPlan) -> ExecutionEvent:
+        assert len(plan.intents) == 2
+        self.journal.record_before_dispatch(
+            plan.envelope,
+            plan.intents,
+            audit=plan.audit,
+            submitted_monotonic_ns=NOW + 10,
+        )
+        for index, intent in enumerate(plan.intents):
+            if index not in self.acked_intent_indices:
+                self.journal.record_event(
+                    logical_operation_id=plan.envelope.logical_operation_id,
+                    tournament_id=intent.tournament_id,
+                    logical_intent_id=intent.intent_id,
+                    event_type="REJECTED",
+                    observed_monotonic_ns=NOW + 20 + index,
+                    exchange_id=intent.exchange_id,
+                    terminal_status=LifecycleState.REJECTED.value,
+                )
+                continue
+            order_id = None if index in self.omit_order_id_indices else str(91 + index)
+            self.journal.record_event(
+                logical_operation_id=plan.envelope.logical_operation_id,
+                tournament_id=intent.tournament_id,
+                logical_intent_id=intent.intent_id,
+                event_type="ACK",
+                observed_monotonic_ns=NOW + 20 + index,
+                exchange_id=intent.exchange_id,
+                exchange_order_id=order_id,
+                terminal_status=LifecycleState.ACKED.value,
+            )
+        self.journal.mark_state(
+            plan.envelope.logical_operation_id,
+            LifecycleState.ACKED,
+            NOW + 30,
+        )
+        return ExecutionEvent(
+            logical_operation_id=plan.envelope.logical_operation_id,
+            state=LifecycleState.ACKED,
+            observed_monotonic_ns=NOW + 30,
+            simulated=False,
+            detail="fixture_best_effort_batch",
+        )
+
+
+def _live_two_sided_cycle(
+    tmp_path: Path,
+    *,
+    acked_intent_indices: frozenset[int],
+    omit_order_id_indices: frozenset[int] = frozenset(),
+    terminal_refill_side: QuoteSide | None = None,
+) -> tuple[tuple[VenueObservation, ...], QuoteRegistry]:
+    journal = ExecutionJournal(tmp_path / "live-batch.sqlite3")
+    quotes = QuoteRegistry()
+    if terminal_refill_side is not None:
+        quotes.apply_authoritative(
+            exchange_id="36",
+            side=terminal_refill_side,
+            price_ticks=90 if terminal_refill_side is QuoteSide.BID else 110,
+            size=1,
+            remaining_size=0,
+            logical_operation_id="old-terminal-quote",
+            exchange_order_id=77,
+            lifecycle_state=LifecycleState.FILLED,
+            observed_monotonic_ns=NOW - 100,
+        )
+    observation_sink = InMemoryObservationSink()
+    emitter = BoundedObservationEmitter(observation_sink, queue_max=64)
+    live = _PerIntentBatchLiveSink(
+        journal,
+        acked_intent_indices=acked_intent_indices,
+        omit_order_id_indices=omit_order_id_indices,
+    )
+    adapter = LiveMakerExecutionAdapter(
+        cast(SigLiveSink, live),
+        journal=journal,
+        quotes=quotes,
+        observation_emitter=emitter,
+        observation_process_instance_id="live-batch-test",
+        wall_clock=lambda: datetime(2026, 10, 1, 16, 0, tzinfo=UTC),
+    )
+    coordinator = MakerCoordinator(
+        engine=_engine(),
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=quotes,
+        risk_context=RiskContext(
+            mode=ExecutionMode.LIVE,
+            kill_switch=False,
+            limits=RiskLimits(
+                max_order_size=10,
+                max_gross_exposure=100.0,
+                max_per_market_exposure=100.0,
+                max_open_order_exposure=100.0,
+                max_concurrent_open_orders=10,
+            ),
+            max_state_age_ns=1_000_000_000,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+        reservations=ExecutionReservationBook(),
+        observation_emitter=emitter,
+        observation_process_instance_id="live-batch-test",
+        wall_clock=lambda: datetime(2026, 10, 1, 16, 0, tzinfo=UTC),
+    )
+    try:
+        result = asyncio.run(
+            coordinator.on_state_change(
+                MakerStateChange(
+                    event_id="two-sided-live",
+                    observed_monotonic_ns=NOW,
+                    exchange_ids=frozenset({"36"}),
+                ),
+                {"36": _maker_snapshot()},
+            )
+        )
+        assert result.execution_events[0].state is LifecycleState.ACKED
+        emitter.close()
+        return tuple(observation_sink.observations), quotes
+    finally:
+        emitter.close()
+        journal.close()
+
+
+def test_live_two_sided_batch_two_acks_publish_two_authoritative_quotes(
+    tmp_path: Path,
+) -> None:
+    observations, quotes = _live_two_sided_cycle(
+        tmp_path,
+        acked_intent_indices=frozenset({0, 1}),
+    )
+    published = tuple(
+        item for item in observations if item.kind is ObservationKind.QUOTE_PUBLISHED
+    )
+    assert len(published) == 2
+    assert {item.logical_intent_id for item in published} == {
+        "make-direct-pm:1000000000:36:0",
+        "make-direct-pm:1000000000:36:1",
+    }
+    assert {item.exchange_order_id for item in published} == {"91", "92"}
+    assert {dict(item.detail)["side"] for item in published} == {"BID", "ASK"}
+    assert all(
+        dict(item.detail)["quote_key"].startswith("two-sided-live:make-place:36|36|")
+        for item in published
+    )
+    state = quotes.state("36")
+    assert state.bid is not None and state.bid.exchange_order_id == 91
+    assert state.ask is not None and state.ask.exchange_order_id == 92
+
+
+def test_live_two_sided_batch_ack_plus_reject_publishes_only_acknowledged_quote(
+    tmp_path: Path,
+) -> None:
+    observations, quotes = _live_two_sided_cycle(
+        tmp_path,
+        acked_intent_indices=frozenset({0}),
+    )
+    published = tuple(
+        item for item in observations if item.kind is ObservationKind.QUOTE_PUBLISHED
+    )
+    assert len(published) == 1
+    assert published[0].exchange_order_id == "91"
+    assert dict(published[0].detail)["side"] == "BID"
+    state = quotes.state("36")
+    assert state.bid is not None
+    assert state.ask is None
+
+
+def test_live_two_sided_batch_ack_without_order_identity_is_not_published(
+    tmp_path: Path,
+) -> None:
+    observations, quotes = _live_two_sided_cycle(
+        tmp_path,
+        acked_intent_indices=frozenset({0, 1}),
+        omit_order_id_indices=frozenset({1}),
+    )
+    published = tuple(
+        item for item in observations if item.kind is ObservationKind.QUOTE_PUBLISHED
+    )
+    assert len(published) == 1
+    assert published[0].exchange_order_id == "91"
+    state = quotes.state("36")
+    assert state.bid is not None
+    assert state.ask is not None
+    assert state.ask.exchange_order_id is None
+
+
+def test_live_authoritative_terminal_refill_retains_replenishment_observation(
+    tmp_path: Path,
+) -> None:
+    observations, quotes = _live_two_sided_cycle(
+        tmp_path,
+        acked_intent_indices=frozenset({0, 1}),
+        terminal_refill_side=QuoteSide.BID,
+    )
+    replenished = tuple(
+        item for item in observations if item.kind is ObservationKind.QUOTE_REPLENISHED
+    )
+    assert len(replenished) == 1
+    assert replenished[0].exchange_order_id == "91"
+    assert replenished[0].logical_intent_id == "make-direct-pm:1000000000:36:0"
+    assert dict(replenished[0].detail)["side"] == "BID"
+    assert dict(replenished[0].detail)["lifecycle_reason"] == "terminal_quote_refill"
+    state = quotes.state("36")
+    assert state.bid is not None and state.bid.exchange_order_id == 91
 
 
 def test_direct_pm_preserves_value_orientation_and_source_observation_age() -> None:
@@ -775,6 +1070,337 @@ def test_freshness_deadline_cancels_resting_quote_without_feed_event() -> None:
     )
     assert registry.state("36").bid is None
     assert registry.state("36").ask is None
+
+
+class _MutableMakerRiskMarkProvider:
+    def __init__(self, price: Decimal) -> None:
+        self.price = price
+
+    def marks_for(
+        self,
+        exchange_ids: frozenset[str],
+        *,
+        now_monotonic_ns: int,
+    ) -> tuple[RiskMark, ...]:
+        assert exchange_ids == frozenset({"36"})
+        return (
+            RiskMark(
+                exchange_id="36",
+                market_id="m1",
+                price=self.price,
+                source="fixture",
+                observed_monotonic_ns=now_monotonic_ns,
+                trusted=True,
+                version="v1",
+                method="fixture",
+            ),
+        )
+
+
+def test_realtime_drawdown_trip_force_cancels_resting_quotes_same_cycle() -> None:
+    engine = _engine()
+    registry = QuoteRegistry()
+    _seed_resting_quotes(registry)
+    adapter = ShadowMakerExecutionAdapter()
+    marks = _MutableMakerRiskMarkProvider(Decimal("0.5"))
+    checkpoints: list[str] = []
+    base_context = RiskContext(
+        mode=ExecutionMode.SHADOW,
+        kill_switch=False,
+        limits=RiskLimits(
+            max_order_size=10,
+            max_gross_exposure=100.0,
+            max_per_market_exposure=100.0,
+            max_open_order_exposure=100.0,
+            max_concurrent_open_orders=10,
+            drawdown_limit=5.0,
+        ),
+        max_state_age_ns=100_000_000,
+        max_mark_age_ns=100_000_000,
+        require_capital_state=True,
+    )
+    source = RiskContextSource(
+        base_context,
+        state=_maker_capital(),
+        valuation_positions=(
+            RiskValuationPosition(
+                exchange_id="36",
+                market_id="m1",
+                signed_quantity=Decimal("10"),
+                baseline_mark=Decimal("0.5"),
+                baseline_unrealised_pnl=Decimal("0"),
+            ),
+        ),
+        mark_provider=marks,
+        halt_checkpoint=lambda state, reason: checkpoints.append(reason),
+    )
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=source,
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+    assert source.state is not None and source.state.global_halt is None
+
+    # The coordinator's next risk-context resolution revalues the inventory,
+    # trips the drawdown latch, and must cancel the unchanged resting quotes.
+    marks.price = Decimal("0")
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id="drawdown-trip",
+                observed_monotonic_ns=NOW + 1,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": replace(_maker_snapshot(), now_monotonic_ns=NOW + 1)},
+        )
+    )
+
+    assert checkpoints == ["peak_drawdown_limit"]
+    assert len(result.execution_events) == 2
+    assert all(
+        action.kind is QuoteLifecycleActionKind.CANCEL
+        for action in result.lifecycle_actions
+    )
+    assert registry.state("36").bid is None
+    assert registry.state("36").ask is None
+
+def test_capital_global_halt_force_cancels_resting_make_quotes() -> None:
+    engine = _engine()
+    registry = QuoteRegistry()
+    _seed_resting_quotes(registry)
+    adapter = ShadowMakerExecutionAdapter()
+    halted = trip_global_halt(
+        _maker_capital(),
+        reason="peak_drawdown_limit",
+        now_monotonic_ns=NOW,
+    )
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+            capital_state=halted,
+            require_capital_state=True,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id="capital-halt",
+                observed_monotonic_ns=NOW,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": _maker_snapshot()},
+        )
+    )
+
+    assert len(result.execution_events) == 2
+    assert all(
+        action.kind is QuoteLifecycleActionKind.CANCEL
+        for action in result.lifecycle_actions
+    )
+    assert registry.state("36").bid is None
+    assert registry.state("36").ask is None
+
+
+@pytest.mark.parametrize(
+    ("scope", "scope_value"),
+    (
+        (HaltScope.STRATEGY_ID, "make-direct-pm"),
+        (HaltScope.STRATEGY_FAMILY, "MAKE"),
+    ),
+)
+def test_matching_capital_strategy_halt_cancels_make_quotes(
+    scope: HaltScope,
+    scope_value: str,
+) -> None:
+    engine = _engine()
+    registry = QuoteRegistry()
+    _seed_resting_quotes(registry)
+    adapter = ShadowMakerExecutionAdapter()
+    halted = trip_strategy_halt(
+        _maker_capital(),
+        scope=scope,
+        scope_value=scope_value,
+        reason="operator",
+        now_monotonic_ns=NOW,
+    )
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+            capital_state=halted,
+            require_capital_state=True,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id="strategy-halt",
+                observed_monotonic_ns=NOW,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": _maker_snapshot()},
+        )
+    )
+    assert len(result.execution_events) == 2
+    assert registry.state("36").bid is None
+    assert registry.state("36").ask is None
+
+
+def test_unrelated_strategy_halt_does_not_cancel_make_quotes() -> None:
+    engine = _engine()
+    registry = QuoteRegistry()
+    desired = engine.quote(_maker_snapshot()).desired
+    assert desired is not None
+    assert desired.bid_ticks is not None and desired.ask_ticks is not None
+    registry.apply_authoritative(
+        exchange_id="36",
+        side=QuoteSide.BID,
+        price_ticks=desired.bid_ticks,
+        size=desired.bid_size,
+        remaining_size=desired.bid_size,
+        logical_operation_id="current-bid",
+        exchange_order_id=91,
+        lifecycle_state=LifecycleState.OPEN,
+        observed_monotonic_ns=NOW - 1,
+    )
+    registry.apply_authoritative(
+        exchange_id="36",
+        side=QuoteSide.ASK,
+        price_ticks=desired.ask_ticks,
+        size=desired.ask_size,
+        remaining_size=desired.ask_size,
+        logical_operation_id="current-ask",
+        exchange_order_id=92,
+        lifecycle_state=LifecycleState.OPEN,
+        observed_monotonic_ns=NOW - 1,
+    )
+    adapter = ShadowMakerExecutionAdapter()
+    halted = trip_strategy_halt(
+        _maker_capital(),
+        scope=HaltScope.STRATEGY_ID,
+        scope_value="other-strategy",
+        reason="operator",
+        now_monotonic_ns=NOW,
+    )
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+            capital_state=halted,
+            require_capital_state=True,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id="unrelated-strategy-halt",
+                observed_monotonic_ns=NOW,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": _maker_snapshot()},
+        )
+    )
+    assert result.execution_events == ()
+    assert registry.state("36").bid is not None
+    assert registry.state("36").ask is not None
+    assert all(
+        action.kind is QuoteLifecycleActionKind.KEEP
+        for action in result.lifecycle_actions
+    )
+
+
+def test_uncertain_capital_halt_cancel_keeps_quote_risk_bearing() -> None:
+    engine = _engine()
+    registry = QuoteRegistry()
+    registry.apply_authoritative(
+        exchange_id="36",
+        side=QuoteSide.BID,
+        price_ticks=99,
+        size=2,
+        remaining_size=2,
+        logical_operation_id="old-bid",
+        exchange_order_id=91,
+        lifecycle_state=LifecycleState.OPEN,
+        observed_monotonic_ns=NOW - 1,
+    )
+    halted = trip_global_halt(
+        _maker_capital(),
+        reason="session_loss_limit",
+        now_monotonic_ns=NOW,
+    )
+
+    async def uncertain_cancel(
+        active: ActiveQuote,
+        logical_operation_id: str,
+        tournament_id: str,
+    ) -> ExecutionEvent:
+        del active, tournament_id
+        return ExecutionEvent(
+            logical_operation_id=logical_operation_id,
+            state=LifecycleState.UNCERTAIN,
+            observed_monotonic_ns=NOW + 1,
+            simulated=False,
+        )
+
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+            capital_state=halted,
+            require_capital_state=True,
+        ),
+        placement_dispatch=ShadowMakerExecutionAdapter().place,
+        cancel_dispatch=uncertain_cancel,
+    )
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id="uncertain-capital-cancel",
+                observed_monotonic_ns=NOW,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": _maker_snapshot()},
+        )
+    )
+
+    assert len(result.execution_events) == 1
+    assert result.execution_events[0].state is LifecycleState.UNCERTAIN
+    bid = registry.state("36").bid
+    assert bid is not None
+    assert bid.lifecycle_state is LifecycleState.UNCERTAIN
 
 
 def test_global_kill_cancels_resting_quotes_even_in_shadow() -> None:

@@ -490,24 +490,37 @@ def test_live_interlocks_require_explicit_invocation_and_trusted_account() -> No
         risk_max_per_market_exposure=100.0,
         risk_max_open_order_exposure=100.0,
         risk_max_concurrent_open_orders=10,
+        risk_capital_control_enabled=True,
+        risk_session_loss_limit=10.0,
+        risk_drawdown_limit=10.0,
     )
     with pytest.raises(LiveInterlockError):
         assert_live_interlocks(
             settings,
             explicit_live_invocation=False,
             account_trusted=True,
+            capital_state_ready=True,
         )
     with pytest.raises(LiveInterlockError):
         assert_live_interlocks(
             settings,
             explicit_live_invocation=True,
             account_trusted=False,
+            capital_state_ready=True,
+        )
+    with pytest.raises(LiveInterlockError, match="capital_control_state"):
+        assert_live_interlocks(
+            settings,
+            explicit_live_invocation=True,
+            account_trusted=True,
+            capital_state_ready=False,
         )
 
     permit = assert_live_interlocks(
         settings,
         explicit_live_invocation=True,
         account_trusted=True,
+        capital_state_ready=True,
     )
     assert permit.tournament_id == "t1"
 
@@ -555,14 +568,56 @@ def test_settings_default_to_shadow_and_live_requires_complete_caps() -> None:
     with pytest.raises(ValidationError, match="trading_enabled"):
         AppSettings(execution_mode="LIVE")
 
-    with pytest.raises(ValidationError, match="every central risk cap"):
-        AppSettings(
+    def live_settings(
+        *,
+        capital_enabled: bool,
+        session_loss: float | None,
+        drawdown: float | None,
+    ) -> AppSettings:
+        return AppSettings(
             execution_mode="LIVE",
             trading_enabled=True,
             sig_trade_credential=SecretStr("trade-secret"),
             tournament_id="t1",
             tournament_slug="cup",
+            global_kill_switch=False,
+            risk_max_order_size=10,
+            risk_max_gross_exposure=100.0,
+            risk_max_per_market_exposure=100.0,
+            risk_max_open_order_exposure=100.0,
+            risk_max_concurrent_open_orders=10,
+            risk_capital_control_enabled=capital_enabled,
+            risk_session_loss_limit=session_loss,
+            risk_drawdown_limit=drawdown,
         )
+
+    with pytest.raises(ValidationError, match="risk_capital_control_enabled"):
+        live_settings(
+            capital_enabled=False,
+            session_loss=None,
+            drawdown=None,
+        )
+
+    with pytest.raises(ValidationError, match="risk_session_loss_limit"):
+        live_settings(
+            capital_enabled=True,
+            session_loss=None,
+            drawdown=10.0,
+        )
+
+    with pytest.raises(ValidationError, match="risk_drawdown_limit"):
+        live_settings(
+            capital_enabled=True,
+            session_loss=10.0,
+            drawdown=None,
+        )
+
+    settings = live_settings(
+        capital_enabled=True,
+        session_loss=10.0,
+        drawdown=10.0,
+    )
+    assert settings.execution_mode == "LIVE"
 
 
 def test_registered_equivalent_kernel_candidates_match_reference() -> None:

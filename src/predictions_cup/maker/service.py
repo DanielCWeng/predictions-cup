@@ -12,17 +12,21 @@ import asyncio
 import logging
 import signal
 from contextlib import suppress
-from datetime import datetime
+from datetime import UTC, datetime
+from decimal import Decimal
 from time import monotonic_ns
 from typing import cast
 
 from pydantic import ValidationError
 
 from predictions_cup.config import AppSettings, load_settings
-from predictions_cup.execution.interlocks import assert_live_interlocks
+from predictions_cup.execution.interlocks import (
+    assert_live_interlocks,
+    assert_live_recovery_interlocks,
+)
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
-from predictions_cup.execution.models import ExecutionMode
+from predictions_cup.execution.models import ExecutionMode, LifecycleState
 from predictions_cup.execution.recovery import recover_startup
 from predictions_cup.external.polymarket.client import ClobMarketDataClient
 from predictions_cup.external.polymarket.health import IngestionHealth
@@ -40,6 +44,33 @@ from predictions_cup.maker.recovery import reconcile_maker_quote_registry
 from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.mapping.models import MappingDocument
+from predictions_cup.observe import (
+    BoundedObservationEmitter,
+    CaptureObservationSink,
+    CompetitionContextSampler,
+    ObservationHealthProvider,
+    ObservationHealthSnapshot,
+    ObservationHealthStatusPublisher,
+    SigOfficialCompetitionContextProvider,
+    default_observation_health_status_path,
+)
+from predictions_cup.risk import (
+    CapitalControlService,
+    CapitalRiskState,
+    ExposureAttribution,
+    ExternalCashFlowScan,
+    RiskContext,
+    RiskContextSource,
+    SigRealtimeRiskMarkProvider,
+    SqliteRiskStateStore,
+    apply_external_cash_flow_scan,
+    attribute_strategy_exposure,
+    fetch_tournament_fills,
+    latest_tournament_transaction_id,
+    normalize_sig_risk_inputs,
+    scan_external_cash_flows,
+    validate_restart_preflight,
+)
 from predictions_cup.runtime.telemetry import HotPathTelemetry
 from predictions_cup.shadow.live import LiveShadowRuntime, build_live_shadow_runtime
 from predictions_cup.sig.account_reconciliation import (
@@ -53,6 +84,7 @@ from predictions_cup.sig.account_state import (
 )
 from predictions_cup.sig.errors import SigApiError
 from predictions_cup.sig.governed_client import GovernedSigRestClient
+from predictions_cup.sig.launch_storage import ObservationCaptureRecorder
 from predictions_cup.sig.realtime_models import MarketBatchDto
 from predictions_cup.sig.realtime_state import SigRealtimeStateEngine, SubscriptionReason
 from predictions_cup.sig.realtime_storage import SigRealtimeRecorder
@@ -62,6 +94,7 @@ from predictions_cup.sig.realtime_subscriber import (
 )
 from predictions_cup.sig.rest_governor import RestPriority, SigRestGovernor
 from predictions_cup.sig.trading_client import SigTradingClient
+from predictions_cup.sig.trading_dto import PortfolioPnlDto
 
 _LOG = logging.getLogger(__name__)
 
@@ -86,6 +119,12 @@ class MakerService:
         self.pm_ws = MarketWebSocket(str(settings.polymarket_ws_url), self.pm_health)
         self._pm_token_ids = _mapped_token_ids(self.core.mapping)
         self._last_health: tuple[bool, bool, bool, datetime | None] | None = None
+        self._observation_health_provider: ObservationHealthProvider | None = None
+        self._observation_health_publisher: ObservationHealthStatusPublisher | None = None
+
+    def observation_health(self) -> ObservationHealthSnapshot | None:
+        provider = self._observation_health_provider
+        return None if provider is None else provider.health()
 
     async def run(self) -> None:
         tournament_id, tournament_slug = self._tournament_context()
@@ -97,13 +136,76 @@ class MakerService:
         )
         rest = GovernedSigRestClient(self.settings, governor=governor)
         sig_recorder = cast(SigRealtimeRecorder, NoopSigRealtimeRecorder())
+        observe_recorder = ObservationCaptureRecorder(
+            self.settings.sig_research_path,
+            queue_max=max(1_024, min(self.settings.sig_capture_queue_max, 65_536)),
+            shard_seconds=self.settings.sig_capture_parquet_shard_seconds,
+            max_rows_per_shard=self.settings.sig_capture_parquet_max_rows_per_shard,
+        )
+        observation_emitter = BoundedObservationEmitter(
+            CaptureObservationSink(observe_recorder),
+            queue_max=max(1_024, min(self.settings.sig_capture_queue_max, 65_536)),
+        )
+        self._observation_health_provider = ObservationHealthProvider(
+            observation_emitter,
+            observe_recorder,
+        )
+        self._observation_health_publisher = ObservationHealthStatusPublisher(
+            default_observation_health_status_path(self.settings.sig_research_path),
+            process_instance_id=observe_recorder.session_id,
+            owner="predictions-cup-maker.service",
+        )
+        self._publish_observation_health(force=True)
+        context_sampler = CompetitionContextSampler(
+            SigOfficialCompetitionContextProvider(rest, tournament_id=tournament_id),
+            observe_recorder.record_competition_context,
+            interval_seconds=60.0,
+        )
         journal: ExecutionJournal | None = None
         trading: SigTradingClient | None = None
         sig_state: SigRealtimeStateEngine | None = None
         runtime: MakerRuntimeLoop | None = None
         shadow_runtime: LiveShadowRuntime | None = None
+        risk_store: SqliteRiskStateStore | None = None
+        risk_service: CapitalControlService | None = None
+        risk_context_source: RiskContextSource | None = None
+        authoritative_account: AccountAuthoritativeSnapshot | None = None
+        live_sink: SigLiveSink | None = None
 
         try:
+            if self.settings.risk_capital_control_enabled:
+                risk_store = SqliteRiskStateStore(self.settings.risk_state_path)
+                risk_service = CapitalControlService(
+                    store=risk_store,
+                    max_account_age_ns=(
+                        self.settings.risk_max_account_age_ms * 1_000_000
+                    ),
+                    max_mark_age_ns=self.settings.risk_max_mark_age_ms * 1_000_000,
+                    session_loss_limit=(
+                        None
+                        if self.settings.risk_session_loss_limit is None
+                        else Decimal(str(self.settings.risk_session_loss_limit))
+                    ),
+                    drawdown_limit=(
+                        None
+                        if self.settings.risk_drawdown_limit is None
+                        else Decimal(str(self.settings.risk_drawdown_limit))
+                    ),
+                )
+                expected_profile_version = (
+                    self.core.risk_context.profile.version
+                    if self.core.risk_context.profile is not None
+                    else self.settings.risk_profile_version
+                )
+                validate_restart_preflight(
+                    risk_store.load(),
+                    session_id=tournament_id,
+                    profile_version=expected_profile_version,
+                    live_recovery=(
+                        self.core.risk_context.mode is ExecutionMode.LIVE
+                    ),
+                )
+
             account_state = AccountRealtimeStateEngine(
                 tournament_id=tournament_id,
                 reservations=self.core.reservations,
@@ -114,6 +216,7 @@ class MakerService:
                 tournament_slug=tournament_slug,
             )
             account_state.apply_authoritative(initial_account)
+            authoritative_account = initial_account
 
             tracked = _configured_tracked_exchanges(self.settings)
             if self.settings.maker_require_trusted_depth:
@@ -145,8 +248,11 @@ class MakerService:
                     self.settings.sig_rest_governor_rate_per_second
                 ),
                 governor_snapshot=rest.governor_snapshot,
+                observation_emitter=observation_emitter,
+                observation_process_instance_id=observe_recorder.session_id,
             )
             await sig_state.initialize()
+            context_sampler.maybe_schedule(datetime.now(UTC), force=True)
             await self._seed_polymarket_books()
             await self.pm_ws.set_tokens(self._pm_token_ids)
 
@@ -168,7 +274,7 @@ class MakerService:
                     self.settings,
                     governor=governor,
                 )
-                permit = assert_live_interlocks(
+                recovery_permit = assert_live_recovery_interlocks(
                     self.settings,
                     explicit_live_invocation=self.explicit_live_invocation,
                     account_trusted=account_state.trusted,
@@ -176,8 +282,10 @@ class MakerService:
                 live_sink = SigLiveSink(
                     client=trading,
                     journal=journal,
-                    permit=permit,
+                    permit=recovery_permit,
                     reservations=self.core.reservations,
+                    observation_emitter=observation_emitter,
+                    observation_process_instance_id=observe_recorder.session_id,
                 )
                 recovery = await recover_startup(
                     journal=journal,
@@ -185,6 +293,8 @@ class MakerService:
                     live_sink=live_sink,
                     tournament_id=tournament_id,
                     tournament_slug=tournament_slug,
+                    observation_emitter=observation_emitter,
+                    observation_process_instance_id=observe_recorder.session_id,
                 )
                 if not recovery.safe_to_resume_live:
                     raise RuntimeError(
@@ -197,16 +307,12 @@ class MakerService:
                     tournament_slug=tournament_slug,
                 )
                 account_state.apply_authoritative(authoritative)
+                authoritative_account = authoritative
                 reconcile_maker_quote_registry(
                     journal=journal,
                     authoritative=authoritative,
                     quotes=self.core.quotes,
                     observed_monotonic_ns=monotonic_ns(),
-                )
-                adapter = LiveMakerExecutionAdapter(
-                    live_sink,
-                    journal=journal,
-                    quotes=self.core.quotes,
                 )
             else:
                 if self.explicit_live_invocation:
@@ -215,11 +321,97 @@ class MakerService:
                     )
                 adapter = ShadowMakerExecutionAdapter()
 
+            risk_context: RiskContext | RiskContextSource = self.core.risk_context
+            if self.settings.risk_capital_control_enabled:
+                if authoritative_account is None:
+                    raise RuntimeError("RISK-002 missing authoritative account state")
+                if risk_store is None or risk_service is None:
+                    raise RuntimeError("RISK-002 durable service was not initialized")
+                risk_context_source = await self._initialize_capital_control(
+                    rest=rest,
+                    account=authoritative_account,
+                    journal=journal,
+                    service=risk_service,
+                    sig_state=sig_state,
+                    tournament_id=tournament_id,
+                    tournament_slug=tournament_slug,
+                )
+                await self._checkpoint_realtime_risk_transition(
+                    source=risk_context_source,
+                    service=risk_service,
+                )
+                risk_context = risk_context_source
+
+            if self.core.risk_context.mode is ExecutionMode.LIVE:
+                if (
+                    journal is None
+                    or trading is None
+                    or live_sink is None
+                    or risk_context_source is None
+                ):
+                    raise RuntimeError(
+                        "LIVE startup missing execution or RISK-002 recovery authority"
+                    )
+                capital = risk_context_source().capital_state
+                capital_ready = (
+                    capital is not None
+                    and capital.reconciliation_complete
+                    and capital.account_trusted
+                    and capital.exposure.trusted
+                    and capital.marks_trusted
+                )
+                if not capital_ready:
+                    # Raise the canonical interlock error and identify the exact
+                    # missing admission gate. Recovery/cancel work has already
+                    # been allowed above, but fresh economic exposure is not.
+                    assert_live_interlocks(
+                        self.settings,
+                        explicit_live_invocation=self.explicit_live_invocation,
+                        account_trusted=account_state.trusted,
+                        capital_state_ready=False,
+                    )
+                    raise AssertionError("unreachable")
+
+                assert capital is not None
+                capital_halts_make = (
+                    (
+                        capital.global_halt is not None
+                        and capital.global_halt.active
+                    )
+                    or capital.strategy_halted(
+                        self.core.engine.strategy_id,
+                        "MAKE",
+                    )
+                )
+                if not capital_halts_make:
+                    permit = assert_live_interlocks(
+                        self.settings,
+                        explicit_live_invocation=self.explicit_live_invocation,
+                        account_trusted=account_state.trusted,
+                        capital_state_ready=True,
+                    )
+                    live_sink = SigLiveSink(
+                        client=trading,
+                        journal=journal,
+                        permit=permit,
+                        reservations=self.core.reservations,
+                    )
+                # Under a durable matching halt retain the recovery-only sink:
+                # cancels/reconciliation remain legal, fresh placement is
+                # impossible both at central Risk and at the sink capability.
+                adapter = LiveMakerExecutionAdapter(
+                    live_sink,
+                    journal=journal,
+                    quotes=self.core.quotes,
+                    observation_emitter=observation_emitter,
+                    observation_process_instance_id=observe_recorder.session_id,
+                )
+
             coordinator = MakerCoordinator(
                 engine=self.core.engine,
                 lifecycle=self.core.lifecycle,
                 quote_registry=self.core.quotes,
-                risk_context=self.core.risk_context,
+                risk_context=risk_context,
                 placement_dispatch=adapter.place,
                 cancel_dispatch=adapter.cancel,
                 reservations=(
@@ -228,6 +420,8 @@ class MakerService:
                     else None
                 ),
                 kill_switch=self.core.kill_switch,
+                observation_emitter=observation_emitter,
+                observation_process_instance_id=observe_recorder.session_id,
             )
             runtime = MakerRuntimeLoop(
                 bridge=bridge,
@@ -260,6 +454,16 @@ class MakerService:
                         quotes=self.core.quotes,
                         observed_monotonic_ns=monotonic_ns(),
                     )
+                if risk_context_source is not None and risk_service is not None:
+                    await self._refresh_capital_control(
+                        rest=rest,
+                        account=authoritative,
+                        journal=journal,
+                        service=risk_service,
+                        source=risk_context_source,
+                        tournament_id=tournament_id,
+                        tournament_slug=tournament_slug,
+                    )
                 return authoritative
 
             account_controller = AccountRealtimeController(
@@ -267,6 +471,8 @@ class MakerService:
                 mint_token=rest.mint_realtime_token,
                 authoritative_resync=account_resync,
                 execution_journal=journal,
+                observation_emitter=observation_emitter,
+                observation_process_instance_id=observe_recorder.session_id,
             )
             # The startup REST snapshot was sufficient for LIVE permit/recovery,
             # but new maker placements must wait for a subscribed account socket
@@ -292,7 +498,14 @@ class MakerService:
                     name="make-polymarket",
                 ),
                 asyncio.create_task(
-                    self._run_sig_market_feed(sig_state, rest, runtime),
+                    self._run_sig_market_feed(
+                        sig_state,
+                        rest,
+                        runtime,
+                        context_sampler,
+                        risk_context_source=risk_context_source,
+                        risk_service=risk_service,
+                    ),
                     name="make-sig-market",
                 ),
                 asyncio.create_task(
@@ -350,13 +563,248 @@ class MakerService:
                 await trading.aclose()
             if journal is not None:
                 journal.close()
+            if risk_store is not None:
+                risk_store.close()
+            with suppress(Exception):
+                await context_sampler.aclose()
+            observation_emitter.close()
+            observe_recorder.close()
             await rest.aclose()
+
+    async def _initialize_capital_control(
+        self,
+        *,
+        rest: GovernedSigRestClient,
+        account: AccountAuthoritativeSnapshot,
+        journal: ExecutionJournal | None,
+        service: CapitalControlService,
+        sig_state: SigRealtimeStateEngine,
+        tournament_id: str,
+        tournament_slug: str,
+    ) -> RiskContextSource:
+        baseline_pnl, baseline_cursor = await self._stable_risk_session_baseline(
+            rest=rest,
+            tournament_slug=tournament_slug,
+        )
+        state = service.load_or_initialize(
+            session_id=tournament_id,
+            start_equity=baseline_pnl.total_account_value,
+            start_unrealised_pnl=baseline_pnl.unrealized_pnl,
+            profile_version=(
+                self.core.risk_context.profile.version
+                if self.core.risk_context.profile is not None
+                else self.settings.risk_profile_version
+            ),
+            observed_monotonic_ns=monotonic_ns(),
+            realised_pnl_cursor=baseline_cursor,
+        )
+        source = RiskContextSource(
+            self.core.risk_context,
+            state=state,
+            mark_provider=SigRealtimeRiskMarkProvider(sig_state),
+            halt_checkpoint=lambda halted, reason: service.checkpoint(
+                halted,
+                event_type="GLOBAL_HALT",
+                detail=reason,
+            ),
+        )
+        await self._refresh_capital_control(
+            rest=rest,
+            account=account,
+            journal=journal,
+            service=service,
+            source=source,
+            tournament_id=tournament_id,
+            tournament_slug=tournament_slug,
+        )
+        return source
+
+    async def _refresh_capital_control(
+        self,
+        *,
+        rest: GovernedSigRestClient,
+        account: AccountAuthoritativeSnapshot,
+        journal: ExecutionJournal | None,
+        service: CapitalControlService,
+        source: RiskContextSource,
+        tournament_id: str,
+        tournament_slug: str,
+    ) -> CapitalRiskState:
+        state = source.state
+        if state is None:
+            raise RuntimeError("RISK-002 context has no durable session state")
+
+        scan, pnl = await self._stable_incremental_risk_reads(
+            rest=rest,
+            tournament_slug=tournament_slug,
+            prior_event_id=state.realised_pnl_cursor,
+        )
+        updated = apply_external_cash_flow_scan(state, scan)
+        if updated != state:
+            service.checkpoint(
+                updated,
+                event_type="EXTERNAL_CASH_FLOW_RECONCILIATION",
+                detail=(
+                    f"delta={scan.delta};events={scan.events_scanned};"
+                    f"cursor={updated.realised_pnl_cursor}"
+                ),
+            )
+        state = updated
+
+        attributions: tuple[ExposureAttribution, ...] = ()
+        attribution_complete: bool | None = None
+        if self.settings.risk_max_per_strategy_exposure is not None:
+            if journal is None:
+                attribution_complete = not account.positions and not account.open_orders
+            else:
+                fills = await fetch_tournament_fills(
+                    rest,
+                    tournament_id=tournament_id,
+                )
+                attribution = attribute_strategy_exposure(
+                    journal=journal,
+                    account=account,
+                    fills=fills,
+                    market_by_exchange={
+                        record.sig_exchange_id: record.sig_market_id
+                        for record in self.core.mapping.records
+                    },
+                )
+                attributions = attribution.attributions
+                attribution_complete = attribution.complete
+                if not attribution.complete:
+                    raise RuntimeError(
+                        "RISK-002 strategy exposure attribution incomplete: "
+                        + attribution.reason
+                    )
+
+        observed_ns = monotonic_ns()
+        inputs = normalize_sig_risk_inputs(
+            session_id=tournament_id,
+            session_start_equity=state.session_start_equity,
+            session_start_unrealised_pnl=state.session_start_unrealised_pnl,
+            account=account,
+            pnl=pnl,
+            observed_monotonic_ns=observed_ns,
+            net_external_cash_flow=state.net_external_cash_flow,
+            unresolved_operation_ids=_risk_uncertain_operation_ids(journal),
+            realised_pnl_cursor=state.realised_pnl_cursor,
+            attributions=attributions,
+            memberships=self.core.risk_context.exposure_groups,
+            strategy_attribution_complete=attribution_complete,
+        )
+        if (
+            self.settings.risk_max_event_group_exposure is not None
+            and not inputs.exposure.group_classification_complete
+        ):
+            raise RuntimeError("RISK-002 event-group classification is incomplete")
+
+        reconciled = service.reconcile(
+            state=state,
+            authoritative=inputs.authoritative,
+            reconstruction=inputs.reconstruction,
+            exposure=inputs.exposure,
+            marks=inputs.marks,
+            now_monotonic_ns=observed_ns,
+        )
+        source.publish(
+            reconciled,
+            valuation_positions=inputs.valuation_positions,
+        )
+        return reconciled
+
+    async def _stable_risk_session_baseline(
+        self,
+        *,
+        rest: GovernedSigRestClient,
+        tournament_slug: str,
+    ) -> tuple[PortfolioPnlDto, str | None]:
+        for _ in range(3):
+            before = await latest_tournament_transaction_id(
+                rest,
+                tournament_slug=tournament_slug,
+            )
+            pnl = await rest.get_tournament_pnl(tournament_slug, period="all")
+            after = await latest_tournament_transaction_id(
+                rest,
+                tournament_slug=tournament_slug,
+            )
+            if before == after:
+                return pnl, after
+        raise RuntimeError("RISK-002 could not establish a stable session baseline")
+
+    async def _stable_incremental_risk_reads(
+        self,
+        *,
+        rest: GovernedSigRestClient,
+        tournament_slug: str,
+        prior_event_id: str | None,
+    ) -> tuple[ExternalCashFlowScan, PortfolioPnlDto]:
+        for _ in range(3):
+            scan = await scan_external_cash_flows(
+                rest,
+                tournament_slug=tournament_slug,
+                prior_event_id=prior_event_id,
+            )
+            pnl = await rest.get_tournament_pnl(tournament_slug, period="all")
+            after = await latest_tournament_transaction_id(
+                rest,
+                tournament_slug=tournament_slug,
+            )
+            observed_newest = (
+                scan.newest_event_id
+                if scan.newest_event_id is not None
+                else prior_event_id
+            )
+            if after == observed_newest:
+                return scan, pnl
+        raise RuntimeError("RISK-002 authoritative reads did not reach a stable fence")
+
+    async def _checkpoint_realtime_risk_transition(
+        self,
+        *,
+        source: RiskContextSource | None,
+        service: CapitalControlService | None,
+    ) -> None:
+        if source is None or service is None:
+            return
+        before = source.state
+        after = source.refresh(now_ns=monotonic_ns())
+        if before is None or after is None:
+            return
+        new_peak = after.peak_session_equity > before.peak_session_equity
+        new_halt = (
+            after.global_halt is not None
+            and after.global_halt.active
+            and (
+                before.global_halt is None
+                or not before.global_halt.active
+            )
+        )
+        if not new_peak and not new_halt:
+            return
+        event_type = "GLOBAL_HALT" if new_halt else "PEAK_EQUITY"
+        detail = (
+            after.global_halt.reason
+            if new_halt and after.global_halt is not None
+            else f"peak={after.peak_session_equity}"
+        )
+        await asyncio.to_thread(
+            service.checkpoint,
+            after,
+            event_type=event_type,
+            detail=detail,
+        )
 
     async def _run_sig_market_feed(
         self,
         sig_state: SigRealtimeStateEngine,
         rest: GovernedSigRestClient,
         runtime: MakerRuntimeLoop,
+        context_sampler: CompetitionContextSampler,
+        *,
+        risk_context_source: RiskContextSource | None = None,
+        risk_service: CapitalControlService | None = None,
     ) -> None:
         reason = SubscriptionReason.INITIAL_SUBSCRIBE
         while not self.stop_event.is_set():
@@ -414,6 +862,10 @@ class MakerService:
                                 for state in sig_state.states.values()
                                 if state.market_id in settled
                             )
+                        await self._checkpoint_realtime_risk_transition(
+                            source=risk_context_source,
+                            service=risk_service,
+                        )
                         runtime.notify_sig(
                             affected,
                             observed_monotonic_ns=monotonic_ns(),
@@ -424,11 +876,19 @@ class MakerService:
                             await runtime.drain_once()
                         raise
 
+                async def maintenance(observed_at: datetime) -> None:
+                    await sig_state.maintenance(observed_at)
+                    context_sampler.maybe_schedule(observed_at)
+                    await self._checkpoint_realtime_risk_transition(
+                        source=risk_context_source,
+                        service=risk_service,
+                    )
+
                 outcome = await subscriber.run(
                     on_batch=on_batch,
                     on_connected=connected,
                     stop_event=self.stop_event,
-                    on_maintenance=sig_state.maintenance,
+                    on_maintenance=maintenance,
                 )
             except SigApiError:
                 sig_state.mark_disconnected()
@@ -521,6 +981,7 @@ class MakerService:
         runtime: MakerRuntimeLoop,
     ) -> None:
         while not self.stop_event.is_set():
+            self._publish_observation_health()
             current = (
                 self.pm_health.websocket_connected,
                 sig_state.health.connected,
@@ -535,6 +996,19 @@ class MakerService:
                 if previous is None or current[3] != previous[3]:
                     runtime.notify_account(observed_monotonic_ns=monotonic_ns())
             await asyncio.sleep(0.05)
+
+    def _publish_observation_health(self, *, force: bool = False) -> None:
+        provider = self._observation_health_provider
+        publisher = self._observation_health_publisher
+        if provider is None or publisher is None:
+            return
+        try:
+            publisher.publish(provider.health(), force=force)
+        except Exception as exc:
+            _LOG.warning(
+                "OBSERVE health status publication failed without affecting Risk: %s",
+                type(exc).__name__,
+            )
 
     async def _best_effort_kill_drain(
         self,
@@ -579,6 +1053,24 @@ class MakerService:
         for sig in (signal.SIGINT, signal.SIGTERM):
             with suppress(NotImplementedError):
                 loop.add_signal_handler(sig, self.stop_event.set)
+
+
+def _risk_uncertain_operation_ids(
+    journal: ExecutionJournal | None,
+) -> tuple[str, ...]:
+    if journal is None:
+        return ()
+    uncertain_states = {
+        LifecycleState.PENDING,
+        LifecycleState.CANCEL_PENDING,
+        LifecycleState.UNCERTAIN,
+        LifecycleState.RECONCILING,
+    }
+    return tuple(
+        envelope.logical_operation_id
+        for envelope in journal.unresolved()
+        if envelope.lifecycle_state in uncertain_states
+    )
 
 
 def _mapped_token_ids(mapping: MappingDocument) -> tuple[str, ...]:

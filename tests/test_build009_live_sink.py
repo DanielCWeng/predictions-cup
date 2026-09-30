@@ -21,9 +21,18 @@ from predictions_cup.execution.models import (
 )
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.reservations import ExecutionReservationBook
+from predictions_cup.observe import (
+    BoundedObservationEmitter,
+    InMemoryObservationSink,
+    ObservationKind,
+)
 from predictions_cup.risk.core import RiskDecision
 from predictions_cup.runtime import OrderAction, OutcomeSide
-from predictions_cup.sig.errors import SigClientRequestError, SigExecutionUncertainError
+from predictions_cup.sig.errors import (
+    SigClientRequestError,
+    SigExecutionUncertainError,
+    SigRateLimitError,
+)
 from predictions_cup.sig.trading_client import SigTradingClient
 from predictions_cup.sig.trading_dto import (
     BatchOrderResponseDto,
@@ -96,6 +105,45 @@ class FakeRelationshipRejectedTradingClient(FakeTradingClient):
         )
 
 
+class FakeRateLimitTradingClient(FakeTradingClient):
+    async def place_order_payload(
+        self,
+        payload_json: str,
+    ) -> SingleOrderResponseDto:
+        del payload_json
+        raise SigRateLimitError(
+            status_code=429,
+            code="RATE_LIMITED",
+            safe_message="fixture rate limit",
+        )
+
+
+class Fake503TradingClient(FakeTradingClient):
+    async def place_order_payload(
+        self,
+        payload_json: str,
+    ) -> SingleOrderResponseDto:
+        del payload_json
+        raise SigExecutionUncertainError(
+            status_code=503,
+            code="SERVICE_UNAVAILABLE",
+            safe_message="fixture 503",
+        )
+
+
+class FakeTransportTradingClient(FakeTradingClient):
+    async def place_order_payload(
+        self,
+        payload_json: str,
+    ) -> SingleOrderResponseDto:
+        del payload_json
+        raise SigExecutionUncertainError(
+            status_code=None,
+            code="TRANSPORT_OUTCOME_UNKNOWN",
+            safe_message="fixture transport timeout",
+        )
+
+
 class FakeUncertainTradingClient(FakeTradingClient):
     @staticmethod
     def _raise_uncertain(payload_json: str) -> None:
@@ -141,11 +189,15 @@ def _permit() -> LiveExecutionPermit:
         risk_max_per_market_exposure=100.0,
         risk_max_open_order_exposure=100.0,
         risk_max_concurrent_open_orders=10,
+        risk_capital_control_enabled=True,
+        risk_session_loss_limit=10.0,
+        risk_drawdown_limit=10.0,
     )
     return assert_live_interlocks(
         settings,
         explicit_live_invocation=True,
         account_trusted=True,
+        capital_state_ready=True,
     )
 
 
@@ -189,16 +241,21 @@ def test_live_sink_records_observation_decision_dispatch_and_ack_clocks(
     journal = ExecutionJournal(tmp_path / "execution.sqlite3")
     reservations = ExecutionReservationBook()
     reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    observation_sink = InMemoryObservationSink()
+    emitter = BoundedObservationEmitter(observation_sink, queue_max=100)
     sink = SigLiveSink(
         client=cast(SigTradingClient, FakeTradingClient()),
         journal=journal,
         permit=_permit(),
         reservations=reservations,
         clock_ns=lambda: next(ticks),
+        observation_emitter=emitter,
+        observation_process_instance_id="test-process",
     )
 
     try:
         event = asyncio.run(sink.dispatch(plan))
+        emitter.close()
         assert event.state is LifecycleState.OPEN
         events = journal.events("op-91")
         submission = next(item for item in events if item.event_type == "SUBMISSION")
@@ -217,7 +274,20 @@ def test_live_sink_records_observation_decision_dispatch_and_ack_clocks(
         assert dispatch.observed_monotonic_ns == 300
         assert ack.tournament_id == "t1"
         assert ack.observed_monotonic_ns == 400
+        kinds = [item.kind for item in observation_sink.observations]
+        assert kinds == [
+            ObservationKind.DECISION_OBSERVED,
+            ObservationKind.PLAN_CREATED,
+            ObservationKind.REQUEST_ENQUEUED,
+            ObservationKind.REQUEST_DISPATCHED,
+            ObservationKind.RESPONSE_RECEIVED,
+            ObservationKind.RESPONSE_PARSED,
+            ObservationKind.ACK,
+        ]
+        assert observation_sink.observations[-1].logical_operation_id == "op-91"
+        assert observation_sink.observations[-1].idempotency_key == plan.envelope.idempotency_key
     finally:
+        emitter.close()
         journal.close()
 
 
@@ -526,3 +596,68 @@ def test_generic_5xx_execution_outcome_stays_uncertain_and_reserved(
     finally:
         journal.close()
 
+
+
+@pytest.mark.parametrize(
+    ("client", "error_type", "expected_kind"),
+    (
+        (FakeRateLimitTradingClient(), SigRateLimitError, ObservationKind.RATE_LIMIT),
+        (Fake503TradingClient(), SigExecutionUncertainError, ObservationKind.SERVER_ERROR),
+        (
+            FakeTransportTradingClient(),
+            SigExecutionUncertainError,
+            ObservationKind.TRANSPORT_EXCEPTION,
+        ),
+    ),
+)
+def test_observe_classifies_final_429_503_and_transport_timeout(
+    tmp_path: Path,
+    client: FakeTradingClient,
+    error_type: type[Exception],
+    expected_kind: ObservationKind,
+) -> None:
+    intent = _intent()
+    decision = RiskDecision(
+        approved=True,
+        reason="approved",
+        execution_mode=ExecutionMode.LIVE,
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        intents=(intent,),
+        strategy_family="FV-TAKE",
+        strategy_id="fixture",
+        signal_value=0.025,
+        fair_value=0.55,
+        decision_observation_ns=100,
+    )
+    plan = build_execution_plan(
+        decision,
+        logical_operation_id=f"op-observe-{expected_kind.value}",
+        created_monotonic_ns=150,
+    )
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    journal = ExecutionJournal(tmp_path / f"{expected_kind.value}.sqlite3")
+    observation_sink = InMemoryObservationSink()
+    emitter = BoundedObservationEmitter(observation_sink, queue_max=100)
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, client),
+        journal=journal,
+        permit=_permit(),
+        reservations=reservations,
+        clock_ns=lambda: 200,
+        observation_emitter=emitter,
+        observation_process_instance_id="test-process",
+    )
+    try:
+        with pytest.raises(error_type):
+            asyncio.run(sink.dispatch(plan))
+        emitter.close()
+        kinds = {item.kind for item in observation_sink.observations}
+        assert expected_kind in kinds
+        if expected_kind is ObservationKind.RATE_LIMIT:
+            assert ObservationKind.REJECTED in kinds
+        else:
+            assert ObservationKind.UNCERTAIN in kinds
+    finally:
+        emitter.close()
+        journal.close()

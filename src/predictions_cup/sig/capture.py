@@ -8,10 +8,17 @@ import json
 import logging
 import signal
 from contextlib import suppress
+from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from predictions_cup.config import AppSettings, load_settings
+from predictions_cup.observe import (
+    BoundedObservationEmitter,
+    CaptureObservationSink,
+    CompetitionContextSampler,
+    SigOfficialCompetitionContextProvider,
+)
 from predictions_cup.sig.errors import SigApiError
 from predictions_cup.sig.governed_client import GovernedSigRestClient
 from predictions_cup.sig.launch_storage import LaunchSigRecorder
@@ -107,6 +114,15 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
             research_root,
             recorder.session_id,
         )
+        observation_emitter = BoundedObservationEmitter(
+            CaptureObservationSink(recorder),
+            queue_max=max(1_024, min(queue_max, 65_536)),
+        )
+        context_sampler = CompetitionContextSampler(
+            SigOfficialCompetitionContextProvider(rest, tournament_id=tournament_id),
+            recorder.record_competition_context,
+            interval_seconds=60.0,
+        )
         stop_event = asyncio.Event()
         _install_signal_handlers(stop_event)
         if args.run_seconds is not None:
@@ -141,7 +157,14 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
             ),
             governed_rate_per_second=settings.sig_rest_governor_rate_per_second,
             governor_snapshot=rest.governor_snapshot,
+            observation_emitter=observation_emitter,
+            observation_process_instance_id=recorder.session_id,
         )
+
+        async def maintenance(observed_at: datetime) -> None:
+            await engine.maintenance(observed_at)
+            context_sampler.maybe_schedule(observed_at)
+
         try:
             cutoff = datetime.now(UTC) - timedelta(days=settings.sig_realtime_retention_days)
             recorder.prune_before(cutoff)
@@ -153,6 +176,7 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                     token = await rest.mint_realtime_token()
                     if reason == SubscriptionReason.INITIAL_SUBSCRIBE:
                         await engine.initialize()
+                        context_sampler.maybe_schedule(datetime.now(UTC), force=True)
                     else:
                         await engine.prepare_subscription(reason)
                     recorder.record_connection_boundary(
@@ -170,7 +194,7 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                         on_batch=engine.handle_raw_batch,
                         on_connected=engine.mark_connected,
                         stop_event=stop_event,
-                        on_maintenance=engine.maintenance,
+                        on_maintenance=maintenance,
                     )
                 except SigApiError as exc:
                     engine.mark_disconnected()
@@ -194,12 +218,18 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                 await asyncio.sleep(1.0)
         finally:
             await engine.aclose()
+            await context_sampler.aclose()
+            observe_health = asdict(observation_emitter.health())
+            context_health = _json_health_snapshot(context_sampler.health())
             if args.print_health:
                 health = _json_health_snapshot(engine.health_snapshot())
                 health["capture"] = _json_health_snapshot(
                     recorder.capture_health_snapshot()
                 )
+                health["observe"] = observe_health
+                health["competition_context"] = context_health
                 print(json.dumps(health, sort_keys=True))
+            observation_emitter.close()
             recorder.close()
     return 0
 

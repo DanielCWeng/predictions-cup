@@ -12,10 +12,12 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Protocol
+from uuid import uuid4
 
 from pydantic import ValidationError
 
 from predictions_cup.models import OrderBook
+from predictions_cup.observe.contracts import ObservationEmitter, ObservationKind, VenueObservation
 from predictions_cup.sig.dto import BulkPricesDto, MarketDto, OrderBookSnapshotDto
 from predictions_cup.sig.realtime_models import MarketBatchDto, RealtimeTradeDto
 from predictions_cup.sig.realtime_storage import SigRealtimeRecorder
@@ -171,6 +173,8 @@ class SigRealtimeStateEngine:
         governed_rate_per_second: float = 2.0,
         governor_snapshot: GovernorSnapshotFn | None = None,
         clock: Clock = lambda: datetime.now(UTC),
+        observation_emitter: ObservationEmitter | None = None,
+        observation_process_instance_id: str | None = None,
     ) -> None:
         if not tournament_id.strip():
             raise ValueError("tournament_id must not be blank")
@@ -200,6 +204,14 @@ class SigRealtimeStateEngine:
         self._governed_rate_per_second = governed_rate_per_second
         self._governor_snapshot = governor_snapshot
         self._clock = clock
+        self._observation_emitter = observation_emitter
+        self._observation_process_instance_id = (
+            uuid4().hex
+            if observation_process_instance_id is None
+            else observation_process_instance_id
+        )
+        if not self._observation_process_instance_id.strip():
+            raise ValueError("observation_process_instance_id must not be blank")
 
         self.market_states: dict[str, MarketRuntimeState] = {}
         self.states: dict[str, ExchangeRuntimeState] = {}
@@ -270,6 +282,12 @@ class SigRealtimeStateEngine:
 
     async def prepare_subscription(self, reason: SubscriptionReason) -> None:
         """Invalidate tracked depth, recover authoritative state, then resubscribe."""
+        recovery_started_ns = time.monotonic_ns()
+        self._observe(
+            ObservationKind.RECONNECT_STARTED,
+            monotonic_ns=recovery_started_ns,
+            detail=(("reason", reason.value),),
+        )
         self.health.connected = False
         self.last_accepted_revision = None
         transition = {
@@ -302,6 +320,11 @@ class SigRealtimeStateEngine:
         await self.refresh_bulk_prices(
             reason=reason.value,
             priority=RestPriority.BACKGROUND,
+        )
+        self._observe(
+            ObservationKind.RECONNECT_RESOLVED,
+            monotonic_ns=time.monotonic_ns(),
+            detail=(("reason", reason.value),),
         )
 
     def mark_connected(self) -> None:
@@ -519,6 +542,15 @@ class SigRealtimeStateEngine:
             and delivery.previous_revision != self.last_accepted_revision
         ):
             self.health.revision_gap_count += 1
+            self._observe(
+                ObservationKind.REALTIME_REVISION_GAP,
+                monotonic_ns=monotonic_receive_ns,
+                revision=delivery.revision,
+                detail=(
+                    ("expected_previous_revision", str(self.last_accepted_revision)),
+                    ("observed_previous_revision", str(delivery.previous_revision)),
+                ),
+            )
             await self._full_resync(
                 transition=TrustTransition.UNTRUSTED_REVISION_GAP,
                 reason="revision_gap",
@@ -685,6 +717,37 @@ class SigRealtimeStateEngine:
                 governor.pending_background_reads if governor is not None else None
             ),
         }
+
+    def _observe(
+        self,
+        kind: ObservationKind,
+        *,
+        monotonic_ns: int,
+        exchange_id: str | None = None,
+        revision: int | None = None,
+        detail: tuple[tuple[str, str], ...] = (),
+    ) -> None:
+        emitter = self._observation_emitter
+        if emitter is None:
+            return
+        try:
+            emitter.emit(
+                VenueObservation(
+                    kind=kind,
+                    observed_at=self._clock(),
+                    monotonic_ns=monotonic_ns,
+                    process_instance_id=self._observation_process_instance_id,
+                    source="SIG_REALTIME_STATE",
+                    source_version="observe-001",
+                    provenance="LOCAL_STATE_ENGINE",
+                    tournament_id=self.tournament_id,
+                    exchange_id=exchange_id,
+                    revision=revision,
+                    detail=detail,
+                )
+            )
+        except Exception:
+            return
 
     async def _full_resync(
         self,

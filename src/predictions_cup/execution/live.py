@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable
+from datetime import UTC, datetime
 from time import monotonic_ns
+from uuid import uuid4
 
 from predictions_cup.execution.interlocks import LiveExecutionPermit
 from predictions_cup.execution.journal import ExecutionJournal
@@ -18,10 +20,12 @@ from predictions_cup.execution.models import (
 )
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
+from predictions_cup.observe.contracts import ObservationEmitter, ObservationKind, VenueObservation
 from predictions_cup.sig.errors import SigApiError, SigExecutionUncertainError
 from predictions_cup.sig.trading_client import SigTradingClient
 
 ClockNs = Callable[[], int]
+WallClock = Callable[[], datetime]
 
 
 class SigLiveSink:
@@ -35,12 +39,24 @@ class SigLiveSink:
         permit: LiveExecutionPermit,
         reservations: ExecutionReservationBook,
         clock_ns: ClockNs = monotonic_ns,
+        wall_clock: WallClock = lambda: datetime.now(UTC),
+        observation_emitter: ObservationEmitter | None = None,
+        observation_process_instance_id: str | None = None,
     ) -> None:
         self._client = client
         self._journal = journal
         self._permit = permit
         self._reservations = reservations
         self._clock_ns = clock_ns
+        self._wall_clock = wall_clock
+        self._observation_emitter = observation_emitter
+        self._observation_process_instance_id = (
+            uuid4().hex
+            if observation_process_instance_id is None
+            else observation_process_instance_id
+        )
+        if not self._observation_process_instance_id.strip():
+            raise ValueError("observation_process_instance_id must not be blank")
 
     async def dispatch(self, plan: ExecutionPlan) -> ExecutionEvent:
         return await self._dispatch_placement(plan, require_reservation=True)
@@ -102,6 +118,10 @@ class SigLiveSink:
             raise ValueError("SigLiveSink accepts LIVE envelopes only")
         if envelope.tournament_id != self._permit.tournament_id:
             raise ValueError("LIVE permit tournament does not match execution envelope")
+        if require_reservation and not self._permit.fresh_admission_allowed:
+            raise ValueError(
+                "recovery-only LIVE permit cannot dispatch fresh economic placement"
+            )
         if require_reservation and not self._reservations.contains_operation(
             envelope.logical_operation_id,
             envelope.intent_ids,
@@ -118,8 +138,28 @@ class SigLiveSink:
         }:
             raise ValueError("placement dispatch requires a placement operation kind")
 
+        if plan.audit is not None:
+            self._observe(
+                ObservationKind.DECISION_OBSERVED,
+                envelope,
+                monotonic_ns=plan.audit.decision_observation_ns,
+                plan=plan,
+            )
+        self._observe(
+            ObservationKind.PLAN_CREATED,
+            envelope,
+            monotonic_ns=envelope.created_monotonic_ns,
+            plan=plan,
+        )
+
         # Safety-critical ordering: durable identity precedes network dispatch.
         submitted = self._clock_ns()
+        self._observe(
+            ObservationKind.REQUEST_ENQUEUED,
+            envelope,
+            monotonic_ns=submitted,
+            plan=plan,
+        )
         self._journal.record_before_dispatch(
             envelope,
             plan.intents,
@@ -127,6 +167,12 @@ class SigLiveSink:
             submitted_monotonic_ns=submitted,
         )
         network_dispatch_ns = self._clock_ns()
+        self._observe(
+            ObservationKind.REQUEST_DISPATCHED,
+            envelope,
+            monotonic_ns=network_dispatch_ns,
+            plan=plan,
+        )
 
         try:
             if envelope.operation_kind is OperationKind.SINGLE_PLACEMENT:
@@ -139,6 +185,7 @@ class SigLiveSink:
                     else LifecycleState.FILLED
                 )
                 response_json = single_response.model_dump_json(by_alias=True)
+                response_status: int | None = 200
             elif envelope.operation_kind is OperationKind.BEST_EFFORT_BATCH:
                 batch_response = await self._client.place_batch_payload(
                     envelope.payload_json
@@ -149,6 +196,9 @@ class SigLiveSink:
                     else LifecycleState.ACKED
                 )
                 response_json = batch_response.model_dump_json(by_alias=True)
+                # SigTradingClient currently returns the validated DTO without
+                # retaining the outer 200/207/422 status.
+                response_status = None
             else:
                 multi_response = await self._client.place_multi_leg_payload(
                     envelope.payload_json
@@ -160,8 +210,17 @@ class SigLiveSink:
                     else LifecycleState.ACKED
                 )
                 response_json = multi_response.model_dump_json(by_alias=True)
-        except SigExecutionUncertainError:
+                response_status = 200
+        except SigExecutionUncertainError as exc:
             observed = self._clock_ns()
+            self._observe_error(exc, envelope, observed, plan=plan)
+            self._observe(
+                ObservationKind.UNCERTAIN,
+                envelope,
+                monotonic_ns=observed,
+                plan=plan,
+                status_code=exc.status_code,
+            )
             self._journal.record_event(
                 logical_operation_id=envelope.logical_operation_id,
                 tournament_id=envelope.tournament_id,
@@ -181,8 +240,16 @@ class SigLiveSink:
                 terminal_status=LifecycleState.UNCERTAIN.value,
             )
             raise
-        except SigApiError:
+        except SigApiError as exc:
             observed = self._clock_ns()
+            self._observe_error(exc, envelope, observed, plan=plan)
+            self._observe(
+                ObservationKind.REJECTED,
+                envelope,
+                monotonic_ns=observed,
+                plan=plan,
+                status_code=exc.status_code,
+            )
             self._journal.record_event(
                 logical_operation_id=envelope.logical_operation_id,
                 tournament_id=envelope.tournament_id,
@@ -205,6 +272,20 @@ class SigLiveSink:
             raise
 
         observed = self._clock_ns()
+        self._observe(
+            ObservationKind.RESPONSE_RECEIVED,
+            envelope,
+            monotonic_ns=observed,
+            plan=plan,
+            status_code=response_status,
+        )
+        self._observe(
+            ObservationKind.RESPONSE_PARSED,
+            envelope,
+            monotonic_ns=observed,
+            plan=plan,
+            status_code=response_status,
+        )
         self._journal.record_event(
             logical_operation_id=envelope.logical_operation_id,
             tournament_id=envelope.tournament_id,
@@ -241,7 +322,36 @@ class SigLiveSink:
                 terminal_status=state.value,
                 detail_json=response_json,
             )
+            self._observe(
+                ObservationKind.ACK,
+                envelope,
+                monotonic_ns=observed,
+                plan=plan,
+                intent=intent,
+                exchange_id=single_response.exchange_id,
+                exchange_order_id=(
+                    None if single_response.order_id is None else str(single_response.order_id)
+                ),
+                status_code=response_status,
+            )
             if single_response.quantity_traded > 0:
+                self._observe(
+                    (
+                        ObservationKind.FILL
+                        if state is LifecycleState.FILLED
+                        else ObservationKind.PARTIAL_FILL
+                    ),
+                    envelope,
+                    monotonic_ns=observed,
+                    plan=plan,
+                    intent=intent,
+                    exchange_id=single_response.exchange_id,
+                    exchange_order_id=(
+                        None if single_response.order_id is None else str(single_response.order_id)
+                    ),
+                    status_code=response_status,
+                    detail=(("quantity", str(single_response.quantity_traded)),),
+                )
                 self._journal.record_event(
                     logical_operation_id=envelope.logical_operation_id,
                 tournament_id=envelope.tournament_id,
@@ -297,6 +407,22 @@ class SigLiveSink:
                         separators=(",", ":"),
                     ),
                 )
+                self._observe(
+                    (
+                        ObservationKind.ACK
+                        if batch_result.ok
+                        else ObservationKind.REJECTED
+                    ),
+                    envelope,
+                    monotonic_ns=observed,
+                    plan=plan,
+                    intent=intent,
+                    exchange_id=None if intent is None else intent.exchange_id,
+                    exchange_order_id=(
+                        str(order_id) if isinstance(order_id, (int, str)) else None
+                    ),
+                    status_code=batch_result.status,
+                )
         else:
             for multi_result in multi_response.results:
                 intent = (
@@ -328,6 +454,22 @@ class SigLiveSink:
                         default=str,
                         separators=(",", ":"),
                     ),
+                )
+                self._observe(
+                    (
+                        ObservationKind.ACK
+                        if multi_result.ok
+                        else ObservationKind.REJECTED
+                    ),
+                    envelope,
+                    monotonic_ns=observed,
+                    plan=plan,
+                    intent=intent,
+                    exchange_id=None if intent is None else intent.exchange_id,
+                    exchange_order_id=(
+                        str(order_id) if isinstance(order_id, (int, str)) else None
+                    ),
+                    status_code=200,
                 )
         self._journal.mark_state(
             envelope.logical_operation_id,
@@ -374,6 +516,16 @@ class SigLiveSink:
         )
         raw = json.loads(envelope.payload_json)
         network_dispatch_ns = self._clock_ns()
+        self._observe(
+            ObservationKind.CANCEL_REQUESTED,
+            envelope,
+            monotonic_ns=network_dispatch_ns,
+            exchange_order_id=(
+                str(raw["orderId"])
+                if isinstance(raw.get("orderId"), (int, str))
+                else None
+            ),
+        )
 
         try:
             if envelope.operation_kind is OperationKind.SINGLE_CANCELLATION:
@@ -387,6 +539,7 @@ class SigLiveSink:
                     separators=(",", ":"),
                 )
                 state = LifecycleState.CANCELLED
+                response_status = 200
             else:
                 tournament_id = raw.get("tournamentId")
                 exchange_id = raw.get("exchangeId")
@@ -404,8 +557,21 @@ class SigLiveSink:
                     if not response.errors
                     else LifecycleState.CANCEL_PENDING
                 )
-        except SigExecutionUncertainError:
+                response_status = None
+        except SigExecutionUncertainError as exc:
             observed = self._clock_ns()
+            self._observe_error(exc, envelope, observed)
+            self._observe(
+                ObservationKind.UNCERTAIN,
+                envelope,
+                monotonic_ns=observed,
+                exchange_order_id=(
+                    str(raw["orderId"])
+                    if isinstance(raw.get("orderId"), (int, str))
+                    else None
+                ),
+                status_code=exc.status_code,
+            )
             self._journal.record_event(
                 logical_operation_id=envelope.logical_operation_id,
                 tournament_id=envelope.tournament_id,
@@ -436,8 +602,20 @@ class SigLiveSink:
                 terminal_status=LifecycleState.UNCERTAIN.value,
             )
             raise
-        except SigApiError:
+        except SigApiError as exc:
             observed = self._clock_ns()
+            self._observe_error(exc, envelope, observed)
+            self._observe(
+                ObservationKind.REJECTED,
+                envelope,
+                monotonic_ns=observed,
+                exchange_order_id=(
+                    str(raw["orderId"])
+                    if isinstance(raw.get("orderId"), (int, str))
+                    else None
+                ),
+                status_code=exc.status_code,
+            )
             self._journal.record_event(
                 logical_operation_id=envelope.logical_operation_id,
                 tournament_id=envelope.tournament_id,
@@ -470,6 +648,30 @@ class SigLiveSink:
             raise
 
         observed = self._clock_ns()
+        self._observe(
+            ObservationKind.RESPONSE_RECEIVED,
+            envelope,
+            monotonic_ns=observed,
+            status_code=response_status,
+        )
+        self._observe(
+            ObservationKind.RESPONSE_PARSED,
+            envelope,
+            monotonic_ns=observed,
+            status_code=response_status,
+        )
+        self._observe(
+            ObservationKind.CANCEL_ACK,
+            envelope,
+            monotonic_ns=observed,
+            exchange_order_id=(
+                str(raw["orderId"])
+                if isinstance(raw.get("orderId"), (int, str))
+                else None
+            ),
+            status_code=response_status,
+            detail=(("state", state.value),),
+        )
         self._journal.record_event(
             logical_operation_id=envelope.logical_operation_id,
             tournament_id=envelope.tournament_id,
@@ -507,3 +709,75 @@ class SigLiveSink:
             observed_monotonic_ns=observed,
             simulated=False,
         )
+
+    def _observe_error(
+        self,
+        exc: SigApiError,
+        envelope: ExecutionEnvelope,
+        observed_ns: int,
+        *,
+        plan: ExecutionPlan | None = None,
+    ) -> None:
+        if exc.status_code == 429:
+            kind = ObservationKind.RATE_LIMIT
+        elif exc.status_code is not None and exc.status_code >= 500:
+            kind = ObservationKind.SERVER_ERROR
+        elif exc.status_code is None:
+            kind = ObservationKind.TRANSPORT_EXCEPTION
+        else:
+            return
+        self._observe(
+            kind,
+            envelope,
+            monotonic_ns=observed_ns,
+            plan=plan,
+            status_code=exc.status_code,
+            detail=(("error_code", exc.code or type(exc).__name__),),
+        )
+
+    def _observe(
+        self,
+        kind: ObservationKind,
+        envelope: ExecutionEnvelope,
+        *,
+        monotonic_ns: int,
+        plan: ExecutionPlan | None = None,
+        intent: object | None = None,
+        exchange_id: str | None = None,
+        exchange_order_id: str | None = None,
+        status_code: int | None = None,
+        detail: tuple[tuple[str, str], ...] = (),
+    ) -> None:
+        emitter = self._observation_emitter
+        if emitter is None:
+            return
+        logical_intent_id = getattr(intent, "intent_id", None)
+        market_id = getattr(intent, "market_id", None)
+        resolved_exchange = exchange_id or getattr(intent, "exchange_id", None)
+        audit = None if plan is None else plan.audit
+        try:
+            emitter.emit(
+                VenueObservation(
+                    kind=kind,
+                    observed_at=self._wall_clock(),
+                    monotonic_ns=monotonic_ns,
+                    process_instance_id=self._observation_process_instance_id,
+                    source="BUILD_009_SIG_LIVE_SINK",
+                    source_version="observe-001",
+                    provenance="LOCAL_EXECUTION_BOUNDARY",
+                    tournament_id=envelope.tournament_id,
+                    market_id=market_id,
+                    exchange_id=resolved_exchange,
+                    strategy_family=None if audit is None else audit.strategy_family,
+                    strategy_id=None if audit is None else audit.strategy_id,
+                    logical_operation_id=envelope.logical_operation_id,
+                    logical_intent_id=logical_intent_id,
+                    idempotency_key=envelope.idempotency_key,
+                    exchange_order_id=exchange_order_id,
+                    status_code=status_code,
+                    detail=detail,
+                )
+            )
+        except Exception:
+            # Observation must never become a safety dependency.
+            return

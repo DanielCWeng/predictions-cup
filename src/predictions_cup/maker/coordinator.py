@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
+from datetime import UTC, datetime
+from uuid import uuid4
 
 from predictions_cup.execution.models import ExecutionEvent, ExecutionMode, LifecycleState
 from predictions_cup.execution.planner import build_execution_plan
@@ -19,6 +21,7 @@ from predictions_cup.maker.lifecycle import (
     QuoteRegistry,
 )
 from predictions_cup.maker.safety import MakerKillSwitch
+from predictions_cup.observe.contracts import ObservationEmitter, ObservationKind, VenueObservation
 from predictions_cup.risk.core import RiskContext, RiskDecision, evaluate_risk
 from predictions_cup.runtime.models import OrderAction, OutcomeSide
 from predictions_cup.strategy.core import CandidateLeg, Opportunity, StrategyFamily
@@ -65,23 +68,36 @@ class MakerCoordinator:
         engine: MakerEngine,
         lifecycle: QuoteLifecycleManager,
         quote_registry: QuoteRegistry,
-        risk_context: RiskContext,
+        risk_context: RiskContext | Callable[[], RiskContext],
         placement_dispatch: PlacementDispatcher,
         cancel_dispatch: CancelDispatcher,
         reservations: ExecutionReservationBook | None = None,
         kill_switch: MakerKillSwitch | None = None,
+        observation_emitter: ObservationEmitter | None = None,
+        observation_process_instance_id: str | None = None,
+        wall_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
-        if risk_context.mode is ExecutionMode.LIVE and reservations is None:
+        initial_risk_context = risk_context() if callable(risk_context) else risk_context
+        if initial_risk_context.mode is ExecutionMode.LIVE and reservations is None:
             raise ValueError("LIVE maker requires BUILD-009 execution reservations")
         self._engine = engine
         self._lifecycle = lifecycle
         self._registry = quote_registry
-        self._risk_context = risk_context
+        self._risk_context_source = risk_context
         self._placement_dispatch = placement_dispatch
         self._cancel_dispatch = cancel_dispatch
         self._reservations = reservations
         self._kill_switch = kill_switch or MakerKillSwitch()
-        if risk_context.kill_switch:
+        self._observation_emitter = observation_emitter
+        self._observation_process_instance_id = (
+            uuid4().hex
+            if observation_process_instance_id is None
+            else observation_process_instance_id
+        )
+        if not self._observation_process_instance_id.strip():
+            raise ValueError("observation_process_instance_id must not be blank")
+        self._wall_clock = wall_clock
+        if initial_risk_context.kill_switch:
             self._kill_switch.activate("startup_configuration")
 
     @property
@@ -133,7 +149,26 @@ class MakerCoordinator:
             decision = self._engine.quote(snapshot)
             decisions.append(decision)
             current = self._registry.state(exchange_id)
-            force_cancel = self._kill_switch.active
+            current_risk_context = (
+                self._risk_context_source()
+                if callable(self._risk_context_source)
+                else self._risk_context_source
+            )
+            capital = current_risk_context.capital_state
+            capital_force_cancel = (
+                capital is not None
+                and (
+                    (
+                        capital.global_halt is not None
+                        and capital.global_halt.active
+                    )
+                    or capital.strategy_halted(
+                        self._engine.strategy_id,
+                        StrategyFamily.MAKE.value,
+                    )
+                )
+            )
+            force_cancel = self._kill_switch.active or capital_force_cancel
             desired = None if force_cancel else decision.desired
             side_actions = self._lifecycle.decide(
                 desired=desired,
@@ -186,6 +221,15 @@ class MakerCoordinator:
                     raise
                 events.append(event)
                 if event.state is LifecycleState.CANCELLED:
+                    self._observe_quote(
+                        ObservationKind.QUOTE_WITHDRAWN,
+                        logical_operation_id=active.logical_operation_id,
+                        snapshot=snapshot,
+                        side=action.side,
+                        observed_monotonic_ns=event.observed_monotonic_ns,
+                        exchange_order_id=active.exchange_order_id,
+                        detail=(("reason", action.reason),),
+                    )
                     self._registry.clear_side(
                         exchange_id=exchange_id,
                         side=action.side,
@@ -222,7 +266,7 @@ class MakerCoordinator:
                 else self._reservations.overlay_snapshot(snapshot.runtime)
             )
             risk_context = replace(
-                self._risk_context,
+                current_risk_context,
                 kill_switch=self._kill_switch.active,
             )
             risk = evaluate_risk(opportunity, risk_snapshot, risk_context)
@@ -278,6 +322,37 @@ class MakerCoordinator:
                 raise
 
             events.append(event)
+            if event.simulated and event.state in {
+                LifecycleState.OPEN,
+                LifecycleState.PARTIALLY_FILLED,
+                LifecycleState.FILLED,
+            }:
+                for action, intent in zip(place_actions, plan.intents, strict=True):
+                    detail = (
+                        ("price_ticks", str(action.desired_ticks)),
+                        ("size", str(action.desired_size)),
+                        ("lifecycle_reason", action.reason),
+                        ("execution_state", event.state.value),
+                    )
+                    self._observe_quote(
+                        ObservationKind.QUOTE_PUBLISHED,
+                        logical_operation_id=logical_operation_id,
+                        snapshot=snapshot,
+                        side=action.side,
+                        observed_monotonic_ns=event.observed_monotonic_ns,
+                        logical_intent_id=intent.intent_id,
+                        detail=detail,
+                    )
+                    if action.reason == "terminal_quote_refill":
+                        self._observe_quote(
+                            ObservationKind.QUOTE_REPLENISHED,
+                            logical_operation_id=logical_operation_id,
+                            snapshot=snapshot,
+                            side=action.side,
+                            observed_monotonic_ns=event.observed_monotonic_ns,
+                            logical_intent_id=intent.intent_id,
+                            detail=detail,
+                        )
             if event.simulated:
                 self._apply_shadow_event(
                     exchange_id=exchange_id,
@@ -285,6 +360,39 @@ class MakerCoordinator:
                     actions=place_actions,
                     event=event,
                 )
+            else:
+                # LIVE publication is emitted by LiveMakerExecutionAdapter at
+                # the authoritative per-intent ACK/QuoteRegistry transition.
+                # Replenishment remains a coordinator-derived lifecycle label,
+                # but is emitted only after that authoritative transition exists.
+                state = self._registry.state(exchange_id)
+                for action, intent in zip(place_actions, plan.intents, strict=True):
+                    if action.reason != "terminal_quote_refill":
+                        continue
+                    active = state.bid if action.side is QuoteSide.BID else state.ask
+                    if (
+                        active is None
+                        or active.logical_operation_id != logical_operation_id
+                        or active.exchange_order_id is None
+                        or active.exchange_order_id <= 0
+                    ):
+                        continue
+                    detail = (
+                        ("price_ticks", str(action.desired_ticks)),
+                        ("size", str(action.desired_size)),
+                        ("lifecycle_reason", action.reason),
+                        ("execution_state", active.lifecycle_state.value),
+                    )
+                    self._observe_quote(
+                        ObservationKind.QUOTE_REPLENISHED,
+                        logical_operation_id=logical_operation_id,
+                        snapshot=snapshot,
+                        side=action.side,
+                        observed_monotonic_ns=event.observed_monotonic_ns,
+                        exchange_order_id=active.exchange_order_id,
+                        logical_intent_id=intent.intent_id,
+                        detail=detail,
+                    )
 
         return MakerCycleResult(
             decisions=tuple(decisions),
@@ -292,6 +400,54 @@ class MakerCoordinator:
             risk_decisions=tuple(risk_decisions),
             execution_events=tuple(events),
         )
+
+    def _observe_quote(
+        self,
+        kind: ObservationKind,
+        *,
+        logical_operation_id: str,
+        snapshot: MakerMarketSnapshot,
+        side: QuoteSide,
+        observed_monotonic_ns: int,
+        exchange_order_id: int | None = None,
+        logical_intent_id: str | None = None,
+        detail: tuple[tuple[str, str], ...] = (),
+    ) -> None:
+        emitter = self._observation_emitter
+        if emitter is None:
+            return
+        try:
+            emitter.emit(
+                VenueObservation(
+                    kind=kind,
+                    observed_at=self._wall_clock(),
+                    monotonic_ns=observed_monotonic_ns,
+                    process_instance_id=self._observation_process_instance_id,
+                    source="MAKE_001_QUOTE_LIFECYCLE",
+                    source_version="observe-001",
+                    provenance="DERIVED_LOCAL_MAKER_LIFECYCLE",
+                    tournament_id=snapshot.tournament_id,
+                    market_id=snapshot.market_id,
+                    exchange_id=snapshot.exchange_id,
+                    strategy_family=StrategyFamily.MAKE.value,
+                    strategy_id=self._engine.strategy_id,
+                    logical_operation_id=logical_operation_id,
+                    logical_intent_id=logical_intent_id,
+                    exchange_order_id=(
+                        None if exchange_order_id is None else str(exchange_order_id)
+                    ),
+                    detail=(
+                        (
+                            "quote_key",
+                            f"{logical_operation_id}|{snapshot.exchange_id}|{side.value}",
+                        ),
+                        ("side", side.value),
+                        *detail,
+                    ),
+                )
+            )
+        except Exception:
+            return
 
     def _opportunity(
         self,

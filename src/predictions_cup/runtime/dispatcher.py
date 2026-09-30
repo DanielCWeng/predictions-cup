@@ -64,15 +64,16 @@ class EventDrivenCoordinator:
         *,
         runtime: DecisionRuntime,
         bindings: tuple[StrategyBinding, ...],
-        risk_context: RiskContext,
+        risk_context: RiskContext | Callable[[], RiskContext],
         dispatch: PlanDispatcher,
         reservations: ExecutionReservationBook | None = None,
     ) -> None:
-        if risk_context.mode is ExecutionMode.LIVE and reservations is None:
+        initial_risk_context = risk_context() if callable(risk_context) else risk_context
+        if initial_risk_context.mode is ExecutionMode.LIVE and reservations is None:
             raise ValueError("LIVE coordinator requires an execution reservation book")
         self._runtime = runtime
         self._bindings = bindings
-        self._risk_context = risk_context
+        self._risk_context_source = risk_context
         self._dispatch = dispatch
         self._reservations = reservations
 
@@ -99,7 +100,11 @@ class EventDrivenCoordinator:
                 strategy_id=binding.strategy_id,
                 snapshot=decision_snapshot,
                 strategy_config=binding.config,
-                risk_context=self._risk_context,
+                risk_context=(
+                    self._risk_context_source()
+                    if callable(self._risk_context_source)
+                    else self._risk_context_source
+                ),
                 logical_operation_id=f"{change.event_id}:{binding.strategy_id}",
             )
             plan = outcome.execution_plan

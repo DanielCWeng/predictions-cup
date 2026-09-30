@@ -50,6 +50,9 @@ jobs:
       - name: BUILD-009 benchmark smoke
         run: python -m predictions_cup.benchmarks --smoke
 
+      - name: RISK-002 benchmark
+        run: python scripts/benchmark_risk002.py --iterations 5000
+
       - name: MAKE-001 benchmark smoke
         run: python scripts/benchmark_make001.py --iterations 20 --bursts 1 --journal-iterations 2
 
@@ -61,6 +64,12 @@ jobs:
 
       - name: CANDIDATE-RUNTIME-001 benchmark
         run: python scripts/benchmark_candidate_runtime001.py --markets 237 --bursts 20
+
+      - name: OBSERVE-001 emitter overhead benchmark
+        run: python scripts/benchmark_observe001.py --iterations 100000
+
+      - name: OBSERVE-001 combined persistence benchmark
+        run: python scripts/benchmark_observe001_pipeline.py --iterations 10000
 
       - name: SHADOW-002 benchmark
         run: python scripts/benchmark_shadow002.py --markets 237 --candidates 6 --persistence-events 32

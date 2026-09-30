@@ -16,23 +16,35 @@ _PERMIT_MARKER = object()
 
 @dataclass(frozen=True, slots=True, init=False)
 class LiveExecutionPermit:
-    """Capability issued only after every configured LIVE interlock passes."""
+    """Capability issued only after the relevant LIVE interlocks pass.
+
+    Recovery-only permits can reconcile/cancel durable existing risk and can
+    redispatch only through SigLiveSink.dispatch_recovery(). They cannot admit a
+    fresh economic placement.
+    """
 
     tournament_id: str
+    fresh_admission_allowed: bool
 
-    def __init__(self, tournament_id: str, marker: object) -> None:
+    def __init__(
+        self,
+        tournament_id: str,
+        marker: object,
+        *,
+        fresh_admission_allowed: bool,
+    ) -> None:
         if marker is not _PERMIT_MARKER:
             raise LiveInterlockError("LIVE execution permit cannot be constructed directly")
         object.__setattr__(self, "tournament_id", tournament_id)
+        object.__setattr__(self, "fresh_admission_allowed", fresh_admission_allowed)
 
 
-def assert_live_interlocks(
+def _live_failures(
     settings: AppSettings,
     *,
     explicit_live_invocation: bool,
     account_trusted: bool,
-) -> LiveExecutionPermit:
-    """Require every independent LIVE gate and return the network-sink permit."""
+) -> list[str]:
     failures: list[str] = []
     if not explicit_live_invocation:
         failures.append("explicit_live_invocation")
@@ -48,6 +60,12 @@ def assert_live_interlocks(
         failures.append("global_kill_switch")
     if not account_trusted:
         failures.append("account_state")
+    if not settings.risk_capital_control_enabled:
+        failures.append("risk_capital_control")
+    if settings.risk_session_loss_limit is None:
+        failures.append("session_loss_limit")
+    if settings.risk_drawdown_limit is None:
+        failures.append("drawdown_limit")
     limits = (
         settings.risk_max_order_size,
         settings.risk_max_gross_exposure,
@@ -57,6 +75,54 @@ def assert_live_interlocks(
     )
     if any(value is None for value in limits):
         failures.append("risk_limits")
+    return failures
+
+
+def assert_live_recovery_interlocks(
+    settings: AppSettings,
+    *,
+    explicit_live_invocation: bool,
+    account_trusted: bool,
+) -> LiveExecutionPermit:
+    """Issue a recovery-only capability after configuration/account gates pass.
+
+    This intentionally does not require reconciled RISK-002 capital state:
+    startup must be able to reconcile/cancel existing PENDING, OPEN and
+    UNCERTAIN risk while a durable capital halt remains latched.
+    """
+    failures = _live_failures(
+        settings,
+        explicit_live_invocation=explicit_live_invocation,
+        account_trusted=account_trusted,
+    )
+    if failures:
+        raise LiveInterlockError(
+            "LIVE recovery interlocks failed: " + ",".join(failures)
+        )
+
+    assert settings.tournament_id is not None
+    return LiveExecutionPermit(
+        settings.tournament_id,
+        _PERMIT_MARKER,
+        fresh_admission_allowed=False,
+    )
+
+
+def assert_live_interlocks(
+    settings: AppSettings,
+    *,
+    explicit_live_invocation: bool,
+    account_trusted: bool,
+    capital_state_ready: bool,
+) -> LiveExecutionPermit:
+    """Require every independent fresh-LIVE gate and return the network permit."""
+    failures = _live_failures(
+        settings,
+        explicit_live_invocation=explicit_live_invocation,
+        account_trusted=account_trusted,
+    )
+    if not capital_state_ready:
+        failures.append("capital_control_state")
 
     if failures:
         raise LiveInterlockError(
@@ -64,4 +130,8 @@ def assert_live_interlocks(
         )
 
     assert settings.tournament_id is not None
-    return LiveExecutionPermit(settings.tournament_id, _PERMIT_MARKER)
+    return LiveExecutionPermit(
+        settings.tournament_id,
+        _PERMIT_MARKER,
+        fresh_admission_allowed=True,
+    )
