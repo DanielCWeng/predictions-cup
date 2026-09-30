@@ -16,7 +16,7 @@ class SpanName(StrEnum):
     REQUEST_ENQUEUE_TO_ACK = "request_enqueue_to_ack"
     ACK_TO_FIRST_FILL = "ack_to_first_fill"
     DISPATCH_TO_FILL = "dispatch_to_fill"
-    CANCEL_TO_CONFIRMATION = "cancel_to_confirmation"
+    CANCEL_TO_ACK = "cancel_to_ack"
     RECONNECT = "reconnect"
     QUOTE_LIFETIME = "quote_lifetime"
 
@@ -28,6 +28,7 @@ class VenueSpan:
     process_instance_id: str
     start_monotonic_ns: int
     end_monotonic_ns: int
+    identity: str | None = None
 
     @property
     def duration_ns(self) -> int:
@@ -58,14 +59,9 @@ _RULES: tuple[tuple[SpanName, ObservationKind, tuple[ObservationKind, ...]], ...
     ),
     (SpanName.DISPATCH_TO_FILL, ObservationKind.REQUEST_DISPATCHED, (ObservationKind.FILL,)),
     (
-        SpanName.CANCEL_TO_CONFIRMATION,
+        SpanName.CANCEL_TO_ACK,
         ObservationKind.CANCEL_REQUESTED,
         (ObservationKind.CANCEL_ACK,),
-    ),
-    (
-        SpanName.QUOTE_LIFETIME,
-        ObservationKind.QUOTE_PUBLISHED,
-        (ObservationKind.QUOTE_WITHDRAWN, ObservationKind.FILL),
     ),
 )
 
@@ -94,6 +90,47 @@ class VenueSpanCollector:
                 if end < start:
                     continue
                 spans.append(VenueSpan(name, operation_id, process_id, start, end))
+        quote_starts = tuple(
+            item for item in rows if item.kind is ObservationKind.QUOTE_PUBLISHED
+        )
+        quote_ends = tuple(
+            item
+            for item in rows
+            if item.kind in {ObservationKind.QUOTE_WITHDRAWN, ObservationKind.FILL}
+        )
+        for start_item in quote_starts:
+            start_aliases = _quote_aliases(start_item, allow_quote_key=True)
+            if not start_aliases:
+                continue
+            candidates: list[tuple[int, str]] = []
+            for end_item in quote_ends:
+                if end_item.process_instance_id != start_item.process_instance_id:
+                    continue
+                if end_item.monotonic_ns < start_item.monotonic_ns:
+                    continue
+                end_aliases = _quote_aliases(
+                    end_item,
+                    allow_quote_key=end_item.kind is ObservationKind.QUOTE_WITHDRAWN,
+                )
+                common = start_aliases.intersection(end_aliases)
+                if not common:
+                    continue
+                identity = sorted(common, key=_quote_alias_priority)[0]
+                candidates.append((end_item.monotonic_ns, identity))
+            if not candidates:
+                continue
+            end_ns, identity = min(candidates, key=lambda item: item[0])
+            spans.append(
+                VenueSpan(
+                    SpanName.QUOTE_LIFETIME,
+                    start_item.logical_operation_id,
+                    start_item.process_instance_id,
+                    start_item.monotonic_ns,
+                    end_ns,
+                    identity,
+                )
+            )
+
         by_process: dict[str, list[VenueObservation]] = {}
         for item in rows:
             by_process.setdefault(item.process_instance_id, []).append(item)
@@ -119,3 +156,35 @@ class VenueSpanCollector:
                             )
                         )
         return tuple(spans)
+
+
+def _detail_value(observation: VenueObservation, key: str) -> str | None:
+    for candidate, value in observation.detail:
+        if candidate == key and value:
+            return value
+    return None
+
+
+def _quote_aliases(
+    observation: VenueObservation,
+    *,
+    allow_quote_key: bool,
+) -> frozenset[str]:
+    aliases: set[str] = set()
+    if observation.logical_intent_id:
+        aliases.add(f"intent:{observation.logical_intent_id}")
+    if observation.exchange_order_id:
+        aliases.add(f"order:{observation.exchange_order_id}")
+    if allow_quote_key:
+        quote_key = _detail_value(observation, "quote_key")
+        if quote_key is not None:
+            aliases.add(f"quote:{quote_key}")
+    return frozenset(aliases)
+
+
+def _quote_alias_priority(value: str) -> int:
+    if value.startswith("intent:"):
+        return 0
+    if value.startswith("order:"):
+        return 1
+    return 2
