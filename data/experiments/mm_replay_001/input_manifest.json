@@ -22,24 +22,26 @@
   "frozen_005f_fit_manifest_path": "data/experiments/experiment_005f/fit_freeze_manifest.json",
   "frozen_005f_holdout_evidence_path": "data/experiments/experiment_005f/holdout_evidence_manifest.json",
   "grid_origin_ns_by_market": {},
-  "kaggle_dataset_slug": null,
+  "kaggle_dataset_slug": "polyleviathan/sig-cup-data003-orderbooks",
   "manifest_schema_version": "mm-replay-input-v1",
   "notes": [
     "Populate only after the new DATA-003-linked current-universe historical order-book dataset lands.",
     "Synthetic fixtures are permitted for engineering tests only.",
     "Real execution must fail closed while status is WAITING_FOR_DATA.",
     "005F transfer requires exact per-market grid origins; do not infer them from first observed row.",
-    "If original 005F joblib artifacts are scored, bind their approved Kaggle dataset and verify frozen hashes."
+    "If original 005F joblib artifacts are scored, bind their approved Kaggle dataset and verify frozen hashes.",
+    "Kaggle dataset page reported created/uploaded on 2026-10-01; indexing/unpacking still in progress at handoff.",
+    "Uploader reports all files present, including ev18 and _manifests."
   ],
-  "relation_to_data003": null,
+  "relation_to_data003": "DATA-003-linked current SIG Cup mapped universe",
   "root_hint": "/kaggle/input",
   "schema_version": null,
   "scientific_result": "NOT_RUN",
-  "source": null,
+  "source": "current SIG Cup DATA-003-linked historical order-book corpus",
   "status": "WAITING_FOR_DATA",
   "005f_regime_default": null,
   "edge_grid_reference_latency_ms": null,
-  "source_venue": null,
+  "source_venue": "POLYMARKET",
   "maker_fee_per_share": null,
   "terminal_unwind_cost_per_share": null
 }
