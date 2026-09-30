@@ -11,11 +11,11 @@ import json
 import math
 from bisect import bisect_right
 from collections import defaultdict, deque
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from threading import RLock
-from typing import Callable, Protocol
+from typing import Protocol
 
 from predictions_cup.shadow.adapters import (
     Hazard005FSignal,
