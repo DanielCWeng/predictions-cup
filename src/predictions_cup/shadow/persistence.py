@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import uuid
+from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from time import perf_counter_ns
 from typing import Protocol
 
 from predictions_cup.shadow.contracts import (
@@ -15,6 +18,10 @@ from predictions_cup.shadow.contracts import (
     CanonicalShadowSnapshot,
     decision_semantic_record,
     maker_snapshot_record,
+)
+from predictions_cup.sig.launch_storage import (
+    SCHEMA_VERSION as CAPTURE_SCHEMA_VERSION,
+    ImmutableCaptureSink,
 )
 
 
@@ -26,6 +33,8 @@ class PersistenceHealth:
     last_error: str | None
     queue_depth: int
     queue_high_water: int
+    write_batches: int
+    write_latency_p95_ns: int | None
 
 
 class ShadowEventStore(Protocol):
@@ -75,6 +84,8 @@ class InMemoryEventStore:
             last_error=None,
             queue_depth=0,
             queue_high_water=0,
+            write_batches=0,
+            write_latency_p95_ns=None,
         )
 
     def _require_started(self) -> None:
@@ -93,11 +104,20 @@ PersistItem = CanonicalShadowSnapshot | CandidateDecision | _Stop
 class JsonlEventStore:
     """Crash-conscious immutable event log written off the SHADOW hot path."""
 
-    def __init__(self, path: Path, *, queue_capacity: int = 4096) -> None:
+    def __init__(
+        self,
+        path: Path,
+        *,
+        queue_capacity: int = 65_536,
+        batch_size: int = 256,
+    ) -> None:
         if queue_capacity <= 0:
             raise ValueError("persistence queue capacity must be positive")
+        if batch_size <= 0:
+            raise ValueError("persistence batch size must be positive")
         self._path = path
         self._queue: asyncio.Queue[PersistItem] = asyncio.Queue(maxsize=queue_capacity)
+        self._batch_size = batch_size
         self._writer: asyncio.Task[None] | None = None
         self._started = False
         self._closed = False
@@ -105,6 +125,8 @@ class JsonlEventStore:
         self._failures = 0
         self._last_error: str | None = None
         self._queue_high_water = 0
+        self._write_batches = 0
+        self._write_latencies_ns: deque[int] = deque(maxlen=2048)
 
     async def start(self) -> None:
         if self._closed:
@@ -155,6 +177,11 @@ class JsonlEventStore:
             last_error=self._last_error,
             queue_depth=self._queue.qsize(),
             queue_high_water=self._queue_high_water,
+            write_batches=self._write_batches,
+            write_latency_p95_ns=_percentile(
+                tuple(self._write_latencies_ns),
+                0.95,
+            ),
         )
 
     async def _enqueue(self, item: CanonicalShadowSnapshot | CandidateDecision) -> None:
@@ -166,36 +193,244 @@ class JsonlEventStore:
 
     async def _writer_loop(self) -> None:
         while True:
-            item = await self._queue.get()
-            try:
-                if isinstance(item, _Stop):
-                    return
-                try:
-                    await asyncio.to_thread(self._append_event, item)
-                except Exception as exc:  # pragma: no cover - filesystem failure path
-                    self._failures += 1
-                    self._last_error = f"{type(exc).__name__}:{exc}"
-                else:
-                    self._persisted_events += 1
-            finally:
+            first = await self._queue.get()
+            if isinstance(first, _Stop):
                 self._queue.task_done()
+                return
 
-    def _append_event(self, item: CanonicalShadowSnapshot | CandidateDecision) -> None:
-        record = event_record(item)
-        line = json.dumps(
-            record,
-            sort_keys=True,
-            separators=(",", ":"),
-            allow_nan=False,
-        ) + "\n"
+            batch: list[CanonicalShadowSnapshot | CandidateDecision] = [first]
+            while len(batch) < self._batch_size:
+                try:
+                    candidate = self._queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+                if isinstance(candidate, _Stop):
+                    self._queue.task_done()
+                    raise RuntimeError("stop marker reached before persistence queue drained")
+                batch.append(candidate)
+
+            started = perf_counter_ns()
+            try:
+                await asyncio.to_thread(self._append_events, batch)
+            except Exception as exc:  # pragma: no cover - filesystem failure path
+                self._failures += 1
+                self._last_error = f"{type(exc).__name__}:{exc}"
+            else:
+                self._persisted_events += len(batch)
+                self._write_batches += 1
+                self._write_latencies_ns.append(perf_counter_ns() - started)
+            finally:
+                for _ in batch:
+                    self._queue.task_done()
+
+    def _append_events(
+        self,
+        items: Sequence[CanonicalShadowSnapshot | CandidateDecision],
+    ) -> None:
+        lines = "".join(
+            json.dumps(
+                event_record(item),
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+            + "\n"
+            for item in items
+        )
         with self._path.open("a", encoding="utf-8") as handle:
-            handle.write(line)
+            handle.write(lines)
             handle.flush()
             os.fsync(handle.fileno())
 
     def _require_started(self) -> None:
         if not self._started:
             raise RuntimeError("event store is not started")
+
+
+class CaptureStrategyEventStore:
+    """Mirror CandidateDecision into CAPTURE-001's canonical strategy_events stream."""
+
+    def __init__(
+        self,
+        research_root: Path,
+        *,
+        queue_capacity: int = 200_000,
+        shard_seconds: int = 60,
+        max_rows_per_shard: int = 100_000,
+        session_id: str | None = None,
+    ) -> None:
+        self._research_root = research_root
+        self._queue_capacity = queue_capacity
+        self._shard_seconds = shard_seconds
+        self._max_rows_per_shard = max_rows_per_shard
+        self._session_id = session_id or uuid.uuid4().hex
+        self._sink: ImmutableCaptureSink | None = None
+        self._accepted_events = 0
+        self._failures = 0
+        self._last_error: str | None = None
+
+    async def start(self) -> None:
+        if self._sink is not None:
+            return
+        self._sink = ImmutableCaptureSink(
+            self._research_root,
+            shard_seconds=self._shard_seconds,
+            max_rows_per_shard=self._max_rows_per_shard,
+            queue_max=self._queue_capacity,
+        )
+
+    async def persist_snapshot(self, snapshot: CanonicalShadowSnapshot) -> None:
+        del snapshot
+
+    async def persist_decision(self, decision: CandidateDecision) -> None:
+        sink = self._require_sink()
+        payload = decision_semantic_record(decision)
+        candidate_payload = dict(decision.candidate_payload)
+        try:
+            sink.emit(
+                "strategy_events",
+                {
+                    "session_id": self._session_id,
+                    "connection_epoch": 0,
+                    "schema_version": CAPTURE_SCHEMA_VERSION,
+                    "event_type": "SHADOW_DECISION",
+                    "observed_at": decision.observed_at,
+                    "monotonic_ns": decision.monotonic_time,
+                    "tournament_id": decision.tournament_id,
+                    "exchange_id": decision.exchange_id,
+                    "market_id": decision.market_id,
+                    "strategy_id": decision.candidate_id,
+                    "strategy_version": decision.candidate_version,
+                    "fair_value_provider": str(
+                        candidate_payload.get("fv_source", decision.candidate_id)
+                    ),
+                    "fair_value_version": str(
+                        candidate_payload.get("fv_version", decision.candidate_version)
+                    ),
+                    "signal_provider": decision.strategy_family,
+                    "signal_version": decision.candidate_version,
+                    "payload_json": json.dumps(
+                        payload,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        allow_nan=False,
+                    ),
+                },
+            )
+        except Exception as exc:
+            self._failures += 1
+            self._last_error = f"{type(exc).__name__}:{exc}"
+            raise
+        self._accepted_events += 1
+
+    async def flush(self) -> None:
+        if self._last_error is not None:
+            raise RuntimeError(f"CAPTURE strategy mirror unhealthy: {self._last_error}")
+
+    async def close(self) -> None:
+        if self._sink is None:
+            return
+        sink = self._sink
+        self._sink = None
+        await asyncio.to_thread(sink.close)
+
+    @property
+    def health(self) -> PersistenceHealth:
+        if self._sink is None:
+            return PersistenceHealth(
+                healthy=self._last_error is None,
+                persisted_events=self._accepted_events,
+                failures=self._failures,
+                last_error=self._last_error,
+                queue_depth=0,
+                queue_high_water=0,
+                write_batches=0,
+                write_latency_p95_ns=None,
+            )
+        raw = self._sink.health_snapshot()
+        return PersistenceHealth(
+            healthy=self._last_error is None and int(raw["storage_failures"]) == 0,
+            persisted_events=self._accepted_events,
+            failures=self._failures + int(raw["storage_failures"]),
+            last_error=self._last_error,
+            queue_depth=int(raw["queue_depth"]),
+            queue_high_water=int(raw["queue_high_water"]),
+            write_batches=int(raw["written_shards"]),
+            write_latency_p95_ns=None,
+        )
+
+    def _require_sink(self) -> ImmutableCaptureSink:
+        if self._sink is None:
+            raise RuntimeError("CAPTURE strategy mirror is not started")
+        return self._sink
+
+
+class CompositeShadowEventStore:
+    """Primary durable journal plus one or more canonical evidence mirrors."""
+
+    def __init__(
+        self,
+        primary: ShadowEventStore,
+        mirrors: Sequence[ShadowEventStore] = (),
+    ) -> None:
+        self._primary = primary
+        self._mirrors = tuple(mirrors)
+
+    async def start(self) -> None:
+        await self._primary.start()
+        for mirror in self._mirrors:
+            await mirror.start()
+
+    async def persist_snapshot(self, snapshot: CanonicalShadowSnapshot) -> None:
+        await self._primary.persist_snapshot(snapshot)
+        for mirror in self._mirrors:
+            await mirror.persist_snapshot(snapshot)
+
+    async def persist_decision(self, decision: CandidateDecision) -> None:
+        await self._primary.persist_decision(decision)
+        for mirror in self._mirrors:
+            await mirror.persist_decision(decision)
+
+    async def flush(self) -> None:
+        await self._primary.flush()
+        for mirror in self._mirrors:
+            await mirror.flush()
+
+    async def close(self) -> None:
+        errors: list[Exception] = []
+        for store in (*reversed(self._mirrors), self._primary):
+            try:
+                await store.close()
+            except Exception as exc:  # pragma: no cover - defensive shutdown
+                errors.append(exc)
+        if errors:
+            raise errors[0]
+
+    @property
+    def health(self) -> PersistenceHealth:
+        primary = self._primary.health
+        mirror_health = tuple(mirror.health for mirror in self._mirrors)
+        return PersistenceHealth(
+            healthy=primary.healthy and all(item.healthy for item in mirror_health),
+            persisted_events=primary.persisted_events,
+            failures=primary.failures + sum(item.failures for item in mirror_health),
+            last_error=primary.last_error
+            or next(
+                (item.last_error for item in mirror_health if item.last_error is not None),
+                None,
+            ),
+            queue_depth=max(
+                (primary.queue_depth, *(item.queue_depth for item in mirror_health)),
+            ),
+            queue_high_water=max(
+                (
+                    primary.queue_high_water,
+                    *(item.queue_high_water for item in mirror_health),
+                ),
+            ),
+            write_batches=primary.write_batches,
+            write_latency_p95_ns=primary.write_latency_p95_ns,
+        )
 
 
 def event_record(
@@ -237,3 +472,11 @@ def read_jsonl_records(path: Path) -> Sequence[dict[str, object]]:
                 raise ValueError(f"invalid SHADOW event at line {line_number}")
             records.append(value)
     return records
+
+
+def _percentile(values: tuple[int, ...], fraction: float) -> int | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    index = max(0, min(len(ordered) - 1, int((len(ordered) - 1) * fraction)))
+    return ordered[index]
