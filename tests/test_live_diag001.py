@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-import predictions_cup.analysis.live_diag as live_diag
+from predictions_cup.analysis import live_diag
 from predictions_cup.mapping.models import MappingDirection
 
 
