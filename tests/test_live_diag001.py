@@ -188,4 +188,6 @@ def test_market_selection_does_not_double_count_spread_and_markout() -> None:
     assert row["expected_edge"] == pytest.approx(0.02)
     assert row["gross_mmev_before_risk_ops"] == pytest.approx(0.02)
     assert row["MMEV"] is None
-    assert "MMEV_NOT_FORCED_WITH_MISSING_COSTS" in row["reasons"]
+    reasons = row["reasons"]
+    assert isinstance(reasons, list)
+    assert "MMEV_NOT_FORCED_WITH_MISSING_COSTS" in reasons
