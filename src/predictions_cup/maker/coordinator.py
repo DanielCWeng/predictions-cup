@@ -307,7 +307,7 @@ class MakerCoordinator:
                 LifecycleState.PARTIALLY_FILLED,
                 LifecycleState.FILLED,
             }:
-                for action in place_actions:
+                for action, intent in zip(place_actions, plan.intents, strict=True):
                     detail = (
                         ("price_ticks", str(action.desired_ticks)),
                         ("size", str(action.desired_size)),
@@ -320,6 +320,7 @@ class MakerCoordinator:
                         snapshot=snapshot,
                         side=action.side,
                         observed_monotonic_ns=event.observed_monotonic_ns,
+                        logical_intent_id=intent.intent_id,
                         detail=detail,
                     )
                     if action.reason == "terminal_quote_refill":
@@ -329,6 +330,7 @@ class MakerCoordinator:
                             snapshot=snapshot,
                             side=action.side,
                             observed_monotonic_ns=event.observed_monotonic_ns,
+                            logical_intent_id=intent.intent_id,
                             detail=detail,
                         )
             if event.simulated:
@@ -355,6 +357,7 @@ class MakerCoordinator:
         side: QuoteSide,
         observed_monotonic_ns: int,
         exchange_order_id: int | None = None,
+        logical_intent_id: str | None = None,
         detail: tuple[tuple[str, str], ...] = (),
     ) -> None:
         emitter = self._observation_emitter
@@ -376,10 +379,18 @@ class MakerCoordinator:
                     strategy_family=StrategyFamily.MAKE.value,
                     strategy_id=self._engine.strategy_id,
                     logical_operation_id=logical_operation_id,
+                    logical_intent_id=logical_intent_id,
                     exchange_order_id=(
                         None if exchange_order_id is None else str(exchange_order_id)
                     ),
-                    detail=(("side", side.value), *detail),
+                    detail=(
+                        (
+                            "quote_key",
+                            f"{logical_operation_id}|{snapshot.exchange_id}|{side.value}",
+                        ),
+                        ("side", side.value),
+                        *detail,
+                    ),
                 )
             )
         except Exception:
