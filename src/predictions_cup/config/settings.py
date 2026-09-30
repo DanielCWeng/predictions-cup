@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import Literal, Self
 
@@ -111,6 +112,8 @@ class AppSettings(BaseSettings):
     shadow_persistence_batch_size: int = Field(default=256, gt=0, le=10_000)
     shadow_candidate_timeout_ms: int = Field(default=50, gt=0, le=60_000)
     shadow_capture_mirror_enabled: bool = True
+    # Explicit only: no post-hoc 005F grid origin is inferred from observed outcomes.
+    shadow_005f_grid_origin: datetime | None = None
 
     # LIVE-LEARN-001 consumes SHADOW's durable decision stream. It never writes orders.
     live_learn_enabled: bool = False
