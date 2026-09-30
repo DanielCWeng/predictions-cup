@@ -1116,6 +1116,7 @@ def analyze_live_diagnostics(
     shadow_journal: Path | None = None,
     exposure_groups_path: Path | None = None,
     inventory_limit: float | None = None,
+    max_quote_age_seconds: float = 15.0,
     max_depth_age_seconds: float = 30.0,
     latency_ms: float = 100.0,
     latency_assumption_source: str = "fixed_sensitivity",
@@ -1123,17 +1124,18 @@ def analyze_live_diagnostics(
     horizons_seconds: Sequence[int] = DEFAULT_HORIZONS_SECONDS,
 ) -> dict[str, object]:
     """Run the first-hours economic layer without creating a new market-data process."""
+    if max_quote_age_seconds <= 0 or max_depth_age_seconds <= 0:
+        raise ValueError("quote/depth freshness limits must be positive")
     generated_at = datetime.now(UTC)
     config = {
         "analysis_version": ANALYSIS_VERSION,
         "latency_ms": latency_ms,
         "latency_assumption_source": latency_assumption_source,
+        "max_quote_age_seconds": max_quote_age_seconds,
         "max_depth_age_seconds": max_depth_age_seconds,
         "thresholds_ticks": list(thresholds_ticks),
         "horizons_seconds": list(horizons_seconds),
         "tick_size": SIG_TICK_SIZE,
-        "max_quote_age_seconds": 15.0,
-        "max_depth_age_seconds": 60.0,
         "trigger_rule": "threshold_crossing_rearms_only_below_threshold",
     }
     config_hash = canonical_config_hash(config)
@@ -1251,14 +1253,14 @@ def analyze_live_diagnostics(
                 sig_quotes=sig,
                 external_quotes=pm,
                 threshold_ticks=threshold,
-                max_quote_age_seconds=15.0,
+                max_quote_age_seconds=max_quote_age_seconds,
             )
             observations = observe_snapback(
                 triggers=triggers,
                 sig_quotes=sig,
                 external_quotes=pm,
                 horizons_seconds=horizons_seconds,
-                max_quote_age_seconds=15.0,
+                max_quote_age_seconds=max_quote_age_seconds,
             )
             summary = summarize_snapback(
                 triggers=triggers,
@@ -1362,8 +1364,8 @@ def analyze_live_diagnostics(
             sig_quotes=sig,
             external_quotes=pm,
             latency_ms=latency_ms,
-            max_quote_age_seconds=15.0,
-            max_depth_age_seconds=60.0,
+            max_quote_age_seconds=max_quote_age_seconds,
+            max_depth_age_seconds=max_depth_age_seconds,
         ):
             lead_lag_rows.append(
                 {
