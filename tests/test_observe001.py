@@ -24,6 +24,7 @@ from predictions_cup.observe import (
     SigOfficialCompetitionContextProvider,
     VenueObservation,
     VenueSpanCollector,
+    default_observation_health_status_path,
     join_pm_to_sig,
     read_observation_health_status,
     replay_operation,
@@ -491,6 +492,12 @@ def _status_snapshot(
             storage_failures=storage_failures,
             last_write_at=_AT,
         ),
+    )
+
+
+def test_default_observation_status_path_matches_fullstack_status_dir() -> None:
+    assert default_observation_health_status_path(Path("data/sig_research")) == Path(
+        "data/runtime/status/observe.json"
     )
 
 
