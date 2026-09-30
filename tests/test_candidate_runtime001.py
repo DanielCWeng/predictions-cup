@@ -182,7 +182,9 @@ def test_pred006_model_absence_is_explicit_and_precedes_feature_guessing() -> No
 
 
 def test_pred006_scores_both_survivors_without_aggregating_semantics() -> None:
-    state = IncrementalPred006FeatureState()
+    state = IncrementalPred006FeatureState(
+        scope_resolver=lambda snapshot: snapshot.market_id
+    )
     for timestamp_s, p_yes in ((0, 0.40), (30, 0.50), (120, 0.45), (1800, 0.55)):
         state.observe(_pred_observation(timestamp_s, p_yes))
     evaluator = FrozenPred006Evaluator(
@@ -224,7 +226,10 @@ def _observe_005f_fixture(state: IncrementalHazard005FState) -> None:
 
 
 def test_005f_genuine_age_and_capture_bin_boundaries_match_freeze() -> None:
-    state = IncrementalHazard005FState(grid_origin_s=0)
+    state = IncrementalHazard005FState(
+        grid_origin_s=0,
+        scope_resolver=lambda snapshot: snapshot.market_id,
+    )
     _observe_005f_fixture(state)
     vector = state.feature_vector(_snapshot(60))
     assert vector is not None
@@ -238,7 +243,9 @@ def test_005f_genuine_age_and_capture_bin_boundaries_match_freeze() -> None:
 
 
 def test_005f_requires_explicit_grid_origin() -> None:
-    state = IncrementalHazard005FState()
+    state = IncrementalHazard005FState(
+        scope_resolver=lambda snapshot: snapshot.market_id
+    )
     _observe_005f_fixture(state)
     assert state.feature_vector(_snapshot(60)) is None
 
@@ -250,7 +257,10 @@ def test_005f_default_runtime_fails_closed_on_missing_orderbook_history() -> Non
 
 
 def test_005f_active_runtime_keeps_update_and_jump_coordinates_separate() -> None:
-    state = IncrementalHazard005FState(grid_origin_s=0)
+    state = IncrementalHazard005FState(
+        grid_origin_s=0,
+        scope_resolver=lambda snapshot: snapshot.market_id,
+    )
     _observe_005f_fixture(state)
     evaluator = Frozen005FEvaluator(
         state,
@@ -278,7 +288,10 @@ def test_005f_active_runtime_keeps_update_and_jump_coordinates_separate() -> Non
 
 
 def test_005f_pre_runtime_does_not_invent_unfrozen_jump_coordinate() -> None:
-    state = IncrementalHazard005FState(grid_origin_s=0)
+    state = IncrementalHazard005FState(
+        grid_origin_s=0,
+        scope_resolver=lambda snapshot: snapshot.market_id,
+    )
     _observe_005f_fixture(state)
     evaluator = Frozen005FEvaluator(
         state,
@@ -298,7 +311,10 @@ def test_005f_pre_runtime_does_not_invent_unfrozen_jump_coordinate() -> None:
 
 
 def test_005f_rejects_wrong_frozen_artifact_hash() -> None:
-    state = IncrementalHazard005FState(grid_origin_s=0)
+    state = IncrementalHazard005FState(
+        grid_origin_s=0,
+        scope_resolver=lambda snapshot: snapshot.market_id,
+    )
     _observe_005f_fixture(state)
     evaluator = Frozen005FEvaluator(
         state,
@@ -316,7 +332,10 @@ def test_005f_rejects_wrong_frozen_artifact_hash() -> None:
 
 
 def test_005f_boundary_and_ambiguous_bbo_do_not_establish_state() -> None:
-    state = IncrementalHazard005FState(grid_origin_s=0)
+    state = IncrementalHazard005FState(
+        grid_origin_s=0,
+        scope_resolver=lambda snapshot: snapshot.market_id,
+    )
     for observation in (
         Hazard005FBboObservation(
             scope_id="m1",
@@ -346,3 +365,13 @@ def test_005f_boundary_and_ambiguous_bbo_do_not_establish_state() -> None:
     ):
         state.observe(observation)
     assert state.feature_vector(_snapshot(15)) is None
+
+
+def test_incremental_runtime_requires_explicit_scope_resolution() -> None:
+    pred = IncrementalPred006FeatureState()
+    pred.observe(_pred_observation(0, 0.40))
+    assert pred.feature_vector(_snapshot(0)) is None
+
+    hazard = IncrementalHazard005FState(grid_origin_s=0)
+    _observe_005f_fixture(hazard)
+    assert hazard.feature_vector(_snapshot(60)) is None
