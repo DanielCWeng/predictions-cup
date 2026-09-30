@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "stage": "P0_TRAIN_DEV_SUPPORT_AUDIT_EVIDENCE",
+  "github_actions_run": 36643236436,
+  "artifact_id": 11067283174,
+  "artifact_zip_sha256": "fe51650fa09781c1a19dd5a168e35ffdf2b7e830483d1beb9b6a7d0b3e69d0e7",
+  "output_sha256": {
+    "P0_EVENT_GROUP_SUPPORT.csv": "28929f8871515b6995ff70c56c5b4be761f1bb149200f67b557ea064e0e85989",
+    "P0_MARKET_SUPPORT.csv": "68e384c911b07590ec93f58a2a57b869b56a0d5ea0a4f20a8ba238d703f8bb75",
+    "P0_SUPPORT_SUMMARY.json": "ee8c6e8b493b385d9143880537bd5b4b5e7a02f47a1f1c2f0dcfeb3d8a2cf513"
+  },
+  "final_opened": false,
+  "final_rows_accessed": 0,
+  "p0_markets": 210,
+  "p0_event_groups": 37,
+  "end_to_end_ready_groups": 7,
+  "ready": [
+    {
+      "event_id": "106193",
+      "title": "Republican Senate seats after the 2026 midterm elections?",
+      "archetype": "COUNT_DISTRIBUTION",
+      "markets": 11,
+      "train_source_rows": 12341,
+      "dev_source_rows": 549,
+      "train_target_events": 3539,
+      "dev_target_events": 823
+    },
+    {
+      "event_id": "103166",
+      "title": "Republican House seats after the 2026 midterm elections?",
+      "archetype": "COUNT_DISTRIBUTION",
+      "markets": 10,
+      "train_source_rows": 3777,
+      "dev_source_rows": 249,
+      "train_target_events": 3514,
+      "dev_target_events": 742
+    },
+    {
+      "event_id": "101856",
+      "title": "How many Republican Governors after the 2026 midterm elections?",
+      "archetype": "GOV_COUNT_COMPARISON",
+      "markets": 7,
+      "train_source_rows": 2810,
+      "dev_source_rows": 404,
+      "train_target_events": 21,
+      "dev_target_events": 195
+    },
+    {
+      "event_id": "659973",
+      "title": "How many Senate and Governor elections will Republicans win in states won by Kamala?",
+      "archetype": "MULTI_RACE_COUNT",
+      "markets": 7,
+      "train_source_rows": 696,
+      "dev_source_rows": 869,
+      "train_target_events": 6933,
+      "dev_target_events": 1905
+    },
+    {
+      "event_id": "633839",
+      "title": "How many Senate and House seats will Republicans have after the midterms?",
+      "archetype": "COUNT_CROSS_CHAMBER_JOINT",
+      "markets": 13,
+      "train_source_rows": 456,
+      "dev_source_rows": 644,
+      "train_target_events": 15486,
+      "dev_target_events": 3771
+    },
+    {
+      "event_id": "162226",
+      "title": "Will Democrats win all core four senate races?",
+      "archetype": "FOUR_RACE_JOINT",
+      "markets": 1,
+      "train_source_rows": 346,
+      "dev_source_rows": 190,
+      "train_target_events": 3373,
+      "dev_target_events": 887
+    },
+    {
+      "event_id": "528267",
+      "title": "Will Republicans win any Senate or Governor's Election in a Biden-Trump state?",
+      "archetype": "PARTIAL_MULTI_RACE_JOINT",
+      "markets": 1,
+      "train_source_rows": 90,
+      "dev_source_rows": 34,
+      "train_target_events": 6933,
+      "dev_target_events": 1905
+    }
+  ],
+  "decision": "CONTINUE_WITH_UNTOUCHED_SUPPORTED_COMPONENTS",
+  "next_priority": [
+    "103166 House seat distribution",
+    "106193 Senate seat distribution",
+    "659973 multi-race truncated-count inverse after constituent semantics are frozen"
+  ]
+}

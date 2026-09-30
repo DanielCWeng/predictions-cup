@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "stage": "DEV_DISCOVERY_VERDICT",
+  "decision": "STOP_NO_INDEPENDENT_SIGNAL",
+  "final_opened": false,
+  "final_rows_accessed": 0,
+  "evidence": {
+    "kaggle_kernel": "polyleviathan/r3-fv-001-structural-discovery",
+    "kaggle_status": "COMPLETE",
+    "output_recovery_actions_run_id": 36632235437,
+    "output_artifact_id": 11062795819,
+    "output_artifact_digest": "sha256:0265ec42cb490328449fa52e1e1cbfaa4ca669cb4535d7a1dd5f512494e11e2b",
+    "split_manifest_sha256": "cea20a374a8ed5822e361e7c8584cf3a2599fc80bcba3b2522efdf707e572225"
+  },
+  "support": {
+    "direct_event_rows_prefinal": 34406,
+    "source_rows_prefinal": 88155,
+    "loo_price": {
+      "train_events": 11403,
+      "train_markets": 6,
+      "dev_events": 4606,
+      "dev_markets": 47
+    },
+    "loo_family": {
+      "train_events": 11365,
+      "train_markets": 5,
+      "dev_events": 4389,
+      "dev_markets": 29
+    },
+    "semantic_and_strict_source_sets_identical": true
+  },
+  "best_controls": {
+    "loo_price_blend_ridge": {
+      "baseline_mae": 0.005931613113330442,
+      "model_mae": 0.01503134854823915,
+      "absolute_improvement": -0.009099735434908707,
+      "relative_improvement": -1.5341080513930299,
+      "bootstrap_95": [
+        -0.022489368710545618,
+        -0.004073069255516063
+      ]
+    },
+    "loo_family_blend_ridge": {
+      "baseline_mae": 0.00550604010025063,
+      "model_mae": 0.03440094738147165,
+      "absolute_improvement": -0.028894907281221016,
+      "relative_improvement": -5.247856309638164,
+      "bootstrap_95": [
+        -0.04910677052286493,
+        -0.014999807945466997
+      ],
+      "dev_markets": 29,
+      "required_dev_markets": 30,
+      "champion_gate_pass": false
+    }
+  },
+  "interpretation": [
+    "No tested structural estimator improves next direct Polymarket repricing over persistence on frozen DEV.",
+    "LOO-PRICE also fails, so the result is not merely an over-aggressive LOO-FAMILY exclusion effect.",
+    "LOO-FAMILY TRAIN support spans only 5 markets versus 29 DEV markets, indicating a severe cross-market transfer challenge, but this cannot rescue the preregistered DEV failure.",
+    "Semantic and strict LOO-FAMILY source sets are identical in this corpus; all 8 LOO-FAMILY model results therefore coincide apart from bootstrap resampling noise.",
+    "Per frozen stop rule, no dynamic, flow, PRED-006 hazard augmentation, rescue search, or FINAL evaluation is opened inside R3-FV-001."
+  ]
+}

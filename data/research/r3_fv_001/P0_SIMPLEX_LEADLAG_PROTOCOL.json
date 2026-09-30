@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "subexperiment": "R3-P0-SIMPLEX-LEADLAG-001",
+  "stage": "TRAIN_DEV_ONLY",
+  "frozen_before_performance": true,
+  "empirical_universe": {
+    "source": "DATA-004 P0 fills only",
+    "target": "DATA-003 accepted direct/reference fills only",
+    "data001_allowed": false,
+    "historical_analogue_families_allowed": false
+  },
+  "source_target_pairs": [
+    {
+      "event_id": "103166",
+      "source_market_ids": [
+        "919489",
+        "919490",
+        "919491",
+        "919492",
+        "919493",
+        "919494",
+        "919495",
+        "919496",
+        "919497",
+        "919498"
+      ],
+      "target_sig_market_id": "152",
+      "label": "House count -> Republican House"
+    },
+    {
+      "event_id": "106193",
+      "source_market_ids": [
+        "943819",
+        "943820",
+        "943821",
+        "943822",
+        "943823",
+        "943824",
+        "943825",
+        "943826",
+        "943827",
+        "943828",
+        "943829"
+      ],
+      "target_sig_market_id": "154",
+      "label": "Senate count -> Republican Senate"
+    },
+    {
+      "event_id": "633839",
+      "source_market_ids": [
+        "2683257",
+        "2683258",
+        "2683259",
+        "2683260",
+        "2683261",
+        "2683262",
+        "2683263",
+        "2683264",
+        "2683265",
+        "2683266",
+        "2683267",
+        "2683268",
+        "2683269"
+      ],
+      "target_sig_market_id": "151",
+      "label": "Cross-chamber -> Democratic House"
+    },
+    {
+      "event_id": "633839",
+      "source_market_ids": [
+        "2683257",
+        "2683258",
+        "2683259",
+        "2683260",
+        "2683261",
+        "2683262",
+        "2683263",
+        "2683264",
+        "2683265",
+        "2683266",
+        "2683267",
+        "2683268",
+        "2683269"
+      ],
+      "target_sig_market_id": "152",
+      "label": "Cross-chamber -> Republican House"
+    },
+    {
+      "event_id": "633839",
+      "source_market_ids": [
+        "2683257",
+        "2683258",
+        "2683259",
+        "2683260",
+        "2683261",
+        "2683262",
+        "2683263",
+        "2683264",
+        "2683265",
+        "2683266",
+        "2683267",
+        "2683268",
+        "2683269"
+      ],
+      "target_sig_market_id": "153",
+      "label": "Cross-chamber -> Democratic Senate"
+    },
+    {
+      "event_id": "633839",
+      "source_market_ids": [
+        "2683257",
+        "2683258",
+        "2683259",
+        "2683260",
+        "2683261",
+        "2683262",
+        "2683263",
+        "2683264",
+        "2683265",
+        "2683266",
+        "2683267",
+        "2683268",
+        "2683269"
+      ],
+      "target_sig_market_id": "154",
+      "label": "Cross-chamber -> Republican Senate"
+    },
+    {
+      "event_id": "162226",
+      "source_market_ids": [
+        "1178882"
+      ],
+      "target_sig_market_id": "153",
+      "label": "Core-four joint -> Democratic Senate"
+    }
+  ],
+  "representation": {
+    "geometries": [
+      "QP simplex projection",
+      "KL/I projection by positive normalization"
+    ],
+    "binary_rule": "A one-market binary source is represented as [p,1-p] before projection.",
+    "transform": "Centered log-ratio clr(q+1e-4); source feature is clr(q_t)-clr(q_prev).",
+    "rationale": "Use the full distributional shape change rather than force a scalar contemporaneous fair value."
+  },
+  "chronology": {
+    "max_component_age_seconds": 86400,
+    "source_block_rule": "Signal state includes source fills through block B.",
+    "target_rule": "Baseline target block < B; response target block > B.",
+    "shock_threshold": "TRAIN-only 75th percentile of non-zero CLR-shock L2 norm, separately by source family and geometry.",
+    "cooldown_seconds": 30,
+    "deduplication": "Earliest source shock only when multiple shocks map to the same future target block."
+  },
+  "estimator": {
+    "fit": "Fixed ridge on TRAIN only with zero intercept. Standardize each CLR-delta feature by TRAIN standard deviation; lambda=1.0.",
+    "predictor": "target_before + standardized_delta dot ridge_weights, clipped to [0,1].",
+    "baseline": "persistence / zero target move."
+  },
+  "outcomes": {
+    "primary": "first target update after source shock within 300 seconds",
+    "diagnostics": [
+      "30 seconds",
+      "5 seconds"
+    ],
+    "no_update": "missing, never imputed as zero"
+  },
+  "gate": {
+    "primary_horizon_seconds": 300,
+    "minimum_train_rows": 40,
+    "minimum_dev_rows": 20,
+    "minimum_dev_day_clusters": 4,
+    "requirements": [
+      "QP and KL both positive DEV MAE improvement",
+      "QP and KL UTC-day bootstrap lower 95% > 0",
+      "QP and KL first/second DEV halves non-negative",
+      "QP and KL direction accuracy > 0.5"
+    ],
+    "rule": "30s/5s diagnostics cannot rescue a 300s failure. Each source-target pair is judged separately; no DEV-driven source/target remapping.",
+    "no_post_result_rescue": true
+  },
+  "final_opened": false,
+  "final_rows_accessed": 0
+}

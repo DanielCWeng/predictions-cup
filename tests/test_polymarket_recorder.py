@@ -12,6 +12,7 @@ from predictions_cup.config import AppSettings
 from predictions_cup.external.polymarket.client import ObservedBookBatch
 from predictions_cup.external.polymarket.recorder import (
     PolymarketRecorder,
+    _public_smoke_test,
     _run_recorder_until_stopped,
     main,
 )
@@ -36,6 +37,53 @@ def test_supervised_recorder_fails_closed_without_explicit_universe(
     monkeypatch.delenv("PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS", raising=False)
 
     assert main(["--runtime-env-only", "--require-explicit-universe"]) == 2
+
+
+
+
+
+def test_public_smoke_honors_supervised_token_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    market = SimpleNamespace(
+        active=True,
+        closed=False,
+        market_id="market-1",
+        condition_id="condition-1",
+        token_ids=("token-shadow", "token-other"),
+    )
+
+    class FakeGamma:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+
+        async def discover_active_markets(self) -> object:
+            return SimpleNamespace(markets=(market,), parse_failures=0)
+
+    class FakeClob:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+
+        async def fetch_books(
+            self,
+            token_ids: tuple[str, ...],
+        ) -> tuple[dict[str, object], ...]:
+            assert token_ids == ("token-shadow",)
+            return ({"asset_id": "token-shadow"},)
+
+    monkeypatch.setattr(
+        "predictions_cup.external.polymarket.recorder.GammaClient",
+        FakeGamma,
+    )
+    monkeypatch.setattr(
+        "predictions_cup.external.polymarket.recorder.ClobMarketDataClient",
+        FakeClob,
+    )
+    settings = AppSettings.model_validate(
+        {"polymarket_supervised_ids": "token-shadow"}
+    )
+
+    assert asyncio.run(_public_smoke_test(settings)) == 0
 
 
 def test_rest_seed_preserves_batch_level_observation_times(

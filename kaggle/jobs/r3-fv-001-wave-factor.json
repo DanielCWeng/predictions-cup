@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/r3_fv_001_wave_factor",
+  "kernel": "polyleviathan/r3-fv-001-wave-factor-v1",
+  "poll_seconds": 20,
+  "timeout_minutes": 90,
+  "download_outputs": true,
+  "output_file_pattern": "(WAVE_FACTOR_RESULTS|WAVE_FACTOR_EPISODES|WAVE_FACTOR_HANDOFF)\\.(json|csv|md)$",
+  "note": "Relaunch after factor-specific support fix: individual P0 factors no longer require simultaneous freshness of unrelated families. DATA-003 targets + DATA-004 P0; source block < target; TRAIN-fitted absorption/isotonic only; DATA-001 forbidden; FINAL locked.",
+  "revision": 2
+}

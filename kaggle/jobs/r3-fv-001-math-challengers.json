@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel": "polyleviathan/r3-fv-001-math-challengers-v9",
+  "kernel_dir": "scripts/kaggle/r3_fv_001_math_challengers",
+  "poll_seconds": 30,
+  "timeout_minutes": 60,
+  "download_outputs": true,
+  "note": "V9 relaunch after Kaggle title/slug consistency fix. Lean episode-native governor inverse only; DATA-003 + DATA-004 P0/P1; DATA-001 forbidden; FINAL unopened.",
+  "revision": 12
+}

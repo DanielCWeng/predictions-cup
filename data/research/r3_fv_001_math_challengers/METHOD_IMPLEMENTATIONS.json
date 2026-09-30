@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001M",
+  "final_opened": false,
+  "external_math_head": "e46eac3cb8aa",
+  "data003_required": true,
+  "data004_required": true,
+  "data001_forbidden": true,
+  "declared_before_run": true,
+  "implementation_notes": {
+    "identification_first": "LP/bucket-support bounds are reported independently of point completions.",
+    "completion_second": "QP/KL/MaxEnt are model/completion rules and cannot narrow hard bounds by assertion.",
+    "dynamics_third": "No dynamic filter is opened in this lane.",
+    "governor_scalable": "Primary challenger is genuine LOO: target direct prior is removed and replaced by the TRAIN-selected exchangeable base probability; a common logit shift is calibrated to all seven national governor-count buckets with exact Poisson-binomial convolution. A direct-prior blend is secondary diagnostic only.",
+    "lp_identification": "Primary LP bounds use the smallest uniform coherence tube around raw asynchronous source prices; equality-surface dual certificates are explicitly conditional on a separate QP reconciliation.",
+    "identified_set_information_value": "Leave-one-source information value is the increase in target identified-set width when that source constraint is removed while holding the full-surface minimal uniform ambiguity radius fixed. This preserves monotonicity; the ambiguity radius is not re-estimated after ablation."
+  },
+  "parent_head_rebased_to": "473847e00ceb2c3968cc637af4589eb19938eb7b",
+  "parent_state_at_rebase": "STRUCTURAL_MATH_ACTIVE; parent S01/S03/S04/S05 preserved from attempt3, S02/S06 under implementation correction",
+  "challenger_novelty": [
+    "LP dual/sub-super replication diagnostics",
+    "identified-set source information value",
+    "I-projection reference-measure sensitivity",
+    "one-factor exact Poisson-binomial governor-count inverse challenger"
+  ],
+  "duplicate_parent_methods": "QP/KL/MaxEnt component calculations retained only as controlled comparators/validation or for the external-math extensions; not claimed as new inventions.",
+  "finalised_challenger_architecture": {
+    "identification": "KEEP_RESEARCH_DIAGNOSTIC",
+    "point_fv": "DO_NOT_PROMOTE",
+    "event_pressure": "DO_NOT_PROMOTE_POST_HOC",
+    "cross_p0_wave": "DO_NOT_PROMOTE",
+    "live_sparse_shocks": "SHADOW_ONLY",
+    "governor_inverse": "DO_NOT_PROMOTE"
+  },
+  "v9_governor_inverse": {
+    "observation_unit": "one target row per genuinely new national governor-count source surface",
+    "optimizer": "deterministic bounded 1-D golden-section search over common logit factor",
+    "likelihood": "exact Poisson-binomial count buckets with KL loss",
+    "primary_loo": "target direct prior excluded",
+    "unobserved_base_probability": "selected on TRAIN only",
+    "promotion_gate": "DEV >=200 episodes, >=10 SIG targets, positive MAE improvement, cluster-bootstrap lower 95% > 0, both DEV halves non-negative",
+    "final_result": {
+      "decision": "DO_NOT_PROMOTE",
+      "train_episodes": 0,
+      "dev_episodes": 14,
+      "sig_markets": 8,
+      "baseline_mae": 0.0145,
+      "method_mae": 0.24509330252066414,
+      "absolute_mae_improvement": -0.2305933025206641,
+      "bootstrap_lower_95": -0.33956848742088297,
+      "bootstrap_upper_95": -0.0988612848612355
+    },
+    "evidence_path": "data/research/r3_fv_001_math_challengers/GOVERNOR_V9_EVIDENCE.json"
+  },
+  "live_shadow_config": "data/research/r3_fv_001_math_challengers/LIVE_SHOCK_CONFIG.json"
+}

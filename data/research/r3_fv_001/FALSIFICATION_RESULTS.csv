@@ -1,0 +1,13 @@
+falsification_id,target,check,result,consequence
+"F01","Programme scope","Audit empirical source/target datasets","PASS: R3 branch used DATA-004 sources + DATA-003 targets; DATA-001/historical analogues not used","Preserve empirical work; correct only the premature stop interpretation."
+"F02","Chronology","Require source blocks strictly less than target block for target-state inference","PASS","No same-block lookahead in corrected structural state."
+"F03","Semantic hard edges","Replace raw P1 direct-winner averaging with nonliteral EXACT_EQUIVALENT-only LOO-PRICE","0 usable corrected rows","Classify S02 as insufficient support, not positive reconstruction."
+"F04","Governorship inverse eligibility","Remove incorrect requirement that every target anchor explicitly list all national count bins","Corrected eligibility yields 46 DEV rows but 0 TRAIN inverse rows","Do not fit/promote S06 from this family."
+"F05","Seat residual horizon","Assign next target update before source-completeness filtering","Attempt 2 remains negative under QP and KL","Attempt-1 residual bug cannot explain the null."
+"F06","Geometry","Compare QP vs KL throughout priority structural, seat, calibrated and timing tests","No qualified method survives both geometries","No geometry-specific rescue."
+"F07","Senate semantics","Compare structural Senate bounds with direct NEAR win/control reference","0% interval coverage in cross-chamber hard-threshold interpretation","Do not promote 50/51-seat wording to hard identity; T50/T51 DEV performance cannot choose semantics."
+"F08","Calibration","Fit affine structural->direct scale on TRAIN only before error-correction","Calibrated level and ECM both worse than persistence","Raw level mismatch is not the sole reason for structural failure."
+"F09","Machine-speed timing","Freeze 300s primary with 30s/5s diagnostics unable to rescue","No pair meets support or performance gate","No historical fill-based machine-speed alpha claim."
+"F10","Isolated positive Senate timing","Inspect favorable 300s Senate observations","Only 1 DEV response / 1 UTC day; QP/KL disagree for CLR variant","Reject as anecdotal/noise; no FINAL."
+"F11","Holdout discipline","Check FINAL start 2026-09-10 and access counters","PASS: final_opened=false; final_rows_accessed=0","No one-shot FINAL run because no DEV champion."
+"F12","Predictive rescue layers","Flow and PRED-006 hazard only after core structural candidate","NOT OPENED: no core candidate","Prevents post-hoc flow/hazard rescue."

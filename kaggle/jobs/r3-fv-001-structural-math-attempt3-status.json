@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "status",
+  "kernel": "polyleviathan/r3-fv-001-corrected-structural-math",
+  "note": "Read-only attempt-3 probe. Never rerun compute from this manifest."
+}

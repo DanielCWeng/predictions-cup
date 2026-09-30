@@ -1,0 +1,11 @@
+test,geometry,scope,dev_rows,dev_markets,baseline_mae,model_mae,absolute_mae_improvement,bootstrap_lower_95,bootstrap_upper_95,status,notes
+"Broad correct-universe screen","Ridge","LOO_FAMILY_SEMANTIC",4389,29,0.00550604010025063,0.03440094738147165,-0.028894907281221016,-0.04910677052286493,-0.014999807945466997,"NEGATIVE_DEV","Generic structural feature model; TRAIN support only 5 target markets."
+"Georgia joint point FV","QP","priority component",35,2,0.004514285714285723,0.01659919999999997,-0.012084914285714246,,,"NEGATIVE_DEV","Coherent projection plus explicit residual completion."
+"Georgia joint point FV","KL","priority component",35,2,0.004514285714285723,0.01623927082566424,-0.011724985111378514,,,"NEGATIVE_DEV","Probability geometry does not rescue."
+"Senate x House point FV","QP","priority component",1534,4,0.0051303839634941365,0.12000857612075018,-0.11487819215725605,,,"NEGATIVE_DEV","Large failure versus persistence."
+"Senate x House point FV","KL","priority component",1534,4,0.0051303839634941365,0.12024309816794031,-0.11511271420444617,,,"NEGATIVE_DEV","Large failure versus persistence."
+"House count CLR lead-lag","QP","300s primary",1,1,0.01,,,"","","INSUFFICIENT_SUPPORT","Only one DEV response in-window; no promotion."
+"House count CLR lead-lag","KL","300s primary",1,1,0.01,,,"","","INSUFFICIENT_SUPPORT","Only one DEV response in-window; no promotion."
+"Senate count CLR lead-lag","QP","300s primary",1,1,0.010000000000000009,0.011848075201024266,-0.0018480752010242574,,,"INSUFFICIENT_SUPPORT","One DEV row / one day; negative on QP."
+"Senate count CLR lead-lag","KL","300s primary",1,1,0.010000000000000009,0.002470898980520553,0.007529101019479456,,,"INSUFFICIENT_SUPPORT","Favorable single row but one DEV observation / one day and QP disagreement."
+"Cross-chamber/core-four CLR lead-lag","QP/KL","five frozen pairs",0,0,,,,,,"INSUFFICIENT_SUPPORT","No DEV target response within 300s for the frozen pairs."

@@ -19,11 +19,22 @@ The accepted EXPERIMENT-001A baseline used local SQLite/WAL research persistence
 CAPTURE-001 reuses the BUILD-007 supervised collectors. Before deploying this branch, put the
 launch-specific research roots in `runtime.env` while keeping trading disabled:
 
+Generate the strict PM token universe first:
+
+```bash
+.venv/bin/python -m predictions_cup.external.polymarket.supervised_universe \
+  > /tmp/polymarket_supervised_ids.txt
+```
+
+The emitted set is accepted EXACT+DERIVED mapping tokens plus the explicit 13-token R3
+structural-shadow allowlist. Copy the single CSV line into the runtime variable below; do not
+replace this with the broad election heuristic.
+
 ```text
 PREDICTIONS_CUP_SIG_RESEARCH_PATH=data/launch_20261001/sig
 PREDICTIONS_CUP_POLYMARKET_RESEARCH_PATH=data/launch_20261001/polymarket
 PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true
-PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS=<accepted mapping IDs>
+PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS=<generated strict mapping + shadow token IDs>
 PREDICTIONS_CUP_TRADING_ENABLED=false
 ```
 
@@ -63,6 +74,20 @@ python -m predictions_cup.analysis.first_hours \
 The output includes `summary.json`, `report.md`, market activity, economic BBO/update metrics,
 trade/markout diagnostics, tracked-depth summaries, 15-minute activity tables, direct mapped
 cross-venue response/latest-discrepancy tables and per-operation execution-lifecycle latency.
+
+For the R3 sparse structural-shadow experiment, run the separate non-trading analyzer against the
+same immutable capture roots:
+
+```bash
+python -m predictions_cup.analysis.structural_shadow \
+  --sig-root data/launch_20261001/sig \
+  --polymarket-root data/launch_20261001/polymarket \
+  --output data/launch_20261001/structural_shadow
+```
+
+It detects the frozen source shocks, applies a 30-second independence/debounce rule, and records
+5s/30s/300s SIG response using executable top-of-book sides plus a target-only reversal baseline.
+Outputs are explicitly **gross** of fees and depth slippage and cannot promote a strategy.
 Direct PM values are aligned through the accepted
 `SAME`/`COMPLEMENT` mapping direction before comparison. Treat response lags as nearest-subsequent
 economic changes rather than causal evidence. Treat aggressor classification as
@@ -232,10 +257,13 @@ Polymarket is now separately gated. If
 `PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=false` (or unset), the installer still installs its
 unit but explicitly leaves it disabled/stopped while SIG remains enabled. If Polymarket capture is
 enabled, `PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS` is mandatory and must contain an explicit
-bounded market/condition/token set. For production this must come from the accepted mapping
-crosswalk. Missing IDs trigger an operational fail-closed migration: the installer first
-`disable --now`s any existing Polymarket service, then exits non-zero. Unresolved IDs fail recorder
-startup. The service never falls back to the broad election heuristic.
+bounded market/condition/token set. For launch, generate the strict token set with
+`python -m predictions_cup.external.polymarket.supervised_universe`: it preserves the accepted
+EXACT+DERIVED mapping universe and unions only the reviewed capture-only R3 structural-shadow YES
+tokens. Those extra tokens are research observations, not mappings or promoted signals. Missing
+IDs trigger an operational fail-closed migration: the installer first `disable --now`s any existing
+Polymarket service, then exits non-zero. Unresolved IDs fail recorder startup. The service never
+falls back to the broad election heuristic.
 
 ### Install / update
 

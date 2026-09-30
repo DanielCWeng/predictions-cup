@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001M-WAVE",
+  "revision": 2,
+  "actions_run": 36645680395,
+  "artifact_id": 11067734851,
+  "artifact_zip_sha256": "9bceba97e7cc009c1425d2611d9d11b3cc1e9c1d95004a840b0858067def7acd",
+  "binding": {
+    "target": "DATA-003",
+    "source": "DATA-004 P0",
+    "data001_used": false
+  },
+  "final_opened": false,
+  "target_rows": 5576,
+  "decision": "NO_PROMOTION",
+  "factor_support": {
+    "COUNT_MEAN6": "DEV episodes only for Senate-control targets under 24h freshness; no TRAIN target overlap, so not estimable here.",
+    "COUNT_TAIL3": "Same support limitation as COUNT_MEAN6.",
+    "BT_ANY": "TRAIN+DEV overlap exists but <20 eligible TRAIN response episodes at the primary 24h next-episode horizon.",
+    "CORE4_BREAK": "Adequate TRAIN+DEV support; no signal survives the requirement to beat target-only reversal in both TRAIN and DEV.",
+    "composites": "No TRAIN overlap because their constituent P0 families do not overlap sufficiently under the 24h freshness gate."
+  },
+  "representative_results": {
+    "target_153_core4_unabsorbed_q0": {
+      "train_rows": 50,
+      "train_signed_move": 0.00376,
+      "train_increment_vs_reversal": 0.001,
+      "dev_rows": 34,
+      "dev_signed_move": 0.003235,
+      "dev_increment_vs_reversal": -0.000588,
+      "interpretation": "Direction itself looks positive, but incremental value over target reversal flips negative on DEV."
+    },
+    "target_154_core4_source_change_q0": {
+      "train_rows": 48,
+      "train_signed_move": -0.002458,
+      "dev_rows": 23,
+      "dev_signed_move": 0.003043,
+      "interpretation": "Direct source impulse changes sign between TRAIN and DEV."
+    },
+    "target_153_bt_any_unabsorbed_q0": {
+      "train_rows": 13,
+      "train_signed_move": 0.004615,
+      "train_increment_vs_reversal": 0.000769,
+      "dev_rows": 6,
+      "dev_signed_move": 0.005,
+      "dev_increment_vs_reversal": 0.001667,
+      "interpretation": "Interesting but below preregistered minimum TRAIN support; beta sign is negative and not interpretable as a generic Republican-wave effect."
+    }
+  },
+  "scientific_interpretation": "Independent P0 aggregate/joint political sensors do not provide a stable, sufficiently supported Senate-control lead-lag signal beyond target mean reversion on this TRAIN/DEV history. Keep BT_ANY only as a live-shadow curiosity; do not treat it as historical alpha.",
+  "recommended_action": "Reject the broad Republican-wave factor for production. Preserve factor-specific live monitoring only if cheap; prioritize parent frozen lead-lag tests and other orthogonal research families."
+}

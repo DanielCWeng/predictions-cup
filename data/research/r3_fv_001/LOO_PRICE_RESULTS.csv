@@ -1,0 +1,3 @@
+test,mode,model,train_events,train_markets,dev_events,dev_markets,baseline_mae,model_mae,absolute_mae_improvement,bootstrap_lower_95,bootstrap_upper_95,status,notes
+"Broad correct-universe screen","LOO_PRICE","blend_ridge",11403,6,4606,47,0.005931613113330442,0.01503134854823915,-0.009099735434908707,-0.022489368710545618,-0.004073069255516063,"NEGATIVE_DEV","Correct DATA-004 -> DATA-003 screen; materially worse than persistence."
+"Corrected exact-equivalent structural comparator","LOO_PRICE_EXACT_EQUIVALENT","QP",0,0,0,0,,,,,,"INSUFFICIENT_SUPPORT","Literal direct IDs excluded; no nonliteral settlement-aligned EXACT_EQUIVALENT source produced usable rows under frozen scope and 24h causal-state rule."

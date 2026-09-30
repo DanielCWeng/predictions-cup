@@ -1,0 +1,7 @@
+component,geometry,dev_rows,median_interval_width,direct_interval_coverage,status,notes
+"Georgia Senate x Governor joint","LP raw marginals",255,1.0,0.984313725490196,"MOSTLY_VACUOUS","Observed four named joint cells leave large explicit Other/residual mass under the 24h source-age rule."
+"Senate x House -> Democratic House","QP coherent category projection",1534,0.229,0.9629629629629629,"INFORMATIVE_BUT_WIDE","Valid as a structural diagnostic; not a point FV."
+"Senate x House -> Republican House","QP coherent category projection",1534,0.229,0.9806094182825484,"INFORMATIVE_BUT_WIDE","Valid as a structural diagnostic; not a point FV."
+"Senate x House -> Senate control/win","QP coherent category projection",1534,,0.0,"SEMANTIC_FALSIFIER","Zero coverage indicates the NEAR win/control/50-seat semantics cannot be promoted to a hard threshold identity."
+"House seat count -> Republican House","QP 218-seat partial bound",48,0.04813333333333338,0.020833333333333332,"POOR_ALIGNMENT","Despite narrow interval, direct reference almost never lies inside; do not use as hard FV bound without settlement-semantic reconciliation."
+"House seat count -> Republican House","KL 218-seat partial bound",48,0.04958772613141341,0.020833333333333332,"POOR_ALIGNMENT","Same failure under probability geometry; not a QP-specific artifact."

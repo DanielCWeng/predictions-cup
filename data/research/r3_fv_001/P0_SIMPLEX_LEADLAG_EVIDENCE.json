@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "subexperiment": "R3-P0-SIMPLEX-LEADLAG-001",
+  "stage": "TRAIN_DEV_EVIDENCE",
+  "output_recovery_commit": "1657c5d0cb9f4b164ba41c79d13fe61dfb438a9e",
+  "github_actions_run": 36645975490,
+  "artifact_id": 11067913519,
+  "artifact_zip_sha256": "be7a1777865216f4ae7e96b37c3b0ddbe60cfb86f90d82ccf20c40feed7ccb5d",
+  "empirical_universe": {
+    "source": "DATA-004",
+    "target": "DATA-003",
+    "data001_used": false,
+    "historical_analogue_families_used": false
+  },
+  "final_opened": false,
+  "final_rows_accessed": 0,
+  "candidate_pairs": [],
+  "primary_horizon_seconds": 300,
+  "source_support": {
+    "house_count": {
+      "train_source_states": 1021,
+      "dev_source_states": 44
+    },
+    "senate_count": {
+      "train_source_states": 3773,
+      "dev_source_states": 75
+    },
+    "core_four": {
+      "train_source_states": 336,
+      "dev_source_states": 170
+    },
+    "cross_chamber": {
+      "train_source_states": 54,
+      "dev_source_states": 129
+    }
+  },
+  "primary_pair_results": {
+    "house_count__r_house": {
+      "QP": {
+        "train_rows": 1,
+        "dev_rows": 1,
+        "status": "INSUFFICIENT_SUPPORT"
+      },
+      "KL": {
+        "train_rows": 3,
+        "dev_rows": 1,
+        "status": "INSUFFICIENT_SUPPORT"
+      }
+    },
+    "senate_count__r_senate": {
+      "QP": {
+        "train_rows": 23,
+        "dev_rows": 1,
+        "mae_improvement": -0.0018480752010242574,
+        "direction_accuracy": 0,
+        "day_clusters": 1,
+        "gate": false
+      },
+      "KL": {
+        "train_rows": 33,
+        "dev_rows": 1,
+        "mae_improvement": 0.007529101019479456,
+        "direction_accuracy": 1,
+        "day_clusters": 1,
+        "gate": false
+      }
+    },
+    "cross_chamber__d_house": {
+      "QP": {
+        "train_rows": 0,
+        "dev_rows": 0
+      },
+      "KL": {
+        "train_rows": 0,
+        "dev_rows": 0
+      }
+    },
+    "cross_chamber__r_house": {
+      "QP": {
+        "train_rows": 2,
+        "dev_rows": 0
+      },
+      "KL": {
+        "train_rows": 2,
+        "dev_rows": 0
+      }
+    },
+    "cross_chamber__d_senate": {
+      "QP": {
+        "train_rows": 0,
+        "dev_rows": 0
+      },
+      "KL": {
+        "train_rows": 0,
+        "dev_rows": 0
+      }
+    },
+    "cross_chamber__r_senate": {
+      "QP": {
+        "train_rows": 0,
+        "dev_rows": 0
+      },
+      "KL": {
+        "train_rows": 0,
+        "dev_rows": 0
+      }
+    },
+    "core_four__d_senate": {
+      "QP": {
+        "train_rows": 3,
+        "dev_rows": 0
+      },
+      "KL": {
+        "train_rows": 3,
+        "dev_rows": 0
+      }
+    }
+  },
+  "decision": "NO_HISTORICAL_MACHINE_SPEED_CANDIDATE",
+  "interpretation": "The full-distribution CLR shock test has substantial source-state history but almost no DEV direct-target fill response within the preregistered 300s machine-speed window. The single favorable Senate-KL DEV row is one observation on one UTC day and disagrees with QP; it cannot be promoted. This is a support-limited/null result for historical fill-based machine-speed leadership, not proof that live order-book leadership cannot exist.",
+  "no_rescue": "30s/5s diagnostics cannot rescue the 300s failure; no threshold/horizon/source-target remapping is permitted after result."
+}

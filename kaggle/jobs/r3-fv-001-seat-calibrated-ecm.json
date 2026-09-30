@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/r3_fv_001_seat_calibrated_ecm",
+  "kernel": "polyleviathan/r3-fv-001-seat-calibrated-ecm",
+  "poll_seconds": 20,
+  "timeout_minutes": 90,
+  "download_outputs": true,
+  "note": "Adaptive R3-SEAT-CALIBRATED-ECM-001. TRAIN-only affine calibration of supported House/Senate structural scalar, then TRAIN-only ECM beta; DEV evaluation only. No DEV-tuned parameters, no DATA-001, no FINAL."
+}

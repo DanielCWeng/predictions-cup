@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "status",
+  "kernel": "polyleviathan/r3-fv-001-structural-discovery",
+  "note": "Read-only status probe using the canonical notebook slug returned by Kaggle owned-kernel listing. Does not push, rerun, download outputs, or alter scientific state."
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "experiment_id": "R3-FV-001",
+  "stage": "FINAL_PROTOCOL_CLOSED_NO_CHAMPION",
+  "final_start_utc": "2026-09-10T00:00:00+00:00",
+  "final_opened": false,
+  "final_rows_accessed": 0,
+  "original_entry_principle": "Open FINAL only after one champion and at most two challengers are frozen from TRAIN/DEV.",
+  "entry_condition_satisfied": false,
+  "champion": null,
+  "challengers": [],
+  "status": "NOT_RUN_NO_CHAMPION",
+  "reason": "The corrected TRAIN/DEV programme exhausted the serious structural and dynamic lanes without a gate-passing candidate. FINAL was therefore not launched.",
+  "preserved_rules": {
+    "chronology": "Strict block-prior visibility for target-state models; source-shock timing strictly before target response.",
+    "baseline": "Same-target persistence.",
+    "no_post_dev_replacement": "No challenger may be invented from FINAL.",
+    "execution_boundary": "Historical fills are repricing observations, not proof of executable arbitrage or maker P&L."
+  },
+  "future_rule": "R3-FV-001 is closed. Do not launch its staged FINAL evaluator. A genuinely new preregistered programme may preserve and later use the untouched holdout."
+}

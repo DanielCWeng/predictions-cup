@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "prepare_actions_run_id": 36626882729,
+  "graph_rows": 5422,
+  "anchor_rows": 231,
+  "data004_economic_taker_rows": 96630,
+  "direct_rows": 77554,
+  "anchor_adds_beyond_direct_counts": {
+    "redundant-echo": 142,
+    "dependence-info": 78,
+    "independent-constraint": 9,
+    "none": 2
+  },
+  "market_graph_relationship_class_counts": {
+    "CHAMBER_CONTROL": 4,
+    "CONSTITUENT_OF_AGGREGATE": 1038,
+    "COUNT_DISTRIBUTION": 953,
+    "EXACT_EQUIVALENT": 275,
+    "EXHAUSTIVE_PARTITION": 87,
+    "JOINT_OUTCOME": 52,
+    "MARGIN_DISTRIBUTION": 461,
+    "NONEXHAUSTIVE_PARTITION": 611,
+    "PARTIAL_JOINT": 326,
+    "PIVOTAL_RACE": 280,
+    "REJECTED_RESOLUTION_SCOPE": 40,
+    "SOFT_RELATED": 121,
+    "TURNOUT_THRESHOLD": 1174
+  },
+  "market_graph_mathematical_class_counts": {
+    "EXACT_STRUCTURAL": 1421,
+    "MODEL_DEPENDENT_STRUCTURAL": 2373,
+    "PREDICTIVE_ONLY": 1588,
+    "REJECTED": 40
+  },
+  "family_seed_targets": 231,
+  "family_seed_p1_exclusions": 265,
+  "family_seed_pending_exact_ids": 1011,
+  "semantic_graph_summary_sha256": "af05a9fa095dfec4286c19bb8820a005253b8b3eb303b235fe9a0bca12f01d4f",
+  "family_seed_sha256": "fb59d0328547cd8bc2db1506ffd33b0e9f8d95b7187af4437fd962bbc9d30c38",
+  "final_opened": false
+}

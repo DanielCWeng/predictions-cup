@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "stage": "ATTEMPT4_EVIDENCE_EVALUATION",
+  "source_commit": "473847e00ceb2c3968cc637af4589eb19938eb7b",
+  "github_actions_run": 36641007493,
+  "artifact_id": 11065804681,
+  "artifact_zip_sha256": "c622fa8375c04684f82f2356aff0dbe54db8cdca3aea7d43dbba3ea28e9a2faa",
+  "output_sha256": {
+    "STRUCTURAL_MATH_RESULTS.json": "f0001f26c2a4a377dd6bdc9aa777e50548c9b859c9c450c58f4a962d68ebf56a",
+    "GEORGIA_STRUCTURAL_EVENTS.csv": "b97b87e02177387fb8884c1c4932dba8bac177c96ceab94d62ac1e2d324d1e6e",
+    "SENATE_HOUSE_STRUCTURAL_EVENTS.csv": "1a3a4b0c063ef3a9f928edc52e99a79cd7a68da9f6fbc5a69c741c330c20f4f3",
+    "GOV_COUNT_INVERSE_BASE.csv": "696d0f95f1f3580b10f1c7dd8ee43862e04cf153ef4d1d6734923c26eb1279bb"
+  },
+  "empirical_universe": {
+    "source": "DATA-004",
+    "target": "DATA-003",
+    "data001_used": false,
+    "historical_analogues_used": false
+  },
+  "final_opened": false,
+  "final_rows_accessed": 0,
+  "corrected_interpretation": {
+    "R3-S01-LP-BOUNDS": {
+      "decision": "CONTINUE_DESCRIPTIVE_NOT_SIGNAL",
+      "evidence": {
+        "georgia_dev_rows": 255,
+        "georgia_median_interval_width": 1,
+        "georgia_direct_interval_coverage": 0.984313725490196,
+        "senate_house_dev_rows": 1534,
+        "house_dem_interval_coverage_qp": 0.9629629629629629,
+        "house_rep_interval_coverage_qp": 0.9806094182825484,
+        "house_median_interval_width_qp": 0.229,
+        "senate_dem_interval_coverage_qp": 0,
+        "senate_rep_interval_coverage_qp": 0
+      },
+      "interpretation": "Georgia assumption-free bounds are mostly vacuous at the primary 24h freshness rule. House seat-count bounds are informative but wide. Senate zero coverage is a semantic falsifier for treating the NEAR win/control mapping as a hard threshold identity, not evidence that the source surface has no information."
+    },
+    "R3-S02-LOO-PRICE-QP": {
+      "decision": "INSUFFICIENT_SUPPORT",
+      "rows": 0,
+      "dev_rows": 0,
+      "reason": "No settlement-aligned nonliteral EXACT_EQUIVALENT DATA-004 source survived the frozen P0/P1 universe and 24h causal-state rule. The method was not empirically exercised despite the kernel status label."
+    },
+    "R3-S03-LOO-FAMILY-QP": {
+      "decision": "NEGATIVE_ON_TESTED_PRIORITY_COMPONENTS",
+      "evidence": {
+        "georgia_predicted_dev_rows": 35,
+        "georgia_targets": 2,
+        "georgia_baseline_mae": 0.004514285714285723,
+        "georgia_model_mae": 0.01659919999999997,
+        "georgia_absolute_mae_improvement": -0.012084914285714246,
+        "senate_house_dev_rows": 1534,
+        "senate_house_targets": 4,
+        "senate_house_baseline_mae": 0.0051303839634941365,
+        "senate_house_model_mae": 0.12000857612075018,
+        "senate_house_absolute_mae_improvement": -0.11487819215725605
+      },
+      "interpretation": "Strong negative point-estimator result on the Georgia joint and Senate-House count surfaces. This demotes the tested QP constructions; it does not by itself close the other 35 P0 event groups."
+    },
+    "R3-S04-LOO-FAMILY-KL": {
+      "decision": "NEGATIVE_ON_TESTED_PRIORITY_COMPONENTS",
+      "evidence": {
+        "georgia_predicted_dev_rows": 35,
+        "georgia_model_mae": 0.01623927082566424,
+        "georgia_absolute_mae_improvement": -0.011724985111378514,
+        "senate_house_dev_rows": 1534,
+        "senate_house_model_mae": 0.12024309816794031,
+        "senate_house_absolute_mae_improvement": -0.11511271420444617
+      },
+      "interpretation": "KL geometry does not rescue the tested components."
+    },
+    "R3-S05-MAXENT": {
+      "decision": "NEGATIVE_AS_POINT_COMPLETION_ON_TESTED_COMPONENTS",
+      "reason": "MaxEnt fine-state completion is embedded in the Georgia/Senate-House point estimates and did not yield useful next-repricing FV there. Preserve LP identified sets separately from MaxEnt point choices."
+    },
+    "R3-S06-LATENT": {
+      "decision": "INSUFFICIENT_TRAIN_SUPPORT",
+      "raw_rows": 46,
+      "train_rows": 0,
+      "dev_rows": 46,
+      "reason": "The frozen Republican-governorship count family had causal 24h source support only in DEV for linked D/R Governor target updates. No TRAIN-fitted inverse beta exists, so this is untested rather than negative."
+    }
+  },
+  "programme_decision": "CONTINUE_SUPPORT_AUDIT",
+  "next_step": "Audit all 210 P0 markets / 37 event groups for genuine source TRAIN+DEV and linked DATA-003 target support, then exercise only structurally legitimate families with pre-existing support. FINAL remains locked."
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/r3_fv_001_event_pressure",
+  "kernel": "polyleviathan/r3-fv-001-event-pressure-v1",
+  "poll_seconds": 20,
+  "timeout_minutes": 60,
+  "download_outputs": true,
+  "output_file_pattern": "(EVENT_PRESSURE_RESULTS|EVENT_EPISODES|EVENT_PRESSURE_HANDOFF)\\.(json|csv|md)$",
+  "note": "Launch frozen episode-level event-pressure exploration after implementation. Parent seat-count outputs only; DATA-001 forbidden; FINAL unopened.",
+  "revision": 1
+}
