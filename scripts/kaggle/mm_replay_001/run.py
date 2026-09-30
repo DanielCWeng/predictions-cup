@@ -534,3 +534,329 @@ def run_mm(
         start, end = observations[0].timestamp_ns, observations[-1].timestamp_ns
         for policy in policies:
             for model in models:
+                results, summary = replay_market(
+                    observations,
+                    policy=policy,
+                    fill_model=model,
+                )
+                row = asdict(summary)
+                row.update(
+                    {
+                        "market_id": market_id,
+                        "category": observations[0].category,
+                    }
+                )
+                policy_rows.append(row)
+                breakdown.append(row)
+                for item in results:
+                    record = {
+                        "market_id": market_id,
+                        "timestamp_ns": item.fill.timestamp_ns,
+                        "split": split_for(item.fill.timestamp_ns, start, end),
+                        "policy_id": item.fill.policy_id,
+                        "fill_assumption": item.fill.assumption.value,
+                        "side": item.fill.side.value,
+                        "fill_price": item.fill.price,
+                        "size": item.fill.size,
+                        "reservation_fv": item.reservation_fv,
+                        "gross_spread_capture": item.gross_spread_capture,
+                        "fee_cost": item.fee_cost,
+                        "unwind_cost": item.unwind_cost,
+                        "estimated_edge_5m": item.estimated_edge_5m,
+                    }
+                    fill_rows.append(record)
+                    for horizon, value in item.markouts.items():
+                        markout_rows.append(
+                            {**record, "horizon_s": horizon, "markout": value}
+                        )
+    return policy_rows, fill_rows, markout_rows, breakdown
+
+
+def latency_rows(
+    markets: dict[str, list[BookObservation]],
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for market_id, observations in markets.items():
+        moves: list[tuple[int, float]] = []
+        for previous, current in zip(observations, observations[1:], strict=False):
+            if previous.external_fv is None or current.external_fv is None:
+                continue
+            if not math.isclose(
+                previous.external_fv,
+                current.external_fv,
+                abs_tol=1e-12,
+                rel_tol=0.0,
+            ):
+                moves.append(
+                    (
+                        current.timestamp_ns,
+                        abs(current.external_fv - previous.external_fv),
+                    )
+                )
+        trade_times = [
+            obs.timestamp_ns
+            for obs in observations
+            if obs.trade_price is not None and obs.trade_size is not None
+        ]
+        for latency_ms in CANCEL_LATENCIES_MS:
+            vulnerable = 0
+            for move_time, _ in moves:
+                index = bisect_right(trade_times, move_time)
+                if (
+                    index < len(trade_times)
+                    and trade_times[index] < move_time + latency_ms * 1_000_000
+                ):
+                    vulnerable += 1
+            out.append(
+                {
+                    "market_id": market_id,
+                    "latency_ms": latency_ms,
+                    "external_fv_moves": len(moves),
+                    "trade_events_inside_reaction_window": vulnerable,
+                    "reaction_window_share": (
+                        vulnerable / len(moves) if moves else None
+                    ),
+                    "interpretation": "exposure sensitivity; not a fill/profit estimate",
+                }
+            )
+    return out
+
+
+def toxicity_rows(
+    fill_rows: list[dict[str, Any]],
+    markets: dict[str, list[BookObservation]],
+) -> list[dict[str, Any]]:
+    lookup: dict[tuple[str, int], float | None] = {}
+    for market_id, observations in markets.items():
+        for observation in observations:
+            lookup[(market_id, observation.timestamp_ns)] = observation.update_hazard
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in fill_rows:
+        score = lookup.get((str(row["market_id"]), int(row["timestamp_ns"])))
+        bucket = toxicity_bucket(score)
+        groups[(str(row["policy_id"]), bucket)].append(row)
+    out: list[dict[str, Any]] = []
+    for (policy, bucket), rows in sorted(groups.items()):
+        edges = [
+            float(row["estimated_edge_5m"])
+            for row in rows
+            if row.get("estimated_edge_5m") is not None
+        ]
+        out.append(
+            {
+                "policy_id": policy,
+                "toxicity_bucket": bucket,
+                "fills": len(rows),
+                "mean_estimated_edge_5m": (
+                    float(np.mean(edges)) if edges else None
+                ),
+            }
+        )
+    return out
+
+
+def final_report(
+    audit_passed: bool,
+    transfer: dict[str, Any],
+    policy_rows: list[dict[str, Any]],
+    fill_rows: list[dict[str, Any]],
+    markets: dict[str, list[BookObservation]],
+) -> str:
+    del policy_rows
+    external_available = any(
+        observation.external_fv is not None
+        for observations in markets.values()
+        for observation in observations
+    )
+    scored = transfer.get("status") == "SCORED"
+    lines = [
+        "# MM-REPLAY-001 — Final Report",
+        "",
+        f"- Input audit: **{'PASS' if audit_passed else 'FAIL'}**",
+        f"- 005F frozen scoring: **{transfer.get('status', 'NOT_RUN')}**",
+        f"- Markets loaded: **{len(markets)}**",
+        f"- Simulated passive fills: **{len(fill_rows)}**",
+        "- Real SIG orders sent: **NO**",
+        "",
+        "## Required questions",
+        "",
+        (
+            "1. **Did frozen 005F transfer?** "
+            + (
+                "Frozen artifact scores were evaluated; inspect "
+                "005F_TRANSFER_SUMMARY.json."
+                if scored
+                else "Not established: exact features may be present, but a frozen "
+                "score requires explicit regime, grid origins, and hash-matched "
+                "original artifacts."
+            )
+        ),
+        (
+            "2. **Are high-hazard states worse for passive fills?** Reported in "
+            "MM_TOXICITY_BUCKETS.csv only when frozen hazard scores exist; "
+            "otherwise not claimed."
+        ),
+        (
+            "3. **Does excluding/widening toxic states help?** B3 is evaluated "
+            "only with a frozen hazard score; it fails closed when toxicity is unavailable."
+        ),
+        (
+            "4. **External-FV MM vs local-mid?** "
+            + (
+                "Both families were replayed."
+                if external_available
+                else "Not evaluated because no explicit external FV field/provider was bound."
+            )
+        ),
+        (
+            "5. **Convergence to external FV?** See FV_CONVERGENCE.csv; "
+            "no causal lead-lag language is used."
+        ),
+        (
+            "6. **Cancellation latency sensitivity?** See LATENCY_SENSITIVITY.csv. "
+            "It is an exposure sensitivity and is not mislabeled as a fill estimate."
+        ),
+        (
+            "7. **Viable regimes?** See MARKET_BREAKDOWN.csv and policy results; "
+            "no production promotion is made automatically."
+        ),
+        (
+            "8. **Minimum external edge?** A predeclared 0–4 tick compact grid is "
+            "reported without post-FINAL rescue."
+        ),
+        (
+            "9. **Maker active proportion?** active_fraction is reported by "
+            "market/policy/fill assumption."
+        ),
+        (
+            "10. **Small live candidate or SHADOW?** This kernel never enables LIVE. "
+            "Candidate promotion requires a separate evidence review; no config is "
+            "emitted automatically."
+        ),
+        "",
+        "## Research boundaries",
+        "",
+        (
+            "Observable, reconstructable and assumed execution evidence remain separate. "
+            "A passive touch alone never creates a fill. Queue-aware replay is enabled "
+            "only when explicit queue-ahead fields exist. FINAL is not used to retune "
+            "policy thresholds."
+        ),
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def write_empty_outputs(reason: str) -> None:
+    write_csv(WORK / "005F_TRANSFER_RESULTS.csv", [], ["status", "reason"])
+    write_json(
+        WORK / "005F_TRANSFER_SUMMARY.json",
+        {"status": "NOT_RUN", "reason": reason},
+    )
+    pq.write_table(
+        pa.table({"status": pa.array([], type=pa.string())}),
+        WORK / "MM_FILL_RESULTS.parquet",
+    )
+    for name in (
+        "MM_POLICY_RESULTS.csv",
+        "MM_MARKOUTS.csv",
+        "MM_TOXICITY_BUCKETS.csv",
+        "FV_CONVERGENCE.csv",
+        "LATENCY_SENSITIVITY.csv",
+        "MARKET_BREAKDOWN.csv",
+    ):
+        write_csv(WORK / name, [], ["status", "reason"])
+    (WORK / "FINAL_REPORT.md").write_text(
+        "# MM-REPLAY-001 — Final Report\n\n"
+        "SCIENTIFIC_RESULT=NOT_RUN\n\n"
+        f"Reason: {reason}\n",
+        encoding="utf-8",
+    )
+    (WORK / "MASTER_HANDOFF_MM_REPLAY_001.md").write_text(
+        "# MM-REPLAY-001 — Handoff\n\n"
+        "IMPLEMENTATION_READY\n\n"
+        "DATA_STATUS=BOUND\n\n"
+        "SCIENTIFIC_RESULT=NOT_RUN\n\n"
+        f"Reason: {reason}\n\n"
+        "REAL SIG ORDERS SENT: NO\n",
+        encoding="utf-8",
+    )
+
+
+def main() -> None:
+    manifest = load_json(MANIFEST_PATH)
+    binding = DatasetBinding.from_json(manifest)
+    try:
+        root = find_dataset_root(binding)
+    except Exception as exc:
+        write_empty_outputs(str(exc))
+        raise
+
+    audit = inspect_input(root, binding)
+    write_audit(audit, WORK)
+    if not audit.passed:
+        write_empty_outputs("input audit failed; see INPUT_AUDIT.json")
+        return
+
+    explicit = dict(binding.column_map)
+    required = {"market_id", "event_timestamp"}
+    if not required.issubset(explicit):
+        write_empty_outputs(
+            "scientific run requires explicit manifest column_map for "
+            "market_id and event_timestamp"
+        )
+        return
+
+    encoding = (binding.book_encoding or "").upper()
+    if encoding not in {"SNAPSHOT", "DELTA"}:
+        write_empty_outputs("book_encoding must be explicitly SNAPSHOT or DELTA")
+        return
+
+    frame = load_frame(root, explicit)
+    markets = canonical_observations(frame, encoding)
+    transfer_rows, transfer_summary, hazard_scores = build_005f_transfer(
+        markets,
+        manifest,
+    )
+    attach_scores(markets, hazard_scores)
+
+    policy_rows, fill_rows, markout_rows, breakdown = run_mm(markets)
+    convergence = [
+        row
+        for observations in markets.values()
+        for row in fair_value_convergence(observations)
+    ]
+    latencies = latency_rows(markets)
+    toxicity = toxicity_rows(fill_rows, markets)
+
+    write_csv(WORK / "005F_TRANSFER_RESULTS.csv", transfer_rows)
+    write_json(WORK / "005F_TRANSFER_SUMMARY.json", transfer_summary)
+    fill_table = (
+        pa.Table.from_pylist(fill_rows)
+        if fill_rows
+        else pa.table({"status": pa.array([], type=pa.string())})
+    )
+    pq.write_table(fill_table, WORK / "MM_FILL_RESULTS.parquet")
+    write_csv(WORK / "MM_POLICY_RESULTS.csv", policy_rows)
+    write_csv(WORK / "MM_MARKOUTS.csv", markout_rows)
+    write_csv(WORK / "MM_TOXICITY_BUCKETS.csv", toxicity)
+    write_csv(WORK / "FV_CONVERGENCE.csv", list(convergence))
+    write_csv(WORK / "LATENCY_SENSITIVITY.csv", latencies)
+    write_csv(WORK / "MARKET_BREAKDOWN.csv", breakdown)
+    (WORK / "FINAL_REPORT.md").write_text(
+        final_report(True, transfer_summary, policy_rows, fill_rows, markets),
+        encoding="utf-8",
+    )
+    (WORK / "MASTER_HANDOFF_MM_REPLAY_001.md").write_text(
+        "# MM-REPLAY-001 — Empirical Handoff\n\n"
+        "DATA_STATUS=BOUND\n"
+        "SCIENTIFIC_RESULT=RUN_COMPLETE\n"
+        f"MARKETS={len(markets)}\n"
+        f"FILLS={len(fill_rows)}\n"
+        f"005F_STATUS={transfer_summary.get('status')}\n"
+        "REAL SIG ORDERS SENT: NO\n",
+        encoding="utf-8",
+    )
+
+
+if __name__ == "__main__":
+    main()
