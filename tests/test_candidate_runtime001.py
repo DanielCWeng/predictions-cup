@@ -313,3 +313,36 @@ def test_005f_rejects_wrong_frozen_artifact_hash() -> None:
     assert output.status is DecisionStatus.NOT_READY
     assert output.abstain_reason is not None
     assert output.abstain_reason.startswith("model_artifact_hash_mismatch:")
+
+
+def test_005f_boundary_and_ambiguous_bbo_do_not_establish_state() -> None:
+    state = IncrementalHazard005FState(grid_origin_s=0)
+    for observation in (
+        Hazard005FBboObservation(
+            scope_id="m1",
+            timestamp_s=0,
+            observed_monotonic_ns=BASE_MONO,
+            best_bid=0.0,
+            best_ask=0.60,
+            source_version="fixture",
+        ),
+        Hazard005FBboObservation(
+            scope_id="m1",
+            timestamp_s=5,
+            observed_monotonic_ns=BASE_MONO + 5_000_000_000,
+            best_bid=0.40,
+            best_ask=1.0,
+            source_version="fixture",
+        ),
+        Hazard005FBboObservation(
+            scope_id="m1",
+            timestamp_s=10,
+            observed_monotonic_ns=BASE_MONO + 10_000_000_000,
+            best_bid=0.40,
+            best_ask=0.60,
+            source_version="fixture",
+            ambiguous=True,
+        ),
+    ):
+        state.observe(observation)
+    assert state.feature_vector(_snapshot(15)) is None
