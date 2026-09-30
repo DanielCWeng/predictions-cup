@@ -61,7 +61,10 @@ def summarize_observations(
     duplicate_fill = sum(
         max(0, counter[ObservationKind.FILL] - 1) for counter in by_operation.values()
     )
-    dispatches = counts[ObservationKind.REQUEST_DISPATCHED.value]
+    request_attempts = (
+        counts[ObservationKind.REQUEST_DISPATCHED.value]
+        + counts[ObservationKind.CANCEL_REQUESTED.value]
+    )
     uncertainty = counts[ObservationKind.UNCERTAIN.value]
     return {
         "event_counts": dict(sorted(counts.items())),
@@ -72,19 +75,25 @@ def summarize_observations(
         "rate_limit_429_count": counts[ObservationKind.RATE_LIMIT.value],
         "rate_limit_429_rate": (
             None
-            if dispatches == 0
-            else counts[ObservationKind.RATE_LIMIT.value] / dispatches
+            if request_attempts == 0
+            else counts[ObservationKind.RATE_LIMIT.value] / request_attempts
         ),
         "server_5xx_count": counts[ObservationKind.SERVER_ERROR.value],
         "server_5xx_rate": (
             None
-            if dispatches == 0
-            else counts[ObservationKind.SERVER_ERROR.value] / dispatches
+            if request_attempts == 0
+            else counts[ObservationKind.SERVER_ERROR.value] / request_attempts
         ),
         "transport_exception_count": counts[ObservationKind.TRANSPORT_EXCEPTION.value],
         "uncertainty_count": uncertainty,
-        "uncertainty_rate": None if dispatches == 0 else uncertainty / dispatches,
-        "reconnect_count": counts[ObservationKind.RECONNECT_RESOLVED.value],
+        "uncertainty_rate": None if request_attempts == 0 else uncertainty / request_attempts,
+        "reconnect_count": counts[ObservationKind.RECONNECT_STARTED.value],
+        "reconnect_resolved_count": counts[ObservationKind.RECONNECT_RESOLVED.value],
+        "reconnect_unresolved_count": max(
+            0,
+            counts[ObservationKind.RECONNECT_STARTED.value]
+            - counts[ObservationKind.RECONNECT_RESOLVED.value],
+        ),
         "realtime_revision_gap_count": counts[ObservationKind.REALTIME_REVISION_GAP.value],
         "replenishment_observation_count": counts[ObservationKind.QUOTE_REPLENISHED.value],
         "duplicate_ack_evidence": duplicate_ack,
