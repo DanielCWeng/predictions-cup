@@ -91,6 +91,7 @@ Do not infer `genuine_age_s` from generic quote age.
 | `required_orderbook_history_unavailable` | exact 005F history/grid features are unavailable | continue/repair book capture and grid state |
 | `regime_unavailable` | 005F PRE/ACTIVE state not supplied | wire explicit regime source |
 | `model_artifact_missing:<coordinate>` | required 005F frozen scorer is absent | recover and hash-check original artifact |
+| `model_artifact_hash_mismatch:<coordinate>` | supplied 005F scorer identity does not match the frozen challenger model+scaler hashes | disable it and recover the exact original binaries; never score with the mismatched artifact |
 
 ## Restart behavior
 
