@@ -217,7 +217,9 @@ def test_deterministic_replay_and_duplicate_inputs_are_idempotent(
 ) -> None:
     t0 = datetime(2099, 1, 1, 12, 0, tzinfo=UTC)
 
-    async def one(root: Path) -> list[dict[str, object]]:
+    async def one(
+        root: Path,
+    ) -> tuple[list[dict[str, object]], bytes]:
         engine, _ = await _engine(root)
         initial = _snapshot(t0, now_ns=1_000_000_000)
         decision = _decision(initial)
@@ -235,12 +237,14 @@ def test_deterministic_replay_and_duplicate_inputs_are_idempotent(
         await engine.flush()
         records = [outcome_record(item) for item in engine.outcomes()]
         await engine.close()
-        return records
+        persisted = (root / "outcomes.jsonl").read_bytes()
+        return records, persisted
 
-    first = asyncio.run(one(tmp_path / "a"))
-    second = asyncio.run(one(tmp_path / "b"))
-    assert first == second
-    assert len(first) == 1
+    first_records, first_bytes = asyncio.run(one(tmp_path / "a"))
+    second_records, second_bytes = asyncio.run(one(tmp_path / "b"))
+    assert first_records == second_records
+    assert first_bytes == second_bytes
+    assert len(first_records) == 1
 
 
 def test_restart_recovers_pending_maturity(tmp_path: Path) -> None:
@@ -466,20 +470,47 @@ def _write_execution_journal(
         connection.close()
 
 
-def test_bbo_source_wall_time_matches_monotonic_freshness() -> None:
-    observed = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)
-    state = ObservableMarketState.from_snapshot(
-        _snapshot(
+def test_bbo_source_wall_time_matches_monotonic_freshness(
+    tmp_path: Path,
+) -> None:
+    async def run() -> None:
+        observed = datetime(2099, 1, 1, 12, 0, tzinfo=UTC)
+        initial = _snapshot(
             observed,
             now_ns=10_000_000_000,
-            source_age_ns=3_000_000_000,
+            source_age_ns=100_000_000,
             trusted=True,
         )
-    )
-    evidence = state.evidence()
-    assert evidence.observed_at == observed
-    assert evidence.freshness_seconds == pytest.approx(3.0)
-    assert evidence.source_observed_at == observed - timedelta(seconds=3)
+        future = _snapshot(
+            observed + timedelta(seconds=1),
+            now_ns=11_000_000_000,
+            source_age_ns=3_000_000_000,
+            trusted=True,
+            bid_ticks=100,
+            ask_ticks=102,
+        )
+        state = ObservableMarketState.from_snapshot(future)
+        evidence = state.evidence()
+        assert evidence.observed_at == future.observed_at
+        assert evidence.freshness_seconds == pytest.approx(3.0)
+        assert evidence.source_observed_at == (
+            future.observed_at - timedelta(seconds=3)
+        )
+
+        engine, _ = await _engine(tmp_path)
+        await engine.persist_snapshot(initial)
+        await engine.persist_decision(_decision(initial))
+        await engine.persist_snapshot(future)
+        await engine.flush()
+        outcome = engine.outcomes()[0]
+        assert outcome.outcome_status is OutcomeStatus.MATURED_SCORED
+        assert outcome.source_freshness_seconds == pytest.approx(3.0)
+        assert outcome.source_timestamp == (
+            future.observed_at - timedelta(seconds=3)
+        )
+        await engine.close()
+
+    asyncio.run(run())
 
 
 def test_authoritative_fill_duplicates_are_deduplicated(tmp_path: Path) -> None:
