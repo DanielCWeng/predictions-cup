@@ -17,12 +17,18 @@ def _quote(
     bid_depth: float | None = 10.0,
     ask_depth: float | None = 10.0,
 ) -> live_diag.Quote:
+    observed_at = BASE + timedelta(seconds=seconds)
     return live_diag.Quote(
-        observed_at=BASE + timedelta(seconds=seconds),
+        observed_at=observed_at,
         best_bid=bid,
         best_ask=ask,
         bid_depth=bid_depth,
         ask_depth=ask_depth,
+        depth_observed_at=(
+            observed_at
+            if bid_depth is not None or ask_depth is not None
+            else None
+        ),
     )
 
 
@@ -104,6 +110,38 @@ def test_latency_can_remove_active_edge() -> None:
     assert result.latency_adjusted_edge == pytest.approx(0.0)
     assert result.status is live_diag.ResearchStatus.TOO_FAST_TO_MONETIZE
     assert "EDGE_GONE_AFTER_LATENCY" in result.reasons
+
+
+def test_stale_sig_book_never_becomes_executable_edge() -> None:
+    sig = (
+        _quote(0, 0.49, 0.51),
+        _quote(30, 0.52, 0.54),
+    )
+    external = (
+        _quote(0, 0.49, 0.51),
+        _quote(20, 0.54, 0.56),
+    )
+    result = live_diag.analyze_lead_lag(
+        sig_quotes=sig,
+        external_quotes=external,
+        latency_ms=10.0,
+        max_quote_age_seconds=5.0,
+    )[0]
+    assert result.status is live_diag.ResearchStatus.INSUFFICIENT_EVIDENCE
+    assert result.gross_executable_edge is None
+    assert result.reasons == ("NO_SIG_ASOF_QUOTE",)
+
+
+def test_sig_thresholds_use_canonical_half_cent_tick() -> None:
+    sig = (_quote(0, 0.495, 0.505),)
+    external = (_quote(0, 0.500, 0.510),)
+    triggers = live_diag.construct_gap_episodes(
+        sig_quotes=sig,
+        external_quotes=external,
+        threshold_ticks=1,
+    )
+    assert len(triggers) == 1
+    assert triggers[0].signed_gap == pytest.approx(0.005)
 
 
 def test_missing_depth_never_becomes_executable_edge() -> None:
