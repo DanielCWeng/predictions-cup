@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -30,6 +31,7 @@ from predictions_cup.shadow import (
     CandidateOutput,
     CanonicalShadowSnapshot,
     DecisionStatus,
+    CaptureStrategyEventStore,
     DirectPmCandidate,
     Hazard005FCandidate,
     InMemoryEventStore,
@@ -158,6 +160,27 @@ class _SlowCandidate:
         return CandidateOutput(status=DecisionStatus.OK)
 
 
+class _BlockingCandidate:
+    candidate_id = "blocking"
+    candidate_version = "v1"
+    strategy_family = "TEST"
+
+    def __init__(self) -> None:
+        self.release = threading.Event()
+        self.calls = 0
+        self.active = 0
+        self.max_active = 0
+
+    def evaluate(self, snapshot: CanonicalShadowSnapshot) -> CandidateOutput:
+        del snapshot
+        self.calls += 1
+        self.active += 1
+        self.max_active = max(self.max_active, self.active)
+        self.release.wait(timeout=1.0)
+        self.active -= 1
+        return CandidateOutput(status=DecisionStatus.OK)
+
+
 class _InvalidCandidate:
     candidate_id = "invalid"
     candidate_version = "v1"
@@ -222,6 +245,64 @@ def test_timeout_isolation_and_invalid_output_fail_closed() -> None:
             item for item in health.candidates if item.candidate_id == "slow"
         )
         assert slow_health.timeout_count == 1
+
+    asyncio.run(run())
+
+
+def test_timeout_quarantine_bounds_inflight_evaluations() -> None:
+    async def run() -> None:
+        candidate = _BlockingCandidate()
+        store = InMemoryEventStore()
+        bus = ShadowBus(
+            (candidate,),
+            store=store,
+            candidate_timeout_seconds=0.005,
+        )
+        await bus.start()
+        await bus.publish(_snapshot())
+        await asyncio.sleep(0.02)
+
+        timed_out = bus.health().candidates[0]
+        assert timed_out.quarantined is True
+        assert timed_out.in_flight is True
+        assert timed_out.timeout_count == 1
+
+        for offset in range(1, 21):
+            await bus.publish(_snapshot(now=NOW + offset))
+        await asyncio.sleep(0.01)
+
+        assert candidate.calls == 1
+        assert candidate.max_active == 1
+        while candidate.active == 0:
+            await asyncio.sleep(0)
+        candidate.release.set()
+        await asyncio.sleep(0.03)
+        recovered = bus.health().candidates[0]
+        assert recovered.quarantined is False
+        assert recovered.in_flight is False
+        assert recovered.skipped_states >= 20
+        await bus.close()
+
+    asyncio.run(run())
+
+
+def test_nonblocking_ingress_reports_rejection_instead_of_blocking() -> None:
+    async def run() -> None:
+        candidate = _BlockingCandidate()
+        bus = ShadowBus(
+            (candidate,),
+            ingress_capacity=1,
+            candidate_timeout_seconds=0.5,
+        )
+        await bus.start()
+        first = bus.submit(_snapshot())
+        second = bus.submit(_snapshot(now=NOW + 1))
+        assert first is True
+        assert second is False
+        health = bus.health()
+        assert health.ingress_rejected == 1
+        candidate.release.set()
+        await bus.close()
 
     asyncio.run(run())
 
@@ -381,6 +462,29 @@ def test_direct_pm_reference_exposes_mapping_and_residual() -> None:
     assert output.score == pytest.approx(0.05)
     assert output.candidate_payload["mapping_class"] == "EXACT"
     assert output.candidate_payload["mapping_direction"] == "SAME"
+
+
+def test_capture_strategy_event_mirror_writes_canonical_parquet(
+    tmp_path: Path,
+) -> None:
+    async def run() -> None:
+        store = CaptureStrategyEventStore(
+            tmp_path / "sig_research",
+            queue_capacity=100,
+            shard_seconds=60,
+            max_rows_per_shard=10,
+            session_id="shadow-test",
+        )
+        candidate = _FixedCandidate("capture")
+        bus = ShadowBus((candidate,), store=store)
+        await bus.start()
+        await bus.publish(_snapshot())
+        await bus.flush()
+        await bus.close()
+
+    asyncio.run(run())
+    files = tuple((tmp_path / "sig_research" / "strategy_events").rglob("*.parquet"))
+    assert files
 
 
 def test_unwired_research_candidates_fail_closed_as_not_ready() -> None:
