@@ -22,8 +22,10 @@ SIG is always enabled/restarted by this installer. Polymarket is conditional:
 - if an old capture-enabled runtime.env lacks that new setting, the installer first
   `disable --now`s the existing Polymarket unit, then fails rather than leaving the old broad
   collector running;
-- production IDs come from the accepted SIG ↔ Polymarket mapping gate, not the broad election
-  heuristic; a small explicit public set may be used only for the pre-merge ARM64 Parquet smoke.
+- production IDs remain strict and explicit: generate them with
+  `python -m predictions_cup.external.polymarket.supervised_universe`, which unions the accepted
+  EXACT+DERIVED SIG ↔ Polymarket mapping tokens with the reviewed capture-only R3 structural-shadow
+  YES-token allowlist; the broad election heuristic remains forbidden for the supervised service.
 
 The installer never sources or overwrites `trade.env`, never prints credential values, and does
 not delete capture data. BUILD-007's Polymarket high-frequency research data is written to ZSTD

@@ -211,9 +211,14 @@ CAPTURE-001 reuses the accepted Polymarket recorder. It already writes:
 - source timestamps and local observation timestamps;
 - immutable ZSTD Parquet.
 
-Production IDs must come from:
+Production mapping identity remains:
 
 `data/mappings/sig_polymarket_2026.json`
+
+The strict launch capture universe may additionally include the explicit capture-only R3 shadow
+YES tokens in `data/capture/r3_live_shadow_polymarket_ids.json`. Generate the union with
+`python -m predictions_cup.external.polymarket.supervised_universe`. Shadow inclusion changes
+only what the recorder observes; it does not alter the accepted SIG ↔ Polymarket mapping.
 
 The two venue collectors do not pretend to share a venue clock. Cross-venue analysis uses each
 source's event time where supplied and the local receive/observation clocks for observable-time
@@ -379,7 +384,7 @@ Recommended runtime values:
 PREDICTIONS_CUP_SIG_RESEARCH_PATH=data/launch_20261001/sig
 PREDICTIONS_CUP_POLYMARKET_RESEARCH_PATH=data/launch_20261001/polymarket
 PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED=true
-PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS=<accepted mapping IDs>
+PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS=<generated strict mapping + shadow token IDs>
 PREDICTIONS_CUP_TRADING_ENABLED=false
 ```
 
@@ -470,7 +475,7 @@ Before 1 October 17:00 BST, verify on the intended launch host:
 1. exact reviewed branch/head installed;
 2. runtime.env contains read-only capture settings and no trade credential;
 3. SIG tournament ID resolves and full universe seeds;
-4. accepted mapped Polymarket universe resolves;
+4. generated strict Polymarket universe resolves, including all explicit R3 shadow tokens when enabled;
 5. both supervised collectors remain active across a finite soak;
 6. raw SIG and normalized SIG Parquet shards appear and read back;
 7. PM observations/book changes/trades/depth shards appear and read back;
