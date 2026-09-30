@@ -148,7 +148,7 @@ def _pred_observation(
         window_id="w1",
         block_number=block,
         timestamp_s=timestamp_s,
-        observed_monotonic_ns=BASE_MONO + timestamp_s * NS + block,
+        observed_monotonic_ns=BASE_MONO + timestamp_s * NS,
         p_yes=p_yes,
         size_shares=9.0,
         value_usd=4.0,
