@@ -111,6 +111,9 @@ def test_storage_health_reports_insufficient_then_observed_runway(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     values = _values(tmp_path)
+    sig_db = Path(values["PREDICTIONS_CUP_SIG_REALTIME_STORAGE_PATH"])
+    sig_db.write_bytes(b"d" * 128)
+    Path(str(sig_db) + "-wal").write_bytes(b"w" * 64)
     monkeypatch.setattr(
         "predictions_cup.runtime.control_plane.shutil.disk_usage",
         lambda _path: _DiskUsage(200 * 1024**3, 100 * 1024**3, 100 * 1024**3),
@@ -134,6 +137,7 @@ def test_storage_health_reports_insufficient_then_observed_runway(
 
     capture = Path(values["PREDICTIONS_CUP_SIG_RESEARCH_PATH"])
     (capture / "part-001.parquet").write_bytes(b"x" * 1024)
+    Path(str(sig_db) + "-wal").write_bytes(b"w" * 128)
     second = storage_health(
         tmp_path,
         values,
@@ -144,6 +148,10 @@ def test_storage_health_reports_insufficient_then_observed_runway(
     assert second["runway_reason"] == "OBSERVED_GROWTH"
     assert isinstance(second["runway_hours"], float)
     assert second["runway_hours"] > 0
+    growth = second["growth_bytes_per_hour_by_path"]
+    assert isinstance(growth, dict)
+    assert growth["path:sig_research"] > 0
+    assert growth["sqlite:sig_realtime:wal"] > 0
 
 
 def test_storage_health_handles_critical_missing_and_queue_pressure(
