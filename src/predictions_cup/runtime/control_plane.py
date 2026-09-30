@@ -75,13 +75,30 @@ def atomic_json(path: Path, payload: Mapping[str, object]) -> None:
 
 def artifact_identity(path: Path) -> dict[str, object]:
     if not path.exists() or not path.is_file():
-        return {"path": str(path), "exists": False, "sha256": None, "bytes": None}
+        return {
+            "path": str(path),
+            "exists": False,
+            "sha256": None,
+            "bytes": None,
+            "version": None,
+        }
     raw = path.read_bytes()
+    version: object | None = None
+    try:
+        decoded = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        decoded = None
+    if isinstance(decoded, dict):
+        for key in ("registry_version", "version", "schema_version", "mapping_version"):
+            if key in decoded:
+                version = decoded[key]
+                break
     return {
         "path": str(path),
         "exists": True,
         "sha256": hashlib.sha256(raw).hexdigest(),
         "bytes": len(raw),
+        "version": version,
     }
 
 
@@ -135,15 +152,16 @@ def clock_health(
     elif threshold_seconds is None:
         state = "NOT_CONFIGURED"
         reasons.append("CLOCK_OFFSET_THRESHOLD_NOT_CONFIGURED")
-    elif offset_seconds is not None and abs(offset_seconds) > threshold_seconds:
+    elif offset_seconds is None:
+        state = "UNKNOWN"
+        reasons.append("CLOCK_OFFSET_UNAVAILABLE")
+    elif abs(offset_seconds) > threshold_seconds:
         state = "BLOCKED"
         reasons.append("CLOCK_OFFSET_EXCEEDS_THRESHOLD")
     elif not monotonic_info.monotonic:
         state = "BLOCKED"
     else:
         state = "HEALTHY"
-        if offset_seconds is None:
-            reasons.append("OFFSET_UNAVAILABLE_FROM_HOST")
 
     return {
         "state": state,
