@@ -689,11 +689,13 @@ class IncrementalHazard005FState:
                 and math.isclose(
                     observation.best_bid,
                     scope.previous_bid,
+                    rel_tol=0.0,
                     abs_tol=1e-12,
                 )
                 and math.isclose(
                     observation.best_ask,
                     scope.previous_ask,
+                    rel_tol=0.0,
                     abs_tol=1e-12,
                 )
             )
