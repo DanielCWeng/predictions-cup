@@ -1,0 +1,40 @@
+{
+  "accepted_mapping_path": "data/mappings/sig_polymarket_2026.json",
+  "acquisition_version": null,
+  "book_encoding": null,
+  "column_map": {},
+  "data003_manifest_path": "data/manifests/fills/data_003_manifest.json",
+  "dataset_version": null,
+  "expected_markets": 237,
+  "expected_time_end": null,
+  "expected_time_start": null,
+  "expected_tokens": null,
+  "experiment": "MM-REPLAY-001",
+  "file_hashes": {},
+  "forbidden_scientific_substitutes": [
+    "DATA-001",
+    "Hungary",
+    "Colombia",
+    "Peru",
+    "unrelated Polymarket sample"
+  ],
+  "frozen_005f_artifact_dataset_slug": null,
+  "frozen_005f_fit_manifest_path": "data/experiments/experiment_005f/fit_freeze_manifest.json",
+  "frozen_005f_holdout_evidence_path": "data/experiments/experiment_005f/holdout_evidence_manifest.json",
+  "grid_origin_ns_by_market": {},
+  "kaggle_dataset_slug": null,
+  "manifest_schema_version": "mm-replay-input-v1",
+  "notes": [
+    "Populate only after the new DATA-003-linked current-universe historical order-book dataset lands.",
+    "Synthetic fixtures are permitted for engineering tests only.",
+    "Real execution must fail closed while status is WAITING_FOR_DATA.",
+    "005F transfer requires exact per-market grid origins; do not infer them from first observed row.",
+    "If original 005F joblib artifacts are scored, bind their approved Kaggle dataset and verify frozen hashes."
+  ],
+  "relation_to_data003": null,
+  "root_hint": "/kaggle/input",
+  "schema_version": null,
+  "scientific_result": "NOT_RUN",
+  "source": null,
+  "status": "WAITING_FOR_DATA"
+}
