@@ -87,7 +87,7 @@ def artifact_identity(path: Path) -> dict[str, object]:
 
 def clock_health(
     *,
-    threshold_seconds: float,
+    threshold_seconds: float | None,
     runner: CommandRunner = _run,
     wall_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> dict[str, object]:
