@@ -698,3 +698,353 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def mapped_external_fv(
+    *,
+    best_bid: float,
+    best_ask: float,
+    mapping_class: str,
+    mapping_direction: str,
+    allow_near: bool = False,
+) -> float:
+    if not (0.0 <= best_bid <= best_ask <= 1.0):
+        raise ValueError("invalid external BBO")
+    mapping_class = mapping_class.upper()
+    mapping_direction = mapping_direction.upper()
+    if mapping_class == "NEAR" and not allow_near:
+        raise InputContractError("NEAR mapping is not approved as EXACT fair value")
+    if mapping_class not in {"EXACT", "NEAR"}:
+        raise InputContractError("direct external FV requires EXACT (or explicitly approved NEAR)")
+    value = (best_bid + best_ask) / 2.0
+    if mapping_direction in {"SAME", "YES"}:
+        return value
+    if mapping_direction in {"COMPLEMENT", "INVERSE", "NO"}:
+        return 1.0 - value
+    raise InputContractError(f"unsupported mapping_direction={mapping_direction}")
+
+
+def binary_cara_reservation(fair_value: float, inventory: float, gamma: float) -> float:
+    if not 0.0 < fair_value < 1.0:
+        raise ValueError("fair value must be strictly inside (0,1)")
+    if gamma < 0.0 or not math.isfinite(gamma):
+        raise ValueError("gamma must be finite and non-negative")
+    logit = math.log(fair_value / (1.0 - fair_value)) - gamma * inventory
+    if logit >= 0.0:
+        reservation = 1.0 / (1.0 + math.exp(-logit))
+    else:
+        exp_value = math.exp(logit)
+        reservation = exp_value / (1.0 + exp_value)
+    return min(0.995, max(0.005, reservation))
+
+
+def build_quote(
+    observation: BookObservation,
+    policy: MakerPolicy,
+    *,
+    inventory: float = 0.0,
+    base_size: float = 1.0,
+) -> QuoteIntent:
+    local_mid = observation.local_mid
+    if local_mid is None:
+        return QuoteIntent(
+            observation.market_id,
+            observation.timestamp_ns,
+            policy.policy_id,
+            0.5,
+            None,
+            None,
+            0.0,
+            0.0,
+            "invalid_local_bbo",
+        )
+
+    if policy.anchor == "EXTERNAL_FV":
+        if observation.external_fv is None or observation.external_fv_timestamp_ns is None:
+            return QuoteIntent(
+                observation.market_id,
+                observation.timestamp_ns,
+                policy.policy_id,
+                local_mid,
+                None,
+                None,
+                0.0,
+                0.0,
+                "external_fv_unavailable",
+            )
+        age_ns = observation.timestamp_ns - observation.external_fv_timestamp_ns
+        if age_ns < 0 or age_ns >= policy.max_fv_age_ms * 1_000_000:
+            return QuoteIntent(
+                observation.market_id,
+                observation.timestamp_ns,
+                policy.policy_id,
+                observation.external_fv,
+                None,
+                None,
+                0.0,
+                0.0,
+                "external_fv_stale",
+            )
+        fair_value = observation.external_fv
+    else:
+        fair_value = local_mid
+
+    if not 0.0 < fair_value < 1.0:
+        return QuoteIntent(
+            observation.market_id,
+            observation.timestamp_ns,
+            policy.policy_id,
+            fair_value,
+            None,
+            None,
+            0.0,
+            0.0,
+            "fair_value_out_of_bounds",
+        )
+
+    reservation = binary_cara_reservation(fair_value, inventory, policy.inventory_gamma)
+    if (
+        policy.toxicity_withdraw_at is not None
+        and observation.update_hazard is None
+    ):
+        return QuoteIntent(
+            observation.market_id,
+            observation.timestamp_ns,
+            policy.policy_id,
+            reservation,
+            None,
+            None,
+            0.0,
+            0.0,
+            "toxicity_unavailable",
+        )
+    hazard = observation.update_hazard or 0.0
+    if (
+        policy.toxicity_withdraw_at is not None
+        and hazard >= policy.toxicity_withdraw_at
+    ):
+        return QuoteIntent(
+            observation.market_id,
+            observation.timestamp_ns,
+            policy.policy_id,
+            reservation,
+            None,
+            None,
+            0.0,
+            0.0,
+            "toxicity_withdraw",
+        )
+
+    half_spread = policy.base_half_spread_ticks * TICK
+    size_scale = 1.0
+    reason = "normal"
+    if policy.toxicity_widen_at is not None and hazard >= policy.toxicity_widen_at:
+        half_spread += policy.toxicity_extra_ticks * hazard * TICK
+        size_scale = max(0.1, 1.0 - hazard)
+        reason = "toxicity_widen"
+
+    raw_bid = reservation - half_spread
+    raw_ask = reservation + half_spread
+    bid = _floor_tick(raw_bid)
+    ask = _ceil_tick(raw_ask)
+
+    assert observation.best_bid is not None
+    assert observation.best_ask is not None
+    bid = min(bid, observation.best_ask - TICK)
+    ask = max(ask, observation.best_bid + TICK)
+
+    max_distance = policy.max_distance_ticks * TICK
+    if reservation - bid > max_distance:
+        bid = None
+    if ask - reservation > max_distance:
+        ask = None
+
+    min_edge = policy.min_external_edge_ticks * TICK
+    if policy.anchor == "EXTERNAL_FV":
+        if bid is not None and fair_value - bid < min_edge:
+            bid = None
+        if ask is not None and ask - fair_value < min_edge:
+            ask = None
+
+    bid = _legal_probability(bid)
+    ask = _legal_probability(ask)
+    if bid is not None and ask is not None and bid >= ask:
+        bid = None
+        ask = None
+
+    scaled_size = max(0.0, base_size * size_scale)
+    return QuoteIntent(
+        observation.market_id,
+        observation.timestamp_ns,
+        policy.policy_id,
+        reservation,
+        bid,
+        ask,
+        scaled_size if bid is not None else 0.0,
+        scaled_size if ask is not None else 0.0,
+        reason if bid is not None or ask is not None else "no_eligible_side",
+    )
+
+
+def markout(fill: SimulatedFill, *, horizon_s: int, future_fv: float) -> Markout:
+    if horizon_s not in MARKOUT_HORIZONS_S:
+        raise ValueError("unsupported markout horizon")
+    if not 0.0 <= future_fv <= 1.0:
+        raise ValueError("future_fv outside [0,1]")
+    value = (
+        future_fv - fill.price
+        if fill.side is Side.BUY
+        else fill.price - future_fv
+    )
+    return Markout(horizon_s, fill.side, fill.price, future_fv, value)
+
+
+def estimated_maker_edge(
+    *,
+    gross_spread_capture: float,
+    adverse_selection_cost: float,
+    fees: float,
+    unwind_cost: float,
+) -> float:
+    return gross_spread_capture - adverse_selection_cost - fees - unwind_cost
+
+
+def quote_survives_reaction_delay(
+    *,
+    quote_timestamp_ns: int,
+    invalidation_timestamp_ns: int,
+    event_timestamp_ns: int,
+    reaction_delay_ms: int,
+) -> bool:
+    if reaction_delay_ms < 0:
+        raise ValueError("reaction_delay_ms must be non-negative")
+    if event_timestamp_ns < quote_timestamp_ns:
+        return False
+    cancel_effective_ns = invalidation_timestamp_ns + reaction_delay_ms * 1_000_000
+    return event_timestamp_ns < cancel_effective_ns
+
+
+def replay_market(
+    observations: Sequence[BookObservation],
+    *,
+    policy: MakerPolicy,
+    fill_model: FillModel,
+    base_size: float = 1.0,
+    fee_per_share: float = 0.0,
+    unwind_cost_per_share: float = 0.0,
+) -> tuple[tuple[ReplayFillResult, ...], ReplaySummary]:
+    if fee_per_share < 0.0 or unwind_cost_per_share < 0.0:
+        raise ValueError("cost assumptions must be non-negative")
+    if not observations:
+        return (
+            (),
+            ReplaySummary(
+                policy.policy_id,
+                fill_model.assumption,
+                0,
+                0,
+                0,
+                0.0,
+                None,
+                None,
+                None,
+            ),
+        )
+    for previous, current in zip(observations, observations[1:], strict=False):
+        if current.market_id != previous.market_id:
+            raise InputContractError("replay_market accepts exactly one market")
+        if current.timestamp_ns < previous.timestamp_ns:
+            raise InputContractError("observations must be ordered without lookahead")
+
+    timestamps = [item.timestamp_ns for item in observations]
+    inventory = 0.0
+    quote = build_quote(observations[0], policy, inventory=inventory, base_size=base_size)
+    quotes = 1
+    active_quotes = int(quote.bid is not None or quote.ask is not None)
+    results: list[ReplayFillResult] = []
+
+    for index in range(1, len(observations)):
+        event = observations[index]
+        event_fills = fill_model.fills(quote, event)
+        for fill in event_fills:
+            inventory += fill.size if fill.side is Side.BUY else -fill.size
+            markout_values: dict[int, float] = {}
+            for horizon_s in MARKOUT_HORIZONS_S:
+                future = _future_fv(observations, timestamps, index, horizon_s)
+                if future is not None:
+                    markout_values[horizon_s] = markout(
+                        fill,
+                        horizon_s=horizon_s,
+                        future_fv=future,
+                    ).value
+            gross = (
+                quote.reservation_fv - fill.price
+                if fill.side is Side.BUY
+                else fill.price - quote.reservation_fv
+            )
+            fee_cost = fee_per_share * fill.size
+            unwind_cost = unwind_cost_per_share * fill.size
+            markout_5m = markout_values.get(300)
+            estimated = (
+                markout_5m * fill.size - fee_cost - unwind_cost
+                if markout_5m is not None
+                else None
+            )
+            results.append(
+                ReplayFillResult(
+                    fill=fill,
+                    quote_timestamp_ns=quote.timestamp_ns,
+                    reservation_fv=quote.reservation_fv,
+                    gross_spread_capture=gross,
+                    markouts=markout_values,
+                    fee_cost=fee_cost,
+                    unwind_cost=unwind_cost,
+                    estimated_edge_5m=estimated,
+                )
+            )
+
+        quote = build_quote(event, policy, inventory=inventory, base_size=base_size)
+        quotes += 1
+        active_quotes += int(quote.bid is not None or quote.ask is not None)
+
+    gross_values = [item.gross_spread_capture for item in results]
+    markouts_5m = [item.markouts[300] for item in results if 300 in item.markouts]
+    edge_5m = [
+        item.estimated_edge_5m
+        for item in results
+        if item.estimated_edge_5m is not None
+    ]
+    summary = ReplaySummary(
+        policy_id=policy.policy_id,
+        fill_assumption=fill_model.assumption,
+        quotes=quotes,
+        active_quotes=active_quotes,
+        fills=len(results),
+        active_fraction=active_quotes / quotes if quotes else 0.0,
+        mean_gross_spread_capture=_mean_or_none(gross_values),
+        mean_markout_5m=_mean_or_none(markouts_5m),
+        mean_estimated_edge_5m=_mean_or_none(
+            [cast(float, value) for value in edge_5m]
+        ),
+    )
+    return tuple(results), summary
+
+
+def fair_value_convergence(
+    observations: Sequence[BookObservation],
+) -> tuple[dict[str, float | int | str], ...]:
+    if not observations:
+        return ()
+    timestamps = [item.timestamp_ns for item in observations]
+    rows: list[dict[str, float | int | str]] = []
+    for index, observation in enumerate(observations):
+        local_mid = observation.local_mid
+        external = observation.external_fv
+        if local_mid is None or external is None:
+            continue
+        row: dict[str, float | int | str] = {
+            "market_id": observation.market_id,
+            "timestamp_ns": observation.timestamp_ns,
+            "gap_t": local_mid - external,
+        }
+        for horizon_s in MARKOUT_HORIZONS_S:
+            future_index = bisect_left(
+                timestamps,
