@@ -248,6 +248,54 @@ def test_latency_boundary_is_explicit() -> None:
     )
 
 
+def test_replay_latency_changes_stale_quote_fill_exposure() -> None:
+    policy = default_policies()[1]
+    observations = [
+        BookObservation(
+            market_id="m1",
+            timestamp_ns=0,
+            best_bid=0.49,
+            best_ask=0.51,
+            external_fv=0.50,
+            external_fv_timestamp_ns=0,
+        ),
+        BookObservation(
+            market_id="m1",
+            timestamp_ns=1_000_000_000,
+            best_bid=0.44,
+            best_ask=0.46,
+            external_fv=0.45,
+            external_fv_timestamp_ns=1_000_000_000,
+        ),
+        BookObservation(
+            market_id="m1",
+            timestamp_ns=1_050_000_000,
+            best_bid=0.44,
+            best_ask=0.46,
+            external_fv=0.45,
+            external_fv_timestamp_ns=1_050_000_000,
+            trade_price=0.495,
+            trade_size=1.0,
+            aggressor_side=Side.SELL,
+        ),
+    ]
+    _, instant = replay_market(
+        observations,
+        policy=policy,
+        fill_model=ConservativeTradeFillModel(),
+        reaction_delay_ms=0,
+    )
+    slow_results, slow = replay_market(
+        observations,
+        policy=policy,
+        fill_model=ConservativeTradeFillModel(),
+        reaction_delay_ms=100,
+    )
+    assert instant.fills == 0
+    assert slow.fills == 1
+    assert slow_results[0].reaction_delay_ms == 100
+
+
 def test_005f_adapter_uses_existing_exact_state() -> None:
     adapter = Frozen005FTransferAdapter(scope_id="token", grid_origin_ns=0)
     adapter.observe(timestamp_ns=0, best_bid=0.40, best_ask=0.60)
