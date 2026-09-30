@@ -26,6 +26,16 @@ from predictions_cup.observe import (
     read_observation_health_status,
 )
 
+from predictions_cup.runtime.control_plane import (
+    build_control_plane,
+    build_session_manifest,
+    clock_health,
+    persist_session_manifest,
+    publish_control_plane,
+    read_session_pointer,
+    storage_health,
+)
+
 SCHEMA_VERSION = "fullstack-001-v1"
 SIG = "predictions-cup-sig-capture.service"
 PM = "predictions-cup-polymarket-capture.service"
@@ -1806,6 +1816,12 @@ def run_rehearsal(
     after_health = evaluate_health(after, values, require_real=require_real)
     control_plane = build_control_plane(after, after_health)
     control_plane_path = publish_control_plane(values, control_plane)
+    overall_health = control_plane.get("overall_health")
+    control_plane_state = (
+        overall_health.get("state")
+        if isinstance(overall_health, dict)
+        else "UNKNOWN"
+    )
 
     simulations = {
         "failure_injection": failure_injection_matrix(values),
@@ -1857,7 +1873,7 @@ def run_rehearsal(
         "session": session_pointer,
         "control_plane": {
             "path": str(control_plane_path),
-            "state": control_plane["overall_health"]["state"],
+            "state": control_plane_state,
         },
         "before": {"status": before, "health": before_health},
         "safe_restart": restart_result
