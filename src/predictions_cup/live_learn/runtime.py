@@ -34,7 +34,7 @@ from predictions_cup.shadow.contracts import (
 )
 from predictions_cup.shadow.persistence import PersistenceHealth, read_jsonl_records
 
-DEFAULT_HORIZONS = (1, 5, 15, 30, 60, 300)
+DEFAULT_HORIZONS = (1, 5, 15, 30, 60, 300, 900, 3600)
 DEFAULT_REPORT_CADENCES = (300, 900, 3600)
 SCORING_SPEC_ID = "live-learn-001"
 SCORING_SPEC_VERSION = "1"
