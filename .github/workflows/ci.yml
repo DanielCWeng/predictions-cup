@@ -59,6 +59,9 @@ jobs:
       - name: MAKE-001 service smoke
         run: python -m predictions_cup.maker --smoke-test
 
+      - name: OBSERVE-001 emitter overhead benchmark
+        run: python scripts/benchmark_observe001.py --iterations 100000
+
       - name: SHADOW-002 benchmark
         run: python scripts/benchmark_shadow002.py --markets 237 --candidates 6 --persistence-events 32
 
