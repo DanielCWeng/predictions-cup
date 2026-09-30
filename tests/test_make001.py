@@ -336,9 +336,22 @@ def _live_two_sided_cycle(
     *,
     acked_intent_indices: frozenset[int],
     omit_order_id_indices: frozenset[int] = frozenset(),
+    terminal_refill_side: QuoteSide | None = None,
 ) -> tuple[tuple[VenueObservation, ...], QuoteRegistry]:
     journal = ExecutionJournal(tmp_path / "live-batch.sqlite3")
     quotes = QuoteRegistry()
+    if terminal_refill_side is not None:
+        quotes.apply_authoritative(
+            exchange_id="36",
+            side=terminal_refill_side,
+            price_ticks=90 if terminal_refill_side is QuoteSide.BID else 110,
+            size=1,
+            remaining_size=0,
+            logical_operation_id="old-terminal-quote",
+            exchange_order_id=77,
+            lifecycle_state=LifecycleState.FILLED,
+            observed_monotonic_ns=NOW - 100,
+        )
     observation_sink = InMemoryObservationSink()
     emitter = BoundedObservationEmitter(observation_sink, queue_max=64)
     live = _PerIntentBatchLiveSink(
@@ -457,6 +470,26 @@ def test_live_two_sided_batch_ack_without_order_identity_is_not_published(
     assert state.bid is not None
     assert state.ask is not None
     assert state.ask.exchange_order_id is None
+
+
+def test_live_authoritative_terminal_refill_retains_replenishment_observation(
+    tmp_path: Path,
+) -> None:
+    observations, quotes = _live_two_sided_cycle(
+        tmp_path,
+        acked_intent_indices=frozenset({0, 1}),
+        terminal_refill_side=QuoteSide.BID,
+    )
+    replenished = tuple(
+        item for item in observations if item.kind is ObservationKind.QUOTE_REPLENISHED
+    )
+    assert len(replenished) == 1
+    assert replenished[0].exchange_order_id == "91"
+    assert replenished[0].logical_intent_id == "make-direct-pm:1000000000:36:0"
+    assert dict(replenished[0].detail)["side"] == "BID"
+    assert dict(replenished[0].detail)["lifecycle_reason"] == "terminal_quote_refill"
+    state = quotes.state("36")
+    assert state.bid is not None and state.bid.exchange_order_id == 91
 
 
 def test_direct_pm_preserves_value_orientation_and_source_observation_age() -> None:
