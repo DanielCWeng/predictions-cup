@@ -654,7 +654,7 @@ class SigLiveSink:
             ObservationKind.RESPONSE_PARSED,
             envelope,
             monotonic_ns=observed,
-            status_code=200,
+            status_code=response_status,
         )
         self._observe(
             ObservationKind.CANCEL_ACK,
@@ -665,7 +665,7 @@ class SigLiveSink:
                 if isinstance(raw.get("orderId"), (int, str))
                 else None
             ),
-            status_code=200,
+            status_code=response_status,
             detail=(("state", state.value),),
         )
         self._journal.record_event(
