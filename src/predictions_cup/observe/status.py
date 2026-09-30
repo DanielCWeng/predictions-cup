@@ -68,8 +68,8 @@ class ObservationHealthStatusPublisher:
         self.min_interval_seconds = min_interval_seconds
         self._wall_clock = wall_clock
         self._monotonic_clock = monotonic_clock
-        self._last_publish_monotonic: float | None = None
-        self._last_signature: tuple[object, ...] | None = None
+        self._last_attempt_monotonic: float | None = None
+        self._last_attempt_signature: tuple[object, ...] | None = None
 
     def publish(
         self,
@@ -88,14 +88,16 @@ class ObservationHealthStatusPublisher:
             snapshot.capture.storage_failures,
             snapshot.capture.writer_alive,
         )
-        changed = signature != self._last_signature
+        changed = signature != self._last_attempt_signature
         due = (
-            self._last_publish_monotonic is None
-            or now_mono - self._last_publish_monotonic >= self.min_interval_seconds
+            self._last_attempt_monotonic is None
+            or now_mono - self._last_attempt_monotonic >= self.min_interval_seconds
         )
         if not force and not changed and not due:
             return False
 
+        self._last_attempt_monotonic = now_mono
+        self._last_attempt_signature = signature
         observed_at = self._wall_clock().astimezone(UTC)
         payload = {
             "schema_version": STATUS_SCHEMA_VERSION,
@@ -105,8 +107,6 @@ class ObservationHealthStatusPublisher:
             "health": snapshot.to_dict(),
         }
         _atomic_json(self.path, payload)
-        self._last_publish_monotonic = now_mono
-        self._last_signature = signature
         return True
 
 
