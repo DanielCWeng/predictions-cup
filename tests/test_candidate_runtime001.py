@@ -120,6 +120,7 @@ def _pred_observation(
         active_fee_charged=3.0,
         active_fee_refunded=1.0,
         active_charge_legs=2.0,
+        source_version="fixture-data003",
     )
 
 
