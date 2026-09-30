@@ -28,6 +28,7 @@ from predictions_cup.analysis.evidence import (
 from predictions_cup.live_learn.contracts import OutcomeStatus, outcome_from_record
 from predictions_cup.mapping.crosswalk import load_document
 from predictions_cup.mapping.models import MappingDirection
+from predictions_cup.risk.groups import load_exposure_group_provider
 from predictions_cup.runtime.models import SIG_TICK
 from predictions_cup.shadow.replay import load_persisted_snapshots
 
@@ -1061,6 +1062,7 @@ def analyze_live_diagnostics(
     output_root: Path | None = None,
     live_learn_outcomes: Path | None = None,
     shadow_journal: Path | None = None,
+    exposure_groups_path: Path | None = None,
     inventory_limit: float | None = None,
     max_depth_age_seconds: float = 30.0,
     latency_ms: float = 100.0,
@@ -1117,6 +1119,11 @@ def analyze_live_diagnostics(
         return snapshot
 
     document = load_document(mapping_path)
+    group_provider = (
+        None
+        if exposure_groups_path is None or not exposure_groups_path.exists()
+        else load_exposure_group_provider(exposure_groups_path)
+    )
     direct = [
         record
         for record in document.records
@@ -1163,6 +1170,14 @@ def analyze_live_diagnostics(
                 "exchange_id": record.sig_exchange_id,
                 **ecology_summary(sig),
             }
+        )
+        risk_group_ids = (
+            ()
+            if group_provider is None
+            else group_provider.groups_for(
+                record.sig_market_id,
+                document.tournament_id,
+            )
         )
         for threshold in thresholds_ticks:
             triggers = construct_gap_episodes(
@@ -1237,7 +1252,7 @@ def analyze_live_diagnostics(
                         ),
                         market_id=record.sig_market_id,
                         exchange_id=record.sig_exchange_id,
-                        risk_group_ids=(),
+                        risk_group_ids=risk_group_ids,
                         sample_count=len(values),
                         independent_event_count=event_count,
                         metric_name=f"fraction_gap_closed_{horizon}s",
@@ -1250,7 +1265,11 @@ def analyze_live_diagnostics(
                             else ResearchStatus.DESCRIPTIVE_ONLY.value
                         ),
                         reasons=(
-                            "RISK_GROUP_PROVIDER_UNAVAILABLE",
+                            *(
+                                ("RISK_GROUP_PROVIDER_UNAVAILABLE",)
+                                if group_provider is None
+                                else ()
+                            ),
                             *(
                                 ("INSUFFICIENT_INDEPENDENT_EVENTS",)
                                 if event_count < 5
@@ -1329,7 +1348,15 @@ def analyze_live_diagnostics(
         "opponent_venue_ecology": ecology_rows,
         "inventory_recycling": inventory_summary,
         "market_selection": market_selection_summary,
-        "risk_group_status": "UNAVAILABLE_NOT_INFERRED",
+        "risk_group_status": (
+            "UNAVAILABLE_NOT_INFERRED"
+            if group_provider is None
+            else {
+                "status": "AVAILABLE_CANONICAL_PROVIDER",
+                "version": group_provider.version,
+                "source": str(exposure_groups_path),
+            }
+        ),
         "limitations": [
             "Passive touch is not treated as a fill.",
             "Depth-unavailable active opportunities fail as INSUFFICIENT_DEPTH.",
