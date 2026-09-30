@@ -20,6 +20,11 @@ from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.recovery import RecoveryRest, recover_startup
 from predictions_cup.execution.replacement import quote_replacement_allowed
 from predictions_cup.execution.reservations import ExecutionReservationBook
+from predictions_cup.observe import (
+    BoundedObservationEmitter,
+    InMemoryObservationSink,
+    ObservationKind,
+)
 from predictions_cup.risk.core import RiskContext, RiskDecision, evaluate_risk
 from predictions_cup.runtime import (
     OrderAction,
@@ -465,6 +470,8 @@ def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
     journal = ExecutionJournal(path)
     reservations = ExecutionReservationBook()
     trading = _RecoveryTradingFixture()
+    observation_sink = InMemoryObservationSink()
+    emitter = BoundedObservationEmitter(observation_sink, queue_max=100)
     sink = SigLiveSink(
         client=cast(SigTradingClient, trading),
         journal=journal,
@@ -486,8 +493,21 @@ def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
                 tournament_id="t1",
                 tournament_slug="cup",
                 clock_ns=iter(range(900, 1200)).__next__,
+                observation_emitter=emitter,
+                observation_process_instance_id="recovery-test-process",
             )
         )
+        emitter.close()
+
+        kinds = [item.kind for item in observation_sink.observations]
+        assert ObservationKind.RECONCILIATION_STARTED in kinds
+        assert ObservationKind.RECONCILIATION_RESOLVED in kinds
+        resolved = next(
+            item
+            for item in observation_sink.observations
+            if item.kind is ObservationKind.RECONCILIATION_RESOLVED
+        )
+        assert resolved.logical_operation_id == "op-recovery"
 
         assert trading.payloads == [plan.envelope.payload_json]
         resent = json.loads(trading.payloads[0])
@@ -497,5 +517,6 @@ def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
         assert result.safe_to_resume_live is True
         assert result.unresolved_operation_ids == ()
     finally:
+        emitter.close()
         journal.close()
 
