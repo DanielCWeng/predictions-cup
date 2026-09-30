@@ -22,6 +22,10 @@ from predictions_cup.shadow.adapters import (
     StructuralFairValueCandidate,
 )
 from predictions_cup.shadow.bus import ShadowBus
+from predictions_cup.shadow.frozen_runtime import (
+    Frozen005FEvaluator,
+    FrozenPred006Evaluator,
+)
 from predictions_cup.shadow.persistence import (
     CaptureStrategyEventStore,
     CompositeShadowEventStore,
@@ -109,8 +113,8 @@ def build_live_shadow_runtime(
         (
             MakerCandidate(core.engine),
             DirectPmCandidate(direct_pm, mapping=core.mapping),
-            Pred006Candidate(),
-            Hazard005FCandidate(),
+            Pred006Candidate(FrozenPred006Evaluator()),
+            Hazard005FCandidate(Frozen005FEvaluator()),
             StructuralFairValueCandidate(),
         ),
         store=store,
