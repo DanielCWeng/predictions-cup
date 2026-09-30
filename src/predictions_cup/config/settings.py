@@ -10,6 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 ExecutionModeSetting = Literal["SHADOW", "LIVE"]
+RiskProfileMode = Literal["STANDARD", "EXPLORATORY"]
 PolymarketUniverse = Literal["us_elections_2026"]
 
 
@@ -41,7 +42,42 @@ class AppSettings(BaseSettings):
     risk_max_per_market_exposure: float | None = Field(default=None, gt=0.0)
     risk_max_open_order_exposure: float | None = Field(default=None, gt=0.0)
     risk_max_concurrent_open_orders: int | None = Field(default=None, gt=0)
+    risk_max_per_strategy_exposure: float | None = Field(default=None, gt=0.0)
+    risk_max_event_group_exposure: float | None = Field(default=None, gt=0.0)
+    risk_max_tournament_exposure: float | None = Field(default=None, gt=0.0)
+    risk_session_loss_limit: float | None = Field(default=None, gt=0.0)
+    risk_drawdown_limit: float | None = Field(default=None, gt=0.0)
     risk_max_state_age_ms: int = Field(default=1_000, gt=0)
+    risk_max_account_age_ms: int = Field(default=2_000, gt=0)
+    risk_max_mark_age_ms: int = Field(default=12_000, gt=0)
+    risk_capital_control_enabled: bool = False
+    risk_state_path: Path = Path("data/risk_002.sqlite3")
+    risk_exposure_groups_path: Path | None = None
+    risk_profile_name: str = "competition"
+    risk_profile_version: str = "risk-002-v1"
+    risk_profile_mode: RiskProfileMode = "STANDARD"
+    risk_exploratory_max_order_size: int | None = Field(
+        default=None, gt=0, le=2_147_483_647
+    )
+    risk_exploratory_max_gross_exposure: float | None = Field(default=None, gt=0.0)
+    risk_exploratory_max_per_market_exposure: float | None = Field(
+        default=None, gt=0.0
+    )
+    risk_exploratory_max_open_order_exposure: float | None = Field(
+        default=None, gt=0.0
+    )
+    risk_exploratory_max_concurrent_open_orders: int | None = Field(
+        default=None, gt=0
+    )
+    risk_exploratory_max_per_strategy_exposure: float | None = Field(
+        default=None, gt=0.0
+    )
+    risk_exploratory_max_event_group_exposure: float | None = Field(
+        default=None, gt=0.0
+    )
+    risk_exploratory_max_tournament_exposure: float | None = Field(
+        default=None, gt=0.0
+    )
 
     # MAKE-001 is disabled by default. These are calculation/runtime parameters,
     # not substitutes for BUILD-009 central risk limits.
@@ -120,7 +156,13 @@ class AppSettings(BaseSettings):
     polymarket_exclude_ids: str = ""
     polymarket_supervised_ids: str = ""
 
-    @field_validator("environment", "tournament_id", "tournament_slug")
+    @field_validator(
+        "environment",
+        "tournament_id",
+        "tournament_slug",
+        "risk_profile_name",
+        "risk_profile_version",
+    )
     @classmethod
     def reject_blank_optional_strings(cls, value: str | None) -> str | None:
         if value is not None and not value.strip():
@@ -133,6 +175,7 @@ class AppSettings(BaseSettings):
         "sig_realtime_storage_path",
         "sig_research_path",
         "execution_journal_path",
+        "risk_state_path",
         "maker_mapping_path",
         "shadow_journal_path",
         "live_learn_outcome_path",
@@ -142,6 +185,13 @@ class AppSettings(BaseSettings):
     def reject_blank_storage_path(cls, value: Path) -> Path:
         if not str(value).strip():
             raise ValueError("polymarket_storage_path must not be blank")
+        return value
+
+    @field_validator("risk_exposure_groups_path")
+    @classmethod
+    def reject_blank_optional_path(cls, value: Path | None) -> Path | None:
+        if value is not None and not str(value).strip():
+            raise ValueError("risk_exposure_groups_path must not be blank")
         return value
 
     @field_validator("log_level", mode="before")
@@ -181,6 +231,57 @@ class AppSettings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def validate_risk002_configuration(self) -> Self:
+        state_dependent = (
+            self.risk_max_per_strategy_exposure,
+            self.risk_max_event_group_exposure,
+            self.risk_max_tournament_exposure,
+            self.risk_session_loss_limit,
+            self.risk_drawdown_limit,
+        )
+        if (
+            any(value is not None for value in state_dependent)
+            and not self.risk_capital_control_enabled
+        ):
+            raise ValueError(
+                "RISK-002 state-dependent caps require "
+                "risk_capital_control_enabled=true"
+            )
+        if (
+            self.risk_capital_control_enabled
+            and self.risk_max_mark_age_ms
+            < int(self.sig_realtime_bulk_price_refresh_seconds * 1_000)
+        ):
+            raise ValueError(
+                "risk_max_mark_age_ms must cover SIG bulk-price refresh interval"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_exploratory_risk_profile(self) -> Self:
+        if self.risk_profile_mode != "EXPLORATORY":
+            return self
+        global_caps = (
+            self.risk_max_order_size,
+            self.risk_max_gross_exposure,
+            self.risk_max_per_market_exposure,
+            self.risk_max_open_order_exposure,
+            self.risk_max_concurrent_open_orders,
+        )
+        exploratory_caps = (
+            self.risk_exploratory_max_order_size,
+            self.risk_exploratory_max_gross_exposure,
+            self.risk_exploratory_max_per_market_exposure,
+            self.risk_exploratory_max_open_order_exposure,
+            self.risk_exploratory_max_concurrent_open_orders,
+        )
+        if any(value is None for value in global_caps):
+            raise ValueError("EXPLORATORY risk requires complete global hard caps")
+        if any(value is None for value in exploratory_caps):
+            raise ValueError("EXPLORATORY risk requires complete exploratory caps")
+        return self
+
+    @model_validator(mode="after")
     def validate_shadow_configuration(self) -> Self:
         if self.shadow_enabled and not self.maker_enabled:
             raise ValueError("shadow_enabled requires maker_enabled=true")
@@ -200,6 +301,18 @@ class AppSettings(BaseSettings):
             if self.tournament_id is None or self.tournament_slug is None:
                 raise ValueError(
                     "LIVE execution requires explicit tournament_id and tournament_slug"
+                )
+            if not self.risk_capital_control_enabled:
+                raise ValueError(
+                    "LIVE execution requires risk_capital_control_enabled=true"
+                )
+            if self.risk_session_loss_limit is None:
+                raise ValueError(
+                    "LIVE execution requires explicit risk_session_loss_limit"
+                )
+            if self.risk_drawdown_limit is None:
+                raise ValueError(
+                    "LIVE execution requires explicit risk_drawdown_limit"
                 )
             limits = (
                 self.risk_max_order_size,
@@ -229,7 +342,46 @@ class AppSettings(BaseSettings):
             "risk_max_per_market_exposure": self.risk_max_per_market_exposure,
             "risk_max_open_order_exposure": self.risk_max_open_order_exposure,
             "risk_max_concurrent_open_orders": self.risk_max_concurrent_open_orders,
+            "risk_max_per_strategy_exposure": self.risk_max_per_strategy_exposure,
+            "risk_max_event_group_exposure": self.risk_max_event_group_exposure,
+            "risk_max_tournament_exposure": self.risk_max_tournament_exposure,
+            "risk_session_loss_limit": self.risk_session_loss_limit,
+            "risk_drawdown_limit": self.risk_drawdown_limit,
             "risk_max_state_age_ms": self.risk_max_state_age_ms,
+            "risk_max_account_age_ms": self.risk_max_account_age_ms,
+            "risk_max_mark_age_ms": self.risk_max_mark_age_ms,
+            "risk_capital_control_enabled": self.risk_capital_control_enabled,
+            "risk_state_path": str(self.risk_state_path),
+            "risk_exposure_groups_path": (
+                None
+                if self.risk_exposure_groups_path is None
+                else str(self.risk_exposure_groups_path)
+            ),
+            "risk_profile_name": self.risk_profile_name,
+            "risk_profile_version": self.risk_profile_version,
+            "risk_profile_mode": self.risk_profile_mode,
+            "risk_exploratory_max_order_size": self.risk_exploratory_max_order_size,
+            "risk_exploratory_max_gross_exposure": (
+                self.risk_exploratory_max_gross_exposure
+            ),
+            "risk_exploratory_max_per_market_exposure": (
+                self.risk_exploratory_max_per_market_exposure
+            ),
+            "risk_exploratory_max_open_order_exposure": (
+                self.risk_exploratory_max_open_order_exposure
+            ),
+            "risk_exploratory_max_concurrent_open_orders": (
+                self.risk_exploratory_max_concurrent_open_orders
+            ),
+            "risk_exploratory_max_per_strategy_exposure": (
+                self.risk_exploratory_max_per_strategy_exposure
+            ),
+            "risk_exploratory_max_event_group_exposure": (
+                self.risk_exploratory_max_event_group_exposure
+            ),
+            "risk_exploratory_max_tournament_exposure": (
+                self.risk_exploratory_max_tournament_exposure
+            ),
             "maker_enabled": self.maker_enabled,
             "maker_mapping_path": str(self.maker_mapping_path),
             "maker_max_abs_inventory": self.maker_max_abs_inventory,

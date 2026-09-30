@@ -25,7 +25,9 @@ from predictions_cup.maker.policies import (
 from predictions_cup.maker.safety import MakerKillSwitch
 from predictions_cup.mapping.crosswalk import load_document
 from predictions_cup.mapping.models import MappingDocument
-from predictions_cup.risk.core import RiskContext, RiskLimits
+from predictions_cup.risk.capital import MarketExposureGroup
+from predictions_cup.risk.core import RiskContext, RiskLimits, RiskProfile
+from predictions_cup.risk.groups import load_exposure_group_provider
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +53,20 @@ def build_maker_components(
         and mapping.tournament_id != settings.tournament_id
     ):
         raise ValueError("maker mapping tournament does not match configured tournament")
+
+    if (
+        settings.risk_max_event_group_exposure is not None
+        and settings.risk_exposure_groups_path is None
+    ):
+        raise ValueError(
+            "event-group risk cap requires risk_exposure_groups_path"
+        )
+    exposure_groups: tuple[MarketExposureGroup, ...] = ()
+    if settings.risk_exposure_groups_path is not None:
+        group_provider = load_exposure_group_provider(
+            settings.risk_exposure_groups_path
+        )
+        exposure_groups = group_provider.for_tournament(mapping.tournament_id)
 
     ms = 1_000_000
     engine = MakerEngine(
@@ -105,7 +121,14 @@ def build_maker_components(
             mode=ExecutionMode(settings.execution_mode),
             kill_switch=settings.global_kill_switch,
             limits=_risk_limits(settings),
+            profile=_risk_profile(settings),
             max_state_age_ns=settings.risk_max_state_age_ms * ms,
+            # Account continuity is event-driven through AccountRealtimeStateEngine:
+            # gaps/reconnects/fills revoke portfolio trust and force REST reconciliation.
+            max_account_age_ns=None,
+            max_mark_age_ns=settings.risk_max_mark_age_ms * ms,
+            require_capital_state=settings.risk_capital_control_enabled,
+            exposure_groups=exposure_groups,
         ),
         reservations=ExecutionReservationBook(),
         kill_switch=kill_switch,
@@ -135,4 +158,64 @@ def _risk_limits(settings: AppSettings) -> RiskLimits | None:
         max_per_market_exposure=settings.risk_max_per_market_exposure,
         max_open_order_exposure=settings.risk_max_open_order_exposure,
         max_concurrent_open_orders=settings.risk_max_concurrent_open_orders,
+        max_per_strategy_exposure=settings.risk_max_per_strategy_exposure,
+        max_event_group_exposure=settings.risk_max_event_group_exposure,
+        max_tournament_exposure=settings.risk_max_tournament_exposure,
+        session_loss_limit=settings.risk_session_loss_limit,
+        drawdown_limit=settings.risk_drawdown_limit,
+    )
+
+
+def _risk_profile(settings: AppSettings) -> RiskProfile | None:
+    hard = _risk_limits(settings)
+    if hard is None:
+        return None
+    version = f"{settings.risk_profile_version}:{settings.risk_profile_mode}"
+    if settings.risk_profile_mode == "STANDARD":
+        return RiskProfile(
+            name=settings.risk_profile_name,
+            version=version,
+            limits=hard,
+        )
+
+    required = (
+        settings.risk_exploratory_max_order_size,
+        settings.risk_exploratory_max_gross_exposure,
+        settings.risk_exploratory_max_per_market_exposure,
+        settings.risk_exploratory_max_open_order_exposure,
+        settings.risk_exploratory_max_concurrent_open_orders,
+    )
+    if any(value is None for value in required):
+        raise ValueError("exploratory risk profile is incomplete")
+    assert settings.risk_exploratory_max_order_size is not None
+    assert settings.risk_exploratory_max_gross_exposure is not None
+    assert settings.risk_exploratory_max_per_market_exposure is not None
+    assert settings.risk_exploratory_max_open_order_exposure is not None
+    assert settings.risk_exploratory_max_concurrent_open_orders is not None
+    exploratory = RiskLimits(
+        max_order_size=settings.risk_exploratory_max_order_size,
+        max_gross_exposure=settings.risk_exploratory_max_gross_exposure,
+        max_per_market_exposure=settings.risk_exploratory_max_per_market_exposure,
+        max_open_order_exposure=settings.risk_exploratory_max_open_order_exposure,
+        max_concurrent_open_orders=(
+            settings.risk_exploratory_max_concurrent_open_orders
+        ),
+        max_per_strategy_exposure=(
+            settings.risk_exploratory_max_per_strategy_exposure
+        ),
+        max_event_group_exposure=(
+            settings.risk_exploratory_max_event_group_exposure
+        ),
+        max_tournament_exposure=(
+            settings.risk_exploratory_max_tournament_exposure
+        ),
+        session_loss_limit=settings.risk_session_loss_limit,
+        drawdown_limit=settings.risk_drawdown_limit,
+    )
+    return RiskProfile(
+        name=settings.risk_profile_name,
+        version=version,
+        limits=exploratory,
+        exploratory=True,
+        hard_limits=hard,
     )

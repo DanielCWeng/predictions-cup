@@ -118,6 +118,10 @@ class SigLiveSink:
             raise ValueError("SigLiveSink accepts LIVE envelopes only")
         if envelope.tournament_id != self._permit.tournament_id:
             raise ValueError("LIVE permit tournament does not match execution envelope")
+        if require_reservation and not self._permit.fresh_admission_allowed:
+            raise ValueError(
+                "recovery-only LIVE permit cannot dispatch fresh economic placement"
+            )
         if require_reservation and not self._reservations.contains_operation(
             envelope.logical_operation_id,
             envelope.intent_ids,
