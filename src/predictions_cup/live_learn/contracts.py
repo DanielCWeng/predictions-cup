@@ -6,7 +6,7 @@ import hashlib
 import json
 import math
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from types import MappingProxyType
@@ -181,7 +181,7 @@ def outcome_id_for(
 ) -> str:
     raw = (
         f"{decision_id}|{scoring_spec_id}|{scoring_spec_version}|{horizon_seconds}"
-    ).encode("utf-8")
+    ).encode()
     return "llo_" + hashlib.sha256(raw).hexdigest()[:32]
 
 
