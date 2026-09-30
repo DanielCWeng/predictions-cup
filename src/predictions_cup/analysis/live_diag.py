@@ -923,9 +923,9 @@ def analyze_inventory_history(
     return {
         "available": bool(rows),
         "market_count": len(rows),
-        "sample_count": sum(int(row["sample_count"]) for row in rows),
+        "sample_count": sum(len(indexed) for indexed in by_market_time.values()),
         "independent_event_count": sum(
-            int(row["independent_event_count"]) for row in rows
+            summary.episode_count for summary in summaries.values()
         ),
         "inventory_limit": inventory_limit,
         "accounting_boundary": (
@@ -1027,7 +1027,7 @@ def analyze_market_selection(
     return {
         "available": bool(output),
         "row_count": len(output),
-        "market_count": len({row["market_id"] for row in output}),
+        "market_count": len({market_id for market_id, _ in grouped}),
         "formula": "MMEV = FillRate * ExpectedEdge - RiskCost - OpsCost",
         "status": (
             ResearchStatus.DESCRIPTIVE_ONLY.value
