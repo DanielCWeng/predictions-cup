@@ -26,6 +26,8 @@ from predictions_cup.mm_replay_001 import (
     default_policies,
     expected_output_schema,
     fair_value_convergence,
+    genuine_005f_change_times,
+    group_bbo_for_005f,
     inspect_input,
     mapped_external_fv,
     markout,
@@ -296,6 +298,19 @@ def test_replay_latency_changes_stale_quote_fill_exposure() -> None:
     assert slow_results[0].reaction_delay_ms == 100
 
 
+def test_same_timestamp_conflicting_bbo_is_ambiguous_for_005f() -> None:
+    rows = [
+        BookObservation("m1", 0, 0.40, 0.60),
+        BookObservation("m1", 5_000_000_000, 0.41, 0.59),
+        BookObservation("m1", 5_000_000_000, 0.42, 0.58),
+        BookObservation("m1", 10_000_000_000, 0.43, 0.57),
+    ]
+    grouped = group_bbo_for_005f(rows)
+    assert len(grouped) == 3
+    assert grouped[1].ambiguous
+    assert genuine_005f_change_times(grouped) == ()
+
+
 def test_005f_adapter_uses_existing_exact_state() -> None:
     adapter = Frozen005FTransferAdapter(scope_id="token", grid_origin_ns=0)
     adapter.observe(timestamp_ns=0, best_bid=0.40, best_ask=0.60)
@@ -314,6 +329,62 @@ def test_005f_adapter_uses_existing_exact_state() -> None:
     assert features["genuine_15"] == pytest.approx(1.0)
     assert features["genuine_60"] == pytest.approx(1.0)
     assert features["genuine_age_s"] == pytest.approx(10.0)
+
+
+def test_replay_accounting_is_separate_from_markouts_and_explicit_costs() -> None:
+    policy = default_policies()[1]
+    observations = [
+        BookObservation(
+            market_id="m1",
+            timestamp_ns=0,
+            best_bid=0.49,
+            best_ask=0.51,
+            external_fv=0.50,
+            external_fv_timestamp_ns=0,
+        ),
+        BookObservation(
+            market_id="m1",
+            timestamp_ns=1_000_000_000,
+            best_bid=0.49,
+            best_ask=0.51,
+            external_fv=0.50,
+            external_fv_timestamp_ns=1_000_000_000,
+            trade_price=0.495,
+            trade_size=1.0,
+            aggressor_side=Side.SELL,
+        ),
+        BookObservation(
+            market_id="m1",
+            timestamp_ns=301_000_000_000,
+            best_bid=0.51,
+            best_ask=0.53,
+            external_fv=0.52,
+            external_fv_timestamp_ns=301_000_000_000,
+        ),
+    ]
+    _, gross_only = replay_market(
+        observations,
+        policy=policy,
+        fill_model=ConservativeTradeFillModel(),
+    )
+    assert gross_only.net_terminal_local_pnl is None
+    assert gross_only.net_terminal_external_pnl is None
+
+    _, costed = replay_market(
+        observations,
+        policy=policy,
+        fill_model=ConservativeTradeFillModel(),
+        fee_per_share=0.001,
+        unwind_cost_per_share=0.002,
+    )
+    assert costed.fills == 1
+    assert costed.final_inventory == pytest.approx(1.0)
+    assert costed.gross_cash_flow == pytest.approx(-0.495)
+    assert costed.gross_terminal_local_pnl == pytest.approx(0.025)
+    assert costed.gross_terminal_external_pnl == pytest.approx(0.025)
+    assert costed.total_fee_cost == pytest.approx(0.001)
+    assert costed.terminal_unwind_cost == pytest.approx(0.002)
+    assert costed.net_terminal_local_pnl == pytest.approx(0.022)
 
 
 def test_replay_and_convergence_are_available_without_live_orders() -> None:
