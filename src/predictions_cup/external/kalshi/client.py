@@ -274,11 +274,11 @@ class KalshiPublicClient:
         parsed = _retry_after_seconds(retry_after, now=self._wall_clock())
         if parsed is not None:
             return max(0.05, parsed)
-        backoff = min(
-            self.backoff_base_seconds * (2 ** (attempt - 1)),
-            self.backoff_max_seconds,
-        )
-        return float(\n            backoff\n            + self._random_fraction() * min(self.backoff_base_seconds, backoff)\n        )
+        exponential: float = self.backoff_base_seconds * float(2 ** (attempt - 1))
+        backoff: float = min(exponential, self.backoff_max_seconds)
+        jitter_fraction: float = self._random_fraction()
+        jitter_cap: float = min(self.backoff_base_seconds, backoff)
+        return backoff + jitter_fraction * jitter_cap
 
     @staticmethod
     def _ticker(value: str) -> str:
