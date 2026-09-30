@@ -8,7 +8,7 @@ import math
 import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol, cast
 
@@ -118,7 +118,7 @@ class ObservableMarketState:
             market_id=self.market_id,
             observed_at=self.observed_at,
             source_id=f"sig-bbo:{self.snapshot_id}:{self.exchange_id}",
-            source_observed_at=self.observed_at,
+            source_observed_at=self.observed_at - timedelta(seconds=freshness),
             source_monotonic_ns=self.source_observed_monotonic_ns,
             best_bid=self.best_bid,
             best_ask=self.best_ask,
@@ -231,6 +231,7 @@ class JournalExecutionEvidenceProvider:
 
             planned = 0.0
             fills: list[FillEvidence] = []
+            authoritative_fills: dict[str, FillEvidence] = {}
             sources: list[str] = []
             modes: set[str] = set()
             for operation_id_raw, payload_json_raw, mode_raw in operation_rows:
@@ -284,21 +285,39 @@ class JournalExecutionEvidenceProvider:
                         if fill_id is not None
                         else f"build009-event:{event_id}"
                     )
-                    fills.append(
-                        FillEvidence(
-                            evidence_id=evidence_id,
-                            logical_operation_id=operation_id,
-                            exchange_order_id=(
-                                None if row[4] is None else str(row[4])
-                            ),
-                            exchange_id=decision.exchange_id,
-                            action=action,
-                            quantity=quantity,
-                            price=price,
-                            filled_at=filled_at,
-                            observed_monotonic_ns=observed_ns,
-                        )
+                    fill = FillEvidence(
+                        evidence_id=evidence_id,
+                        logical_operation_id=operation_id,
+                        exchange_order_id=(
+                            None if row[4] is None else str(row[4])
+                        ),
+                        exchange_id=decision.exchange_id,
+                        action=action,
+                        quantity=quantity,
+                        price=price,
+                        filled_at=filled_at,
+                        observed_monotonic_ns=observed_ns,
                     )
+                    if authoritative:
+                        previous = authoritative_fills.get(evidence_id)
+                        if previous is not None:
+                            if not _same_fill_economics(previous, fill):
+                                return ExecutionEvidence(
+                                    supported=False,
+                                    reason="conflicting_authoritative_fill_evidence",
+                                    planned_quantity=planned,
+                                    evidence_source_ids=tuple(
+                                        dict.fromkeys((*sources, evidence_id))
+                                    ),
+                                    execution_mode=(
+                                        next(iter(modes))
+                                        if len(modes) == 1
+                                        else "MIXED"
+                                    ),
+                                )
+                            continue
+                        authoritative_fills[evidence_id] = fill
+                    fills.append(fill)
                     sources.append(evidence_id)
 
             if planned <= 0.0:
@@ -370,6 +389,19 @@ def _single_action(plans: tuple[_PlannedLeg, ...]) -> str | None:
     if actions == {"sell"}:
         return "sell"
     return None
+
+
+def _same_fill_economics(left: FillEvidence, right: FillEvidence) -> bool:
+    return (
+        left.evidence_id == right.evidence_id
+        and left.logical_operation_id == right.logical_operation_id
+        and left.exchange_order_id == right.exchange_order_id
+        and left.exchange_id == right.exchange_id
+        and left.action == right.action
+        and left.quantity == right.quantity
+        and left.price == right.price
+        and left.filled_at == right.filled_at
+    )
 
 
 def _parse_time(value: object) -> datetime | None:
