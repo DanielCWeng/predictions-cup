@@ -61,3 +61,6 @@ jobs:
 
       - name: SHADOW-002 benchmark
         run: python scripts/benchmark_shadow002.py --markets 237 --candidates 6 --persistence-events 32
+
+      - name: SHADOW-002 sustained persistence soak
+        run: python scripts/soak_shadow002.py --markets 237 --candidates 6 --cycles 10 --cycle-pause-ms 200
