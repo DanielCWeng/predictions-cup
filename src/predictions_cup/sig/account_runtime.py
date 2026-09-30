@@ -8,8 +8,10 @@ from contextlib import suppress
 from datetime import datetime
 from time import monotonic_ns
 from typing import Protocol, cast
+from uuid import uuid4
 
 from predictions_cup.execution.journal import ExecutionJournal
+from predictions_cup.observe.contracts import ObservationEmitter, ObservationKind, VenueObservation
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
 from predictions_cup.sig.account_state import (
     AccountRealtimeStateEngine,
@@ -80,6 +82,8 @@ class AccountRealtimeController:
         subscriber_factory: AccountSubscriberFactory = _default_subscriber_factory,
         execution_journal: ExecutionJournal | None = None,
         clock_ns: ClockNs = monotonic_ns,
+        observation_emitter: ObservationEmitter | None = None,
+        observation_process_instance_id: str | None = None,
     ) -> None:
         self._state = state
         self._mint_token = mint_token
@@ -87,6 +91,14 @@ class AccountRealtimeController:
         self._subscriber_factory = subscriber_factory
         self._execution_journal = execution_journal
         self._clock_ns = clock_ns
+        self._observation_emitter = observation_emitter
+        self._observation_process_instance_id = (
+            uuid4().hex
+            if observation_process_instance_id is None
+            else observation_process_instance_id
+        )
+        if not self._observation_process_instance_id.strip():
+            raise ValueError("observation_process_instance_id must not be blank")
         self._resyncing = False
         self._resync_generation = 0
 
@@ -154,6 +166,10 @@ class AccountRealtimeController:
         while True:
             self._resyncing = True
             generation_before = self._resync_generation
+            self._observe(
+                ObservationKind.RECONCILIATION_STARTED,
+                monotonic_ns=self._clock_ns(),
+            )
             authoritative = await self._authoritative_resync()
             self._state.apply_authoritative(
                 authoritative,
@@ -164,6 +180,10 @@ class AccountRealtimeController:
             await asyncio.sleep(0)
             if self._resync_generation == generation_before:
                 self._state.mark_trusted_after_reconciliation()
+                self._observe(
+                    ObservationKind.RECONCILIATION_RESOLVED,
+                    monotonic_ns=self._clock_ns(),
+                )
                 self._resyncing = False
                 return
             self._state.mark_untrusted(
@@ -202,6 +222,43 @@ class AccountRealtimeController:
         if result.requires_reconciliation:
             raise AccountResyncRequired
 
+    def _observe(
+        self,
+        kind: ObservationKind,
+        *,
+        monotonic_ns: int,
+        logical_operation_id: str | None = None,
+        exchange_id: str | None = None,
+        market_id: str | None = None,
+        exchange_order_id: str | None = None,
+        source_timestamp: datetime | None = None,
+        detail: tuple[tuple[str, str], ...] = (),
+    ) -> None:
+        emitter = self._observation_emitter
+        if emitter is None:
+            return
+        try:
+            emitter.emit(
+                VenueObservation(
+                    kind=kind,
+                    observed_at=datetime.now().astimezone(),
+                    monotonic_ns=monotonic_ns,
+                    process_instance_id=self._observation_process_instance_id,
+                    source="SIG_ACCOUNT_REALTIME",
+                    source_version="observe-001",
+                    provenance="SIG_ACCOUNT_BATCH_OR_RECONCILIATION",
+                    tournament_id=self._state.tournament_id,
+                    market_id=market_id,
+                    exchange_id=exchange_id,
+                    logical_operation_id=logical_operation_id,
+                    exchange_order_id=exchange_order_id,
+                    source_timestamp=source_timestamp,
+                    detail=detail,
+                )
+            )
+        except Exception:
+            return
+
     def _record_execution_events(self, batch: AccountBatchDto) -> None:
         journal = self._execution_journal
         if journal is None:
@@ -223,6 +280,16 @@ class AccountRealtimeController:
                 exchange_order_id=order_id,
                 quantity=str(fill.quantity),
                 price=str(fill.price),
+            )
+            self._observe(
+                ObservationKind.PARTIAL_FILL,
+                monotonic_ns=observed_ns,
+                logical_operation_id=logical_operation_id,
+                exchange_id=fill.exchange_id,
+                market_id=fill.market_id,
+                exchange_order_id=order_id,
+                source_timestamp=fill.executed_at,
+                detail=(("quantity", str(fill.quantity)), ("price", str(fill.price))),
             )
         for update in batch.order_updates:
             order_id = str(update.order_id)
