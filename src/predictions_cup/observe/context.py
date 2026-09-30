@@ -250,6 +250,25 @@ class CompetitionContextSampler:
             self._last_error = type(exc).__name__
 
 
+def summarize_competition_context(
+    snapshot: CompetitionContextSnapshot,
+) -> dict[str, object]:
+    return {
+        "tournament_id": snapshot.tournament_id,
+        "observed_at": snapshot.observed_at.astimezone(UTC).isoformat(),
+        "fields": {
+            field.name: {
+                "value": json_value(field.value),
+                "classification": field.classification.value,
+                "source": field.source,
+                "source_version": field.source_version,
+                "unavailable_reason": field.unavailable_reason,
+            }
+            for field in snapshot.fields
+        },
+    }
+
+
 def json_value(value: object | None) -> object | None:
     if isinstance(value, Decimal):
         return str(value)
