@@ -66,6 +66,16 @@ class AppSettings(BaseSettings):
     maker_min_replace_size: int = Field(default=1, gt=0)
     maker_min_requote_interval_ms: int = Field(default=0, ge=0)
 
+    # SHADOW-002 is disabled by default and has no order-write capability.
+    shadow_enabled: bool = False
+    shadow_journal_path: Path = Path("data/shadow_002/events.jsonl")
+    shadow_candidate_queue_capacity: int = Field(default=512, gt=0, le=100_000)
+    shadow_ingress_queue_capacity: int = Field(default=4096, gt=0, le=1_000_000)
+    shadow_persistence_queue_capacity: int = Field(default=65_536, gt=0, le=2_000_000)
+    shadow_persistence_batch_size: int = Field(default=256, gt=0, le=10_000)
+    shadow_candidate_timeout_ms: int = Field(default=50, gt=0, le=60_000)
+    shadow_capture_mirror_enabled: bool = True
+
     sig_realtime_storage_path: Path = Path("data/sig_realtime.sqlite3")
     sig_research_path: Path = Path("data/sig_research")
     sig_capture_queue_max: int = Field(default=200_000, ge=10_000, le=2_000_000)
@@ -116,6 +126,7 @@ class AppSettings(BaseSettings):
         "sig_research_path",
         "execution_journal_path",
         "maker_mapping_path",
+        "shadow_journal_path",
     )
     @classmethod
     def reject_blank_storage_path(cls, value: Path) -> Path:
@@ -157,6 +168,12 @@ class AppSettings(BaseSettings):
                 "maker_max_depth_age_ms must cover the configured trusted-depth "
                 "refresh interval"
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_shadow_configuration(self) -> Self:
+        if self.shadow_enabled and not self.maker_enabled:
+            raise ValueError("shadow_enabled requires maker_enabled=true")
         return self
 
     @model_validator(mode="after")
@@ -221,6 +238,14 @@ class AppSettings(BaseSettings):
             "maker_min_replace_ticks": self.maker_min_replace_ticks,
             "maker_min_replace_size": self.maker_min_replace_size,
             "maker_min_requote_interval_ms": self.maker_min_requote_interval_ms,
+            "shadow_enabled": self.shadow_enabled,
+            "shadow_journal_path": str(self.shadow_journal_path),
+            "shadow_candidate_queue_capacity": self.shadow_candidate_queue_capacity,
+            "shadow_ingress_queue_capacity": self.shadow_ingress_queue_capacity,
+            "shadow_persistence_queue_capacity": self.shadow_persistence_queue_capacity,
+            "shadow_persistence_batch_size": self.shadow_persistence_batch_size,
+            "shadow_candidate_timeout_ms": self.shadow_candidate_timeout_ms,
+            "shadow_capture_mirror_enabled": self.shadow_capture_mirror_enabled,
             "sig_read_credential_configured": self.sig_read_credential is not None,
             "sig_trade_credential_configured": self.sig_trade_credential is not None,
             "sig_realtime_storage_path": str(self.sig_realtime_storage_path),
