@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from predictions_cup.external.kalshi import KalshiPublicClient, KalshiReadError
+from predictions_cup.external.kalshi import KalshiPublicClient
 
 
 NOW = datetime(2026, 9, 30, 22, 0, tzinfo=UTC)
@@ -35,7 +35,7 @@ def test_market_parses_fixed_point_decimals_and_provenance() -> None:
     async def run() -> None:
         client = KalshiPublicClient(wall_clock=lambda: NOW)
     
-        async def fake(path: str, *, params: dict[str, str] | None = None):
+        async def fake(\n            path: str, *, params: dict[str, str] | None = None\n        ) -> tuple[dict[str, Any], datetime]:
             assert path == "/markets/KXTEST-YES"
             assert params is None
             return {"market": market_payload()}, NOW
@@ -55,7 +55,7 @@ def test_orderbook_is_bid_only_and_exact_decimal() -> None:
     async def run() -> None:
         client = KalshiPublicClient(wall_clock=lambda: NOW)
     
-        async def fake(path: str, *, params: dict[str, str] | None = None):
+        async def fake(\n            path: str, *, params: dict[str, str] | None = None\n        ) -> tuple[dict[str, Any], datetime]:
             assert path == "/markets/KXTEST-YES/orderbook"
             assert params == {"depth": "2"}
             return {
@@ -77,7 +77,7 @@ def test_markets_and_trades_preserve_cursor() -> None:
     async def run() -> None:
         client = KalshiPublicClient(wall_clock=lambda: NOW)
     
-        async def fake(path: str, *, params: dict[str, str] | None = None):
+        async def fake(\n            path: str, *, params: dict[str, str] | None = None\n        ) -> tuple[dict[str, Any], datetime]:
             if path == "/markets":
                 return {"markets": [market_payload()], "cursor": "next"}, NOW
             assert path == "/markets/trades"
