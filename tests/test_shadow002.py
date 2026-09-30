@@ -30,8 +30,8 @@ from predictions_cup.runtime.models import (
 from predictions_cup.shadow import (
     CandidateOutput,
     CanonicalShadowSnapshot,
-    DecisionStatus,
     CaptureStrategyEventStore,
+    DecisionStatus,
     DirectPmCandidate,
     Hazard005FCandidate,
     InMemoryEventStore,
