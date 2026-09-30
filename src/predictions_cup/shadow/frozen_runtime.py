@@ -98,6 +98,12 @@ HAZARD005F_EXPECTED_ARTIFACT_HASHES = {
 HAZARD005F_SCHEMA_HASH = hashlib.sha256(
     json.dumps(HAZARD005F_SCHEMA, sort_keys=True, separators=(",", ":")).encode()
 ).hexdigest()
+HAZARD005F_SCORER_HASHES = {
+    key: hashlib.sha256(
+        json.dumps(value, separators=(",", ":")).encode()
+    ).hexdigest()
+    for key, value in HAZARD005F_EXPECTED_ARTIFACT_HASHES.items()
+}
 
 
 class FeatureParity(StrEnum):
@@ -886,6 +892,24 @@ class Frozen005FEvaluator:
                     "005f:no_refit",
                     "005f:frozen_artifact_hashes_required",
                 ),
+            )
+
+        bad_hash = tuple(
+            key
+            for key in required
+            if self._scorers[key].artifact_hash != HAZARD005F_SCORER_HASHES[key]
+        )
+        if bad_hash:
+            return RuntimeEvaluatorMetadata(
+                research_id=self.research_id,
+                frozen_spec_version=self.frozen_spec_version,
+                artifact_hash=self._artifact_hash(),
+                expected_artifact_hash=self._expected_artifact_hash(),
+                feature_schema_hash=self.feature_schema_hash,
+                ready=False,
+                readiness_reason="model_artifact_hash_mismatch:" + ",".join(bad_hash),
+                freshness_seconds=None,
+                quality_flags=("005f:frozen_artifact_hashes_required",),
             )
 
         if any(
