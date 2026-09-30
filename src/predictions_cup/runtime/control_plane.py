@@ -528,7 +528,6 @@ def build_control_plane(
     sig = status.get("sig")
     pm = status.get("polymarket")
     sig_dict = sig if isinstance(sig, dict) else {}
-    pm_dict = pm if isinstance(pm, dict) else {}
     capture_health = sig_dict.get("health")
     capture_dict = capture_health if isinstance(capture_health, dict) else {}
     queue = capture_dict.get("research_storage")
