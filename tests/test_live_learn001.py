@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -19,6 +20,10 @@ from predictions_cup.live_learn import (
     OutcomeStatus,
 )
 from predictions_cup.live_learn.contracts import outcome_record
+from predictions_cup.live_learn.evidence import (
+    JournalExecutionEvidenceProvider,
+    ObservableMarketState,
+)
 from predictions_cup.live_learn.reporting import RollingReport, build_report
 from predictions_cup.live_learn.scoring import QuoteEconomicsScorer, ScoreContext
 from predictions_cup.maker.contracts import MakerMarketSnapshot
@@ -210,8 +215,9 @@ def test_exact_boundary_and_no_future_leakage(tmp_path: Path) -> None:
 def test_deterministic_replay_and_duplicate_inputs_are_idempotent(
     tmp_path: Path,
 ) -> None:
+    t0 = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)
+
     async def one(root: Path) -> list[dict[str, object]]:
-        t0 = datetime.now(UTC) + timedelta(hours=1)
         engine, _ = await _engine(root)
         initial = _snapshot(t0, now_ns=1_000_000_000)
         decision = _decision(initial)
@@ -350,6 +356,187 @@ def test_abstention_and_unsupported_score_semantics(tmp_path: Path) -> None:
             == OutcomeStatus.UNSUPPORTED_SCORE_SEMANTICS.value
         )
         await engine.close()
+
+    asyncio.run(run())
+
+
+
+
+def _write_execution_journal(
+    path: Path,
+    decision: CandidateDecision,
+    rows: tuple[tuple[str, str | None, float, float, datetime, int], ...],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(
+            """
+            CREATE TABLE execution_envelopes (
+                logical_operation_id TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL,
+                sink_mode TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE execution_events (
+                event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                logical_operation_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                observed_monotonic_ns INTEGER NOT NULL,
+                source_timestamp TEXT,
+                decision_observation_ns INTEGER,
+                decision_monotonic_ns INTEGER,
+                strategy_id TEXT,
+                exchange_id TEXT,
+                tournament_id TEXT,
+                exchange_order_id TEXT,
+                fill_id TEXT,
+                quantity TEXT,
+                price TEXT
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO execution_envelopes (
+                logical_operation_id, payload_json, sink_mode
+            ) VALUES (?, ?, ?)
+            """,
+            (
+                "op-1",
+                json.dumps(
+                    {
+                        "orders": [
+                            {
+                                "exchangeId": decision.exchange_id,
+                                "quantity": 10,
+                                "action": "buy",
+                            }
+                        ]
+                    }
+                ),
+                "LIVE",
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO execution_events (
+                logical_operation_id, event_type, observed_monotonic_ns,
+                decision_observation_ns, decision_monotonic_ns, strategy_id,
+                exchange_id, tournament_id
+            ) VALUES (?, 'SUBMISSION', ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "op-1",
+                decision.monotonic_time,
+                decision.monotonic_time,
+                decision.monotonic_time,
+                decision.candidate_id,
+                decision.exchange_id,
+                decision.tournament_id,
+            ),
+        )
+        for event_type, fill_id, quantity, price, filled_at, observed_ns in rows:
+            connection.execute(
+                """
+                INSERT INTO execution_events (
+                    logical_operation_id, event_type, observed_monotonic_ns,
+                    source_timestamp, exchange_order_id, fill_id, quantity, price,
+                    exchange_id, tournament_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "op-1",
+                    event_type,
+                    observed_ns,
+                    filled_at.isoformat(),
+                    "order-1",
+                    fill_id,
+                    str(quantity),
+                    str(price),
+                    decision.exchange_id,
+                    decision.tournament_id,
+                ),
+            )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def test_bbo_source_wall_time_matches_monotonic_freshness() -> None:
+    observed = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)
+    state = ObservableMarketState.from_snapshot(
+        _snapshot(
+            observed,
+            now_ns=10_000_000_000,
+            source_age_ns=3_000_000_000,
+            trusted=True,
+        )
+    )
+    evidence = state.evidence()
+    assert evidence.observed_at == observed
+    assert evidence.freshness_seconds == pytest.approx(3.0)
+    assert evidence.source_observed_at == observed - timedelta(seconds=3)
+
+
+def test_authoritative_fill_duplicates_are_deduplicated(tmp_path: Path) -> None:
+    async def run() -> None:
+        observed = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)
+        decision = _decision(_snapshot(observed, now_ns=1_000_000_000))
+        filled_at = observed + timedelta(milliseconds=200)
+        journal = tmp_path / "execution.sqlite3"
+        _write_execution_journal(
+            journal,
+            decision,
+            (
+                ("FILL_SUMMARY", None, 10.0, 0.50, filled_at, 1_100_000_000),
+                ("AUTHORITATIVE_FILL", "fill-1", 5.0, 0.49, filled_at, 1_200_000_000),
+                ("AUTHORITATIVE_FILL", "fill-1", 5.0, 0.49, filled_at, 1_300_000_000),
+            ),
+        )
+        evidence = await JournalExecutionEvidenceProvider(journal).evidence_for(
+            decision,
+            maturity_at=observed + timedelta(seconds=1),
+        )
+        assert evidence.supported
+        assert evidence.reason is None
+        assert evidence.planned_quantity == pytest.approx(10.0)
+        assert len(evidence.fills) == 1
+        assert evidence.fills[0].evidence_id == "sig-fill:fill-1"
+        assert evidence.fills[0].quantity == pytest.approx(5.0)
+        assert evidence.fills[0].price == pytest.approx(0.49)
+        assert "build009-event:2" not in evidence.evidence_source_ids
+
+    asyncio.run(run())
+
+
+def test_conflicting_authoritative_fill_duplicate_fails_closed(
+    tmp_path: Path,
+) -> None:
+    async def run() -> None:
+        observed = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)
+        decision = _decision(_snapshot(observed, now_ns=1_000_000_000))
+        filled_at = observed + timedelta(milliseconds=200)
+        journal = tmp_path / "execution.sqlite3"
+        _write_execution_journal(
+            journal,
+            decision,
+            (
+                ("AUTHORITATIVE_FILL", "fill-1", 5.0, 0.49, filled_at, 1_200_000_000),
+                ("AUTHORITATIVE_FILL", "fill-1", 5.0, 0.48, filled_at, 1_300_000_000),
+            ),
+        )
+        evidence = await JournalExecutionEvidenceProvider(journal).evidence_for(
+            decision,
+            maturity_at=observed + timedelta(seconds=1),
+        )
+        assert not evidence.supported
+        assert evidence.reason == "conflicting_authoritative_fill_evidence"
+        assert evidence.planned_quantity == pytest.approx(10.0)
+        assert evidence.fills == ()
 
     asyncio.run(run())
 
