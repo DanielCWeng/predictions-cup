@@ -342,16 +342,17 @@ The lane benchmark exercises 237-market bursts through the feature/evaluator
 boundaries with deterministic injected scorers; it is a runtime plumbing
 benchmark, not scientific evidence.
 
-GitHub Actions run `36720367866` executed the final code (including explicit
-research-scope resolution) over 20 x 237-market bursts, or 9,480 evaluator calls:
+GitHub Actions run `36729039542` executed the corrected parity runtime at
+`2659ddfa9512961f8fab4ab1919a0205ee8a0dcb` over 20 x 237-market bursts, or
+9,480 evaluator calls:
 
-- elapsed: 0.536761s;
-- throughput: 17,661.5 evaluator calls/s;
-- evaluator latency: p50 58.420us, p95 69.461us, p99 82.385us;
-- 237-market two-evaluator burst: p50 26.719ms, p95/p99 27.643ms.
+- elapsed: 0.417991s;
+- throughput: 22,679.9 evaluator calls/s;
+- evaluator latency: p50 52.299us, p95 55.183us, p99 62.143us;
+- 237-market two-evaluator burst: p50 20.819ms, p95/p99 21.218ms.
 
-The same run passed Ruff, strict Mypy over 227 source files, and pytest with
-667 passed / 3 skipped.
+The same run passed Ruff, shell validation, strict Mypy over 227 source files,
+all existing smoke/benchmark stages, and pytest with 674 passed / 3 skipped.
 
 No performance acceptance threshold changes research semantics.
 
