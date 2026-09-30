@@ -23,11 +23,13 @@ from predictions_cup.shadow import (
     Hazard005FBboObservation,
     IncrementalHazard005FState,
     IncrementalPred006FeatureState,
+    Pred006ArtifactManifest,
     Pred006BlockObservation,
 )
 from predictions_cup.shadow.frozen_runtime import HAZARD005F_SCORER_HASHES
 
 BASE_MONO = 50_000_000_000_000
+NS = 1_000_000_000
 
 
 @dataclass(frozen=True)
@@ -103,26 +105,29 @@ def run(markets: int, bursts: int) -> dict[str, float | int]:
         scope_resolver=lambda snapshot: snapshot.market_id
     )
     hazard_state = IncrementalHazard005FState(
-        grid_origin_s=0,
+        grid_origin_ns=0,
         scope_resolver=lambda snapshot: snapshot.market_id,
     )
     snapshots: list[CanonicalShadowSnapshot] = []
 
     for index in range(markets):
         market_id = f"m{index:03d}"
-        for timestamp_s, probability in (
-            (0, 0.40),
-            (30, 0.50),
-            (120, 0.45),
-            (1800, 0.55),
+        for block_number, (timestamp_s, probability) in enumerate(
+            (
+                (0, 0.40),
+                (30, 0.50),
+                (120, 0.45),
+                (1800, 0.55),
+            ),
+            start=1,
         ):
             pred_state.observe(
                 Pred006BlockObservation(
                     scope_id=market_id,
                     window_id="bench-window",
+                    block_number=block_number,
                     timestamp_s=timestamp_s,
-                    observed_monotonic_ns=BASE_MONO
-                    + timestamp_s * 1_000_000_000,
+                    observed_monotonic_ns=BASE_MONO + timestamp_s * NS + block_number,
                     p_yes=probability,
                     size_shares=10.0,
                     value_usd=5.0,
@@ -144,9 +149,8 @@ def run(markets: int, bursts: int) -> dict[str, float | int]:
             hazard_state.observe(
                 Hazard005FBboObservation(
                     scope_id=market_id,
-                    timestamp_s=timestamp_s,
-                    observed_monotonic_ns=BASE_MONO
-                    + timestamp_s * 1_000_000_000,
+                    timestamp_ns=timestamp_s * NS,
+                    observed_monotonic_ns=BASE_MONO + timestamp_s * NS,
                     best_bid=bid,
                     best_ask=ask,
                     source_version="benchmark",
@@ -160,6 +164,17 @@ def run(markets: int, bursts: int) -> dict[str, float | int]:
             "PRED006-C01": _ConstantScorer("c01", "a" * 64, 0.6),
             "PRED006-C02": _ConstantScorer("c02", "b" * 64, 0.4),
         },
+        artifact_manifest=Pred006ArtifactManifest(
+            manifest_version="pred006-artifact-manifest-v1",
+            research_id=FrozenPred006Evaluator.research_id,
+            frozen_spec_version=FrozenPred006Evaluator.frozen_spec_version,
+            feature_schema_hash=FrozenPred006Evaluator.feature_schema_hash,
+            artifacts=(
+                ("PRED006-C01", "a" * 64),
+                ("PRED006-C02", "b" * 64),
+            ),
+            provenance="synthetic-benchmark-only:never-production-authorized",
+        ),
     )
     hazard = Frozen005FEvaluator(
         hazard_state,
