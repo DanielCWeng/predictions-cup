@@ -21,6 +21,11 @@ from predictions_cup.execution.models import (
 )
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.reservations import ExecutionReservationBook
+from predictions_cup.observe import (
+    BoundedObservationEmitter,
+    InMemoryObservationSink,
+    ObservationKind,
+)
 from predictions_cup.risk.core import RiskDecision
 from predictions_cup.runtime import OrderAction, OutcomeSide
 from predictions_cup.sig.errors import SigClientRequestError, SigExecutionUncertainError
@@ -189,16 +194,21 @@ def test_live_sink_records_observation_decision_dispatch_and_ack_clocks(
     journal = ExecutionJournal(tmp_path / "execution.sqlite3")
     reservations = ExecutionReservationBook()
     reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    observation_sink = InMemoryObservationSink()
+    emitter = BoundedObservationEmitter(observation_sink, queue_max=100)
     sink = SigLiveSink(
         client=cast(SigTradingClient, FakeTradingClient()),
         journal=journal,
         permit=_permit(),
         reservations=reservations,
         clock_ns=lambda: next(ticks),
+        observation_emitter=emitter,
+        observation_process_instance_id="test-process",
     )
 
     try:
         event = asyncio.run(sink.dispatch(plan))
+        emitter.close()
         assert event.state is LifecycleState.OPEN
         events = journal.events("op-91")
         submission = next(item for item in events if item.event_type == "SUBMISSION")
@@ -217,7 +227,20 @@ def test_live_sink_records_observation_decision_dispatch_and_ack_clocks(
         assert dispatch.observed_monotonic_ns == 300
         assert ack.tournament_id == "t1"
         assert ack.observed_monotonic_ns == 400
+        kinds = [item.kind for item in observation_sink.observations]
+        assert kinds == [
+            ObservationKind.DECISION_OBSERVED,
+            ObservationKind.PLAN_CREATED,
+            ObservationKind.REQUEST_ENQUEUED,
+            ObservationKind.REQUEST_DISPATCHED,
+            ObservationKind.RESPONSE_RECEIVED,
+            ObservationKind.RESPONSE_PARSED,
+            ObservationKind.ACK,
+        ]
+        assert observation_sink.observations[-1].logical_operation_id == "op-91"
+        assert observation_sink.observations[-1].idempotency_key == plan.envelope.idempotency_key
     finally:
+        emitter.close()
         journal.close()
 
 
