@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from time import monotonic_ns
 from typing import Protocol
 
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import ExecutionEnvelope, LifecycleState, OperationKind
+from predictions_cup.observe.contracts import ObservationEmitter, ObservationKind, VenueObservation
 from predictions_cup.runtime.models import RuntimePortfolio
 from predictions_cup.sig.account_reconciliation import reconcile_account
 from predictions_cup.sig.errors import SigExecutionUncertainError
@@ -22,6 +24,7 @@ from predictions_cup.sig.trading_dto import (
 )
 
 ClockNs = Callable[[], int]
+WallClock = Callable[[], datetime]
 
 
 class RecoveryRest(Protocol):
@@ -66,6 +69,9 @@ async def recover_startup(
     tournament_id: str,
     tournament_slug: str,
     clock_ns: ClockNs = monotonic_ns,
+    wall_clock: WallClock = lambda: datetime.now(UTC),
+    observation_emitter: ObservationEmitter | None = None,
+    observation_process_instance_id: str | None = None,
 ) -> StartupRecoveryResult:
     """Recover journal first; LIVE remains blocked if anything stays uncertain."""
     authoritative = await reconcile_account(
@@ -76,6 +82,15 @@ async def recover_startup(
 
     for envelope in journal.unresolved():
         original_state = envelope.lifecycle_state
+        _emit_recovery_observation(
+            observation_emitter,
+            observation_process_instance_id,
+            wall_clock,
+            ObservationKind.RECONCILIATION_STARTED,
+            envelope,
+            clock_ns(),
+            detail=(("original_state", original_state.value),),
+        )
         if original_state is not LifecycleState.RECONCILING:
             journal.mark_state(
                 envelope.logical_operation_id,
@@ -119,6 +134,18 @@ async def recover_startup(
         except SigExecutionUncertainError:
             continue
 
+        if envelope.logical_operation_id not in {
+            item.logical_operation_id for item in journal.unresolved()
+        }:
+            _emit_recovery_observation(
+                observation_emitter,
+                observation_process_instance_id,
+                wall_clock,
+                ObservationKind.RECONCILIATION_RESOLVED,
+                envelope,
+                clock_ns(),
+            )
+
     authoritative = await reconcile_account(
         rest,
         tournament_id=tournament_id,
@@ -140,10 +167,20 @@ async def recover_startup(
                 LifecycleState.RECONCILING,
                 clock_ns(),
             )
+        resolved_ns = clock_ns()
         journal.mark_state(
             envelope.logical_operation_id,
             LifecycleState.RECONCILED,
-            clock_ns(),
+            resolved_ns,
+        )
+        _emit_recovery_observation(
+            observation_emitter,
+            observation_process_instance_id,
+            wall_clock,
+            ObservationKind.RECONCILIATION_RESOLVED,
+            envelope,
+            resolved_ns,
+            detail=(("resolved_state", LifecycleState.RECONCILED.value),),
         )
 
     unresolved = journal.unresolved()
@@ -154,6 +191,42 @@ async def recover_startup(
             envelope.logical_operation_id for envelope in unresolved
         ),
     )
+
+
+def _emit_recovery_observation(
+    emitter: ObservationEmitter | None,
+    process_instance_id: str | None,
+    wall_clock: WallClock,
+    kind: ObservationKind,
+    envelope: ExecutionEnvelope,
+    monotonic_ns: int,
+    *,
+    detail: tuple[tuple[str, str], ...] = (),
+) -> None:
+    if emitter is None:
+        return
+    if process_instance_id is None or not process_instance_id.strip():
+        raise ValueError(
+            "observation_process_instance_id is required when recovery observation is enabled"
+        )
+    try:
+        emitter.emit(
+            VenueObservation(
+                kind=kind,
+                observed_at=wall_clock(),
+                monotonic_ns=monotonic_ns,
+                process_instance_id=process_instance_id,
+                source="BUILD_009_STARTUP_RECOVERY",
+                source_version="observe-001",
+                provenance="AUTHORITATIVE_RECONCILIATION",
+                tournament_id=envelope.tournament_id,
+                logical_operation_id=envelope.logical_operation_id,
+                idempotency_key=envelope.idempotency_key,
+                detail=detail,
+            )
+        )
+    except Exception:
+        return
 
 
 async def _recover_single_cancel(

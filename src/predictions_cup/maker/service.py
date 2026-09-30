@@ -12,7 +12,7 @@ import asyncio
 import logging
 import signal
 from contextlib import suppress
-from datetime import datetime
+from datetime import UTC, datetime
 from time import monotonic_ns
 from typing import cast
 
@@ -40,6 +40,16 @@ from predictions_cup.maker.recovery import reconcile_maker_quote_registry
 from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.mapping.models import MappingDocument
+from predictions_cup.observe import (
+    BoundedObservationEmitter,
+    CaptureObservationSink,
+    CompetitionContextSampler,
+    ObservationHealthProvider,
+    ObservationHealthSnapshot,
+    ObservationHealthStatusPublisher,
+    SigOfficialCompetitionContextProvider,
+    default_observation_health_status_path,
+)
 from predictions_cup.runtime.telemetry import HotPathTelemetry
 from predictions_cup.shadow.live import LiveShadowRuntime, build_live_shadow_runtime
 from predictions_cup.sig.account_reconciliation import (
@@ -53,6 +63,7 @@ from predictions_cup.sig.account_state import (
 )
 from predictions_cup.sig.errors import SigApiError
 from predictions_cup.sig.governed_client import GovernedSigRestClient
+from predictions_cup.sig.launch_storage import ObservationCaptureRecorder
 from predictions_cup.sig.realtime_models import MarketBatchDto
 from predictions_cup.sig.realtime_state import SigRealtimeStateEngine, SubscriptionReason
 from predictions_cup.sig.realtime_storage import SigRealtimeRecorder
@@ -86,6 +97,12 @@ class MakerService:
         self.pm_ws = MarketWebSocket(str(settings.polymarket_ws_url), self.pm_health)
         self._pm_token_ids = _mapped_token_ids(self.core.mapping)
         self._last_health: tuple[bool, bool, bool, datetime | None] | None = None
+        self._observation_health_provider: ObservationHealthProvider | None = None
+        self._observation_health_publisher: ObservationHealthStatusPublisher | None = None
+
+    def observation_health(self) -> ObservationHealthSnapshot | None:
+        provider = self._observation_health_provider
+        return None if provider is None else provider.health()
 
     async def run(self) -> None:
         tournament_id, tournament_slug = self._tournament_context()
@@ -97,6 +114,31 @@ class MakerService:
         )
         rest = GovernedSigRestClient(self.settings, governor=governor)
         sig_recorder = cast(SigRealtimeRecorder, NoopSigRealtimeRecorder())
+        observe_recorder = ObservationCaptureRecorder(
+            self.settings.sig_research_path,
+            queue_max=max(1_024, min(self.settings.sig_capture_queue_max, 65_536)),
+            shard_seconds=self.settings.sig_capture_parquet_shard_seconds,
+            max_rows_per_shard=self.settings.sig_capture_parquet_max_rows_per_shard,
+        )
+        observation_emitter = BoundedObservationEmitter(
+            CaptureObservationSink(observe_recorder),
+            queue_max=max(1_024, min(self.settings.sig_capture_queue_max, 65_536)),
+        )
+        self._observation_health_provider = ObservationHealthProvider(
+            observation_emitter,
+            observe_recorder,
+        )
+        self._observation_health_publisher = ObservationHealthStatusPublisher(
+            default_observation_health_status_path(self.settings.sig_research_path),
+            process_instance_id=observe_recorder.session_id,
+            owner="predictions-cup-maker.service",
+        )
+        self._publish_observation_health(force=True)
+        context_sampler = CompetitionContextSampler(
+            SigOfficialCompetitionContextProvider(rest, tournament_id=tournament_id),
+            observe_recorder.record_competition_context,
+            interval_seconds=60.0,
+        )
         journal: ExecutionJournal | None = None
         trading: SigTradingClient | None = None
         sig_state: SigRealtimeStateEngine | None = None
@@ -145,8 +187,11 @@ class MakerService:
                     self.settings.sig_rest_governor_rate_per_second
                 ),
                 governor_snapshot=rest.governor_snapshot,
+                observation_emitter=observation_emitter,
+                observation_process_instance_id=observe_recorder.session_id,
             )
             await sig_state.initialize()
+            context_sampler.maybe_schedule(datetime.now(UTC), force=True)
             await self._seed_polymarket_books()
             await self.pm_ws.set_tokens(self._pm_token_ids)
 
@@ -178,6 +223,8 @@ class MakerService:
                     journal=journal,
                     permit=permit,
                     reservations=self.core.reservations,
+                    observation_emitter=observation_emitter,
+                    observation_process_instance_id=observe_recorder.session_id,
                 )
                 recovery = await recover_startup(
                     journal=journal,
@@ -185,6 +232,8 @@ class MakerService:
                     live_sink=live_sink,
                     tournament_id=tournament_id,
                     tournament_slug=tournament_slug,
+                    observation_emitter=observation_emitter,
+                    observation_process_instance_id=observe_recorder.session_id,
                 )
                 if not recovery.safe_to_resume_live:
                     raise RuntimeError(
@@ -207,6 +256,8 @@ class MakerService:
                     live_sink,
                     journal=journal,
                     quotes=self.core.quotes,
+                    observation_emitter=observation_emitter,
+                    observation_process_instance_id=observe_recorder.session_id,
                 )
             else:
                 if self.explicit_live_invocation:
@@ -228,6 +279,8 @@ class MakerService:
                     else None
                 ),
                 kill_switch=self.core.kill_switch,
+                observation_emitter=observation_emitter,
+                observation_process_instance_id=observe_recorder.session_id,
             )
             runtime = MakerRuntimeLoop(
                 bridge=bridge,
@@ -267,6 +320,8 @@ class MakerService:
                 mint_token=rest.mint_realtime_token,
                 authoritative_resync=account_resync,
                 execution_journal=journal,
+                observation_emitter=observation_emitter,
+                observation_process_instance_id=observe_recorder.session_id,
             )
             # The startup REST snapshot was sufficient for LIVE permit/recovery,
             # but new maker placements must wait for a subscribed account socket
@@ -292,7 +347,12 @@ class MakerService:
                     name="make-polymarket",
                 ),
                 asyncio.create_task(
-                    self._run_sig_market_feed(sig_state, rest, runtime),
+                    self._run_sig_market_feed(
+                        sig_state,
+                        rest,
+                        runtime,
+                        context_sampler,
+                    ),
                     name="make-sig-market",
                 ),
                 asyncio.create_task(
@@ -350,6 +410,10 @@ class MakerService:
                 await trading.aclose()
             if journal is not None:
                 journal.close()
+            with suppress(Exception):
+                await context_sampler.aclose()
+            observation_emitter.close()
+            observe_recorder.close()
             await rest.aclose()
 
     async def _run_sig_market_feed(
@@ -357,6 +421,7 @@ class MakerService:
         sig_state: SigRealtimeStateEngine,
         rest: GovernedSigRestClient,
         runtime: MakerRuntimeLoop,
+        context_sampler: CompetitionContextSampler,
     ) -> None:
         reason = SubscriptionReason.INITIAL_SUBSCRIBE
         while not self.stop_event.is_set():
@@ -424,11 +489,15 @@ class MakerService:
                             await runtime.drain_once()
                         raise
 
+                async def maintenance(observed_at: datetime) -> None:
+                    await sig_state.maintenance(observed_at)
+                    context_sampler.maybe_schedule(observed_at)
+
                 outcome = await subscriber.run(
                     on_batch=on_batch,
                     on_connected=connected,
                     stop_event=self.stop_event,
-                    on_maintenance=sig_state.maintenance,
+                    on_maintenance=maintenance,
                 )
             except SigApiError:
                 sig_state.mark_disconnected()
@@ -521,6 +590,7 @@ class MakerService:
         runtime: MakerRuntimeLoop,
     ) -> None:
         while not self.stop_event.is_set():
+            self._publish_observation_health()
             current = (
                 self.pm_health.websocket_connected,
                 sig_state.health.connected,
@@ -535,6 +605,19 @@ class MakerService:
                 if previous is None or current[3] != previous[3]:
                     runtime.notify_account(observed_monotonic_ns=monotonic_ns())
             await asyncio.sleep(0.05)
+
+    def _publish_observation_health(self, *, force: bool = False) -> None:
+        provider = self._observation_health_provider
+        publisher = self._observation_health_publisher
+        if provider is None or publisher is None:
+            return
+        try:
+            publisher.publish(provider.health(), force=force)
+        except Exception as exc:
+            _LOG.warning(
+                "OBSERVE health status publication failed without affecting Risk: %s",
+                type(exc).__name__,
+            )
 
     async def _best_effort_kill_drain(
         self,
