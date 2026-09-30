@@ -257,6 +257,8 @@ class MakerService:
                     else None
                 ),
                 kill_switch=self.core.kill_switch,
+                observation_emitter=observation_emitter,
+                observation_process_instance_id=observe_recorder.session_id,
             )
             runtime = MakerRuntimeLoop(
                 bridge=bridge,
