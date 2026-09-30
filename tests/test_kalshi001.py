@@ -114,8 +114,11 @@ def test_markets_and_trades_preserve_cursor() -> None:
 def test_ticker_cannot_escape_public_routes() -> None:
     async def run() -> None:
         client = KalshiPublicClient()
-        with pytest.raises(ValueError):
+        try:
             await client.get_market("../portfolio/orders")
+        except ValueError:
+            return
+        raise AssertionError("unsafe ticker unexpectedly accepted")
 
     asyncio.run(run())
 
