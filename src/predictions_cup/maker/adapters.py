@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import UTC, datetime
+from uuid import uuid4
+
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import (
@@ -14,6 +18,7 @@ from predictions_cup.execution.models import (
 from predictions_cup.execution.sinks import ExecutionPlan, ShadowSink
 from predictions_cup.maker.contracts import MakerMarketSnapshot, QuoteSide
 from predictions_cup.maker.lifecycle import ActiveQuote, QuoteRegistry
+from predictions_cup.observe.contracts import ObservationEmitter, ObservationKind, VenueObservation
 from predictions_cup.runtime.models import OrderAction
 
 
@@ -55,10 +60,22 @@ class LiveMakerExecutionAdapter:
         *,
         journal: ExecutionJournal,
         quotes: QuoteRegistry,
+        observation_emitter: ObservationEmitter | None = None,
+        observation_process_instance_id: str | None = None,
+        wall_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._sink = sink
         self._journal = journal
         self._quotes = quotes
+        self._observation_emitter = observation_emitter
+        self._observation_process_instance_id = (
+            uuid4().hex
+            if observation_process_instance_id is None
+            else observation_process_instance_id
+        )
+        if not self._observation_process_instance_id.strip():
+            raise ValueError("observation_process_instance_id must not be blank")
+        self._wall_clock = wall_clock
 
     async def place(
         self,
@@ -149,6 +166,64 @@ class LiveMakerExecutionAdapter:
                 lifecycle_state=state,
                 observed_monotonic_ns=event.observed_monotonic_ns,
             )
+            self._observe_published_quote(
+                plan=plan,
+                intent=intent,
+                side=side,
+                order_id=order_id,
+                state=state,
+                observed_monotonic_ns=event.observed_monotonic_ns,
+            )
+
+    def _observe_published_quote(
+        self,
+        *,
+        plan: ExecutionPlan,
+        intent: RuntimeOrderIntent,
+        side: QuoteSide,
+        order_id: int,
+        state: LifecycleState,
+        observed_monotonic_ns: int,
+    ) -> None:
+        emitter = self._observation_emitter
+        if emitter is None or intent.limit_price_ticks is None:
+            return
+        try:
+            emitter.emit(
+                VenueObservation(
+                    kind=ObservationKind.QUOTE_PUBLISHED,
+                    observed_at=self._wall_clock(),
+                    monotonic_ns=observed_monotonic_ns,
+                    process_instance_id=self._observation_process_instance_id,
+                    source="MAKE_001_AUTHORITATIVE_QUOTE_REGISTRY",
+                    source_version="observe-001",
+                    provenance="AUTHORITATIVE_PER_INTENT_ACK",
+                    tournament_id=intent.tournament_id,
+                    market_id=intent.market_id,
+                    exchange_id=intent.exchange_id,
+                    strategy_family="MAKE",
+                    strategy_id=intent.strategy_id,
+                    logical_operation_id=plan.envelope.logical_operation_id,
+                    logical_intent_id=intent.intent_id,
+                    idempotency_key=plan.envelope.idempotency_key,
+                    exchange_order_id=str(order_id),
+                    detail=(
+                        (
+                            "quote_key",
+                            (
+                                f"{plan.envelope.logical_operation_id}|"
+                                f"{intent.exchange_id}|{side.value}"
+                            ),
+                        ),
+                        ("side", side.value),
+                        ("price_ticks", str(intent.limit_price_ticks)),
+                        ("size", str(intent.quantity)),
+                        ("execution_state", state.value),
+                    ),
+                )
+            )
+        except Exception:
+            return
 
     @staticmethod
     def _positive_int(value: str | None) -> int | None:
