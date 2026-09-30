@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -25,6 +28,7 @@ from predictions_cup.shadow import (
     Hazard005FCandidate,
     IncrementalHazard005FState,
     IncrementalPred006FeatureState,
+    Pred006ArtifactManifest,
     Pred006BlockObservation,
     Pred006Candidate,
     pred006_live_parity_matrix,
@@ -32,6 +36,9 @@ from predictions_cup.shadow import (
 from predictions_cup.shadow.frozen_runtime import HAZARD005F_SCORER_HASHES
 
 BASE_MONO = 10_000_000_000_000
+NS = 1_000_000_000
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+GOLDEN_PATH = PROJECT_ROOT / "tests/fixtures/candidate_runtime001_golden.json"
 
 
 def _snapshot(
@@ -99,17 +106,45 @@ class _FixedScorer:
         return self.value
 
 
+def _pred_manifest() -> Pred006ArtifactManifest:
+    return Pred006ArtifactManifest(
+        manifest_version="pred006-artifact-manifest-v1",
+        research_id=FrozenPred006Evaluator.research_id,
+        frozen_spec_version=FrozenPred006Evaluator.frozen_spec_version,
+        feature_schema_hash=FrozenPred006Evaluator.feature_schema_hash,
+        artifacts=(
+            ("PRED006-C01", "a" * 64),
+            ("PRED006-C02", "b" * 64),
+        ),
+        provenance="synthetic-test-only:never-production-authorized",
+    )
+
+
+def _golden() -> dict[str, object]:
+    return json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
+
+
+def _git_blob_sha(path: Path) -> str:
+    payload = path.read_bytes()
+    return hashlib.sha1(  # noqa: S324 - Git object identity, not security
+        f"blob {len(payload)}\0".encode() + payload
+    ).hexdigest()
+
+
 def _pred_observation(
     timestamp_s: int,
     p_yes: float,
     *,
     scope_id: str = "m1",
+    block_number: int | None = None,
 ) -> Pred006BlockObservation:
+    block = timestamp_s + 1 if block_number is None else block_number
     return Pred006BlockObservation(
         scope_id=scope_id,
         window_id="w1",
+        block_number=block,
         timestamp_s=timestamp_s,
-        observed_monotonic_ns=BASE_MONO + timestamp_s * 1_000_000_000,
+        observed_monotonic_ns=BASE_MONO + timestamp_s * NS + block,
         p_yes=p_yes,
         size_shares=9.0,
         value_usd=4.0,
@@ -177,7 +212,7 @@ def test_pred006_model_absence_is_explicit_and_precedes_feature_guessing() -> No
     assert output.candidate_payload["artifact_hash"] is None
     assert (
         output.candidate_payload["expected_artifact_hash"]
-        == "NO_SERIALIZED_FITTED_MODEL_IN_FROZEN_PRED006_OUTPUT"
+        == "NO_AUTHORIZED_SERIALIZED_FITTED_MODEL_MANIFEST"
     )
 
 
@@ -193,6 +228,7 @@ def test_pred006_scores_both_survivors_without_aggregating_semantics() -> None:
             "PRED006-C01": _FixedScorer("c01", 0.70, "a" * 64),
             "PRED006-C02": _FixedScorer("c02", 0.30, "b" * 64),
         },
+        artifact_manifest=_pred_manifest(),
     )
     output = Pred006Candidate(evaluator).evaluate(_snapshot(1800))
     assert output.status is DecisionStatus.OK
@@ -202,6 +238,95 @@ def test_pred006_scores_both_survivors_without_aggregating_semantics() -> None:
         "PRED006-C01": 0.70,
         "PRED006-C02": 0.30,
     }
+
+
+def test_pred006_scorers_without_authorized_manifest_stay_not_ready() -> None:
+    state = IncrementalPred006FeatureState(
+        scope_resolver=lambda snapshot: snapshot.market_id
+    )
+    state.observe(_pred_observation(0, 0.40, block_number=1))
+    evaluator = FrozenPred006Evaluator(
+        state,
+        scorers={
+            "PRED006-C01": _FixedScorer("c01", 0.70, "a" * 64),
+            "PRED006-C02": _FixedScorer("c02", 0.30, "b" * 64),
+        },
+    )
+    output = Pred006Candidate(evaluator).evaluate(_snapshot(0))
+    assert output.status is DecisionStatus.NOT_READY
+    assert output.abstain_reason == "model_artifact_missing"
+
+
+def test_pred006_manifest_hash_mismatch_fails_closed() -> None:
+    state = IncrementalPred006FeatureState(
+        scope_resolver=lambda snapshot: snapshot.market_id
+    )
+    state.observe(_pred_observation(0, 0.40, block_number=1))
+    evaluator = FrozenPred006Evaluator(
+        state,
+        scorers={
+            "PRED006-C01": _FixedScorer("c01", 0.70, "0" * 64),
+            "PRED006-C02": _FixedScorer("c02", 0.30, "b" * 64),
+        },
+        artifact_manifest=_pred_manifest(),
+    )
+    output = Pred006Candidate(evaluator).evaluate(_snapshot(0))
+    assert output.status is DecisionStatus.NOT_READY
+    assert output.abstain_reason == "model_artifact_hash_mismatch:PRED006-C01"
+
+
+def test_pred006_equal_second_blocks_are_legal_but_block_order_is_strict() -> None:
+    state = IncrementalPred006FeatureState()
+    state.observe(_pred_observation(100, 0.40, block_number=100))
+    vector = state.observe(_pred_observation(100, 0.50, block_number=101))
+    assert vector.block_number == 101
+    assert vector.as_mapping()["since_prev"] == 0.0
+
+    with pytest.raises(ValueError, match="block_number must strictly increase"):
+        state.observe(_pred_observation(101, 0.51, block_number=101))
+    with pytest.raises(ValueError, match="block_number must strictly increase"):
+        state.observe(_pred_observation(102, 0.52, block_number=99))
+
+
+def test_pred006_golden_vector_matches_original_research_output() -> None:
+    golden = _golden()
+    pred = golden["pred006"]
+    assert isinstance(pred, dict)
+    observations = pred["observations"]
+    assert isinstance(observations, list)
+
+    state = IncrementalPred006FeatureState()
+    vectors = []
+    for row in observations:
+        assert isinstance(row, dict)
+        vectors.append(
+            state.observe(
+                _pred_observation(
+                    int(row["timestamp_s"]),
+                    float(row["p_yes"]),
+                    block_number=int(row["block_number"]),
+                )
+            )
+        )
+
+    equal_expected = pred["equal_second_expected"]
+    assert isinstance(equal_expected, dict)
+    assert vectors[1].block_number == int(equal_expected["block_number"])
+    assert vectors[1].as_mapping()["since_prev"] == float(
+        equal_expected["since_prev"]
+    )
+
+    final_expected = pred["final_expected"]
+    assert isinstance(final_expected, dict)
+    final = vectors[-1]
+    assert final.block_number == int(final_expected["block_number"])
+    assert final.timestamp_s == int(final_expected["timestamp_s"])
+    expected_values = final_expected["values"]
+    assert isinstance(expected_values, dict)
+    actual = final.as_mapping()
+    assert set(actual) == set(expected_values)
+    for name, expected in expected_values.items():
+        assert actual[name] == pytest.approx(float(expected), rel=1e-12, abs=1e-12)
 
 
 def _observe_005f_fixture(state: IncrementalHazard005FState) -> None:
@@ -216,8 +341,8 @@ def _observe_005f_fixture(state: IncrementalHazard005FState) -> None:
         state.observe(
             Hazard005FBboObservation(
                 scope_id="m1",
-                timestamp_s=timestamp_s,
-                observed_monotonic_ns=BASE_MONO + timestamp_s * 1_000_000_000,
+                timestamp_ns=timestamp_s * NS,
+                observed_monotonic_ns=BASE_MONO + timestamp_s * NS,
                 best_bid=bid,
                 best_ask=ask,
                 source_version="fixture",
@@ -227,13 +352,13 @@ def _observe_005f_fixture(state: IncrementalHazard005FState) -> None:
 
 def test_005f_genuine_age_and_capture_bin_boundaries_match_freeze() -> None:
     state = IncrementalHazard005FState(
-        grid_origin_s=0,
+        grid_origin_ns=0,
         scope_resolver=lambda snapshot: snapshot.market_id,
     )
     _observe_005f_fixture(state)
     vector = state.feature_vector(_snapshot(60))
     assert vector is not None
-    assert vector.grid_time_s == 60
+    assert vector.grid_time_ns == 60 * NS
     assert vector.values["genuine_age_s"] == 15.0
     assert vector.values["genuine_15"] == 0.0
     assert vector.values["genuine_60"] == 2.0
@@ -258,7 +383,7 @@ def test_005f_default_runtime_fails_closed_on_missing_orderbook_history() -> Non
 
 def test_005f_active_runtime_keeps_update_and_jump_coordinates_separate() -> None:
     state = IncrementalHazard005FState(
-        grid_origin_s=0,
+        grid_origin_ns=0,
         scope_resolver=lambda snapshot: snapshot.market_id,
     )
     _observe_005f_fixture(state)
@@ -289,7 +414,7 @@ def test_005f_active_runtime_keeps_update_and_jump_coordinates_separate() -> Non
 
 def test_005f_pre_runtime_does_not_invent_unfrozen_jump_coordinate() -> None:
     state = IncrementalHazard005FState(
-        grid_origin_s=0,
+        grid_origin_ns=0,
         scope_resolver=lambda snapshot: snapshot.market_id,
     )
     _observe_005f_fixture(state)
@@ -312,7 +437,7 @@ def test_005f_pre_runtime_does_not_invent_unfrozen_jump_coordinate() -> None:
 
 def test_005f_rejects_wrong_frozen_artifact_hash() -> None:
     state = IncrementalHazard005FState(
-        grid_origin_s=0,
+        grid_origin_ns=0,
         scope_resolver=lambda snapshot: snapshot.market_id,
     )
     _observe_005f_fixture(state)
@@ -333,13 +458,13 @@ def test_005f_rejects_wrong_frozen_artifact_hash() -> None:
 
 def test_005f_boundary_and_ambiguous_bbo_do_not_establish_state() -> None:
     state = IncrementalHazard005FState(
-        grid_origin_s=0,
+        grid_origin_ns=0,
         scope_resolver=lambda snapshot: snapshot.market_id,
     )
     for observation in (
         Hazard005FBboObservation(
             scope_id="m1",
-            timestamp_s=0,
+            timestamp_ns=0,
             observed_monotonic_ns=BASE_MONO,
             best_bid=0.0,
             best_ask=0.60,
@@ -347,16 +472,16 @@ def test_005f_boundary_and_ambiguous_bbo_do_not_establish_state() -> None:
         ),
         Hazard005FBboObservation(
             scope_id="m1",
-            timestamp_s=5,
-            observed_monotonic_ns=BASE_MONO + 5_000_000_000,
+            timestamp_ns=5 * NS,
+            observed_monotonic_ns=BASE_MONO + 5 * NS,
             best_bid=0.40,
             best_ask=1.0,
             source_version="fixture",
         ),
         Hazard005FBboObservation(
             scope_id="m1",
-            timestamp_s=10,
-            observed_monotonic_ns=BASE_MONO + 10_000_000_000,
+            timestamp_ns=10 * NS,
+            observed_monotonic_ns=BASE_MONO + 10 * NS,
             best_bid=0.40,
             best_ask=0.60,
             source_version="fixture",
@@ -367,11 +492,117 @@ def test_005f_boundary_and_ambiguous_bbo_do_not_establish_state() -> None:
     assert state.feature_vector(_snapshot(15)) is None
 
 
+def test_005f_golden_nanosecond_vector_matches_frozen_research_output() -> None:
+    golden = _golden()
+    hazard = golden["hazard005f"]
+    assert isinstance(hazard, dict)
+    state = IncrementalHazard005FState(
+        grid_origin_ns=int(hazard["grid_origin_ns"]),
+        scope_resolver=lambda snapshot: snapshot.market_id,
+    )
+    observations = hazard["observations"]
+    assert isinstance(observations, list)
+    for row in observations:
+        assert isinstance(row, dict)
+        timestamp_ns = int(row["timestamp_ns"])
+        state.observe(
+            Hazard005FBboObservation(
+                scope_id="m1",
+                timestamp_ns=timestamp_ns,
+                observed_monotonic_ns=BASE_MONO + timestamp_ns,
+                best_bid=float(row["best_bid"]),
+                best_ask=float(row["best_ask"]),
+                source_version="golden-005f",
+            )
+        )
+
+    query_ns = int(hazard["query_ns"])
+    vector = state.feature_vector(_snapshot(query_ns // NS))
+    assert vector is not None
+    expected = hazard["expected"]
+    assert isinstance(expected, dict)
+    assert vector.grid_time_ns == int(expected["grid_time_ns"])
+    for name in ("genuine_15", "genuine_60", "genuine_age_s", "abs_ret_15", "rv_60"):
+        assert vector.values[name] == pytest.approx(
+            float(expected[name]), rel=1e-12, abs=1e-12
+        )
+
+
+def test_005f_gap_boundary_is_nanosecond_exact() -> None:
+    golden = _golden()
+    hazard = golden["hazard005f"]
+    assert isinstance(hazard, dict)
+    boundary = hazard["gap_boundary"]
+    assert isinstance(boundary, dict)
+
+    below = IncrementalHazard005FState(
+        grid_origin_ns=0,
+        scope_resolver=lambda snapshot: snapshot.market_id,
+    )
+    below.observe(
+        Hazard005FBboObservation(
+            scope_id="m1",
+            timestamp_ns=0,
+            observed_monotonic_ns=BASE_MONO,
+            best_bid=0.40,
+            best_ask=0.60,
+        )
+    )
+    below_ns = int(boundary["below_300s_ns"])
+    below.observe(
+        Hazard005FBboObservation(
+            scope_id="m1",
+            timestamp_ns=below_ns,
+            observed_monotonic_ns=BASE_MONO + below_ns,
+            best_bid=0.41,
+            best_ask=0.60,
+        )
+    )
+    vector = below.feature_vector(_snapshot(300))
+    assert vector is not None
+    assert vector.values["genuine_age_s"] == pytest.approx(1e-9, abs=1e-15)
+
+    above = IncrementalHazard005FState(
+        grid_origin_ns=0,
+        scope_resolver=lambda snapshot: snapshot.market_id,
+    )
+    above.observe(
+        Hazard005FBboObservation(
+            scope_id="m1",
+            timestamp_ns=0,
+            observed_monotonic_ns=BASE_MONO,
+            best_bid=0.40,
+            best_ask=0.60,
+        )
+    )
+    above_ns = int(boundary["above_300s_ns"])
+    above.observe(
+        Hazard005FBboObservation(
+            scope_id="m1",
+            timestamp_ns=above_ns,
+            observed_monotonic_ns=BASE_MONO + above_ns,
+            best_bid=0.41,
+            best_ask=0.60,
+        )
+    )
+    assert above.feature_vector(_snapshot(315)) is None
+
+
+def test_golden_fixture_is_pinned_to_original_research_source_blobs() -> None:
+    golden = _golden()
+    provenance = golden["provenance"]
+    assert isinstance(provenance, dict)
+    pred_path = PROJECT_ROOT / str(provenance["pred006_source"])
+    hazard_path = PROJECT_ROOT / str(provenance["hazard005f_source"])
+    assert _git_blob_sha(pred_path) == provenance["pred006_source_blob_sha"]
+    assert _git_blob_sha(hazard_path) == provenance["hazard005f_source_blob_sha"]
+
+
 def test_incremental_runtime_requires_explicit_scope_resolution() -> None:
     pred = IncrementalPred006FeatureState()
     pred.observe(_pred_observation(0, 0.40))
     assert pred.feature_vector(_snapshot(0)) is None
 
-    hazard = IncrementalHazard005FState(grid_origin_s=0)
+    hazard = IncrementalHazard005FState(grid_origin_ns=0)
     _observe_005f_fixture(hazard)
     assert hazard.feature_vector(_snapshot(60)) is None
