@@ -13,15 +13,15 @@ from predictions_cup.observe import (
     CrossVenueMapping,
     EconomicChange,
     FieldClassification,
-    join_pm_to_sig,
     ObservationKind,
-    replay_operation,
     SigOfficialCompetitionContextProvider,
+    VenueObservation,
+    VenueSpanCollector,
+    join_pm_to_sig,
+    replay_operation,
     summarize_competition_context,
     summarize_cross_venue,
     summarize_observations,
-    VenueObservation,
-    VenueSpanCollector,
 )
 from predictions_cup.sig.dto import AccountDto
 from predictions_cup.sig.launch_storage import LaunchSigRecorder
@@ -30,7 +30,6 @@ from predictions_cup.sig.realtime_models import (
     TournamentListStatus,
     TournamentPageDto,
 )
-
 
 _AT = datetime(2026, 10, 1, 16, 0, tzinfo=UTC)
 
