@@ -145,8 +145,13 @@ Do not enable LIVE merely to populate OBSERVE.
 
 For the standalone SIG capture command, `--print-health` includes OBSERVE/context state.
 
+For MAKE/FULLSTACK composition, read `MakerService.observation_health()` directly. The returned
+typed snapshot contains outer emitter and inner CAPTURE writer health and can be serialized with
+`to_dict()`; no log parsing is required.
+
 Check:
 
+- `state` / `reasons`;
 - `observe.accepted`;
 - `observe.dropped`;
 - `observe.sink_failures`;
@@ -158,6 +163,7 @@ Check:
 
 Launch expectation:
 
+- combined OBSERVE state = `HEALTHY`;
 - OBSERVE `dropped = 0`;
 - OBSERVE `sink_failures = 0`;
 - CAPTURE `dropped_rows = 0`;
@@ -239,7 +245,7 @@ Useful spans include:
 - dispatch -> ACK;
 - ACK -> first fill;
 - dispatch -> fill;
-- cancel -> confirmation;
+- cancel -> ACK;
 - reconnect duration;
 - local MAKE quote lifetime.
 
@@ -398,10 +404,11 @@ After restart verify:
 
 ## 17. Benchmark
 
-Run:
+Run both:
 
 ```bash
 python scripts/benchmark_observe001.py --iterations 100000
+python scripts/benchmark_observe001_pipeline.py --iterations 10000
 ```
 
 Record:
