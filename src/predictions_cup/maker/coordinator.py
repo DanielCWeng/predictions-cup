@@ -302,31 +302,35 @@ class MakerCoordinator:
                 raise
 
             events.append(event)
-            for action in place_actions:
-                detail = (
-                    ("side", action.side.value),
-                    ("price_ticks", str(action.desired_ticks)),
-                    ("size", str(action.desired_size)),
-                    ("lifecycle_reason", action.reason),
-                    ("execution_state", event.state.value),
-                )
-                self._observe_quote(
-                    ObservationKind.QUOTE_PUBLISHED,
-                    logical_operation_id=logical_operation_id,
-                    snapshot=snapshot,
-                    side=action.side,
-                    observed_monotonic_ns=event.observed_monotonic_ns,
-                    detail=detail,
-                )
-                if action.reason == "terminal_quote_refill":
+            if event.state in {
+                LifecycleState.OPEN,
+                LifecycleState.PARTIALLY_FILLED,
+                LifecycleState.FILLED,
+            }:
+                for action in place_actions:
+                    detail = (
+                        ("price_ticks", str(action.desired_ticks)),
+                        ("size", str(action.desired_size)),
+                        ("lifecycle_reason", action.reason),
+                        ("execution_state", event.state.value),
+                    )
                     self._observe_quote(
-                        ObservationKind.QUOTE_REPLENISHED,
+                        ObservationKind.QUOTE_PUBLISHED,
                         logical_operation_id=logical_operation_id,
                         snapshot=snapshot,
                         side=action.side,
                         observed_monotonic_ns=event.observed_monotonic_ns,
                         detail=detail,
                     )
+                    if action.reason == "terminal_quote_refill":
+                        self._observe_quote(
+                            ObservationKind.QUOTE_REPLENISHED,
+                            logical_operation_id=logical_operation_id,
+                            snapshot=snapshot,
+                            side=action.side,
+                            observed_monotonic_ns=event.observed_monotonic_ns,
+                            detail=detail,
+                        )
             if event.simulated:
                 self._apply_shadow_event(
                     exchange_id=exchange_id,
