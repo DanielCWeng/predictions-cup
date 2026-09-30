@@ -5,12 +5,11 @@ from __future__ import annotations
 import json
 import os
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Mapping
 
 from predictions_cup.observe.health import ObservationHealthSnapshot, ObservationHealthState
 
