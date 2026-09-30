@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001M-WAVE",
+  "status": "TRAIN_DEV_DISCOVERY",
+  "empirical_binding": {
+    "target": "DATA-003 accepted current-universe direct/reference fills",
+    "source": "DATA-004 P0 fills",
+    "data001_used": false,
+    "final_opened": false
+  },
+  "targets": [
+    {
+      "sig_market_id": "153",
+      "orientation": "Republican strength = 1 - Democratic Senate target"
+    },
+    {
+      "sig_market_id": "154",
+      "orientation": "Republican strength = Republican Senate target"
+    }
+  ],
+  "source_factors": [
+    {
+      "event_id": "659973",
+      "markets": [
+        "2773660",
+        "2773661",
+        "2773662",
+        "2773663",
+        "2773664",
+        "2773665",
+        "2773666"
+      ],
+      "object": "truncated expected Republican wins K in Kamala-state Senate/Governor elections, scaled K/6"
+    },
+    {
+      "event_id": "162226",
+      "markets": [
+        "1178882"
+      ],
+      "object": "Republican-strength proxy = 1 - P(Democrats win all core four Senate races)"
+    },
+    {
+      "event_id": "528267",
+      "markets": [
+        "2364515"
+      ],
+      "object": "Republican-strength proxy = P(Republicans win any Biden-Trump Senate/Governor election)"
+    }
+  ],
+  "methods": [
+    "source-factor episode impulse",
+    "TRAIN-fitted absorption coefficient and unabsorbed pressure",
+    "TRAIN-only monotone isotonic level calibration",
+    "target-only reversal baseline",
+    "one-step stale source-change placebo"
+  ],
+  "chronology": "Every source state must be from block_number < target block. Repeated target rows sharing the same relevant source state are collapsed to one episode.",
+  "primary_horizon_hours": 24,
+  "support_rule": "At least 20 TRAIN episodes and 5 DEV episodes per target/factor combination.",
+  "interpretation": "This tests dynamic information transfer, not state-price equality or executable arbitrage."
+}

@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001M-LIVE-SHADOW",
+  "mode": "SHADOW_ONLY_UNTIL_LIVE_GATE",
+  "final_dependency": false,
+  "historical_binding": {
+    "target": "DATA-003",
+    "source": "DATA-004 P0/P1",
+    "data001_used": false
+  },
+  "candidates": [
+    {
+      "id": "SENATE_COUNT_SHOCK",
+      "target_sig_market_ids": [
+        "154"
+      ],
+      "source_event_id": "106193",
+      "source_market_ids": [
+        "943819",
+        "943820",
+        "943821",
+        "943822",
+        "943823",
+        "943824",
+        "943825",
+        "943826",
+        "943827",
+        "943828",
+        "943829"
+      ],
+      "transformations": [
+        {
+          "name": "scalar_t50_qp",
+          "train_q75_abs_change": 0.006550090909090978
+        },
+        {
+          "name": "scalar_t50_kl",
+          "train_q75_abs_change": 0.005690831359326243
+        },
+        {
+          "name": "clr_qp",
+          "train_q75_l2": 0.2539297572270941
+        },
+        {
+          "name": "clr_kl",
+          "train_q75_l2": 0.1549557193203694
+        }
+      ],
+      "historical_status": "INSUFFICIENT_RAPID_DEV_RESPONSE_SUPPORT",
+      "note": "Only one DEV target response inside 300s in frozen history; QP/KL signs were not stable enough for promotion."
+    },
+    {
+      "id": "CORE4_JOINT_SHOCK",
+      "target_sig_market_ids": [
+        "153"
+      ],
+      "source_event_id": "162226",
+      "source_market_ids": [
+        "1178882"
+      ],
+      "transformations": [
+        {
+          "name": "binary_clr_qp_kl",
+          "train_q75_l2": 0.09391856828048364
+        }
+      ],
+      "historical_status": "INSUFFICIENT_300S_RESPONSE_SUPPORT",
+      "note": "Adequate source history but no DEV response within the frozen 300s horizon."
+    },
+    {
+      "id": "BT_ANY_SHADOW",
+      "target_sig_market_ids": [
+        "153",
+        "154"
+      ],
+      "source_event_id": "528267",
+      "source_market_ids": [
+        "2364515"
+      ],
+      "transformations": [
+        {
+          "name": "p_republican_any"
+        }
+      ],
+      "historical_status": "LOW_TRAIN_RESPONSE_SUPPORT",
+      "note": "Episode-level unabsorbed-pressure pattern looked interesting on tiny support but failed preregistered minimum support; shadow curiosity only."
+    }
+  ],
+  "observation_horizons_seconds": [
+    5,
+    30,
+    300
+  ],
+  "required_logging": [
+    "source observable timestamp and block",
+    "SIG book observable timestamp",
+    "SIG best bid/ask/mid before shock",
+    "first SIG quote/book change after shock",
+    "5s/30s/300s executable side-aware markout",
+    "target-only reversal baseline",
+    "source-to-SIG latency",
+    "mapping/semantic variant",
+    "whether QP and KL source direction agree"
+  ],
+  "live_gate": {
+    "minimum_independent_shocks": 20,
+    "minimum_distinct_days_or_event_windows": 2,
+    "require_qp_kl_direction_agreement_where_applicable": true,
+    "require_positive_increment_vs_target_only_reversal": true,
+    "require_positive_side_aware_markout_after_fees_slippage": true,
+    "require_no_single_shock_dominance": true,
+    "action_on_pass": "eligible for micro-size challenger only; MAKE/RISK controls remain authoritative",
+    "action_on_fail": "remain shadow / reject"
+  }
+}
