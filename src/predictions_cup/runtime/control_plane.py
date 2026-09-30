@@ -281,13 +281,28 @@ def storage_health(
 
     sqlite = {
         "sig_realtime": _file_with_wal(
-            Path(values.get("PREDICTIONS_CUP_SIG_REALTIME_STORAGE_PATH", "data/sig_realtime.sqlite3"))
+            Path(
+                values.get(
+                    "PREDICTIONS_CUP_SIG_REALTIME_STORAGE_PATH",
+                    "data/sig_realtime.sqlite3",
+                )
+            )
         ),
         "polymarket": _file_with_wal(
-            Path(values.get("PREDICTIONS_CUP_POLYMARKET_STORAGE_PATH", "data/polymarket_operational.sqlite3"))
+            Path(
+                values.get(
+                    "PREDICTIONS_CUP_POLYMARKET_STORAGE_PATH",
+                    "data/polymarket_operational.sqlite3",
+                )
+            )
         ),
         "execution": _file_with_wal(
-            Path(values.get("PREDICTIONS_CUP_EXECUTION_JOURNAL_PATH", "data/execution_journal.sqlite3"))
+            Path(
+                values.get(
+                    "PREDICTIONS_CUP_EXECUTION_JOURNAL_PATH",
+                    "data/execution_journal.sqlite3",
+                )
+            )
         ),
         "risk": _file_with_wal(
             Path(values.get("PREDICTIONS_CUP_RISK_STATE_PATH", "data/risk_002.sqlite3"))
