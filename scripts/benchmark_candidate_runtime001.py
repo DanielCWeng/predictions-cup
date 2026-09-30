@@ -127,7 +127,7 @@ def run(markets: int, bursts: int) -> dict[str, float | int]:
                     window_id="bench-window",
                     block_number=block_number,
                     timestamp_s=timestamp_s,
-                    observed_monotonic_ns=BASE_MONO + timestamp_s * NS + block_number,
+                    observed_monotonic_ns=BASE_MONO + timestamp_s * NS,
                     p_yes=probability,
                     size_shares=10.0,
                     value_usd=5.0,
