@@ -53,15 +53,20 @@ Do not skip gates.
 3. Serialize the complete fitted pipelines, not only tree parameters.
 4. Freeze and record artifact SHA-256 values before the future confirmation
    observation window.
-5. Provide a scorer adapter that verifies those hashes.
-6. Inject an exact SHADOW -> Polymarket condition scope resolver; do not assume a
+5. Create an explicitly authorized `pred006-artifact-manifest-v1` binding both
+   C01/C02 hashes to the exact PRED research ID, frozen spec version and feature
+   schema hash. Scorer injection without this manifest remains NOT_READY.
+6. Provide scorer adapters whose artifact hashes exactly match that manifest.
+7. Inject an exact SHADOW -> Polymarket condition scope resolver; do not assume a
    SIG market ID is a condition ID.
-7. Feed exact DATA-003-equivalent condition/block observations into
-   `IncrementalPred006FeatureState`.
-8. Prove exact custody/fee evidence is observable without future leakage.
-9. Check candidate metadata. Any required feature classified
+8. Feed exact DATA-003-equivalent condition/block observations, including Polygon
+   `block_number`, into `IncrementalPred006FeatureState`.
+9. Require strictly increasing block number per research scope/window. Equal
+   Unix-second timestamps are legal; duplicate/reordered blocks are not.
+10. Prove exact custody/fee evidence is observable without future leakage.
+11. Check candidate metadata. Any required feature classified
    `NOT_OBSERVABLE_LIVE` or `SEMANTICS_MISMATCH` blocks scoring.
-10. Only then collect future-confirmation outcomes under the frozen protocol.
+12. Only then collect future-confirmation outcomes under the frozen protocol.
 
 Do not use PM BBO midpoint as `p_yes`, do not drop fee features, and do not
 change imputation.
@@ -71,9 +76,12 @@ change imputation.
 1. Complete/verify current-universe order-book capture.
 2. Inject the accepted SIG -> PM token scope resolver; do not assume the IDs are
    interchangeable.
-3. Feed grouped BBO observations, including ambiguity status, not individual
-   websocket message age, into `IncrementalHazard005FState`.
-4. Set the exact 15-second grid origin from the applicable frozen regime window.
+3. Feed grouped BBO observations with exact integer `timestamp_ns`, including
+   ambiguity status, not individual websocket message age, into
+   `IncrementalHazard005FState`.
+4. Set the exact `grid_origin_ns` from the applicable frozen regime window.
+   Preserve sub-second timestamps through the 300-second continuity gate,
+   5-second capture-bin floor, 15-second grid query and `genuine_age_s`.
 5. Supply an explicit PRE_ELECTION or ACTIVE_RESULTS regime source.
 6. Recover the frozen scaler/model joblib artifacts named by
    `fit_freeze_manifest.json`.
@@ -89,7 +97,8 @@ Do not infer `genuine_age_s` from generic quote age.
 
 | Reason | Meaning | Operator action |
 |---|---|---|
-| `model_artifact_missing` | PRED frozen fitted pipeline is absent | stop; obtain explicit fitting authorization |
+| `model_artifact_missing` | PRED authorized artifact manifest and/or fitted pipeline is absent | stop; obtain explicit fitting + manifest authorization |
+| `model_artifact_hash_mismatch:<candidate>` | a PRED scorer does not match its authorized manifest hash | disable; recover the exact authorized serialized pipeline |
 | `feature_parity_unavailable:...` | exact PRED source semantics fail | fix source parity; do not proxy/drop |
 | `required_feature_history_unavailable` | exact PRED block history not available for this scope | continue capture |
 | `required_orderbook_history_unavailable` | exact 005F history/grid features are unavailable | continue/repair book capture and grid state |
@@ -104,6 +113,13 @@ After a process restart they require upstream historical replay/warm-up before
 becoming ready. Until warm-up is exact and sufficient, `NOT_READY` is correct.
 
 Do not mark a candidate ready merely because the process is healthy.
+
+For parity verification, keep
+`tests/fixtures/candidate_runtime001_golden.json` unchanged unless the frozen
+research source itself is deliberately re-frozen. The fixture pins the exact
+Git blob identities of the original PRED-006 and 005F research runners and tests
+equal-second block chronology, 5-second-bin sub-second behavior, fractional
+genuine age, and the 300-second ±1ns boundary.
 
 ## Rollback
 
