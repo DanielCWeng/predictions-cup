@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 import sqlite3
@@ -93,8 +94,12 @@ class ObservableMarketState:
             best_ask=best_ask,
             midpoint=midpoint,
             trusted=bool(maker["sig_bbo_trusted"]),
-            source_observed_monotonic_ns=int(maker["sig_bbo_observed_ns"]),
-            snapshot_observed_monotonic_ns=int(record["observed_monotonic_ns"]),
+            source_observed_monotonic_ns=_required_int(
+                maker["sig_bbo_observed_ns"]
+            ),
+            snapshot_observed_monotonic_ns=_required_int(
+                record["observed_monotonic_ns"]
+            ),
             mapping_version=str(record["mapping_version"]),
         )
 
@@ -172,8 +177,6 @@ class JournalExecutionEvidenceProvider:
         *,
         maturity_at: datetime,
     ) -> ExecutionEvidence:
-        import asyncio
-
         return await asyncio.to_thread(self._read, decision, maturity_at)
 
     def _read(
@@ -235,7 +238,7 @@ class JournalExecutionEvidenceProvider:
                 payload_json = str(payload_json_raw)
                 modes.add(str(mode_raw))
                 plans = _payload_legs(payload_json, decision.exchange_id)
-                planned += sum(float(item["quantity"]) for item in plans)
+                planned += sum(float(item.quantity) for item in plans)
                 action = _single_action(plans)
                 if action is None:
                     return ExecutionEvidence(
@@ -323,7 +326,13 @@ class JournalExecutionEvidenceProvider:
             connection.close()
 
 
-def _payload_legs(payload_json: str, exchange_id: str) -> tuple[dict[str, object], ...]:
+@dataclass(frozen=True, slots=True)
+class _PlannedLeg:
+    quantity: int
+    action: str
+
+
+def _payload_legs(payload_json: str, exchange_id: str) -> tuple[_PlannedLeg, ...]:
     raw = json.loads(payload_json)
     if not isinstance(raw, dict):
         return ()
@@ -335,7 +344,7 @@ def _payload_legs(payload_json: str, exchange_id: str) -> tuple[dict[str, object
         values = [raw]
     if not isinstance(values, list):
         return ()
-    result: list[dict[str, object]] = []
+    result: list[_PlannedLeg] = []
     for item in values:
         if not isinstance(item, dict):
             continue
@@ -345,20 +354,17 @@ def _payload_legs(payload_json: str, exchange_id: str) -> tuple[dict[str, object
         action = item.get("action")
         if (
             isinstance(quantity, int)
+            and not isinstance(quantity, bool)
             and quantity > 0
+            and isinstance(action, str)
             and action in {"buy", "sell"}
         ):
-            result.append(
-                {
-                    "quantity": quantity,
-                    "action": str(action),
-                }
-            )
+            result.append(_PlannedLeg(quantity=quantity, action=action))
     return tuple(result)
 
 
-def _single_action(plans: tuple[dict[str, object], ...]) -> str | None:
-    actions = {str(item["action"]) for item in plans}
+def _single_action(plans: tuple[_PlannedLeg, ...]) -> str | None:
+    actions = {item.action for item in plans}
     if actions == {"buy"}:
         return "buy"
     if actions == {"sell"}:
@@ -379,11 +385,13 @@ def _parse_time(value: object) -> datetime | None:
 
 
 def _positive_number(value: object) -> float | None:
-    if value is None:
+    if value is None or isinstance(value, bool):
+        return None
+    if not isinstance(value, (int, float, str)):
         return None
     try:
         parsed = abs(float(value))
-    except (TypeError, ValueError):
+    except ValueError:
         return None
     if not math.isfinite(parsed) or parsed <= 0.0:
         return None
@@ -391,12 +399,20 @@ def _positive_number(value: object) -> float | None:
 
 
 def _probability(value: object) -> float | None:
-    if value is None:
+    if value is None or isinstance(value, bool):
+        return None
+    if not isinstance(value, (int, float, str)):
         return None
     try:
         parsed = float(value)
-    except (TypeError, ValueError):
+    except ValueError:
         return None
     if not math.isfinite(parsed) or not 0.0 <= parsed <= 1.0:
         return None
     return parsed
+
+
+def _required_int(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise ValueError("persisted integer field has invalid type")
+    return int(value)
