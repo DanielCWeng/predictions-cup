@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pyarrow as pa
@@ -161,12 +162,7 @@ def observation(
 
 def test_external_fv_staleness_withdraws_quote() -> None:
     obs = observation(timestamp_ns=2_100_000_000)
-    obs = BookObservation(
-        **{
-            **obs.__dict__,
-            "external_fv_timestamp_ns": 1_000_000_000,
-        }
-    )
+    obs = replace(obs, external_fv_timestamp_ns=1_000_000_000)
     quote = build_quote(obs, default_policies()[1])
     assert quote.bid is None and quote.ask is None
     assert quote.reason == "external_fv_stale"
