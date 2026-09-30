@@ -140,6 +140,12 @@ does not mislabel a client-call boundary as wire latency.
 accepted trading-client method returns only after DTO validation. A future transport observer can
 separate them without changing the durable observation schema.
 
+HTTP status is retained only when the accepted adapter still exposes it. Single placement,
+atomic multi-leg and single cancel have known successful status 200. Best-effort batch result rows
+retain their documented per-result status. The current validated DTO returned for the overall
+best-effort batch and cancel-all response does not retain whether the outer success was 200, 207 or
+422, so those outer response observations persist `status_code=null` rather than inventing 200.
+
 ## Timestamp semantics
 
 Every observation carries two clocks when applicable.
@@ -181,7 +187,9 @@ The quote lifetime is a MAKE lifecycle duration. It is **not** passive queue-pos
 
 ## Quote mechanics
 
-MAKE emits local lifecycle markers only where it has canonical operation identity.
+MAKE emits local lifecycle markers only where it has canonical operation identity and a
+conclusive local state. A batch-level `ACKED` state is not treated as proof that every requested
+leg became a resting quote; OBSERVE deliberately omits `QUOTE_PUBLISHED` in that ambiguous case.
 
 This supports later reconstruction of:
 
