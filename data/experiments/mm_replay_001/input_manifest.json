@@ -37,5 +37,7 @@
   "scientific_result": "NOT_RUN",
   "source": null,
   "status": "WAITING_FOR_DATA",
-  "005f_regime_default": null
+  "005f_regime_default": null,
+  "edge_grid_reference_latency_ms": null,
+  "source_venue": null
 }
