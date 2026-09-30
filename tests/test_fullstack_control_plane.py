@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -29,7 +30,7 @@ class _DiskUsage:
 
 
 def test_clock_health_accepts_synchronised_host_with_small_offset() -> None:
-    def runner(command: tuple[str, ...]) -> tuple[int, str]:
+    def runner(command: Sequence[str]) -> tuple[int, str]:
         if command[0] == "timedatectl":
             return 0, "yes"
         if command[0] == "chronyc":
@@ -47,7 +48,7 @@ def test_clock_health_accepts_synchronised_host_with_small_offset() -> None:
 
 
 def test_clock_health_blocks_offset_boundary_and_unknown_inspection() -> None:
-    def bad_offset(command: tuple[str, ...]) -> tuple[int, str]:
+    def bad_offset(command: Sequence[str]) -> tuple[int, str]:
         if command[0] == "timedatectl":
             return 0, "yes"
         return 0, "Last offset     : 0.250001 seconds\nLeap status     : Normal"
@@ -63,9 +64,13 @@ def test_clock_health_blocks_offset_boundary_and_unknown_inspection() -> None:
         wall_clock=lambda: NOW,
     )
     assert blocked["state"] == "BLOCKED"
-    assert "CLOCK_OFFSET_EXCEEDS_THRESHOLD" in blocked["reason_codes"]
+    blocked_reasons = blocked["reason_codes"]
+    assert isinstance(blocked_reasons, list)
+    assert "CLOCK_OFFSET_EXCEEDS_THRESHOLD" in blocked_reasons
     assert unknown["state"] == "UNKNOWN"
-    assert "SYNC_STATE_UNAVAILABLE" in unknown["reason_codes"]
+    unknown_reasons = unknown["reason_codes"]
+    assert isinstance(unknown_reasons, list)
+    assert "SYNC_STATE_UNAVAILABLE" in unknown_reasons
 
 
 def _values(tmp_path: Path) -> dict[str, str]:
@@ -146,9 +151,11 @@ def test_storage_health_handles_critical_missing_and_queue_pressure(
         wall_clock=lambda: NOW,
     )
     assert result["state"] == "BLOCKED"
-    assert "FILESYSTEM_FREE_CRITICAL" in result["reason_codes"]
-    assert "CAPTURE_PATH_MISSING" in result["reason_codes"]
-    assert "CAPTURE_QUEUE_OR_WRITER_FAILURE" in result["reason_codes"]
+    reasons = result["reason_codes"]
+    assert isinstance(reasons, list)
+    assert "FILESYSTEM_FREE_CRITICAL" in reasons
+    assert "CAPTURE_PATH_MISSING" in reasons
+    assert "CAPTURE_QUEUE_OR_WRITER_FAILURE" in reasons
 
 
 
@@ -168,7 +175,9 @@ def test_storage_health_warning_and_non_positive_growth(
         wall_clock=lambda: NOW + timedelta(hours=1),
     )
     assert first["state"] == "DEGRADED"
-    assert "FILESYSTEM_FREE_WARNING" in first["reason_codes"]
+    reasons = first["reason_codes"]
+    assert isinstance(reasons, list)
+    assert "FILESYSTEM_FREE_WARNING" in reasons
     assert second["runway_hours"] is None
     assert second["runway_reason"] == "NON_POSITIVE_GROWTH"
 
