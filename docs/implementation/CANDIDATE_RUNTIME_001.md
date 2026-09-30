@@ -110,7 +110,11 @@ and is intentionally not performed here.
 `Pred006BlockObservation` representing one complete DATA-003-equivalent
 condition/block-end economic observation.
 
-It incrementally reproduces the FINAL feature formulas:
+It incrementally reproduces the FINAL feature formulas. The state is keyed by the
+research condition/window scope; SHADOW-to-research identity is supplied through an
+explicit injected scope resolver. There is no implicit assumption that a SIG market
+ID equals a Polymarket condition ID.
+
 
 - probability clipping at `1e-4` for logit only;
 - block observation `size_log` / `value_log`;
@@ -195,17 +199,21 @@ quote age with `genuine_age_s`.
 
 It reconstructs the research state needed by the accepted coordinates:
 
-1. consume grouped BBO observations;
-2. a transition is contiguous only when both current and previous BBO are valid
+1. consume grouped BBO observations after exact token resolution; an injected
+   scope resolver must map the SHADOW snapshot to the research PM token, and the
+   runtime never assumes SIG market ID equals token ID;
+2. apply the frozen grouped-BBO validity gate: finite values, bid > 0,
+   ask < 1, bid <= ask, and no ambiguous same-timestamp group;
+3. a transition is contiguous only when both current and previous BBO are valid
    and the observation gap is <=300s;
-3. a genuine change is a contiguous best-bid or best-ask change;
-4. establish/re-establish transitions are not genuine changes;
-5. genuine changes are counted in 5-second capture bins;
-6. evaluation is on the frozen 15-second clock grid;
-7. `genuine_15` / `genuine_60` use the same left-open/right-closed capture-bin
+4. a genuine change is a contiguous best-bid or best-ask change;
+5. establish/re-establish transitions are not genuine changes;
+6. genuine changes are counted in 5-second capture bins;
+7. evaluation is on the frozen 15-second clock grid;
+8. `genuine_15` / `genuine_60` use the same left-open/right-closed capture-bin
    boundary as the research `rolling_counts`;
-8. price returns use logit midpoint and require the same state segment;
-9. `rv_60` is the square root of the rolling sum of up to four 15-second
+9. price returns use logit midpoint and require the same state segment;
+10. `rv_60` is the square root of the rolling sum of up to four 15-second
    returns with at least two finite observations.
 
 The grid origin is mandatory. The runtime will not silently choose an origin,
