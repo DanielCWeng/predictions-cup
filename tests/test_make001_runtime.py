@@ -46,6 +46,7 @@ from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.risk.core import RiskDecision
 from predictions_cup.runtime.models import OrderAction, OutcomeSide
 from predictions_cup.runtime.telemetry import HotPathTelemetry
+from predictions_cup.shadow.live import LiveShadowRuntime
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
 from predictions_cup.sig.trading_dto import OrderReadDto
 
@@ -608,6 +609,35 @@ class _PmNotifyRuntime:
         self.tokens.append(frozenset(token_ids))
 
 
+class _Pm005FObserver:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def observe_polymarket_bbo(
+        self,
+        *,
+        token_id: str,
+        observed_at: datetime,
+        observed_monotonic_ns: int,
+        best_bid: float | None,
+        best_ask: float | None,
+        source_version: str,
+        trusted: bool,
+    ) -> bool:
+        self.calls.append(
+            {
+                "token_id": token_id,
+                "observed_at": observed_at,
+                "observed_monotonic_ns": observed_monotonic_ns,
+                "best_bid": best_bid,
+                "best_ask": best_ask,
+                "source_version": source_version,
+                "trusted": trusted,
+            }
+        )
+        return True
+
+
 def test_maker_pm_handler_tolerates_unmapped_sibling_delta() -> None:
     service = MakerService(
         AppSettings(maker_enabled=True),
@@ -660,6 +690,64 @@ def test_maker_pm_handler_tolerates_unmapped_sibling_delta() -> None:
     snapshot = service.pm_books.snapshot("required-token", 1)
     assert snapshot is not None
     assert str(snapshot.best_bid) == "0.495"
+
+
+def test_maker_pm_handler_groups_conflicting_equal_time_bbo_for_005f() -> None:
+    service = MakerService(
+        AppSettings(maker_enabled=True),
+        explicit_live_invocation=False,
+    )
+    service._pm_token_ids = ("required-token",)
+    observed = datetime(2026, 9, 29, 17, 0, tzinfo=UTC)
+    service.pm_books.apply_full_snapshot(
+        {
+            "event_type": "book",
+            "market": "0xmarket",
+            "asset_id": "required-token",
+            "timestamp": "1782753357257",
+            "bids": [{"price": "0.49", "size": "10"}],
+            "asks": [{"price": "0.51", "size": "10"}],
+        },
+        observed,
+    )
+    runtime = _PmNotifyRuntime()
+    observer = _Pm005FObserver()
+    payload = {
+        "event_type": "price_change",
+        "market": "0xmarket",
+        "timestamp": "1782753358257",
+        "price_changes": [
+            {
+                "asset_id": "required-token",
+                "price": "0.495",
+                "size": "9",
+                "side": "BUY",
+            },
+            {
+                "asset_id": "required-token",
+                "price": "0.505",
+                "size": "11",
+                "side": "SELL",
+            },
+        ],
+    }
+
+    asyncio.run(
+        service._handle_pm_message(
+            payload,
+            observed,
+            cast(MakerRuntimeLoop, runtime),
+            cast(LiveShadowRuntime, observer),
+        )
+    )
+
+    assert runtime.tokens == [frozenset({"required-token"})]
+    assert len(observer.calls) == 1
+    call = observer.calls[0]
+    assert call["token_id"] == "required-token"
+    assert call["best_bid"] is None
+    assert call["best_ask"] is None
+    assert call["trusted"] is False
 
 
 def test_maker_pm_handler_reconnects_when_required_token_is_unseeded() -> None:
