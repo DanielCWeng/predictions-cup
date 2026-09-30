@@ -4,18 +4,14 @@ import asyncio
 import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import cast
-
 import pyarrow.dataset as ds
 
 from predictions_cup.observe import (
     BoundedObservationEmitter,
     CallbackObservationSink,
-    CompetitionContextSnapshot,
     CrossVenueMapping,
     EconomicChange,
     FieldClassification,
-    InMemoryObservationSink,
     ObservationKind,
     SigOfficialCompetitionContextProvider,
     VenueObservation,
@@ -257,7 +253,7 @@ class _ContextRest:
 
 def test_official_context_exposes_rank_and_marks_super_signal_unavailable() -> None:
     provider = SigOfficialCompetitionContextProvider(
-        cast(object, _ContextRest()),
+        _ContextRest(),
         tournament_id="cup-id",
     )
     snapshot = asyncio.run(provider.snapshot())
@@ -278,7 +274,7 @@ def test_capture001_persists_observation_and_context_streams(tmp_path: Path) -> 
         session_id="observe-test",
     )
     provider = SigOfficialCompetitionContextProvider(
-        cast(object, _ContextRest()),
+        _ContextRest(),
         tournament_id="cup-id",
     )
     snapshot = asyncio.run(provider.snapshot())
