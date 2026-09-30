@@ -25,6 +25,7 @@ from predictions_cup.shadow import (
     IncrementalPred006FeatureState,
     Pred006BlockObservation,
 )
+from predictions_cup.shadow.frozen_runtime import HAZARD005F_SCORER_HASHES
 
 BASE_MONO = 50_000_000_000_000
 
@@ -159,10 +160,14 @@ def run(markets: int, bursts: int) -> dict[str, float | int]:
         FixedHazard005FRegimeProvider("ACTIVE_RESULTS"),
         scorers={
             "ACTIVE_RESULTS|clock|UPDATE_HAZARD": _ConstantScorer(
-                "update", "c" * 64, 0.5
+                "update",
+                HAZARD005F_SCORER_HASHES["ACTIVE_RESULTS|clock|UPDATE_HAZARD"],
+                0.5
             ),
             "ACTIVE_RESULTS|clock|JUMP_HAZARD": _ConstantScorer(
-                "jump", "d" * 64, 0.2
+                "jump",
+                HAZARD005F_SCORER_HASHES["ACTIVE_RESULTS|clock|JUMP_HAZARD"],
+                0.2
             ),
         },
     )
