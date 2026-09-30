@@ -7,7 +7,7 @@ import json
 import os
 import uuid
 from collections import deque
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter_ns
@@ -345,14 +345,15 @@ class CaptureStrategyEventStore:
                 write_latency_p95_ns=None,
             )
         raw = self._sink.health_snapshot()
+        storage_failures = _health_int(raw, "storage_failures")
         return PersistenceHealth(
-            healthy=self._last_error is None and int(raw["storage_failures"]) == 0,
+            healthy=self._last_error is None and storage_failures == 0,
             persisted_events=self._accepted_events,
-            failures=self._failures + int(raw["storage_failures"]),
+            failures=self._failures + storage_failures,
             last_error=self._last_error,
-            queue_depth=int(raw["queue_depth"]),
-            queue_high_water=int(raw["queue_high_water"]),
-            write_batches=int(raw["written_shards"]),
+            queue_depth=_health_int(raw, "queue_depth"),
+            queue_high_water=_health_int(raw, "queue_high_water"),
+            write_batches=_health_int(raw, "written_shards"),
             write_latency_p95_ns=None,
         )
 
@@ -477,3 +478,10 @@ def _percentile(values: tuple[int, ...], fraction: float) -> int | None:
     ordered = sorted(values)
     index = max(0, min(len(ordered) - 1, int((len(ordered) - 1) * fraction)))
     return ordered[index]
+
+
+def _health_int(raw: Mapping[str, object], key: str) -> int:
+    value = raw[key]
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"CAPTURE health field {key} must be int")
+    return value
