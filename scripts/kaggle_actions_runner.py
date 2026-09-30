@@ -52,7 +52,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     if data.get("schema_version") != 1:
         raise ValueError("schema_version must be 1")
     action = data.get("action")
-    if action not in {"auth_check", "run", "status", "output", "logs"}:
+    if action not in {"auth_check", "run", "status", "output", "logs", "dataset_probe"}:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
 
@@ -247,6 +247,82 @@ def run_kernel(data: dict[str, Any], output_dir: Path) -> None:
     )
 
 
+def dataset_probe(data: dict[str, Any], output_dir: Path) -> None:
+    dataset = str(data.get("dataset", "")).strip()
+    if "/" not in dataset:
+        raise ValueError("dataset_probe requires dataset='owner/slug'")
+
+    status_result = run_command(
+        ["kaggle", "datasets", "status", dataset],
+        check=False,
+    )
+    (output_dir / "dataset_status.txt").write_text(
+        (status_result.stdout or "") + (status_result.stderr or ""),
+        encoding="utf-8",
+    )
+
+    files_result = run_command(
+        ["kaggle", "datasets", "files", dataset, "--page-size", "1000", "--csv"],
+        check=False,
+    )
+    (output_dir / "dataset_files.csv").write_text(
+        (files_result.stdout or "") + (files_result.stderr or ""),
+        encoding="utf-8",
+    )
+
+    metadata_dir = output_dir / "metadata"
+    metadata_dir.mkdir(parents=True, exist_ok=True)
+    metadata_result = run_command(
+        ["kaggle", "datasets", "metadata", dataset, "-p", str(metadata_dir)],
+        check=False,
+    )
+    (output_dir / "dataset_metadata_command.txt").write_text(
+        (metadata_result.stdout or "") + (metadata_result.stderr or ""),
+        encoding="utf-8",
+    )
+
+    probe_script = (
+        "import json\n"
+        "from kaggle.api.kaggle_api_extended import KaggleApi\n"
+        "api=KaggleApi(); api.authenticate()\n"
+        f"obj=api.dataset_view({dataset!r})\n"
+        "def conv(v):\n"
+        "    if isinstance(v,(str,int,float,bool)) or v is None: return v\n"
+        "    if isinstance(v,dict): return {str(k):conv(x) for k,x in v.items()}\n"
+        "    if isinstance(v,(list,tuple)): return [conv(x) for x in v]\n"
+        "    d=getattr(v,'__dict__',None)\n"
+        "    if isinstance(d,dict): return {str(k):conv(x) for k,x in d.items() if not str(k).startswith('_')}\n"
+        "    return str(v)\n"
+        "print(json.dumps(conv(obj), indent=2, sort_keys=True))\n"
+    )
+    api_result = run_command([sys.executable, "-c", probe_script], check=False)
+    (output_dir / "dataset_api_view.json").write_text(
+        api_result.stdout or "",
+        encoding="utf-8",
+    )
+    (output_dir / "dataset_api_view.stderr.txt").write_text(
+        api_result.stderr or "",
+        encoding="utf-8",
+    )
+
+    if status_result.returncode != 0 or files_result.returncode != 0:
+        raise RuntimeError(
+            "Kaggle dataset probe failed; inspect dataset_status.txt and dataset_files.csv"
+        )
+
+    write_summary(
+        [
+            "## Kaggle dataset probe",
+            "",
+            f"- Dataset: {dataset}",
+            f"- Status rc: {status_result.returncode}",
+            f"- Files rc: {files_result.returncode}",
+            f"- Metadata rc: {metadata_result.returncode}",
+            f"- API view rc: {api_result.returncode}",
+        ]
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", required=True)
@@ -282,6 +358,8 @@ def main() -> int:
         kernel = kernel_from_manifest(data)
         capture_logs(kernel, output_dir)
         write_summary(["## Kaggle logs", "", f"Kernel: {kernel}"])
+    elif action == "dataset_probe":
+        dataset_probe(data, output_dir)
 
     return 0
 
