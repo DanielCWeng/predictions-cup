@@ -16,6 +16,7 @@ import numpy as np
 import pyarrow.dataset as ds
 
 from predictions_cup.analysis.cross_venue import analyze_direct_cross_venue
+from predictions_cup.analysis.live_diag import analyze_live_diagnostics
 from predictions_cup.analysis.microstructure import analyze_sig_microstructure
 from predictions_cup.mapping.crosswalk import load_document
 from predictions_cup.mapping.models import MappingDirection
@@ -32,6 +33,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True, help="Report output directory")
     parser.add_argument("--polymarket-root", type=Path)
     parser.add_argument("--execution-journal", type=Path)
+    parser.add_argument(
+        "--live-learn-outcomes",
+        type=Path,
+        help="LIVE-LEARN append-only outcome journal for actual maker economics",
+    )
     parser.add_argument(
         "--mapping",
         type=Path,
@@ -596,6 +602,7 @@ def run(
     polymarket_root: Path | None,
     execution_journal: Path | None,
     mapping_path: Path | None,
+    live_learn_outcomes: Path | None = None,
 ) -> dict[str, Any]:
     sig_root = input_root / "sig" if (input_root / "sig").exists() else input_root
     pm_root = polymarket_root
@@ -615,6 +622,30 @@ def run(
     ) = analyze_sig_microstructure(sig_root)
     pm, pm_mid = _analyse_polymarket(pm_root)
     execution, execution_rows = _analyse_execution(journal)
+    latency_ms = 100.0
+    latency_source = "fixed_sensitivity"
+    latency_summary = execution.get("observation_to_ack_ms")
+    if isinstance(latency_summary, dict):
+        measured_p50 = _optional_float(latency_summary.get("p50"))
+        if measured_p50 is not None:
+            latency_ms = measured_p50
+            latency_source = "measured_execution_observation_to_ack_p50"
+
+    outcomes_path = live_learn_outcomes
+    if outcomes_path is None:
+        captured_outcomes = input_root / "live_learn" / "outcomes.jsonl"
+        if captured_outcomes.exists():
+            outcomes_path = captured_outcomes
+
+    economic_intelligence = analyze_live_diagnostics(
+        sig_root=sig_root,
+        polymarket_root=pm_root,
+        mapping_path=mapping_path,
+        output_root=output_root / "economic_intelligence",
+        live_learn_outcomes=outcomes_path,
+        latency_ms=latency_ms,
+        latency_assumption_source=latency_source,
+    )
     cross_response, cross_response_rows = analyze_direct_cross_venue(
         sig_root=sig_root,
         polymarket_root=pm_root,
@@ -630,6 +661,7 @@ def run(
         "execution": execution,
         "cross_venue_response": cross_response,
         "cross_venue_latest": cross,
+        "economic_intelligence": economic_intelligence,
     }
 
     output_root.mkdir(parents=True, exist_ok=True)
@@ -668,6 +700,7 @@ def main() -> int:
         polymarket_root=args.polymarket_root,
         execution_journal=args.execution_journal,
         mapping_path=args.mapping,
+        live_learn_outcomes=args.live_learn_outcomes,
     )
     print(json.dumps(summary, sort_keys=True))
     return 0
