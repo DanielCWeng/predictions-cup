@@ -357,6 +357,7 @@ class _Coordinator:
     def __init__(self) -> None:
         self.calls: list[frozenset[str]] = []
         self.event_ids: list[str] = []
+        self.snapshot_object_ids: list[dict[str, int]] = []
         self.killed = False
         self.deadline_ns: int | None = None
 
@@ -367,6 +368,7 @@ class _Coordinator:
     ) -> MakerCycleResult:
         self.event_ids.append(change.event_id)
         self.calls.append(frozenset(snapshots))
+        self.snapshot_object_ids.append({key: id(value) for key, value in snapshots.items()})
         decisions = tuple(
             _runtime_decision(exchange_id, deadline_ns=self.deadline_ns)
             for exchange_id in sorted(snapshots)
@@ -413,6 +415,45 @@ def test_runtime_loop_coalesces_exchange_and_token_updates() -> None:
     runtime.notify_account(observed_monotonic_ns=120)
     asyncio.run(runtime.drain_once())
     assert coordinator.calls[-1] == frozenset({"36", "37"})
+
+
+def test_runtime_snapshot_observer_receives_exact_decision_boundary() -> None:
+    bridge = _Bridge()
+    coordinator = _Coordinator()
+    observed: list[tuple[str, datetime, dict[str, int]]] = []
+
+    def snapshot_observer(
+        change: MakerStateChange,
+        observed_at: datetime,
+        snapshots: Mapping[str, MakerMarketSnapshot],
+    ) -> None:
+        observed.append(
+            (
+                change.event_id,
+                observed_at,
+                {key: id(value) for key, value in snapshots.items()},
+            )
+        )
+
+    wall_now = datetime(2026, 9, 29, 14, 0, tzinfo=UTC)
+    runtime = MakerRuntimeLoop(
+        bridge=cast(MakerSourceBridge, bridge),
+        coordinator=cast(MakerCoordinator, coordinator),
+        polymarket_feed_trusted=lambda: True,
+        snapshot_observer=snapshot_observer,
+        wall_clock=lambda: wall_now,
+        mono_clock=lambda: 100,
+        runtime_session_id="shadow-boundary",
+    )
+
+    runtime.notify_sig({"36"}, observed_monotonic_ns=90)
+    asyncio.run(runtime.drain_once())
+
+    assert len(observed) == 1
+    event_id, observed_at, object_ids = observed[0]
+    assert event_id == "make-runtime-shadow-boundary-1"
+    assert observed_at == wall_now
+    assert object_ids == coordinator.snapshot_object_ids[0]
 
 
 def test_runtime_deadline_rechecks_exchange_without_new_source_event() -> None:
