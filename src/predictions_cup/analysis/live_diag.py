@@ -1124,6 +1124,19 @@ def analyze_live_diagnostics(
         if exposure_groups_path is None or not exposure_groups_path.exists()
         else load_exposure_group_provider(exposure_groups_path)
     )
+    if group_provider is not None:
+        for row in inventory_rows:
+            market_id = row.get("market_id")
+            if isinstance(market_id, str):
+                row["risk_group_ids"] = list(
+                    group_provider.groups_for(market_id, document.tournament_id)
+                )
+        for row in market_selection_rows:
+            market_id = row.get("market_id")
+            if isinstance(market_id, str):
+                row["risk_group_ids"] = list(
+                    group_provider.groups_for(market_id, document.tournament_id)
+                )
     direct = [
         record
         for record in document.records
