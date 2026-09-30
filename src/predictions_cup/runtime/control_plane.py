@@ -528,6 +528,10 @@ def build_session_manifest(
         "provider_versions": snapshot.get("service_versions"),
         "capabilities": snapshot.get("capabilities"),
         "risk_profile": snapshot.get("risk_profile"),
+        "launch_health": {
+            "clock": snapshot.get("clock"),
+            "storage": snapshot.get("storage"),
+        },
         "structural_shock_registry": artifact_identity(shock_path),
         "host": snapshot.get("host"),
         "process": {
