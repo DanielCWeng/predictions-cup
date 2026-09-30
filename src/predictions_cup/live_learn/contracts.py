@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -43,14 +43,14 @@ class MarketEvidence:
         for name in ("snapshot_id", "exchange_id", "market_id", "source_id"):
             if not str(getattr(self, name)).strip():
                 raise ValueError(f"{name} must not be blank")
-        for value in (self.observed_at, self.source_observed_at):
-            if value.tzinfo is None or value.utcoffset() is None:
+        for timestamp in (self.observed_at, self.source_observed_at):
+            if timestamp.tzinfo is None or timestamp.utcoffset() is None:
                 raise ValueError("evidence timestamps must be timezone-aware")
         if self.source_monotonic_ns < 0 or self.freshness_seconds < 0.0:
             raise ValueError("evidence timing values must be non-negative")
-        for value in (self.best_bid, self.best_ask, self.midpoint):
-            if value is not None and (
-                not math.isfinite(value) or not 0.0 <= value <= 1.0
+        for price in (self.best_bid, self.best_ask, self.midpoint):
+            if price is not None and (
+                not math.isfinite(price) or not 0.0 <= price <= 1.0
             ):
                 raise ValueError("evidence prices must be finite within [0,1]")
 
@@ -146,14 +146,18 @@ class DecisionOutcome:
             raise ValueError("outcome identity/version fields must not be blank")
         if self.horizon_seconds <= 0:
             raise ValueError("outcome horizon must be positive")
-        for value in (self.maturity_at, self.evidence_observed_at, self.source_timestamp):
-            if value is not None and (
-                value.tzinfo is None or value.utcoffset() is None
+        for timestamp in (
+            self.maturity_at,
+            self.evidence_observed_at,
+            self.source_timestamp,
+        ):
+            if timestamp is not None and (
+                timestamp.tzinfo is None or timestamp.utcoffset() is None
             ):
                 raise ValueError("outcome timestamps must be timezone-aware")
-        for value in (self.initial_price, self.future_price):
-            if value is not None and (
-                not math.isfinite(value) or not 0.0 <= value <= 1.0
+        for price in (self.initial_price, self.future_price):
+            if price is not None and (
+                not math.isfinite(price) or not 0.0 <= price <= 1.0
             ):
                 raise ValueError("outcome prices must be finite within [0,1]")
         if self.source_freshness_seconds is not None and (
@@ -227,6 +231,12 @@ def outcome_record(outcome: DecisionOutcome) -> dict[str, object]:
 def outcome_from_record(record: Mapping[str, object]) -> DecisionOutcome:
     evidence_at = record.get("evidence_observed_at")
     source_at = record.get("source_timestamp")
+    evidence_source_ids = _record_sequence(
+        record.get("evidence_source_ids", ())
+    )
+    component_status = _record_mapping(record.get("component_status", {}))
+    metric_values = _record_mapping(record.get("metric_values", {}))
+    dimensions = _record_mapping(record.get("dimensions", {}))
     return DecisionOutcome(
         outcome_id=str(record["outcome_id"]),
         decision_id=str(record["decision_id"]),
@@ -236,52 +246,76 @@ def outcome_from_record(record: Mapping[str, object]) -> DecisionOutcome:
         input_snapshot_id=str(record["input_snapshot_id"]),
         scoring_spec_id=str(record["scoring_spec_id"]),
         scoring_spec_version=str(record["scoring_spec_version"]),
-        horizon_seconds=int(record["horizon_seconds"]),
+        horizon_seconds=_record_int(record["horizon_seconds"]),
         maturity_at=datetime.fromisoformat(str(record["maturity_at"])),
         evidence_observed_at=(
             None if evidence_at is None else datetime.fromisoformat(str(evidence_at))
         ),
-        evidence_source_ids=tuple(
-            str(value) for value in record.get("evidence_source_ids", ())
-        ),
+        evidence_source_ids=tuple(str(value) for value in evidence_source_ids),
         outcome_status=OutcomeStatus(str(record["outcome_status"])),
         component_status={
-            str(key): str(value)
-            for key, value in dict(record.get("component_status", {})).items()
+            str(key): str(value) for key, value in component_status.items()
         },
         metric_values={
-            str(key): float(value)
-            for key, value in dict(record.get("metric_values", {})).items()
+            str(key): _record_float(value) for key, value in metric_values.items()
         },
         dimensions={
-            str(key): str(value)
-            for key, value in dict(record.get("dimensions", {})).items()
+            str(key): str(value) for key, value in dimensions.items()
         },
-        initial_price=(
-            None if record.get("initial_price") is None else float(record["initial_price"])
-        ),
-        future_price=(
-            None if record.get("future_price") is None else float(record["future_price"])
-        ),
+        initial_price=_optional_record_float(record.get("initial_price")),
+        future_price=_optional_record_float(record.get("future_price")),
         price_source=(
             None if record.get("price_source") is None else str(record["price_source"])
         ),
         source_timestamp=(
             None if source_at is None else datetime.fromisoformat(str(source_at))
         ),
-        source_freshness_seconds=(
-            None
-            if record.get("source_freshness_seconds") is None
-            else float(record["source_freshness_seconds"])
+        source_freshness_seconds=_optional_record_float(
+            record.get("source_freshness_seconds")
         ),
-        source_trusted=(
-            None
-            if record.get("source_trusted") is None
-            else bool(record["source_trusted"])
-        ),
+        source_trusted=_optional_record_bool(record.get("source_trusted")),
         price_convention=str(record.get("price_convention", "YES_PROBABILITY")),
         missing_reason=(
             None if record.get("missing_reason") is None else str(record["missing_reason"])
         ),
-        schema_version=int(record.get("schema_version", 1)),
+        schema_version=_record_int(record.get("schema_version", 1)),
     )
+
+
+def _record_sequence(value: object) -> Sequence[object]:
+    if not isinstance(value, (list, tuple)):
+        raise ValueError("persisted sequence field has invalid type")
+    return value
+
+
+def _record_mapping(value: object) -> Mapping[object, object]:
+    if not isinstance(value, Mapping):
+        raise ValueError("persisted mapping field has invalid type")
+    return value
+
+
+def _record_int(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise ValueError("persisted integer field has invalid type")
+    return int(value)
+
+
+def _record_float(value: object) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise ValueError("persisted numeric field has invalid type")
+    result = float(value)
+    if not math.isfinite(result):
+        raise ValueError("persisted numeric field must be finite")
+    return result
+
+
+def _optional_record_float(value: object) -> float | None:
+    return None if value is None else _record_float(value)
+
+
+def _optional_record_bool(value: object) -> bool | None:
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise ValueError("persisted boolean field has invalid type")
+    return value
