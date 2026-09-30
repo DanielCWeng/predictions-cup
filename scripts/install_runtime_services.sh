@@ -171,7 +171,7 @@ if env_flag_is_true "PREDICTIONS_CUP_FULLSTACK_ALLOW_FIXTURES" "${runtime_env}";
   fixtures_allowed=1
 fi
 
-if env_flag_is_true "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_ENABLED" "${runtime_env}"; then
+if env_flag_is_true "PREDICTIONS_CUP_LIVE_LEARN_ENABLED" "${runtime_env}" || env_flag_is_true "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_ENABLED" "${runtime_env}"; then
   live_learn_mode="$(capability_mode "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_MODE" "${runtime_env}")"
   if [[ "${live_learn_mode}" == "IN_PROCESS" ]]; then
     env_flag_is_true "PREDICTIONS_CUP_MAKER_ENABLED" "${runtime_env}" || fail "IN_PROCESS LIVE-LEARN requires PREDICTIONS_CUP_MAKER_ENABLED=true"
