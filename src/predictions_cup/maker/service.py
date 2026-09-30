@@ -956,7 +956,7 @@ class MakerService:
     async def _before_pm_connect(
         self,
         runtime: MakerRuntimeLoop,
-        shadow_runtime: LiveShadowRuntime | None,
+        shadow_runtime: LiveShadowRuntime | None = None,
     ) -> None:
         self.pm_health.websocket_connected = False
         runtime.notify_global(observed_monotonic_ns=monotonic_ns())
@@ -974,7 +974,7 @@ class MakerService:
         payload: JsonObject,
         observed_at: datetime,
         runtime: MakerRuntimeLoop,
-        shadow_runtime: LiveShadowRuntime | None,
+        shadow_runtime: LiveShadowRuntime | None = None,
     ) -> None:
         try:
             kind = event_type(payload)
