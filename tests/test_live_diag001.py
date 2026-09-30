@@ -5,16 +5,16 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from predictions_cup.analysis.live_diag import (
-    InventoryPoint,
-    MarketRecommendation,
-    Quote,
-    ResearchStatus,
     align_probability,
     analyze_lead_lag,
     construct_gap_episodes,
     ecology_summary,
+    InventoryPoint,
+    MarketRecommendation,
     observe_snapback,
+    Quote,
     recommend_market,
+    ResearchStatus,
     summarize_inventory,
 )
 from predictions_cup.mapping.models import MappingDirection
