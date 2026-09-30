@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "subexperiment": "R3-SEAT-CALIBRATED-ECM-001",
+  "stage": "ADAPTIVE_TRAIN_DEV_EVIDENCE",
+  "source_commit": "8fef2c71ce5130cc9a75cf6e77010c38877ff6fc",
+  "github_actions_run": 36645588144,
+  "artifact_id": 11068422695,
+  "artifact_zip_sha256": "cc22b23e0752d908747abda57fbb63816ac8e30ab51e2ffb5c6ca99fb4192200",
+  "empirical_universe": {
+    "source": "DATA-004",
+    "target": "DATA-003",
+    "data001_used": false
+  },
+  "final_opened": false,
+  "final_rows_accessed": 0,
+  "result": {
+    "house": {
+      "train_rows": 923,
+      "dev_rows": 48,
+      "QP": {
+        "affine_intercept": 0.1254713831150821,
+        "affine_slope": 0.41788291803857747,
+        "level_mae_improvement": -0.018289087436247915,
+        "ecm_mae_improvement": -0.001720939615367097,
+        "ecm_bootstrap_95": [
+          -0.0019085066251200815,
+          -0.0012186471312367695
+        ],
+        "ecm_direction_accuracy": 0.20833333333333334
+      },
+      "KL": {
+        "affine_intercept": 0.12558064225564772,
+        "affine_slope": 0.4065841898488547,
+        "level_mae_improvement": -0.019206683601707623,
+        "ecm_mae_improvement": -0.0019147961834438069,
+        "ecm_bootstrap_95": [
+          -0.002318626551621558,
+          -0.0014579016290599243
+        ],
+        "ecm_direction_accuracy": 0.20833333333333334
+      },
+      "candidate": false
+    },
+    "senate_t50": {
+      "train_rows": 1357,
+      "dev_rows": 80,
+      "QP": {
+        "affine_intercept": 0.1442143164191205,
+        "affine_slope": 0.7719061862161394,
+        "level_mae_improvement": -0.011633840446232988,
+        "ecm_mae_improvement": -0.00034719151242480414,
+        "ecm_bootstrap_95": [
+          -0.0005881168798388958,
+          -0.00021092806888400132
+        ],
+        "ecm_direction_accuracy": 0.2125
+      },
+      "KL": {
+        "affine_intercept": 0.2109040927955657,
+        "affine_slope": 0.6263260966201242,
+        "level_mae_improvement": -0.007368315775586196,
+        "ecm_mae_improvement": -0.00019038528307943267,
+        "ecm_bootstrap_95": [
+          -0.0004968002363646929,
+          -0.00009606464293130742
+        ],
+        "ecm_direction_accuracy": 0.225
+      },
+      "candidate": false
+    }
+  },
+  "decision": "KILL_CALIBRATED_LEVEL_AND_ERROR_CORRECTION",
+  "interpretation": "TRAIN-only affine calibration materially shrinks raw structural level bias but does not make the structural gap predictive. Both calibrated levels and calibrated error-correction next-update models remain worse than persistence on DEV under both QP and KL. No candidate.",
+  "next_step": "Do not tune calibration further. Await independently frozen event-time lead-lag tests."
+}

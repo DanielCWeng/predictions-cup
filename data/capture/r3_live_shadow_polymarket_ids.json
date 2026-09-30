@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "purpose": "R3-FV-001M live sparse structural-shock shadow capture",
+  "mode": "SHADOW_ONLY",
+  "provenance": {
+    "historical_source": "DATA-004 P0/P1 v2 token_coverage.csv",
+    "research_handoff": "data/research/r3_fv_001_math_challengers/LIVE_SHOCK_CONFIG.json",
+    "data001_used": false
+  },
+  "sources": [
+    {
+      "id": "SENATE_COUNT_47_OR_FEWER",
+      "event_id": "106193",
+      "market_id": "943819",
+      "capture_token_id": "89624669145341997724697326849445716755183665898947701894080018635919612252707",
+      "outcome_label": "Yes"
+    },
+    {
+      "id": "SENATE_COUNT_48",
+      "event_id": "106193",
+      "market_id": "943820",
+      "capture_token_id": "72612350161635310858699746744664698071678470215569392949055290671799482750173",
+      "outcome_label": "Yes"
+    },
+    {
+      "id": "SENATE_COUNT_49",
+      "event_id": "106193",
+      "market_id": "943821",
+      "capture_token_id": "62377650660175430184575321355603581384424839385693705300992070114964919683845",
+      "outcome_label": "Yes"
+    },
+    {
+      "id": "SENATE_COUNT_50",
+      "event_id": "106193",
+      "market_id": "943822",
+      "capture_token_id": "23243487444956959885535301419786787791218675785513044513046312975446911578713",
+      "outcome_label": "Yes"
+    },
+    {
+      "id": "SENATE_COUNT_51",
+      "event_id": "106193",
+      "market_id": "943823",
+      "capture_token_id": "105627504566569706748610029122703529394729331390957077331824112641486910010161",
+      "outcome_label": "Yes"
+    },
+    {
+      "id": "SENATE_COUNT_52",
+      "event_id": "106193",
+      "market_id": "943824",
+      "capture_token_id": "71547572456937213989007089427188853117815317606685045433579261770964952182308",
+      "outcome_label": "Yes"
+    },
+    {
+      "id": "SENATE_COUNT_53",
+      "event_id": "106193",
+      "market_id": "943825",
+      "capture_token_id": "15394416147421266264002744586901575755411758481406494583013250092373628427765",
+      "outcome_label": "Yes"
+    },
+    {
+      "id": "SENATE_COUNT_54",
+      "event_id": "106193",
+      "market_id": "943826",
+      "capture_token_id": "13278443981418985302116823794751942747516190107446009911143426402863687470127",
+      "outcome_label": "Yes"
+    },
+    {
+      "id": "SENATE_COUNT_55",
+      "event_id": "106193",
+      "market_id": "943827",
+      "capture_token_id": "10750997471908598562514411969554157596465059745769943341362824315243580377116",
+      "outcome_label": "Yes"
+    },
+    {
+      "id": "SENATE_COUNT_56",
+      "event_id": "106193",
+      "market_id": "943828",
+      "capture_token_id": "9273056014077248525737106426866852410841224250259842453481519298611852217348",
+      "outcome_label": "Yes"
+    },
+    {
+      "id": "SENATE_COUNT_57_OR_MORE",
+      "event_id": "106193",
+      "market_id": "943829",
+      "capture_token_id": "106446804142822856909456712516050968287728263341329924913008459244064245181608",
+      "outcome_label": "Yes"
+    },
+    {
+      "id": "CORE4_DEM_SWEEP",
+      "event_id": "162226",
+      "market_id": "1178882",
+      "capture_token_id": "12134010230902861474165277046903480923286100348764356477041975060066568507465",
+      "outcome_label": "Yes"
+    },
+    {
+      "id": "BT_REPUBLICAN_ANY",
+      "event_id": "528267",
+      "market_id": "2364515",
+      "capture_token_id": "28908058236393723818309220740364307755663049454326330251508645633886069289875",
+      "outcome_label": "Yes"
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "split_status": "FROZEN_BEFORE_PERFORMANCE",
+  "dev_start_epoch": 1785801600,
+  "dev_start_utc": "2026-08-04T00:00:00+00:00",
+  "final_start_epoch": 1788998400,
+  "final_start_utc": "2026-09-10T00:00:00+00:00",
+  "train_rows": 25192,
+  "dev_rows": 13045,
+  "final_rows": 7608,
+  "train_sig_markets": 106,
+  "dev_sig_markets": 229,
+  "final_sig_markets": 214,
+  "mapping_class_support": [
+    {
+      "mapping_class": "DERIVED",
+      "train_rows": 0,
+      "dev_rows": 4114,
+      "final_rows": 2428
+    },
+    {
+      "mapping_class": "EXACT",
+      "train_rows": 9706,
+      "dev_rows": 5160,
+      "final_rows": 2766
+    },
+    {
+      "mapping_class": "NEAR",
+      "train_rows": 15486,
+      "dev_rows": 3771,
+      "final_rows": 2414
+    }
+  ],
+  "ordering": [
+    "block_number",
+    "log_index"
+  ],
+  "same_block_policy": "An inference at target block B may use source state only from blocks < B. Block B is exposed only after completion.",
+  "selection_rule": {
+    "final_anchor_fraction": 0.82,
+    "final_start_rule": "first UTC midnight strictly after floor(82% * N) block-complete direct-update row timestamp",
+    "dev_anchor_fraction_of_prefinal": 0.65,
+    "dev_start_rule": "first UTC midnight strictly after floor(65% * N_prefinal) block-complete direct-update row timestamp",
+    "boundary_purge_seconds": 21600,
+    "maximum_permitted_future_evaluation_horizon_seconds": 21600
+  },
+  "selection_inputs": [
+    "DATA-003 block-corrected direct update timestamps",
+    "direct update row support",
+    "direct SIG-market coverage"
+  ],
+  "performance_or_future_target_metrics_accessed": false,
+  "final_opened": false,
+  "prepare_kernel": "polyleviathan/r3-fv-001-prepare-v2",
+  "prepare_actions_run_id": 36626882729,
+  "prepare_attempt": 6,
+  "prepare_head_sha": "93b47d40602cf5721da694a0fea497ef0b0f2c87",
+  "upstream_split_manifest_sha256": "cea20a374a8ed5822e361e7c8584cf3a2599fc80bcba3b2522efdf707e572225"
+}

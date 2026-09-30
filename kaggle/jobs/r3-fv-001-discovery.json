@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "status",
+  "kernel": "polyleviathan/r3-fv-001-structural-discovery",
+  "note": "R3 DEV discovery is consumed and STOP_NO_INDEPENDENT_SIGNAL. Permanently read-only: do not change back to action=run; FINAL was not opened."
+}

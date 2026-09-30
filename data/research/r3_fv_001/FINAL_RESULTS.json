@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "status": "NOT_RUN_NO_CHAMPION",
+  "final_start_utc": "2026-09-10T00:00:00Z",
+  "final_opened": false,
+  "final_rows_accessed": 0,
+  "champion": null,
+  "challengers": [],
+  "confirmation_result": null,
+  "reason": "No TRAIN/DEV candidate satisfied the frozen entry condition for one-shot FINAL evaluation.",
+  "scientific_consequence": "R3-FV-001 has no freshly confirmed deployable structural fair-value or directional lead-lag model.",
+  "holdout_value": "The FINAL slice remains uncontaminated and may be reserved for a genuinely new preregistered future hypothesis."
+}

@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "action": "output",
+  "kernel": "polyleviathan/r3-fv-001-seat-count-structural-test",
+  "output_dir": "data/research/r3_fv_001/seat_count_attempt1_output",
+  "note": "Read-only recovery of completed R3-SEAT-COUNT-001 attempt 1. Residual-next-update metrics are pre-declared invalid by SEAT_COUNT_IMPLEMENTATION_CORRECTION_001; contemporaneous level outputs remain eligible."
+}

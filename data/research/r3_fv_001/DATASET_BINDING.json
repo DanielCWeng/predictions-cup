@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "bound_at_utc": "2026-09-29T20:08:13Z",
+  "repository": "DanielCWeng/predictions-cup",
+  "research_branch": "research/r3-fv-001-structural-fair-value",
+  "source_policy": "PR #59 remained open at binding; use exact accepted DATA-004 v2 source head rather than stale docs or main.",
+  "data004": {
+    "source_branch": "data/data004-ets-p0p1-fills",
+    "source_head_sha": "90607a3a8dd82b7876df29aa3f738aed10193303",
+    "source_pr": 59,
+    "source_pr_state": "OPEN",
+    "accepted_version": "v2",
+    "status": "ACCEPTED_V2",
+    "dataset_ref": "polyleviathan/sig-cup-data-004-ets-p0p1-fills",
+    "kaggle_dataset_version": 1,
+    "upload_timestamp_utc": "2026-09-29T20:00:23.833000Z",
+    "source_archive_sha256": "fe8f0cd99efbe55854e494f283b11c3f50a41016443735a804b13bbd26883c50",
+    "package_manifest_sha256": "f1a5a44c3a59120ab248d8766e3f9312bebfa6c7dc73994ef542659a12dce2b5",
+    "oci_source_manifest_sha256": "f38c54291c96d0a34ed52fb383e51dfbc7273d195c9882dc82d374f6ba5dde53",
+    "upload_create_actions_run_id": 36623145569,
+    "upload_verification_actions_run_id": 36623448837,
+    "smoke": {
+      "pass": true,
+      "actions_run_id": 36624054661,
+      "kernel": "polyleviathan/r3-fv-001-data004-smoke",
+      "attempt": 2,
+      "head_sha": "9bc778b1adfddbe1e43033eff30ee35bf9c0da2a",
+      "quality_all_gates_pass": true,
+      "source_package_manifest_file_count": 369,
+      "mounted_manifest_files_hash_verified": 368,
+      "intentional_mount_omissions": {
+        "dataset-metadata.json": "Kaggle consumes dataset metadata as upload-control metadata; id/private fields were verified before creation."
+      },
+      "fill_partitions": 343,
+      "fill_rows": 231964,
+      "scope": {
+        "markets": 298,
+        "conditions": 298,
+        "tokens": 596,
+        "p0_markets": 210,
+        "p1_markets": 88
+      },
+      "block_number_present": true,
+      "log_index_present": true,
+      "missing_order_keys": 0,
+      "duplicate_token_order_keys": 0,
+      "strict_block_log_order_reconstructable": true,
+      "dataset_hashes_manifest_agree": true
+    }
+  },
+  "data003": {
+    "dataset_ref": "polyleviathan/sig-cup-data-003-sig-actual-fills",
+    "repo_manifest_path": "data/manifests/fills/data_003_manifest.json",
+    "repo_manifest_git_blob_sha": "9fc562c13b93dce17877303d95a24ff4ed65f537",
+    "dataset_id": "sigfills-20260928",
+    "extraction_cutoff_utc": "2026-09-28T18:52:11Z",
+    "sig_markets": 231,
+    "direct_mapping_counts": {
+      "EXACT": 140,
+      "DERIVED": 87,
+      "NEAR": 4
+    },
+    "source_conditions": 693,
+    "aligned_tokens": 1386,
+    "accepted_block_order_source": {
+      "kernel": "polyleviathan/005b-data003-block-gate",
+      "report_path": "data/experiments/experiment_005b_data003_confirmation/block_gate_report.json",
+      "all_hard_gates_pass": true,
+      "participant_rows": 132928,
+      "transaction_condition_groups": 55302,
+      "accepted_groups": 55274,
+      "economic_rows": 77554,
+      "blocks": 43222,
+      "missing_block_numbers": 0,
+      "missing_block_timestamps": 0,
+      "timestamp_mismatches": 0,
+      "duplicate_block_log_groups": 0,
+      "economic_fills_sha256": "4528926586ef41cdf785016fff657dbb3034bdc41973a307b99561dd0d9ce265",
+      "tx_block_sha256": "e1af2075db53a547135bad8e61db6e2e2fe37eb830e6f40aab6f1e7a56246bbc",
+      "block_timestamp_sha256": "42231574b442ab30721a6271311d914a08ec4aa80059e131690d2610e321853b"
+    }
+  },
+  "causality": {
+    "primary_order": [
+      "block_number",
+      "log_index"
+    ],
+    "inference_state_rule": "Only completed-block information may inform an inference state; later rows in the same block are never visible to earlier rows.",
+    "direct_fill_proxy": "DATA-003 p_yes is reconstructed from the aligned binary outcome fill; SAME maps p_yes directly, COMPLEMENT maps 1-p_yes, DERIVED requires the accepted component transform rather than a direct leg.",
+    "historical_book_limitation": "Fills are fair-value/repricing observations, not proof of executable historical arbitrage or maker P&L."
+  },
+  "scope_controls": {
+    "data004_fills": "P0/P1 only",
+    "p2_p3_rescue_forbidden": true,
+    "final_opened": false
+  }
+}

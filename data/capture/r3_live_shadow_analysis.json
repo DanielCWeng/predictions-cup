@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001M-LIVE-SHADOW",
+  "mode": "SHADOW_ONLY",
+  "data001_used": false,
+  "source_freshness_seconds": 5,
+  "target_pre_shock_freshness_seconds": 30,
+  "max_horizon_sampling_delay_seconds": 30,
+  "independent_shock_separation_seconds": 30,
+  "horizons_seconds": [
+    5,
+    30,
+    300
+  ],
+  "candidates": [
+    {
+      "id": "SENATE_COUNT_SHOCK",
+      "type": "seat_distribution",
+      "gate_eligible": true,
+      "source_tokens": [
+        {
+          "market_id": "943819",
+          "label": "R_47_OR_FEWER",
+          "token_id": "89624669145341997724697326849445716755183665898947701894080018635919612252707"
+        },
+        {
+          "market_id": "943820",
+          "label": "R_48",
+          "token_id": "72612350161635310858699746744664698071678470215569392949055290671799482750173"
+        },
+        {
+          "market_id": "943821",
+          "label": "R_49",
+          "token_id": "62377650660175430184575321355603581384424839385693705300992070114964919683845"
+        },
+        {
+          "market_id": "943822",
+          "label": "R_50",
+          "token_id": "23243487444956959885535301419786787791218675785513044513046312975446911578713"
+        },
+        {
+          "market_id": "943823",
+          "label": "R_51",
+          "token_id": "105627504566569706748610029122703529394729331390957077331824112641486910010161"
+        },
+        {
+          "market_id": "943824",
+          "label": "R_52",
+          "token_id": "71547572456937213989007089427188853117815317606685045433579261770964952182308"
+        },
+        {
+          "market_id": "943825",
+          "label": "R_53",
+          "token_id": "15394416147421266264002744586901575755411758481406494583013250092373628427765"
+        },
+        {
+          "market_id": "943826",
+          "label": "R_54",
+          "token_id": "13278443981418985302116823794751942747516190107446009911143426402863687470127"
+        },
+        {
+          "market_id": "943827",
+          "label": "R_55",
+          "token_id": "10750997471908598562514411969554157596465059745769943341362824315243580377116"
+        },
+        {
+          "market_id": "943828",
+          "label": "R_56",
+          "token_id": "9273056014077248525737106426866852410841224250259842453481519298611852217348"
+        },
+        {
+          "market_id": "943829",
+          "label": "R_57_OR_MORE",
+          "token_id": "106446804142822856909456712516050968287728263341329924913008459244064245181608"
+        }
+      ],
+      "target_exchange_ids": [
+        {
+          "exchange_id": "843",
+          "target_sig_market_id": "154",
+          "direction_multiplier": 1
+        }
+      ],
+      "thresholds": {
+        "scalar_t50_qp_abs_change": 0.006550090909090978,
+        "scalar_t50_kl_abs_change": 0.005690831359326243,
+        "clr_qp_l2": 0.2539297572270941,
+        "clr_kl_l2": 0.1549557193203694
+      }
+    },
+    {
+      "id": "CORE4_JOINT_SHOCK",
+      "type": "binary_probability",
+      "gate_eligible": true,
+      "source_tokens": [
+        {
+          "market_id": "1178882",
+          "label": "DEM_CORE4_SWEEP",
+          "token_id": "12134010230902861474165277046903480923286100348764356477041975060066568507465"
+        }
+      ],
+      "target_exchange_ids": [
+        {
+          "exchange_id": "842",
+          "target_sig_market_id": "153",
+          "direction_multiplier": 1
+        }
+      ],
+      "thresholds": {
+        "binary_clr_l2": 0.09391856828048364
+      }
+    },
+    {
+      "id": "BT_ANY_SHADOW",
+      "type": "binary_probability",
+      "gate_eligible": false,
+      "source_tokens": [
+        {
+          "market_id": "2364515",
+          "label": "REPUBLICAN_ANY_BT",
+          "token_id": "28908058236393723818309220740364307755663049454326330251508645633886069289875"
+        }
+      ],
+      "target_exchange_ids": [
+        {
+          "exchange_id": "843",
+          "target_sig_market_id": "154",
+          "direction_multiplier": 1
+        },
+        {
+          "exchange_id": "842",
+          "target_sig_market_id": "153",
+          "direction_multiplier": -1
+        }
+      ],
+      "thresholds": {
+        "binary_clr_l2": 0
+      }
+    }
+  ],
+  "live_gate": {
+    "minimum_independent_shocks": 20,
+    "minimum_distinct_days_or_event_windows": 2,
+    "require_positive_increment_vs_target_only_reversal": true,
+    "require_positive_side_aware_markout_after_fees_slippage": true,
+    "require_no_single_shock_dominance": true
+  },
+  "output_semantics": {
+    "top_of_book_markout": "Gross executable cross-spread markout from pre-shock BBO to sampled future BBO; fees and depth slippage are not included.",
+    "promotion": "This analyzer cannot promote a strategy. Net-cost and MAKE/RISK gates remain external."
+  }
+}

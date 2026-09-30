@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/r3_fv_001_seat_leadlag",
+  "kernel": "polyleviathan/r3-fv-001-seat-leadlag",
+  "poll_seconds": 20,
+  "timeout_minutes": 90,
+  "download_outputs": true,
+  "note": "Frozen R3-SEAT-LEADLAG-001. TRAIN-only q75 source-shock threshold; 30s cooldown; first direct target update after shock; 300s primary, 30s/5s diagnostics only. DATA-004 -> DATA-003, no DATA-001, no historical analogues, no FINAL."
+}

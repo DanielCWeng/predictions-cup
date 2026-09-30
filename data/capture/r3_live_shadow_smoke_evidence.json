@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "checked_at_utc": "2026-09-30T08:01:37Z",
+  "github_actions_run_id": 36687130088,
+  "github_actions_job_id": 109795451303,
+  "branch": "build/r3-live-shadow-capture-sources",
+  "head_sha": "98eafec82f3b2cf5d2589f003b8cc0efacc44f9e",
+  "result": "PASS",
+  "gamma_markets_requested": 13,
+  "gamma_markets_active_open": 13,
+  "strict_yes_tokens_expected": 13,
+  "strict_yes_tokens_selected": 13,
+  "clob_books_requested": 13,
+  "clob_books_received": 13,
+  "missing_tokens": [],
+  "data001_used": false,
+  "note": "Explicit market-ID Gamma lookup plus exact YES-token strict selection and public CLOB /books validation. No trading/authenticated action."
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001M-EVENT",
+  "status": "POST_HOC_TRAIN_DEV_EXPLORATION_ONLY",
+  "parent_source_kernel": "polyleviathan/r3-fv-001-seat-count-structural-test",
+  "empirical_binding": {
+    "target": "DATA-003 via frozen parent seat-count output",
+    "source": "DATA-004 P0 via frozen parent seat-count output",
+    "data001_used": false,
+    "final_opened": false
+  },
+  "hypothesis": "Structural surfaces may be useful as sparse source impulses / pressure signals even when their probability levels are poor fair values.",
+  "unit_of_observation": "One target observation per distinct source_latest_block episode; repeated target updates against the same source state are collapsed.",
+  "primary_horizon": "next distinct source-state episode, capped at 24 hours",
+  "sensitivity_horizons_hours": [
+    6,
+    72
+  ],
+  "methods": [
+    "source_surface_change",
+    "target_reversal_baseline",
+    "unabsorbed_structural_pressure = source_surface_change - previous target change",
+    "structural_level_residual",
+    "identified-interval violation pressure"
+  ],
+  "controls": [
+    "daily cluster bootstrap",
+    "same TRAIN/DEV split inherited from parent",
+    "T50 and T51 Senate semantics reported separately; DEV cannot select semantics",
+    "compare structural pressure against target-only reversal baseline",
+    "no FINAL access"
+  ]
+}

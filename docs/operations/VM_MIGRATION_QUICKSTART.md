@@ -113,51 +113,41 @@ PREDICTIONS_CUP_POLYMARKET_RESEARCH_PATH=data/launch_20261001/polymarket
 If a persistent/data volume is mounted elsewhere, prefer explicit absolute paths rather than
 filling a small root disk.
 
-## 3. Rebuild the accepted supervised Polymarket universe
+## 3. Rebuild the strict supervised Polymarket universe
 
-Production capture intentionally uses the accepted **EXACT + DERIVED mapped-token** universe. It
-does not subscribe to the four `NEAR` contracts.
+The accepted SIG ↔ Polymarket identity remains the **EXACT + DERIVED mapped-token** universe. The
+launch recorder may additionally observe a small, explicit capture-only shadow set for R3 live
+structural-shock learning. Those shadow contracts do **not** become mappings or fair-value
+identities.
 
-Generate the current canonical token list from the checked-out mapping rather than pasting a stale
-list from chat:
+Generate the checked-out strict universe rather than pasting a stale list from chat:
 
 ```bash
-.venv/bin/python - <<'PY'
-import json
-from pathlib import Path
-
-mapping = json.loads(Path("data/mappings/sig_polymarket_2026.json").read_text())
-tokens = set()
-
-for record in mapping["records"]:
-    if record["mapping_class"] not in {"EXACT", "DERIVED"}:
-        continue
-    legs = []
-    if record.get("direct_polymarket"):
-        legs.append(record["direct_polymarket"])
-    legs.extend(record.get("polymarket_components") or [])
-    for leg in legs:
-        token = leg.get("mapped_token_id")
-        if token:
-            tokens.add(token)
-
-print(f"supervised_token_count={len(tokens)}")
-print(",".join(sorted(tokens)))
-PY
+.venv/bin/python -m predictions_cup.external.polymarket.supervised_universe \
+  > /tmp/polymarket_supervised_ids.txt
 ```
 
-At the 29 September 2026 accepted mapping this resolves to **689 tokens**: 140 EXACT direct tokens
-plus 549 DERIVED component tokens. If the mapping changes later, the checked-out artifact outranks
-this historical count.
+The helper prints the mapping/shadow/combined counts to stderr and emits one comma-separated token
+list to stdout. It takes:
 
-Place the resulting comma-separated IDs in:
+- accepted EXACT+DERIVED tokens from `data/mappings/sig_polymarket_2026.json`; and
+- the 13 explicit YES tokens in `data/capture/r3_live_shadow_polymarket_ids.json`.
+
+It still excludes the four `NEAR` mappings and never enables the broad election heuristic. Use
+`--no-shadow` only when intentionally restoring the mapping-only capture universe.
+
+At the 29 September mapping snapshot the accepted mapping-only set was 689 tokens. The R3 shadow
+allowlist adds 13 distinct tokens, so that snapshot would generate 702 IDs. **Do not hard-code
+702**: the generator output from the deployed ref is authoritative if the mapping changes.
+
+Place the generated CSV in:
 
 ```text
-PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS=<canonical generated list>
+PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS=<contents of /tmp/polymarket_supervised_ids.txt>
 ```
 
-The Polymarket service runs with `--require-explicit-universe` and must fail closed if configured
-IDs cannot be resolved.
+The Polymarket service runs with `--require-explicit-universe` and must fail closed if any
+configured identity cannot be resolved.
 
 ## 4. Install the two systemd collectors
 
@@ -208,15 +198,19 @@ Do not enable full tracked depth for all 237 exchanges. Empty
 `PREDICTIONS_CUP_SIG_REALTIME_TRACKED_EXCHANGE_IDS` still gives tournament-wide Realtime plus
 broad scalar/BBO capture.
 
-Polymarket strict-universe startup is comparatively expensive. On the accepted 689-token launch
-host it took roughly four minutes to complete Gamma discovery/book seeding before the first health
-line. Do not redesign or kill it merely because the process is quiet during that normal seed
-window. Confirm that it remains CPU/network active and then expect:
+Polymarket strict-universe startup is comparatively expensive. The earlier mapping-only 689-token
+launch host took roughly four minutes to complete Gamma discovery/book seeding before the first
+health line. The additional 13 shadow tokens have not yet been production-soaked, so do not invent
+a fixed startup time or subscription count. Confirm that the process remains CPU/network active and
+then require:
 
-- `markets_subscribed=689`
-- `tokens_subscribed=689`
-- `websocket_connected=true`
-- `storage_failures=0`
+- `tokens_subscribed` equals the count reported by the deployed universe generator;
+- all configured IDs resolved successfully;
+- `websocket_connected=true`;
+- `storage_failures=0`.
+
+For the frozen 29 September mapping plus the current 13-token shadow spec, the expected generated
+count is 702. A later checked-out mapping/spec outranks that historical number.
 
 Check logs:
 
@@ -235,8 +229,9 @@ find data -type f -name '*.parquet' -printf '%TY-%Tm-%Td %TH:%TM:%TS %s %p\n' | 
 
 Before declaring the replacement host production-ready:
 
-1. Run SIG and mapped PM together through the installed systemd units.
-2. Verify SIG is 237/237 and PM is the explicit accepted supervised universe.
+1. Run SIG and strict supervised PM together through the installed systemd units.
+2. Verify SIG is 237/237 and PM token subscriptions equal the generated strict universe count,
+   including the explicit shadow tokens when enabled.
 3. Verify zero dropped rows/storage failures and sane queue/WAL/disk growth.
 4. Open/read at least one published Parquet shard from both venues.
 5. Restart both collector services and verify old shards remain intact and new shards publish.

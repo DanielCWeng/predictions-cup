@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "stage": "CORRECTED_STRUCTURAL_MATH_TRAIN_DEV",
+  "frozen_before_run": true,
+  "empirical_universe": {
+    "source_dataset": "polyleviathan/sig-cup-data-004-ets-p0p1-fills",
+    "target_dataset": "polyleviathan/sig-cup-data-003-sig-actual-fills",
+    "data001_allowed": false,
+    "historical_analogue_families_allowed": false,
+    "source_scope": "DATA-004 P0/P1 only",
+    "target_scope": "accepted DATA-003 EXACT/NEAR direct block-end observations"
+  },
+  "inherited_split": {
+    "source": "data/research/r3_fv_001/R3_SPLIT_MANIFEST.json",
+    "final_must_remain_unopened": true,
+    "boundary_purge_inherited": true
+  },
+  "causal_ordering": {
+    "rule": "For a DATA-003 target observation in block B, DATA-004 source state may contain only fills from blocks < B.",
+    "primary_max_source_age_seconds": 86400,
+    "sensitivity_source_age_seconds": [
+      21600,
+      86400,
+      259200
+    ],
+    "sensitivity_rule": "Sensitivity cutoffs may demote but never rescue the primary result."
+  },
+  "methods": [
+    {
+      "method_id": "R3-S01-LP-BOUNDS",
+      "test": "Assumption-free partial-identification bounds on priority joint/count components; preserve Other/residual and threshold-straddling bins."
+    },
+    {
+      "method_id": "R3-S02-LOO-PRICE-QP",
+      "test": "Hide literal DATA-003 target quote; use eligible P1 direct-winner DATA-004 sources and solve the scalar least-squares/QP redundancy comparator."
+    },
+    {
+      "method_id": "R3-S03-LOO-FAMILY-QP",
+      "test": "Euclidean coherent simplex projection on target-family-excluded priority components."
+    },
+    {
+      "method_id": "R3-S04-LOO-FAMILY-KL",
+      "test": "Positive-category KL/I-projection challenger on the same frozen component states."
+    },
+    {
+      "method_id": "R3-S05-MAXENT",
+      "test": "Maximum-entropy completion only inside the hard feasible/coherent set; never relabel as exact identification."
+    },
+    {
+      "method_id": "R3-S06-LATENT",
+      "test": "Scalable Republican-governorship count-index shock -> linked Governor constituent update model; pooled coefficient fitted on TRAIN only."
+    }
+  ],
+  "priority_labs": {
+    "georgia_senate_governor": {
+      "market_ids": [
+        "3729337",
+        "3729338",
+        "3729339",
+        "3729340"
+      ],
+      "fine_states": [
+        "D/D",
+        "D/R",
+        "D/O",
+        "R/D",
+        "R/R",
+        "R/O",
+        "O/D",
+        "O/R",
+        "O/O"
+      ],
+      "residual": "Explicit Other remains unpriced residual.",
+      "tests": [
+        "marginal LP bounds",
+        "raw feasibility",
+        "QP coherence",
+        "KL coherence",
+        "MaxEnt residual completion",
+        "direct repricing comparison"
+      ]
+    },
+    "senate_house_count": {
+      "market_ids": [
+        "2683257",
+        "2683258",
+        "2683259",
+        "2683260",
+        "2683261",
+        "2683262",
+        "2683263",
+        "2683264",
+        "2683265",
+        "2683266",
+        "2683267",
+        "2683268",
+        "2683269"
+      ],
+      "frozen_shape": "13 observed categories over 16 fine Senate-band x House-band states",
+      "tests": [
+        "partition coherence",
+        "QP/KL category projection",
+        "MaxEnt completion of three coarsened DOF",
+        "threshold lower/upper bounds",
+        "NEAR chamber reference comparison"
+      ]
+    },
+    "republican_governorship_count": {
+      "market_ids": [
+        "907686",
+        "907687",
+        "907688",
+        "907689",
+        "907690",
+        "907691",
+        "907692"
+      ],
+      "bins": [
+        "<22",
+        "22-23",
+        "24-25",
+        "26-27",
+        "28-29",
+        "30-31",
+        "32+"
+      ],
+      "tests": [
+        "partition coherence",
+        "QP/KL projection",
+        "MaxEnt integer-count completion",
+        "expected-count aggregate index",
+        "TRAIN-only inverse aggregate-to-constituent model"
+      ]
+    }
+  },
+  "inverse_model": {
+    "feature": "orientation * (K_struct_now - K_struct_at_previous_target_update)",
+    "outcome": "p_target_now - p_target_prev",
+    "fit": "zero-intercept pooled beta = sum(x*dp)/sum(x^2) on TRAIN only",
+    "dev_predictor": "clip(p_prev + beta*x,0,1)",
+    "baseline": "persistence p_prev",
+    "bootstrap": "target-cluster bootstrap, 1000 draws"
+  },
+  "metrics": [
+    "raw feasible/infeasible state count",
+    "LP interval width and direct-price interval coverage",
+    "coherent projection adjustment",
+    "source completeness and age",
+    "DEV MAE/RMSE versus persistence",
+    "absolute and relative MAE improvement",
+    "target-cluster bootstrap 95% interval",
+    "first/second DEV-half stability",
+    "unique target support"
+  ],
+  "decision_boundary": {
+    "final_opened": false,
+    "no_programme_level_stop_from_single_component": true,
+    "promotion_requires": "Freeze exact estimator, assumptions, target/source universe, age rule, metrics and gate before any one-shot FINAL.",
+    "no_post_result_rescue": true
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "subexperiment": "R3-SEAT-CALIBRATED-ECM-001",
+  "stage": "ADAPTIVE_TRAIN_DEV",
+  "adaptive_after": [
+    "R3-SEAT-COUNT-001 negative raw level",
+    "R3-SEAT-COUNT-001 negative raw structural residual"
+  ],
+  "rationale": "Raw count-derived levels are systematically miscalibrated against direct references. The commission explicitly permits adaptive TRAIN/DEV model reformulation and direct+struct combination. Test whether a TRAIN-only affine calibration preserves useful structural variation.",
+  "empirical_universe": {
+    "source": "DATA-004",
+    "target": "DATA-003",
+    "house_source_event": "103166",
+    "senate_source_event": "106193",
+    "house_target": "152",
+    "senate_target": "154",
+    "data001_allowed": false,
+    "final_opened": false
+  },
+  "structural_state": {
+    "chronology": "For target block B use complete source state from blocks strictly < B, max age 24h.",
+    "geometries": [
+      "QP",
+      "KL"
+    ],
+    "house_scalar": "P(R>=220)+0.4*P(215-219)",
+    "senate_scalar": "T50=P(R seats>=50); T51 excluded because semantics unresolved."
+  },
+  "calibration": {
+    "fit": "On TRAIN only, ordinary least squares target_current = a + b*struct_scalar.",
+    "fair_value": "clip(a+b*struct_scalar,0,1)",
+    "no_dev_parameter_tuning": true
+  },
+  "direct_plus_struct": {
+    "residual": "gap_t = FV_calibrated_t - direct_target_t",
+    "fit": "On TRAIN only, zero-intercept beta for next_target_change = beta*gap_t.",
+    "predictor": "clip(direct_target_t + beta*gap_t,0,1)",
+    "baseline": "direct_target_t persistence to literal next target update."
+  },
+  "metrics": [
+    "calibrated contemporaneous MAE vs previous-direct persistence",
+    "next-update MAE/RMSE improvement vs direct persistence",
+    "direction accuracy",
+    "1000 UTC-day cluster bootstrap",
+    "first/second DEV-half stability"
+  ],
+  "gate": {
+    "minimum_train_rows": 100,
+    "minimum_dev_rows": 30,
+    "minimum_dev_day_clusters": 4,
+    "candidate_requires": [
+      "QP and KL next-update MAE improvement >0",
+      "QP and KL bootstrap lower 95% >0",
+      "QP and KL both DEV halves >=0",
+      "QP and KL direction accuracy >0.5"
+    ],
+    "no_post_result_rescue": true
+  },
+  "final_opened": false,
+  "final_rows_accessed": 0
+}

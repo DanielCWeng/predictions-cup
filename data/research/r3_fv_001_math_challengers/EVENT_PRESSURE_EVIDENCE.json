@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001M-EVENT",
+  "actions_run": 36644996225,
+  "artifact_id": 11068007189,
+  "artifact_zip_sha256": "06022729114dc09615046ff3394eb89eaf58ff86e0d43c4dc576e3a837d46189",
+  "status": "POST_HOC_TRAIN_DEV_EXPLORATION_ONLY",
+  "binding": {
+    "target": "DATA-003",
+    "source": "DATA-004 P0 via parent seat-count outputs",
+    "data001_used": false
+  },
+  "final_opened": false,
+  "episodes": {
+    "house_train": 106,
+    "house_dev": 11,
+    "senate_train": 333,
+    "senate_dev": 15
+  },
+  "key_findings": {
+    "house": "No episode-pressure signal survived DEV versus the target-only reversal baseline; source-change and unabsorbed-pressure variants reverse sign or underperform.",
+    "senate_t50_unabsorbed_q0": {
+      "train_rows": 299,
+      "train_mean_signed_move": 0.00244493,
+      "train_increment_vs_reversal": -0.000194,
+      "dev_rows": 13,
+      "dev_mean_signed_move": 0.003846,
+      "dev_increment_vs_reversal": 0.002308,
+      "dev_direction_accuracy_nonzero": 1,
+      "dev_signed_move_day_bootstrap_lower_95": 0.001429,
+      "dev_increment_day_bootstrap_lower_95": 0.00125,
+      "interpretation": "Interesting DEV anomaly, but it fails the stronger TRAIN incremental-vs-reversal requirement. Do not promote; use only as a mechanism clue."
+    },
+    "senate_t50_source_change_q75": {
+      "train_rows": 79,
+      "train_mean_signed_move": -0.000734,
+      "dev_rows": 5,
+      "dev_mean_signed_move": 0.004,
+      "interpretation": "Sign flips from TRAIN to DEV; reject as stable source-impulse signal."
+    }
+  },
+  "decision": "DO_NOT_PROMOTE_EVENT_PRESSURE",
+  "next_step": "Test independent P0 cross-event Republican-wave sensors with TRAIN-fitted absorption and explicit target-reversal control."
+}

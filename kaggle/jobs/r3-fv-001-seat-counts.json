@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/r3_fv_001_seat_counts",
+  "kernel": "polyleviathan/r3-fv-001-seat-counts",
+  "poll_seconds": 20,
+  "timeout_minutes": 90,
+  "download_outputs": true,
+  "note": "Frozen R3-SEAT-COUNT-001 TRAIN/DEV test. House 218 partial-identification + MaxEnt point; Senate T50/T51 semantic variants side-by-side. DATA-004 -> DATA-003 only; no DATA-001, no historical analogues, no FINAL."
+}

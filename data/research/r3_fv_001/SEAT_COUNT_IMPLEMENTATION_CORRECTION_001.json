@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "subexperiment": "R3-SEAT-COUNT-001",
+  "correction_id": "SEAT-IMPL-CORR-001",
+  "observed_before_attempt1_performance_read": true,
+  "classification": "IMPLEMENTATION_CORRECTION_NOT_MODEL_REDESIGN",
+  "affected_output": "structural_residual / next-target-update evaluation only",
+  "unaffected_output": "contemporaneous level reconstruction, House LP bounds, QP/KL projections, Senate T50/T51 level estimates",
+  "defect": "Attempt 1 assigned next_y after filtering to source-complete rows, so the residual horizon was next source-complete target observation rather than the literal next target update required by the frozen protocol.",
+  "correction": "Assign next_y/next_ts on the full target-event sequence first, null cross-split transitions, then filter events by source completeness.",
+  "frozen_items_unchanged": [
+    "DATA-004 source universe",
+    "DATA-003 target universe",
+    "TRAIN/DEV/FINAL split",
+    "24h source freshness",
+    "House 218 bounds and MaxEnt formula",
+    "Senate T50/T51 variants",
+    "zero-intercept TRAIN residual beta",
+    "DEV metrics",
+    "UTC-day bootstrap",
+    "candidate gates",
+    "FINAL lock"
+  ],
+  "attempt1_policy": "Ignore attempt-1 residual outputs regardless of sign or magnitude. Level outputs remain valid if the kernel otherwise completes.",
+  "final_opened": false,
+  "final_rows_accessed": 0
+}

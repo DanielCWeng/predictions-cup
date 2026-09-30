@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "experiment_id": "R3-FV-001",
+  "stage": "DISCOVERY_PROTOCOL_FROZEN_BEFORE_DEV_PERFORMANCE",
+  "split_manifest_sha256": "cea20a374a8ed5822e361e7c8584cf3a2599fc80bcba3b2522efdf707e572225",
+  "final_opened": false,
+  "target_universe": {
+    "primary_direct_mapping_classes": [
+      "EXACT",
+      "NEAR"
+    ],
+    "rationale": "DERIVED has zero TRAIN rows under the frozen split; it cannot be used to fit/tune a learned next-update model without violating chronology.",
+    "direct_mapping_directions": [
+      "SAME",
+      "COMPLEMENT"
+    ]
+  },
+  "causal_state": {
+    "ordering": [
+      "block_number",
+      "log_index"
+    ],
+    "source_visibility": "For a target update in block B, DATA-004 source state may use only source rows from blocks strictly less than B.",
+    "target_baseline": "Previous block-complete direct target probability for the same SIG market.",
+    "outcome": "Current block-complete direct target probability; this is the next observed direct repricing event, not a resolved election outcome."
+  },
+  "source_modes": {
+    "LOO_PRICE": {
+      "purpose": "Recoverability/redundancy control.",
+      "exclusion": "Accepted DATA-003 direct mapping market IDs only. Other v2 echoes remain visible."
+    },
+    "LOO_FAMILY_SEMANTIC": {
+      "purpose": "Primary genuinely indirect-information test.",
+      "eligible_target_semantics": [
+        "dependence-info",
+        "independent-constraint"
+      ],
+      "exclusion": [
+        "accepted direct mapping IDs",
+        "P1 direct-winner refreshes of the same target",
+        "EXACT_EQUIVALENT v2 sources",
+        "all sources for targets R2.5 classified redundant-echo/none"
+      ]
+    },
+    "LOO_FAMILY_STRICT": {
+      "purpose": "Robustness test removing all exact-structural v2 sources in addition to the semantic family exclusions.",
+      "exclusion": [
+        "accepted direct mapping IDs",
+        "P1 direct-winner refreshes",
+        "all EXACT_STRUCTURAL v2 sources"
+      ]
+    }
+  },
+  "features": {
+    "source": "Last block-prior p_yes states; freshness-weighted and unweighted aggregates by R2.5 relationship class and mathematical class.",
+    "fixed_freshness_half_life_seconds": 21600,
+    "include": [
+      "available source count/fraction",
+      "mean",
+      "freshness-weighted mean",
+      "min",
+      "max",
+      "std",
+      "range",
+      "per-relationship count/weighted-mean/sum",
+      "per-mathematical-class count/weighted-mean",
+      "R2.5 adds-beyond-direct class",
+      "mapping class"
+    ],
+    "flow_features": false,
+    "pred006_hazard_features": false
+  },
+  "models": [
+    {
+      "id": "source_ridge",
+      "inputs": "source features only",
+      "family": "Ridge",
+      "tuning": "alpha in [0.1,1,10,100] on chronological inner-TRAIN validation"
+    },
+    {
+      "id": "blend_ridge",
+      "inputs": "previous direct probability + source features",
+      "family": "Ridge",
+      "tuning": "alpha in [0.1,1,10,100] on chronological inner-TRAIN validation"
+    },
+    {
+      "id": "source_hgb",
+      "inputs": "source features only",
+      "family": "HistGradientBoostingRegressor",
+      "tuning": "two fixed complexity settings on chronological inner-TRAIN validation"
+    },
+    {
+      "id": "blend_hgb",
+      "inputs": "previous direct probability + source features",
+      "family": "HistGradientBoostingRegressor",
+      "tuning": "two fixed complexity settings on chronological inner-TRAIN validation"
+    }
+  ],
+  "primary_metric": "DEV MAE improvement versus same-row persistence baseline (previous direct probability).",
+  "secondary_metrics": [
+    "relative MAE improvement",
+    "RMSE",
+    "residual Spearman correlation",
+    "directional accuracy at 0.5c and 1c model dislocation thresholds",
+    "coverage by event and SIG market"
+  ],
+  "uncertainty": "Deterministic SIG-market cluster bootstrap, 400 resamples, on per-event absolute-error improvement.",
+  "champion_gate": {
+    "allowed_modes": [
+      "LOO_FAMILY_SEMANTIC",
+      "LOO_FAMILY_STRICT"
+    ],
+    "min_dev_events": 1000,
+    "min_dev_sig_markets": 30,
+    "min_relative_mae_improvement": 0.005,
+    "require_absolute_mae_improvement_positive": true,
+    "require_cluster_bootstrap_95pct_lower_bound_positive": true
+  },
+  "selection": "Among gate-passing candidates, maximize the cluster-bootstrap 95% lower bound of MAE improvement. Freeze one champion and at most two challengers before FINAL.",
+  "stop_rule": "If no LOO-FAMILY candidate passes, classify R3 as no confirmed independent structural next-update signal and do not open FINAL.",
+  "final_policy": "No FINAL target rows or performance may be loaded/evaluated in discovery code."
+}
