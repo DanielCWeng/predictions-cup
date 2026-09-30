@@ -179,7 +179,7 @@ time and relabeled as server time.
 - dispatch -> ACK;
 - ACK -> first fill;
 - dispatch -> terminal fill;
-- cancel request -> cancel confirmation;
+- cancel request -> cancel ACK;
 - reconnect start -> reconnect resolution;
 - local derived quote-published -> withdrawal/fill lifetime.
 
@@ -190,6 +190,12 @@ The quote lifetime is a MAKE lifecycle duration. It is **not** passive queue-pos
 MAKE emits local lifecycle markers only where it has canonical operation identity and a
 conclusive local state. A batch-level `ACKED` state is not treated as proof that every requested
 leg became a resting quote; OBSERVE deliberately omits `QUOTE_PUBLISHED` in that ambiguous case.
+
+Every quote lifecycle observation carries a deterministic `quote_key` comprising operation,
+exchange and side. `QUOTE_PUBLISHED` also carries the canonical BUILD-009 logical intent ID when
+available. Quote lifetime is matched by canonical intent/order identity when possible and otherwise
+by the side-specific quote key. A fill without an unambiguous intent/order match never terminates a
+quote lifetime.
 
 This supports later reconstruction of:
 
@@ -335,6 +341,21 @@ BUILD-009 logical operation ID.
 
 Competition context is already machine-readable in each `competition_context` Parquet row.
 
+## Runtime health surface
+
+`ObservationHealthProvider.health()` returns an immutable typed
+`ObservationHealthSnapshot` combining the outer emitter and inner CAPTURE writer.
+
+The snapshot exposes:
+
+- emitter queue depth/capacity/high-water, accepted, dropped, sink failures and worker liveness;
+- CAPTURE queue depth/capacity/high-water, written rows/shards, dropped rows, storage failures and writer liveness;
+- an explicit `HEALTHY`, `DEGRADED` or `BLOCKED` state plus machine-readable reasons.
+
+MAKE exposes the current snapshot through `MakerService.observation_health()`, so FULLSTACK can
+consume runtime OBSERVE health directly without parsing logs. Observation health remains
+informational/operational evidence only and cannot bypass or stop BUILD-009 Risk.
+
 ## Backpressure and failure policy
 
 There are two bounded stages in runtimes that persist OBSERVE:
@@ -388,7 +409,7 @@ BUILD-009 and MAKE regression suites remain the authority for economic safety/re
 
 ## Hot-path benchmark
 
-The committed benchmark is:
+The committed microbenchmark is:
 
 ```bash
 python scripts/benchmark_observe001.py --iterations 100000
@@ -406,7 +427,14 @@ CI runs instrumentation OFF through `NullObservationEmitter` and ON through
 
 The benchmark contains no network call, no file I/O and no real SIG order.
 
-Final measured values belong in the PR/handoff for the exact final head SHA.
+The combined producer/persistence benchmark is:
+
+```bash
+python scripts/benchmark_observe001_pipeline.py --iterations 10000
+```
+
+It exercises the outer bounded emitter, typed combined health surface and the inner CAPTURE Parquet
+writer together. Final measured values belong in the PR/handoff for the exact final head SHA.
 
 ## Configuration
 
