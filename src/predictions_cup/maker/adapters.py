@@ -156,6 +156,14 @@ class LiveMakerExecutionAdapter:
                 # MAKE only emits passive limit quotes. A market sentinel here is
                 # an invariant violation, so keep the pre-dispatch uncertain state.
                 continue
+            if state not in {
+                LifecycleState.ACKED,
+                LifecycleState.OPEN,
+                LifecycleState.PARTIALLY_FILLED,
+            }:
+                # A per-intent ACK with an unexpected unresolved/non-resting
+                # lifecycle must not be promoted into quote-publication evidence.
+                continue
             self._quotes.apply_authoritative(
                 exchange_id=intent.exchange_id,
                 side=side,
