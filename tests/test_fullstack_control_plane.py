@@ -307,7 +307,41 @@ def test_control_plane_has_required_machine_readable_tree() -> None:
     }
     execution = result["execution"]
     assert isinstance(execution, dict)
-    assert execution["fresh_economic_admission_possible"] is True
+    assert execution["unresolved_count"] == 0
     overall = result["overall_health"]
     assert isinstance(overall, dict)
     assert overall["state"] == "HEALTHY"
+
+
+
+def test_control_plane_degrades_when_launch_surface_is_unknown() -> None:
+    status: dict[str, object] = {
+        "schema_version": "fullstack-001-v1",
+        "git_sha": "abc",
+        "environment": "test",
+        "runtime_profile": "REHEARSAL",
+        "session": {"state": "NOT_CONFIGURED"},
+        "services": [],
+        "sig": {},
+        "polymarket": None,
+        "kalshi": None,
+        "storage": {"state": "HEALTHY"},
+        "clock": {"state": "UNKNOWN"},
+        "observe": None,
+        "live_learn": None,
+        "shadow": None,
+        "shadow_evidence": {},
+        "risk_halt": {"state": "PASS", "active": False},
+        "execution": {"unresolved_count": 0},
+        "config": {},
+        "capabilities": {},
+    }
+    health = {"state": "PASS", "observed_at": NOW.isoformat(), "checks": []}
+    result = build_control_plane(status, health)
+    overall = result["overall_health"]
+    assert isinstance(overall, dict)
+    assert overall["state"] == "DEGRADED"
+    reasons = overall["reason_codes"]
+    assert isinstance(reasons, list)
+    assert "clock:UNKNOWN" in reasons
+    assert "session:NOT_CONFIGURED" in reasons
