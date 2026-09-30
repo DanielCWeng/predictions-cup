@@ -73,7 +73,7 @@ class KalshiMarket:
         *,
         observed_at: datetime,
         api_version: str,
-    ) -> "KalshiMarket":
+    ) -> KalshiMarket:
         title = payload.get("title")
         if title is not None and not isinstance(title, str):
             raise KalshiPayloadError("title must be a string when present")
@@ -120,7 +120,7 @@ class KalshiEvent:
         *,
         observed_at: datetime,
         api_version: str,
-    ) -> "KalshiEvent":
+    ) -> KalshiEvent:
         event_ticker = payload.get("event_ticker", payload.get("ticker"))
         if not isinstance(event_ticker, str) or not event_ticker.strip():
             raise KalshiPayloadError("event response requires event_ticker/ticker")
@@ -187,7 +187,7 @@ class KalshiTrade:
         *,
         observed_at: datetime,
         api_version: str,
-    ) -> "KalshiTrade":
+    ) -> KalshiTrade:
         quantity = optional_decimal(payload.get("count_fp"), field="count_fp")
         yes_price = optional_decimal(
             payload.get("yes_price_dollars"), field="yes_price_dollars"
