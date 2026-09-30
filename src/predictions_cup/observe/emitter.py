@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import queue
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from predictions_cup.observe.contracts import ObservationSink, VenueObservation
 
