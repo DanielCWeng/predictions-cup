@@ -1,3 +1,4 @@
+# ruff: noqa: I001
 from __future__ import annotations
 
 import json
@@ -148,6 +149,28 @@ def test_storage_health_handles_critical_missing_and_queue_pressure(
     assert "FILESYSTEM_FREE_CRITICAL" in result["reason_codes"]
     assert "CAPTURE_PATH_MISSING" in result["reason_codes"]
     assert "CAPTURE_QUEUE_OR_WRITER_FAILURE" in result["reason_codes"]
+
+
+
+def test_storage_health_warning_and_non_positive_growth(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    values = _values(tmp_path)
+    monkeypatch.setattr(
+        "predictions_cup.runtime.control_plane.shutil.disk_usage",
+        lambda _path: _DiskUsage(100 * 1024**3, 95 * 1024**3, 5 * 1024**3),
+    )
+    first = storage_health(tmp_path, values, wall_clock=lambda: NOW)
+    second = storage_health(
+        tmp_path,
+        values,
+        wall_clock=lambda: NOW + timedelta(hours=1),
+    )
+    assert first["state"] == "DEGRADED"
+    assert "FILESYSTEM_FREE_WARNING" in first["reason_codes"]
+    assert second["runway_hours"] is None
+    assert second["runway_reason"] == "NON_POSITIVE_GROWTH"
 
 
 def test_session_manifest_is_hashed_atomic_and_secret_free(tmp_path: Path) -> None:
