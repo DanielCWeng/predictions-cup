@@ -1652,6 +1652,42 @@ def _provider_acceptance_evidence(
     }
 
 
+def _watchdog_acceptance(
+    name: str,
+    value: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if value is None:
+        return {
+            "name": name,
+            "evidence_state": EvidenceState.NOT_RUN.value,
+            "reason": "watchdog evidence unavailable",
+        }
+    healthy = value.get("state") == "HEALTHY"
+    return {
+        "name": name,
+        "evidence_state": (
+            EvidenceState.REAL_PASS.value if healthy else EvidenceState.BLOCKED.value
+        ),
+        "provider_mode": "real",
+        "reason": ",".join(str(item) for item in value.get("reason_codes", ()))
+        or ("healthy" if healthy else str(value.get("state", "UNKNOWN"))),
+        "evidence": value,
+    }
+
+
+def _session_acceptance(value: dict[str, Any] | None) -> dict[str, Any]:
+    healthy = isinstance(value, dict) and value.get("state") == "HEALTHY"
+    return {
+        "name": "session_provenance",
+        "evidence_state": (
+            EvidenceState.REAL_PASS.value if healthy else EvidenceState.BLOCKED.value
+        ),
+        "provider_mode": "real" if healthy else "missing",
+        "reason": "manifest persisted" if healthy else "session manifest unavailable",
+        "evidence": value,
+    }
+
+
 def _real_acceptance_evidence(
     values: dict[str, str],
     status: dict[str, Any],
@@ -1681,6 +1717,17 @@ def _real_acceptance_evidence(
             "observe",
             status.get("observe"),
             capabilities["observe"],
+        ),
+        "clock": _watchdog_acceptance(
+            "clock",
+            status.get("clock") if isinstance(status.get("clock"), dict) else None,
+        ),
+        "storage": _watchdog_acceptance(
+            "storage",
+            status.get("storage") if isinstance(status.get("storage"), dict) else None,
+        ),
+        "session_provenance": _session_acceptance(
+            status.get("session") if isinstance(status.get("session"), dict) else None
         ),
         "ssh_survival": _exercise_evidence(values, "ssh_survival"),
     }
@@ -1756,6 +1803,8 @@ def run_rehearsal(
         restart_result = safe_restart(values)
     after = collect_status(repo, values)
     after_health = evaluate_health(after, values, require_real=require_real)
+    control_plane = build_control_plane(after, after_health)
+    control_plane_path = publish_control_plane(values, control_plane)
 
     simulations = {
         "failure_injection": failure_injection_matrix(values),
@@ -1805,6 +1854,10 @@ def run_rehearsal(
         "real_sig_orders_sent": False,
         "snapshot": snapshot,
         "session": session_pointer,
+        "control_plane": {
+            "path": str(control_plane_path),
+            "state": control_plane["overall_health"]["state"],
+        },
         "before": {"status": before, "health": before_health},
         "safe_restart": restart_result
         or {
