@@ -23,7 +23,6 @@ from typing import Any, Protocol, cast
 
 from predictions_cup.observe import (
     ObservationStatusState,
-    default_observation_health_status_path,
     read_observation_health_status,
 )
 
@@ -898,7 +897,7 @@ def _synthetic_status(values: dict[str, str]) -> tuple[dict[str, Any], dict[str,
             "state": "PASS",
             "provider_mode": "real",
             "capability_mode": CapabilityMode.IN_PROCESS.value,
-            "owner_services": [MAKE, SIG],
+            "owner_services": [MAKE],
             "reason": "synthetic baseline",
         },
         "disk": {"free_gib": 100.0},
