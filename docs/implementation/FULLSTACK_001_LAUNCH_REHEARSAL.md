@@ -39,17 +39,26 @@ MAKE, central Risk and SHADOW deliberately remain in one process. The accepted M
 passes the exact immutable MakerMarketSnapshot used for MAKE decisions into SHADOW through a
 non-blocking observer. SHADOW must not create another SIG or Polymarket subscriber.
 
-LIVE-LEARN and OBSERVE are capabilities with explicit ownership. IN_PROCESS capabilities ride with their accepted owner and never spawn a duplicate adapter; EXTERNAL_SERVICE remains available for a deliberate standalone provider. For reviewed #67/#66, LIVE-LEARN is owned by MAKE/SHADOW and OBSERVE by MAKE/SIG. CAPTURE remains separately supervised so useful evidence can continue when safe. CAPTURE first-hours forensics remains an analysis/reporting process rather than a new daemon.
+LIVE-LEARN and OBSERVE are capabilities with explicit ownership. IN_PROCESS capabilities ride with their accepted owner and never spawn a duplicate adapter; EXTERNAL_SERVICE remains available for a deliberate standalone provider. For merged #67/#66, LIVE-LEARN is owned by MAKE/SHADOW and the canonical cross-process OBSERVE status is owned by MAKE. SIG/CAPTURE liveness and storage health remain separate accepted surfaces. CAPTURE remains separately supervised so useful evidence can continue when safe. CAPTURE first-hours forensics remains an analysis/reporting process rather than a new daemon.
 
 ## Capability adapter boundary
 
 The deployment layer deals with capabilities, readiness and shutdown/recovery hooks, never candidate
 IDs or candidate math. Capability mode is explicit: IN_PROCESS or EXTERNAL_SERVICE. IN_PROCESS reads real health from its owner and starts no adapter service. EXTERNAL_SERVICE may use a real command supplied by PREDICTIONS_CUP_LIVE_LEARN_COMMAND or PREDICTIONS_CUP_OBSERVE_COMMAND. Fixtures remain harness-development only. All modes publish/read the common health surface under PREDICTIONS_CUP_FULLSTACK_STATUS_DIR.
 
-Known health records are account.json, shadow.json, risk.json, live-learn.json and observe.json.
-Final acceptance with --require-real rejects fixture-backed LIVE-LEARN/OBSERVE and missing real
-account/SHADOW health. When upstream lanes land, replace adapters with their accepted providers;
-do not duplicate their logic here.
+The final merged provider composition is now concrete:
+
+- OBSERVE: consume the accepted #66 `observe-001-health-v1` envelope through
+  `read_observation_health_status()`, normalizing HEALTHY -> PASS and failing closed on
+  missing/stale/owner/process/schema mismatch;
+- LIVE-LEARN: the owning MAKE/SHADOW process publishes the existing
+  `LiveLearnEngine.health` at the process boundary; no second scoring consumer exists;
+- SHADOW: the owning MAKE process publishes `ShadowBus.health()`;
+- RISK/account: FULLSTACK reads the accepted RISK-002 durable SQLite state directly and derives
+  authoritative account trust/reconciliation from it;
+- SIG/CAPTURE: service freshness, queue/storage and publication health remain independently checked.
+
+Final acceptance with --require-real rejects missing/stale/untrusted real providers.
 
 ## Installer and secret boundary
 
@@ -146,10 +155,10 @@ health contracts after those branches merge. FULLSTACK must not reimplement thos
 
 When RISK-002, LIVE-LEARN-001, OBSERVE-001 and CANDIDATE-RUNTIME-001 merge:
 
-1. rebase this branch onto merged main;
-2. preserve #67 LIVE-LEARN as the in-process SHADOW mirror and #66 OBSERVE as in-process MAKE/SIG instrumentation unless an authoritative standalone entrypoint is deliberately added;
-3. preserve both #69 evaluator-backed candidate wiring and #67 learner mirror in shadow/live.py;
-4. expose real Risk/account/SHADOW and capability health, including ownership mode and owner services;
+1. #66/#67/#69/#70 are merged and #68 is rebased onto their canonical main;
+2. #67 LIVE-LEARN remains the in-process SHADOW mirror and #66 OBSERVE remains existing in-process instrumentation;
+3. #69 evaluator-backed frozen candidates and #67 learner mirror coexist in shadow/live.py;
+4. real RISK/account/SHADOW/LIVE-LEARN/OBSERVE health is normalized through accepted provider surfaces;
 5. remove fixture enablement from the intended-host runtime.env;
 6. run bash scripts/cupctl health --require-real;
 7. run bash scripts/cupctl rehearse --require-real --safe-restart;
