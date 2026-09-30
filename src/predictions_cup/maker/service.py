@@ -131,7 +131,7 @@ class MakerService:
         self._observation_health_publisher = ObservationHealthStatusPublisher(
             default_observation_health_status_path(self.settings.sig_research_path),
             process_instance_id=observe_recorder.session_id,
-            owner="maker",
+            owner="predictions-cup-maker.service",
         )
         self._publish_observation_health(force=True)
         context_sampler = CompetitionContextSampler(
