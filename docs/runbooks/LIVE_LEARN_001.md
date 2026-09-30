@@ -118,7 +118,7 @@ batched `ExecutionEvidenceProvider` and keep it outside the scoring math.
 ## Report interpretation
 
 Outcome horizon and report cadence are separate. A 5-minute report can contain
-1s, 5s, 15s, 30s, 60s and 5m outcomes where those horizons have matured.
+1s, 5s, 15s, 30s, 60s, 5m, 15m and 1h outcomes where those horizons have matured.
 
 Matched-support deltas compare only identical snapshot+horizon observations.
 They are descriptive evidence, not an automatic champion-selection rule.
@@ -142,8 +142,9 @@ maturity and outcome cardinality. It does not place orders or call SIG.
 
 ## Extending
 
-To add 15-minute or 1-hour outcome horizons, pass `900` and `3600` in the
-engine horizon sequence. No scheduler changes are required.
+The default outcome horizons already include 15 minutes (`900`) and 1 hour
+(`3600`). Custom positive horizon sequences remain supported without scheduler
+changes.
 
 To add a candidate score, implement `OutcomeScorer` and register it. Candidate
 specific semantics belong there, not in reporting or persistence.
