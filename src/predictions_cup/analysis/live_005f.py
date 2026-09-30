@@ -423,7 +423,7 @@ def analyze_state_transfer_from_paths(
         )
         return current
     if not shadow_journal_path.exists() or not live_learn_outcome_path.exists():
-        current: dict[str, object] = {
+        current = {
             "analysis_id": "005F-LIVE-001",
             "analysis_version": STATE_TRANSFER_VERSION,
             "generated_at": datetime.now(UTC).isoformat(),
