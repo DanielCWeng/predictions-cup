@@ -41,6 +41,7 @@ from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.mapping.models import MappingDocument
 from predictions_cup.runtime.telemetry import HotPathTelemetry
+from predictions_cup.shadow.live import LiveShadowRuntime, build_live_shadow_runtime
 from predictions_cup.sig.account_reconciliation import (
     AccountAuthoritativeSnapshot,
     reconcile_account,
@@ -100,6 +101,7 @@ class MakerService:
         trading: SigTradingClient | None = None
         sig_state: SigRealtimeStateEngine | None = None
         runtime: MakerRuntimeLoop | None = None
+        shadow_runtime: LiveShadowRuntime | None = None
 
         try:
             account_state = AccountRealtimeStateEngine(
@@ -154,6 +156,10 @@ class MakerService:
                 account_state=account_state,
                 polymarket_books=self.pm_books,
             )
+
+            if self.settings.shadow_enabled:
+                shadow_runtime = build_live_shadow_runtime(self.settings, self.core)
+                await shadow_runtime.start()
 
             adapter: LiveMakerExecutionAdapter | ShadowMakerExecutionAdapter
             if self.core.risk_context.mode is ExecutionMode.LIVE:
@@ -228,6 +234,9 @@ class MakerService:
                 coordinator=coordinator,
                 polymarket_feed_trusted=lambda: self.pm_health.websocket_connected,
                 telemetry=self.telemetry,
+                snapshot_observer=(
+                    None if shadow_runtime is None else shadow_runtime.observe
+                ),
                 # LIVE writes are paced one exchange at a time so the asyncio
                 # shell regains control between governed REST operations and
                 # snapshots the next market from current state.
@@ -332,6 +341,9 @@ class MakerService:
             await asyncio.gather(stop_waiter, return_exceptions=True)
         finally:
             self.pm_ws.stop()
+            if shadow_runtime is not None:
+                with suppress(Exception):
+                    await shadow_runtime.close()
             if sig_state is not None:
                 await sig_state.aclose()
             if trading is not None:
