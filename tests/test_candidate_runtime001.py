@@ -29,6 +29,7 @@ from predictions_cup.shadow import (
     Pred006Candidate,
     pred006_live_parity_matrix,
 )
+from predictions_cup.shadow.frozen_runtime import HAZARD005F_SCORER_HASHES
 
 BASE_MONO = 10_000_000_000_000
 
@@ -255,10 +256,14 @@ def test_005f_active_runtime_keeps_update_and_jump_coordinates_separate() -> Non
         FixedHazard005FRegimeProvider("ACTIVE_RESULTS"),
         scorers={
             "ACTIVE_RESULTS|clock|UPDATE_HAZARD": _FixedScorer(
-                "active-update", 0.70, "c" * 64
+                "active-update",
+                0.70,
+                HAZARD005F_SCORER_HASHES["ACTIVE_RESULTS|clock|UPDATE_HAZARD"]
             ),
             "ACTIVE_RESULTS|clock|JUMP_HAZARD": _FixedScorer(
-                "active-jump", 0.20, "d" * 64
+                "active-jump",
+                0.20,
+                HAZARD005F_SCORER_HASHES["ACTIVE_RESULTS|clock|JUMP_HAZARD"]
             ),
         },
     )
@@ -279,7 +284,9 @@ def test_005f_pre_runtime_does_not_invent_unfrozen_jump_coordinate() -> None:
         FixedHazard005FRegimeProvider("PRE_ELECTION"),
         scorers={
             "PRE_ELECTION|clock|UPDATE_HAZARD": _FixedScorer(
-                "pre-update", 0.61, "e" * 64
+                "pre-update",
+                0.61,
+                HAZARD005F_SCORER_HASHES["PRE_ELECTION|clock|UPDATE_HAZARD"]
             )
         },
     )
@@ -287,3 +294,21 @@ def test_005f_pre_runtime_does_not_invent_unfrozen_jump_coordinate() -> None:
     assert output.status is DecisionStatus.OK
     assert output.score == 0.61
     assert output.candidate_payload["jump_hazard"] is None
+
+
+def test_005f_rejects_wrong_frozen_artifact_hash() -> None:
+    state = IncrementalHazard005FState(grid_origin_s=0)
+    _observe_005f_fixture(state)
+    evaluator = Frozen005FEvaluator(
+        state,
+        FixedHazard005FRegimeProvider("PRE_ELECTION"),
+        scorers={
+            "PRE_ELECTION|clock|UPDATE_HAZARD": _FixedScorer(
+                "wrong-hash", 0.50, "0" * 64
+            )
+        },
+    )
+    output = Hazard005FCandidate(evaluator).evaluate(_snapshot(60))
+    assert output.status is DecisionStatus.NOT_READY
+    assert output.abstain_reason is not None
+    assert output.abstain_reason.startswith("model_artifact_hash_mismatch:")
