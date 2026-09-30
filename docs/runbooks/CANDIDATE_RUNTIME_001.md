@@ -54,12 +54,14 @@ Do not skip gates.
 4. Freeze and record artifact SHA-256 values before the future confirmation
    observation window.
 5. Provide a scorer adapter that verifies those hashes.
-6. Feed exact DATA-003-equivalent condition/block observations into
+6. Inject an exact SHADOW -> Polymarket condition scope resolver; do not assume a
+   SIG market ID is a condition ID.
+7. Feed exact DATA-003-equivalent condition/block observations into
    `IncrementalPred006FeatureState`.
-7. Prove exact custody/fee evidence is observable without future leakage.
-8. Check candidate metadata. Any required feature classified
+8. Prove exact custody/fee evidence is observable without future leakage.
+9. Check candidate metadata. Any required feature classified
    `NOT_OBSERVABLE_LIVE` or `SEMANTICS_MISMATCH` blocks scoring.
-9. Only then collect future-confirmation outcomes under the frozen protocol.
+10. Only then collect future-confirmation outcomes under the frozen protocol.
 
 Do not use PM BBO midpoint as `p_yes`, do not drop fee features, and do not
 change imputation.
@@ -67,16 +69,18 @@ change imputation.
 ## 005F dependency sequence
 
 1. Complete/verify current-universe order-book capture.
-2. Feed grouped BBO observations, not individual websocket message age, into
-   `IncrementalHazard005FState`.
-3. Set the exact 15-second grid origin from the applicable frozen regime window.
-4. Supply an explicit PRE_ELECTION or ACTIVE_RESULTS regime source.
-5. Recover the frozen scaler/model joblib artifacts named by
+2. Inject the accepted SIG -> PM token scope resolver; do not assume the IDs are
+   interchangeable.
+3. Feed grouped BBO observations, including ambiguity status, not individual
+   websocket message age, into `IncrementalHazard005FState`.
+4. Set the exact 15-second grid origin from the applicable frozen regime window.
+5. Supply an explicit PRE_ELECTION or ACTIVE_RESULTS regime source.
+6. Recover the frozen scaler/model joblib artifacts named by
    `fit_freeze_manifest.json`.
-6. Verify every binary against its manifest SHA-256 before constructing scorers.
-7. PRE requires only the PRE update-hazard scorer.
-8. ACTIVE requires both ACTIVE update-hazard and ACTIVE jump-hazard scorers.
-9. Confirm the evaluator reports `ready=true` and finite freshness before
+7. Verify every binary against its manifest SHA-256 before constructing scorers.
+8. PRE requires only the PRE update-hazard scorer.
+9. ACTIVE requires both ACTIVE update-hazard and ACTIVE jump-hazard scorers.
+10. Confirm the evaluator reports `ready=true` and finite freshness before
    interpreting a score.
 
 Do not infer `genuine_age_s` from generic quote age.
