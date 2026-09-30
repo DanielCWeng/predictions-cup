@@ -13,10 +13,7 @@ from pathlib import Path
 from time import perf_counter_ns
 from typing import Protocol
 
-from predictions_cup.sig.launch_storage import (
-    ImmutableCaptureSink,
-    SCHEMA_VERSION as CAPTURE_SCHEMA_VERSION,
-)
+from predictions_cup.sig import launch_storage as capture_storage
 from predictions_cup.shadow.contracts import (
     CandidateDecision,
     CanonicalShadowSnapshot,
@@ -264,7 +261,7 @@ class CaptureStrategyEventStore:
         self._shard_seconds = shard_seconds
         self._max_rows_per_shard = max_rows_per_shard
         self._session_id = session_id or uuid.uuid4().hex
-        self._sink: ImmutableCaptureSink | None = None
+        self._sink: capture_storage.ImmutableCaptureSink | None = None
         self._accepted_events = 0
         self._failures = 0
         self._last_error: str | None = None
@@ -272,7 +269,7 @@ class CaptureStrategyEventStore:
     async def start(self) -> None:
         if self._sink is not None:
             return
-        self._sink = ImmutableCaptureSink(
+        self._sink = capture_storage.ImmutableCaptureSink(
             self._research_root,
             shard_seconds=self._shard_seconds,
             max_rows_per_shard=self._max_rows_per_shard,
@@ -292,7 +289,7 @@ class CaptureStrategyEventStore:
                 {
                     "session_id": self._session_id,
                     "connection_epoch": 0,
-                    "schema_version": CAPTURE_SCHEMA_VERSION,
+                    "schema_version": capture_storage.SCHEMA_VERSION,
                     "event_type": "SHADOW_DECISION",
                     "observed_at": decision.observed_at,
                     "monotonic_ns": decision.monotonic_time,
@@ -359,7 +356,7 @@ class CaptureStrategyEventStore:
             write_latency_p95_ns=None,
         )
 
-    def _require_sink(self) -> ImmutableCaptureSink:
+    def _require_sink(self) -> capture_storage.ImmutableCaptureSink:
         if self._sink is None:
             raise RuntimeError("CAPTURE strategy mirror is not started")
         return self._sink
