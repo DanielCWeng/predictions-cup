@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
 import time
 from dataclasses import dataclass
@@ -10,8 +11,11 @@ from pathlib import Path
 
 import pytest
 
+from predictions_cup.config import AppSettings
 from predictions_cup.maker.contracts import ExternalQuoteState, MakerMarketSnapshot
+from predictions_cup.maker.coordinator import MakerStateChange
 from predictions_cup.maker.direct_pm import DirectPolymarketFairValueProvider
+from predictions_cup.maker.factory import build_maker_components
 from predictions_cup.mapping.models import (
     MappingClass,
     MappingDirection,
@@ -42,6 +46,7 @@ from predictions_cup.shadow import (
     StructuralFairValueCandidate,
     load_persisted_snapshots,
 )
+from predictions_cup.shadow.live import build_live_shadow_runtime
 
 TOURNAMENT = "tournament-1"
 NOW = 10_000_000_000
@@ -126,11 +131,13 @@ class _FixedCandidate:
 
     def __post_init__(self) -> None:
         self.snapshot_ids: list[str] = []
+        self.snapshot_object_ids: list[int] = []
         self.calls = 0
 
     def evaluate(self, snapshot: CanonicalShadowSnapshot) -> CandidateOutput:
         self.calls += 1
         self.snapshot_ids.append(snapshot.snapshot_id)
+        self.snapshot_object_ids.append(id(snapshot))
         return CandidateOutput(
             status=DecisionStatus.OK,
             fair_value=0.55,
@@ -208,6 +215,7 @@ def test_same_state_delivery_and_candidate_isolation() -> None:
 
         assert first.snapshot_ids == [snapshot.snapshot_id]
         assert second.snapshot_ids == [snapshot.snapshot_id]
+        assert first.snapshot_object_ids == second.snapshot_object_ids
         statuses = {
             decision.candidate_id: decision.decision_status
             for decision in store.decisions
@@ -413,6 +421,54 @@ def test_jsonl_restart_preserves_old_events_and_replays_snapshots(
         second.snapshot_id,
     )
 
+
+def test_live_shadow_runtime_persists_one_snapshot_boundary_and_all_candidates(
+    tmp_path: Path,
+) -> None:
+    async def run() -> None:
+        settings = AppSettings(
+            maker_enabled=True,
+            shadow_enabled=True,
+            shadow_capture_mirror_enabled=False,
+            shadow_journal_path=tmp_path / "live-shadow.jsonl",
+        )
+        mapping = _mapping()
+        core = build_maker_components(settings, mapping=mapping)
+        runtime = build_live_shadow_runtime(settings, core)
+        await runtime.start()
+        snapshot = _maker_snapshot()
+        runtime.observe(
+            MakerStateChange(
+                event_id="make-runtime-live-test-1",
+                observed_monotonic_ns=snapshot.now_monotonic_ns,
+                exchange_ids=frozenset({snapshot.exchange_id}),
+            ),
+            datetime(2026, 9, 30, 8, 0, tzinfo=UTC),
+            {snapshot.exchange_id: snapshot},
+        )
+        await runtime.bus.flush()
+        health = runtime.bus.health()
+        assert health.ingress_rejected == 0
+        assert health.snapshots_processed == 1
+        await runtime.close()
+
+        records = [
+            json.loads(line)
+            for line in settings.shadow_journal_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert sum(item["event_type"] == "snapshot" for item in records) == 1
+        decisions = [item for item in records if item["event_type"] == "decision"]
+        assert len(decisions) == 5
+        assert {item["candidate_id"] for item in decisions} == {
+            "make-direct-pm",
+            "direct-pm-reference",
+            "pred-006",
+            "experiment-005f-hazard",
+            "r3-ets-structural-fv",
+        }
+
+    asyncio.run(run())
 
 def test_shadow_bus_refuses_live_trading_configuration() -> None:
     with pytest.raises(ValueError, match="trading_enabled=false"):
