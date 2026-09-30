@@ -548,9 +548,10 @@ def collect_status(repo: Path, values: dict[str, str]) -> dict[str, Any]:
     shadow = _in_process_provider(values, "shadow")
     research_storage = (sig.get("health") or {}).get("research_storage")
     queue_health = research_storage if isinstance(research_storage, dict) else None
+    clock_threshold_raw = values.get("PREDICTIONS_CUP_FULLSTACK_MAX_CLOCK_OFFSET_SECONDS")
     clock = clock_health(
-        threshold_seconds=float(
-            values.get("PREDICTIONS_CUP_FULLSTACK_MAX_CLOCK_OFFSET_SECONDS", "1.0")
+        threshold_seconds=(
+            float(clock_threshold_raw) if clock_threshold_raw is not None else None
         )
     )
     storage = storage_health(repo, values, queue_health=queue_health)
