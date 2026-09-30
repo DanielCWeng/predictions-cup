@@ -7,6 +7,7 @@ from predictions_cup.observe.context import (
     CompetitionContextSnapshot,
     ContextField,
     SigOfficialCompetitionContextProvider,
+    summarize_competition_context,
 )
 from predictions_cup.observe.contracts import (
     FieldClassification,
@@ -61,6 +62,7 @@ __all__ = [
     "join_pm_to_sig",
     "persist_competition_context",
     "replay_operation",
+    "summarize_competition_context",
     "summarize_cross_venue",
     "summarize_observations",
 ]
