@@ -1804,8 +1804,10 @@ def run_rehearsal(
     snapshot_path = Path(
         values.get("PREDICTIONS_CUP_FULLSTACK_SNAPSHOT_PATH", "data/runtime/launch_snapshot.json")
     )
-    write_json_atomic(snapshot_path, snapshot)
     initial_status = collect_status(repo, values)
+    snapshot["clock"] = initial_status.get("clock")
+    snapshot["storage"] = initial_status.get("storage")
+    write_json_atomic(snapshot_path, snapshot)
     session_id = values.get("PREDICTIONS_CUP_SESSION_ID") or (
         "rehearsal-" + started_at.strftime("%Y%m%dT%H%M%SZ")
     )
@@ -2037,8 +2039,10 @@ def main(argv: list[str] | None = None) -> int:
                 "data/runtime/launch_snapshot.json",
             )
         )
-        write_json_atomic(path, snapshot)
         initial_status = collect_status(repo, values)
+        snapshot["clock"] = initial_status.get("clock")
+        snapshot["storage"] = initial_status.get("storage")
+        write_json_atomic(path, snapshot)
         session_id = values.get("PREDICTIONS_CUP_SESSION_ID") or (
             "snapshot-" + started_at.strftime("%Y%m%dT%H%M%SZ")
         )
