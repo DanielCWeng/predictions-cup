@@ -531,6 +531,7 @@ def _shadow_evidence(values: dict[str, str]) -> dict[str, Any]:
 
 def collect_status(repo: Path, values: dict[str, str]) -> dict[str, Any]:
     usage = shutil.disk_usage(repo)
+    sig = _sig(values)
     pm = _pm(values) if env_flag(values, "PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED") else None
     capabilities = capability_configs(values)
     risk = _risk_provider(values)
@@ -545,6 +546,14 @@ def collect_status(repo: Path, values: dict[str, str]) -> dict[str, Any]:
         else None
     )
     shadow = _in_process_provider(values, "shadow")
+    research_storage = (sig.get("health") or {}).get("research_storage")
+    queue_health = research_storage if isinstance(research_storage, dict) else None
+    clock = clock_health(
+        threshold_seconds=float(
+            values.get("PREDICTIONS_CUP_FULLSTACK_MAX_CLOCK_OFFSET_SECONDS", "1.0")
+        )
+    )
+    storage = storage_health(repo, values, queue_health=queue_health)
     return {
         "schema_version": SCHEMA_VERSION,
         "observed_at": datetime.now(UTC).isoformat(),
@@ -555,8 +564,9 @@ def collect_status(repo: Path, values: dict[str, str]) -> dict[str, Any]:
         "maker_enabled": env_flag(values, "PREDICTIONS_CUP_MAKER_ENABLED"),
         "shadow_enabled": env_flag(values, "PREDICTIONS_CUP_SHADOW_ENABLED"),
         "services": [asdict(_service(unit)) for unit in configured_services(values)],
-        "sig": _sig(values),
+        "sig": sig,
         "polymarket": pm,
+        "kalshi": _provider(values, "kalshi"),
         "account": _account_provider(risk),
         "shadow": shadow,
         "shadow_evidence": _shadow_evidence(values),
@@ -569,6 +579,9 @@ def collect_status(repo: Path, values: dict[str, str]) -> dict[str, Any]:
         "execution": _execution(values),
         "live_learn": live_learn,
         "observe": observe,
+        "session": read_session_pointer(values),
+        "clock": clock,
+        "storage": storage,
         "capabilities": {
             name: {
                 "enabled": config.enabled,
@@ -805,6 +818,35 @@ def evaluate_health(
             if not candidates:
                 state = GateState.BLOCKED if require_real else GateState.DEGRADED
                 checks.append(Check("shadow_decisions", state, "no candidate decisions observed"))
+    for name in ("clock", "storage"):
+        watchdog = status.get(name)
+        if not isinstance(watchdog, dict):
+            continue
+        raw = str(watchdog.get("state", "UNKNOWN"))
+        mapped = {
+            "HEALTHY": GateState.PASS,
+            "DEGRADED": GateState.DEGRADED,
+            "BLOCKED": GateState.BLOCKED,
+            "UNKNOWN": GateState.BLOCKED if require_real else GateState.DEGRADED,
+            "NOT_CONFIGURED": GateState.BLOCKED if require_real else GateState.DEGRADED,
+        }.get(raw, GateState.BLOCKED if require_real else GateState.DEGRADED)
+        checks.append(
+            Check(
+                name,
+                mapped,
+                ",".join(str(code) for code in watchdog.get("reason_codes", ())) or "healthy",
+            )
+        )
+    if require_real:
+        session = status.get("session")
+        session_ok = isinstance(session, dict) and session.get("state") == "HEALTHY"
+        checks.append(
+            Check(
+                "session_provenance",
+                GateState.PASS if session_ok else GateState.BLOCKED,
+                "manifest persisted" if session_ok else "launch-session manifest unavailable",
+            )
+        )
     states = {check.state for check in checks}
     overall = (
         GateState.BLOCKED
@@ -1683,11 +1725,29 @@ def _real_acceptance_evidence(
 def run_rehearsal(
     repo: Path, values: dict[str, str], *, require_real: bool, restart: bool
 ) -> dict[str, Any]:
+    started_at = datetime.now(UTC)
     snapshot = launch_snapshot(repo, values)
     snapshot_path = Path(
         values.get("PREDICTIONS_CUP_FULLSTACK_SNAPSHOT_PATH", "data/runtime/launch_snapshot.json")
     )
     write_json_atomic(snapshot_path, snapshot)
+    initial_status = collect_status(repo, values)
+    session_id = values.get("PREDICTIONS_CUP_SESSION_ID") or (
+        "rehearsal-" + started_at.strftime("%Y%m%dT%H%M%SZ")
+    )
+    manifest = build_session_manifest(
+        repo,
+        values,
+        session_id=session_id,
+        started_at=started_at,
+        snapshot=snapshot,
+        source_state={
+            "sig": initial_status.get("sig"),
+            "polymarket": initial_status.get("polymarket"),
+            "kalshi": initial_status.get("kalshi"),
+        },
+    )
+    session_pointer = persist_session_manifest(values, manifest)
     before = collect_status(repo, values)
     before_health = evaluate_health(before, values, require_real=require_real)
     restart_result = None
@@ -1743,6 +1803,7 @@ def run_rehearsal(
         "created_at": datetime.now(UTC).isoformat(),
         "real_sig_orders_sent": False,
         "snapshot": snapshot,
+        "session": session_pointer,
         "before": {"status": before, "health": before_health},
         "safe_restart": restart_result
         or {
@@ -1869,7 +1930,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "status":
         status = collect_status(repo, values)
         health = evaluate_health(status, values, require_real=False)
-        print(json.dumps({"status": status, "health": health})) if args.json else _human(
+        control_plane = build_control_plane(status, health)
+        publish_control_plane(values, control_plane)
+        print(json.dumps(control_plane, sort_keys=True)) if args.json else _human(
             status, health
         )
         return 0
@@ -1880,6 +1943,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(health, sort_keys=True))
         return 2 if health["state"] == "BLOCKED" else 1 if health["state"] == "DEGRADED" else 0
     if args.command == "snapshot":
+        started_at = datetime.now(UTC)
         snapshot = launch_snapshot(repo, values)
         path = Path(
             values.get(
@@ -1888,7 +1952,24 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         write_json_atomic(path, snapshot)
-        print(json.dumps(snapshot, sort_keys=True))
+        initial_status = collect_status(repo, values)
+        session_id = values.get("PREDICTIONS_CUP_SESSION_ID") or (
+            "snapshot-" + started_at.strftime("%Y%m%dT%H%M%SZ")
+        )
+        manifest = build_session_manifest(
+            repo,
+            values,
+            session_id=session_id,
+            started_at=started_at,
+            snapshot=snapshot,
+            source_state={
+                "sig": initial_status.get("sig"),
+                "polymarket": initial_status.get("polymarket"),
+                "kalshi": initial_status.get("kalshi"),
+            },
+        )
+        session_pointer = persist_session_manifest(values, manifest)
+        print(json.dumps({"snapshot": snapshot, "session": session_pointer}, sort_keys=True))
         return 0
     if args.command == "failure-injection":
         result = failure_injection_matrix(values)
