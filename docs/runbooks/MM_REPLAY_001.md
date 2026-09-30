@@ -36,7 +36,10 @@ allowed scientific substitute. Tiny deterministic fixtures are engineering tests
 - file hashes when the acquisition publishes them;
 - coverage/time metadata when known;
 - exact per-market 005F grid origins;
+- explicit source venue / replay-laboratory interpretation;
 - an explicit 005F regime if frozen artifact scoring is requested;
+- explicit maker fee and terminal unwind-cost assumptions before net P&L is populated;
+- an explicit edge-grid reference latency if the compact edge-threshold grid is run;
 - the approved Kaggle dataset containing the original 005F joblib artifacts, if used.
 
 The audit reports formats, schemas, identity/time columns, BBO reconstructability,
@@ -108,7 +111,10 @@ python scripts/mm_replay_001.py reset-waiting
 ## Research interpretation
 
 Gross spread capture is never the profitability metric by itself. The replay keeps
-gross spread, future-FV markouts, fees and unwind costs visible separately. Fair-value
+gross spread, future-FV markouts, cash/inventory terminal accounting, fees and unwind
+costs visible separately. Cancellation latency is part of the fill simulation itself
+for the 0/25/50/100/250/500/1000ms sweep; it is not merely a chart layered on an
+instant-cancel replay. Fair-value
 convergence is descriptive and must not be called causal lead-lag without additional
 identification. Latency output is an exposure sensitivity unless the input data
 supports stronger execution inference.
