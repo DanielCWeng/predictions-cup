@@ -29,6 +29,7 @@ from predictions_cup.live_learn.contracts import OutcomeStatus, outcome_from_rec
 from predictions_cup.mapping.crosswalk import load_document
 from predictions_cup.mapping.models import MappingDirection
 from predictions_cup.runtime.models import SIG_TICK
+from predictions_cup.shadow.replay import load_persisted_snapshots
 
 ANALYSIS_VERSION = "live-diag-001-v1"
 DEFAULT_THRESHOLDS_TICKS = (1, 2, 3, 5)
@@ -844,6 +845,200 @@ def analyze_maker_outcomes(
         ),
     }
     return summary, rows
+
+
+
+def analyze_inventory_history(
+    path: Path | None,
+    *,
+    inventory_limit: float | None = None,
+) -> tuple[dict[str, object], list[dict[str, object]], dict[str, InventorySummary]]:
+    """Reconstruct canonical account inventory paths from durable SHADOW snapshots."""
+    if path is None or not path.exists():
+        return {
+            "available": False,
+            "reason": "SHADOW_SNAPSHOT_HISTORY_UNAVAILABLE",
+        }, [], {}
+
+    snapshots = load_persisted_snapshots(path)
+    by_market_time: dict[str, dict[datetime, InventoryPoint]] = defaultdict(dict)
+    for snapshot in snapshots:
+        market_id = snapshot.market_id
+        positions = tuple(
+            position
+            for position in snapshot.maker.runtime.portfolio.positions
+            if position.market_id == market_id
+        )
+        inventory = sum(position.signed_quantity for position in positions)
+        capital_at_risk = sum(max(0.0, position.gross_exposure) for position in positions)
+        by_market_time[market_id][snapshot.observed_at] = InventoryPoint(
+            observed_at=snapshot.observed_at,
+            inventory=inventory,
+            capital_at_risk=capital_at_risk,
+        )
+
+    rows: list[dict[str, object]] = []
+    summaries: dict[str, InventorySummary] = {}
+    for market_id, indexed in sorted(by_market_time.items()):
+        points = tuple(indexed[key] for key in sorted(indexed))
+        summary = summarize_inventory(
+            points,
+            inventory_limit=inventory_limit,
+        )
+        summaries[market_id] = summary
+        rows.append(
+            {
+                "market_id": market_id,
+                "sample_count": len(points),
+                "independent_event_count": summary.episode_count,
+                "peak_abs_inventory": summary.peak_abs_inventory,
+                "inventory_time_weighted_abs": summary.inventory_time_weighted_abs,
+                "time_to_flat_distribution": list(summary.time_to_flat_distribution),
+                "inventory_half_life": summary.inventory_half_life,
+                "returns_to_flat_count": summary.returns_to_flat_count,
+                "time_above_25pct_limit": summary.time_above_25pct_limit,
+                "time_above_50pct_limit": summary.time_above_50pct_limit,
+                "time_above_75pct_limit": summary.time_above_75pct_limit,
+                "capital_seconds_consumed": summary.capital_seconds_consumed,
+                "inventory_limit": inventory_limit,
+                "realised_pnl": None,
+                "unrealised_pnl": None,
+                "status": (
+                    ResearchStatus.INSUFFICIENT_EVIDENCE.value
+                    if summary.episode_count < 1
+                    else ResearchStatus.DESCRIPTIVE_ONLY.value
+                ),
+                "reasons": [
+                    "CANONICAL_SHADOW_ACCOUNT_SNAPSHOTS",
+                    "RISK_002_ACCOUNTING_PNL_NOT_RECONSTRUCTED",
+                    *(
+                        ["INVENTORY_LIMIT_UNAVAILABLE"]
+                        if inventory_limit is None
+                        else []
+                    ),
+                ],
+            }
+        )
+
+    return {
+        "available": bool(rows),
+        "market_count": len(rows),
+        "sample_count": sum(int(row["sample_count"]) for row in rows),
+        "independent_event_count": sum(
+            int(row["independent_event_count"]) for row in rows
+        ),
+        "inventory_limit": inventory_limit,
+        "accounting_boundary": (
+            "Inventory path uses canonical SHADOW account snapshots; authoritative "
+            "realised/unrealised P&L remains RISK-002."
+        ),
+    }, rows, summaries
+
+
+def analyze_market_selection(
+    maker_rows: Sequence[dict[str, object]],
+    *,
+    inventory_by_market: dict[str, InventorySummary] | None = None,
+) -> tuple[dict[str, object], list[dict[str, object]]]:
+    """Expose market-selection components without manufacturing missing cost terms."""
+    inventory = inventory_by_market or {}
+    grouped: dict[tuple[str, int], list[dict[str, object]]] = defaultdict(list)
+    for row in maker_rows:
+        market_id = row.get("market_id")
+        horizon = row.get("horizon_seconds")
+        if isinstance(market_id, str) and isinstance(horizon, int):
+            grouped[(market_id, horizon)].append(row)
+
+    output: list[dict[str, object]] = []
+    for (market_id, horizon), rows in sorted(grouped.items()):
+        decision_ids = {str(row["decision_id"]) for row in rows}
+        fill_values = [
+            float(str(value))
+            for row in rows
+            if (value := row.get("fill_rate")) is not None
+        ]
+        edge_values = [
+            float(str(value))
+            for row in rows
+            if (value := row.get("post_fill_markout")) is not None
+        ]
+        adverse_values = [
+            float(str(value))
+            for row in rows
+            if (value := row.get("adverse_selection")) is not None
+        ]
+        spread_values = [
+            float(str(value))
+            for row in rows
+            if (value := row.get("spread_capture")) is not None
+        ]
+        fill_rate = _median(fill_values)
+        expected_edge = _median(edge_values)
+        adverse_selection = _median(adverse_values)
+        spread_capture = _median(spread_values)
+        gross_mmev = (
+            None
+            if fill_rate is None or expected_edge is None
+            else fill_rate * expected_edge
+        )
+        inventory_summary = inventory.get(market_id)
+        capital_seconds = (
+            None
+            if inventory_summary is None
+            else inventory_summary.capital_seconds_consumed
+        )
+        recommendation, reasons = recommend_market(
+            sample_count=len(rows),
+            independent_event_count=len(decision_ids),
+            expected_edge=expected_edge,
+            adverse_selection=adverse_selection,
+            capital_time_efficiency=None,
+        )
+        output.append(
+            {
+                "market_id": market_id,
+                "horizon_seconds": horizon,
+                "sample_count": len(rows),
+                "independent_event_count": len(decision_ids),
+                "fill_rate": fill_rate,
+                "expected_edge": expected_edge,
+                "expected_edge_semantics": "median_post_fill_markout_conditional_on_fill",
+                "spread_capture": spread_capture,
+                "adverse_selection": adverse_selection,
+                "risk_cost": None,
+                "ops_cost": None,
+                "expected_holding_time": None,
+                "capital_required": None,
+                "capital_seconds": capital_seconds,
+                "gross_mmev_before_risk_ops": gross_mmev,
+                "MMEV": None,
+                "capital_time_efficiency": None,
+                "recommendation": recommendation.value,
+                "reasons": [
+                    *reasons,
+                    "RISK_COST_UNAVAILABLE",
+                    "OPS_COST_UNAVAILABLE",
+                    "MMEV_NOT_FORCED_WITH_MISSING_COSTS",
+                    "CAPITAL_TIME_EFFICIENCY_UNAVAILABLE",
+                ],
+            }
+        )
+
+    return {
+        "available": bool(output),
+        "row_count": len(output),
+        "market_count": len({row["market_id"] for row in output}),
+        "formula": "MMEV = FillRate * ExpectedEdge - RiskCost - OpsCost",
+        "status": (
+            ResearchStatus.DESCRIPTIVE_ONLY.value
+            if output
+            else ResearchStatus.INSUFFICIENT_EVIDENCE.value
+        ),
+        "reason": (
+            "Exact MMEV/capital_time_efficiency remain null until risk and ops "
+            "cost terms are available; gross pre-cost economics are exposed separately."
+        ),
+    }, output
 
 
 def _write_rows(path: Path, rows: list[dict[str, object]]) -> None:
