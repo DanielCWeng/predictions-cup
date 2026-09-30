@@ -12,7 +12,10 @@ import pytest
 from pydantic import SecretStr
 
 from predictions_cup.config import AppSettings
-from predictions_cup.execution.interlocks import LiveExecutionPermit, assert_live_interlocks
+from predictions_cup.execution.interlocks import (
+    LiveExecutionPermit,
+    assert_live_recovery_interlocks,
+)
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import ExecutionMode, LifecycleState, OperationKind
@@ -375,6 +378,7 @@ class _RecoveryRestFixture:
 class _RecoveryTradingFixture:
     def __init__(self) -> None:
         self.payloads: list[str] = []
+        self.cancelled_order_ids: list[int] = []
 
     async def place_order_payload(
         self,
@@ -399,6 +403,10 @@ class _RecoveryTradingFixture:
             }
         )
 
+    async def cancel_order(self, order_id: int) -> object:
+        self.cancelled_order_ids.append(order_id)
+        return {"cancelled": True}
+
 
 def _recovery_permit() -> LiveExecutionPermit:
     settings = AppSettings(
@@ -413,12 +421,113 @@ def _recovery_permit() -> LiveExecutionPermit:
         risk_max_per_market_exposure=100.0,
         risk_max_open_order_exposure=100.0,
         risk_max_concurrent_open_orders=10,
+        risk_capital_control_enabled=True,
+        risk_session_loss_limit=10.0,
+        risk_drawdown_limit=10.0,
     )
-    return assert_live_interlocks(
+    return assert_live_recovery_interlocks(
         settings,
         explicit_live_invocation=True,
         account_trusted=True,
     )
+
+
+class _OpenOrderRecoveryRest(_RecoveryRestFixture):
+    async def get_order(self, order_id: int) -> OrderReadDto:
+        assert order_id == 91
+        return OrderReadDto.model_validate(
+            {
+                "id": 91,
+                "exchangeId": "36",
+                "side": "yes",
+                "action": "buy",
+                "quantity": "2",
+                "priceLimit": "0.495",
+                "open": True,
+                "createdAt": "2026-09-29T14:00:00Z",
+                "expirationDate": None,
+            }
+        )
+
+
+def test_recovery_only_authority_cancels_unresolved_open_order_but_cannot_place(
+    tmp_path: Path,
+) -> None:
+    from predictions_cup.execution.models import ExecutionEnvelope, RuntimeOrderIntent
+
+    journal = ExecutionJournal(tmp_path / "cancel-recovery.sqlite3")
+    cancel = ExecutionEnvelope.cancellation(
+        logical_operation_id="cancel-recovery-91",
+        operation_kind=OperationKind.SINGLE_CANCELLATION,
+        sink_mode=ExecutionMode.LIVE,
+        created_monotonic_ns=100,
+        order_id=91,
+        tournament_id="t1",
+    )
+    journal.record_before_dispatch(cancel, submitted_monotonic_ns=101)
+    journal.mark_state(
+        cancel.logical_operation_id,
+        LifecycleState.UNCERTAIN,
+        102,
+    )
+
+    trading = _RecoveryTradingFixture()
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, trading),
+        journal=journal,
+        permit=_recovery_permit(),
+        reservations=ExecutionReservationBook(),
+        clock_ns=iter(range(200, 500)).__next__,
+    )
+    try:
+        recovered = asyncio.run(
+            recover_startup(
+                journal=journal,
+                rest=cast(RecoveryRest, _OpenOrderRecoveryRest()),
+                live_sink=sink,
+                tournament_id="t1",
+                tournament_slug="cup",
+                clock_ns=iter(range(500, 800)).__next__,
+            )
+        )
+        assert trading.cancelled_order_ids == [91]
+        assert recovered.safe_to_resume_live
+        assert recovered.unresolved_operation_ids == ()
+        assert journal.unresolved() == ()
+
+        fresh_intent = RuntimeOrderIntent(
+            intent_id="fresh-under-halt",
+            exchange_id="36",
+            market_id="m1",
+            tournament_id="t1",
+            outcome_side=OutcomeSide.YES,
+            action=OrderAction.BUY,
+            quantity=1,
+            limit_price_ticks=100,
+            strategy_id="fixture",
+            decision_observation_ns=900,
+        )
+        fresh_plan = build_execution_plan(
+            RiskDecision(
+                approved=True,
+                reason="approved",
+                execution_mode=ExecutionMode.LIVE,
+                operation_kind=OperationKind.SINGLE_PLACEMENT,
+                intents=(fresh_intent,),
+                strategy_family="FV-TAKE",
+                strategy_id="fixture",
+                signal_value=0.01,
+                fair_value=0.55,
+                decision_observation_ns=900,
+            ),
+            logical_operation_id="fresh-under-halt",
+            created_monotonic_ns=901,
+        )
+        with pytest.raises(ValueError, match="recovery-only LIVE permit"):
+            asyncio.run(sink.dispatch(fresh_plan))
+        assert trading.payloads == []
+    finally:
+        journal.close()
 
 
 def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
@@ -482,7 +591,7 @@ def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
     try:
         # Fresh LIVE remains blocked: recovery authority does not weaken the
         # normal reservation gate.
-        with pytest.raises(ValueError, match="missing its synchronous reservation"):
+        with pytest.raises(ValueError, match="recovery-only LIVE permit"):
             asyncio.run(sink.dispatch(plan))
 
         result = asyncio.run(

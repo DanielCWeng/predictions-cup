@@ -198,6 +198,63 @@ class PositionsResponseDto(TransportModel):
     summary: PositionSummaryDto
 
 
+
+
+
+
+class TournamentTransactionDto(TransportModel):
+    event_id: str = Field(alias="eventId")
+    event_type: str = Field(alias="eventType")
+    created_at: WireDateTime = Field(alias="createdAt")
+    price: WireDecimal | None
+    quantity: WireDecimal
+    exchange_id: str | None = Field(alias="exchangeId")
+    market_id: str | None = Field(alias="marketId")
+    settlement_option: str | None = Field(alias="settlementOption")
+    current_price: WireDecimal | None = Field(alias="currentPrice")
+    market_title: str | None = Field(alias="marketTitle")
+    order_type: str | None = Field(alias="orderType")
+    contract_type: str | None = Field(alias="contractType")
+    description: str | None
+    amount: WireDecimal | None
+    transaction_type: str | None = Field(alias="transactionType")
+    outstanding_advance_after: WireDecimal | None = Field(
+        default=None, alias="outstandingAdvanceAfter"
+    )
+    component_id: str | None = Field(default=None, alias="componentId")
+    reason: str | None = None
+    tournament_id: str | None = Field(default=None, alias="tournamentId")
+
+
+class TournamentPaginationDto(TransportModel):
+    limit: int
+    has_more: bool = Field(alias="hasMore")
+    next_cursor: str | None = Field(alias="nextCursor")
+
+
+class TournamentEconomicCoverageDto(TransportModel):
+    complete: bool
+
+
+class TournamentTransactionPageDto(TransportModel):
+    data: tuple[TournamentTransactionDto, ...]
+    pagination: TournamentPaginationDto
+    coverage: TournamentEconomicCoverageDto
+
+
+class PortfolioPnlDto(TransportModel):
+    period: str
+    period_start: WireDateTime | None = Field(alias="periodStart")
+    period_end: WireDateTime = Field(alias="periodEnd")
+    period_pnl: WireDecimal | None = Field(alias="periodPnl")
+    unrealized_pnl: WireDecimal = Field(alias="unrealizedPnl")
+    total_account_value: WireDecimal = Field(alias="totalAccountValue")
+    total_holdings_value: WireDecimal = Field(alias="totalHoldingsValue")
+    total_cost_basis: WireDecimal = Field(alias="totalCostBasis")
+    roi: WireDecimal | None
+    sharpe: WireDecimal | None
+
+
 class FillReadDto(TransportModel):
     id: int
     order_id: int | None = Field(alias="orderId")

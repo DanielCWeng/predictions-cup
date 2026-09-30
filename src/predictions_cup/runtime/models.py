@@ -69,6 +69,10 @@ class RuntimeOrderState:
     reserved_exposure: float
     open: bool
     uncertain: bool
+    # Set for local BUILD-009 reservations before authoritative account
+    # reconciliation. Authoritative SIG rows intentionally leave this unset;
+    # RISK-002 obtains their strategy attribution from journal + fills.
+    strategy_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

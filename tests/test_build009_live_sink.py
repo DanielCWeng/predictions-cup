@@ -189,11 +189,15 @@ def _permit() -> LiveExecutionPermit:
         risk_max_per_market_exposure=100.0,
         risk_max_open_order_exposure=100.0,
         risk_max_concurrent_open_orders=10,
+        risk_capital_control_enabled=True,
+        risk_session_loss_limit=10.0,
+        risk_drawdown_limit=10.0,
     )
     return assert_live_interlocks(
         settings,
         explicit_live_invocation=True,
         account_trusted=True,
+        capital_state_ready=True,
     )
 
 

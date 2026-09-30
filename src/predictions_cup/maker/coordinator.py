@@ -68,7 +68,7 @@ class MakerCoordinator:
         engine: MakerEngine,
         lifecycle: QuoteLifecycleManager,
         quote_registry: QuoteRegistry,
-        risk_context: RiskContext,
+        risk_context: RiskContext | Callable[[], RiskContext],
         placement_dispatch: PlacementDispatcher,
         cancel_dispatch: CancelDispatcher,
         reservations: ExecutionReservationBook | None = None,
@@ -77,12 +77,13 @@ class MakerCoordinator:
         observation_process_instance_id: str | None = None,
         wall_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
-        if risk_context.mode is ExecutionMode.LIVE and reservations is None:
+        initial_risk_context = risk_context() if callable(risk_context) else risk_context
+        if initial_risk_context.mode is ExecutionMode.LIVE and reservations is None:
             raise ValueError("LIVE maker requires BUILD-009 execution reservations")
         self._engine = engine
         self._lifecycle = lifecycle
         self._registry = quote_registry
-        self._risk_context = risk_context
+        self._risk_context_source = risk_context
         self._placement_dispatch = placement_dispatch
         self._cancel_dispatch = cancel_dispatch
         self._reservations = reservations
@@ -96,7 +97,7 @@ class MakerCoordinator:
         if not self._observation_process_instance_id.strip():
             raise ValueError("observation_process_instance_id must not be blank")
         self._wall_clock = wall_clock
-        if risk_context.kill_switch:
+        if initial_risk_context.kill_switch:
             self._kill_switch.activate("startup_configuration")
 
     @property
@@ -148,7 +149,26 @@ class MakerCoordinator:
             decision = self._engine.quote(snapshot)
             decisions.append(decision)
             current = self._registry.state(exchange_id)
-            force_cancel = self._kill_switch.active
+            current_risk_context = (
+                self._risk_context_source()
+                if callable(self._risk_context_source)
+                else self._risk_context_source
+            )
+            capital = current_risk_context.capital_state
+            capital_force_cancel = (
+                capital is not None
+                and (
+                    (
+                        capital.global_halt is not None
+                        and capital.global_halt.active
+                    )
+                    or capital.strategy_halted(
+                        self._engine.strategy_id,
+                        StrategyFamily.MAKE.value,
+                    )
+                )
+            )
+            force_cancel = self._kill_switch.active or capital_force_cancel
             desired = None if force_cancel else decision.desired
             side_actions = self._lifecycle.decide(
                 desired=desired,
@@ -246,7 +266,7 @@ class MakerCoordinator:
                 else self._reservations.overlay_snapshot(snapshot.runtime)
             )
             risk_context = replace(
-                self._risk_context,
+                current_risk_context,
                 kill_switch=self._kill_switch.active,
             )
             risk = evaluate_risk(opportunity, risk_snapshot, risk_context)

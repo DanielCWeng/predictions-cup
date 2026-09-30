@@ -53,7 +53,9 @@ from predictions_cup.sig.trading_dto import (
     OrderReadDto,
     OrderStatusFilter,
     PortfolioFillPageDto,
+    PortfolioPnlDto,
     PositionsResponseDto,
+    TournamentTransactionPageDto,
 )
 
 logger = logging.getLogger(__name__)
@@ -587,6 +589,54 @@ class SigRestClient:
             PositionsResponseDto,
             payload,
             route_template="/tournaments/{slug}/portfolio/positions",
+        )
+
+    async def get_tournament_pnl(
+        self,
+        tournament_slug: str,
+        *,
+        period: str = "all",
+    ) -> PortfolioPnlDto:
+        self._require_identifier("tournament_slug", tournament_slug)
+        if period not in {"day", "week", "month", "quarter", "year", "all"}:
+            raise ValueError("invalid tournament P&L period")
+        payload = await self._get_json(
+            f"tournaments/{tournament_slug}/portfolio/pnl",
+            params={"period": period},
+            route_template="/tournaments/{slug}/portfolio/pnl",
+        )
+        return self._validate(
+            PortfolioPnlDto,
+            payload,
+            route_template="/tournaments/{slug}/portfolio/pnl",
+        )
+
+    async def list_tournament_transactions(
+        self,
+        tournament_slug: str,
+        *,
+        limit: int = 200,
+        cursor: str | None = None,
+        event_types: tuple[str, ...] | None = None,
+    ) -> TournamentTransactionPageDto:
+        self._require_identifier("tournament_slug", tournament_slug)
+        self._require_range("limit", limit, 1, 200)
+        params: dict[str, str | int] = {"limit": limit}
+        self._put_optional(params, "cursor", cursor)
+        if event_types:
+            allowed = {"trade", "settlement", "deposit", "fee", "market_creation"}
+            if any(value not in allowed for value in event_types):
+                raise ValueError("invalid tournament transaction type")
+            params["type"] = ",".join(event_types)
+        payload = await self._get_json(
+            f"tournaments/{tournament_slug}/portfolio/transactions",
+            params=params,
+            route_template="/tournaments/{slug}/portfolio/transactions",
+        )
+        return self._validate(
+            TournamentTransactionPageDto,
+            payload,
+            route_template="/tournaments/{slug}/portfolio/transactions",
         )
 
     async def _get_json(

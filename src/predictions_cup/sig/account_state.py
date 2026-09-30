@@ -25,6 +25,9 @@ class AccountTrustTransition(StrEnum):
     UNTRUSTED_MALFORMED_PAYLOAD = "UNTRUSTED_MALFORMED_PAYLOAD"
     UNTRUSTED_UNKNOWN_OPEN_ORDER = "UNTRUSTED_UNKNOWN_OPEN_ORDER"
     UNTRUSTED_FILL_REQUIRES_RECONCILIATION = "UNTRUSTED_FILL_REQUIRES_RECONCILIATION"
+    UNTRUSTED_ECONOMIC_EVENT_REQUIRES_RECONCILIATION = (
+        "UNTRUSTED_ECONOMIC_EVENT_REQUIRES_RECONCILIATION"
+    )
     UNTRUSTED_RESYNC_ACTIVITY = "UNTRUSTED_RESYNC_ACTIVITY"
 
 
@@ -156,6 +159,20 @@ class AccountRealtimeStateEngine:
         if batch.fills:
             self.mark_untrusted(
                 AccountTrustTransition.UNTRUSTED_FILL_REQUIRES_RECONCILIATION
+            )
+            return AccountBatchApplyResult(
+                accepted=False,
+                duplicate=False,
+                requires_reconciliation=True,
+                transition=self.transition,
+            )
+
+        if batch.settlements or batch.refunds or batch.collateral_changes:
+            # These events can move realised P&L/cash even when the position
+            # mutation itself looks locally deterministic. RISK-002 therefore
+            # requires authoritative tournament positions/P&L before new exposure.
+            self.mark_untrusted(
+                AccountTrustTransition.UNTRUSTED_ECONOMIC_EVENT_REQUIRES_RECONCILIATION
             )
             return AccountBatchApplyResult(
                 accepted=False,
