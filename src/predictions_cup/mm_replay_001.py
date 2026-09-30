@@ -44,6 +44,7 @@ REQUIRED_PROVENANCE_FIELDS: Final[tuple[str, ...]] = (
     "kaggle_dataset_slug",
     "dataset_version",
     "source",
+    "source_venue",
     "schema_version",
     "relation_to_data003",
     "acquisition_version",
@@ -131,6 +132,7 @@ class DatasetBinding:
     kaggle_dataset_slug: str | None
     dataset_version: str | None
     source: str | None
+    source_venue: str | None
     schema_version: str | None
     relation_to_data003: str | None
     acquisition_version: str | None
@@ -150,6 +152,7 @@ class DatasetBinding:
             kaggle_dataset_slug=_maybe_str(raw.get("kaggle_dataset_slug")),
             dataset_version=_maybe_str(raw.get("dataset_version")),
             source=_maybe_str(raw.get("source")),
+            source_venue=_maybe_str(raw.get("source_venue")),
             schema_version=_maybe_str(raw.get("schema_version")),
             relation_to_data003=_maybe_str(raw.get("relation_to_data003")),
             acquisition_version=_maybe_str(raw.get("acquisition_version")),
@@ -175,6 +178,7 @@ class DatasetBinding:
             "kaggle_dataset_slug": self.kaggle_dataset_slug,
             "dataset_version": self.dataset_version,
             "source": self.source,
+            "source_venue": self.source_venue,
             "schema_version": self.schema_version,
             "relation_to_data003": self.relation_to_data003,
             "acquisition_version": self.acquisition_version,
@@ -750,6 +754,11 @@ def inspect_input(root: Path, binding: DatasetBinding) -> InputAudit:
     suggested = _suggest_column_map(all_columns)
     resolved = dict(suggested)
     resolved.update(binding.column_map)
+    for canonical, source in binding.column_map.items():
+        if source not in all_columns:
+            errors.append(
+                f"explicit column_map {canonical!r} references missing source column {source!r}"
+            )
 
     has_identity = "market_id" in resolved
     has_time = "event_timestamp" in resolved
