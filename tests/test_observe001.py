@@ -13,6 +13,8 @@ from predictions_cup.observe import (
     CrossVenueMapping,
     EconomicChange,
     FieldClassification,
+    ObservationHealthProvider,
+    ObservationHealthState,
     ObservationKind,
     SigOfficialCompetitionContextProvider,
     VenueObservation,
@@ -24,7 +26,7 @@ from predictions_cup.observe import (
     summarize_observations,
 )
 from predictions_cup.sig.dto import AccountDto
-from predictions_cup.sig.launch_storage import LaunchSigRecorder
+from predictions_cup.sig.launch_storage import LaunchSigRecorder, ObservationCaptureRecorder
 from predictions_cup.sig.realtime_models import (
     TournamentLeaderboardDto,
     TournamentListStatus,
@@ -42,6 +44,9 @@ def _obs(
     process: str = "proc-1",
     strategy_family: str | None = "MAKE",
     source_timestamp: datetime | None = None,
+    logical_intent_id: str | None = None,
+    exchange_order_id: str | None = None,
+    detail: tuple[tuple[str, str], ...] = (),
 ) -> VenueObservation:
     return VenueObservation(
         kind=kind,
@@ -57,8 +62,11 @@ def _obs(
         strategy_family=strategy_family,
         strategy_id="s1",
         logical_operation_id=operation,
+        logical_intent_id=logical_intent_id,
         idempotency_key="idem-1",
+        exchange_order_id=exchange_order_id,
         source_timestamp=source_timestamp,
+        detail=detail,
     )
 
 
@@ -86,16 +94,21 @@ def test_lifecycle_summary_covers_latency_errors_cancel_reconnect_and_duplicates
             ObservationKind.QUOTE_PUBLISHED,
             130_000_000,
             operation="quote-op",
+            logical_intent_id="quote-intent",
+            detail=(("quote_key", "quote-op|e1|bid"), ("side", "bid")),
         ),
         _obs(
             ObservationKind.QUOTE_REPLENISHED,
             131_000_000,
             operation="quote-op",
+            logical_intent_id="quote-intent",
+            detail=(("quote_key", "quote-op|e1|bid"), ("side", "bid")),
         ),
         _obs(
             ObservationKind.QUOTE_WITHDRAWN,
             145_000_000,
             operation="quote-op",
+            detail=(("quote_key", "quote-op|e1|bid"), ("side", "bid")),
         ),
         _obs(ObservationKind.REALTIME_REVISION_GAP, 150_000_000, operation=None),
     )
@@ -118,15 +131,15 @@ def test_lifecycle_summary_covers_latency_errors_cancel_reconnect_and_duplicates
     assert isinstance(latency, dict)
     dispatch_to_ack = latency["dispatch_to_ack"]
     ack_to_first_fill = latency["ack_to_first_fill"]
-    cancel_to_confirmation = latency["cancel_to_confirmation"]
+    cancel_to_ack = latency["cancel_to_ack"]
     quote_lifetime = latency["quote_lifetime"]
     assert isinstance(dispatch_to_ack, dict)
     assert isinstance(ack_to_first_fill, dict)
-    assert isinstance(cancel_to_confirmation, dict)
+    assert isinstance(cancel_to_ack, dict)
     assert isinstance(quote_lifetime, dict)
     assert dispatch_to_ack["p50"] == 15.0
     assert ack_to_first_fill["p50"] == 5.0
-    assert cancel_to_confirmation["p50"] == 5.0
+    assert cancel_to_ack["p50"] == 5.0
     assert quote_lifetime["p50"] == 15.0
 
 
@@ -151,6 +164,84 @@ def test_spans_never_compare_monotonic_values_across_processes() -> None:
         _obs(ObservationKind.ACK, 1, process="host-b"),
     )
     assert VenueSpanCollector().collect(rows) == ()
+
+
+def test_quote_lifetime_is_side_specific_with_two_sided_operation() -> None:
+    rows = (
+        _obs(
+            ObservationKind.QUOTE_PUBLISHED,
+            10_000_000,
+            operation="two-sided",
+            logical_intent_id="bid-intent",
+            detail=(("quote_key", "two-sided|e1|bid"), ("side", "bid")),
+        ),
+        _obs(
+            ObservationKind.QUOTE_PUBLISHED,
+            10_000_000,
+            operation="two-sided",
+            logical_intent_id="ask-intent",
+            detail=(("quote_key", "two-sided|e1|ask"), ("side", "ask")),
+        ),
+        _obs(
+            ObservationKind.FILL,
+            20_000_000,
+            operation="two-sided",
+            logical_intent_id="bid-intent",
+        ),
+        _obs(
+            ObservationKind.QUOTE_WITHDRAWN,
+            40_000_000,
+            operation="two-sided",
+            detail=(("quote_key", "two-sided|e1|ask"), ("side", "ask")),
+        ),
+    )
+    spans = tuple(
+        span
+        for span in VenueSpanCollector().collect(rows)
+        if span.name.value == "quote_lifetime"
+    )
+    assert [(span.identity, span.duration_ns) for span in spans] == [
+        ("intent:bid-intent", 10_000_000),
+        ("quote:two-sided|e1|ask", 30_000_000),
+    ]
+
+
+def test_ambiguous_fill_does_not_end_quote_lifetime() -> None:
+    rows = (
+        _obs(
+            ObservationKind.QUOTE_PUBLISHED,
+            10_000_000,
+            operation="quote-op",
+            logical_intent_id="bid-intent",
+            detail=(("quote_key", "quote-op|e1|bid"), ("side", "bid")),
+        ),
+        _obs(
+            ObservationKind.FILL,
+            20_000_000,
+            operation="quote-op",
+            logical_intent_id=None,
+        ),
+    )
+    assert not any(
+        span.name.value == "quote_lifetime"
+        for span in VenueSpanCollector().collect(rows)
+    )
+
+
+def test_cancel_pending_is_ack_timing_not_confirmation() -> None:
+    rows = (
+        _obs(ObservationKind.CANCEL_REQUESTED, 10_000_000),
+        _obs(
+            ObservationKind.CANCEL_ACK,
+            15_000_000,
+            detail=(("state", "CANCEL_PENDING"),),
+        ),
+    )
+    spans = VenueSpanCollector().collect(rows)
+    cancel_spans = tuple(span for span in spans if span.name.value.startswith("cancel_"))
+    assert len(cancel_spans) == 1
+    assert cancel_spans[0].name.value == "cancel_to_ack"
+    assert cancel_spans[0].duration_ns == 5_000_000
 
 
 def test_reconnect_distribution_retains_multiple_reconnects() -> None:
@@ -249,6 +340,61 @@ def test_sink_failure_isolated_from_emitter() -> None:
     assert emitter.emit(_obs(ObservationKind.ACK, 1))
     emitter.close()
     assert emitter.health().sink_failures == 1
+
+
+def test_combined_observation_health_is_typed_and_runtime_consumable(
+    tmp_path: Path,
+) -> None:
+    recorder = ObservationCaptureRecorder(
+        tmp_path / "observe-health",
+        queue_max=16,
+        shard_seconds=1,
+        max_rows_per_shard=100,
+        session_id="health-test",
+    )
+    emitter = BoundedObservationEmitter(
+        CallbackObservationSink(recorder.record_venue_observation),
+        queue_max=16,
+    )
+    provider = ObservationHealthProvider(emitter, recorder)
+    try:
+        snapshot = provider.health()
+        assert snapshot.state is ObservationHealthState.HEALTHY
+        payload = snapshot.to_dict()
+        assert payload["state"] == "HEALTHY"
+        assert isinstance(payload["emitter"], dict)
+        assert isinstance(payload["capture"], dict)
+    finally:
+        emitter.close()
+        recorder.close()
+
+
+class _DegradedCaptureHealth:
+    def capture_health_snapshot(self) -> dict[str, object]:
+        return {
+            "writer_alive": True,
+            "queue_depth": 0,
+            "queue_capacity": 16,
+            "queue_high_water": 16,
+            "written_rows": 10,
+            "written_shards": 1,
+            "dropped_rows": 1,
+            "storage_failures": 0,
+            "last_write_at": _AT,
+        }
+
+
+def test_combined_observation_health_marks_capture_loss_degraded() -> None:
+    emitter = BoundedObservationEmitter(
+        CallbackObservationSink(lambda observation: None),
+        queue_max=16,
+    )
+    try:
+        snapshot = ObservationHealthProvider(emitter, _DegradedCaptureHealth()).health()
+        assert snapshot.state is ObservationHealthState.DEGRADED
+        assert "CAPTURE_DROPPED_ROWS" in snapshot.reasons
+    finally:
+        emitter.close()
 
 
 class _ContextRest:
