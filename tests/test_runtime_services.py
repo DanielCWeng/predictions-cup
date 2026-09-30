@@ -308,8 +308,7 @@ def test_installer_in_process_capabilities_do_not_spawn_adapters(
         runtime_env,
         "PREDICTIONS_CUP_MAKER_ENABLED=true",
         "PREDICTIONS_CUP_TOURNAMENT_SLUG=test-tournament",
-        "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_ENABLED=true",
-        "PREDICTIONS_CUP_FULLSTACK_OBSERVE_ENABLED=true",
+        "PREDICTIONS_CUP_LIVE_LEARN_ENABLED=true",
         "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_MODE=IN_PROCESS",
         "PREDICTIONS_CUP_FULLSTACK_OBSERVE_MODE=IN_PROCESS",
     )
@@ -374,7 +373,7 @@ def test_installer_rejects_in_process_capability_without_owner_process(
     env, runtime_env, _ = _installer_env(tmp_path)
     _append_runtime_env(
         runtime_env,
-        "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_ENABLED=true",
+        "PREDICTIONS_CUP_LIVE_LEARN_ENABLED=true",
         "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_MODE=IN_PROCESS",
     )
 
