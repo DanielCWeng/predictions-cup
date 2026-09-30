@@ -5,8 +5,6 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-import pytest
-
 from predictions_cup.external.kalshi import KalshiPublicClient
 
 
