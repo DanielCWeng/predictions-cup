@@ -14,6 +14,7 @@ from predictions_cup.execution.models import (
     ExecutionMode,
     LifecycleState,
     OperationKind,
+    RuntimeOrderIntent,
 )
 from predictions_cup.execution.sinks import ExecutionPlan, ShadowSink
 from predictions_cup.maker.contracts import MakerMarketSnapshot, QuoteSide
