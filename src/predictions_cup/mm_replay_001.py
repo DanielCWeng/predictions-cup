@@ -348,3 +348,353 @@ class MakerPolicy:
     max_fv_age_ms: int
     max_distance_ticks: float
     min_external_edge_ticks: float
+    toxicity_widen_at: float | None = None
+    toxicity_withdraw_at: float | None = None
+    toxicity_extra_ticks: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.inventory_gamma < 0.0:
+            raise ValueError("inventory_gamma must be non-negative")
+        if self.base_half_spread_ticks <= 0.0:
+            raise ValueError("base_half_spread_ticks must be positive")
+        if self.max_fv_age_ms <= 0:
+            raise ValueError("max_fv_age_ms must be positive")
+        if self.max_distance_ticks <= 0.0:
+            raise ValueError("max_distance_ticks must be positive")
+        if self.min_external_edge_ticks < 0.0:
+            raise ValueError("min_external_edge_ticks must be non-negative")
+        if self.toxicity_widen_at is not None and not 0.0 <= self.toxicity_widen_at <= 1.0:
+            raise ValueError("invalid toxicity_widen_at")
+        if self.toxicity_withdraw_at is not None and not 0.0 <= self.toxicity_withdraw_at <= 1.0:
+            raise ValueError("invalid toxicity_withdraw_at")
+        if (
+            self.toxicity_widen_at is not None
+            and self.toxicity_withdraw_at is not None
+            and self.toxicity_widen_at > self.toxicity_withdraw_at
+        ):
+            raise ValueError("toxicity widen threshold exceeds withdraw threshold")
+
+
+@dataclass(frozen=True, slots=True)
+class QuoteIntent:
+    market_id: str
+    timestamp_ns: int
+    policy_id: str
+    reservation_fv: float
+    bid: float | None
+    ask: float | None
+    bid_size: float
+    ask_size: float
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class SimulatedFill:
+    market_id: str
+    timestamp_ns: int
+    policy_id: str
+    side: Side
+    price: float
+    size: float
+    assumption: FillAssumption
+
+
+@dataclass(frozen=True, slots=True)
+class Markout:
+    horizon_s: int
+    side: Side
+    fill_price: float
+    future_fv: float
+    value: float
+
+
+@dataclass(frozen=True, slots=True)
+class ReplayFillResult:
+    fill: SimulatedFill
+    quote_timestamp_ns: int
+    reservation_fv: float
+    gross_spread_capture: float
+    markouts: Mapping[int, float]
+    fee_cost: float
+    unwind_cost: float
+    estimated_edge_5m: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class ReplaySummary:
+    policy_id: str
+    fill_assumption: FillAssumption
+    quotes: int
+    active_quotes: int
+    fills: int
+    active_fraction: float
+    mean_gross_spread_capture: float | None
+    mean_markout_5m: float | None
+    mean_estimated_edge_5m: float | None
+
+
+class FillModel(Protocol):
+    assumption: FillAssumption
+
+    def fills(self, quote: QuoteIntent, event: BookObservation) -> tuple[SimulatedFill, ...]: ...
+
+
+class ConservativeTradeFillModel:
+    """Fill only from observed aggressive trades, never from a mere price touch."""
+
+    assumption = FillAssumption.OBSERVED_TRADE
+
+    def fills(self, quote: QuoteIntent, event: BookObservation) -> tuple[SimulatedFill, ...]:
+        if event.trade_price is None or event.trade_size is None or event.trade_size <= 0.0:
+            return ()
+        side = event.aggressor_side
+        fills: list[SimulatedFill] = []
+        if (
+            side is Side.SELL
+            and quote.bid is not None
+            and quote.bid_size > 0.0
+            and event.trade_price <= quote.bid
+        ):
+            fills.append(
+                SimulatedFill(
+                    market_id=quote.market_id,
+                    timestamp_ns=event.timestamp_ns,
+                    policy_id=quote.policy_id,
+                    side=Side.BUY,
+                    price=quote.bid,
+                    size=min(quote.bid_size, event.trade_size),
+                    assumption=self.assumption,
+                )
+            )
+        if (
+            side is Side.BUY
+            and quote.ask is not None
+            and quote.ask_size > 0.0
+            and event.trade_price >= quote.ask
+        ):
+            fills.append(
+                SimulatedFill(
+                    market_id=quote.market_id,
+                    timestamp_ns=event.timestamp_ns,
+                    policy_id=quote.policy_id,
+                    side=Side.SELL,
+                    price=quote.ask,
+                    size=min(quote.ask_size, event.trade_size),
+                    assumption=self.assumption,
+                )
+            )
+        return tuple(fills)
+
+
+class QueueAwareFillModel:
+    """Observed-trade fill model with explicit queue-ahead depletion."""
+
+    assumption = FillAssumption.QUEUE_AWARE
+
+    def fills(self, quote: QuoteIntent, event: BookObservation) -> tuple[SimulatedFill, ...]:
+        if event.trade_price is None or event.trade_size is None or event.trade_size <= 0.0:
+            return ()
+        fills: list[SimulatedFill] = []
+        if (
+            event.aggressor_side is Side.SELL
+            and quote.bid is not None
+            and event.trade_price <= quote.bid
+            and event.queue_ahead_bid is not None
+        ):
+            residual = max(0.0, event.trade_size - event.queue_ahead_bid)
+            if residual > 0.0:
+                fills.append(
+                    SimulatedFill(
+                        quote.market_id,
+                        event.timestamp_ns,
+                        quote.policy_id,
+                        Side.BUY,
+                        quote.bid,
+                        min(quote.bid_size, residual),
+                        self.assumption,
+                    )
+                )
+        if (
+            event.aggressor_side is Side.BUY
+            and quote.ask is not None
+            and event.trade_price >= quote.ask
+            and event.queue_ahead_ask is not None
+        ):
+            residual = max(0.0, event.trade_size - event.queue_ahead_ask)
+            if residual > 0.0:
+                fills.append(
+                    SimulatedFill(
+                        quote.market_id,
+                        event.timestamp_ns,
+                        quote.policy_id,
+                        Side.SELL,
+                        quote.ask,
+                        min(quote.ask_size, residual),
+                        self.assumption,
+                    )
+                )
+        return tuple(fills)
+
+
+class TradeThroughSensitivityFillModel:
+    """Sensitivity case: require a trade strictly through the passive quote."""
+
+    assumption = FillAssumption.TRADE_THROUGH_SENSITIVITY
+
+    def fills(self, quote: QuoteIntent, event: BookObservation) -> tuple[SimulatedFill, ...]:
+        if event.trade_price is None or event.trade_size is None or event.trade_size <= 0.0:
+            return ()
+        if (
+            event.aggressor_side is Side.SELL
+            and quote.bid is not None
+            and event.trade_price < quote.bid
+        ):
+            return (
+                SimulatedFill(
+                    quote.market_id,
+                    event.timestamp_ns,
+                    quote.policy_id,
+                    Side.BUY,
+                    quote.bid,
+                    min(quote.bid_size, event.trade_size),
+                    self.assumption,
+                ),
+            )
+        if (
+            event.aggressor_side is Side.BUY
+            and quote.ask is not None
+            and event.trade_price > quote.ask
+        ):
+            return (
+                SimulatedFill(
+                    quote.market_id,
+                    event.timestamp_ns,
+                    quote.policy_id,
+                    Side.SELL,
+                    quote.ask,
+                    min(quote.ask_size, event.trade_size),
+                    self.assumption,
+                ),
+            )
+        return ()
+
+
+def load_binding(path: Path) -> DatasetBinding:
+    return DatasetBinding.load(path)
+
+
+def inspect_input(root: Path, binding: DatasetBinding) -> InputAudit:
+    errors: list[str] = []
+    warnings: list[str] = []
+    try:
+        binding.require_bound()
+    except InputContractError as exc:
+        errors.append(str(exc))
+
+    files: list[FileSchema] = []
+    all_columns: set[str] = set()
+    formats: set[str] = set()
+    for path in sorted(item for item in root.rglob("*") if item.is_file()):
+        suffix = path.suffix.lower()
+        if suffix not in {".parquet", ".csv", ".jsonl", ".json"}:
+            continue
+        rel = str(path.relative_to(root))
+        columns: tuple[str, ...] = ()
+        rows: int | None = None
+        fmt = suffix.lstrip(".")
+        formats.add(fmt)
+        try:
+            if suffix == ".parquet":
+                parquet_file = pq.ParquetFile(path)
+                columns = tuple(parquet_file.schema_arrow.names)
+                rows = parquet_file.metadata.num_rows
+            elif suffix == ".csv":
+                with path.open("r", encoding="utf-8", newline="") as handle:
+                    reader = csv.reader(handle)
+                    columns = tuple(next(reader, ()))
+            else:
+                warnings.append(f"{rel}: schema inspection limited for {fmt}")
+        except (OSError, ValueError) as exc:
+            errors.append(f"{rel}: schema inspection failed: {exc}")
+        all_columns.update(columns)
+        expected_hash = binding.file_hashes.get(rel)
+        actual_hash = sha256_file(path) if expected_hash is not None else None
+        if expected_hash is not None and actual_hash != expected_hash:
+            errors.append(f"{rel}: sha256 mismatch")
+        files.append(FileSchema(rel, fmt, columns, rows, actual_hash))
+
+    if not files:
+        errors.append("no supported parquet/csv/jsonl/json input files found")
+
+    suggested = _suggest_column_map(all_columns)
+    resolved = dict(suggested)
+    resolved.update(binding.column_map)
+
+    has_identity = "market_id" in resolved
+    has_time = "event_timestamp" in resolved
+    has_snapshot_bbo = "best_bid" in resolved and "best_ask" in resolved
+    has_delta_book = all(
+        key in resolved for key in ("book_side", "book_price", "book_size", "book_action")
+    )
+    has_trade = all(key in resolved for key in ("trade_price", "trade_size", "aggressor_side"))
+    has_external_fv = "external_fv" in resolved
+
+    if not has_identity:
+        errors.append("market/token identity column could not be resolved")
+    if not has_time:
+        errors.append("event timestamp column could not be resolved")
+    if not (has_snapshot_bbo or has_delta_book):
+        errors.append("top-of-book cannot be reconstructed from resolved columns")
+    if not has_trade:
+        warnings.append(
+            "observed trade evidence not resolved; conservative passive-fill "
+            "replay may be unavailable"
+        )
+    if not has_external_fv:
+        warnings.append(
+            "external FV column not resolved; B1/B2/B3 require an explicit "
+            "external-FV provider/join"
+        )
+
+    capabilities = {
+        "snapshot_bbo": has_snapshot_bbo,
+        "delta_book_reconstruction": has_delta_book,
+        "observed_trade_fill_evidence": has_trade,
+        "external_fair_value": has_external_fv,
+        "005f_exact_bbo_features": (
+            has_identity and has_time and (has_snapshot_bbo or has_delta_book)
+        ),
+        "queue_aware_fill": "queue_ahead_bid" in resolved and "queue_ahead_ask" in resolved,
+    }
+    return InputAudit(
+        experiment=EXPERIMENT_ID,
+        passed=not errors,
+        binding_status=binding.status,
+        file_count=len(files),
+        formats=tuple(sorted(formats)),
+        columns=tuple(sorted(all_columns)),
+        suggested_column_map=resolved,
+        capabilities=capabilities,
+        errors=tuple(errors),
+        warnings=tuple(warnings),
+        files=tuple(files),
+    )
+
+
+def write_audit(audit: InputAudit, output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "INPUT_AUDIT.json").write_text(
+        json.dumps(audit.to_dict(), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    (output_dir / "INPUT_AUDIT.md").write_text(audit.to_markdown(), encoding="utf-8")
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
