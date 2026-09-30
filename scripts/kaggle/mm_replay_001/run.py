@@ -40,6 +40,8 @@ from predictions_cup.mm_replay_001 import (  # noqa: E402
     FillAssumption,
     Frozen005FTransferAdapter,
     InputContractError,
+    genuine_005f_change_times,
+    group_bbo_for_005f,
     MakerPolicy,
     QueueAwareFillModel,
     Side,
@@ -258,50 +260,6 @@ def canonical_observations(
     return rows
 
 
-def genuine_change_times(observations: list[BookObservation]) -> list[int]:
-    """Exact 005F grouped-BBO transition definition from the frozen build_clock."""
-    out: list[int] = []
-    previous: BookObservation | None = None
-    for current in observations:
-        valid = (
-            current.best_bid is not None
-            and current.best_ask is not None
-            and 0.0 < current.best_bid <= current.best_ask < 1.0
-        )
-        if previous is None:
-            previous = current
-            continue
-        prev_valid = (
-            previous.best_bid is not None
-            and previous.best_ask is not None
-            and 0.0 < previous.best_bid <= previous.best_ask < 1.0
-        )
-        contiguous = (
-            valid
-            and prev_valid
-            and current.timestamp_ns - previous.timestamp_ns <= 300_000_000_000
-        )
-        same = (
-            contiguous
-            and math.isclose(
-                float(current.best_bid),
-                float(previous.best_bid),
-                rel_tol=0.0,
-                abs_tol=1e-12,
-            )
-            and math.isclose(
-                float(current.best_ask),
-                float(previous.best_ask),
-                rel_tol=0.0,
-                abs_tol=1e-12,
-            )
-        )
-        if contiguous and not same:
-            out.append(current.timestamp_ns)
-        previous = current
-    return out
-
-
 def frozen_artifacts() -> dict[str, tuple[Any, Any, dict[str, Any]]]:
     if not FIT_MANIFEST_PATH.is_file():
         return {}
@@ -365,13 +323,15 @@ def build_005f_transfer(
             continue
         origin = int(origin_raw)
         adapter = Frozen005FTransferAdapter(scope_id=market_id, grid_origin_ns=origin)
-        for obs in observations:
+        grouped_bbo = group_bbo_for_005f(observations)
+        for obs in grouped_bbo:
             adapter.observe(
                 timestamp_ns=obs.timestamp_ns,
                 best_bid=obs.best_bid,
                 best_ask=obs.best_ask,
+                ambiguous=obs.ambiguous,
             )
-        genuine = genuine_change_times(observations)
+        genuine = list(genuine_005f_change_times(grouped_bbo))
         if not observations:
             continue
         last = observations[-1].timestamp_ns
