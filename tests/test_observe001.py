@@ -286,7 +286,11 @@ def test_capture001_persists_observation_and_context_streams(tmp_path: Path) -> 
     context_files = sorted((tmp_path / "research" / "competition_context").rglob("*.parquet"))
     assert venue_files and context_files
     venue = ds.dataset([str(path) for path in venue_files], format="parquet").to_table().to_pylist()
-    context = ds.dataset([str(path) for path in context_files], format="parquet").to_table().to_pylist()
+    context = (
+        ds.dataset([str(path) for path in context_files], format="parquet")
+        .to_table()
+        .to_pylist()
+    )
     assert venue[0]["kind"] == "REALTIME_REVISION_GAP"
     assert context[0]["tournament_id"] == "cup-id"
     assert "super_signal" in str(context[0]["fields_json"])
