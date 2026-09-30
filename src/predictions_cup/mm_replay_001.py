@@ -356,21 +356,23 @@ def genuine_005f_change_times(
             and previous_valid
             and current.timestamp_ns - previous.timestamp_ns <= 300_000_000_000
         )
-        same_bbo = (
-            contiguous
-            and math.isclose(
+        same_bbo = False
+        if contiguous:
+            assert current.best_bid is not None
+            assert current.best_ask is not None
+            assert previous.best_bid is not None
+            assert previous.best_ask is not None
+            same_bbo = math.isclose(
                 current.best_bid,
                 previous.best_bid,
                 rel_tol=0.0,
                 abs_tol=1e-12,
-            )
-            and math.isclose(
+            ) and math.isclose(
                 current.best_ask,
                 previous.best_ask,
                 rel_tol=0.0,
                 abs_tol=1e-12,
             )
-        )
         if contiguous and not same_bbo:
             out.append(current.timestamp_ns)
         previous = current
@@ -1252,15 +1254,22 @@ def replay_market(
         if unwind_cost_per_share is not None
         else None
     )
-    costs_bound = total_fee_cost is not None and terminal_unwind_cost is not None
     net_terminal_local_pnl = (
         gross_terminal_local_pnl - total_fee_cost - terminal_unwind_cost
-        if gross_terminal_local_pnl is not None and costs_bound
+        if (
+            gross_terminal_local_pnl is not None
+            and total_fee_cost is not None
+            and terminal_unwind_cost is not None
+        )
         else None
     )
     net_terminal_external_pnl = (
         gross_terminal_external_pnl - total_fee_cost - terminal_unwind_cost
-        if gross_terminal_external_pnl is not None and costs_bound
+        if (
+            gross_terminal_external_pnl is not None
+            and total_fee_cost is not None
+            and terminal_unwind_cost is not None
+        )
         else None
     )
     summary = ReplaySummary(
