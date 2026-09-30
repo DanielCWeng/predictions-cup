@@ -550,6 +550,7 @@ class Hazard005FBboObservation:
     best_bid: float | None
     best_ask: float | None
     source_version: str = "unknown"
+    ambiguous: bool = False
 
     @property
     def valid(self) -> bool:
@@ -558,7 +559,8 @@ class Hazard005FBboObservation:
             and self.best_ask is not None
             and math.isfinite(self.best_bid)
             and math.isfinite(self.best_ask)
-            and 0.0 <= self.best_bid <= self.best_ask <= 1.0
+            and 0.0 < self.best_bid <= self.best_ask < 1.0
+            and not self.ambiguous
         )
 
 
