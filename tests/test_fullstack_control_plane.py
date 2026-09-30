@@ -67,7 +67,7 @@ def _values(tmp_path: Path) -> dict[str, str]:
     capture.mkdir()
     (capture / "part-000.parquet").write_bytes(b"x" * 1024)
     return {
-        "PREDICTIONS_CUP_SIG_RESEARCH_STORAGE_ROOT": str(capture),
+        "PREDICTIONS_CUP_SIG_RESEARCH_PATH": str(capture),
         "PREDICTIONS_CUP_FULLSTACK_STATUS_DIR": str(tmp_path / "status"),
         "PREDICTIONS_CUP_FULLSTACK_WARN_FREE_DISK_GIB": "8",
         "PREDICTIONS_CUP_FULLSTACK_MIN_FREE_DISK_GIB": "3",
@@ -108,7 +108,7 @@ def test_storage_health_reports_insufficient_then_observed_runway(
     assert first["runway_hours"] is None
     assert first["runway_reason"] == "INSUFFICIENT_HISTORY"
 
-    capture = Path(values["PREDICTIONS_CUP_SIG_RESEARCH_STORAGE_ROOT"])
+    capture = Path(values["PREDICTIONS_CUP_SIG_RESEARCH_PATH"])
     (capture / "part-001.parquet").write_bytes(b"x" * 1024)
     second = storage_health(
         tmp_path,
