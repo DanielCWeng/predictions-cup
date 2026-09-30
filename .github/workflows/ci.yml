@@ -62,6 +62,9 @@ jobs:
       - name: OBSERVE-001 emitter overhead benchmark
         run: python scripts/benchmark_observe001.py --iterations 100000
 
+      - name: OBSERVE-001 combined persistence benchmark
+        run: python scripts/benchmark_observe001_pipeline.py --iterations 10000
+
       - name: SHADOW-002 benchmark
         run: python scripts/benchmark_shadow002.py --markets 237 --candidates 6 --persistence-events 32
 
