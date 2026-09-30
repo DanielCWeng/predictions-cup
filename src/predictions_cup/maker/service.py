@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from collections.abc import Iterable
 import logging
 import signal
 from contextlib import suppress
@@ -930,7 +931,7 @@ class MakerService:
 
     def _observe_005f_books(
         self,
-        token_ids: set[str] | frozenset[str],
+        token_ids: Iterable[str],
         shadow_runtime: LiveShadowRuntime | None,
         *,
         observed_monotonic_ns: int,
