@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -86,6 +87,46 @@ def output_dir_for(manifest_path: Path) -> Path:
     return path
 
 
+def staged_kernel_dir(
+    data: dict[str, Any],
+    kernel_dir: Path,
+    output_dir: Path,
+) -> Path:
+    raw_specs = data.get("stage_paths")
+    if raw_specs is None:
+        return kernel_dir
+    if not isinstance(raw_specs, list):
+        raise ValueError("stage_paths must be a list")
+    staging = output_dir / "kernel-staging"
+    if staging.exists():
+        shutil.rmtree(staging)
+    shutil.copytree(kernel_dir, staging)
+    for index, raw_spec in enumerate(raw_specs):
+        if not isinstance(raw_spec, dict):
+            raise ValueError(f"stage_paths[{index}] must be an object")
+        source_raw = str(raw_spec.get("source", "")).strip()
+        destination_raw = str(raw_spec.get("destination", "")).strip()
+        if not source_raw or not destination_raw:
+            raise ValueError(f"stage_paths[{index}] requires source and destination")
+        source = repo_path(source_raw)
+        destination_rel = Path(destination_raw)
+        if destination_rel.is_absolute() or ".." in destination_rel.parts:
+            raise ValueError(f"invalid staged destination: {destination_raw}")
+        destination = (staging / destination_rel).resolve()
+        try:
+            destination.relative_to(staging.resolve())
+        except ValueError as exc:
+            raise ValueError(f"staged destination escapes kernel: {destination_raw}") from exc
+        if not source.exists():
+            raise FileNotFoundError(f"staged source not found: {source_raw}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if source.is_dir():
+            shutil.copytree(source, destination, dirs_exist_ok=True)
+        else:
+            shutil.copy2(source, destination)
+    return staging
+
+
 def auth_check(output_dir: Path) -> None:
     result = run_command(["kaggle", "kernels", "list", "--mine", "--page", "1"])
     (output_dir / "auth_check.txt").write_text(result.stdout, encoding="utf-8")
@@ -152,7 +193,8 @@ def run_kernel(data: dict[str, Any], output_dir: Path) -> None:
     if not 1 <= timeout_minutes <= 330:
         raise ValueError("timeout_minutes must be between 1 and 330")
 
-    push_result = run_command(["kaggle", "kernels", "push", "-p", str(kernel_dir)])
+    push_dir = staged_kernel_dir(data, kernel_dir, output_dir)
+    push_result = run_command(["kaggle", "kernels", "push", "-p", str(push_dir)])
     active_kernel = canonical_kernel_from_push(push_result, declared_kernel)
     (output_dir / "canonical_kernel.txt").write_text(active_kernel + "\n", encoding="utf-8")
     if active_kernel != declared_kernel:
