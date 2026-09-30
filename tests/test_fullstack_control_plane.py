@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Any
 
 import pytest
 
@@ -23,7 +22,7 @@ NOW = datetime(2026, 9, 30, 22, 0, tzinfo=UTC)
 
 
 def test_clock_health_accepts_synchronised_host_with_small_offset() -> None:
-    def runner(command: Any) -> tuple[int, str]:
+    def runner(command: Sequence[str]) -> tuple[int, str]:
         if command[0] == "timedatectl":
             return 0, "yes"
         if command[0] == "chronyc":
@@ -41,7 +40,7 @@ def test_clock_health_accepts_synchronised_host_with_small_offset() -> None:
 
 
 def test_clock_health_blocks_offset_boundary_and_unknown_inspection() -> None:
-    def bad_offset(command: Any) -> tuple[int, str]:
+    def bad_offset(command: Sequence[str]) -> tuple[int, str]:
         if command[0] == "timedatectl":
             return 0, "yes"
         return 0, "Last offset     : 0.250001 seconds\nLeap status     : Normal"
@@ -85,11 +84,7 @@ def test_storage_health_reports_insufficient_then_observed_runway(
     values = _values(tmp_path)
     monkeypatch.setattr(
         "predictions_cup.runtime.control_plane.shutil.disk_usage",
-        lambda _path: SimpleNamespace(
-            total=200 * 1024**3,
-            used=100 * 1024**3,
-            free=100 * 1024**3,
-        ),
+        lambda _path: _DiskUsage(200 * 1024**3, 100 * 1024**3, 100 * 1024**3),
     )
     queue = {
         "queue_depth": 1,
@@ -130,11 +125,7 @@ def test_storage_health_handles_critical_missing_and_queue_pressure(
     Path(values["PREDICTIONS_CUP_SIG_RESEARCH_PATH"]).rename(tmp_path / "gone")
     monkeypatch.setattr(
         "predictions_cup.runtime.control_plane.shutil.disk_usage",
-        lambda _path: SimpleNamespace(
-            total=100 * 1024**3,
-            used=98 * 1024**3,
-            free=2 * 1024**3,
-        ),
+        lambda _path: _DiskUsage(100 * 1024**3, 98 * 1024**3, 2 * 1024**3),
     )
     result = storage_health(
         tmp_path,
@@ -194,7 +185,7 @@ def test_session_manifest_is_hashed_atomic_and_secret_free(tmp_path: Path) -> No
 
 
 def test_control_plane_has_required_machine_readable_tree() -> None:
-    status: dict[str, Any] = {
+    status: dict[str, object] = {
         "schema_version": "fullstack-001-v1",
         "git_sha": "abc",
         "environment": "test",
