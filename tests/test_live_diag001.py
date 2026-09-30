@@ -160,7 +160,7 @@ def test_missing_depth_never_becomes_executable_edge() -> None:
         latency_ms=10.0,
     )[0]
     assert result.status is live_diag.ResearchStatus.INSUFFICIENT_DEPTH
-    assert "EXECUTABLE_DEPTH_UNAVAILABLE" in result.reasons
+    assert "TRIGGER_EXECUTABLE_DEPTH_UNAVAILABLE" in result.reasons
 
 
 def test_inventory_episode_and_capital_seconds() -> None:
