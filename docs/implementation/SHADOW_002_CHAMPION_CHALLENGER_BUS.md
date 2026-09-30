@@ -114,15 +114,21 @@ This is a baseline/reference, not an alpha claim.
 
 ### PRED-006
 
-`Pred006Candidate` accepts an exact frozen runtime evaluator. With no evaluator,
-it emits `NOT_READY` and `runtime_feature_parity_not_wired`. There is no
-retraining, threshold change, approximation or post-hoc feature replacement.
+`Pred006Candidate` accepts an exact frozen runtime evaluator. CANDIDATE-RUNTIME-001
+now supplies `FrozenPred006Evaluator` in production SHADOW wiring. It exposes
+frozen provenance/readiness and currently fails closed as
+`NOT_READY:model_artifact_missing`; no retraining, threshold change,
+approximation or post-hoc feature replacement is performed.
 
 ### EXPERIMENT-005F
 
-`Hazard005FCandidate` accepts an exact live hazard evaluator. Without live parity,
-it emits `NOT_READY`. Its payload explicitly labels the output
-`movement_hazard_not_directional`; it never converts hazard into directional FV.
+`Hazard005FCandidate` accepts an exact live hazard evaluator.
+CANDIDATE-RUNTIME-001 now supplies `Frozen005FEvaluator` plus an incremental
+genuine-BBO state contract. Current production wiring has no exact current-universe
+order-book history provider, so it fails closed as
+`NOT_READY:required_orderbook_history_unavailable`. Its payload explicitly labels
+the output `movement_hazard_not_directional`; it never converts hazard into
+directional FV.
 
 ### R3 / ETS
 
@@ -290,12 +296,16 @@ latency and event throughput.
 
 ## Known limitations
 
-1. PRED-006 and 005F remain `NOT_READY` until exact live feature-parity evaluators
-   are supplied.
-2. R3/ETS is hook-only until research publishes a stable provider.
-3. A permanently wedged Python candidate thread cannot be force-killed in-process;
+1. PRED-006 has an exact runtime evaluator/feature boundary but remains
+   `NOT_READY:model_artifact_missing` until a separately authorized frozen fit
+   produces serialized C01/C02 pipelines.
+2. 005F has an exact genuine-BBO runtime evaluator/state boundary but remains
+   `NOT_READY:required_orderbook_history_unavailable` until exact current-universe
+   history is wired and frozen model binaries are recovered/hash-checked.
+3. R3/ETS is hook-only until research publishes a stable provider.
+4. A permanently wedged Python candidate thread cannot be force-killed in-process;
    quarantine bounds it to one in-flight call. Such a provider should be restarted
    or moved behind a process boundary if it proves unsafe operationally.
-4. Final launch readiness still requires a production-host full-stack rehearsal
+5. Final launch readiness still requires a production-host full-stack rehearsal
    with live market feeds, SHADOW enabled, zero ingress rejection and readable
    decision evidence after restart.
