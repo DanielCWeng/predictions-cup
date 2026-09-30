@@ -15,69 +15,44 @@ adapter and does not accept a trade credential.
 
 ## Startup composition
 
-At process startup:
+SHADOW is disabled by default. Production composition is owned by `MakerService`;
+do not create a second independent SIG/Polymarket subscriber.
 
-1. Load the accepted SIG ↔ Polymarket mapping.
-2. Build the existing MAKE components.
-3. Register the candidates that are actually available.
-4. Create one bounded event journal.
-5. Start the bus before publishing canonical snapshots.
+Recommended SHADOW settings:
 
-Conceptual composition:
-
-```python
-from pathlib import Path
-
-from predictions_cup.maker import DirectPolymarketFairValueProvider
-from predictions_cup.shadow import (
-    DirectPmCandidate,
-    Hazard005FCandidate,
-    JsonlEventStore,
-    MakerCandidate,
-    Pred006Candidate,
-    ShadowBus,
-    StructuralFairValueCandidate,
-)
-
-provider = DirectPolymarketFairValueProvider(mapping)
-store = JsonlEventStore(Path("data/live/shadow_002/events.jsonl"))
-
-bus = ShadowBus(
-    (
-        MakerCandidate(maker_engine),
-        DirectPmCandidate(provider, mapping=mapping),
-        Pred006Candidate(),          # NOT_READY until exact runtime evaluator exists
-        Hazard005FCandidate(),       # NOT_READY until exact live parity exists
-        StructuralFairValueCandidate(),  # hook-only until R3 publishes provider
-    ),
-    store=store,
-    queue_capacity=512,
-    candidate_timeout_seconds=0.050,
-    trading_enabled=False,
-)
-await bus.start()
+```text
+PREDICTIONS_CUP_MAKER_ENABLED=true
+PREDICTIONS_CUP_SHADOW_ENABLED=true
+PREDICTIONS_CUP_SHADOW_JOURNAL_PATH=data/live/shadow_002/events.jsonl
+PREDICTIONS_CUP_SHADOW_CANDIDATE_QUEUE_CAPACITY=512
+PREDICTIONS_CUP_SHADOW_INGRESS_QUEUE_CAPACITY=4096
+PREDICTIONS_CUP_SHADOW_PERSISTENCE_QUEUE_CAPACITY=65536
+PREDICTIONS_CUP_SHADOW_PERSISTENCE_BATCH_SIZE=256
+PREDICTIONS_CUP_SHADOW_CANDIDATE_TIMEOUT_MS=50
+PREDICTIONS_CUP_SHADOW_CAPTURE_MIRROR_ENABLED=true
 ```
 
-## Publishing one decision boundary
+When enabled, `MakerService` builds SHADOW from the accepted mapping and the
+already-constructed MAKE engine. `MakerRuntimeLoop` passes the exact immutable
+`MakerMarketSnapshot` objects used for the MAKE decision through a synchronous
+non-blocking observer. That observer only performs bounded `put_nowait` admission
+into SHADOW; it never awaits persistence or challenger work.
 
-Reuse the existing `MakerMarketSnapshot` produced from canonical live state:
+The production path is:
 
-```python
-canonical = CanonicalShadowSnapshot.freeze(
-    maker_snapshot,
-    observed_at=wall_now,
-    mapping_version=mapping_version,
-    source_revision=runtime_revision,
-    source_provenance={
-        "sig": sig_source_version,
-        "polymarket": polymarket_source_version,
-    },
-)
-await bus.publish(canonical)
+```text
+SIG + PM state
+    -> MakerSourceBridge
+    -> MakerMarketSnapshot
+    -> MakerRuntimeLoop snapshot observer (non-blocking)
+    -> ShadowBus ingress
+    -> CanonicalShadowSnapshot
+    -> candidates
+    -> JSONL replay journal + CAPTURE strategy_events mirror
 ```
 
-Do not rebuild market state inside individual candidates. The frozen object is the
-decision boundary.
+No candidate rebuilds live state and SHADOW never subscribes independently to SIG
+or Polymarket.
 
 ## Control actions
 
@@ -168,9 +143,10 @@ Gate on:
 
 - `health.running is True`;
 - recent `last_snapshot_age_ns`;
-- zero unexplained persistence failures;
-- bounded persistence/candidate queues;
-- zero or understood timeout/failure counts;
+- `ingress_rejected == 0` and no `ingress_error`;
+- bounded ingress, persistence and candidate queue high-water;
+- zero unexplained persistence/CAPTURE mirror failures;
+- zero or understood timeout/quarantine/failure counts;
 - no sustained coalescing for launch-critical candidates;
 - expected enabled/disabled candidate set;
 - plausible p50/p95/p99 candidate latency.
@@ -178,17 +154,17 @@ Gate on:
 ## Test and benchmark commands
 
 ```bash
-pytest tests/test_shadow002.py
-ruff check src/predictions_cup/shadow tests/test_shadow002.py scripts/benchmark_shadow002.py
+pytest tests/test_shadow002.py tests/test_make001_runtime.py
+ruff check src/predictions_cup/shadow tests/test_shadow002.py scripts/benchmark_shadow002.py scripts/soak_shadow002.py
 mypy
-python scripts/benchmark_shadow002.py \
-  --markets 237 \
-  --candidates 6 \
-  --persistence-events 32
+python scripts/benchmark_shadow002.py --markets 237 --candidates 6 --persistence-events 32
+python scripts/soak_shadow002.py --markets 237 --candidates 6 --cycles 10 --cycle-pause-ms 200
 ```
 
-The benchmark separates publish/orchestration overhead from candidate evaluation
-latency and reports persistence cost separately.
+The one-shot benchmark measures orchestration/evaluation overhead. The sustained
+soak uses production non-blocking MakerSnapshot ingress plus JSONL persistence,
+requires exact event readback, and fails on any ingress rejection, coalescing/drop
+or persistence failure.
 
 ## Adding a challenger
 
@@ -215,12 +191,30 @@ A candidate must:
 - fail closed when exact live features are unavailable;
 - never place/cancel orders.
 
+## Evidence reconciliation
+
+JSONL is the authoritative replay journal because it stores both canonical
+snapshots and CandidateDecision events. With the CAPTURE mirror enabled, each
+decision is also written as a `SHADOW_DECISION` row in CAPTURE-001
+`strategy_events`.
+
+For LIVE-LEARN / first-hours joins:
+
+1. read CAPTURE `strategy_events` for the common decision analytics surface;
+2. parse `payload_json` and retain `decision_id` and `input_snapshot_id`;
+3. join to JSONL decisions by `decision_id`;
+4. recover the exact canonical observable state from the JSONL snapshot with the
+   matching `input_snapshot_id`;
+5. cross-check candidate/version, market/exchange and observable time.
+
+A CAPTURE mirror failure is health-visible and never grants execution permission.
+
 ## Launch integration boundary
 
-The launch event source should call SHADOW after it has built the canonical
-`MakerMarketSnapshot`. Do not let each candidate subscribe independently to SIG or
-Polymarket.
+The launch connection is implemented inside `MakerService` / `MakerRuntimeLoop`.
+Do not add another market-data subscriber and do not await SHADOW from MAKE.
 
 If a future candidate is promoted toward execution, translate its decision through
 the existing BUILD-009 Opportunity -> central Risk -> ExecutionPlan path. SHADOW
 itself remains observation-only.
+
