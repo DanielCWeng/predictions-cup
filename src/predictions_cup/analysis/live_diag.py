@@ -65,6 +65,7 @@ class Quote:
     best_ask: float
     bid_depth: float | None = None
     ask_depth: float | None = None
+    depth_observed_at: datetime | None = None
     trusted: bool = True
 
     @property
@@ -152,11 +153,23 @@ def _times(quotes: Sequence[Quote]) -> list[datetime]:
     return [item.observed_at for item in quotes]
 
 
-def _asof(quotes: Sequence[Quote], at: datetime) -> Quote | None:
+def _asof(
+    quotes: Sequence[Quote],
+    at: datetime,
+    *,
+    max_age_seconds: float | None = None,
+) -> Quote | None:
     if not quotes:
         return None
     index = bisect.bisect_right(_times(quotes), at) - 1
-    return None if index < 0 else quotes[index]
+    if index < 0:
+        return None
+    quote = quotes[index]
+    if max_age_seconds is not None:
+        age = (at - quote.observed_at).total_seconds()
+        if age < 0.0 or age > max_age_seconds:
+            return None
+    return quote
 
 
 def _economic(quotes: Sequence[Quote]) -> tuple[Quote, ...]:
@@ -179,6 +192,7 @@ def construct_gap_episodes(
     external_quotes: Sequence[Quote],
     threshold_ticks: int,
     tick_size: float = SIG_TICK_SIZE,
+    max_quote_age_seconds: float = 15.0,
 ) -> tuple[GapTrigger, ...]:
     """Create independent threshold-crossing episodes using only observable-as-of state."""
     if threshold_ticks <= 0 or tick_size <= 0:
@@ -192,8 +206,12 @@ def construct_gap_episodes(
     active = False
     output: list[GapTrigger] = []
     for at in timestamps:
-        sig_quote = _asof(sig, at)
-        external_quote = _asof(external, at)
+        sig_quote = _asof(sig, at, max_age_seconds=max_quote_age_seconds)
+        external_quote = _asof(
+            external,
+            at,
+            max_age_seconds=max_quote_age_seconds,
+        )
         if sig_quote is None or external_quote is None:
             continue
         gap = external_quote.midpoint - sig_quote.midpoint
@@ -222,6 +240,7 @@ def observe_snapback(
     external_quotes: Sequence[Quote],
     horizons_seconds: Sequence[int] = DEFAULT_HORIZONS_SECONDS,
     tick_size: float = SIG_TICK_SIZE,
+    max_quote_age_seconds: float = 15.0,
 ) -> tuple[SnapbackObservation, ...]:
     """Score future residual gaps without feeding future evidence into the trigger."""
     sig = _economic(sig_quotes)
@@ -230,8 +249,16 @@ def observe_snapback(
     for trigger in triggers:
         for horizon in horizons_seconds:
             at = trigger.observed_at + timedelta(seconds=horizon)
-            future_sig = _asof(sig, at)
-            future_external = _asof(external, at)
+            future_sig = _asof(
+                sig,
+                at,
+                max_age_seconds=max_quote_age_seconds,
+            )
+            future_external = _asof(
+                external,
+                at,
+                max_age_seconds=max_quote_age_seconds,
+            )
             if future_sig is None or future_external is None:
                 continue
             residual = future_external.midpoint - future_sig.midpoint
@@ -344,8 +371,13 @@ def _first_response(
     *,
     at: datetime,
     direction: int,
+    max_quote_age_seconds: float,
 ) -> tuple[datetime | None, bool | None]:
-    baseline = _asof(sig_quotes, at)
+    baseline = _asof(
+        sig_quotes,
+        at,
+        max_age_seconds=max_quote_age_seconds,
+    )
     if baseline is None:
         return None, None
     for quote in sig_quotes:
@@ -364,6 +396,8 @@ def analyze_lead_lag(
     latency_ms: float,
     minimum_impulse_ticks: int = 1,
     tick_size: float = SIG_TICK_SIZE,
+    max_quote_age_seconds: float = 15.0,
+    max_depth_age_seconds: float = 60.0,
 ) -> tuple[LeadLagObservation, ...]:
     """Require the executable edge to survive the declared latency assumption."""
     if latency_ms < 0:
@@ -376,7 +410,11 @@ def analyze_lead_lag(
         move = current.midpoint - prior.midpoint
         if abs(move) < minimum_impulse_ticks * tick_size:
             continue
-        trigger = _asof(sig, current.observed_at)
+        trigger = _asof(
+            sig,
+            current.observed_at,
+            max_age_seconds=max_quote_age_seconds,
+        )
         impulse_id = f"{current.observed_at.astimezone(UTC).isoformat()}:{index}"
         if trigger is None:
             output.append(
@@ -406,6 +444,7 @@ def analyze_lead_lag(
             sig,
             at=current.observed_at,
             direction=direction,
+            max_quote_age_seconds=max_quote_age_seconds,
         )
         lead_seconds = (
             None
@@ -413,9 +452,20 @@ def analyze_lead_lag(
             else (response_at - current.observed_at).total_seconds()
         )
         gross_edge, _, depth = _active_edge(current.midpoint, trigger)
+        if (
+            depth is not None
+            and (
+                trigger.depth_observed_at is None
+                or (
+                    current.observed_at - trigger.depth_observed_at
+                ).total_seconds() > max_depth_age_seconds
+            )
+        ):
+            depth = None
         delayed = _asof(
             sig,
             current.observed_at + timedelta(milliseconds=latency_ms),
+            max_age_seconds=max_quote_age_seconds,
         )
         delayed_edge: float | None = None
         delayed_price: float | None = None
@@ -745,6 +795,7 @@ def _load_quotes(
                         best_ask=quote.best_ask,
                         bid_depth=bid_depth,
                         ask_depth=ask_depth,
+                        depth_observed_at=series[index][0],
                         trusted=quote.trusted,
                     )
                 )
@@ -770,6 +821,7 @@ def _align_quotes(
             best_ask=1.0 - item.best_bid,
             bid_depth=item.ask_depth,
             ask_depth=item.bid_depth,
+            depth_observed_at=item.depth_observed_at,
             trusted=item.trusted,
         )
         for item in quotes
@@ -1080,6 +1132,8 @@ def analyze_live_diagnostics(
         "thresholds_ticks": list(thresholds_ticks),
         "horizons_seconds": list(horizons_seconds),
         "tick_size": SIG_TICK_SIZE,
+        "max_quote_age_seconds": 15.0,
+        "max_depth_age_seconds": 60.0,
         "trigger_rule": "threshold_crossing_rearms_only_below_threshold",
     }
     config_hash = canonical_config_hash(config)
@@ -1197,12 +1251,14 @@ def analyze_live_diagnostics(
                 sig_quotes=sig,
                 external_quotes=pm,
                 threshold_ticks=threshold,
+                max_quote_age_seconds=15.0,
             )
             observations = observe_snapback(
                 triggers=triggers,
                 sig_quotes=sig,
                 external_quotes=pm,
                 horizons_seconds=horizons_seconds,
+                max_quote_age_seconds=15.0,
             )
             summary = summarize_snapback(
                 triggers=triggers,
@@ -1306,6 +1362,8 @@ def analyze_live_diagnostics(
             sig_quotes=sig,
             external_quotes=pm,
             latency_ms=latency_ms,
+            max_quote_age_seconds=15.0,
+            max_depth_age_seconds=60.0,
         ):
             lead_lag_rows.append(
                 {
