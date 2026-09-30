@@ -91,6 +91,38 @@ def _journal(path: Path, state: str | None = None) -> None:
             connection.execute("INSERT INTO execution_envelopes VALUES (?)", (state,))
 
 
+
+def _risk_state_db(path: Path) -> None:
+    payload = {
+        "account_trusted": True,
+        "marks_trusted": True,
+        "reconciliation_complete": True,
+        "account_observed_monotonic_ns": 123456,
+        "global_halt": None,
+        "strategy_halts": [],
+        "current_equity": "100",
+        "peak_session_equity": "100",
+        "drawdown": "0",
+        "realised_pnl": "0",
+        "unrealised_pnl": "0",
+        "exposure": {
+            "trusted": True,
+            "gross_exposure": 0.0,
+            "net_directional_exposure": 0.0,
+            "open_order_exposure": 0.0,
+            "uncertain_order_exposure": 0.0,
+        },
+    }
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "CREATE TABLE risk_state (singleton INTEGER PRIMARY KEY, payload_json TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO risk_state VALUES (1, ?)",
+            (json.dumps(payload),),
+        )
+
+
 def _healthy_values(tmp_path: Path) -> dict[str, str]:
     sig = tmp_path / "sig.sqlite3"
     pm = tmp_path / "pm.sqlite3"
@@ -537,3 +569,82 @@ def test_require_real_rejects_wrong_in_process_owner(tmp_path: Path) -> None:
         and "owner mismatch" in item["reason"]
         for item in health["checks"]
     )
+
+
+
+def test_merged_provider_stack_health_passes_require_real(tmp_path: Path) -> None:
+    script, calls = _fake_systemctl(tmp_path)
+    os.environ["PREDICTIONS_CUP_SYSTEMCTL"] = str(script)
+    os.environ["CALL_LOG"] = str(calls)
+    values = _healthy_values(tmp_path)
+    status_dir = tmp_path / "status"
+    status_dir.mkdir()
+    risk_path = tmp_path / "risk.sqlite3"
+    _risk_state_db(risk_path)
+    shadow_path = tmp_path / "shadow.jsonl"
+    shadow_path.write_text(
+        json.dumps(
+            {
+                "payload": {
+                    "candidate_id": "pred-006",
+                    "candidate_version": "frozen-test",
+                }
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    now = datetime.now(UTC).isoformat()
+    values.update(
+        {
+            "PREDICTIONS_CUP_MAKER_ENABLED": "true",
+            "PREDICTIONS_CUP_SHADOW_ENABLED": "true",
+            "PREDICTIONS_CUP_LIVE_LEARN_ENABLED": "true",
+            "PREDICTIONS_CUP_RISK_CAPITAL_CONTROL_ENABLED": "true",
+            "PREDICTIONS_CUP_RISK_STATE_PATH": str(risk_path),
+            "PREDICTIONS_CUP_SHADOW_JOURNAL_PATH": str(shadow_path),
+            "PREDICTIONS_CUP_FULLSTACK_STATUS_DIR": str(status_dir),
+            "PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_MODE": "IN_PROCESS",
+            "PREDICTIONS_CUP_FULLSTACK_OBSERVE_MODE": "IN_PROCESS",
+        }
+    )
+    (status_dir / "observe.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "observe-001-health-v1",
+                "observed_at": now,
+                "process_instance_id": "maker-observe-test",
+                "owner": "predictions-cup-maker.service",
+                "health": {"state": "HEALTHY"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    for name, reason in (
+        ("shadow", "shadow_healthy"),
+        ("live-learn", "live_learn_healthy"),
+    ):
+        (status_dir / f"{name}.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "runtime-capability-status-v1",
+                    "observed_at": now,
+                    "state": "PASS",
+                    "provider_mode": "real",
+                    "capability_mode": "IN_PROCESS",
+                    "owner_services": ["predictions-cup-maker.service"],
+                    "reason": reason,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    status = collect_status(PROJECT_ROOT, values)
+    health = evaluate_health(status, values, require_real=True)
+
+    assert status["risk_halt"]["source"] == "risk-002"
+    assert status["account"]["trusted"] is True
+    assert status["observe"]["state"] == GateState.PASS.value
+    assert status["live_learn"]["state"] == GateState.PASS.value
+    assert status["shadow"]["state"] == GateState.PASS.value
+    assert health["state"] == GateState.PASS.value
