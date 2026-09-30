@@ -13,6 +13,7 @@ from bisect import bisect_right
 from collections import defaultdict, deque
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import StrEnum
 from threading import RLock
 from typing import Protocol
@@ -132,11 +133,64 @@ class ProbabilityScorer(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
+class Pred006ArtifactManifest:
+    """Explicit authorization for serialized frozen PRED-006 scorers."""
+
+    manifest_version: str
+    research_id: str
+    frozen_spec_version: str
+    feature_schema_hash: str
+    artifacts: tuple[tuple[str, str], ...]
+    provenance: str
+
+    def __post_init__(self) -> None:
+        if self.manifest_version != "pred006-artifact-manifest-v1":
+            raise ValueError("unsupported PRED-006 artifact manifest version")
+        if self.research_id != PRED006_RESEARCH_ID:
+            raise ValueError("PRED-006 artifact manifest research identity mismatch")
+        if self.frozen_spec_version != PRED006_FROZEN_SPEC_VERSION:
+            raise ValueError("PRED-006 artifact manifest frozen spec mismatch")
+        if self.feature_schema_hash != PRED006_SCHEMA_HASH:
+            raise ValueError("PRED-006 artifact manifest feature schema mismatch")
+        if not self.provenance.strip():
+            raise ValueError("PRED-006 artifact manifest provenance must not be blank")
+        artifact_map = dict(self.artifacts)
+        if len(artifact_map) != len(self.artifacts):
+            raise ValueError("duplicate PRED-006 artifact manifest candidate")
+        if set(artifact_map) != set(PRED006_CANDIDATES):
+            raise ValueError("PRED-006 artifact manifest must authorize C01 and C02")
+        for artifact_hash in artifact_map.values():
+            if (
+                len(artifact_hash) != 64
+                or any(ch not in "0123456789abcdef" for ch in artifact_hash.lower())
+            ):
+                raise ValueError("PRED-006 artifact hash must be SHA-256 hex")
+
+    def expected_hash(self, candidate_id: str) -> str:
+        return dict(self.artifacts)[candidate_id]
+
+    @property
+    def manifest_hash(self) -> str:
+        payload = {
+            "manifest_version": self.manifest_version,
+            "research_id": self.research_id,
+            "frozen_spec_version": self.frozen_spec_version,
+            "feature_schema_hash": self.feature_schema_hash,
+            "artifacts": dict(sorted(self.artifacts)),
+            "provenance": self.provenance,
+        }
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
 class Pred006BlockObservation:
     """Exact DATA-003-equivalent condition/block-end observation."""
 
     scope_id: str
     window_id: str
+    block_number: int
     timestamp_s: int
     observed_monotonic_ns: int
     p_yes: float
@@ -154,6 +208,8 @@ class Pred006BlockObservation:
     def __post_init__(self) -> None:
         if not self.scope_id or not self.window_id or not self.source_version:
             raise ValueError("scope_id/window_id/source_version must not be blank")
+        if self.block_number < 0:
+            raise ValueError("block_number must be non-negative")
         if self.timestamp_s < 0 or self.observed_monotonic_ns < 0:
             raise ValueError("observation timestamps must be non-negative")
         if not math.isfinite(self.p_yes) or not 0.0 <= self.p_yes <= 1.0:
@@ -177,6 +233,7 @@ class Pred006BlockObservation:
 class Pred006FeatureVector:
     scope_id: str
     window_id: str
+    block_number: int
     timestamp_s: int
     observed_monotonic_ns: int
     source_version: str
@@ -207,6 +264,7 @@ class Pred006FeatureProvider(Protocol):
 class _PredWindow:
     first_timestamp_s: int
     previous_timestamp_s: int
+    previous_block_number: int
     previous_p: float
     queues: dict[int, deque[tuple[int, float, float]]]
     sum_sq: dict[int, float]
@@ -304,6 +362,7 @@ class IncrementalPred006FeatureState:
                 state = _PredWindow(
                     first_timestamp_s=observation.timestamp_s,
                     previous_timestamp_s=observation.timestamp_s,
+                    previous_block_number=observation.block_number,
                     previous_p=observation.p_yes,
                     queues={window: deque() for window in self._windows},
                     sum_sq={window: 0.0 for window in self._windows},
@@ -312,9 +371,13 @@ class IncrementalPred006FeatureState:
                 since_prev = math.nan
                 dp_sq = 0.0
             else:
+                if observation.block_number <= state.previous_block_number:
+                    raise ValueError(
+                        "PRED-006 block_number must strictly increase per scope/window"
+                    )
                 if observation.timestamp_s < state.previous_timestamp_s:
                     raise ValueError(
-                        "PRED-006 observations must be time ordered per scope/window"
+                        "PRED-006 source timestamp regressed across increasing blocks"
                     )
                 since_prev = float(
                     observation.timestamp_s - state.previous_timestamp_s
@@ -380,6 +443,7 @@ class IncrementalPred006FeatureState:
             vector = Pred006FeatureVector(
                 scope_id=observation.scope_id,
                 window_id=observation.window_id,
+                block_number=observation.block_number,
                 timestamp_s=observation.timestamp_s,
                 observed_monotonic_ns=observation.observed_monotonic_ns,
                 source_version=observation.source_version,
@@ -387,6 +451,7 @@ class IncrementalPred006FeatureState:
                 values=tuple(float(features[name]) for name in PRED006_FEATURES),
             )
             state.previous_timestamp_s = observation.timestamp_s
+            state.previous_block_number = observation.block_number
             state.previous_p = observation.p_yes
             self._latest[observation.scope_id] = vector
             return vector
@@ -421,19 +486,22 @@ class FrozenPred006Evaluator:
         provider: Pred006FeatureProvider | None = None,
         *,
         scorers: Mapping[str, ProbabilityScorer] | None = None,
+        artifact_manifest: Pred006ArtifactManifest | None = None,
     ) -> None:
         self._provider = provider or NullPred006FeatureProvider()
         self._scorers = dict(scorers or {})
+        self._artifact_manifest = artifact_manifest
 
     def metadata(self, snapshot: CanonicalShadowSnapshot) -> RuntimeEvaluatorMetadata:
         parity = self._provider.parity()
-        if any(candidate not in self._scorers for candidate in PRED006_CANDIDATES):
+        manifest = self._artifact_manifest
+        if manifest is None:
             return RuntimeEvaluatorMetadata(
                 research_id=self.research_id,
                 frozen_spec_version=self.frozen_spec_version,
-                artifact_hash=None,
+                artifact_hash=self._artifact_hash() if self._scorers else None,
                 expected_artifact_hash=(
-                    "NO_SERIALIZED_FITTED_MODEL_IN_FROZEN_PRED006_OUTPUT"
+                    "NO_AUTHORIZED_SERIALIZED_FITTED_MODEL_MANIFEST"
                 ),
                 feature_schema_hash=self.feature_schema_hash,
                 ready=False,
@@ -442,7 +510,45 @@ class FrozenPred006Evaluator:
                 quality_flags=(
                     "pred006:no_retraining",
                     "pred006:frozen_no_approximation",
+                    "pred006:artifact_manifest_required",
                 ),
+            )
+
+        missing = tuple(
+            candidate
+            for candidate in PRED006_CANDIDATES
+            if candidate not in self._scorers
+        )
+        if missing:
+            return RuntimeEvaluatorMetadata(
+                research_id=self.research_id,
+                frozen_spec_version=self.frozen_spec_version,
+                artifact_hash=self._artifact_hash() if self._scorers else None,
+                expected_artifact_hash=manifest.manifest_hash,
+                feature_schema_hash=self.feature_schema_hash,
+                ready=False,
+                readiness_reason="model_artifact_missing:" + ",".join(missing),
+                freshness_seconds=None,
+                quality_flags=("pred006:artifact_manifest_authorized",),
+            )
+
+        bad_hash = tuple(
+            candidate
+            for candidate in PRED006_CANDIDATES
+            if self._scorers[candidate].artifact_hash
+            != manifest.expected_hash(candidate)
+        )
+        if bad_hash:
+            return RuntimeEvaluatorMetadata(
+                research_id=self.research_id,
+                frozen_spec_version=self.frozen_spec_version,
+                artifact_hash=self._artifact_hash(),
+                expected_artifact_hash=manifest.manifest_hash,
+                feature_schema_hash=self.feature_schema_hash,
+                ready=False,
+                readiness_reason="model_artifact_hash_mismatch:" + ",".join(bad_hash),
+                freshness_seconds=None,
+                quality_flags=("pred006:artifact_manifest_authorized",),
             )
 
         bad = tuple(
@@ -459,7 +565,7 @@ class FrozenPred006Evaluator:
                 research_id=self.research_id,
                 frozen_spec_version=self.frozen_spec_version,
                 artifact_hash=self._artifact_hash(),
-                expected_artifact_hash=None,
+                expected_artifact_hash=manifest.manifest_hash,
                 feature_schema_hash=self.feature_schema_hash,
                 ready=False,
                 readiness_reason="feature_parity_unavailable:" + ",".join(bad),
@@ -473,7 +579,7 @@ class FrozenPred006Evaluator:
                 research_id=self.research_id,
                 frozen_spec_version=self.frozen_spec_version,
                 artifact_hash=self._artifact_hash(),
-                expected_artifact_hash=None,
+                expected_artifact_hash=manifest.manifest_hash,
                 feature_schema_hash=self.feature_schema_hash,
                 ready=False,
                 readiness_reason="required_feature_history_unavailable",
@@ -489,7 +595,7 @@ class FrozenPred006Evaluator:
             research_id=self.research_id,
             frozen_spec_version=self.frozen_spec_version,
             artifact_hash=self._artifact_hash(),
-            expected_artifact_hash=None,
+            expected_artifact_hash=manifest.manifest_hash,
             feature_schema_hash=self.feature_schema_hash,
             ready=True,
             readiness_reason=None,
@@ -518,6 +624,10 @@ class FrozenPred006Evaluator:
                 "research_id": self.research_id,
                 "frozen_spec_version": self.frozen_spec_version,
                 "feature_schema_hash": self.feature_schema_hash,
+                "artifact_manifest_hash": self._artifact_manifest.manifest_hash
+                if self._artifact_manifest is not None
+                else None,
+                "feature_block_number": vector.block_number,
                 "feature_timestamp_s": vector.timestamp_s,
                 "window_id": vector.window_id,
                 "source_version": vector.source_version,
@@ -549,15 +659,21 @@ class FrozenPred006Evaluator:
 
 @dataclass(frozen=True, slots=True)
 class Hazard005FBboObservation:
-    """Grouped BBO observation, not a generic websocket-age proxy."""
+    """Grouped BBO observation with exact research timestamp semantics."""
 
     scope_id: str
-    timestamp_s: int
+    timestamp_ns: int
     observed_monotonic_ns: int
     best_bid: float | None
     best_ask: float | None
     source_version: str = "unknown"
     ambiguous: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.scope_id:
+            raise ValueError("005F scope_id must not be blank")
+        if self.timestamp_ns < 0 or self.observed_monotonic_ns < 0:
+            raise ValueError("005F timestamps must be non-negative")
 
     @property
     def valid(self) -> bool:
@@ -574,7 +690,7 @@ class Hazard005FBboObservation:
 @dataclass(frozen=True, slots=True)
 class Hazard005FFeatureVector:
     scope_id: str
-    grid_time_s: int
+    grid_time_ns: int
     observed_monotonic_ns: int
     values: Mapping[str, float]
     source_version: str
@@ -634,65 +750,77 @@ class FixedHazard005FRegimeProvider:
 
 @dataclass(frozen=True, slots=True)
 class _HazardState:
-    timestamp_s: int
+    timestamp_ns: int
     midpoint: float
     segment: int
-    last_genuine_s: int | None
+    last_genuine_ns: int | None
     observed_monotonic_ns: int
     source_version: str
 
 
 @dataclass(slots=True)
 class _HazardScope:
-    previous_timestamp_s: int | None = None
+    previous_timestamp_ns: int | None = None
     previous_bid: float | None = None
     previous_ask: float | None = None
     previous_valid: bool = False
     segment: int = 0
-    last_genuine_s: int | None = None
+    last_genuine_ns: int | None = None
     states: list[_HazardState] = field(default_factory=list)
-    state_times: list[int] = field(default_factory=list)
-    genuine_bins: dict[int, int] = field(default_factory=dict)
+    state_times_ns: list[int] = field(default_factory=list)
+    genuine_bins_ns: dict[int, int] = field(default_factory=dict)
 
 
 class IncrementalHazard005FState:
-    """Reconstruct accepted 005F BBO-age features on the frozen 15-second grid."""
+    """Reconstruct accepted 005F features using integer nanosecond time."""
 
     provider_id = "005f-exact-genuine-bbo-state"
     version = "candidate-runtime-001"
-    _grid_seconds = 15
-    _capture_bin_seconds = 5
-    _gap_seconds = 300
+    _ns = 1_000_000_000
+    _grid_ns = 15 * _ns
+    _capture_bin_ns = 5 * _ns
+    _gap_ns = 300 * _ns
+    _epoch = datetime(1970, 1, 1, tzinfo=UTC)
 
     def __init__(
         self,
         *,
-        grid_origin_s: int | None = None,
+        grid_origin_ns: int | None = None,
         scope_resolver: Callable[[CanonicalShadowSnapshot], str | None] | None = None,
     ) -> None:
-        if grid_origin_s is not None and grid_origin_s < 0:
-            raise ValueError("grid_origin_s must be non-negative")
-        self._grid_origin_s = grid_origin_s
+        if grid_origin_ns is not None and grid_origin_ns < 0:
+            raise ValueError("grid_origin_ns must be non-negative")
+        self._grid_origin_ns = grid_origin_ns
         self._scope_resolver = scope_resolver
         self._scopes: dict[str, _HazardScope] = defaultdict(_HazardScope)
         self._lock = RLock()
 
+    @classmethod
+    def datetime_ns(cls, value: datetime) -> int:
+        if value.tzinfo is None:
+            raise ValueError("005F query datetime must be timezone-aware")
+        delta = value.astimezone(UTC) - cls._epoch
+        return (
+            (delta.days * 86_400 + delta.seconds) * cls._ns
+            + delta.microseconds * 1_000
+        )
+
     def observe(self, observation: Hazard005FBboObservation) -> None:
         with self._lock:
             scope = self._scopes[observation.scope_id]
+            previous_time = scope.previous_timestamp_ns
             if (
-                scope.previous_timestamp_s is not None
-                and observation.timestamp_s < scope.previous_timestamp_s
+                previous_time is not None
+                and observation.timestamp_ns < previous_time
             ):
                 raise ValueError(
                     "005F BBO observations must be time ordered per scope"
                 )
 
             valid = observation.valid
-            previous_time = scope.previous_timestamp_s
             gap = (
                 previous_time is not None
-                and observation.timestamp_s - previous_time > self._gap_seconds
+                and observation.timestamp_ns - previous_time > self._gap_ns
             )
             contiguous = valid and scope.previous_valid and not gap
             same_bbo = (
@@ -720,29 +848,29 @@ class IncrementalHazard005FState:
             if establish:
                 scope.segment += 1
             if genuine:
-                scope.last_genuine_s = observation.timestamp_s
-                bin_time = (
-                    observation.timestamp_s // self._capture_bin_seconds
-                ) * self._capture_bin_seconds
-                scope.genuine_bins[bin_time] = (
-                    scope.genuine_bins.get(bin_time, 0) + 1
+                scope.last_genuine_ns = observation.timestamp_ns
+                bin_time_ns = (
+                    observation.timestamp_ns // self._capture_bin_ns
+                ) * self._capture_bin_ns
+                scope.genuine_bins_ns[bin_time_ns] = (
+                    scope.genuine_bins_ns.get(bin_time_ns, 0) + 1
                 )
 
             if valid and (establish or genuine):
                 assert observation.best_bid is not None
                 assert observation.best_ask is not None
                 state = _HazardState(
-                    timestamp_s=observation.timestamp_s,
+                    timestamp_ns=observation.timestamp_ns,
                     midpoint=(observation.best_bid + observation.best_ask) / 2.0,
                     segment=scope.segment,
-                    last_genuine_s=scope.last_genuine_s,
+                    last_genuine_ns=scope.last_genuine_ns,
                     observed_monotonic_ns=observation.observed_monotonic_ns,
                     source_version=observation.source_version,
                 )
                 scope.states.append(state)
-                scope.state_times.append(observation.timestamp_s)
+                scope.state_times_ns.append(observation.timestamp_ns)
 
-            scope.previous_timestamp_s = observation.timestamp_s
+            scope.previous_timestamp_ns = observation.timestamp_ns
             scope.previous_valid = valid
             if valid:
                 scope.previous_bid = observation.best_bid
@@ -750,35 +878,35 @@ class IncrementalHazard005FState:
             else:
                 scope.previous_bid = None
                 scope.previous_ask = None
-                scope.last_genuine_s = None
+                scope.last_genuine_ns = None
 
     def feature_vector(
         self,
         snapshot: CanonicalShadowSnapshot,
     ) -> Hazard005FFeatureVector | None:
-        if self._grid_origin_s is None or self._scope_resolver is None:
+        if self._grid_origin_ns is None or self._scope_resolver is None:
             return None
         scope_id = self._scope_resolver(snapshot)
         if scope_id is None:
             return None
-        observed_s = int(snapshot.observed_at.timestamp())
-        if observed_s < self._grid_origin_s:
+        observed_ns = self.datetime_ns(snapshot.observed_at)
+        if observed_ns < self._grid_origin_ns:
             return None
-        elapsed = observed_s - self._grid_origin_s
-        query_s = self._grid_origin_s + (
-            elapsed // self._grid_seconds
-        ) * self._grid_seconds
+        elapsed_ns = observed_ns - self._grid_origin_ns
+        query_ns = self._grid_origin_ns + (
+            elapsed_ns // self._grid_ns
+        ) * self._grid_ns
         with self._lock:
             scope = self._scopes.get(scope_id)
             if scope is None or not scope.states:
                 return None
-            current = self._asof(scope, query_s)
-            if current is None or current.last_genuine_s is None:
+            current = self._asof(scope, query_ns)
+            if current is None or current.last_genuine_ns is None:
                 return None
 
-            ret_15 = self._return(scope, query_s, 15)
+            ret_15 = self._return(scope, query_ns, 15)
             returns = [
-                self._return(scope, query_s - offset, 15)
+                self._return(scope, query_ns - offset * self._ns, 15)
                 for offset in (45, 30, 15, 0)
             ]
             finite = [value for value in returns if math.isfinite(value)]
@@ -788,15 +916,17 @@ class IncrementalHazard005FState:
                 else math.nan
             )
             values = {
-                "genuine_15": float(self._genuine_count(scope, query_s, 15)),
-                "genuine_60": float(self._genuine_count(scope, query_s, 60)),
-                "genuine_age_s": float(query_s - current.last_genuine_s),
+                "genuine_15": float(self._genuine_count(scope, query_ns, 15)),
+                "genuine_60": float(self._genuine_count(scope, query_ns, 60)),
+                "genuine_age_s": (
+                    query_ns - current.last_genuine_ns
+                ) / self._ns,
                 "abs_ret_15": abs(ret_15) if math.isfinite(ret_15) else math.nan,
                 "rv_60": rv_60,
             }
             return Hazard005FFeatureVector(
                 scope_id=scope_id,
-                grid_time_s=query_s,
+                grid_time_ns=query_ns,
                 observed_monotonic_ns=current.observed_monotonic_ns,
                 values=values,
                 source_version=current.source_version,
@@ -811,11 +941,11 @@ class IncrementalHazard005FState:
     def _return(
         self,
         scope: _HazardScope,
-        query_s: int,
+        query_ns: int,
         lag_s: int,
     ) -> float:
-        current = self._asof(scope, query_s)
-        past = self._asof(scope, query_s - lag_s)
+        current = self._asof(scope, query_ns)
+        past = self._asof(scope, query_ns - lag_s * self._ns)
         if current is None or past is None or current.segment != past.segment:
             return math.nan
         current_logit = self._logit(current.midpoint)
@@ -827,22 +957,22 @@ class IncrementalHazard005FState:
     @staticmethod
     def _asof(
         scope: _HazardScope,
-        query_s: int,
+        query_ns: int,
     ) -> _HazardState | None:
-        index = bisect_right(scope.state_times, query_s) - 1
+        index = bisect_right(scope.state_times_ns, query_ns) - 1
         return scope.states[index] if index >= 0 else None
 
-    @staticmethod
     def _genuine_count(
+        self,
         scope: _HazardScope,
-        query_s: int,
+        query_ns: int,
         window_s: int,
     ) -> int:
-        lower = query_s - window_s
+        lower_ns = query_ns - window_s * self._ns
         return sum(
             count
-            for bin_time, count in scope.genuine_bins.items()
-            if lower < bin_time <= query_s
+            for bin_time_ns, count in scope.genuine_bins_ns.items()
+            if lower_ns < bin_time_ns <= query_ns
         )
 
 
@@ -966,7 +1096,10 @@ class Frozen005FEvaluator:
             ready=True,
             readiness_reason=None,
             freshness_seconds=age,
-            quality_flags=("005f:genuine_age_exact", f"005f:regime:{regime}"),
+            quality_flags=(
+                "005f:genuine_age_ns_exact",
+                f"005f:regime:{regime}",
+            ),
         )
 
     def evaluate(
@@ -1001,7 +1134,7 @@ class Frozen005FEvaluator:
                 "frozen_spec_version": self.frozen_spec_version,
                 "feature_schema_hash": self.feature_schema_hash,
                 "regime": regime,
-                "grid_time_s": vector.grid_time_s,
+                "grid_time_ns": vector.grid_time_ns,
                 "source_version": vector.source_version,
             },
         )
