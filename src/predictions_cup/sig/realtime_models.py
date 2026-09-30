@@ -70,6 +70,41 @@ class TournamentPageDto(TransportModel):
     pagination: TournamentOffsetPaginationDto
 
 
+class LeaderboardEntryDto(TransportModel):
+    rank: int
+    profile_id: str = Field(alias="profileId")
+    username: str | None
+    pnl: WireDecimal
+    trades_count: int = Field(alias="tradesCount")
+    volume: WireDecimal
+    win_rate: WireDecimal | None = Field(alias="winRate")
+    roi: WireDecimal
+
+
+class BoundGroupDto(TransportModel):
+    id: str
+    name: str
+    slug: str
+    member_count: int = Field(alias="member_count")
+
+
+class SeasonDescriptorDto(TransportModel):
+    season_key: str = Field(alias="season_key")
+    archived: bool
+
+
+class TournamentLeaderboardDto(TransportModel):
+    leaderboard: tuple[LeaderboardEntryDto, ...]
+    total: int
+    period: str
+    limit: int
+    offset: int
+    my_rank: int | None = Field(alias="myRank")
+    season: SeasonDescriptorDto | None
+    bound_groups: tuple[BoundGroupDto, ...] = Field(alias="boundGroups")
+    active_group_id: str | None = Field(alias="activeGroupId")
+
+
 class RealtimeDeliveryDto(TransportModel):
     """Topic-local delivery continuity plus engine provenance."""
 
