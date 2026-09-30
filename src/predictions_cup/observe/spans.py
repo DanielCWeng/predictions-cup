@@ -34,12 +34,28 @@ class VenueSpan:
 
 
 _RULES: tuple[tuple[SpanName, ObservationKind, tuple[ObservationKind, ...]], ...] = (
-    (SpanName.DECISION_TO_DISPATCH, ObservationKind.DECISION_OBSERVED, (ObservationKind.REQUEST_DISPATCHED,)),
-    (SpanName.DISPATCH_TO_RESPONSE, ObservationKind.REQUEST_DISPATCHED, (ObservationKind.RESPONSE_RECEIVED,)),
+    (
+        SpanName.DECISION_TO_DISPATCH,
+        ObservationKind.DECISION_OBSERVED,
+        (ObservationKind.REQUEST_DISPATCHED,),
+    ),
+    (
+        SpanName.DISPATCH_TO_RESPONSE,
+        ObservationKind.REQUEST_DISPATCHED,
+        (ObservationKind.RESPONSE_RECEIVED,),
+    ),
     (SpanName.DISPATCH_TO_ACK, ObservationKind.REQUEST_DISPATCHED, (ObservationKind.ACK,)),
-    (SpanName.ACK_TO_FIRST_FILL, ObservationKind.ACK, (ObservationKind.PARTIAL_FILL, ObservationKind.FILL)),
+    (
+        SpanName.ACK_TO_FIRST_FILL,
+        ObservationKind.ACK,
+        (ObservationKind.PARTIAL_FILL, ObservationKind.FILL),
+    ),
     (SpanName.DISPATCH_TO_FILL, ObservationKind.REQUEST_DISPATCHED, (ObservationKind.FILL,)),
-    (SpanName.CANCEL_TO_CONFIRMATION, ObservationKind.CANCEL_REQUESTED, (ObservationKind.CANCEL_ACK,)),
+    (
+        SpanName.CANCEL_TO_CONFIRMATION,
+        ObservationKind.CANCEL_REQUESTED,
+        (ObservationKind.CANCEL_ACK,),
+    ),
     (SpanName.RECONNECT, ObservationKind.RECONNECT_STARTED, (ObservationKind.RECONNECT_RESOLVED,)),
 )
 
@@ -71,7 +87,11 @@ class VenueSpanCollector:
                 ack = first.get(ObservationKind.ACK)
                 terminals = [
                     first[kind]
-                    for kind in (ObservationKind.FILL, ObservationKind.CANCEL_ACK, ObservationKind.REJECTED)
+                    for kind in (
+                        ObservationKind.FILL,
+                        ObservationKind.CANCEL_ACK,
+                        ObservationKind.REJECTED,
+                    )
                     if kind in first
                 ]
                 if ack is not None and terminals and min(terminals) >= ack:
