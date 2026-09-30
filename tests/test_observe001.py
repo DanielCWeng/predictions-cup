@@ -82,7 +82,22 @@ def test_lifecycle_summary_covers_latency_errors_cancel_reconnect_and_duplicates
         _obs(ObservationKind.RECONCILIATION_RESOLVED, 80_000_000),
         _obs(ObservationKind.RECONNECT_STARTED, 90_000_000, operation=None),
         _obs(ObservationKind.RECONNECT_RESOLVED, 120_000_000, operation=None),
-        _obs(ObservationKind.REALTIME_REVISION_GAP, 121_000_000, operation=None),
+        _obs(
+            ObservationKind.QUOTE_PUBLISHED,
+            130_000_000,
+            operation="quote-op",
+        ),
+        _obs(
+            ObservationKind.QUOTE_REPLENISHED,
+            131_000_000,
+            operation="quote-op",
+        ),
+        _obs(
+            ObservationKind.QUOTE_WITHDRAWN,
+            145_000_000,
+            operation="quote-op",
+        ),
+        _obs(ObservationKind.REALTIME_REVISION_GAP, 150_000_000, operation=None),
     )
     summary = summarize_observations(rows)
     assert summary["rate_limit_429_count"] == 1
@@ -91,6 +106,7 @@ def test_lifecycle_summary_covers_latency_errors_cancel_reconnect_and_duplicates
     assert summary["uncertainty_count"] == 1
     assert summary["reconnect_count"] == 1
     assert summary["realtime_revision_gap_count"] == 1
+    assert summary["replenishment_observation_count"] == 1
     assert summary["duplicate_ack_evidence"] == 1
     assert summary["duplicate_fill_evidence"] == 1
     latency = summary["latency_ms"]
@@ -98,12 +114,15 @@ def test_lifecycle_summary_covers_latency_errors_cancel_reconnect_and_duplicates
     dispatch_to_ack = latency["dispatch_to_ack"]
     ack_to_first_fill = latency["ack_to_first_fill"]
     cancel_to_confirmation = latency["cancel_to_confirmation"]
+    quote_lifetime = latency["quote_lifetime"]
     assert isinstance(dispatch_to_ack, dict)
     assert isinstance(ack_to_first_fill, dict)
     assert isinstance(cancel_to_confirmation, dict)
+    assert isinstance(quote_lifetime, dict)
     assert dispatch_to_ack["p50"] == 15.0
     assert ack_to_first_fill["p50"] == 5.0
     assert cancel_to_confirmation["p50"] == 5.0
+    assert quote_lifetime["p50"] == 15.0
 
 
 def test_replay_orders_lifecycle_and_missing_server_timestamp_stays_explicit() -> None:
