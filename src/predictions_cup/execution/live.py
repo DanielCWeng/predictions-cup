@@ -181,6 +181,7 @@ class SigLiveSink:
                     else LifecycleState.FILLED
                 )
                 response_json = single_response.model_dump_json(by_alias=True)
+                response_status: int | None = 200
             elif envelope.operation_kind is OperationKind.BEST_EFFORT_BATCH:
                 batch_response = await self._client.place_batch_payload(
                     envelope.payload_json
@@ -191,6 +192,9 @@ class SigLiveSink:
                     else LifecycleState.ACKED
                 )
                 response_json = batch_response.model_dump_json(by_alias=True)
+                # SigTradingClient currently returns the validated DTO without
+                # retaining the outer 200/207/422 status.
+                response_status = None
             else:
                 multi_response = await self._client.place_multi_leg_payload(
                     envelope.payload_json
@@ -202,6 +206,7 @@ class SigLiveSink:
                     else LifecycleState.ACKED
                 )
                 response_json = multi_response.model_dump_json(by_alias=True)
+                response_status = 200
         except SigExecutionUncertainError as exc:
             observed = self._clock_ns()
             self._observe_error(exc, envelope, observed, plan=plan)
@@ -268,14 +273,14 @@ class SigLiveSink:
             envelope,
             monotonic_ns=observed,
             plan=plan,
-            status_code=200,
+            status_code=response_status,
         )
         self._observe(
             ObservationKind.RESPONSE_PARSED,
             envelope,
             monotonic_ns=observed,
             plan=plan,
-            status_code=200,
+            status_code=response_status,
         )
         self._journal.record_event(
             logical_operation_id=envelope.logical_operation_id,
@@ -323,7 +328,7 @@ class SigLiveSink:
                 exchange_order_id=(
                     None if single_response.order_id is None else str(single_response.order_id)
                 ),
-                status_code=200,
+                status_code=response_status,
             )
             if single_response.quantity_traded > 0:
                 self._observe(
@@ -340,7 +345,7 @@ class SigLiveSink:
                     exchange_order_id=(
                         None if single_response.order_id is None else str(single_response.order_id)
                     ),
-                    status_code=200,
+                    status_code=response_status,
                     detail=(("quantity", str(single_response.quantity_traded)),),
                 )
                 self._journal.record_event(
@@ -398,6 +403,22 @@ class SigLiveSink:
                         separators=(",", ":"),
                     ),
                 )
+                self._observe(
+                    (
+                        ObservationKind.ACK
+                        if batch_result.ok
+                        else ObservationKind.REJECTED
+                    ),
+                    envelope,
+                    monotonic_ns=observed,
+                    plan=plan,
+                    intent=intent,
+                    exchange_id=None if intent is None else intent.exchange_id,
+                    exchange_order_id=(
+                        str(order_id) if isinstance(order_id, (int, str)) else None
+                    ),
+                    status_code=batch_result.status,
+                )
         else:
             for multi_result in multi_response.results:
                 intent = (
@@ -429,6 +450,22 @@ class SigLiveSink:
                         default=str,
                         separators=(",", ":"),
                     ),
+                )
+                self._observe(
+                    (
+                        ObservationKind.ACK
+                        if multi_result.ok
+                        else ObservationKind.REJECTED
+                    ),
+                    envelope,
+                    monotonic_ns=observed,
+                    plan=plan,
+                    intent=intent,
+                    exchange_id=None if intent is None else intent.exchange_id,
+                    exchange_order_id=(
+                        str(order_id) if isinstance(order_id, (int, str)) else None
+                    ),
+                    status_code=200,
                 )
         self._journal.mark_state(
             envelope.logical_operation_id,
@@ -498,6 +535,7 @@ class SigLiveSink:
                     separators=(",", ":"),
                 )
                 state = LifecycleState.CANCELLED
+                response_status = 200
             else:
                 tournament_id = raw.get("tournamentId")
                 exchange_id = raw.get("exchangeId")
@@ -515,6 +553,7 @@ class SigLiveSink:
                     if not response.errors
                     else LifecycleState.CANCEL_PENDING
                 )
+                response_status = None
         except SigExecutionUncertainError as exc:
             observed = self._clock_ns()
             self._observe_error(exc, envelope, observed)
@@ -609,7 +648,7 @@ class SigLiveSink:
             ObservationKind.RESPONSE_RECEIVED,
             envelope,
             monotonic_ns=observed,
-            status_code=200,
+            status_code=response_status,
         )
         self._observe(
             ObservationKind.RESPONSE_PARSED,
