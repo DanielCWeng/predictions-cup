@@ -15,7 +15,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from threading import RLock
-from typing import Protocol
+from typing import Callable, Protocol
 
 from predictions_cup.shadow.adapters import (
     Hazard005FSignal,
@@ -265,8 +265,10 @@ class IncrementalPred006FeatureState:
         self,
         *,
         fee_parity: FeatureParity = FeatureParity.EXACT_BUT_DELAYED,
+        scope_resolver: Callable[[CanonicalShadowSnapshot], str | None] | None = None,
     ) -> None:
         self._fee_parity = fee_parity
+        self._scope_resolver = scope_resolver
         self._state: dict[tuple[str, str], _PredWindow] = {}
         self._latest: dict[str, Pred006FeatureVector] = {}
         self._lock = RLock()
@@ -393,8 +395,13 @@ class IncrementalPred006FeatureState:
         self,
         snapshot: CanonicalShadowSnapshot,
     ) -> Pred006FeatureVector | None:
+        if self._scope_resolver is None:
+            return None
+        scope_id = self._scope_resolver(snapshot)
+        if scope_id is None:
+            return None
         with self._lock:
-            vector = self._latest.get(snapshot.market_id)
+            vector = self._latest.get(scope_id)
             if vector is None:
                 return None
             if vector.observed_monotonic_ns > snapshot.observed_monotonic_ns:
@@ -657,10 +664,16 @@ class IncrementalHazard005FState:
     _capture_bin_seconds = 5
     _gap_seconds = 300
 
-    def __init__(self, *, grid_origin_s: int | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        grid_origin_s: int | None = None,
+        scope_resolver: Callable[[CanonicalShadowSnapshot], str | None] | None = None,
+    ) -> None:
         if grid_origin_s is not None and grid_origin_s < 0:
             raise ValueError("grid_origin_s must be non-negative")
         self._grid_origin_s = grid_origin_s
+        self._scope_resolver = scope_resolver
         self._scopes: dict[str, _HazardScope] = defaultdict(_HazardScope)
         self._lock = RLock()
 
@@ -743,7 +756,10 @@ class IncrementalHazard005FState:
         self,
         snapshot: CanonicalShadowSnapshot,
     ) -> Hazard005FFeatureVector | None:
-        if self._grid_origin_s is None:
+        if self._grid_origin_s is None or self._scope_resolver is None:
+            return None
+        scope_id = self._scope_resolver(snapshot)
+        if scope_id is None:
             return None
         observed_s = int(snapshot.observed_at.timestamp())
         if observed_s < self._grid_origin_s:
@@ -753,7 +769,7 @@ class IncrementalHazard005FState:
             elapsed // self._grid_seconds
         ) * self._grid_seconds
         with self._lock:
-            scope = self._scopes.get(snapshot.market_id)
+            scope = self._scopes.get(scope_id)
             if scope is None or not scope.states:
                 return None
             current = self._asof(scope, query_s)
@@ -779,7 +795,7 @@ class IncrementalHazard005FState:
                 "rv_60": rv_60,
             }
             return Hazard005FFeatureVector(
-                scope_id=snapshot.market_id,
+                scope_id=scope_id,
                 grid_time_s=query_s,
                 observed_monotonic_ns=current.observed_monotonic_ns,
                 values=values,
