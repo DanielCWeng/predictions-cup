@@ -278,7 +278,7 @@ class KalshiPublicClient:
             self.backoff_base_seconds * (2 ** (attempt - 1)),
             self.backoff_max_seconds,
         )
-        return backoff + self._random_fraction() * min(self.backoff_base_seconds, backoff)
+        return float(\n            backoff\n            + self._random_fraction() * min(self.backoff_base_seconds, backoff)\n        )
 
     @staticmethod
     def _ticker(value: str) -> str:
