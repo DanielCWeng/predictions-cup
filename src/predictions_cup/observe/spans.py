@@ -63,11 +63,6 @@ _RULES: tuple[tuple[SpanName, ObservationKind, tuple[ObservationKind, ...]], ...
         (ObservationKind.CANCEL_ACK,),
     ),
     (
-        SpanName.RECONNECT,
-        ObservationKind.RECONNECT_STARTED,
-        (ObservationKind.RECONNECT_RESOLVED,),
-    ),
-    (
         SpanName.QUOTE_LIFETIME,
         ObservationKind.QUOTE_PUBLISHED,
         (ObservationKind.QUOTE_WITHDRAWN, ObservationKind.FILL),
@@ -98,4 +93,28 @@ class VenueSpanCollector:
                 if end < start:
                     continue
                 spans.append(VenueSpan(name, operation_id, process_id, start, end))
+        by_process: dict[str, list[VenueObservation]] = {}
+        for item in observations:
+            by_process.setdefault(item.process_instance_id, []).append(item)
+        for process_id, group in by_process.items():
+            pending_reconnects: list[int] = []
+            for item in sorted(group, key=lambda row: row.monotonic_ns):
+                if item.kind is ObservationKind.RECONNECT_STARTED:
+                    pending_reconnects.append(item.monotonic_ns)
+                    continue
+                if (
+                    item.kind is ObservationKind.RECONNECT_RESOLVED
+                    and pending_reconnects
+                ):
+                    start = pending_reconnects.pop(0)
+                    if item.monotonic_ns >= start:
+                        spans.append(
+                            VenueSpan(
+                                SpanName.RECONNECT,
+                                None,
+                                process_id,
+                                start,
+                                item.monotonic_ns,
+                            )
+                        )
         return tuple(spans)
