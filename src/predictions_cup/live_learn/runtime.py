@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 import heapq
 import math
-from contextlib import suppress
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
