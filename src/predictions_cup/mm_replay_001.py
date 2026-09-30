@@ -427,8 +427,8 @@ class ReplayFillResult:
     reservation_fv: float
     gross_spread_capture: float
     markouts: Mapping[int, float]
-    fee_cost: float
-    unwind_cost: float
+    fee_cost: float | None
+    unwind_cost: float | None
     estimated_edge_5m: float | None
 
 
@@ -444,6 +444,16 @@ class ReplaySummary:
     mean_gross_spread_capture: float | None
     mean_markout_5m: float | None
     mean_estimated_edge_5m: float | None
+    final_inventory: float
+    gross_cash_flow: float
+    terminal_local_mid: float | None
+    terminal_external_fv: float | None
+    gross_terminal_local_pnl: float | None
+    gross_terminal_external_pnl: float | None
+    total_fee_cost: float | None
+    terminal_unwind_cost: float | None
+    net_terminal_local_pnl: float | None
+    net_terminal_external_pnl: float | None
 
 
 class FillModel(Protocol):
@@ -967,12 +977,14 @@ def replay_market(
     policy: MakerPolicy,
     fill_model: FillModel,
     base_size: float = 1.0,
-    fee_per_share: float = 0.0,
-    unwind_cost_per_share: float = 0.0,
+    fee_per_share: float | None = None,
+    unwind_cost_per_share: float | None = None,
     reaction_delay_ms: int = 0,
 ) -> tuple[tuple[ReplayFillResult, ...], ReplaySummary]:
-    if fee_per_share < 0.0 or unwind_cost_per_share < 0.0:
-        raise ValueError("cost assumptions must be non-negative")
+    if fee_per_share is not None and fee_per_share < 0.0:
+        raise ValueError("fee_per_share must be non-negative when supplied")
+    if unwind_cost_per_share is not None and unwind_cost_per_share < 0.0:
+        raise ValueError("unwind_cost_per_share must be non-negative when supplied")
     if reaction_delay_ms < 0:
         raise ValueError("reaction_delay_ms must be non-negative")
     if not observations:
@@ -989,6 +1001,16 @@ def replay_market(
                 mean_gross_spread_capture=None,
                 mean_markout_5m=None,
                 mean_estimated_edge_5m=None,
+                final_inventory=0.0,
+                gross_cash_flow=0.0,
+                terminal_local_mid=None,
+                terminal_external_fv=None,
+                gross_terminal_local_pnl=None,
+                gross_terminal_external_pnl=None,
+                total_fee_cost=0.0 if fee_per_share is not None else None,
+                terminal_unwind_cost=0.0 if unwind_cost_per_share is not None else None,
+                net_terminal_local_pnl=None,
+                net_terminal_external_pnl=None,
             ),
         )
     for previous, current in zip(observations, observations[1:], strict=False):
@@ -999,6 +1021,8 @@ def replay_market(
 
     timestamps = [item.timestamp_ns for item in observations]
     inventory = 0.0
+    gross_cash_flow = 0.0
+    total_traded_size = 0.0
     current_quote = build_quote(
         observations[0],
         policy,
@@ -1027,7 +1051,10 @@ def replay_market(
 
         event_fills = fill_model.fills(current_quote, event)
         for fill in event_fills:
-            inventory += fill.size if fill.side is Side.BUY else -fill.size
+            signed_size = fill.size if fill.side is Side.BUY else -fill.size
+            inventory += signed_size
+            gross_cash_flow += -fill.price * signed_size
+            total_traded_size += fill.size
             markout_values: dict[int, float] = {}
             for horizon_s in MARKOUT_HORIZONS_S:
                 future = _future_fv(observations, timestamps, index, horizon_s)
@@ -1042,12 +1069,22 @@ def replay_market(
                 if fill.side is Side.BUY
                 else fill.price - current_quote.reservation_fv
             )
-            fee_cost = fee_per_share * fill.size
-            unwind_cost = unwind_cost_per_share * fill.size
+            fee_cost = (
+                fee_per_share * fill.size if fee_per_share is not None else None
+            )
+            unwind_cost = (
+                unwind_cost_per_share * fill.size
+                if unwind_cost_per_share is not None
+                else None
+            )
             markout_5m = markout_values.get(300)
             estimated = (
                 markout_5m * fill.size - fee_cost - unwind_cost
-                if markout_5m is not None
+                if (
+                    markout_5m is not None
+                    and fee_cost is not None
+                    and unwind_cost is not None
+                )
                 else None
             )
             results.append(
@@ -1099,6 +1136,37 @@ def replay_market(
         for item in results
         if item.estimated_edge_5m is not None
     ]
+    terminal_local_mid = observations[-1].local_mid
+    terminal_external_fv = observations[-1].external_fv
+    gross_terminal_local_pnl = (
+        gross_cash_flow + inventory * terminal_local_mid
+        if terminal_local_mid is not None
+        else None
+    )
+    gross_terminal_external_pnl = (
+        gross_cash_flow + inventory * terminal_external_fv
+        if terminal_external_fv is not None
+        else None
+    )
+    total_fee_cost = (
+        fee_per_share * total_traded_size if fee_per_share is not None else None
+    )
+    terminal_unwind_cost = (
+        unwind_cost_per_share * abs(inventory)
+        if unwind_cost_per_share is not None
+        else None
+    )
+    costs_bound = total_fee_cost is not None and terminal_unwind_cost is not None
+    net_terminal_local_pnl = (
+        gross_terminal_local_pnl - total_fee_cost - terminal_unwind_cost
+        if gross_terminal_local_pnl is not None and costs_bound
+        else None
+    )
+    net_terminal_external_pnl = (
+        gross_terminal_external_pnl - total_fee_cost - terminal_unwind_cost
+        if gross_terminal_external_pnl is not None and costs_bound
+        else None
+    )
     summary = ReplaySummary(
         policy_id=policy.policy_id,
         fill_assumption=fill_model.assumption,
@@ -1110,6 +1178,16 @@ def replay_market(
         mean_gross_spread_capture=_mean_or_none(gross_values),
         mean_markout_5m=_mean_or_none(markouts_5m),
         mean_estimated_edge_5m=_mean_or_none(edge_5m),
+        final_inventory=inventory,
+        gross_cash_flow=gross_cash_flow,
+        terminal_local_mid=terminal_local_mid,
+        terminal_external_fv=terminal_external_fv,
+        gross_terminal_local_pnl=gross_terminal_local_pnl,
+        gross_terminal_external_pnl=gross_terminal_external_pnl,
+        total_fee_cost=total_fee_cost,
+        terminal_unwind_cost=terminal_unwind_cost,
+        net_terminal_local_pnl=net_terminal_local_pnl,
+        net_terminal_external_pnl=net_terminal_external_pnl,
     )
     return tuple(results), summary
 
