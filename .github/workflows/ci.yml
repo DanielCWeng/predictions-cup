@@ -64,3 +64,6 @@ jobs:
 
       - name: SHADOW-002 sustained persistence soak
         run: python scripts/soak_shadow002.py --markets 237 --candidates 6 --cycles 20 --cycle-pause-ms 500
+
+      - name: LIVE-LEARN-001 237-market burst
+        run: python scripts/benchmark_live_learn001.py --markets 237 --candidates 6
