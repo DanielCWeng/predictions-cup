@@ -4,6 +4,7 @@ import asyncio
 import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
 import pyarrow.dataset as ds
 
 from predictions_cup.observe import (
@@ -25,6 +26,7 @@ from predictions_cup.sig.dto import AccountDto
 from predictions_cup.sig.launch_storage import LaunchSigRecorder
 from predictions_cup.sig.realtime_models import (
     TournamentLeaderboardDto,
+    TournamentListStatus,
     TournamentPageDto,
 )
 
@@ -184,7 +186,11 @@ def test_sink_failure_isolated_from_emitter() -> None:
 
 class _ContextRest:
     async def list_tournaments(
-        self, *, status: str = "any", limit: int = 50, offset: int = 0
+        self,
+        *,
+        status: TournamentListStatus = "any",
+        limit: int = 50,
+        offset: int = 0,
     ) -> TournamentPageDto:
         del status, limit, offset
         return TournamentPageDto.model_validate(
