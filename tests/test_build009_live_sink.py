@@ -28,7 +28,11 @@ from predictions_cup.observe import (
 )
 from predictions_cup.risk.core import RiskDecision
 from predictions_cup.runtime import OrderAction, OutcomeSide
-from predictions_cup.sig.errors import SigClientRequestError, SigExecutionUncertainError
+from predictions_cup.sig.errors import (
+    SigClientRequestError,
+    SigExecutionUncertainError,
+    SigRateLimitError,
+)
 from predictions_cup.sig.trading_client import SigTradingClient
 from predictions_cup.sig.trading_dto import (
     BatchOrderResponseDto,
@@ -98,6 +102,45 @@ class FakeRelationshipRejectedTradingClient(FakeTradingClient):
             status_code=422,
             code="RELATIONSHIP_VIOLATION",
             safe_message="fixture relationship rejection",
+        )
+
+
+class FakeRateLimitTradingClient(FakeTradingClient):
+    async def place_order_payload(
+        self,
+        payload_json: str,
+    ) -> SingleOrderResponseDto:
+        del payload_json
+        raise SigRateLimitError(
+            status_code=429,
+            code="RATE_LIMITED",
+            safe_message="fixture rate limit",
+        )
+
+
+class Fake503TradingClient(FakeTradingClient):
+    async def place_order_payload(
+        self,
+        payload_json: str,
+    ) -> SingleOrderResponseDto:
+        del payload_json
+        raise SigExecutionUncertainError(
+            status_code=503,
+            code="SERVICE_UNAVAILABLE",
+            safe_message="fixture 503",
+        )
+
+
+class FakeTransportTradingClient(FakeTradingClient):
+    async def place_order_payload(
+        self,
+        payload_json: str,
+    ) -> SingleOrderResponseDto:
+        del payload_json
+        raise SigExecutionUncertainError(
+            status_code=None,
+            code="TRANSPORT_OUTCOME_UNKNOWN",
+            safe_message="fixture transport timeout",
         )
 
 
@@ -549,3 +592,68 @@ def test_generic_5xx_execution_outcome_stays_uncertain_and_reserved(
     finally:
         journal.close()
 
+
+
+@pytest.mark.parametrize(
+    ("client", "error_type", "expected_kind"),
+    (
+        (FakeRateLimitTradingClient(), SigRateLimitError, ObservationKind.RATE_LIMIT),
+        (Fake503TradingClient(), SigExecutionUncertainError, ObservationKind.SERVER_ERROR),
+        (
+            FakeTransportTradingClient(),
+            SigExecutionUncertainError,
+            ObservationKind.TRANSPORT_EXCEPTION,
+        ),
+    ),
+)
+def test_observe_classifies_final_429_503_and_transport_timeout(
+    tmp_path: Path,
+    client: FakeTradingClient,
+    error_type: type[Exception],
+    expected_kind: ObservationKind,
+) -> None:
+    intent = _intent()
+    decision = RiskDecision(
+        approved=True,
+        reason="approved",
+        execution_mode=ExecutionMode.LIVE,
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        intents=(intent,),
+        strategy_family="FV-TAKE",
+        strategy_id="fixture",
+        signal_value=0.025,
+        fair_value=0.55,
+        decision_observation_ns=100,
+    )
+    plan = build_execution_plan(
+        decision,
+        logical_operation_id=f"op-observe-{expected_kind.value}",
+        created_monotonic_ns=150,
+    )
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    journal = ExecutionJournal(tmp_path / f"{expected_kind.value}.sqlite3")
+    observation_sink = InMemoryObservationSink()
+    emitter = BoundedObservationEmitter(observation_sink, queue_max=100)
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, client),
+        journal=journal,
+        permit=_permit(),
+        reservations=reservations,
+        clock_ns=lambda: 200,
+        observation_emitter=emitter,
+        observation_process_instance_id="test-process",
+    )
+    try:
+        with pytest.raises(error_type):
+            asyncio.run(sink.dispatch(plan))
+        emitter.close()
+        kinds = {item.kind for item in observation_sink.observations}
+        assert expected_kind in kinds
+        if expected_kind is ObservationKind.RATE_LIMIT:
+            assert ObservationKind.REJECTED in kinds
+        else:
+            assert ObservationKind.UNCERTAIN in kinds
+    finally:
+        emitter.close()
+        journal.close()
