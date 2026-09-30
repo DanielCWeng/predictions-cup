@@ -34,3 +34,16 @@ Parquet under `data/polymarket_research/`; its fresh operational SQLite is
 
 See `OPERATIONS.md` for prerequisites, update commands, storage-soak evidence and the EC2
 validation runbook.
+
+## FULLSTACK-001 composition
+
+install_runtime_services.sh now renders the complete configured rehearsal composition from the
+templates in deploy/systemd: SIG/Polymarket CAPTURE, MAKE (including BUILD-009 Risk + SHADOW), and
+optional LIVE-LEARN/OBSERVE adapters only for EXTERNAL_SERVICE capability mode, grouped by
+predictions-cup-runtime.target. IN_PROCESS capabilities ride with their owner and do not spawn
+duplicate adapter units.
+
+It still uses only ~/.config/predictions-cup/runtime.env for this standard path, refuses trade
+credentials/TRADING_ENABLED/LIVE execution, renders absolute paths on each host, and uses graceful
+SIGTERM shutdown with no automatic SIGKILL. Use bash scripts/cupctl for status, health, snapshots,
+ordered safe restart and the one-command rehearsal gate.

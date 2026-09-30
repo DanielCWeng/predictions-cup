@@ -309,3 +309,23 @@ sudo systemctl is-active rdc-<account>.service
 
 Do not infer collector failure from loss of the RDC control channel; reconnect through another
 authorized path and inspect systemd/journald directly.
+
+## FULLSTACK-001 composed runtime on a replacement VM
+
+FULLSTACK adds rendered MAKE, LIVE-LEARN, OBSERVE and predictions-cup-runtime.target templates to the
+same BUILD-007 installation convention. Do not copy any rendered predictions-cup-* unit from the old
+host. On the destination checkout run:
+
+~~~bash
+sudo -E bash scripts/install_runtime_services.sh
+bash scripts/cupctl status
+bash scripts/cupctl snapshot
+~~~
+
+The standard installer remains SHADOW/rehearsal only. runtime.env must not contain the SIG trade
+credential and must not enable LIVE execution. Reconfigure real LIVE-LEARN/OBSERVE commands on the
+destination after those lanes are merged; fixture mode cannot pass --require-real acceptance.
+
+For survival evidence, use bash scripts/cupctl checkpoint ssh before disconnecting and
+bash scripts/cupctl verify ssh after reconnecting. For an explicitly authorized host reboot use the
+corresponding reboot checkpoint/verify pair. See docs/runbooks/FULLSTACK_001.md.

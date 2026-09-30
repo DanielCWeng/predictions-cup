@@ -458,3 +458,28 @@ or trading service.
 - Builders do not merge their own PRs.
 - Active branch state must not be described as merged functionality.
 - GitHub merge state and actual `main` contents outrank stale documentation.
+
+## FULLSTACK-001 composed launch rehearsal
+
+FULLSTACK-001 extends the accepted BUILD-007 systemd conventions rather than adding another
+orchestrator. CAPTURE remains separately supervised. MAKE, BUILD-009 central Risk and SHADOW remain
+in the existing MakerService process. LIVE-LEARN and OBSERVE are replaceable capabilities with
+explicit IN_PROCESS or EXTERNAL_SERVICE ownership. The reviewed #67/#66 implementations are
+IN_PROCESS and therefore do not receive duplicate adapter services.
+
+Standard operator commands:
+
+~~~bash
+bash scripts/cupctl status
+bash scripts/cupctl health
+bash scripts/cupctl snapshot
+sudo -E bash scripts/cupctl safe-restart
+bash scripts/cupctl rehearse
+~~~
+
+The standard installer and FULLSTACK systemd units are intentionally rehearsal/SHADOW-only: they
+refuse a SIG trade credential in runtime.env, reject trading enabled / LIVE execution and never pass
+--live to MakerService. Final real-component acceptance uses health/rehearse --require-real.
+
+See docs/implementation/FULLSTACK_001_LAUNCH_REHEARSAL.md and docs/runbooks/FULLSTACK_001.md for
+composition, failure injection, SSH/reboot checks and the pressure-tested operator checklist.

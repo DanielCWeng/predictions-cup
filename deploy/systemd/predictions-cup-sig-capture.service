@@ -1,8 +1,11 @@
-# BUILD-007 systemd template. Render with scripts/install_runtime_services.sh.
+# BUILD-007/FULLSTACK-001 systemd template. Render with scripts/install_runtime_services.sh.
 [Unit]
 Description=Predictions Cup read-only SIG capture
 Wants=network-online.target
 After=network-online.target
+PartOf=predictions-cup-runtime.target
+StartLimitIntervalSec=300
+StartLimitBurst=10
 
 [Service]
 Type=simple
@@ -14,12 +17,15 @@ UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL
 ExecStart=@@PYTHON_BIN@@ -m predictions_cup.sig.capture --runtime-env-only
 Restart=on-failure
 RestartSec=5s
+RestartSteps=4
+RestartMaxDelaySec=60s
 KillSignal=SIGTERM
-TimeoutStopSec=30s
+TimeoutStopSec=60s
+SendSIGKILL=no
 StandardOutput=journal
 StandardError=journal
 UMask=0077
 NoNewPrivileges=true
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=predictions-cup-runtime.target

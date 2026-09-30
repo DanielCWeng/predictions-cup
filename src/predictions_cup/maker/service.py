@@ -10,10 +10,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import signal
 from contextlib import suppress
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 from time import monotonic_ns
 from typing import cast
 
@@ -71,6 +73,7 @@ from predictions_cup.risk import (
     scan_external_cash_flows,
     validate_restart_preflight,
 )
+from predictions_cup.runtime.status import RuntimeStatusPublisher
 from predictions_cup.runtime.telemetry import HotPathTelemetry
 from predictions_cup.shadow.live import LiveShadowRuntime, build_live_shadow_runtime
 from predictions_cup.sig.account_reconciliation import (
@@ -121,6 +124,16 @@ class MakerService:
         self._last_health: tuple[bool, bool, bool, datetime | None] | None = None
         self._observation_health_provider: ObservationHealthProvider | None = None
         self._observation_health_publisher: ObservationHealthStatusPublisher | None = None
+        status_root = Path(
+            os.environ.get(
+                "PREDICTIONS_CUP_FULLSTACK_STATUS_DIR",
+                str(self.settings.sig_research_path.parent / "runtime" / "status"),
+            )
+        )
+        self._shadow_status_publisher = RuntimeStatusPublisher(status_root / "shadow.json")
+        self._live_learn_status_publisher = RuntimeStatusPublisher(
+            status_root / "live-learn.json"
+        )
 
     def observation_health(self) -> ObservationHealthSnapshot | None:
         provider = self._observation_health_provider
@@ -151,7 +164,17 @@ class MakerService:
             observe_recorder,
         )
         self._observation_health_publisher = ObservationHealthStatusPublisher(
-            default_observation_health_status_path(self.settings.sig_research_path),
+            Path(
+                os.environ.get(
+                    "PREDICTIONS_CUP_FULLSTACK_STATUS_DIR",
+                    str(
+                        default_observation_health_status_path(
+                            self.settings.sig_research_path
+                        ).parent
+                    ),
+                )
+            )
+            / "observe.json",
             process_instance_id=observe_recorder.session_id,
             owner="predictions-cup-maker.service",
         )
@@ -513,7 +536,12 @@ class MakerService:
                     name="make-account",
                 ),
                 asyncio.create_task(
-                    self._health_watchdog(sig_state, account_state, runtime),
+                    self._health_watchdog(
+                        sig_state,
+                        account_state,
+                        runtime,
+                        shadow_runtime,
+                    ),
                     name="make-health-watchdog",
                 ),
             )
@@ -555,6 +583,7 @@ class MakerService:
         finally:
             self.pm_ws.stop()
             if shadow_runtime is not None:
+                self._publish_shadow_health(shadow_runtime, force=True)
                 with suppress(Exception):
                     await shadow_runtime.close()
             if sig_state is not None:
@@ -979,9 +1008,11 @@ class MakerService:
         sig_state: SigRealtimeStateEngine,
         account_state: AccountRealtimeStateEngine,
         runtime: MakerRuntimeLoop,
+        shadow_runtime: LiveShadowRuntime | None,
     ) -> None:
         while not self.stop_event.is_set():
             self._publish_observation_health()
+            self._publish_shadow_health(shadow_runtime)
             current = (
                 self.pm_health.websocket_connected,
                 sig_state.health.connected,
@@ -1007,6 +1038,103 @@ class MakerService:
         except Exception as exc:
             _LOG.warning(
                 "OBSERVE health status publication failed without affecting Risk: %s",
+                type(exc).__name__,
+            )
+
+    def _publish_shadow_health(
+        self,
+        shadow_runtime: LiveShadowRuntime | None,
+        *,
+        force: bool = False,
+    ) -> None:
+        if shadow_runtime is None:
+            return
+        try:
+            shadow = shadow_runtime.bus.health()
+            candidate_degraded = any(
+                item.enabled
+                and (
+                    item.quarantined
+                    or item.failure_count > 0
+                    or item.last_error is not None
+                )
+                for item in shadow.candidates
+            )
+            blocked = (
+                not shadow.running
+                or shadow.ingress_error is not None
+                or not shadow.persistence.healthy
+            )
+            degraded = (
+                shadow.paused
+                or shadow.ingress_rejected > 0
+                or shadow.snapshots_dropped_or_coalesced > 0
+                or candidate_degraded
+            )
+            state = "BLOCKED" if blocked else "DEGRADED" if degraded else "PASS"
+            reason = (
+                shadow.ingress_error
+                or shadow.persistence.last_error
+                or ("shadow_paused_or_candidate_degraded" if degraded else "shadow_healthy")
+            )
+            self._shadow_status_publisher.publish(
+                {
+                    "state": state,
+                    "provider_mode": "real",
+                    "capability_mode": "IN_PROCESS",
+                    "owner_services": ["predictions-cup-maker.service"],
+                    "reason": reason,
+                    "health": {
+                        "running": shadow.running,
+                        "paused": shadow.paused,
+                        "last_snapshot_age_ns": shadow.last_snapshot_age_ns,
+                        "snapshots_processed": shadow.snapshots_processed,
+                        "snapshots_dropped_or_coalesced": (
+                            shadow.snapshots_dropped_or_coalesced
+                        ),
+                        "ingress_queue_depth": shadow.ingress_queue_depth,
+                        "ingress_queue_high_water": shadow.ingress_queue_high_water,
+                        "ingress_rejected": shadow.ingress_rejected,
+                        "ingress_error": shadow.ingress_error,
+                        "persistence_healthy": shadow.persistence.healthy,
+                        "persistence_failures": shadow.persistence.failures,
+                        "candidate_count": len(shadow.candidates),
+                        "quarantined_candidates": [
+                            item.candidate_id
+                            for item in shadow.candidates
+                            if item.quarantined
+                        ],
+                    },
+                },
+                force=force,
+            )
+
+            learner = shadow_runtime.live_learn_health
+            if learner is not None:
+                learner_state = "PASS" if learner.healthy else "BLOCKED"
+                self._live_learn_status_publisher.publish(
+                    {
+                        "state": learner_state,
+                        "provider_mode": "real",
+                        "capability_mode": "IN_PROCESS",
+                        "owner_services": ["predictions-cup-maker.service"],
+                        "reason": learner.last_error or "live_learn_healthy",
+                        "health": {
+                            "healthy": learner.healthy,
+                            "persisted_events": learner.persisted_events,
+                            "failures": learner.failures,
+                            "last_error": learner.last_error,
+                            "queue_depth": learner.queue_depth,
+                            "queue_high_water": learner.queue_high_water,
+                            "write_batches": learner.write_batches,
+                            "write_latency_p95_ns": learner.write_latency_p95_ns,
+                        },
+                    },
+                    force=force,
+                )
+        except Exception as exc:
+            _LOG.warning(
+                "SHADOW/LIVE-LEARN status publication failed without affecting Risk: %s",
                 type(exc).__name__,
             )
 
