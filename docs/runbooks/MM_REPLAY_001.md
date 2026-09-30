@@ -73,6 +73,7 @@ When the new order-book dataset is present:
 python scripts/mm_replay_001.py bind-dataset <owner/slug> \
   --version <version> \
   --source "<source>" \
+  --source-venue <venue> \
   --schema-version <schema-version> \
   --acquisition-version <acquisition-version>
 ```
