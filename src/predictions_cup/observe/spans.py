@@ -56,7 +56,16 @@ _RULES: tuple[tuple[SpanName, ObservationKind, tuple[ObservationKind, ...]], ...
         ObservationKind.CANCEL_REQUESTED,
         (ObservationKind.CANCEL_ACK,),
     ),
-    (SpanName.RECONNECT, ObservationKind.RECONNECT_STARTED, (ObservationKind.RECONNECT_RESOLVED,)),
+    (
+        SpanName.RECONNECT,
+        ObservationKind.RECONNECT_STARTED,
+        (ObservationKind.RECONNECT_RESOLVED,),
+    ),
+    (
+        SpanName.QUOTE_LIFETIME,
+        ObservationKind.QUOTE_PUBLISHED,
+        (ObservationKind.QUOTE_WITHDRAWN, ObservationKind.FILL),
+    ),
 )
 
 
@@ -83,25 +92,4 @@ class VenueSpanCollector:
                 if end < start:
                     continue
                 spans.append(VenueSpan(name, operation_id, process_id, start, end))
-            if any(item.strategy_family == "MAKE" for item in ordered):
-                ack = first.get(ObservationKind.ACK)
-                terminals = [
-                    first[kind]
-                    for kind in (
-                        ObservationKind.FILL,
-                        ObservationKind.CANCEL_ACK,
-                        ObservationKind.REJECTED,
-                    )
-                    if kind in first
-                ]
-                if ack is not None and terminals and min(terminals) >= ack:
-                    spans.append(
-                        VenueSpan(
-                            SpanName.QUOTE_LIFETIME,
-                            operation_id,
-                            process_id,
-                            ack,
-                            min(terminals),
-                        )
-                    )
         return tuple(spans)
