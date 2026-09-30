@@ -27,6 +27,8 @@ from predictions_cup.shadow.contracts import (
     ShadowCandidate,
 )
 from predictions_cup.shadow.persistence import (
+    CaptureStrategyEventStore,
+    CompositeShadowEventStore,
     InMemoryEventStore,
     JsonlEventStore,
     PersistenceHealth,
@@ -41,6 +43,8 @@ __all__ = [
     "CandidateDecision",
     "CandidateHealth",
     "CandidateOutput",
+    "CaptureStrategyEventStore",
+    "CompositeShadowEventStore",
     "CanonicalShadowSnapshot",
     "DecisionStatus",
     "DirectPmCandidate",
