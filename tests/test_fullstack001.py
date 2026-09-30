@@ -93,7 +93,7 @@ def _journal(path: Path, state: str | None = None) -> None:
 
 
 def _risk_state_db(path: Path) -> None:
-    payload = {
+    payload: dict[str, object] = {
         "account_trusted": True,
         "marks_trusted": True,
         "reconciliation_complete": True,
