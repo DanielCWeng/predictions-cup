@@ -6,6 +6,7 @@ import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -121,7 +122,10 @@ def _pred_manifest() -> Pred006ArtifactManifest:
 
 
 def _golden() -> dict[str, object]:
-    return json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
+    return cast(
+        dict[str, object],
+        json.loads(GOLDEN_PATH.read_text(encoding="utf-8")),
+    )
 
 
 def _git_blob_sha(path: Path) -> str:
@@ -238,6 +242,11 @@ def test_pred006_scores_both_survivors_without_aggregating_semantics() -> None:
         "PRED006-C01": 0.70,
         "PRED006-C02": 0.30,
     }
+    assert output.candidate_payload["feature_block_number"] == 1801
+    assert (
+        output.candidate_payload["artifact_manifest_hash"]
+        == _pred_manifest().manifest_hash
+    )
 
 
 def test_pred006_scorers_without_authorized_manifest_stay_not_ready() -> None:
