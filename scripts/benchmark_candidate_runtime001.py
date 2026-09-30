@@ -99,8 +99,13 @@ def _quantile(values: list[float], fraction: float) -> float:
 
 
 def run(markets: int, bursts: int) -> dict[str, float | int]:
-    pred_state = IncrementalPred006FeatureState()
-    hazard_state = IncrementalHazard005FState(grid_origin_s=0)
+    pred_state = IncrementalPred006FeatureState(
+        scope_resolver=lambda snapshot: snapshot.market_id
+    )
+    hazard_state = IncrementalHazard005FState(
+        grid_origin_s=0,
+        scope_resolver=lambda snapshot: snapshot.market_id,
+    )
     snapshots: list[CanonicalShadowSnapshot] = []
 
     for index in range(markets):
