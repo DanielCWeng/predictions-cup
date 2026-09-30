@@ -116,7 +116,7 @@ Expected new evidence:
 - SIG Realtime reconnect/gap observations;
 - account reconciliation observations;
 - context snapshots;
-- derived local MAKE quote lifecycle markers;
+- derived SHADOW MAKE quote lifecycle markers;
 - no real SIG execution writes.
 
 ## 5. LIVE integration boundary
@@ -132,6 +132,7 @@ instrumentation records:
 - client-call dispatch;
 - client return / parsed response;
 - ACK;
+- per-intent authoritative LIVE quote publication only for ACKed legs with usable order identity;
 - fill evidence;
 - cancel request / confirmation;
 - typed rejection;
@@ -145,9 +146,18 @@ Do not enable LIVE merely to populate OBSERVE.
 
 For the standalone SIG capture command, `--print-health` includes OBSERVE/context state.
 
-For MAKE/FULLSTACK composition, read `MakerService.observation_health()` directly. The returned
-typed snapshot contains outer emitter and inner CAPTURE writer health and can be serialized with
-`to_dict()`; no log parsing is required.
+Inside MAKE, `MakerService.observation_health()` returns the typed combined snapshot.
+
+Across the systemd/process boundary, read the atomically published status file:
+
+```text
+<parent of PREDICTIONS_CUP_SIG_RESEARCH_PATH>/runtime/observe_health.json
+```
+
+Use `read_observation_health_status(..., expected_owner="maker", max_age_seconds=...)` rather than
+parsing logs or trusting the JSON `health.state` field by itself. The reader validates owner,
+process identity when supplied, timestamp freshness and schema. Missing/stale/wrong-owner/invalid
+files are explicit non-healthy states.
 
 Check:
 
@@ -288,6 +298,11 @@ Never create an economic order as a latency probe.
 
 `QUOTE_PUBLISHED`, `QUOTE_WITHDRAWN` and `QUOTE_REPLENISHED` are derived from our MAKE
 lifecycle.
+
+For LIVE best-effort batches, publication is per intent at the same boundary that activates the
+authoritative `QuoteRegistry` entry. One ACK + one reject creates one quote start; two ACKs with
+usable order identities create two independent quote starts; an ACK without usable order identity
+creates no quote start.
 
 They support analysis of:
 
@@ -434,6 +449,8 @@ The benchmark performs no network or file I/O and sends no SIG order.
 - [ ] `competition_context` Parquet readable;
 - [ ] participant rank/leaderboard available or explicitly unavailable with reason;
 - [ ] Super Signal explicitly unavailable for participant key;
+- [ ] cross-process OBSERVE status file exists, owner is `maker`, and is fresh;
+- [ ] status reader reports `HEALTHY` rather than MISSING/STALE/OWNER_MISMATCH/INVALID;
 - [ ] `observe.dropped = 0`;
 - [ ] `observe.sink_failures = 0`;
 - [ ] CAPTURE storage failures = 0;
