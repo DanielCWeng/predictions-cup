@@ -82,6 +82,17 @@ COLUMN_SYNONYMS: Final[dict[str, tuple[str, ...]]] = {
     "trade_size": ("trade_size", "size", "quantity", "amount"),
     "aggressor_side": ("aggressor_side", "taker_side", "trade_side"),
     "external_fv": ("external_fv", "fair_value", "reference_fv", "pm_fv"),
+    "external_fv_timestamp": (
+        "external_fv_timestamp_ns",
+        "reference_timestamp_ns",
+        "pm_timestamp_ns",
+    ),
+    "bid_depth": ("bid_depth", "best_bid_size", "bid_size"),
+    "ask_depth": ("ask_depth", "best_ask_size", "ask_size"),
+    "queue_ahead_bid": ("queue_ahead_bid",),
+    "queue_ahead_ask": ("queue_ahead_ask",),
+    "category": ("category", "market_category"),
+    "event_id": ("event_id", "sequence_id", "update_id"),
     "source_timestamp": (
         "source_timestamp_ns",
         "exchange_timestamp_ns",
