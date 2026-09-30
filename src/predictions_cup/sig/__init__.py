@@ -30,8 +30,10 @@ from predictions_cup.sig.errors import (
     SigUnexpectedServerError,
 )
 from predictions_cup.sig.realtime_models import (
+    LeaderboardEntryDto,
     MarketBatchDto,
     RealtimeTokenDto,
+    TournamentLeaderboardDto,
     TournamentPageDto,
     TournamentSummaryDto,
 )
@@ -49,8 +51,10 @@ __all__ = [
     "OrderBookSnapshotDto",
     "PriceHistoryDto",
     "PriceSnapshotDto",
+    "LeaderboardEntryDto",
     "MarketBatchDto",
     "RealtimeTokenDto",
+    "TournamentLeaderboardDto",
     "TournamentPageDto",
     "TournamentSummaryDto",
     "RetryPolicy",
