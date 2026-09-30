@@ -263,27 +263,45 @@ def _install_signal_handlers(stop_event: asyncio.Event) -> None:
 
 
 async def _public_smoke_test(settings: AppSettings) -> int:
+    strict_ids = parse_id_csv(settings.polymarket_supervised_ids)
     gamma = GammaClient(
         str(settings.polymarket_gamma_base_url),
-        page_limit=min(settings.polymarket_gamma_page_limit, 20),
+        page_limit=(
+            settings.polymarket_gamma_page_limit
+            if strict_ids
+            else min(settings.polymarket_gamma_page_limit, 20)
+        ),
     )
     discovery = await gamma.discover_active_markets()
     selector = ElectionUniverseSelector(
         include_ids=parse_id_csv(settings.polymarket_include_ids),
         exclude_ids=parse_id_csv(settings.polymarket_exclude_ids),
+        strict_ids=strict_ids,
     )
     selected = selector.select(discovery.markets)
     if not selected.markets:
         raise RuntimeError("live smoke found no selected election markets")
     clob = ClobMarketDataClient(str(settings.polymarket_clob_base_url), batch_size=10)
-    books = await clob.fetch_books(selected.token_ids[: min(10, len(selected.token_ids))])
-    if not books:
-        raise RuntimeError("live smoke received no CLOB books")
+    probe_tokens = (
+        selected.token_ids
+        if strict_ids and len(selected.token_ids) <= 25
+        else selected.token_ids[: min(10, len(selected.token_ids))]
+    )
+    books = await clob.fetch_books(probe_tokens)
+    if len(books) != len(probe_tokens):
+        raise RuntimeError(
+            "live smoke did not receive one CLOB book per probed token: "
+            f"requested={len(probe_tokens)} received={len(books)}"
+        )
     _LOG.info(
-        "public smoke ok markets=%d selected=%d books=%d",
+        "public smoke ok markets=%d selected=%d selected_tokens=%d "
+        "probed_tokens=%d books=%d strict=%s",
         len(discovery.markets),
         len(selected.markets),
+        len(selected.token_ids),
+        len(probe_tokens),
         len(books),
+        bool(strict_ids),
     )
     return 0
 
