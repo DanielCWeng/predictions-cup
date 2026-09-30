@@ -53,12 +53,13 @@ PREDICTIONS_CUP_FULLSTACK_QUEUE_BLOCK_FRACTION=0.95
 PREDICTIONS_CUP_FULLSTACK_WARN_FREE_DISK_GIB=8
 PREDICTIONS_CUP_FULLSTACK_MIN_FREE_DISK_GIB=3
 
-PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_ENABLED=false
-PREDICTIONS_CUP_FULLSTACK_OBSERVE_ENABLED=false
+# Canonical merged learner switch:
+PREDICTIONS_CUP_LIVE_LEARN_ENABLED=true
+# FULLSTACK ownership normalization:
 PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_MODE=IN_PROCESS
 PREDICTIONS_CUP_FULLSTACK_OBSERVE_MODE=IN_PROCESS
 PREDICTIONS_CUP_FULLSTACK_LIVE_LEARN_OWNER_SERVICES=predictions-cup-maker.service
-PREDICTIONS_CUP_FULLSTACK_OBSERVE_OWNER_SERVICES=predictions-cup-maker.service,predictions-cup-sig-capture.service
+PREDICTIONS_CUP_FULLSTACK_OBSERVE_OWNER_SERVICES=predictions-cup-maker.service
 PREDICTIONS_CUP_FULLSTACK_ALLOW_FIXTURES=false
 # Only for an authoritative EXTERNAL_SERVICE provider:
 # PREDICTIONS_CUP_LIVE_LEARN_COMMAND=<real command>
@@ -86,7 +87,7 @@ bash scripts/cupctl rehearse
 
 Health/rehearsal exit semantics: 0 PASS, 1 DEGRADED, 2 BLOCKED.
 
-After all upstream lanes are integrated:
+With #66/#67/#69/#70 merged and the harness rebased:
 
 ~~~bash
 bash scripts/cupctl health --require-real
@@ -173,7 +174,7 @@ economic SIG order to prove recovery.
 - SIG Realtime death: economic path fails closed; SIG freshness BLOCKED; safe other capture continues.
 - PM feed death: external FV cannot be trusted; PM freshness BLOCKED.
 - Account trust loss: real account/Risk provider BLOCKED; no economic resume.
-- OBSERVE failure: health degrades/blocks in the owning MAKE/SIG runtime; no duplicate observer is started.
+- OBSERVE failure: the MAKE-owned #66 health envelope degrades/blocks; SIG/CAPTURE health is checked separately and no duplicate observer is started.
 - Disk low: DEGRADED then BLOCKED at configured thresholds.
 - Capture queue high: DEGRADED then BLOCKED; any drops/storage failure BLOCKED.
 - Unresolved journal operation: BLOCKED until BUILD-009 reconciliation.
@@ -256,7 +257,7 @@ receive zero final-acceptance credit.
 
 ## 13. Capability ownership verification
 
-For reviewed #67/#66, status must show LIVE-LEARN and OBSERVE as provider_mode=real with capability mode IN_PROCESS and their declared owner services. systemd must not run predictions-cup-live-learn.service or predictions-cup-observe.service in that mode. cupctl safe-restart must restart MAKE/SIG owners only once.
+For merged #67/#66, status must show LIVE-LEARN and OBSERVE as provider_mode=real with capability mode IN_PROCESS and owner predictions-cup-maker.service. SIG/CAPTURE remains a separate liveness/storage surface. systemd must not run predictions-cup-live-learn.service or predictions-cup-observe.service in that mode. cupctl safe-restart must restart MAKE and capture owners only once.
 
 Use EXTERNAL_SERVICE only for one deliberate authoritative standalone entrypoint. A second SHADOW replay/scoring consumer or duplicate OBSERVE emitter is a deployment error, not redundancy.
 
