@@ -467,6 +467,12 @@ def test_live_shadow_runtime_persists_one_snapshot_boundary_and_all_candidates(
             "experiment-005f-hazard",
             "r3-ets-structural-fv",
         }
+        research = {item["candidate_id"]: item for item in decisions}
+        assert research["pred-006"]["abstain_reason"] == "model_artifact_missing"
+        assert (
+            research["experiment-005f-hazard"]["abstain_reason"]
+            == "required_orderbook_history_unavailable"
+        )
 
     asyncio.run(run())
 
