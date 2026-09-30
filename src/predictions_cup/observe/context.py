@@ -32,9 +32,9 @@ class CompetitionContextSnapshot:
     tournament_id: str
     observed_at: datetime
     fields: tuple[ContextField, ...]
-    raw_tournament: dict[str, object] | None
-    raw_account: dict[str, object] | None
-    raw_leaderboard: dict[str, object] | None
+    raw_tournament: object | None
+    raw_account: object | None
+    raw_leaderboard: object | None
 
     def field(self, name: str) -> ContextField:
         for field in self.fields:
@@ -44,13 +44,13 @@ class CompetitionContextSnapshot:
 
 
 class CompetitionContextRest(Protocol):
-    async def list_tournaments(
+    async def list_tournaments_with_raw(
         self, *, status: TournamentListStatus = "any", limit: int = 50, offset: int = 0
-    ) -> TournamentPageDto: ...
+    ) -> tuple[TournamentPageDto, object]: ...
 
-    async def get_account(self) -> AccountDto: ...
+    async def get_account_with_raw(self) -> tuple[AccountDto, object]: ...
 
-    async def get_tournament_leaderboard(
+    async def get_tournament_leaderboard_with_raw(
         self,
         tournament_slug: str,
         *,
@@ -74,15 +74,19 @@ class SigOfficialCompetitionContextProvider:
         self._tournament_id = tournament_id
 
     async def snapshot(self) -> CompetitionContextSnapshot:
-        tournaments = await self._client.list_tournaments(status="any", limit=100, offset=0)
+        tournaments, raw_tournaments = await self._client.list_tournaments_with_raw(
+            status="any",
+            limit=100,
+            offset=0,
+        )
         tournament = next(
             (item for item in tournaments.data if item.id == self._tournament_id),
             None,
         )
-        account = await self._client.get_account()
+        account, raw_account = await self._client.get_account_with_raw()
         observed_at = datetime.now(UTC)
         fields: list[ContextField] = []
-        raw_leaderboard: dict[str, object] | None = None
+        raw_leaderboard: object | None = None
 
         if tournament is None:
             for name in (
@@ -107,9 +111,9 @@ class SigOfficialCompetitionContextProvider:
                         "TOURNAMENT_NOT_RETURNED",
                     )
                 )
-            raw_tournament = None
+            raw_tournament = raw_tournaments
         else:
-            raw_tournament = tournament.model_dump(mode="json", by_alias=True)
+            raw_tournament = raw_tournaments
             for name, value in (
                 ("tournament_name", tournament.name),
                 ("tournament_status", tournament.status),
@@ -128,13 +132,14 @@ class SigOfficialCompetitionContextProvider:
                         "api-1",
                     )
                 )
-            leaderboard = await self._client.get_tournament_leaderboard(
-                tournament.slug,
-                period="all",
-                limit=100,
-                offset=0,
+            leaderboard, raw_leaderboard = (
+                await self._client.get_tournament_leaderboard_with_raw(
+                    tournament.slug,
+                    period="all",
+                    limit=100,
+                    offset=0,
+                )
             )
-            raw_leaderboard = leaderboard.model_dump(mode="json", by_alias=True)
             fields.extend(
                 (
                     ContextField(
@@ -188,7 +193,7 @@ class SigOfficialCompetitionContextProvider:
             observed_at=observed_at,
             fields=tuple(fields),
             raw_tournament=raw_tournament,
-            raw_account=account.model_dump(mode="json", by_alias=True),
+            raw_account=raw_account,
             raw_leaderboard=raw_leaderboard,
         )
 
