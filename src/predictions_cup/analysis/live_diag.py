@@ -372,6 +372,7 @@ def _first_response(
     at: datetime,
     direction: int,
     max_quote_age_seconds: float,
+    max_response_seconds: float,
 ) -> tuple[datetime | None, bool | None]:
     baseline = _asof(
         sig_quotes,
@@ -383,6 +384,8 @@ def _first_response(
     for quote in sig_quotes:
         if quote.observed_at < at:
             continue
+        if (quote.observed_at - at).total_seconds() > max_response_seconds:
+            break
         move = quote.midpoint - baseline.midpoint
         if move != 0.0:
             return quote.observed_at, move * direction > 0.0
@@ -398,10 +401,13 @@ def analyze_lead_lag(
     tick_size: float = SIG_TICK_SIZE,
     max_quote_age_seconds: float = 15.0,
     max_depth_age_seconds: float = 60.0,
+    max_response_seconds: float = 60.0,
 ) -> tuple[LeadLagObservation, ...]:
     """Require the executable edge to survive the declared latency assumption."""
     if latency_ms < 0:
         raise ValueError("latency_ms must be non-negative")
+    if max_response_seconds <= 0:
+        raise ValueError("max_response_seconds must be positive")
     sig = _economic(sig_quotes)
     external = _economic(external_quotes)
     output: list[LeadLagObservation] = []
@@ -445,6 +451,7 @@ def analyze_lead_lag(
             at=current.observed_at,
             direction=direction,
             max_quote_age_seconds=max_quote_age_seconds,
+            max_response_seconds=max_response_seconds,
         )
         lead_seconds = (
             None
@@ -477,6 +484,10 @@ def analyze_lead_lag(
             for quote in sig:
                 if quote.observed_at < current.observed_at:
                     continue
+                if (
+                    quote.observed_at - current.observed_at
+                ).total_seconds() > max_response_seconds:
+                    break
                 edge, _, _ = _active_edge(current.midpoint, quote)
                 if edge <= gross_edge / 2.0:
                     half_life = (
@@ -1152,14 +1163,19 @@ def analyze_live_diagnostics(
     inventory_limit: float | None = None,
     max_quote_age_seconds: float = 15.0,
     max_depth_age_seconds: float = 30.0,
+    max_response_seconds: float = 60.0,
     latency_ms: float = 100.0,
     latency_assumption_source: str = "fixed_sensitivity",
     thresholds_ticks: Sequence[int] = DEFAULT_THRESHOLDS_TICKS,
     horizons_seconds: Sequence[int] = DEFAULT_HORIZONS_SECONDS,
 ) -> dict[str, object]:
     """Run the first-hours economic layer without creating a new market-data process."""
-    if max_quote_age_seconds <= 0 or max_depth_age_seconds <= 0:
-        raise ValueError("quote/depth freshness limits must be positive")
+    if (
+        max_quote_age_seconds <= 0
+        or max_depth_age_seconds <= 0
+        or max_response_seconds <= 0
+    ):
+        raise ValueError("quote/depth freshness and response window must be positive")
     generated_at = datetime.now(UTC)
     config = {
         "analysis_version": ANALYSIS_VERSION,
@@ -1167,6 +1183,7 @@ def analyze_live_diagnostics(
         "latency_assumption_source": latency_assumption_source,
         "max_quote_age_seconds": max_quote_age_seconds,
         "max_depth_age_seconds": max_depth_age_seconds,
+        "max_response_seconds": max_response_seconds,
         "thresholds_ticks": list(thresholds_ticks),
         "horizons_seconds": list(horizons_seconds),
         "tick_size": SIG_TICK_SIZE,
@@ -1400,6 +1417,7 @@ def analyze_live_diagnostics(
             latency_ms=latency_ms,
             max_quote_age_seconds=max_quote_age_seconds,
             max_depth_age_seconds=max_depth_age_seconds,
+            max_response_seconds=max_response_seconds,
         ):
             lead_lag_rows.append(
                 {
