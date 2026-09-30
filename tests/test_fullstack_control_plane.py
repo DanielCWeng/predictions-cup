@@ -127,7 +127,7 @@ def test_storage_health_handles_critical_missing_and_queue_pressure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     values = _values(tmp_path)
-    Path(values["PREDICTIONS_CUP_SIG_RESEARCH_STORAGE_ROOT"]).rename(tmp_path / "gone")
+    Path(values["PREDICTIONS_CUP_SIG_RESEARCH_PATH"]).rename(tmp_path / "gone")
     monkeypatch.setattr(
         "predictions_cup.runtime.control_plane.shutil.disk_usage",
         lambda _path: SimpleNamespace(
