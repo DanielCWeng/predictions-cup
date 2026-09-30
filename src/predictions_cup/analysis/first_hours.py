@@ -39,6 +39,21 @@ def parse_args() -> argparse.Namespace:
         help="LIVE-LEARN append-only outcome journal for actual maker economics",
     )
     parser.add_argument(
+        "--shadow-journal",
+        type=Path,
+        help="SHADOW-002 append-only event journal for canonical inventory history",
+    )
+    parser.add_argument(
+        "--exposure-groups",
+        type=Path,
+        help="Canonical RISK-002 market-to-exposure-group registry",
+    )
+    parser.add_argument(
+        "--inventory-limit",
+        type=float,
+        help="Optional explicit per-market inventory limit for recycling diagnostics",
+    )
+    parser.add_argument(
         "--mapping",
         type=Path,
         help="Accepted mapping JSON for direct cross-venue diagnostics",
@@ -603,6 +618,9 @@ def run(
     execution_journal: Path | None,
     mapping_path: Path | None,
     live_learn_outcomes: Path | None = None,
+    shadow_journal: Path | None = None,
+    exposure_groups_path: Path | None = None,
+    inventory_limit: float | None = None,
 ) -> dict[str, Any]:
     sig_root = input_root / "sig" if (input_root / "sig").exists() else input_root
     pm_root = polymarket_root
@@ -637,12 +655,27 @@ def run(
         if captured_outcomes.exists():
             outcomes_path = captured_outcomes
 
+    shadow_path = shadow_journal
+    if shadow_path is None:
+        captured_shadow = input_root / "shadow_002" / "events.jsonl"
+        if captured_shadow.exists():
+            shadow_path = captured_shadow
+
+    groups_path = exposure_groups_path
+    if groups_path is None:
+        canonical_groups = Path("data/risk/exposure_groups_2026.json")
+        if canonical_groups.exists():
+            groups_path = canonical_groups
+
     economic_intelligence = analyze_live_diagnostics(
         sig_root=sig_root,
         polymarket_root=pm_root,
         mapping_path=mapping_path,
         output_root=output_root / "economic_intelligence",
         live_learn_outcomes=outcomes_path,
+        shadow_journal=shadow_path,
+        exposure_groups_path=groups_path,
+        inventory_limit=inventory_limit,
         latency_ms=latency_ms,
         latency_assumption_source=latency_source,
     )
@@ -701,6 +734,9 @@ def main() -> int:
         execution_journal=args.execution_journal,
         mapping_path=args.mapping,
         live_learn_outcomes=args.live_learn_outcomes,
+        shadow_journal=args.shadow_journal,
+        exposure_groups_path=args.exposure_groups,
+        inventory_limit=args.inventory_limit,
     )
     print(json.dumps(summary, sort_keys=True))
     return 0
