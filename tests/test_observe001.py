@@ -185,7 +185,7 @@ def test_sink_failure_isolated_from_emitter() -> None:
 
 
 class _ContextRest:
-    async def list_tournaments(
+    async def list_tournaments_with_raw(
         self,
         *,
         status: TournamentListStatus = "any",
@@ -193,42 +193,40 @@ class _ContextRest:
         offset: int = 0,
     ) -> TournamentPageDto:
         del status, limit, offset
-        return TournamentPageDto.model_validate(
-            {
-                "data": [
-                    {
-                        "id": "cup-id",
-                        "slug": "cup",
-                        "name": "SIG Cup",
-                        "description": None,
-                        "status": "active",
-                        "startDate": "2026-10-01T16:00:00Z",
-                        "endDate": None,
-                        "initialBalance": "1000",
-                        "currencyName": "coins",
-                        "myBalance": "975",
-                        "joinedAt": "2026-09-30T10:00:00Z",
-                        "isPendingEnrolment": False,
-                    }
-                ],
-                "pagination": {"limit": 100, "offset": 0, "hasMore": False, "total": 1},
-            }
-        )
+        raw: dict[str, object] = {
+            "data": [
+                {
+                    "id": "cup-id",
+                    "slug": "cup",
+                    "name": "SIG Cup",
+                    "description": None,
+                    "status": "active",
+                    "startDate": "2026-10-01T16:00:00Z",
+                    "endDate": None,
+                    "initialBalance": "1000",
+                    "currencyName": "coins",
+                    "myBalance": "975",
+                    "joinedAt": "2026-09-30T10:00:00Z",
+                    "isPendingEnrolment": False,
+                }
+            ],
+            "pagination": {"limit": 100, "offset": 0, "hasMore": False, "total": 1},
+        }
+        return TournamentPageDto.model_validate(raw), raw
 
-    async def get_account(self) -> AccountDto:
-        return AccountDto.model_validate(
-            {
-                "id": "me",
-                "username": "daniel",
-                "email": None,
-                "createdAt": "2026-09-01T00:00:00Z",
-                "avatarUrl": None,
-                "bio": None,
-                "balance": "975",
-            }
-        )
+    async def get_account_with_raw(self) -> tuple[AccountDto, object]:
+        raw: dict[str, object] = {
+            "id": "me",
+            "username": "daniel",
+            "email": None,
+            "createdAt": "2026-09-01T00:00:00Z",
+            "avatarUrl": None,
+            "bio": None,
+            "balance": "975",
+        }
+        return AccountDto.model_validate(raw), raw
 
-    async def get_tournament_leaderboard(
+    async def get_tournament_leaderboard_with_raw(
         self,
         tournament_slug: str,
         *,
@@ -238,30 +236,29 @@ class _ContextRest:
     ) -> TournamentLeaderboardDto:
         assert tournament_slug == "cup"
         del period, limit, offset
-        return TournamentLeaderboardDto.model_validate(
-            {
-                "leaderboard": [
-                    {
-                        "rank": 3,
-                        "profileId": "me",
-                        "username": "daniel",
-                        "pnl": "15",
-                        "tradesCount": 12,
-                        "volume": "200",
-                        "winRate": "60",
-                        "roi": "7.5",
-                    }
-                ],
-                "total": 20,
-                "period": "all",
-                "limit": 100,
-                "offset": 0,
-                "myRank": 3,
-                "season": None,
-                "boundGroups": [],
-                "activeGroupId": None,
-            }
-        )
+        raw: dict[str, object] = {
+            "leaderboard": [
+                {
+                    "rank": 3,
+                    "profileId": "me",
+                    "username": "daniel",
+                    "pnl": "15",
+                    "tradesCount": 12,
+                    "volume": "200",
+                    "winRate": "60",
+                    "roi": "7.5",
+                }
+            ],
+            "total": 20,
+            "period": "all",
+            "limit": 100,
+            "offset": 0,
+            "myRank": 3,
+            "season": None,
+            "boundGroups": [],
+            "activeGroupId": None,
+        }
+        return TournamentLeaderboardDto.model_validate(raw), raw
 
 
 def test_official_context_exposes_rank_and_marks_super_signal_unavailable() -> None:
@@ -271,6 +268,9 @@ def test_official_context_exposes_rank_and_marks_super_signal_unavailable() -> N
     )
     snapshot = asyncio.run(provider.snapshot())
     assert snapshot.field("participant_rank").value == 3
+    assert isinstance(snapshot.raw_tournament, dict)
+    assert isinstance(snapshot.raw_account, dict)
+    assert isinstance(snapshot.raw_leaderboard, dict)
     assert snapshot.field("leaderboard").classification is FieldClassification.NORMALIZED
     super_signal = snapshot.field("super_signal")
     assert super_signal.classification is FieldClassification.UNAVAILABLE
