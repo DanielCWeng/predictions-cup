@@ -46,7 +46,9 @@ from predictions_cup.observe import (
     CompetitionContextSampler,
     ObservationHealthProvider,
     ObservationHealthSnapshot,
+    ObservationHealthStatusPublisher,
     SigOfficialCompetitionContextProvider,
+    default_observation_health_status_path,
 )
 from predictions_cup.runtime.telemetry import HotPathTelemetry
 from predictions_cup.shadow.live import LiveShadowRuntime, build_live_shadow_runtime
@@ -96,6 +98,7 @@ class MakerService:
         self._pm_token_ids = _mapped_token_ids(self.core.mapping)
         self._last_health: tuple[bool, bool, bool, datetime | None] | None = None
         self._observation_health_provider: ObservationHealthProvider | None = None
+        self._observation_health_publisher: ObservationHealthStatusPublisher | None = None
 
     def observation_health(self) -> ObservationHealthSnapshot | None:
         provider = self._observation_health_provider
@@ -125,6 +128,12 @@ class MakerService:
             observation_emitter,
             observe_recorder,
         )
+        self._observation_health_publisher = ObservationHealthStatusPublisher(
+            default_observation_health_status_path(self.settings.sig_research_path),
+            process_instance_id=observe_recorder.session_id,
+            owner="maker",
+        )
+        self._publish_observation_health(force=True)
         context_sampler = CompetitionContextSampler(
             SigOfficialCompetitionContextProvider(rest, tournament_id=tournament_id),
             observe_recorder.record_competition_context,
@@ -581,6 +590,7 @@ class MakerService:
         runtime: MakerRuntimeLoop,
     ) -> None:
         while not self.stop_event.is_set():
+            self._publish_observation_health()
             current = (
                 self.pm_health.websocket_connected,
                 sig_state.health.connected,
@@ -595,6 +605,19 @@ class MakerService:
                 if previous is None or current[3] != previous[3]:
                     runtime.notify_account(observed_monotonic_ns=monotonic_ns())
             await asyncio.sleep(0.05)
+
+    def _publish_observation_health(self, *, force: bool = False) -> None:
+        provider = self._observation_health_provider
+        publisher = self._observation_health_publisher
+        if provider is None or publisher is None:
+            return
+        try:
+            publisher.publish(provider.health(), force=force)
+        except Exception as exc:
+            _LOG.warning(
+                "OBSERVE health status publication failed without affecting Risk: %s",
+                type(exc).__name__,
+            )
 
     async def _best_effort_kill_drain(
         self,
