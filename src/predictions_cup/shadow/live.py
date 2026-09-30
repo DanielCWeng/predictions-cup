@@ -30,6 +30,7 @@ from predictions_cup.shadow.persistence import (
     CaptureStrategyEventStore,
     CompositeShadowEventStore,
     JsonlEventStore,
+    PersistenceHealth,
     ShadowEventStore,
 )
 
@@ -44,7 +45,7 @@ class LiveShadowRuntime:
     rejected_boundaries: int = 0
 
     @property
-    def live_learn_health(self):
+    def live_learn_health(self) -> PersistenceHealth | None:
         return None if self.live_learn is None else self.live_learn.health
 
     async def start(self) -> None:
