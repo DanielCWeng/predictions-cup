@@ -642,7 +642,10 @@ class IncrementalHazard005FState:
     _capture_bin_seconds = 5
     _gap_seconds = 300
 
-    def __init__(self) -> None:
+    def __init__(self, *, grid_origin_s: int | None = None) -> None:
+        if grid_origin_s is not None and grid_origin_s < 0:
+            raise ValueError("grid_origin_s must be non-negative")
+        self._grid_origin_s = grid_origin_s
         self._scopes: dict[str, _HazardScope] = defaultdict(_HazardScope)
         self._lock = RLock()
 
@@ -723,8 +726,15 @@ class IncrementalHazard005FState:
         self,
         snapshot: CanonicalShadowSnapshot,
     ) -> Hazard005FFeatureVector | None:
-        query_s = int(snapshot.observed_at.timestamp())
-        query_s -= query_s % self._grid_seconds
+        if self._grid_origin_s is None:
+            return None
+        observed_s = int(snapshot.observed_at.timestamp())
+        if observed_s < self._grid_origin_s:
+            return None
+        elapsed = observed_s - self._grid_origin_s
+        query_s = self._grid_origin_s + (
+            elapsed // self._grid_seconds
+        ) * self._grid_seconds
         with self._lock:
             scope = self._scopes.get(snapshot.market_id)
             if scope is None or not scope.states:
