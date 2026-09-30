@@ -44,6 +44,8 @@ from predictions_cup.observe import (
     BoundedObservationEmitter,
     CaptureObservationSink,
     CompetitionContextSampler,
+    ObservationHealthProvider,
+    ObservationHealthSnapshot,
     SigOfficialCompetitionContextProvider,
 )
 from predictions_cup.runtime.telemetry import HotPathTelemetry
@@ -93,6 +95,11 @@ class MakerService:
         self.pm_ws = MarketWebSocket(str(settings.polymarket_ws_url), self.pm_health)
         self._pm_token_ids = _mapped_token_ids(self.core.mapping)
         self._last_health: tuple[bool, bool, bool, datetime | None] | None = None
+        self._observation_health_provider: ObservationHealthProvider | None = None
+
+    def observation_health(self) -> ObservationHealthSnapshot | None:
+        provider = self._observation_health_provider
+        return None if provider is None else provider.health()
 
     async def run(self) -> None:
         tournament_id, tournament_slug = self._tournament_context()
@@ -113,6 +120,10 @@ class MakerService:
         observation_emitter = BoundedObservationEmitter(
             CaptureObservationSink(observe_recorder),
             queue_max=max(1_024, min(self.settings.sig_capture_queue_max, 65_536)),
+        )
+        self._observation_health_provider = ObservationHealthProvider(
+            observation_emitter,
+            observe_recorder,
         )
         context_sampler = CompetitionContextSampler(
             SigOfficialCompetitionContextProvider(rest, tournament_id=tournament_id),
