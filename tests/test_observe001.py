@@ -4,8 +4,6 @@ import asyncio
 import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import cast
-
 import pyarrow.dataset as ds
 
 from predictions_cup.observe import (
@@ -93,10 +91,17 @@ def test_lifecycle_summary_covers_latency_errors_cancel_reconnect_and_duplicates
     assert summary["realtime_revision_gap_count"] == 1
     assert summary["duplicate_ack_evidence"] == 1
     assert summary["duplicate_fill_evidence"] == 1
-    latency = cast(dict[str, dict[str, float | None]], summary["latency_ms"])
-    assert latency["dispatch_to_ack"]["p50"] == 15.0
-    assert latency["ack_to_first_fill"]["p50"] == 5.0
-    assert latency["cancel_to_confirmation"]["p50"] == 5.0
+    latency = summary["latency_ms"]
+    assert isinstance(latency, dict)
+    dispatch_to_ack = latency["dispatch_to_ack"]
+    ack_to_first_fill = latency["ack_to_first_fill"]
+    cancel_to_confirmation = latency["cancel_to_confirmation"]
+    assert isinstance(dispatch_to_ack, dict)
+    assert isinstance(ack_to_first_fill, dict)
+    assert isinstance(cancel_to_confirmation, dict)
+    assert dispatch_to_ack["p50"] == 15.0
+    assert ack_to_first_fill["p50"] == 5.0
+    assert cancel_to_confirmation["p50"] == 5.0
 
 
 def test_replay_orders_lifecycle_and_missing_server_timestamp_stays_explicit() -> None:
