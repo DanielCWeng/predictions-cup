@@ -818,26 +818,27 @@ def evaluate_health(
             if not candidates:
                 state = GateState.BLOCKED if require_real else GateState.DEGRADED
                 checks.append(Check("shadow_decisions", state, "no candidate decisions observed"))
-    for name in ("clock", "storage"):
-        watchdog = status.get(name)
-        if not isinstance(watchdog, dict):
-            continue
-        raw = str(watchdog.get("state", "UNKNOWN"))
-        mapped = {
-            "HEALTHY": GateState.PASS,
-            "DEGRADED": GateState.DEGRADED,
-            "BLOCKED": GateState.BLOCKED,
-            "UNKNOWN": GateState.BLOCKED if require_real else GateState.DEGRADED,
-            "NOT_CONFIGURED": GateState.BLOCKED if require_real else GateState.DEGRADED,
-        }.get(raw, GateState.BLOCKED if require_real else GateState.DEGRADED)
-        checks.append(
-            Check(
-                name,
-                mapped,
-                ",".join(str(code) for code in watchdog.get("reason_codes", ())) or "healthy",
-            )
-        )
     if require_real:
+        for name in ("clock", "storage"):
+            watchdog = status.get(name)
+            if not isinstance(watchdog, dict):
+                checks.append(Check(name, GateState.BLOCKED, "watchdog unavailable"))
+                continue
+            raw = str(watchdog.get("state", "UNKNOWN"))
+            mapped = {
+                "HEALTHY": GateState.PASS,
+                "DEGRADED": GateState.DEGRADED,
+                "BLOCKED": GateState.BLOCKED,
+                "UNKNOWN": GateState.BLOCKED,
+                "NOT_CONFIGURED": GateState.BLOCKED,
+            }.get(raw, GateState.BLOCKED)
+            checks.append(
+                Check(
+                    name,
+                    mapped,
+                    ",".join(str(code) for code in watchdog.get("reason_codes", ())) or "healthy",
+                )
+            )
         session = status.get("session")
         session_ok = isinstance(session, dict) and session.get("state") == "HEALTHY"
         checks.append(
