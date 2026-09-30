@@ -184,9 +184,24 @@ class Pred006Signal:
     payload: Mapping[str, object] = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class RuntimeEvaluatorMetadata:
+    research_id: str
+    frozen_spec_version: str
+    artifact_hash: str | None
+    expected_artifact_hash: str | None
+    feature_schema_hash: str
+    ready: bool
+    readiness_reason: str | None
+    freshness_seconds: float | None
+    quality_flags: tuple[str, ...] = ()
+
+
 class Pred006RuntimeEvaluator(Protocol):
     evaluator_id: str
     version: str
+
+    def metadata(self, snapshot: CanonicalShadowSnapshot) -> RuntimeEvaluatorMetadata: ...
 
     def evaluate(self, snapshot: CanonicalShadowSnapshot) -> Pred006Signal | None: ...
 
@@ -215,12 +230,24 @@ class Pred006Candidate:
                 abstain_reason="runtime_feature_parity_not_wired",
                 quality_flags=("pred006:frozen_no_approximation",),
             )
+        metadata = self._evaluator.metadata(snapshot)
+        if not metadata.ready:
+            return CandidateOutput(
+                status=DecisionStatus.NOT_READY,
+                abstain_reason=metadata.readiness_reason or "runtime_features_unavailable",
+                quality_flags=(
+                    "pred006:frozen_no_approximation",
+                    *metadata.quality_flags,
+                ),
+                candidate_payload=_runtime_metadata_payload(metadata),
+            )
         signal = self._evaluator.evaluate(snapshot)
         if signal is None:
             return CandidateOutput(
                 status=DecisionStatus.NOT_READY,
                 abstain_reason="runtime_features_unavailable",
                 quality_flags=("pred006:frozen_no_approximation",),
+                candidate_payload=_runtime_metadata_payload(metadata),
             )
         return CandidateOutput(
             status=DecisionStatus.OK,
@@ -228,8 +255,9 @@ class Pred006Candidate:
             confidence=signal.confidence,
             direction=signal.direction,
             score=signal.score,
-            quality_flags=signal.quality_flags,
+            quality_flags=(*metadata.quality_flags, *signal.quality_flags),
             candidate_payload={
+                **_runtime_metadata_payload(metadata),
                 "signal_observed_monotonic_ns": signal.observed_monotonic_ns,
                 "frozen_definition": True,
                 **dict(signal.payload),
@@ -239,8 +267,8 @@ class Pred006Candidate:
 
 @dataclass(frozen=True, slots=True)
 class Hazard005FSignal:
-    update_hazard: float
-    jump_hazard: float
+    update_hazard: float | None
+    jump_hazard: float | None
     observed_monotonic_ns: int
     quality_flags: tuple[str, ...] = ()
     payload: Mapping[str, object] = field(default_factory=dict)
@@ -249,6 +277,8 @@ class Hazard005FSignal:
 class Hazard005FEvaluator(Protocol):
     evaluator_id: str
     version: str
+
+    def metadata(self, snapshot: CanonicalShadowSnapshot) -> RuntimeEvaluatorMetadata: ...
 
     def evaluate(self, snapshot: CanonicalShadowSnapshot) -> Hazard005FSignal | None: ...
 
@@ -277,18 +307,33 @@ class Hazard005FCandidate:
                 abstain_reason="005f_live_feature_parity_not_wired",
                 quality_flags=("005f:hazard_not_directional",),
             )
+        metadata = self._evaluator.metadata(snapshot)
+        if not metadata.ready:
+            return CandidateOutput(
+                status=DecisionStatus.NOT_READY,
+                abstain_reason=metadata.readiness_reason or "005f_live_features_unavailable",
+                quality_flags=(
+                    "005f:hazard_not_directional",
+                    *metadata.quality_flags,
+                ),
+                candidate_payload=_runtime_metadata_payload(metadata),
+            )
         signal = self._evaluator.evaluate(snapshot)
         if signal is None:
             return CandidateOutput(
                 status=DecisionStatus.NOT_READY,
                 abstain_reason="005f_live_features_unavailable",
                 quality_flags=("005f:hazard_not_directional",),
+                candidate_payload=_runtime_metadata_payload(metadata),
             )
-        if not (
-            math.isfinite(signal.update_hazard)
-            and math.isfinite(signal.jump_hazard)
-            and 0.0 <= signal.update_hazard <= 1.0
-            and 0.0 <= signal.jump_hazard <= 1.0
+        hazards = tuple(
+            value
+            for value in (signal.update_hazard, signal.jump_hazard)
+            if value is not None
+        )
+        if not hazards or any(
+            not math.isfinite(value) or not 0.0 <= value <= 1.0
+            for value in hazards
         ):
             return CandidateOutput(
                 status=DecisionStatus.INVALID_OUTPUT,
@@ -297,9 +342,18 @@ class Hazard005FCandidate:
             )
         return CandidateOutput(
             status=DecisionStatus.OK,
-            score=signal.update_hazard,
-            quality_flags=("005f:hazard_not_directional", *signal.quality_flags),
+            score=(
+                signal.update_hazard
+                if signal.update_hazard is not None
+                else signal.jump_hazard
+            ),
+            quality_flags=(
+                "005f:hazard_not_directional",
+                *metadata.quality_flags,
+                *signal.quality_flags,
+            ),
             candidate_payload={
+                **_runtime_metadata_payload(metadata),
                 "output_type": "movement_hazard_not_directional",
                 "update_hazard": signal.update_hazard,
                 "jump_hazard": signal.jump_hazard,
@@ -386,6 +440,21 @@ class StructuralFairValueCandidate:
             },
         )
 
+
+
+def _runtime_metadata_payload(
+    metadata: RuntimeEvaluatorMetadata,
+) -> dict[str, object]:
+    return {
+        "research_id": metadata.research_id,
+        "frozen_spec_version": metadata.frozen_spec_version,
+        "artifact_hash": metadata.artifact_hash,
+        "expected_artifact_hash": metadata.expected_artifact_hash,
+        "feature_schema_hash": metadata.feature_schema_hash,
+        "readiness": metadata.ready,
+        "readiness_reason": metadata.readiness_reason,
+        "freshness_seconds": metadata.freshness_seconds,
+    }
 
 def _sig_midpoint(snapshot: MakerMarketSnapshot) -> float | None:
     book = snapshot.runtime.book(snapshot.exchange_id)
