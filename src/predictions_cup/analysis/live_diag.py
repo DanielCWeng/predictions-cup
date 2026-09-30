@@ -646,6 +646,7 @@ def _load_quotes(
     identity_column: str,
     identities: set[str],
     sig: bool,
+    max_depth_age_seconds: float = 30.0,
 ) -> dict[str, tuple[Quote, ...]]:
     files = sorted((root / stream).rglob("*.parquet"))
     if not files or not identities:
@@ -730,7 +731,12 @@ def _load_quotes(
                 if index < 0:
                     enriched.append(quote)
                     continue
-                _, bid_depth, ask_depth = series[index]
+                depth_at, bid_depth, ask_depth = series[index]
+                if (
+                    quote.observed_at - depth_at
+                ).total_seconds() > max_depth_age_seconds:
+                    enriched.append(quote)
+                    continue
                 enriched.append(
                     Quote(
                         observed_at=quote.observed_at,
@@ -1056,6 +1062,7 @@ def analyze_live_diagnostics(
     live_learn_outcomes: Path | None = None,
     shadow_journal: Path | None = None,
     inventory_limit: float | None = None,
+    max_depth_age_seconds: float = 30.0,
     latency_ms: float = 100.0,
     latency_assumption_source: str = "fixed_sensitivity",
     thresholds_ticks: Sequence[int] = DEFAULT_THRESHOLDS_TICKS,
@@ -1067,6 +1074,7 @@ def analyze_live_diagnostics(
         "analysis_version": ANALYSIS_VERSION,
         "latency_ms": latency_ms,
         "latency_assumption_source": latency_assumption_source,
+        "max_depth_age_seconds": max_depth_age_seconds,
         "thresholds_ticks": list(thresholds_ticks),
         "horizons_seconds": list(horizons_seconds),
         "tick_size": SIG_TICK_SIZE,
@@ -1128,6 +1136,7 @@ def analyze_live_diagnostics(
         identity_column="exchange_id",
         identities=exchange_ids,
         sig=True,
+        max_depth_age_seconds=max_depth_age_seconds,
     )
     pm_quotes = _load_quotes(
         polymarket_root,
