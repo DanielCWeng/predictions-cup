@@ -522,15 +522,18 @@ def analyze_lead_lag(
         elif gross_edge <= 0:
             status = ResearchStatus.NO_EXECUTABLE_EDGE
             reasons = ("NO_ACTIVE_EDGE_AT_TRIGGER",)
-        elif depth is None or depth <= 0:
+        elif trigger_depth is None or trigger_depth <= 0:
             status = ResearchStatus.INSUFFICIENT_DEPTH
-            reasons = ("EXECUTABLE_DEPTH_UNAVAILABLE",)
+            reasons = ("TRIGGER_EXECUTABLE_DEPTH_UNAVAILABLE",)
         elif delayed_edge is None:
             status = ResearchStatus.INSUFFICIENT_EVIDENCE
             reasons = ("NO_LATENCY_ASOF_BOOK",)
         elif delayed_edge <= 0:
             status = ResearchStatus.TOO_FAST_TO_MONETIZE
             reasons = ("EDGE_GONE_AFTER_LATENCY",)
+        elif delayed_depth is None or delayed_depth <= 0:
+            status = ResearchStatus.INSUFFICIENT_DEPTH
+            reasons = ("LATENCY_EXECUTABLE_DEPTH_UNAVAILABLE",)
         else:
             status = ResearchStatus.MONETIZABLE_CANDIDATE
             reasons = ("LATENCY_ADJUSTED_ACTIVE_EDGE_POSITIVE",)
