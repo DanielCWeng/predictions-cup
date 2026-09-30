@@ -279,6 +279,16 @@ The lane benchmark exercises 237-market bursts through the feature/evaluator
 boundaries with deterministic injected scorers; it is a runtime plumbing
 benchmark, not scientific evidence.
 
+GitHub Actions run `36719422783` executed 20 x 237-market bursts (9,480 evaluator
+calls) on the hosted CI runner:
+
+- elapsed: 0.446671s;
+- throughput: 21,223.7 evaluator calls/s;
+- evaluator latency: p50 50.837us, p95 53.981us, p99 66.220us;
+- 237-market two-evaluator burst: p50 22.298ms, p95/p99 23.317ms.
+
+No performance acceptance threshold changes research semantics.
+
 ## Known limitations / external dependencies
 
 1. PRED-006 has no legal serialized fitted FINAL model artifact. Required next
