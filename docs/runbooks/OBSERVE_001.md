@@ -151,10 +151,12 @@ Inside MAKE, `MakerService.observation_health()` returns the typed combined snap
 Across the systemd/process boundary, read the atomically published status file:
 
 ```text
-<parent of PREDICTIONS_CUP_SIG_RESEARCH_PATH>/runtime/observe_health.json
+<parent of PREDICTIONS_CUP_SIG_RESEARCH_PATH>/runtime/status/observe.json
 ```
 
-Use `read_observation_health_status(..., expected_owner="maker", max_age_seconds=...)` rather than
+Use
+`read_observation_health_status(..., expected_owner="predictions-cup-maker.service", max_age_seconds=...)`
+rather than
 parsing logs or trusting the JSON `health.state` field by itself. The reader validates owner,
 process identity when supplied, timestamp freshness and schema. Missing/stale/wrong-owner/invalid
 files are explicit non-healthy states.
@@ -449,7 +451,7 @@ The benchmark performs no network or file I/O and sends no SIG order.
 - [ ] `competition_context` Parquet readable;
 - [ ] participant rank/leaderboard available or explicitly unavailable with reason;
 - [ ] Super Signal explicitly unavailable for participant key;
-- [ ] cross-process OBSERVE status file exists, owner is `maker`, and is fresh;
+- [ ] cross-process OBSERVE status file exists, owner is `predictions-cup-maker.service`, and is fresh;
 - [ ] status reader reports `HEALTHY` rather than MISSING/STALE/OWNER_MISMATCH/INVALID;
 - [ ] `observe.dropped = 0`;
 - [ ] `observe.sink_failures = 0`;
