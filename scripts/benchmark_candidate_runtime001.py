@@ -128,6 +128,7 @@ def run(markets: int, bursts: int) -> dict[str, float | int]:
                     active_fee_charged=0.1,
                     active_fee_refunded=0.0,
                     active_charge_legs=1.0,
+                    source_version="benchmark-data003",
                 )
             )
         for timestamp_s, bid, ask in (
