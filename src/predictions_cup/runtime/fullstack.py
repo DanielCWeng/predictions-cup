@@ -25,7 +25,6 @@ from predictions_cup.observe import (
     ObservationStatusState,
     read_observation_health_status,
 )
-
 from predictions_cup.runtime.control_plane import (
     build_control_plane,
     build_session_manifest,
