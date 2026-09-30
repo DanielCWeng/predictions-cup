@@ -20,6 +20,7 @@ from urllib.parse import quote
 import aiohttp
 
 from predictions_cup.external.kalshi.models import (
+    KalshiEvent,
     KalshiHealth,
     KalshiMarket,
     KalshiOrderBook,
@@ -117,13 +118,13 @@ class KalshiPublicClient:
             raise KalshiPayloadError("cursor must be a string when present")
         return KalshiPage(tuple(markets), next_cursor or None)
 
-    async def get_event(self, event_ticker: str) -> dict[str, Any]:
+    async def get_event(self, event_ticker: str) -> KalshiEvent:
         safe = self._ticker(event_ticker)
-        raw, _ = await self._request_json(f"/events/{safe}")
+        raw, observed = await self._request_json(f"/events/{safe}")
         event = raw.get("event")
         if not isinstance(event, dict):
             raise KalshiPayloadError("event response missing event object")
-        return dict(event)
+        return KalshiEvent.from_api(event, observed_at=observed, api_version=API_VERSION)
 
     async def get_orderbook(self, ticker: str, *, depth: int | None = None) -> KalshiOrderBook:
         safe = self._ticker(ticker)
@@ -226,6 +227,7 @@ class KalshiPublicClient:
                     ) as response:
                         if response.status in {429, 500, 502, 503, 504}:
                             if attempt == self.max_attempts:
+                                self._consecutive_failures += 1
                                 raise KalshiReadError(
                                     f"Kalshi GET exhausted retries status={response.status}"
                                 )
