@@ -8,6 +8,7 @@ from predictions_cup.external.kalshi.client import (
 )
 from predictions_cup.external.kalshi.models import (
     KalshiBookLevel,
+    KalshiEvent,
     KalshiHealth,
     KalshiMarket,
     KalshiOrderBook,
@@ -21,6 +22,7 @@ __all__ = [
     "API_VERSION",
     "DEFAULT_BASE_URL",
     "KalshiBookLevel",
+    "KalshiEvent",
     "KalshiHealth",
     "KalshiMarket",
     "KalshiOrderBook",
