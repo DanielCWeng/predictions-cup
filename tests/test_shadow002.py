@@ -558,10 +558,18 @@ def test_live_shadow_runtime_composes_frozen_candidates_and_live_learn(
         }
         assert "pred-006" in one_second
         assert "experiment-005f-hazard" in one_second
-        assert one_second["pred-006"]["outcome_status"] == "DECISION_ABSTAINED"
+        assert one_second["pred-006"]["outcome_status"] == "INSUFFICIENT_HISTORY"
+        assert (
+            one_second["pred-006"]["missing_reason"]
+            == "decision_status:NOT_READY"
+        )
         assert (
             one_second["experiment-005f-hazard"]["outcome_status"]
-            == "DECISION_ABSTAINED"
+            == "INSUFFICIENT_HISTORY"
+        )
+        assert (
+            one_second["experiment-005f-hazard"]["missing_reason"]
+            == "decision_status:NOT_READY"
         )
 
     asyncio.run(run())
