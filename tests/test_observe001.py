@@ -10,6 +10,7 @@ import pyarrow.dataset as ds
 from predictions_cup.observe import (
     BoundedObservationEmitter,
     CallbackObservationSink,
+    CaptureWriterHealth,
     CrossVenueMapping,
     EconomicChange,
     EmitterHealth,
