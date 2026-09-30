@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import heapq
 import math
+from contextlib import suppress
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -668,10 +669,8 @@ class LiveLearnEngine:
                 self._last_error = f"{type(exc).__name__}:{exc}"
             timeout = self._next_timeout_seconds(datetime.now(UTC))
             self._wakeup.clear()
-            try:
+            with suppress(TimeoutError):
                 await asyncio.wait_for(self._wakeup.wait(), timeout=timeout)
-            except TimeoutError:
-                pass
 
     async def _emit_due_reports(self, now: datetime) -> None:
         for cadence in self._report_cadences:
