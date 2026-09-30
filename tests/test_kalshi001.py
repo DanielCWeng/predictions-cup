@@ -76,6 +76,19 @@ def test_orderbook_is_bid_only_and_exact_decimal() -> None:
     asyncio.run(run())
 
 
+def test_orderbook_rejects_depth_above_public_contract() -> None:
+    async def run() -> None:
+        client = KalshiPublicClient()
+        for depth in (0, 101):
+            try:
+                await client.get_orderbook("KXTEST-YES", depth=depth)
+            except ValueError:
+                continue
+            raise AssertionError(f"unsupported orderbook depth accepted: {depth}")
+
+    asyncio.run(run())
+
+
 def test_markets_and_trades_preserve_cursor() -> None:
     async def run() -> None:
         client = KalshiPublicClient(wall_clock=lambda: NOW)
