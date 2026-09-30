@@ -36,5 +36,6 @@
   "schema_version": null,
   "scientific_result": "NOT_RUN",
   "source": null,
-  "status": "WAITING_FOR_DATA"
+  "status": "WAITING_FOR_DATA",
+  "005f_regime_default": null
 }
