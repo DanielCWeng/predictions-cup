@@ -14,6 +14,14 @@ modify real SIG orders and it refuses construction when `trading_enabled=True`.
 MakerMarketSnapshot / RuntimeSnapshot
         |
         v
+MakerRuntimeLoop snapshot observer
+  - exact MakerMarketSnapshot objects used by MAKE
+  - synchronous put_nowait only; never awaits SHADOW
+        |
+        v
+bounded ShadowBus ingress
+        |
+        v
 CanonicalShadowSnapshot.freeze()
   - deterministic snapshot_id
   - UTC observable time
@@ -23,7 +31,7 @@ CanonicalShadowSnapshot.freeze()
   - immutable external-quote mapping
         |
         v
-ShadowBus.publish()
+ShadowBus internal fan-out
         |
         +--> append-only snapshot event
         |
@@ -125,17 +133,26 @@ import the active R3 research branch.
 
 ## Fan-out and failure isolation
 
-Every candidate has its own bounded queue and worker. The production default is 512 pending states, which retains a full 237-market Cup sweep with headroom. `publish()` freezes no new
-state after the boundary; every eligible candidate receives the same
-`CanonicalShadowSnapshot` object/snapshot ID.
+Every candidate has its own bounded queue and worker. The production default is
+512 pending states, which retains a full 237-market Cup sweep with headroom.
+Production ingress is a separate bounded queue (default 4,096). MAKE calls a
+synchronous snapshot observer which only performs `put_nowait`; SHADOW therefore
+cannot stall the MAKE coordinator, central Risk or execution path. The ingress
+worker freezes exactly one `CanonicalShadowSnapshot` for each submitted immutable
+`MakerMarketSnapshot` and every enabled candidate receives that same snapshot
+object/snapshot ID. Ingress saturation is explicit through `ingress_rejected`;
+there is no silent blocking or silent loss.
 
 If a queue is full, the oldest pending state is explicitly coalesced in favor of
 the latest state. The counter is exposed in health. There is no unbounded growth.
 
 Each evaluation runs in an isolated worker via `asyncio.to_thread` with a timeout.
-A timeout does not block another candidate worker. Python cannot kill a timed-out
-thread, so candidates must remain pure/read-only; a timed-out computation may finish
-in the executor after SHADOW has already recorded `TIMEOUT`.
+A candidate is allowed at most one in-flight evaluation. If it times out, SHADOW
+records `TIMEOUT`, quarantines that candidate, drains/skips its pending states and
+does not schedule another evaluation until the underlying call actually returns.
+The quarantine/in-flight state and counters are exposed in health. Python still
+cannot force-kill a stuck thread, but the failure is bounded to one worker call per
+candidate rather than accumulating an unbounded number of timed-out threads.
 
 Supported states are:
 
@@ -148,19 +165,24 @@ continue.
 
 ## Persistence
 
-`JsonlEventStore` is an immutable append-only event journal. It writes two event
-types:
+`JsonlEventStore` is the immutable replay journal. It writes two event types:
 
 - one canonical `snapshot` event per decision state;
 - one `decision` event per evaluated candidate.
 
-Filesystem writes and fsync run in a background thread, not in the strategy
-calculation worker. The persistence queue is bounded. Saturation creates explicit
-backpressure rather than unbounded memory growth.
+Filesystem writes and fsync run off the candidate/MAKE path. JSONL events are
+batched (default 256 records) so durability does not require one fsync per event.
+The persistence queue is bounded (default 65,536) and health exposes queue
+high-water, batch count and p95 batch-write latency. Persistence slowdown can
+backlog SHADOW ingress, but cannot await on MAKE; eventual ingress saturation is
+reported explicitly.
 
-A JSONL event journal is used here instead of adding a third giant database. It is
-the durable event surface; downstream compaction to Parquet belongs outside the
-SHADOW hot path.
+When `shadow_capture_mirror_enabled=true`, every CandidateDecision is also emitted
+to CAPTURE-001's canonical `strategy_events` Parquet stream through the existing
+bounded `ImmutableCaptureSink`. JSONL remains authoritative for exact snapshot
+replay; CAPTURE `strategy_events` is the common research/LIVE-LEARN decision
+surface. The mirror payload contains `decision_id` and `input_snapshot_id`, so
+offline jobs reconcile the two surfaces by those IDs plus market/exchange/time.
 
 ## Replay
 
@@ -180,14 +202,15 @@ randomness.
 - running / paused state;
 - last snapshot age;
 - snapshots processed and dropped/coalesced;
-- candidate enabled state;
+- ingress queue depth/high-water, rejection count and ingress error;
+- candidate enabled/quarantined/in-flight state;
 - queue depth/high-water;
 - skipped states;
 - last success/error;
 - p50/p95/p99 evaluation latency;
 - p95 queue delay;
-- failure and timeout counts;
-- persistence health and queue high-water.
+- failure, timeout and quarantine counts;
+- persistence health, queue high-water, batch count and write-latency p95.
 
 Control actions are `enable_candidate`, `disable_candidate`, `pause` and
 `resume`. They never enable trading.
@@ -242,14 +265,37 @@ No artificial microsecond acceptance target is encoded. The benchmark reports th
 observed numbers so morning review can judge whether orchestration is small relative
 to venue/network latency and whether MAKE is materially delayed.
 
+## Launch integration
+
+`MakerService` now optionally composes SHADOW when
+`PREDICTIONS_CUP_SHADOW_ENABLED=true`. `MakerRuntimeLoop` invokes the
+non-blocking snapshot observer on the exact immutable snapshot mapping immediately
+before the coordinator sees it. The production path is therefore:
+
+`SIG + PM state -> MakerSourceBridge -> MakerMarketSnapshot -> non-blocking SHADOW
+ingress -> CanonicalShadowSnapshot -> candidates -> JSONL + CAPTURE strategy_events`.
+
+SHADOW does not receive a placement/cancel dispatcher, SIG trading client or
+execution sink. Enabling SHADOW does not change BUILD-009 Risk authority.
+
+## Sustained acceptance
+
+In addition to the one-shot 237-market benchmark,
+`scripts/soak_shadow002.py` drives 237 markets x 6 candidates over repeated cycles
+through the real non-blocking MakerSnapshot ingress and durable JSONL persistence.
+The soak hard-fails on any ingress rejection, candidate coalescing/drop, persistence
+failure, event-count mismatch or JSONL readback mismatch, and reports ingress,
+candidate and persistence high-water plus submit overhead, persistence write
+latency and event throughput.
+
 ## Known limitations
 
-1. SHADOW is not yet wired into the launch daemon/event source; this build provides
-   the production-quality bus/contracts/adapters and a clear integration surface.
-2. PRED-006 and 005F remain `NOT_READY` until exact live feature-parity evaluators
+1. PRED-006 and 005F remain `NOT_READY` until exact live feature-parity evaluators
    are supplied.
-3. R3/ETS is hook-only until research publishes a stable provider.
-4. JSONL is the durable event journal; Parquet compaction/evaluation belongs to
-   LIVE-LEARN or an offline process.
-5. Timed-out Python thread work cannot be force-killed. Candidate code must stay
-   pure and side-effect free.
+2. R3/ETS is hook-only until research publishes a stable provider.
+3. A permanently wedged Python candidate thread cannot be force-killed in-process;
+   quarantine bounds it to one in-flight call. Such a provider should be restarted
+   or moved behind a process boundary if it proves unsafe operationally.
+4. Final launch readiness still requires a production-host full-stack rehearsal
+   with live market feeds, SHADOW enabled, zero ingress rejection and readable
+   decision evidence after restart.
