@@ -360,11 +360,13 @@ For process-boundary consumers, `ObservationHealthStatusPublisher` atomically wr
 canonical `ObservationHealthSnapshot.to_dict()` payload to a small JSON status document at:
 
 ```text
-<parent of PREDICTIONS_CUP_SIG_RESEARCH_PATH>/runtime/observe_health.json
+<parent of PREDICTIONS_CUP_SIG_RESEARCH_PATH>/runtime/status/observe.json
 ```
 
 The status envelope includes UTC `observed_at`, the observation process instance ID and
-`owner="maker"`. Publication is immediate on health-state/counter-signature change and otherwise
+`owner="predictions-cup-maker.service"`. This matches FULLSTACK-001's default
+`PREDICTIONS_CUP_FULLSTACK_STATUS_DIR=data/runtime/status` convention when the SIG research root
+uses its canonical `data/sig_research` location. Publication is immediate on health-state/counter-signature change and otherwise
 bounded to a one-second cadence. The atomic temp-write/fsync/replace path is deliberately outside
 the execution hot path.
 
