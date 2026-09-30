@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "dataset_probe",
+  "dataset": "polyleviathan/sig-cup-data003-orderbooks",
+  "note": "Authenticated lightweight probe for landed MM-REPLAY-001 dataset metadata/version/file index."
+}
