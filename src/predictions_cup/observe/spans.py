@@ -74,8 +74,9 @@ class VenueSpanCollector:
     """Derive spans only inside one process clock domain."""
 
     def collect(self, observations: Iterable[VenueObservation]) -> tuple[VenueSpan, ...]:
+        rows = tuple(observations)
         groups: dict[tuple[str, str | None], list[VenueObservation]] = {}
-        for item in observations:
+        for item in rows:
             key = (item.process_instance_id, item.logical_operation_id)
             groups.setdefault(key, []).append(item)
         spans: list[VenueSpan] = []
@@ -94,7 +95,7 @@ class VenueSpanCollector:
                     continue
                 spans.append(VenueSpan(name, operation_id, process_id, start, end))
         by_process: dict[str, list[VenueObservation]] = {}
-        for item in observations:
+        for item in rows:
             by_process.setdefault(item.process_instance_id, []).append(item)
         for process_id, group in by_process.items():
             pending_reconnects: list[int] = []
