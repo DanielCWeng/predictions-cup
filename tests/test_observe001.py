@@ -4,6 +4,8 @@ import asyncio
 import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import cast
+
 import pyarrow.dataset as ds
 
 from predictions_cup.observe import (
