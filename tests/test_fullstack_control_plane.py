@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -21,8 +20,15 @@ from predictions_cup.runtime.control_plane import (
 NOW = datetime(2026, 9, 30, 22, 0, tzinfo=UTC)
 
 
+class _DiskUsage:
+    def __init__(self, total: int, used: int, free: int) -> None:
+        self.total = total
+        self.used = used
+        self.free = free
+
+
 def test_clock_health_accepts_synchronised_host_with_small_offset() -> None:
-    def runner(command: Sequence[str]) -> tuple[int, str]:
+    def runner(command: tuple[str, ...]) -> tuple[int, str]:
         if command[0] == "timedatectl":
             return 0, "yes"
         if command[0] == "chronyc":
@@ -40,7 +46,7 @@ def test_clock_health_accepts_synchronised_host_with_small_offset() -> None:
 
 
 def test_clock_health_blocks_offset_boundary_and_unknown_inspection() -> None:
-    def bad_offset(command: Sequence[str]) -> tuple[int, str]:
+    def bad_offset(command: tuple[str, ...]) -> tuple[int, str]:
         if command[0] == "timedatectl":
             return 0, "yes"
         return 0, "Last offset     : 0.250001 seconds\nLeap status     : Normal"
