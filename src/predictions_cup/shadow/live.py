@@ -41,6 +41,7 @@ class LiveShadowRuntime:
 
     bus: ShadowBus
     mapping_version: str
+    hazard_005f: Live005FStateProvider | None = None
     rejected_boundaries: int = 0
 
     async def start(self) -> None:
@@ -48,6 +49,30 @@ class LiveShadowRuntime:
 
     async def close(self) -> None:
         await self.bus.close()
+
+    def observe_polymarket_bbo(
+        self,
+        *,
+        token_id: str,
+        observed_at: datetime,
+        observed_monotonic_ns: int,
+        best_bid: float | None,
+        best_ask: float | None,
+        source_version: str,
+        trusted: bool,
+    ) -> bool:
+        provider = self.hazard_005f
+        if provider is None:
+            return False
+        return provider.observe_bbo(
+            scope_id=token_id,
+            observed_at=observed_at,
+            observed_monotonic_ns=observed_monotonic_ns,
+            best_bid=best_bid,
+            best_ask=best_ask,
+            source_version=source_version,
+            trusted=trusted,
+        )
 
     def observe(
         self,
@@ -133,6 +158,7 @@ def build_live_shadow_runtime(
     return LiveShadowRuntime(
         bus=bus,
         mapping_version=_mapping_version(core.mapping),
+        hazard_005f=hazard_005f,
     )
 
 
