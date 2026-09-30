@@ -714,28 +714,28 @@ def _decision_from_record(record: Mapping[str, object]) -> CandidateDecision:
         candidate_version=str(record["candidate_version"]),
         strategy_family=str(record["strategy_family"]),
         observed_at=datetime.fromisoformat(str(record["observed_at"])),
-        monotonic_time=int(record["monotonic_time"]),
+        monotonic_time=_record_int(record["monotonic_time"]),
         tournament_id=str(record["tournament_id"]),
         exchange_id=str(record["exchange_id"]),
         market_id=str(record["market_id"]),
         input_snapshot_id=str(record["input_snapshot_id"]),
         mapping_version=str(record["mapping_version"]),
         fair_value=(
-            None if record.get("fair_value") is None else float(record["fair_value"])
+            _optional_record_float(record.get("fair_value"))
         ),
         lower_bound=(
-            None if record.get("lower_bound") is None else float(record["lower_bound"])
+            _optional_record_float(record.get("lower_bound"))
         ),
         upper_bound=(
-            None if record.get("upper_bound") is None else float(record["upper_bound"])
+            _optional_record_float(record.get("upper_bound"))
         ),
         confidence=(
-            None if record.get("confidence") is None else float(record["confidence"])
+            _optional_record_float(record.get("confidence"))
         ),
         direction=(
             None if record.get("direction") is None else str(record["direction"])
         ),
-        score=None if record.get("score") is None else float(record["score"]),
+        score=_optional_record_float(record.get("score")),
         action_intent=(
             None
             if record.get("action_intent") is None
@@ -756,13 +756,33 @@ def _decision_from_record(record: Mapping[str, object]) -> CandidateDecision:
             str(value)
             for value in cast(Sequence[object], record.get("quality_flags", ()))
         ),
-        compute_started_at=int(record.get("compute_started_at", 0)),
-        compute_finished_at=int(record.get("compute_finished_at", 0)),
-        compute_latency_ns=int(record.get("compute_latency_ns", 0)),
+        compute_started_at=_record_int(record.get("compute_started_at", 0)),
+        compute_finished_at=_record_int(record.get("compute_finished_at", 0)),
+        compute_latency_ns=_record_int(record.get("compute_latency_ns", 0)),
         candidate_payload=dict(cast(Mapping[str, object], payload_raw)),
-        schema_version=int(record.get("schema_version", 1)),
+        schema_version=_record_int(record.get("schema_version", 1)),
     )
 
+
+
+
+def _record_int(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise ValueError("persisted decision integer field has invalid type")
+    return int(value)
+
+
+def _record_float(value: object) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise ValueError("persisted decision numeric field has invalid type")
+    result = float(value)
+    if not math.isfinite(result):
+        raise ValueError("persisted decision numeric field must be finite")
+    return result
+
+
+def _optional_record_float(value: object) -> float | None:
+    return None if value is None else _record_float(value)
 
 def _dimensions(decision: CandidateDecision) -> dict[str, str]:
     result = {
