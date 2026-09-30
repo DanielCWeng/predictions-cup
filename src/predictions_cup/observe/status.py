@@ -42,7 +42,7 @@ class ObservationHealthStatusRead:
 
 
 def default_observation_health_status_path(research_root: Path) -> Path:
-    return research_root.parent / "runtime" / "observe_health.json"
+    return research_root.parent / "runtime" / "status" / "observe.json"
 
 
 class ObservationHealthStatusPublisher:
