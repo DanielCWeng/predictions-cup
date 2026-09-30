@@ -62,7 +62,17 @@ def summarize_observations(
             name: _percentiles(values) for name, values in sorted(span_values.items())
         },
         "rate_limit_429_count": counts[ObservationKind.RATE_LIMIT.value],
+        "rate_limit_429_rate": (
+            None
+            if dispatches == 0
+            else counts[ObservationKind.RATE_LIMIT.value] / dispatches
+        ),
         "server_5xx_count": counts[ObservationKind.SERVER_ERROR.value],
+        "server_5xx_rate": (
+            None
+            if dispatches == 0
+            else counts[ObservationKind.SERVER_ERROR.value] / dispatches
+        ),
         "transport_exception_count": counts[ObservationKind.TRANSPORT_EXCEPTION.value],
         "uncertainty_count": uncertainty,
         "uncertainty_rate": None if dispatches == 0 else uncertainty / dispatches,
