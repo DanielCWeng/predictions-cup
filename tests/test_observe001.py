@@ -104,7 +104,12 @@ def test_lifecycle_summary_covers_latency_errors_cancel_reconnect_and_duplicates
     assert summary["server_5xx_count"] == 1
     assert summary["transport_exception_count"] == 1
     assert summary["uncertainty_count"] == 1
+    assert summary["uncertainty_rate"] == 0.5
+    assert summary["rate_limit_429_rate"] == 0.5
+    assert summary["server_5xx_rate"] == 0.5
     assert summary["reconnect_count"] == 1
+    assert summary["reconnect_resolved_count"] == 1
+    assert summary["reconnect_unresolved_count"] == 0
     assert summary["realtime_revision_gap_count"] == 1
     assert summary["replenishment_observation_count"] == 1
     assert summary["duplicate_ack_evidence"] == 1
