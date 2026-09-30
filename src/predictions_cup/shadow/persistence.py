@@ -13,15 +13,15 @@ from pathlib import Path
 from time import perf_counter_ns
 from typing import Protocol
 
+from predictions_cup.sig.launch_storage import (
+    ImmutableCaptureSink,
+    SCHEMA_VERSION as CAPTURE_SCHEMA_VERSION,
+)
 from predictions_cup.shadow.contracts import (
     CandidateDecision,
     CanonicalShadowSnapshot,
     decision_semantic_record,
     maker_snapshot_record,
-)
-from predictions_cup.sig.launch_storage import (
-    ImmutableCaptureSink,
-    SCHEMA_VERSION as CAPTURE_SCHEMA_VERSION,
 )
 
 
