@@ -149,10 +149,11 @@ class Pred006BlockObservation:
     active_fee_charged: float
     active_fee_refunded: float
     active_charge_legs: float
+    source_version: str
 
     def __post_init__(self) -> None:
-        if not self.scope_id or not self.window_id:
-            raise ValueError("scope_id/window_id must not be blank")
+        if not self.scope_id or not self.window_id or not self.source_version:
+            raise ValueError("scope_id/window_id/source_version must not be blank")
         if self.timestamp_s < 0 or self.observed_monotonic_ns < 0:
             raise ValueError("observation timestamps must be non-negative")
         if not math.isfinite(self.p_yes) or not 0.0 <= self.p_yes <= 1.0:
@@ -178,6 +179,7 @@ class Pred006FeatureVector:
     window_id: str
     timestamp_s: int
     observed_monotonic_ns: int
+    source_version: str
     names: tuple[str, ...]
     values: tuple[float, ...]
 
@@ -378,6 +380,7 @@ class IncrementalPred006FeatureState:
                 window_id=observation.window_id,
                 timestamp_s=observation.timestamp_s,
                 observed_monotonic_ns=observation.observed_monotonic_ns,
+                source_version=observation.source_version,
                 names=PRED006_FEATURES,
                 values=tuple(float(features[name]) for name in PRED006_FEATURES),
             )
@@ -510,6 +513,7 @@ class FrozenPred006Evaluator:
                 "feature_schema_hash": self.feature_schema_hash,
                 "feature_timestamp_s": vector.timestamp_s,
                 "window_id": vector.window_id,
+                "source_version": vector.source_version,
                 "hazard_probabilities": scores,
                 "horizon_seconds": dict(PRED006_CANDIDATES),
             },
