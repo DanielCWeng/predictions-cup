@@ -854,19 +854,19 @@ def build_quote(
 
     raw_bid = reservation - half_spread
     raw_ask = reservation + half_spread
-    bid = _floor_tick(raw_bid)
-    ask = _ceil_tick(raw_ask)
 
     assert observation.best_bid is not None
     assert observation.best_ask is not None
-    bid = min(bid, observation.best_ask - TICK)
-    ask = max(ask, observation.best_bid + TICK)
+    bid_value = min(_floor_tick(raw_bid), observation.best_ask - TICK)
+    ask_value = max(_ceil_tick(raw_ask), observation.best_bid + TICK)
 
     max_distance = policy.max_distance_ticks * TICK
-    if reservation - bid > max_distance:
-        bid = None
-    if ask - reservation > max_distance:
-        ask = None
+    bid: float | None = (
+        bid_value if reservation - bid_value <= max_distance else None
+    )
+    ask: float | None = (
+        ask_value if ask_value - reservation <= max_distance else None
+    )
 
     min_edge = policy.min_external_edge_ticks * TICK
     if policy.anchor == "EXTERNAL_FV":
@@ -1032,9 +1032,7 @@ def replay_market(
         active_fraction=active_quotes / quotes if quotes else 0.0,
         mean_gross_spread_capture=_mean_or_none(gross_values),
         mean_markout_5m=_mean_or_none(markouts_5m),
-        mean_estimated_edge_5m=_mean_or_none(
-            [cast(float, value) for value in edge_5m]
-        ),
+        mean_estimated_edge_5m=_mean_or_none(edge_5m),
     )
     return tuple(results), summary
 
@@ -1267,6 +1265,6 @@ def _string_mapping(value: Any) -> dict[str, str]:
     if not isinstance(value, dict):
         raise InputContractError("manifest mapping field must be an object")
     result: dict[str, str] = {}
-    for key, item in cast(dict[Any, Any], value).items():
+    for key, item in value.items():
         result[str(key)] = str(item)
     return result
