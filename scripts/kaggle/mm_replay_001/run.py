@@ -238,3 +238,299 @@ def canonical_observations(
                 market_id=market_id,
                 timestamp_ns=timestamp_ns,
                 best_bid=best_bid,
+                best_ask=best_ask,
+                external_fv=ext,
+                external_fv_timestamp_ns=ext_ts,
+                trade_price=_float_or_none(rec.get("trade_price")),
+                trade_size=_float_or_none(rec.get("trade_size")),
+                aggressor_side=_side_or_none(rec.get("aggressor_side")),
+                bid_depth=bid_depth,
+                ask_depth=ask_depth,
+                queue_ahead_bid=_float_or_none(rec.get("queue_ahead_bid")),
+                queue_ahead_ask=_float_or_none(rec.get("queue_ahead_ask")),
+                category=(
+                    str(rec.get("category"))
+                    if rec.get("category") is not None
+                    else None
+                ),
+            )
+        )
+    return rows
+
+
+def genuine_change_times(observations: list[BookObservation]) -> list[int]:
+    """Exact 005F grouped-BBO transition definition from the frozen build_clock."""
+    out: list[int] = []
+    previous: BookObservation | None = None
+    for current in observations:
+        valid = (
+            current.best_bid is not None
+            and current.best_ask is not None
+            and 0.0 < current.best_bid <= current.best_ask < 1.0
+        )
+        if previous is None:
+            previous = current
+            continue
+        prev_valid = (
+            previous.best_bid is not None
+            and previous.best_ask is not None
+            and 0.0 < previous.best_bid <= previous.best_ask < 1.0
+        )
+        contiguous = (
+            valid
+            and prev_valid
+            and current.timestamp_ns - previous.timestamp_ns <= 300_000_000_000
+        )
+        same = (
+            contiguous
+            and math.isclose(
+                float(current.best_bid),
+                float(previous.best_bid),
+                rel_tol=0.0,
+                abs_tol=1e-12,
+            )
+            and math.isclose(
+                float(current.best_ask),
+                float(previous.best_ask),
+                rel_tol=0.0,
+                abs_tol=1e-12,
+            )
+        )
+        if contiguous and not same:
+            out.append(current.timestamp_ns)
+        previous = current
+    return out
+
+
+def frozen_artifacts() -> dict[str, tuple[Any, Any, dict[str, Any]]]:
+    if not FIT_MANIFEST_PATH.is_file():
+        return {}
+    fit = load_json(FIT_MANIFEST_PATH)
+    candidates = fit.get("candidates", [])
+    artifact_files = list(Path("/kaggle/input").rglob("*.joblib"))
+    by_hash: dict[str, Path] = {
+        sha256_file(path): path for path in artifact_files
+    }
+    loaded: dict[str, tuple[Any, Any, dict[str, Any]]] = {}
+    for row in candidates:
+        if not isinstance(row, dict) or row.get("candidate_id") not in REQUIRED_005F:
+            continue
+        hashes = row.get("artifact_sha256", {})
+        model_hash = hashes.get("challenger_model.joblib")
+        scaler_hash = hashes.get("challenger_scaler.joblib")
+        if model_hash in by_hash and scaler_hash in by_hash:
+            loaded[str(row["candidate_id"])] = (
+                joblib.load(by_hash[model_hash]),
+                joblib.load(by_hash[scaler_hash]),
+                row,
+            )
+    return loaded
+
+
+def score_artifact(
+    model: Any,
+    scaler: Any,
+    row: dict[str, Any],
+    features: dict[str, float],
+) -> float:
+    cols = [str(x) for x in row["challenger_columns"]]
+    x = np.asarray([[features[name] for name in cols]], dtype=float)
+    if not np.all(np.isfinite(x)):
+        return math.nan
+    transformed = scaler.transform(x)
+    if bool(row.get("classification")):
+        return float(model.predict_proba(transformed)[0, 1])
+    return float(model.predict(transformed)[0])
+
+
+def build_005f_transfer(
+    markets: dict[str, list[BookObservation]],
+    manifest: dict[str, Any],
+) -> tuple[
+    list[dict[str, Any]],
+    dict[str, Any],
+    dict[str, list[tuple[int, float]]],
+]:
+    origins_raw = manifest.get("grid_origin_ns_by_market") or {}
+    default_regime = str(manifest.get("005f_regime_default") or "").strip().upper()
+    artifacts = frozen_artifacts()
+    rows: list[dict[str, Any]] = []
+    scores: dict[str, list[tuple[int, float]]] = defaultdict(list)
+    skipped_origin = 0
+
+    for market_id, observations in markets.items():
+        origin_raw = origins_raw.get(market_id)
+        if origin_raw is None:
+            skipped_origin += 1
+            continue
+        origin = int(origin_raw)
+        adapter = Frozen005FTransferAdapter(scope_id=market_id, grid_origin_ns=origin)
+        for obs in observations:
+            adapter.observe(
+                timestamp_ns=obs.timestamp_ns,
+                best_bid=obs.best_bid,
+                best_ask=obs.best_ask,
+            )
+        genuine = genuine_change_times(observations)
+        if not observations:
+            continue
+        last = observations[-1].timestamp_ns
+        query = origin
+        if query < observations[0].timestamp_ns:
+            steps = math.ceil(
+                (observations[0].timestamp_ns - query) / 15_000_000_000
+            )
+            query += steps * 15_000_000_000
+
+        while query + 300_000_000_000 <= last:
+            features = adapter.features(query_timestamp_ns=query)
+            if features is not None:
+                a = bisect_right(genuine, query)
+                b = bisect_right(genuine, query + 300_000_000_000)
+                regime = (
+                    default_regime
+                    if default_regime in {"PRE_ELECTION", "ACTIVE_RESULTS"}
+                    else "UNASSIGNED"
+                )
+                record: dict[str, Any] = {
+                    "market_id": market_id,
+                    "grid_time_ns": query,
+                    "regime": regime,
+                    "update_h300": float(b > a),
+                    **features,
+                }
+                update_key = f"{regime}|clock|UPDATE_HAZARD"
+                if update_key in artifacts:
+                    model, scaler, artifact_row = artifacts[update_key]
+                    score = score_artifact(
+                        model,
+                        scaler,
+                        artifact_row,
+                        dict(features),
+                    )
+                    record["frozen_update_hazard_score"] = score
+                    if math.isfinite(score):
+                        scores[market_id].append((query, score))
+                jump_key = "ACTIVE_RESULTS|clock|JUMP_HAZARD"
+                if regime == "ACTIVE_RESULTS" and jump_key in artifacts:
+                    model, scaler, artifact_row = artifacts[jump_key]
+                    record["frozen_jump_hazard_score"] = score_artifact(
+                        model,
+                        scaler,
+                        artifact_row,
+                        dict(features),
+                    )
+                rows.append(record)
+            query += 15_000_000_000
+
+    scored = [
+        row
+        for row in rows
+        if math.isfinite(
+            float(row.get("frozen_update_hazard_score", math.nan))
+        )
+    ]
+    summary: dict[str, Any] = {
+        "experiment": EXPERIMENT_ID,
+        "feature_definition": "existing IncrementalHazard005FState",
+        "target_horizon_seconds": 300,
+        "rows": len(rows),
+        "markets": len({str(row["market_id"]) for row in rows}),
+        "markets_missing_explicit_grid_origin": skipped_origin,
+        "frozen_artifacts_found": sorted(artifacts),
+        "scored_rows": len(scored),
+        "status": "SCORED" if scored else ("FEATURES_ONLY" if rows else "NOT_RUN"),
+        "production_threshold_selected": False,
+    }
+    if scored:
+        y = np.asarray([float(row["update_h300"]) for row in scored])
+        p = np.asarray(
+            [float(row["frozen_update_hazard_score"]) for row in scored]
+        )
+        summary["brier"] = float(np.mean((p - y) ** 2))
+        summary["mean_score_when_update"] = (
+            float(np.mean(p[y == 1])) if np.any(y == 1) else None
+        )
+        summary["mean_score_when_no_update"] = (
+            float(np.mean(p[y == 0])) if np.any(y == 0) else None
+        )
+        order = np.argsort(p)
+        size = max(1, len(order) // 4)
+        lo = order[:size]
+        hi = order[-size:]
+        summary["update_rate_low_score_quartile"] = float(np.mean(y[lo]))
+        summary["update_rate_high_score_quartile"] = float(np.mean(y[hi]))
+    return rows, summary, scores
+
+
+def attach_scores(
+    markets: dict[str, list[BookObservation]],
+    scores: dict[str, list[tuple[int, float]]],
+) -> None:
+    for market_id, observations in list(markets.items()):
+        series = scores.get(market_id, [])
+        if not series:
+            continue
+        times = [item[0] for item in series]
+        revised: list[BookObservation] = []
+        for obs in observations:
+            index = bisect_right(times, obs.timestamp_ns) - 1
+            score = series[index][1] if index >= 0 else None
+            revised.append(replace(obs, update_hazard=score))
+        markets[market_id] = revised
+
+
+def split_for(timestamp_ns: int, start: int, end: int) -> str:
+    span = max(1, end - start)
+    fraction = (timestamp_ns - start) / span
+    if fraction < 0.60:
+        return "TRAIN"
+    if fraction < 0.80:
+        return "DEV"
+    return "FINAL"
+
+
+def edge_grid() -> list[MakerPolicy]:
+    b1, b2, b3 = default_policies()[1:]
+    out: list[MakerPolicy] = []
+    for base in (b1, b2, b3):
+        for ticks in (0.0, 1.0, 2.0, 3.0, 4.0):
+            out.append(
+                replace(
+                    base,
+                    policy_id=f"{base.policy_id}-edge{ticks:g}",
+                    min_external_edge_ticks=ticks,
+                )
+            )
+    return out
+
+
+def run_mm(
+    markets: dict[str, list[BookObservation]],
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
+    policy_rows: list[dict[str, Any]] = []
+    fill_rows: list[dict[str, Any]] = []
+    markout_rows: list[dict[str, Any]] = []
+    breakdown: list[dict[str, Any]] = []
+    models = [ConservativeTradeFillModel(), TradeThroughSensitivityFillModel()]
+    queue_supported = any(
+        any(
+            obs.queue_ahead_bid is not None or obs.queue_ahead_ask is not None
+            for obs in observations
+        )
+        for observations in markets.values()
+    )
+    if queue_supported:
+        models.append(QueueAwareFillModel())
+    policies = list(default_policies()) + edge_grid()
+    for market_id, observations in markets.items():
+        if not observations:
+            continue
+        start, end = observations[0].timestamp_ns, observations[-1].timestamp_ns
+        for policy in policies:
+            for model in models:
