@@ -1,6 +1,6 @@
 {
-  "id": "polyleviathan/mm-replay-001-spread-capture",
-  "title": "MM Replay 001 Spread Capture",
+  "id": "polyleviathan/mm-replay-001-strict-asof",
+  "title": "MM Replay 001 Strict As-Of",
   "code_file": "streaming_run.py",
   "language": "python",
   "kernel_type": "script",
