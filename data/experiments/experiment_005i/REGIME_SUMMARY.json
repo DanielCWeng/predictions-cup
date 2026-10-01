@@ -3,7 +3,7 @@
   "experiment": "EXPERIMENT-005I",
   "final_regime_interpretation": {
     "PRICE_DISCOVERY": {
-      "disposition": "CONFIRMED_TRANSITION_STATE",
+      "disposition": "CONFIRMED_SHORT_LIVED_HIGH_ACTIVITY_MOVE_STATE",
       "holdout_exit_hazard_per_minute": 0.5355569,
       "holdout_exit_to_post_shock_share": 0.4738004,
       "holdout_dwell_p90_min": [
@@ -14,7 +14,8 @@
         4
       ],
       "sampled_holdout_reversal_rate": 0.6808,
-      "economic_read": "Fast repricing with high movement risk. It is not synonymous with momentum; broad five-minute reversal remains dominant inside the state."
+      "construction_caveat": "PRICE_DISCOVERY requires |ret_5m| >= 0.005 plus high quote activity, while POST_SHOCK retains |ret_5m| >= 0.005 without requiring high quote activity. A fall in activity while the rolling move remains elevated therefore mechanically creates some PRICE_DISCOVERY -> POST_SHOCK relabelling. The 47.38% transition share is descriptive evidence, not an independently discovered economic transition mechanism.",
+      "economic_read": "Short-lived high-activity large-move state with elevated movement risk. It is not synonymous with momentum; broad five-minute reversal remains dominant inside the state."
     },
     "LIQUIDITY_STRESS": {
       "disposition": "CONFIRMED_METASTABLE_STATE",
@@ -54,6 +55,7 @@
       "economic_read": "Not a clean refractory state; movement often mean-reverts but can re-enter discovery."
     }
   },
+  "mean_reversion_dependence_caveat": "The 55,340 qualifying HOLDOUT reversal observations are sampled minute-states/move observations, not independent episodes. Adjacent observations substantially overlap through the five-minute forward construction and are serially dependent; robustness comes from temporal-worker consistency and frozen slice survival rather than treating n=55,340 as an independent sample size.",
   "latent_models": {
     "HMM": "NOT_JUSTIFIED",
     "HAWKES": "NOT_JUSTIFIED_BEFORE_BETTER_REGIME_BASELINE",
