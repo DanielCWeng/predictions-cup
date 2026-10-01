@@ -692,6 +692,46 @@ def test_maker_pm_handler_tolerates_unmapped_sibling_delta() -> None:
     assert str(snapshot.best_bid) == "0.495"
 
 
+def test_seeded_polymarket_book_is_forwarded_to_exact_005f_observer() -> None:
+    service = MakerService(
+        AppSettings(maker_enabled=True),
+        explicit_live_invocation=False,
+    )
+    observed = datetime(2026, 9, 29, 17, 0, tzinfo=UTC)
+    service.pm_books.apply_full_snapshot(
+        {
+            "event_type": "book",
+            "market": "0xmarket",
+            "asset_id": "required-token",
+            "timestamp": "1782753357257",
+            "bids": [{"price": "0.49", "size": "10"}],
+            "asks": [{"price": "0.51", "size": "10"}],
+        },
+        observed,
+    )
+    observer = _Pm005FObserver()
+
+    service._observe_005f_books(
+        {"required-token"},
+        cast(LiveShadowRuntime, observer),
+        observed_monotonic_ns=123456,
+        source_version="clob-rest-seed-v1",
+        trusted=True,
+    )
+
+    assert observer.calls == [
+        {
+            "token_id": "required-token",
+            "observed_at": observed,
+            "observed_monotonic_ns": 123456,
+            "best_bid": 0.49,
+            "best_ask": 0.51,
+            "source_version": "clob-rest-seed-v1",
+            "trusted": True,
+        }
+    ]
+
+
 def test_maker_pm_handler_groups_conflicting_equal_time_bbo_for_005f() -> None:
     service = MakerService(
         AppSettings(maker_enabled=True),
