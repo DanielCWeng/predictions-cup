@@ -21,7 +21,7 @@
     }
   ],
   "promoted_core": {
-    "status": "RUNNING",
+    "status": "COMPLETE_SUCCESS",
     "workflow_run_id": 36838276378,
     "launch_head_sha": "a68b10ff34064118c33a37aba5a6ec4a426b4ee1",
     "kernel": "polyleviathan/experiment-005h-v3-core",
@@ -35,18 +35,20 @@
       "10s canonical episodes with 5s/30s sensitivity",
       "without-replacement matched controls",
       "quiet-state last-observation-carried-forward as-of semantics"
-    ]
+    ],
+    "artifact_id": 11151233575
   },
   "source_version_audit": {
     "workflow_run_id": 36836613576,
-    "status": "RUNNING",
-    "scope": "identity and chronology only; no outcome inspection"
+    "status": "COMPLETE_SUCCESS",
+    "scope": "identity and chronology only; no outcome inspection",
+    "artifact_id": 11150409739
   },
   "downstream": {
-    "v3_hostile_falsification": "DEFERRED_UNTIL_WORKFLOW_36838276378_COMPLETE",
-    "extended_v3_analysis": "DEFERRED_UNTIL_WORKFLOW_36838276378_COMPLETE",
+    "v3_hostile_falsification": "LAUNCHED",
+    "extended_v3_analysis": "LAUNCHED",
     "source_stratified_replication": "DEFERRED_UNTIL_SOURCE_AUDIT_AND_V3_SHORTLIST",
-    "pre_holdout_freeze": "FORBIDDEN_YET",
+    "pre_holdout_freeze": "BLOCKED_PENDING_FALSIFICATION_EXTENDED_SOURCE_ROBUSTNESS",
     "b0": "SEALED"
   },
   "real_sig_orders_sent": false
