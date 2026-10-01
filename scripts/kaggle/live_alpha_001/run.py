@@ -11,11 +11,16 @@ if override:
 else:
     roots = list(Path("/kaggle/input").glob("sig-live-alpha-20261001-v1*"))
     if not roots:
-        embedded = Path("/kaggle/src")
-        if list(embedded.glob("trade_features_part*.csv")):
-            roots = [embedded]
+        candidates = list(Path("/kaggle/input").rglob("trade_features_part01.csv"))
+        if candidates:
+            roots = [candidates[0].parent]
+    if not roots:
+        candidates = list(Path("/kaggle/src").rglob("trade_features_part01.csv"))
+        if candidates:
+            roots = [candidates[0].parent]
 if not roots or not roots[0].exists():
-    raise RuntimeError("live-alpha compact tape unavailable")
+    visible = [str(p) for p in list(Path("/kaggle/input").glob("*"))[:50]]
+    raise RuntimeError(f"live-alpha compact tape unavailable; /kaggle/input={visible}")
 ROOT = roots[0]
 OUT.mkdir(parents=True, exist_ok=True)
 
