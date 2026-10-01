@@ -1017,7 +1017,7 @@ def replay_condition(
         ),
         "local_token_id": local_token,
         "grid_evaluation": (
-            "QUOTE_EVENT_15S_BUCKETS"
+            "QUOTE_EVENT_15S_BUCKETS_STRICT_ASOF"
         ),
         "scored_rows": len(scored),
         "genuine_changes": len(genuine),
@@ -1262,7 +1262,7 @@ def transfer_summary(
             "IncrementalHazard005FState"
         ),
         "grid_evaluation": (
-            "QUOTE_EVENT_15S_BUCKETS"
+            "QUOTE_EVENT_15S_BUCKETS_STRICT_ASOF"
         ),
         "markets": len(rows),
         "scored_rows": sum(
