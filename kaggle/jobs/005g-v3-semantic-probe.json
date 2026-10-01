@@ -10,6 +10,6 @@
   "script_args": [],
   "install_project": true,
   "pip_packages": [],
-  "note": "Read-only V3 semantic probe on TRAIN-era files; adds accepted-mapping token overlap and valid-BBO coverage after Lane A retained zero states. No HOLDOUT, modeling or orders.",
-  "attempt": 2
+  "note": "Read-only V3 semantic probe on TRAIN-era files; raw binary asset ids are decoded as unsigned big-endian decimal token ids to verify accepted-mapping overlap. No HOLDOUT/modeling/orders.",
+  "attempt": 3
 }
