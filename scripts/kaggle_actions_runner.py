@@ -52,7 +52,8 @@ def load_manifest(path: Path) -> dict[str, Any]:
         raise ValueError("schema_version must be 1")
     action = data.get("action")
     if action not in {
-        "auth_check", "run", "status", "output", "logs", "dataset_files", "dataset_probe"
+        "auth_check", "run", "status", "output", "logs", "dataset_files", "dataset_probe",
+        "dataset_fetch"
     }:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
@@ -130,6 +131,44 @@ def dataset_files(data: dict[str, Any], output_dir: Path) -> None:
         ]
     )
 
+
+
+
+def dataset_fetch(data: dict[str, Any], output_dir: Path) -> None:
+    dataset = str(data.get("dataset", "")).strip()
+    file_name = str(data.get("file", "")).strip()
+    if "/" not in dataset:
+        raise ValueError("dataset_fetch manifest requires 'dataset' as owner/slug")
+    if not file_name:
+        raise ValueError("dataset_fetch manifest requires 'file'")
+
+    dest = output_dir / "fetched"
+    dest.mkdir(parents=True, exist_ok=True)
+    run_command(
+        [
+            "kaggle",
+            "datasets",
+            "download",
+            dataset,
+            "-f",
+            file_name,
+            "-p",
+            str(dest),
+            "--unzip",
+        ]
+    )
+    files = sorted(p for p in dest.rglob("*") if p.is_file())
+    if not files:
+        raise RuntimeError(f"No file downloaded for {file_name!r}")
+    write_summary(
+        [
+            "## Kaggle dataset file fetch",
+            "",
+            f"- Dataset: {dataset}",
+            f"- File: {file_name}",
+            f"- Downloaded files: {len(files)}",
+        ]
+    )
 
 
 def dataset_probe(data: dict[str, Any], output_dir: Path) -> None:
@@ -383,6 +422,8 @@ def main() -> int:
         dataset_files(data, output_dir)
     elif action == "dataset_probe":
         dataset_probe(data, output_dir)
+    elif action == "dataset_fetch":
+        dataset_fetch(data, output_dir)
 
     return 0
 
