@@ -1,5 +1,5 @@
 {
   "schema_version": 1,
   "action": "auth_check",
-  "note": "Non-compute smoke test for GitHub Actions -> Kaggle authentication."
+  "note": "Non-compute smoke test for GitHub Actions -> Kaggle authentication; inspect owned kernel slugs for MM-REPLAY-001 strict-asof."
 }
