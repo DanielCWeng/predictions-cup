@@ -227,3 +227,112 @@ def test_subscriber_token_refresh_and_graceful_stop(
 
     asyncio.run(refresh_scenario())
     asyncio.run(stop_scenario())
+
+
+class ShardChannel:
+    def __init__(self, topic: str) -> None:
+        self.topic = topic
+        self.is_errored = False
+        self.is_closed = False
+        self.event: str | None = None
+        self.broadcast_callback: BroadcastCallback | None = None
+
+    def on_broadcast(self, event: str, callback: BroadcastCallback) -> Self:
+        self.event = event
+        self.broadcast_callback = callback
+        return self
+
+    async def subscribe(self, callback: StatusCallback) -> Self:
+        callback(RealtimeSubscribeStates.SUBSCRIBED, None)
+        return self
+
+
+class ShardClient:
+    def __init__(self) -> None:
+        self.realtime = FakeRealtime()
+        self.channels: dict[str, ShardChannel] = {}
+        self.options: list[RealtimeChannelOptions | None] = []
+
+    def channel(
+        self, topic: str, options: RealtimeChannelOptions | None = None
+    ) -> ShardChannel:
+        self.options.append(options)
+        channel = ShardChannel(topic)
+        self.channels[topic] = channel
+        return channel
+
+
+def test_subscriber_shards_per_market_topics_and_routes_batches_by_topic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: SIG publishes market_batch only on per-market tournament
+    topics and Supabase caps one socket at 100 channels, so 237 markets must be
+    sharded across sockets and each batch must carry its own topic."""
+
+    async def scenario() -> None:
+        clients: list[ShardClient] = []
+
+        async def fake_acreate_client(url: str, key: str) -> ShardClient:
+            assert key == "anon-secret"
+            client = ShardClient()
+            clients.append(client)
+            return client
+
+        monkeypatch.setattr(subscriber_module, "acreate_client", fake_acreate_client)
+        topics = [f"tournament:cup:market:{index}" for index in range(237)]
+        stop_event = asyncio.Event()
+        received: list[tuple[str, object]] = []
+
+        async def on_batch(topic: str, payload: object, observed_at: datetime) -> None:
+            assert observed_at.tzinfo is not None
+            received.append((topic, payload))
+            stop_event.set()
+
+        def connected() -> None:
+            channel = clients[2].channels["tournament:cup:market:200"]
+            assert channel.broadcast_callback is not None
+            channel.broadcast_callback(
+                {"event": "market_batch", "payload": {"delivery": {"revision": 1}}}
+            )
+
+        subscriber = SupabaseTournamentSubscriber(
+            topics=topics,
+            token=_token(expires_at=datetime.now(UTC) + timedelta(hours=2)),
+        )
+        outcome = await subscriber.run(
+            on_batch=on_batch,
+            on_connected=connected,
+            stop_event=stop_event,
+        )
+
+        assert outcome == SubscriberExit.STOPPED
+        assert [len(client.channels) for client in clients] == [90, 90, 57]
+        assert all(len(client.channels) < 100 for client in clients)
+        assert sorted(
+            topic for client in clients for topic in client.channels
+        ) == sorted(topics)
+        assert all(client.realtime.auth_token == "jwt-secret" for client in clients)
+        assert all(
+            options == {"config": {"broadcast": None, "presence": None, "private": True}}
+            for client in clients
+            for options in client.options
+        )
+        assert {
+            channel.event for client in clients for channel in client.channels.values()
+        } == {"market_batch"}
+        assert received == [
+            ("tournament:cup:market:200", {"delivery": {"revision": 1}})
+        ]
+        assert all(client.realtime.removed for client in clients)
+
+    asyncio.run(scenario())
+
+
+def test_subscriber_requires_exactly_one_topic_form() -> None:
+    token = _token(expires_at=datetime.now(UTC) + timedelta(hours=2))
+    with pytest.raises(ValueError):
+        SupabaseTournamentSubscriber(token=token)
+    with pytest.raises(ValueError):
+        SupabaseTournamentSubscriber(topic="a", topics=["b"], token=token)
+    with pytest.raises(ValueError):
+        SupabaseTournamentSubscriber(topics=[], token=token)

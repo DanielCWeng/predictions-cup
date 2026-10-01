@@ -28,6 +28,9 @@ Clock = Callable[[], datetime]
 GovernorSnapshotFn = Callable[[], RestGovernorSnapshot]
 
 
+_TERMINAL_MARKET_STATUSES = frozenset({"settled", "resolved"})
+
+
 class SubscriptionReason(StrEnum):
     INITIAL_SUBSCRIBE = "initial_subscribe"
     RECONNECT = "reconnect"
@@ -195,7 +198,12 @@ class SigRealtimeStateEngine:
         self._rest = rest
         self._recorder = recorder
         self.tournament_id = tournament_id
+        # Tournament-level label used for REST/trust records. SIG no longer
+        # publishes market updates on this tournament-wide topic; market
+        # batches arrive on per-market ``tournament:{id}:market:{market_id}``
+        # topics (see ``subscription_topics``).
         self.topic = f"tournament:{tournament_id}"
+        self._market_topic_prefix = f"{self.topic}:market:"
         self._configured_tracked_exchange_ids = tracked
         self._book_depth = book_depth
         self._open_book_max_trusted_age = timedelta(
@@ -219,6 +227,7 @@ class SigRealtimeStateEngine:
         self.states: dict[str, ExchangeRuntimeState] = {}
         self.health = RuntimeHealth()
         self.last_accepted_revision: int | None = None
+        self.topic_revisions: dict[str, int] = {}
         self._last_bulk_price_refresh_at: datetime | None = None
 
         self._reconcile_registry_lock = asyncio.Lock()
@@ -235,10 +244,44 @@ class SigRealtimeStateEngine:
             exchange_id for exchange_id, state in self.states.items() if state.tracked
         )
 
+    def market_topic(self, market_id: str) -> str:
+        return f"{self._market_topic_prefix}{market_id}"
+
+    def subscription_topics(self) -> tuple[str, ...]:
+        """Per-market Realtime topics for every unsettled known market.
+
+        SIG documents that the tournament-wide ``tournament:{id}`` topic no
+        longer carries market updates: ``market_batch`` is published only on
+        ``tournament:{tournament_id}:market:{market_id}``. Call after the REST
+        universe is seeded. Falls back to the tournament topic only when no
+        unsettled market is known, so the subscription lifecycle still runs.
+        """
+        market_ids = sorted(
+            (
+                market_id
+                for market_id, market in self.market_states.items()
+                if market.settled_with is None
+                and market.status not in _TERMINAL_MARKET_STATUSES
+            ),
+            key=lambda value: (len(value), value),
+        )
+        if not market_ids:
+            return (self.topic,)
+        return tuple(self.market_topic(market_id) for market_id in market_ids)
+
+    def _topic_market_id(self, topic: str) -> str | None:
+        if topic == self.topic:
+            return None
+        prefix = self._market_topic_prefix
+        if topic.startswith(prefix) and len(topic) > len(prefix):
+            return topic[len(prefix) :]
+        raise ValueError("received batch for unexpected topic")
+
     async def initialize(self) -> None:
         """Enumerate all markets, cheaply seed BBO, then seed tracked depth only."""
         self.health.connected = False
         self.last_accepted_revision = None
+        self.topic_revisions.clear()
         await self.refresh_universe(
             reason=SubscriptionReason.INITIAL_SUBSCRIBE.value,
             triggering_revision=None,
@@ -292,6 +335,7 @@ class SigRealtimeStateEngine:
         )
         self.health.connected = False
         self.last_accepted_revision = None
+        self.topic_revisions.clear()
         transition = {
             SubscriptionReason.INITIAL_SUBSCRIBE: TrustTransition.UNTRUSTED_INITIAL_SUBSCRIBE,
             SubscriptionReason.RECONNECT: TrustTransition.UNTRUSTED_RECONNECT,
@@ -498,14 +542,15 @@ class SigRealtimeStateEngine:
         payload: object,
         observed_at: datetime,
     ) -> None:
-        if topic != self.topic:
-            raise ValueError("received batch for unexpected topic")
+        market_id = self._topic_market_id(topic)
         monotonic_receive_ns = time.monotonic_ns()
         self.health.last_realtime_receive = observed_at
 
         try:
             batch = MarketBatchDto.model_validate(payload)
             self._validate_batch_tournament(batch)
+            if market_id is not None:
+                self._validate_batch_market(batch, market_id)
         except (ValidationError, ValueError) as exc:
             parsed_at = self._clock()
             self._recorder.record_raw_batch(
@@ -517,6 +562,14 @@ class SigRealtimeStateEngine:
                 validation_error=type(exc).__name__,
             )
             logger.warning("SIG Realtime payload rejected: %s", type(exc).__name__)
+            if market_id is not None:
+                await self._resync_market(
+                    market_id,
+                    transition=TrustTransition.UNTRUSTED_MALFORMED_PAYLOAD,
+                    reason="malformed_payload",
+                    triggering_revision=None,
+                )
+                return
             await self._full_resync(
                 transition=TrustTransition.UNTRUSTED_MALFORMED_PAYLOAD,
                 reason="malformed_payload",
@@ -539,46 +592,77 @@ class SigRealtimeStateEngine:
         )
         self.health.last_valid_batch = observed_at
 
-        if self.last_accepted_revision == delivery.revision:
+        # Revision continuity is topic-local. SIG contract: a batch whose
+        # revision is at or below the last accepted one is a duplicate; a
+        # message was missed only when previousRevision is above it.
+        last_revision = self.topic_revisions.get(topic)
+        if last_revision is not None and delivery.revision <= last_revision:
             return
 
         revision_gap_recovered = False
-        if (
-            self.last_accepted_revision is not None
-            and delivery.previous_revision != self.last_accepted_revision
-        ):
+        if last_revision is not None and delivery.previous_revision > last_revision:
             self.health.revision_gap_count += 1
             self._observe(
                 ObservationKind.REALTIME_REVISION_GAP,
                 monotonic_ns=monotonic_receive_ns,
                 revision=delivery.revision,
                 detail=(
-                    ("expected_previous_revision", str(self.last_accepted_revision)),
+                    ("expected_previous_revision", str(last_revision)),
                     ("observed_previous_revision", str(delivery.previous_revision)),
                 ),
             )
-            await self._full_resync(
-                transition=TrustTransition.UNTRUSTED_REVISION_GAP,
-                reason="revision_gap",
-                triggering_revision=delivery.revision,
-                refresh_bulk_prices=False,
-            )
+            if market_id is not None:
+                await self._resync_market(
+                    market_id,
+                    transition=TrustTransition.UNTRUSTED_REVISION_GAP,
+                    reason="revision_gap",
+                    triggering_revision=delivery.revision,
+                )
+            else:
+                await self._full_resync(
+                    transition=TrustTransition.UNTRUSTED_REVISION_GAP,
+                    reason="revision_gap",
+                    triggering_revision=delivery.revision,
+                    refresh_bulk_prices=False,
+                )
             revision_gap_recovered = True
 
+        self.topic_revisions[topic] = delivery.revision
         self.last_accepted_revision = delivery.revision
         await self._ensure_known_exchanges(batch)
-        self._record_trades(batch, observed_at)
+        self._record_trades(batch, observed_at, topic=topic)
+
+        if batch.resync_required:
+            # Oversized batch truncated by SIG: it keeps books and a trade
+            # prefix only. Advance the revision as usual, then restore that
+            # market from REST.
+            if not revision_gap_recovered:
+                if market_id is not None:
+                    await self._resync_market(
+                        market_id,
+                        transition=TrustTransition.UNTRUSTED_REVISION_GAP,
+                        reason="resync_required",
+                        triggering_revision=delivery.revision,
+                    )
+                else:
+                    await self._full_resync(
+                        transition=TrustTransition.UNTRUSTED_REVISION_GAP,
+                        reason="resync_required",
+                        triggering_revision=delivery.revision,
+                        refresh_bulk_prices=True,
+                    )
+            return
 
         for book_event in batch.book_dirty:
             self._recorder.record_book_dirty(
-                topic=self.topic,
+                topic=topic,
                 revision=delivery.revision,
                 event=book_event,
                 observed_at=observed_at,
             )
         for settlement_event in batch.market_settled:
             self._recorder.record_market_settled(
-                topic=self.topic,
+                topic=topic,
                 revision=delivery.revision,
                 event=settlement_event,
                 observed_at=observed_at,
@@ -653,7 +737,7 @@ class SigRealtimeStateEngine:
                 priority=RestPriority.HIGH,
             )
 
-        if revision_gap_recovered:
+        if revision_gap_recovered and market_id is None:
             await self.refresh_bulk_prices(
                 reason="revision_gap",
                 priority=RestPriority.BACKGROUND,
@@ -835,7 +919,69 @@ class SigRealtimeStateEngine:
         ):
             raise ValueError("marketSettled tournamentId mismatch")
 
-    def _record_trades(self, batch: MarketBatchDto, observed_at: datetime) -> None:
+    def _validate_batch_market(self, batch: MarketBatchDto, market_id: str) -> None:
+        if any(trade.market_id != market_id for trade in batch.trades):
+            raise ValueError("market topic trade marketId mismatch")
+        if any(item.market_id != market_id for item in batch.book_dirty):
+            raise ValueError("market topic bookDirty marketId mismatch")
+        if any(item.market_id != market_id for item in batch.market_settled):
+            raise ValueError("market topic marketSettled marketId mismatch")
+
+    async def _resync_market(
+        self,
+        market_id: str,
+        *,
+        transition: TrustTransition,
+        reason: str,
+        triggering_revision: int | None,
+    ) -> None:
+        """Topic-scoped authoritative recovery for one tournament market."""
+        exchange_ids = {
+            exchange_id
+            for exchange_id, state in self.states.items()
+            if state.market_id == market_id
+        }
+        self._mark_untrusted(exchange_ids, transition, revision=triggering_revision)
+        reconciled = await self._reconcile_market(
+            market_id,
+            reason=reason,
+            triggering_revision=triggering_revision,
+            priority=RestPriority.HIGH,
+        )
+        exchange_ids = {
+            exchange_id
+            for exchange_id, state in self.states.items()
+            if state.market_id == market_id
+        }
+        if reconciled:
+            await self._reconcile_many(
+                exchange_ids,
+                reason=reason,
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=triggering_revision,
+                priority=RestPriority.HIGH,
+            )
+        try:
+            await self.refresh_exchange_prices(
+                exchange_ids,
+                reason=reason,
+                priority=RestPriority.BACKGROUND,
+            )
+        except Exception as exc:
+            self.health.reconciliation_failure_count += 1
+            logger.warning(
+                "SIG REST market price resync failed market=%s error=%s",
+                market_id,
+                type(exc).__name__,
+            )
+
+    def _record_trades(
+        self,
+        batch: MarketBatchDto,
+        observed_at: datetime,
+        *,
+        topic: str,
+    ) -> None:
         revision = batch.delivery.revision
         for trade in batch.trades:
             state = self.states[trade.exchange_id]
@@ -843,7 +989,7 @@ class SigRealtimeStateEngine:
             state.last_realtime_observed_at = observed_at
             state.last_accepted_revision = revision
             self._recorder.record_trade(
-                topic=self.topic,
+                topic=topic,
                 revision=revision,
                 trade=trade,
                 observed_at=observed_at,

@@ -130,6 +130,10 @@ class RealtimeDeliveryDto(TransportModel):
 
 
 class RealtimeTradeDto(TransportModel):
+    # ``id``/``sequence`` identify the engine match (same id as REST trades);
+    # SIG documents both as null when the engine records a fill without a match.
+    id: str | None = None
+    sequence: int | None = None
     exchange_id: str = Field(alias="exchangeId")
     market_id: str = Field(alias="marketId")
     price: WireProbability
@@ -158,10 +162,45 @@ class MarketSettledDto(TransportModel):
     at: WireDateTime
 
 
+class RealtimeBookLevelDto(TransportModel):
+    price: WireProbability
+    quantity: WireDecimal
+
+
+class RealtimeBookVersionDto(TransportModel):
+    sequence: int
+    at: WireDateTime
+
+
+class RealtimeBookDto(TransportModel):
+    """Versioned full book pushed on ``tournament:{id}:market:{id}`` topics."""
+
+    exchange_id: str = Field(alias="exchangeId")
+    as_of: RealtimeBookVersionDto = Field(alias="asOf")
+    next_expiry_at: WireDateTime | None = Field(default=None, alias="nextExpiryAt")
+    bids: tuple[RealtimeBookLevelDto, ...]
+    asks: tuple[RealtimeBookLevelDto, ...]
+
+    @field_validator("exchange_id", mode="before")
+    @classmethod
+    def coerce_numeric_exchange_id(cls, value: object) -> object:
+        # SIG sends ``books[].exchangeId`` as a number but every other
+        # exchange reference as a string; normalize to the string identity.
+        if isinstance(value, int) and not isinstance(value, bool):
+            return str(value)
+        return value
+
+
 class MarketBatchDto(TransportModel):
-    trades: tuple[RealtimeTradeDto, ...]
-    book_dirty: tuple[BookDirtyDto, ...] = Field(alias="bookDirty")
-    market_settled: tuple[MarketSettledDto, ...] = Field(alias="marketSettled")
+    # Tournament market topics may send the compact
+    # ``{resyncRequired: true, delivery}`` form with no arrays at all.
+    trades: tuple[RealtimeTradeDto, ...] = ()
+    book_dirty: tuple[BookDirtyDto, ...] = Field(default=(), alias="bookDirty")
+    market_settled: tuple[MarketSettledDto, ...] = Field(
+        default=(), alias="marketSettled"
+    )
+    books: tuple[RealtimeBookDto, ...] = ()
+    resync_required: bool = Field(default=False, alias="resyncRequired")
     delivery: RealtimeDeliveryDto
 
 

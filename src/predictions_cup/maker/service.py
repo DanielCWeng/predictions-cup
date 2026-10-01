@@ -1003,7 +1003,7 @@ class MakerService:
                     runtime.notify_global(observed_monotonic_ns=monotonic_ns())
 
                 subscriber = SupabaseTournamentSubscriber(
-                    topic=sig_state.topic,
+                    topics=sig_state.subscription_topics(),
                     token=token,
                     token_refresh_margin_seconds=(
                         self.settings.sig_realtime_token_refresh_margin_seconds

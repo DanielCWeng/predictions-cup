@@ -30,14 +30,23 @@ The existing authenticated read-only SIG adapter calls `POST /realtime/token` an
 validates the documented `token`, `expiresAt`, `supabaseUrl`, `anonKey` and
 `channels.user` fields. Token/key values use secret types and are never logged.
 
-For Cup capture the implementation uses one private Supabase broadcast topic:
+**Superseded 2026-10-01 (fix/sig-realtime-no-deliveries).** SIG's published contract now states
+that the tournament-wide `tournament:{tournament_id}` topic no longer carries market updates.
+Live probing confirmed it: that topic accepted the private join but delivered zero messages while
+the tournament traded, whereas per-market topics delivered `market_batch` immediately.
+
+Capture and MAKE now subscribe one private channel per unsettled tournament market:
 
 ```text
-tournament:{tournament_id}
+tournament:{tournament_id}:market:{market_id}
 ```
 
-The event consumed is `market_batch`. This avoids one socket or subscription per exchange while
-preserving tournament-scoped `trades[]`, `bookDirty[]`, `marketSettled[]` and `delivery`.
+Supabase rejects more than 100 channels per socket (`ChannelRateLimitReached: Too many
+channels`), so topics are sharded across sockets at 90 channels each. Revision continuity is
+topic-local (`revision <= last` is a duplicate; `previousRevision > last` is a gap), and a gap,
+malformed batch or `resyncRequired` batch on a market topic recovers only that market over REST.
+Batches may also carry `books[]` (versioned full books), trade `id`/`sequence`, and the compact
+`{resyncRequired, delivery}` form; these validate but pushed books are not yet applied to state.
 
 ## Trust and revision rules
 

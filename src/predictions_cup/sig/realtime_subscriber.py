@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any, cast
@@ -29,25 +29,46 @@ class SubscriberExit(StrEnum):
     SOCKET_ERROR = "socket_error"
 
 
+# Supabase Realtime rejects joins beyond 100 channels on one socket
+# ("ChannelRateLimitReached: Too many channels", observed live 2026-10-01), so
+# per-market topics are sharded across sockets with headroom below that cap.
+DEFAULT_MAX_CHANNELS_PER_CONNECTION = 90
+
+
 class SupabaseTournamentSubscriber:
-    """One private tournament subscription; REST remains authoritative."""
+    """Private SIG Realtime subscription(s); REST remains authoritative.
+
+    Accepts one ``topic`` (e.g. the user account channel) or many ``topics``
+    (one per tournament market). All topics share one token and one exit
+    lifecycle: any channel error, reconnect or token refresh ends the run so
+    the caller can REST-resynchronize before trusting Realtime again.
+    """
 
     def __init__(
         self,
         *,
-        topic: str,
+        topic: str | None = None,
+        topics: Sequence[str] | None = None,
         token: RealtimeTokenDto,
         token_refresh_margin_seconds: float = 300.0,
         subscribe_timeout_seconds: float = 15.0,
         maintenance_interval_seconds: float = 1.0,
         event_name: str = "market_batch",
+        max_channels_per_connection: int = DEFAULT_MAX_CHANNELS_PER_CONNECTION,
         clock: Clock = lambda: datetime.now(UTC),
     ) -> None:
+        if (topic is None) == (topics is None):
+            raise ValueError("exactly one of topic or topics is required")
+        resolved = (topic,) if topic is not None else tuple(dict.fromkeys(topics or ()))
+        if not resolved or any(not item.strip() for item in resolved):
+            raise ValueError("topics must be non-empty and non-blank")
         if token_refresh_margin_seconds <= 0:
             raise ValueError("token refresh margin must be positive")
         if maintenance_interval_seconds <= 0:
             raise ValueError("maintenance interval must be positive")
-        self._topic = topic
+        if max_channels_per_connection < 1:
+            raise ValueError("max_channels_per_connection must be positive")
+        self._topics = resolved
         self._token = token
         self._refresh_margin = timedelta(seconds=token_refresh_margin_seconds)
         self._subscribe_timeout_seconds = subscribe_timeout_seconds
@@ -55,7 +76,19 @@ class SupabaseTournamentSubscriber:
         if not event_name.strip():
             raise ValueError("event_name must not be blank")
         self._event_name = event_name
+        self._max_channels_per_connection = max_channels_per_connection
         self._clock = clock
+
+    @property
+    def topics(self) -> tuple[str, ...]:
+        return self._topics
+
+    def _shards(self) -> list[tuple[str, ...]]:
+        size = self._max_channels_per_connection
+        return [
+            self._topics[index : index + size]
+            for index in range(0, len(self._topics), size)
+        ]
 
     async def run(
         self,
@@ -65,41 +98,82 @@ class SupabaseTournamentSubscriber:
         stop_event: asyncio.Event,
         on_maintenance: MaintenanceHandler | None = None,
     ) -> SubscriberExit:
-        client = await acreate_client(
-            str(self._token.supabase_url), self._token.anon_key.get_secret_value()
-        )
-        await client.realtime.set_auth(self._token.token.get_secret_value())
-        channel_options: RealtimeChannelOptions = {
-            "config": {"broadcast": None, "presence": None, "private": True}
-        }
-        channel = client.channel(self._topic, channel_options)
-        payload_queue: asyncio.Queue[tuple[object, datetime]] = asyncio.Queue()
-        status_queue: asyncio.Queue[tuple[RealtimeSubscribeStates, Exception | None]] = (
-            asyncio.Queue()
-        )
+        payload_queue: asyncio.Queue[tuple[str, object, datetime]] = asyncio.Queue()
+        status_queue: asyncio.Queue[
+            tuple[str, RealtimeSubscribeStates, Exception | None]
+        ] = asyncio.Queue()
+        connections: list[tuple[Any, list[Any]]] = []
 
-        def handle_broadcast(message: BroadcastPayload) -> None:
-            payload_queue.put_nowait((message.get("payload"), self._clock()))
+        def broadcast_handler(topic: str) -> Callable[[BroadcastPayload], None]:
+            def handle_broadcast(message: BroadcastPayload) -> None:
+                payload_queue.put_nowait((topic, message.get("payload"), self._clock()))
 
-        def handle_status(status: RealtimeSubscribeStates, error: Exception | None) -> None:
-            status_queue.put_nowait((status, error))
+            return handle_broadcast
+
+        def status_handler(
+            topic: str,
+        ) -> Callable[[RealtimeSubscribeStates, Exception | None], None]:
+            def handle_status(
+                status: RealtimeSubscribeStates, error: Exception | None
+            ) -> None:
+                status_queue.put_nowait((topic, status, error))
+
+            return handle_status
 
         try:
             try:
-                await channel.on_broadcast(self._event_name, handle_broadcast).subscribe(
-                    handle_status
-                )
-                status, _ = await asyncio.wait_for(
-                    status_queue.get(), timeout=self._subscribe_timeout_seconds
-                )
+                for shard in self._shards():
+                    client = await acreate_client(
+                        str(self._token.supabase_url),
+                        self._token.anon_key.get_secret_value(),
+                    )
+                    shard_channels: list[Any] = []
+                    connections.append((client, shard_channels))
+                    await client.realtime.set_auth(self._token.token.get_secret_value())
+                    for topic in shard:
+                        channel_options: RealtimeChannelOptions = {
+                            "config": {"broadcast": None, "presence": None, "private": True}
+                        }
+                        channel = client.channel(topic, channel_options)
+                        shard_channels.append(channel)
+                        # NOTE: deliberately still "market_batch", not
+                        # self._event_name (pre-existing behavior). Honoring
+                        # event_name would switch on account_batch delivery in
+                        # the live MAKE AccountRealtimeController, whose DTOs
+                        # and per-fill resync/token-mint cost have not been
+                        # validated against the live feed. Tracked separately.
+                        await channel.on_broadcast(
+                            "market_batch", broadcast_handler(topic)
+                        ).subscribe(status_handler(topic))
+
+                pending = set(self._topics)
+                loop = asyncio.get_running_loop()
+                deadline = loop.time() + self._subscribe_timeout_seconds
+                while pending:
+                    topic, status, _ = await asyncio.wait_for(
+                        status_queue.get(), timeout=max(0.0, deadline - loop.time())
+                    )
+                    if status != RealtimeSubscribeStates.SUBSCRIBED:
+                        logger.warning(
+                            "SIG Realtime subscription rejected status=%s "
+                            "pending_topics=%s total_topics=%s",
+                            status,
+                            len(pending),
+                            len(self._topics),
+                        )
+                        return SubscriberExit.SOCKET_ERROR
+                    pending.discard(topic)
             except Exception as exc:
                 logger.warning(
                     "SIG Realtime subscription setup failed error=%s",
                     type(exc).__name__,
                 )
                 return SubscriberExit.SOCKET_ERROR
-            if status != RealtimeSubscribeStates.SUBSCRIBED:
-                return SubscriberExit.SOCKET_ERROR
+            logger.info(
+                "SIG Realtime subscribed topics=%s connections=%s",
+                len(self._topics),
+                len(connections),
+            )
             on_connected()
 
             refresh_at = self._token.expires_at - self._refresh_margin
@@ -121,33 +195,39 @@ class SupabaseTournamentSubscriber:
                 # therefore means this connection crossed a recovery boundary and
                 # must exit so the outer loop can REST-resynchronize before trusting
                 # any subsequent Realtime data.
-                try:
-                    reconnect_status, _ = status_queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    reconnect_status = None
-                if reconnect_status == RealtimeSubscribeStates.SUBSCRIBED:
-                    return SubscriberExit.DISCONNECTED
-                if reconnect_status in {
-                    RealtimeSubscribeStates.CHANNEL_ERROR,
-                    RealtimeSubscribeStates.TIMED_OUT,
-                    RealtimeSubscribeStates.CLOSED,
-                }:
-                    return SubscriberExit.SOCKET_ERROR
+                while True:
+                    try:
+                        _, reconnect_status, _ = status_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                    if reconnect_status == RealtimeSubscribeStates.SUBSCRIBED:
+                        return SubscriberExit.DISCONNECTED
+                    if reconnect_status in {
+                        RealtimeSubscribeStates.CHANNEL_ERROR,
+                        RealtimeSubscribeStates.TIMED_OUT,
+                        RealtimeSubscribeStates.CLOSED,
+                    }:
+                        return SubscriberExit.SOCKET_ERROR
 
-                if channel.is_errored:
-                    return SubscriberExit.SOCKET_ERROR
-                if not client.realtime.is_connected or channel.is_closed:
-                    return SubscriberExit.DISCONNECTED
+                for client, shard_channels in connections:
+                    if any(channel.is_errored for channel in shard_channels):
+                        return SubscriberExit.SOCKET_ERROR
+                    if not client.realtime.is_connected or any(
+                        channel.is_closed for channel in shard_channels
+                    ):
+                        return SubscriberExit.DISCONNECTED
 
                 try:
-                    payload, observed_at = await asyncio.wait_for(
+                    topic, payload, observed_at = await asyncio.wait_for(
                         payload_queue.get(), timeout=0.25
                     )
                 except TimeoutError:
                     continue
-                await on_batch(self._topic, payload, observed_at)
+                await on_batch(topic, payload, observed_at)
         finally:
-            try:
-                await client.realtime.remove_channel(cast(Any, channel))
-            except Exception:
-                await client.realtime.close()
+            for client, shard_channels in connections:
+                try:
+                    for channel in shard_channels:
+                        await client.realtime.remove_channel(cast(Any, channel))
+                except Exception:
+                    await client.realtime.close()

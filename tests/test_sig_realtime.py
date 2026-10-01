@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -898,6 +899,202 @@ def test_bounded_dirty_price_refresh_uses_high_priority_subset(tmp_path: Path) -
 
     asyncio.run(scenario())
 
+
+
+def _live_market_batch(
+    *,
+    market_id: str = "26",
+    exchange_id: str = "36",
+    revision: int,
+    previous: int,
+    with_trade: bool = True,
+) -> dict[str, object]:
+    """Shape observed live on tournament:{id}:market:{id} on 2026-10-01."""
+    return {
+        "trades": (
+            [
+                {
+                    "id": "1854300",
+                    "sequence": 1854300,
+                    "exchangeId": exchange_id,
+                    "marketId": market_id,
+                    "price": 0.07,
+                    "quantity": 880,
+                    "executedAt": "2026-10-01T16:10:28.500Z",
+                    "tournamentId": "cup",
+                }
+            ]
+            if with_trade
+            else []
+        ),
+        "bookDirty": [
+            {
+                "exchangeId": exchange_id,
+                "marketId": market_id,
+                "tournamentId": "cup",
+                "at": "2026-10-01T16:10:28.500Z",
+            }
+        ],
+        "marketSettled": [],
+        "books": [
+            {
+                "exchangeId": int(exchange_id),
+                "asOf": {"sequence": 1854301, "at": "2026-10-01T16:10:28.600Z"},
+                "nextExpiryAt": "2026-10-01T17:00:00Z",
+                "bids": [{"price": 0.06, "quantity": 100}],
+                "asks": [{"price": 0.08, "quantity": 120}],
+            }
+        ],
+        "delivery": {
+            "model": "best-effort-authoritative-resync",
+            "correlationId": f"realtime:tournament:cup:market:{market_id}:{revision}",
+            "revision": revision,
+            "previousRevision": previous,
+            "sourceSequenceFrom": 1854201,
+            "sourceSequenceThrough": 1854301,
+        },
+    }
+
+
+def test_live_market_topic_batch_shape_validates() -> None:
+    batch = MarketBatchDto.model_validate(_live_market_batch(revision=141, previous=140))
+    assert batch.trades[0].id == "1854300"
+    assert batch.trades[0].sequence == 1854300
+    assert batch.books[0].exchange_id == "36"
+    assert batch.books[0].as_of.sequence == 1854301
+    assert batch.resync_required is False
+
+    compact = MarketBatchDto.model_validate(
+        {
+            "resyncRequired": True,
+            "delivery": _live_market_batch(revision=2, previous=1)["delivery"],
+        }
+    )
+    assert compact.resync_required is True
+    assert compact.trades == () and compact.books == ()
+
+
+def test_engine_subscribes_per_market_topics_not_tournament_topic(
+    tmp_path: Path,
+) -> None:
+    """Regression: SIG no longer publishes market_batch on tournament:{id}."""
+
+    async def scenario() -> None:
+        rest = FakeRest()
+        rest.market_status["27"] = "settled"
+        rest.settled_with["27"] = "YES"
+        engine, recorder = _engine(tmp_path, rest)
+        await engine.initialize()
+        assert engine.subscription_topics() == ("tournament:cup:market:26",)
+        assert engine.topic not in engine.subscription_topics()
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_market_topic_batches_record_trades_with_topic_local_revisions(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        rest = FakeRest()
+        engine, recorder = _engine(tmp_path, rest)
+        await engine.initialize()
+        engine.mark_connected()
+        observed = datetime(2026, 10, 1, 16, 10, 28, tzinfo=UTC)
+        topic_a = engine.market_topic("26")
+        topic_b = engine.market_topic("27")
+
+        await engine.handle_raw_batch(
+            topic_a, _live_market_batch(revision=141, previous=140), observed
+        )
+        # Independent revision sequence on another market topic is not a gap.
+        await engine.handle_raw_batch(
+            topic_b,
+            _live_market_batch(
+                market_id="27", exchange_id="37", revision=7, previous=6
+            ),
+            observed,
+        )
+        await engine.handle_raw_batch(
+            topic_a, _live_market_batch(revision=142, previous=141), observed
+        )
+        # Duplicate (retried send) is ignored, not treated as a gap.
+        await engine.handle_raw_batch(
+            topic_a, _live_market_batch(revision=141, previous=140), observed
+        )
+
+        assert engine.health.revision_gap_count == 0
+        assert engine.topic_revisions == {topic_a: 142, topic_b: 7}
+        assert engine.health.last_realtime_receive == observed
+        assert rest.market_calls == []
+        connection = sqlite3.connect(tmp_path / "sig.sqlite3")
+        trade_topics = connection.execute(
+            "SELECT topic FROM realtime_trades ORDER BY id"
+        ).fetchall()
+        delivery_count = connection.execute(
+            "SELECT COUNT(*) FROM realtime_deliveries"
+        ).fetchone()
+        connection.close()
+        assert trade_topics == [(topic_a,), (topic_b,), (topic_a,)]
+        assert delivery_count == (4,)
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_market_topic_gap_and_resync_required_recover_only_that_market(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        rest = FakeRest(market_count=237)
+        engine, recorder = _engine(tmp_path, rest, tracked={"e-0", "e-1"})
+        await engine.initialize()
+        initial_bulk = len(rest.bulk_calls)
+        observed = datetime(2026, 10, 1, 16, 10, 28, tzinfo=UTC)
+        topic = engine.market_topic("m-0")
+
+        def batch(revision: int, previous: int) -> dict[str, object]:
+            payload = _live_market_batch(
+                market_id="m-0", exchange_id="0", revision=revision, previous=previous
+            )
+            payload["trades"] = [
+                {**trade, "exchangeId": "e-0"}
+                for trade in cast(list[dict[str, object]], payload["trades"])
+            ]
+            payload["bookDirty"] = [
+                {**item, "exchangeId": "e-0"}
+                for item in cast(list[dict[str, object]], payload["bookDirty"])
+            ]
+            payload["books"] = []
+            return payload
+
+        await engine.handle_raw_batch(topic, batch(10, 9), observed)
+        books_before = len(rest.calls)
+        await engine.handle_raw_batch(topic, batch(12, 11), observed)
+
+        assert engine.health.revision_gap_count == 1
+        assert rest.market_calls == ["m-0"]
+        assert rest.calls[books_before:].count("e-1") == 0
+        # Market-scoped recovery: no full-universe bulk sweep or market listing.
+        assert rest.bulk_calls[initial_bulk:] == [("e-0",)]
+
+        await engine.handle_raw_batch(
+            topic,
+            {"resyncRequired": True, "delivery": batch(13, 12)["delivery"]},
+            observed,
+        )
+        assert engine.topic_revisions[topic] == 13
+        assert rest.market_calls == ["m-0", "m-0"]
+        assert engine.health.revision_gap_count == 1
+
+        with pytest.raises(ValueError):
+            await engine.handle_raw_batch(
+                "tournament:other:market:m-0", batch(14, 13), observed
+            )
+        await engine.aclose()
+        recorder.close()
 
 
 def _engine_recorder_method_names() -> set[str]:
