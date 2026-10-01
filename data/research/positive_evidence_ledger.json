@@ -1,0 +1,1471 @@
+{
+  "schema_version": 1,
+  "title": "RESEARCH-SYNTHESIS-001 Positive Evidence Ledger",
+  "repository": "DanielCWeng/predictions-cup",
+  "branch": "research/synthesis-001-positive-evidence",
+  "starting_main_sha": "611b048ce0ee4630c01a9500cb021a70afba8474",
+  "snapshot_date": "2026-10-01",
+  "evidence_categories": {
+    "E0": "DISCOVERY ONLY — TRAIN/in-sample/descriptive",
+    "E1": "TEMPORAL / DEV REPLICATION",
+    "E2": "SEALED HOLDOUT CONFIRMED",
+    "E3": "CROSS-DATASET / CROSS-EVENT REPLICATION",
+    "E4": "ECONOMIC REPLAY SUPPORT",
+    "E5": "LIVE/SHADOW ECONOMIC SUPPORT"
+  },
+  "critical_rule": "Evidence categories are not scores. No E4/E5 is assigned without positive economic evidence.",
+  "summary": {
+    "strongest_cross_dataset_signal": "genuine_age_s -> 300s BBO update/renewal hazard (005F E2; fresh 005G DATA-003 replication E3; both canonical on main)",
+    "strongest_canonical_directional_signal": "005I five-minute mean reversion (67.26% sampled reversal; all temporal workers >66%)",
+    "economic_positives": 0,
+    "live_shadow_economic_positives": 0,
+    "central_hypothesis": "SUPPORTED_WITH_IMPORTANT_EXCEPTION: the strongest replicated/current-universe positives are movement/state/renewal hazards, but 005I supplies sealed-holdout directional information (mean reversion and depth-normalised OFI), and 005D/005E contain narrower directional/conditional evidence."
+  },
+  "surviving_positive_results": [
+    {
+      "result_id": "004B-SYSTEM-DIRECTED-STRUCTURE",
+      "programme": "EXPERIMENT-004B",
+      "pr": 30,
+      "commit_artifact": "data/experiments/experiment_004b/review/MASTER_HANDOFF_004B_B.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-001",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": null,
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "markets_events": "HUN PRE; PER PRE; PER ACTIVE (aggregate 30s directed response); HUN ACTIVE did not survive",
+      "sample_count": null,
+      "feature_signal": "aggregate directed cross-market response structure",
+      "target": [
+        "DIRECTION",
+        "PARTICIPANT_BEHAVIOUR"
+      ],
+      "target_detail": "30s directed price-response system statistic",
+      "effect_size": "Aggregate directed statistic exceeded circular/block nulls and survived BH in HUN PRE, PER PRE and PER ACTIVE; exact effect sizes not recovered in this synthesis.",
+      "baseline": "circular/block nulls",
+      "direction_of_improvement": "positive system-level dependence",
+      "temporal_consistency": "multiple regimes; HUN ACTIVE negative",
+      "cross_market_consistency": "system-level only; individual leader/follower identities not established",
+      "holdout_status": "DISCOVERY_ONLY",
+      "evidence": [
+        "E0"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "known_caveats": [
+        "Later 004C controls demoted generic pairwise propagation.",
+        "Individual directed edges did not receive cell-level null inference in 004B."
+      ],
+      "known_failures": [
+        "No transferable leader/follower identity established."
+      ],
+      "current_interpretation": "Positive evidence that election markets exhibit non-random common/directed structure; not a directional trading edge.",
+      "when_what_direction": {
+        "WHEN": "weak",
+        "WHAT": "system can display directed dependence",
+        "DIRECTION": "not transferable at individual-pair level",
+        "HOW_LARGE": "not established",
+        "WHETHER_FILL": "none",
+        "WHETHER_TOXIC": "none",
+        "WHETHER_MAKES_MONEY": "none"
+      },
+      "routing": "RESEARCH_ONLY"
+    },
+    {
+      "result_id": "004C-B-COL-SOFT-COMPETITIVE-30S",
+      "programme": "EXPERIMENT-004C-B",
+      "pr": 35,
+      "commit_artifact": "data/experiments/experiment_004c_b/review/FINAL_REPORT_004C_B.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-001",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": null,
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "markets_events": "Colombia first-round winner family; PRE_ELECTION",
+      "sample_count": 20550,
+      "feature_signal": "controlled leave-target-out competitive-family state",
+      "target": [
+        "DIRECTION",
+        "RELATIVE_VALUE"
+      ],
+      "target_detail": "30s target repricing / competitive-family redistribution",
+      "effect_size": "beta 0.0528136; time-null p=0.000999; BH q=0.00999; matched-membership p=0.000999; survives 60s/120s robustness, not 300s",
+      "baseline": "target controls plus time and matched-membership nulls",
+      "direction_of_improvement": "positive",
+      "temporal_consistency": "30/60/120s positive; 300s not",
+      "cross_market_consistency": "comparable Peru structures did not replicate",
+      "holdout_status": "OOS/ROBUSTNESS, NOT SEALED CROSS-FAMILY CONFIRMATION",
+      "evidence": [
+        "E1"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "known_caveats": [
+        "Single election-family effect.",
+        "Member-level effects heterogeneous.",
+        "No hard/exhaustive-family alpha."
+      ],
+      "known_failures": [
+        "No comparable Peru replication."
+      ],
+      "current_interpretation": "Narrow soft competitive-family directional/relative-value effect; research-only.",
+      "when_what_direction": {
+        "WHEN": "conditional on family state",
+        "WHAT": "competitive-family redistribution",
+        "DIRECTION": "yes, narrow",
+        "HOW_LARGE": "beta reported",
+        "WHETHER_FILL": "none",
+        "WHETHER_TOXIC": "none",
+        "WHETHER_MAKES_MONEY": "not tested"
+      },
+      "routing": "RESEARCH_ONLY"
+    },
+    {
+      "result_id": "005A-SAME-FAMILY-PRE-5S",
+      "programme": "EXPERIMENT-005A",
+      "pr": 38,
+      "commit_artifact": "data/experiments/experiment_005a/results/FINAL_RESEARCH_REPORT.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-001 + DATA-002",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": null,
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "markets_events": "PRE_ELECTION same-family",
+      "sample_count": 92007,
+      "feature_signal": "same-family fee/role-aware state (sole surviving A3 cell)",
+      "target": [
+        "DIRECTION",
+        "RELATIVE_VALUE"
+      ],
+      "target_detail": "5s own/same-family repricing",
+      "effect_size": "relative OOS MSE gain 7.6555e-06 (0.0007655%); circular p=0.005; 300s block p=0.002; intersection p=0.005; BH q=0.050",
+      "baseline": "frozen same-market/context baseline",
+      "direction_of_improvement": "positive but economically tiny",
+      "temporal_consistency": "5s only",
+      "cross_market_consistency": "narrow; no broader role-aware family survived",
+      "holdout_status": "VALIDATION RESULT / REPLICATION CANDIDATE",
+      "evidence": [
+        "E1"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "known_caveats": [
+        "Winning cell does not promote the mechanism.",
+        "Effect size is tiny."
+      ],
+      "known_failures": [
+        "Own-market, semantic, participant-identity, maker and liquidity batteries broadly null."
+      ],
+      "current_interpretation": "Narrow same-family short-horizon effect only; not broad role-aware alpha.",
+      "when_what_direction": {
+        "WHEN": "conditional on same-family state",
+        "WHAT": "near-term repricing",
+        "DIRECTION": "yes, narrow",
+        "HOW_LARGE": "tiny",
+        "WHETHER_FILL": "none",
+        "WHETHER_TOXIC": "none",
+        "WHETHER_MAKES_MONEY": "not tested"
+      },
+      "routing": "RESEARCH_ONLY"
+    },
+    {
+      "result_id": "005D-PERU-LATECOUNT-STRUCTURAL",
+      "programme": "EXPERIMENT-005D",
+      "pr": 42,
+      "commit_artifact": "docs/experiments/EXPERIMENT_005D_FINAL_REPORT.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-001/DATA-002 historical structural atlas",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": "Peru first round: 2026-04-14T00:04:56Z–2026-04-14T23:59:55Z",
+      "markets_events": "Peru; Fuerza Popular Senate -> Chamber most-seats; 100% canonical LATE_COUNT",
+      "sample_count": "5s n=10,841; 60s n=9,942",
+      "feature_signal": "RAW_INDIRECT_PROB_MEAN structural residual",
+      "target": [
+        "DIRECTION",
+        "RELATIVE_VALUE"
+      ],
+      "target_detail": "5s and 60s structural convergence/repair direction",
+      "effect_size": "5s q=0.01299, std effect=0.0285, delayed ratio=0.620; 60s q=0.01818, std effect=0.0595, delayed ratio=0.773",
+      "baseline": "TRAIN-controlled residual response plus delayed-state falsifier",
+      "direction_of_improvement": "positive repair direction",
+      "temporal_consistency": "5s/60s pass original frozen HOLDOUT; longer-block post-hoc robustness mixed",
+      "cross_market_consistency": "one relationship; treat horizons as one correlated family",
+      "holdout_status": "SEALED HOLDOUT SUPPORTED; POST-HOC DEPENDENCE ROBUSTNESS MIXED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "All predictive evidence is LATE_COUNT, not PRE/ACTIVE.",
+        "Peru dependence robustness weak/mixed.",
+        "No monotone magnitude sizing."
+      ],
+      "known_failures": [
+        "15s/30s fail delayed-state gate."
+      ],
+      "current_interpretation": "Real but regime-specific late-count structural convergence; weak challenger, not general election alpha.",
+      "when_what_direction": {
+        "WHEN": "LATE_COUNT",
+        "WHAT": "cross-chamber structural convergence",
+        "DIRECTION": "yes",
+        "HOW_LARGE": "very small local response",
+        "WHETHER_FILL": "none",
+        "WHETHER_TOXIC": "none",
+        "WHETHER_MAKES_MONEY": "not tested"
+      },
+      "routing": "RESEARCH_ONLY"
+    },
+    {
+      "result_id": "005D-COL-LATECOUNT-STRUCTURAL",
+      "programme": "EXPERIMENT-005D",
+      "pr": 42,
+      "commit_artifact": "docs/experiments/EXPERIMENT_005D_FINAL_REPORT.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-001/DATA-002 historical structural atlas",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": "Colombia runoff: 2026-06-23T00:04:56Z–2026-06-23T23:59:55Z",
+      "markets_events": "Colombia; Abelardo overall winner -> Antioquia runoff; 100% canonical LATE_COUNT",
+      "sample_count": 17156,
+      "feature_signal": "AFFINE_INDIRECT_LOGIT residual",
+      "target": [
+        "DIRECTION",
+        "RELATIVE_VALUE"
+      ],
+      "target_detail": "5s structural convergence/repair direction",
+      "effect_size": "q=0.00649; bootstrap [2.38e-10, 6.67e-10]; standardized effect 0.00392; positive-contribution 97.9%; delayed ratio 0.444",
+      "baseline": "TRAIN-controlled structural residual + delayed-state falsifier",
+      "direction_of_improvement": "positive",
+      "temporal_consistency": "positive under fixed 30m/1h/4h/8h post-hoc sensitivity",
+      "cross_market_consistency": "one relationship",
+      "holdout_status": "SEALED HOLDOUT SUPPORTED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "All evidence is LATE_COUNT.",
+        "Economic-scale translation is extremely small.",
+        "Non-monotone signal-strength response."
+      ],
+      "known_failures": [],
+      "current_interpretation": "Statistically robust but economically tiny late-count structural convergence diagnostic.",
+      "when_what_direction": {
+        "WHEN": "LATE_COUNT",
+        "WHAT": "structural convergence",
+        "DIRECTION": "yes",
+        "HOW_LARGE": "extremely small",
+        "WHETHER_FILL": "none",
+        "WHETHER_TOXIC": "none",
+        "WHETHER_MAKES_MONEY": "not tested"
+      },
+      "routing": "RESEARCH_ONLY"
+    },
+    {
+      "result_id": "005D-LOO-RECONSTRUCTION",
+      "programme": "EXPERIMENT-005D",
+      "pr": 42,
+      "commit_artifact": "docs/experiments/EXPERIMENT_005D_FINAL_REPORT.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "historical structural atlas",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": null,
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "markets_events": "Canada 2025, Colombia 2026, Hungary 2026, Peru 2026, US 2024",
+      "sample_count": "22/25 frozen reconstruction cells evaluated",
+      "feature_signal": "LOO-PRICE / same-event reconstruction",
+      "target": [
+        "RELATIVE_VALUE",
+        "STRUCTURAL_INCONSISTENCY"
+      ],
+      "target_detail": "held-out price reconstruction",
+      "effect_size": "median HOLDOUT RMSE improvement vs naive same-event baseline: CAN +47.0%, COL +96.3%, HUN +99.8%, PER +97.8%, US +96.0%",
+      "baseline": "declared naive same-event reconstruction",
+      "direction_of_improvement": "large reconstruction improvement",
+      "temporal_consistency": "sealed HOLDOUT reconstruction",
+      "cross_market_consistency": "broad across five families, heterogeneous in Canada",
+      "holdout_status": "SEALED HOLDOUT RECONSTRUCTION; NOT PREDICTIVE ALPHA",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "known_caveats": [
+        "Can retain mechanically/statistically close same-event information.",
+        "Reconstruction is not future-price prediction."
+      ],
+      "known_failures": [
+        "Hard arbitrage/depth-certified executable structural certificates were not established."
+      ],
+      "current_interpretation": "Strong structural/fair-value scaffolding and consistency diagnostic, not alpha.",
+      "when_what_direction": {
+        "WHEN": "not a timing predictor",
+        "WHAT": "coherent relative-value/reconstruction state",
+        "DIRECTION": "not independently predictive",
+        "HOW_LARGE": "large reconstruction gains",
+        "WHETHER_FILL": "none",
+        "WHETHER_TOXIC": "none",
+        "WHETHER_MAKES_MONEY": "not tested"
+      },
+      "routing": "STRUCTURAL_SCANNER"
+    },
+    {
+      "result_id": "005E-SIGNED-MARKOUT",
+      "programme": "EXPERIMENT-005E",
+      "pr": 43,
+      "commit_artifact": "data/experiments/experiment_005e/results/FINAL_REPORT_005E.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-002",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": "sealed HOLDOUT; exact dates not stated in final report",
+      "markets_events": "five families",
+      "sample_count": "HOLDOUT rows 363,488 for primary panel; exact secondary effective count not separately stated",
+      "feature_signal": "full participant behavioural state conditional on observed participant direction",
+      "target": [
+        "MARKOUT",
+        "PARTICIPANT_BEHAVIOUR",
+        "DIRECTION"
+      ],
+      "target_detail": "participant-direction-signed 60s/300s markout",
+      "effect_size": "60s gain +0.00924532; 300s gain +0.01231031; positive in all five families",
+      "baseline": "generic price/size/activity baseline",
+      "direction_of_improvement": "positive conditional signed-markout prediction",
+      "temporal_consistency": "60s and 300s positive",
+      "cross_market_consistency": "all five families positive",
+      "holdout_status": "FROZEN SECONDARY HOLDOUT DIAGNOSTIC; FOLLOW_UP_ONLY",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "Secondary, not preregistered primary promotion target.",
+        "Does not rescue negative unconditional 60s price-alpha result."
+      ],
+      "known_failures": [
+        "Primary selected-behaviour model q=1.0; full behaviour negative on primary target."
+      ],
+      "current_interpretation": "Credible hypothesis-generating conditional flow-quality information; requires fresh preregistered confirmation.",
+      "when_what_direction": {
+        "WHEN": "when participant direction is observed",
+        "WHAT": "whether that direction is followed by markout",
+        "DIRECTION": "conditional yes",
+        "HOW_LARGE": "reported gains",
+        "WHETHER_FILL": "none",
+        "WHETHER_TOXIC": "not directly",
+        "WHETHER_MAKES_MONEY": "not tested"
+      },
+      "routing": "RESEARCH_ONLY"
+    },
+    {
+      "result_id": "005E-NEXT-CHANGE-CLASSIFIER",
+      "programme": "EXPERIMENT-005E",
+      "pr": 43,
+      "commit_artifact": "data/experiments/experiment_005e/results/FINAL_REPORT_005E.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-002",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": null,
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "markets_events": "five families",
+      "sample_count": "exact secondary count not separately stated",
+      "feature_signal": "full participant behavioural state",
+      "target": [
+        "DIRECTION",
+        "PARTICIPANT_BEHAVIOUR"
+      ],
+      "target_detail": "next price-change classification",
+      "effect_size": "log loss 0.677277315061 -> 0.666660658805 (gain 0.0106166562552); accuracy 0.584708 -> 0.604946",
+      "baseline": "generic baseline classifier",
+      "direction_of_improvement": "positive",
+      "temporal_consistency": "frozen secondary HOLDOUT",
+      "cross_market_consistency": "aggregate; family-level secondary detail not stated",
+      "holdout_status": "FROZEN SECONDARY HOLDOUT DIAGNOSTIC; FOLLOW_UP_ONLY",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "known_caveats": [
+        "Secondary target; requires new nulls/calibration/executable mapping."
+      ],
+      "known_failures": [
+        "Primary participant-conditioned 60s price prediction failed."
+      ],
+      "current_interpretation": "Directional participant-flow hypothesis, not production feature.",
+      "when_what_direction": {
+        "WHEN": "participant state/action observed",
+        "WHAT": "next price change class",
+        "DIRECTION": "yes",
+        "HOW_LARGE": "classification metrics reported",
+        "WHETHER_FILL": "none",
+        "WHETHER_TOXIC": "none",
+        "WHETHER_MAKES_MONEY": "not tested"
+      },
+      "routing": "RESEARCH_ONLY"
+    },
+    {
+      "result_id": "005F-ACTIVE-JUMP-H300",
+      "programme": "EXPERIMENT-005F",
+      "pr": null,
+      "commit_artifact": "docs/experiments/EXPERIMENT_005F_FINAL_REPORT.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-001 historical PMXT",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": "sealed HOLDOUT; exact dates in experiment manifests",
+      "markets_events": "ACTIVE_RESULTS; 61 markets; 5 events; 3 families",
+      "sample_count": 14037,
+      "feature_signal": "genuine_age_s",
+      "target": [
+        "ABSOLUTE_MOVEMENT",
+        "STATE_TRANSITION"
+      ],
+      "target_detail": "300s jump hazard",
+      "effect_size": "16.04% relative MSE improvement; sign-flip p=0.0115; bootstrap lower=0.00423; all market/event/family leave-outs positive",
+      "baseline": "frozen price/volatility/history + capture controls",
+      "direction_of_improvement": "positive hazard prediction",
+      "temporal_consistency": "current strongest; 300s delayed weaker; 1800s nearly zero",
+      "cross_market_consistency": "leave-outs all positive",
+      "holdout_status": "SEALED HOLDOUT SUPPORTED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "Hazard is unsigned movement, not direction.",
+        "No queue/fill/PnL evidence."
+      ],
+      "known_failures": [],
+      "current_interpretation": "Local freshness-conditioned movement/jump-risk signal.",
+      "when_what_direction": {
+        "WHEN": "strong",
+        "WHAT": "jump/movement risk",
+        "DIRECTION": "none",
+        "HOW_LARGE": "hazard only, not signed move",
+        "WHETHER_FILL": "none",
+        "WHETHER_TOXIC": "none",
+        "WHETHER_MAKES_MONEY": "not established"
+      },
+      "routing": "SHADOW_ONLY"
+    },
+    {
+      "result_id": "005F-ACTIVE-UPDATE-H300",
+      "programme": "EXPERIMENT-005F",
+      "pr": null,
+      "commit_artifact": "docs/experiments/EXPERIMENT_005F_FINAL_REPORT.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-001 historical PMXT",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": "sealed HOLDOUT",
+      "markets_events": "ACTIVE_RESULTS; 61 markets; 5 events; 3 families",
+      "sample_count": 14177,
+      "feature_signal": "genuine_age_s",
+      "target": [
+        "BOOK_RENEWAL",
+        "QUOTE_UPDATE",
+        "STATE_TRANSITION"
+      ],
+      "target_detail": "300s BBO update hazard",
+      "effect_size": "35.16% relative MSE improvement; p=0.000443; bootstrap lower=0.04125; all leave-outs positive",
+      "baseline": "frozen price/history + capture controls",
+      "direction_of_improvement": "positive",
+      "temporal_consistency": "delayed versions remain predictive; persistent state variable",
+      "cross_market_consistency": "all market/event/family leave-outs positive",
+      "holdout_status": "SEALED HOLDOUT SUPPORTED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "Persistent staleness/renewal state, not transient lead-lag."
+      ],
+      "known_failures": [],
+      "current_interpretation": "Strong persistent renewal-hazard state.",
+      "when_what_direction": {
+        "WHEN": "strong",
+        "WHAT": "BBO renewal/update",
+        "DIRECTION": "none",
+        "HOW_LARGE": "not signed",
+        "WHETHER_FILL": "none",
+        "WHETHER_TOXIC": "none",
+        "WHETHER_MAKES_MONEY": "not established"
+      },
+      "routing": "SHADOW_ONLY"
+    },
+    {
+      "result_id": "005F-PRE-UPDATE-H300",
+      "programme": "EXPERIMENT-005F + EXPERIMENT-005G replication",
+      "pr": "005F canonical; 005G PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f",
+      "commit_artifact": "docs/experiments/EXPERIMENT_005F_FINAL_REPORT.md + experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-001 historical PMXT -> fresh DATA-003 orderbooks",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": "005F sealed HOLDOUT; 005G fresh sealed holdout 2026-09-05T00:00Z–2026-09-06T00:00Z",
+      "markets_events": "005F PRE: 108 markets/5 events/3 families; 005G replication: 658 markets",
+      "sample_count": "005F 297,384; 005G 222,567",
+      "feature_signal": "genuine_age_s",
+      "target": [
+        "BOOK_RENEWAL",
+        "QUOTE_UPDATE",
+        "STATE_TRANSITION"
+      ],
+      "target_detail": "300s update hazard",
+      "effect_size": "005F +35.35% relative MSE; 005G fresh replication +26.5024%, 48/48 positive blocks, sign-flip p=0.000122, bootstrap lower=0.02495",
+      "baseline": "frozen history/capture controls",
+      "direction_of_improvement": "positive in both historical and fresh current-universe corpora",
+      "temporal_consistency": "persistent across regimes/datasets",
+      "cross_market_consistency": "005G 658 markets; 48/48 blocks",
+      "holdout_status": "005F SEALED HOLDOUT + 005G FRESH SEALED REPLICATION",
+      "evidence": [
+        "E2",
+        "E3"
+      ],
+      "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "005G PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; replication is canonical repository evidence.",
+        "Predicts renewal, not sign or toxicity."
+      ],
+      "known_failures": [
+        "005G economic conversion did not produce a DEV champion."
+      ],
+      "current_interpretation": "Strongest cross-dataset evidence in the programme: stable book-age/renewal hazard, but not standalone trading alpha.",
+      "when_what_direction": {
+        "WHEN": "very strong",
+        "WHAT": "future book renewal/update",
+        "DIRECTION": "none",
+        "HOW_LARGE": "not signed",
+        "WHETHER_FILL": "not demonstrated",
+        "WHETHER_TOXIC": "failed as proxy",
+        "WHETHER_MAKES_MONEY": "bundle conversion failed"
+      },
+      "routing": "SHADOW_ONLY"
+    },
+    {
+      "result_id": "005F-PRE-SPREAD-H15",
+      "programme": "EXPERIMENT-005F",
+      "pr": null,
+      "commit_artifact": "docs/experiments/EXPERIMENT_005F_FINAL_REPORT.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-001 historical PMXT",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": "sealed HOLDOUT",
+      "markets_events": "PRE_ELECTION; 60 markets; 3 events; 2 families",
+      "sample_count": 91739,
+      "feature_signal": "trade_abs_impact_60",
+      "target": [
+        "LIQUIDITY_CHANGE"
+      ],
+      "target_detail": "15s spread change",
+      "effect_size": "0.74% relative MSE improvement; p=0.000976; tiny effect",
+      "baseline": "frozen baseline + capture controls",
+      "direction_of_improvement": "positive but small",
+      "temporal_consistency": "long-delay variants retain nearly all lift",
+      "cross_market_consistency": "leave-outs positive",
+      "holdout_status": "SEALED HOLDOUT SUPPORTED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "Mechanism is slow activity/liquidity regime state, not recent-trade causal impulse.",
+        "Economically small."
+      ],
+      "known_failures": [],
+      "current_interpretation": "Small liquidity-regime context signal.",
+      "when_what_direction": {
+        "WHEN": "weak",
+        "WHAT": "spread/liquidity change",
+        "DIRECTION": "not price direction",
+        "HOW_LARGE": "tiny",
+        "WHETHER_FILL": "none",
+        "WHETHER_TOXIC": "none",
+        "WHETHER_MAKES_MONEY": "not tested"
+      },
+      "routing": "LIVE_LEARN_CONTEXT"
+    },
+    {
+      "result_id": "PRED006-C01",
+      "programme": "PRED-006",
+      "pr": 58,
+      "commit_artifact": "docs/experiments/PRED_006_FINAL_REPORT.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-003 actual fills",
+      "train_period": "before 2026-08-09T00:00Z",
+      "dev_period": "from 2026-08-09T00:00Z to before 2026-09-11T00:00Z",
+      "holdout_period": "FINAL from 2026-09-11T00:00Z",
+      "markets_events": "462 conditions; 198 SIG markets",
+      "sample_count": 6924,
+      "feature_signal": "frozen mixed state/activity/volatility/fee feature set",
+      "target": [
+        "ABSOLUTE_MOVEMENT",
+        "STATE_TRANSITION"
+      ],
+      "target_detail": "1800s next-price-change hazard",
+      "effect_size": "FINAL relative Brier improvement 8.18%; AUC 0.712; bootstrap 2.5% 0.007876; 59.96% conditions positive; first/second halves 11.15%/5.16%",
+      "baseline": "frozen next-change base rate/history baseline",
+      "direction_of_improvement": "positive",
+      "temporal_consistency": "both FINAL halves positive, second materially weaker",
+      "cross_market_consistency": "75.2% of supported markets positive; negative lower tail",
+      "holdout_status": "ONE-SHOT FINAL PASS; FUTURE CONFIRMATION REQUIRED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "Movement hazard only; no direction.",
+        "Heterogeneous across markets.",
+        "Runtime fitted artifact was not serialized; candidate not ready."
+      ],
+      "known_failures": [],
+      "current_interpretation": "Current-universe price-change hazard candidate requiring future capture confirmation.",
+      "when_what_direction": {
+        "WHEN": "strong",
+        "WHAT": "whether price changes within 30m",
+        "DIRECTION": "none",
+        "HOW_LARGE": "none",
+        "WHETHER_FILL": "none",
+        "WHETHER_TOXIC": "none",
+        "WHETHER_MAKES_MONEY": "not tested"
+      },
+      "routing": "SHADOW_ONLY"
+    },
+    {
+      "result_id": "PRED006-C02",
+      "programme": "PRED-006",
+      "pr": 58,
+      "commit_artifact": "docs/experiments/PRED_006_FINAL_REPORT.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-003 actual fills",
+      "train_period": "before 2026-08-09T00:00Z",
+      "dev_period": "from 2026-08-09T00:00Z to before 2026-09-11T00:00Z",
+      "holdout_period": "FINAL from 2026-09-11T00:00Z",
+      "markets_events": "466 conditions; 198 SIG markets",
+      "sample_count": 6967,
+      "feature_signal": "frozen mixed state/activity/volatility/fee feature set",
+      "target": [
+        "ABSOLUTE_MOVEMENT",
+        "STATE_TRANSITION"
+      ],
+      "target_detail": "600s next-price-change hazard",
+      "effect_size": "FINAL relative Brier improvement 8.36%; AUC 0.697; bootstrap 2.5% 0.005791; 58.37% conditions positive; first/second halves 12.12%/4.29%",
+      "baseline": "frozen next-change base rate/history baseline",
+      "direction_of_improvement": "positive",
+      "temporal_consistency": "both halves positive, second weaker",
+      "cross_market_consistency": "73.5% of supported markets positive; negative lower tail",
+      "holdout_status": "ONE-SHOT FINAL PASS; FUTURE CONFIRMATION REQUIRED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "Movement hazard only; no direction.",
+        "Heterogeneous across markets.",
+        "Runtime fitted artifact missing."
+      ],
+      "known_failures": [],
+      "current_interpretation": "Current-universe 10m price-change hazard candidate requiring future confirmation.",
+      "when_what_direction": {
+        "WHEN": "strong",
+        "WHAT": "whether price changes within 10m",
+        "DIRECTION": "none",
+        "HOW_LARGE": "none",
+        "WHETHER_FILL": "none",
+        "WHETHER_TOXIC": "none",
+        "WHETHER_MAKES_MONEY": "not tested"
+      },
+      "routing": "SHADOW_ONLY"
+    },
+    {
+      "result_id": "005I-MEAN-REVERSION-5M",
+      "programme": "EXPERIMENT-005I",
+      "pr": 93,
+      "commit_artifact": "docs/experiments/MASTER_HANDOFF_005I.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "fresh DATA-003-linked orderbooks",
+      "train_period": "2026-09-01..2026-09-10",
+      "dev_period": "2026-09-11..2026-09-20",
+      "holdout_period": "2026-09-21..2026-09-28",
+      "markets_events": "full transparent-state panel; frozen slices",
+      "sample_count": "55,340 qualifying sampled HOLDOUT minute-states/move observations (serially dependent, not independent episodes)",
+      "feature_signal": "recent 5m move / transparent regime context",
+      "target": [
+        "DIRECTION"
+      ],
+      "target_detail": "5m reversal vs continuation",
+      "effect_size": "67.26% reversal; every temporal worker >66%; all frozen move-size/price-region/spread slices >63-64%; PRICE_DISCOVERY ~68.1% reversal",
+      "baseline": "continuation / frozen comparison",
+      "direction_of_improvement": "contrarian/reversal",
+      "temporal_consistency": "5/5 temporal worker direction consistent",
+      "cross_market_consistency": "survives frozen slices; exact per-market consistency not stated",
+      "holdout_status": "SEALED HOLDOUT SUPPORTED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "Overlapping five-minute windows create substantial serial dependence.",
+        "Not yet post-cost executable alpha."
+      ],
+      "known_failures": [],
+      "current_interpretation": "Strongest canonical directional finding: broad short-horizon mean reversion, subject to dependence/execution caveats.",
+      "when_what_direction": {
+        "WHEN": "after qualifying recent move",
+        "WHAT": "reversal more common than continuation",
+        "DIRECTION": "yes, contrarian",
+        "HOW_LARGE": "direction only; magnitude conditionality not a PnL claim",
+        "WHETHER_FILL": "none",
+        "WHETHER_TOXIC": "none",
+        "WHETHER_MAKES_MONEY": "not tested"
+      },
+      "routing": "LIVE_LEARN_CONTEXT"
+    },
+    {
+      "result_id": "005I-DEPTH-NORM-OFI",
+      "programme": "EXPERIMENT-005I",
+      "pr": 93,
+      "commit_artifact": "docs/experiments/MASTER_HANDOFF_005I.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "fresh DATA-003-linked orderbooks",
+      "train_period": "2026-09-01..2026-09-10",
+      "dev_period": "2026-09-11..2026-09-20",
+      "holdout_period": "2026-09-21..2026-09-28",
+      "markets_events": "full panel",
+      "sample_count": 1195563,
+      "feature_signal": "frozen depth-normalised BBO OFI model",
+      "target": [
+        "DIRECTION"
+      ],
+      "target_detail": "next-minute directional classification",
+      "effect_size": "HOLDOUT log-loss improvement 0.004165; 5/5 temporal workers positive",
+      "baseline": "frozen simple baseline",
+      "direction_of_improvement": "positive incremental directional information",
+      "temporal_consistency": "5/5 workers positive",
+      "cross_market_consistency": "full panel; exact market leave-outs not stated",
+      "holdout_status": "SEALED HOLDOUT SUPPORTED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "Small conditional increment.",
+        "Simple OFI sign is often contrarian; do not wire raw sign to MAKE."
+      ],
+      "known_failures": [
+        "Raw event OFI and generic multi-level flow did not promote."
+      ],
+      "current_interpretation": "Small but stable directional increment complementary to movement hazard.",
+      "when_what_direction": {
+        "WHEN": "current depth/flow state",
+        "WHAT": "next-minute directional class",
+        "DIRECTION": "yes, model-conditional",
+        "HOW_LARGE": "small log-loss gain",
+        "WHETHER_FILL": "none",
+        "WHETHER_TOXIC": "none",
+        "WHETHER_MAKES_MONEY": "not tested"
+      },
+      "routing": "LIVE_LEARN_CONTEXT"
+    },
+    {
+      "result_id": "005I-PRICE-DISCOVERY-STATE",
+      "programme": "EXPERIMENT-005I",
+      "pr": 93,
+      "commit_artifact": "docs/experiments/MASTER_HANDOFF_005I.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "fresh DATA-003-linked orderbooks",
+      "train_period": "2026-09-01..2026-09-10",
+      "dev_period": "2026-09-11..2026-09-20",
+      "holdout_period": "2026-09-21..2026-09-28",
+      "markets_events": "PRICE_DISCOVERY state",
+      "sample_count": 281619,
+      "feature_signal": "transparent PRICE_DISCOVERY state",
+      "target": [
+        "STATE_TRANSITION",
+        "VOLATILITY",
+        "ABSOLUTE_MOVEMENT"
+      ],
+      "target_detail": "state exit/dwell and high-activity large-move context",
+      "effect_size": "exit hazard 53.56%/min; p90 dwell 3-4m; 47.38% exits to POST_SHOCK",
+      "baseline": "frozen state taxonomy/gate",
+      "direction_of_improvement": "confirmed short-lived state",
+      "temporal_consistency": "p90 dwell 3-4m in every worker",
+      "cross_market_consistency": "panel-wide",
+      "holdout_status": "SEALED HOLDOUT GATE SUPPORTED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "PRICE_DISCOVERY -> POST_SHOCK path partly mechanical because taxonomy retains large-move threshold as activity falls.",
+        "Not a momentum regime."
+      ],
+      "known_failures": [],
+      "current_interpretation": "Short-lived high-activity large-move state; useful context, not independent directional mechanism.",
+      "when_what_direction": {
+        "WHEN": "strong state-exit timing",
+        "WHAT": "state likely to decay/transition",
+        "DIRECTION": "none; broad reversal still dominates",
+        "HOW_LARGE": "large-move context by construction",
+        "WHETHER_FILL": "none",
+        "WHETHER_TOXIC": "none",
+        "WHETHER_MAKES_MONEY": "not tested"
+      },
+      "routing": "LIVE_LEARN_CONTEXT"
+    },
+    {
+      "result_id": "005I-LIQUIDITY-STRESS",
+      "programme": "EXPERIMENT-005I",
+      "pr": 93,
+      "commit_artifact": "docs/experiments/MASTER_HANDOFF_005I.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "fresh DATA-003-linked orderbooks",
+      "train_period": "2026-09-01..2026-09-10",
+      "dev_period": "2026-09-11..2026-09-20",
+      "holdout_period": "2026-09-21..2026-09-28",
+      "markets_events": "LIQUIDITY_STRESS state",
+      "sample_count": 723144,
+      "feature_signal": "transparent stressed-liquidity state",
+      "target": [
+        "LIQUIDITY_CHANGE",
+        "STATE_TRANSITION"
+      ],
+      "target_detail": "state persistence/exit/replenishment",
+      "effect_size": "exit hazard 4.93%/min; p90 dwell ~26-38m; 23.15% exits to REPLENISHMENT",
+      "baseline": "frozen state taxonomy",
+      "direction_of_improvement": "confirmed metastable state",
+      "temporal_consistency": "persistent across workers",
+      "cross_market_consistency": "panel-wide",
+      "holdout_status": "SEALED HOLDOUT SUPPORTED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "State description is not execution value."
+      ],
+      "known_failures": [],
+      "current_interpretation": "Persistent liquidity regime useful for context/risk diagnostics.",
+      "when_what_direction": {
+        "WHEN": "state persistence/exit timing",
+        "WHAT": "liquidity remains stressed or replenishes",
+        "DIRECTION": "no price direction",
+        "HOW_LARGE": "not price magnitude",
+        "WHETHER_FILL": "not established",
+        "WHETHER_TOXIC": "not established",
+        "WHETHER_MAKES_MONEY": "not tested"
+      },
+      "routing": "RISK_CONTEXT"
+    },
+    {
+      "result_id": "005I-REPLENISHMENT-RESILIENCE",
+      "programme": "EXPERIMENT-005I",
+      "pr": 93,
+      "commit_artifact": "docs/experiments/MASTER_HANDOFF_005I.md",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "fresh DATA-003-linked orderbooks",
+      "train_period": "2026-09-01..2026-09-10",
+      "dev_period": "2026-09-11..2026-09-20",
+      "holdout_period": "2026-09-21..2026-09-28",
+      "markets_events": "large visible-withdrawal observations",
+      "sample_count": "recovered 321,350; not recovered 533,083",
+      "feature_signal": "visible replenishment in next minute after withdrawal",
+      "target": [
+        "ABSOLUTE_MOVEMENT",
+        "LIQUIDITY_CHANGE"
+      ],
+      "target_detail": "subsequent absolute 5m movement",
+      "effect_size": "mean abs-5m 0.000842 if replenished vs 0.001272 otherwise; 33.83% lower; same direction 5/5 workers",
+      "baseline": "no-replenishment group",
+      "direction_of_improvement": "lower subsequent movement with replenishment",
+      "temporal_consistency": "5/5 workers",
+      "cross_market_consistency": "panel-wide; association only",
+      "holdout_status": "SEALED HOLDOUT SUPPORTED ASSOCIATION",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "Association, not causal stabilization.",
+        "No passive-fill claim."
+      ],
+      "known_failures": [],
+      "current_interpretation": "Useful movement/resilience context after liquidity withdrawal.",
+      "when_what_direction": {
+        "WHEN": "after visible withdrawal, conditional on replenishment",
+        "WHAT": "future absolute movement lower when replenished",
+        "DIRECTION": "none",
+        "HOW_LARGE": "33.83% lower mean abs-5m",
+        "WHETHER_FILL": "none",
+        "WHETHER_TOXIC": "none",
+        "WHETHER_MAKES_MONEY": "not tested"
+      },
+      "routing": "LIVE_LEARN_CONTEXT"
+    },
+    {
+      "result_id": "005G-STATE-DWELL-H300",
+      "programme": "EXPERIMENT-005G",
+      "pr": "114",
+      "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-003 orderbooks",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": "2026-09-05T00:00:00Z–2026-09-06T00:00:00Z",
+      "markets_events": "295 markets",
+      "sample_count": 25801,
+      "feature_signal": "state_dwell_s",
+      "target": [
+        "STATE_TRANSITION"
+      ],
+      "target_detail": "state_transition_h300",
+      "effect_size": "40.2969% relative MSE improvement; 48/48 positive blocks",
+      "baseline": "frozen baseline",
+      "direction_of_improvement": "positive",
+      "temporal_consistency": "48/48 positive blocks",
+      "cross_market_consistency": "passed frozen leave-market gate",
+      "holdout_status": "ONE-SHOT SEALED HOLDOUT SUPPORTED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
+        "Predictive state evidence is not directional or economic evidence."
+      ],
+      "known_failures": [
+        "Frozen 005G state-hazard economic conversion produced 0 DEV champions across 28 WIDTH/SIZE/WAIT/REFRESH policies."
+      ],
+      "current_interpretation": "Strong state-duration transition hazard.",
+      "when_what_direction": {
+        "WHEN": "supported",
+        "WHAT": "state_transition_h300",
+        "DIRECTION": "none unless target itself is signed (it is not)",
+        "HOW_LARGE": "predictive loss improvement only",
+        "WHETHER_FILL": "not established",
+        "WHETHER_TOXIC": "005G forensics adverse-fill AUC ~0.456 for hazard bundle",
+        "WHETHER_MAKES_MONEY": "conversion failed"
+      },
+      "routing": "SHADOW_ONLY"
+    },
+    {
+      "result_id": "005G-STATE-DWELL-H60",
+      "programme": "EXPERIMENT-005G",
+      "pr": "114",
+      "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-003 orderbooks",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": "2026-09-05T00:00:00Z–2026-09-06T00:00:00Z",
+      "markets_events": "295 markets",
+      "sample_count": 25871,
+      "feature_signal": "state_dwell_s",
+      "target": [
+        "STATE_TRANSITION"
+      ],
+      "target_detail": "state_transition_h60",
+      "effect_size": "20.7621% relative MSE improvement; 48/48 positive blocks",
+      "baseline": "frozen baseline",
+      "direction_of_improvement": "positive",
+      "temporal_consistency": "48/48 positive blocks",
+      "cross_market_consistency": "passed frozen leave-market gate",
+      "holdout_status": "ONE-SHOT SEALED HOLDOUT SUPPORTED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
+        "Predictive state evidence is not directional or economic evidence."
+      ],
+      "known_failures": [
+        "Frozen 005G state-hazard economic conversion produced 0 DEV champions across 28 WIDTH/SIZE/WAIT/REFRESH policies."
+      ],
+      "current_interpretation": "Strong state-duration transition hazard.",
+      "when_what_direction": {
+        "WHEN": "supported",
+        "WHAT": "state_transition_h60",
+        "DIRECTION": "none unless target itself is signed (it is not)",
+        "HOW_LARGE": "predictive loss improvement only",
+        "WHETHER_FILL": "not established",
+        "WHETHER_TOXIC": "005G forensics adverse-fill AUC ~0.456 for hazard bundle",
+        "WHETHER_MAKES_MONEY": "conversion failed"
+      },
+      "routing": "SHADOW_ONLY"
+    },
+    {
+      "result_id": "005G-SPREAD-DIST-BBO-H60",
+      "programme": "EXPERIMENT-005G",
+      "pr": "114",
+      "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-003 orderbooks",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": "2026-09-05T00:00:00Z–2026-09-06T00:00:00Z",
+      "markets_events": "692 markets",
+      "sample_count": 248080,
+      "feature_signal": "spread_x_distance",
+      "target": [
+        "BOOK_RENEWAL",
+        "QUOTE_UPDATE"
+      ],
+      "target_detail": "bbo_update_h60",
+      "effect_size": "4.9550% relative MSE improvement; 44/48 positive blocks",
+      "baseline": "frozen baseline",
+      "direction_of_improvement": "positive",
+      "temporal_consistency": "44/48 positive blocks",
+      "cross_market_consistency": "passed frozen leave-market gate",
+      "holdout_status": "ONE-SHOT SEALED HOLDOUT SUPPORTED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
+        "Predictive state evidence is not directional or economic evidence."
+      ],
+      "known_failures": [
+        "Frozen 005G state-hazard economic conversion produced 0 DEV champions across 28 WIDTH/SIZE/WAIT/REFRESH policies."
+      ],
+      "current_interpretation": "Persistent state descriptor for near-term BBO renewal.",
+      "when_what_direction": {
+        "WHEN": "supported",
+        "WHAT": "bbo_update_h60",
+        "DIRECTION": "none unless target itself is signed (it is not)",
+        "HOW_LARGE": "predictive loss improvement only",
+        "WHETHER_FILL": "not established",
+        "WHETHER_TOXIC": "005G forensics adverse-fill AUC ~0.456 for hazard bundle",
+        "WHETHER_MAKES_MONEY": "conversion failed"
+      },
+      "routing": "SHADOW_ONLY"
+    },
+    {
+      "result_id": "005G-SPREAD-DIST-BBO-H300",
+      "programme": "EXPERIMENT-005G",
+      "pr": "114",
+      "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-003 orderbooks",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": "2026-09-05T00:00:00Z–2026-09-06T00:00:00Z",
+      "markets_events": "692 markets",
+      "sample_count": 247409,
+      "feature_signal": "spread_x_distance",
+      "target": [
+        "BOOK_RENEWAL",
+        "QUOTE_UPDATE"
+      ],
+      "target_detail": "bbo_update_h300",
+      "effect_size": "1.7933% relative MSE improvement; 38/48 positive blocks",
+      "baseline": "frozen baseline",
+      "direction_of_improvement": "positive",
+      "temporal_consistency": "38/48 positive blocks",
+      "cross_market_consistency": "passed frozen leave-market gate",
+      "holdout_status": "ONE-SHOT SEALED HOLDOUT SUPPORTED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
+        "Predictive state evidence is not directional or economic evidence."
+      ],
+      "known_failures": [
+        "Frozen 005G state-hazard economic conversion produced 0 DEV champions across 28 WIDTH/SIZE/WAIT/REFRESH policies."
+      ],
+      "current_interpretation": "Persistent state descriptor for BBO renewal.",
+      "when_what_direction": {
+        "WHEN": "supported",
+        "WHAT": "bbo_update_h300",
+        "DIRECTION": "none unless target itself is signed (it is not)",
+        "HOW_LARGE": "predictive loss improvement only",
+        "WHETHER_FILL": "not established",
+        "WHETHER_TOXIC": "005G forensics adverse-fill AUC ~0.456 for hazard bundle",
+        "WHETHER_MAKES_MONEY": "conversion failed"
+      },
+      "routing": "SHADOW_ONLY"
+    },
+    {
+      "result_id": "005G-DIST05-BBO-H60",
+      "programme": "EXPERIMENT-005G",
+      "pr": "114",
+      "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-003 orderbooks",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": "2026-09-05T00:00:00Z–2026-09-06T00:00:00Z",
+      "markets_events": "692 markets",
+      "sample_count": 248080,
+      "feature_signal": "distance_from_0_5",
+      "target": [
+        "BOOK_RENEWAL",
+        "QUOTE_UPDATE"
+      ],
+      "target_detail": "bbo_update_h60",
+      "effect_size": "1.2378% relative MSE improvement; 48/48 positive blocks",
+      "baseline": "frozen baseline",
+      "direction_of_improvement": "positive",
+      "temporal_consistency": "48/48 positive blocks",
+      "cross_market_consistency": "passed frozen leave-market gate",
+      "holdout_status": "ONE-SHOT SEALED HOLDOUT SUPPORTED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
+        "Predictive state evidence is not directional or economic evidence."
+      ],
+      "known_failures": [
+        "Frozen 005G state-hazard economic conversion produced 0 DEV champions across 28 WIDTH/SIZE/WAIT/REFRESH policies."
+      ],
+      "current_interpretation": "Smaller renewal-state information.",
+      "when_what_direction": {
+        "WHEN": "supported",
+        "WHAT": "bbo_update_h60",
+        "DIRECTION": "none unless target itself is signed (it is not)",
+        "HOW_LARGE": "predictive loss improvement only",
+        "WHETHER_FILL": "not established",
+        "WHETHER_TOXIC": "005G forensics adverse-fill AUC ~0.456 for hazard bundle",
+        "WHETHER_MAKES_MONEY": "conversion failed"
+      },
+      "routing": "SHADOW_ONLY"
+    },
+    {
+      "result_id": "005G-VOL-LIQ-BBO-H300",
+      "programme": "EXPERIMENT-005G",
+      "pr": "114",
+      "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-003 orderbooks",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": "2026-09-05T00:00:00Z–2026-09-06T00:00:00Z",
+      "markets_events": "692 markets",
+      "sample_count": 247403,
+      "feature_signal": "volatility_x_liquidity",
+      "target": [
+        "BOOK_RENEWAL",
+        "QUOTE_UPDATE"
+      ],
+      "target_detail": "bbo_update_h300",
+      "effect_size": "0.7058% relative MSE improvement; 48/48 positive blocks",
+      "baseline": "frozen baseline",
+      "direction_of_improvement": "positive",
+      "temporal_consistency": "48/48 positive blocks",
+      "cross_market_consistency": "passed frozen leave-market gate",
+      "holdout_status": "ONE-SHOT SEALED HOLDOUT SUPPORTED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
+        "Predictive state evidence is not directional or economic evidence."
+      ],
+      "known_failures": [
+        "Frozen 005G state-hazard economic conversion produced 0 DEV champions across 28 WIDTH/SIZE/WAIT/REFRESH policies."
+      ],
+      "current_interpretation": "Smaller renewal-state information.",
+      "when_what_direction": {
+        "WHEN": "supported",
+        "WHAT": "bbo_update_h300",
+        "DIRECTION": "none unless target itself is signed (it is not)",
+        "HOW_LARGE": "predictive loss improvement only",
+        "WHETHER_FILL": "not established",
+        "WHETHER_TOXIC": "005G forensics adverse-fill AUC ~0.456 for hazard bundle",
+        "WHETHER_MAKES_MONEY": "conversion failed"
+      },
+      "routing": "SHADOW_ONLY"
+    },
+    {
+      "result_id": "005G-SPREAD-DIST-ABS-H60",
+      "programme": "EXPERIMENT-005G",
+      "pr": "114",
+      "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-003 orderbooks",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": "2026-09-05T00:00:00Z–2026-09-06T00:00:00Z",
+      "markets_events": "692 markets",
+      "sample_count": 246359,
+      "feature_signal": "spread_x_distance",
+      "target": [
+        "ABSOLUTE_MOVEMENT",
+        "VOLATILITY"
+      ],
+      "target_detail": "abs_h60",
+      "effect_size": "0.1929% relative MSE improvement; 36/48 positive blocks",
+      "baseline": "frozen baseline",
+      "direction_of_improvement": "positive",
+      "temporal_consistency": "36/48 positive blocks",
+      "cross_market_consistency": "passed frozen leave-market gate",
+      "holdout_status": "ONE-SHOT SEALED HOLDOUT SUPPORTED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
+        "Predictive state evidence is not directional or economic evidence."
+      ],
+      "known_failures": [
+        "Frozen 005G state-hazard economic conversion produced 0 DEV champions across 28 WIDTH/SIZE/WAIT/REFRESH policies."
+      ],
+      "current_interpretation": "Small unsigned-movement information.",
+      "when_what_direction": {
+        "WHEN": "supported",
+        "WHAT": "abs_h60",
+        "DIRECTION": "none unless target itself is signed (it is not)",
+        "HOW_LARGE": "predictive loss improvement only",
+        "WHETHER_FILL": "not established",
+        "WHETHER_TOXIC": "005G forensics adverse-fill AUC ~0.456 for hazard bundle",
+        "WHETHER_MAKES_MONEY": "conversion failed"
+      },
+      "routing": "SHADOW_ONLY"
+    },
+    {
+      "result_id": "005G-PRICE-AGE-BBO-H300",
+      "programme": "EXPERIMENT-005G",
+      "pr": "114",
+      "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-003 orderbooks",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": "2026-09-05T00:00:00Z–2026-09-06T00:00:00Z",
+      "markets_events": "658 markets",
+      "sample_count": 222567,
+      "feature_signal": "price_change_age_s",
+      "target": [
+        "BOOK_RENEWAL",
+        "QUOTE_UPDATE"
+      ],
+      "target_detail": "bbo_update_h300",
+      "effect_size": "0.1477% relative MSE improvement; 41/48 positive blocks",
+      "baseline": "frozen baseline",
+      "direction_of_improvement": "positive",
+      "temporal_consistency": "41/48 positive blocks",
+      "cross_market_consistency": "passed frozen leave-market gate",
+      "holdout_status": "ONE-SHOT SEALED HOLDOUT SUPPORTED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
+        "Predictive state evidence is not directional or economic evidence."
+      ],
+      "known_failures": [
+        "Frozen 005G state-hazard economic conversion produced 0 DEV champions across 28 WIDTH/SIZE/WAIT/REFRESH policies."
+      ],
+      "current_interpretation": "Small renewal-age information.",
+      "when_what_direction": {
+        "WHEN": "supported",
+        "WHAT": "bbo_update_h300",
+        "DIRECTION": "none unless target itself is signed (it is not)",
+        "HOW_LARGE": "predictive loss improvement only",
+        "WHETHER_FILL": "not established",
+        "WHETHER_TOXIC": "005G forensics adverse-fill AUC ~0.456 for hazard bundle",
+        "WHETHER_MAKES_MONEY": "conversion failed"
+      },
+      "routing": "SHADOW_ONLY"
+    },
+    {
+      "result_id": "005G-PRICE-AGE-BBO-H60",
+      "programme": "EXPERIMENT-005G",
+      "pr": "114",
+      "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "dataset": "DATA-003 orderbooks",
+      "train_period": null,
+      "dev_period": null,
+      "holdout_period": "2026-09-05T00:00:00Z–2026-09-06T00:00:00Z",
+      "markets_events": "658 markets",
+      "sample_count": 223193,
+      "feature_signal": "price_change_age_s",
+      "target": [
+        "BOOK_RENEWAL",
+        "QUOTE_UPDATE"
+      ],
+      "target_detail": "bbo_update_h60",
+      "effect_size": "0.0810% relative MSE improvement; 45/48 positive blocks",
+      "baseline": "frozen baseline",
+      "direction_of_improvement": "positive",
+      "temporal_consistency": "45/48 positive blocks",
+      "cross_market_consistency": "passed frozen leave-market gate",
+      "holdout_status": "ONE-SHOT SEALED HOLDOUT SUPPORTED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
+        "Predictive state evidence is not directional or economic evidence."
+      ],
+      "known_failures": [
+        "Frozen 005G state-hazard economic conversion produced 0 DEV champions across 28 WIDTH/SIZE/WAIT/REFRESH policies."
+      ],
+      "current_interpretation": "Small renewal-age information.",
+      "when_what_direction": {
+        "WHEN": "supported",
+        "WHAT": "bbo_update_h60",
+        "DIRECTION": "none unless target itself is signed (it is not)",
+        "HOW_LARGE": "predictive loss improvement only",
+        "WHETHER_FILL": "not established",
+        "WHETHER_TOXIC": "005G forensics adverse-fill AUC ~0.456 for hazard bundle",
+        "WHETHER_MAKES_MONEY": "conversion failed"
+      },
+      "routing": "SHADOW_ONLY"
+    }
+  ],
+  "historical_positive_subsequently_falsified_or_downgraded": [
+    {
+      "result_id": "003-PARTICIPANT-300S-NOMINAL",
+      "programme": "EXPERIMENT-003",
+      "canonicality": "CANONICAL_HISTORY_INVALIDATED_CLAIM",
+      "evidence_at_peak": [
+        "E0"
+      ],
+      "feature_signal": "participant-conditioned flow",
+      "target": [
+        "DIRECTION",
+        "PARTICIPANT_BEHAVIOUR"
+      ],
+      "historical_positive": "raw p~0.0014, BH q~0.035, positive delta MSE at 300s",
+      "later_state": "INVALIDATED: executed baseline/placebo materially differed from frozen preregistration; dominant identities included Polymarket NegRisk exchange contracts; negative control itself significant at multiple horizons.",
+      "current_interpretation": "Audit-only historical positive; not valid confirmatory evidence.",
+      "routing": "ARCHIVE"
+    },
+    {
+      "result_id": "004C-C-RAW-PM-SIG-30S",
+      "programme": "EXPERIMENT-004C-C",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "evidence_at_peak": [
+        "E1"
+      ],
+      "feature_signal": "mapped Polymarket -> SIG raw 30s predictor",
+      "target": [
+        "DIRECTION"
+      ],
+      "historical_positive": "raw mapped 30s prediction positive; exact magnitude not available in synthesis",
+      "later_state": "FALSIFIED AS MAPPING-SPECIFIC PRICE DISCOVERY: wrong-contract control substantially stronger; no EXACT contract survived FDR; crossing economics strongly negative.",
+      "current_interpretation": "Evidence for common event state, not direct mapped cross-venue edge.",
+      "routing": "ARCHIVE"
+    },
+    {
+      "result_id": "005B-HISTORICAL-REALIZED-MOVEMENT-7H",
+      "programme": "EXPERIMENT-005B",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "evidence_at_peak": [
+        "E2"
+      ],
+      "feature_signal": "historical scalar movement predictors across seven horizons",
+      "target": [
+        "ABSOLUTE_MOVEMENT",
+        "VOLATILITY"
+      ],
+      "historical_positive": "all seven historical realised-movement findings survived corrected Polygon ordering in post-hoc falsification",
+      "later_state": "FRESH DATA-003 TRANSFER FAILS 0/7: MAE improvement vs persistence negative at every horizon and all condition-cluster bootstrap intervals entirely below zero.",
+      "current_interpretation": "Historical relationship exists, but not a current-SIG-universe predictive signal.",
+      "routing": "ARCHIVE"
+    },
+    {
+      "result_id": "005C-US-JOINT-PANEL-15S",
+      "programme": "EXPERIMENT-005C",
+      "canonicality": "CANONICAL_ON_MAIN",
+      "evidence_at_peak": [
+        "E2"
+      ],
+      "feature_signal": "US_2024 joint popular-vote x Presidency reduced-rank panel",
+      "target": [
+        "DIRECTION"
+      ],
+      "historical_positive": "HOLDOUT pooled MSE +2.22% vs B1 and +6.52% vs B2; median per-target +4.48%; 75% targets helped",
+      "later_state": "DOWNGRADED: synchronized 35-cell UTC-hour max-t adjusted p=0.8918; strongest hour 63.3% of positive advantage.",
+      "current_interpretation": "Descriptively interesting discovery mechanism; familywise null not rejected.",
+      "routing": "ARCHIVE"
+    }
+  ],
+  "pending_unconfirmed": [
+    {
+      "programme": "EXPERIMENT-005H",
+      "pr": 94,
+      "canonicality": "NON_CANONICAL_UNMERGED",
+      "status": "PRE_HOLDOUT_CANDIDATES_WITH_NO_RESULT",
+      "details": "C04 ARRIVAL-STATE and C05 DIRECTION-STATE were frozen for one-shot B0. The B0 state replay completed 504/504 files but the process errored before canonical holdout tables/scoring; result_available=false. Do not count as positive holdout evidence."
+    },
+    {
+      "programme": "MM-REPLAY-001",
+      "pr": 72,
+      "canonicality": "NON_CANONICAL_UNMERGED",
+      "status": "SCIENTIFIC_RESULT_PENDING",
+      "details": "Strict-as-of replay attempts were still pending/running at repository snapshot; no accepted E4 economic result. Earlier attempt 3 is superseded."
+    }
+  ],
+  "programmes_reviewed_with_no_surviving_positive": [
+    {
+      "programme": "EXPERIMENT-002",
+      "reason": "Accepted machinery; no empirical alpha claim."
+    },
+    {
+      "programme": "EXPERIMENT-003",
+      "reason": "No valid family promoted; sole nominal participant rejection invalidated."
+    },
+    {
+      "programme": "EXPERIMENT-004C-A",
+      "reason": "Generic internal propagation inconclusive/no promoted edge."
+    },
+    {
+      "programme": "EXPERIMENT-004C-D",
+      "reason": "No conditional age/activity/renewal edge."
+    },
+    {
+      "programme": "PRED-007",
+      "reason": "NO_MACHINE_SPEED_INDEX_SIGNAL at 1/2/5/10/30s."
+    },
+    {
+      "programme": "R3-FV-001",
+      "reason": "No confirmed independent structural point-FV signal; FINAL unopened."
+    },
+    {
+      "programme": "R3-FV-001M",
+      "reason": "No historical challenger survived; retained diagnostics/live shadow protocol only."
+    },
+    {
+      "programme": "STRUCT-SCAN-001",
+      "reason": "Implementation/certificate engine, not an empirical positive result."
+    }
+  ],
+  "canonicality_refresh_main_sha": "662969df4e481f1cbd9417c923ae35d3a0aa9f9f"
+}
