@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/experiment_005h_v3_core",
+  "kernel": "polyleviathan/experiment-005h-v3-core",
+  "poll_seconds": 30,
+  "timeout_minutes": 300,
+  "download_outputs": true,
+  "output_file_pattern": "(JOIN_AUDIT\\.(json|md)|V3_CORE_SHORTLIST_FREEZE\\.json|V3_DISCOVERY_SUMMARY\\.json|V3_DISCOVERY_REPORT\\.md|FILL_EVENTS\\.parquet|FILL_EPISODES\\.parquet|NONFILL_CONTROLS\\.parquet|MATCHED_CONTROLS\\.csv|EPISODE_SENSITIVITY\\.csv|FILL_INTERACTION_ATLAS\\.csv|REPLENISHMENT_ATLAS\\.csv|TOXICITY_ATLAS\\.csv|TRADE_STATE_RESPONSE\\.csv|TRADFI_CHALLENGERS\\.csv)$",
+  "attempt": 4,
+  "note": "PROMOTED HARDENED CORE. Scientific source for W17 TRAIN/W18 DEV. Includes explicit ns clock, tx_hash+active_token identity, sparse horizon preservation, full clock/event horizons, real episodes, quiet-state as-of semantics, and without-replacement matched controls. Prior core runs are superseded diagnostics and must not be inspected for selection."
+}

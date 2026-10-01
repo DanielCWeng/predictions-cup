@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005H",
+  "decision": "PRIMARY_CAUSAL_EVALUATION_SCOPED_TO_V3",
+  "reason": [
+    "W17, W18, and B0 share V3 recorder semantics with timestamp_received plus sequence.",
+    "V2 lacks recoverable sequence for equal receive timestamps and AG6 is a separate acquisition stratum.",
+    "Pooling source versions before proving transportability would trade sample size for chronology ambiguity."
+  ],
+  "primary_pipeline": {
+    "TRAIN": "W17 V3",
+    "DEV": "W18 V3",
+    "FINAL": "B0 V3"
+  },
+  "v2_ag6_policy": "Do not pool V2/AG6 into candidate selection or B0 evaluation. Before the experiment-wide PRE_HOLDOUT_FREEZE, record source-stratified replication for every V3 survivor wherever exact hash+token linkage and strict pre-trade receive ordering are supportable. Equal-time V2 states are excluded as AMBIGUOUS. If a source stratum is not chronologically testable, record UNTESTABLE_SOURCE rather than imputing evidence.",
+  "deployment_implication": "Every B0 survivor remains FUTURE_CONFIRMATION_REQUIRED until genuinely future/live confirmation; source-specific failures further restrict transportability and MM use.",
+  "v1_policy": "No sequential fill claims without an exact venue trade anchor.",
+  "b0_opened": false,
+  "real_sig_orders_sent": false,
+  "pre_holdout_source_rule": {
+    "required_record": true,
+    "candidate_selection_source": "V3 W17 TRAIN / W18 DEV only",
+    "v2_ag6_effect_on_b0_eligibility": "Does not add candidates or change frozen V3 thresholds. Negative source-stratified replication marks SOURCE_SPECIFIC / FUTURE_CONFIRMATION_REQUIRED but does not by itself invalidate a same-source one-shot B0 test. Untestable source strata are explicit.",
+    "pooling_forbidden": true
+  }
+}

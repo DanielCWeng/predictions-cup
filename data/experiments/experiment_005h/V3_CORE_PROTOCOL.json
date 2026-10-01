@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005H",
+  "stage": "V3_CORE_PRE_OUTCOME_PROTOCOL",
+  "status": "FROZEN_BEFORE_W17_W18_OUTCOME_INSPECTION",
+  "branch": "experiment/005h-fill-orderbook-interaction-atlas",
+  "primary_unit": "accepted DATA-003 transaction-condition episode anchored to exact venue transaction_hash + active token_id",
+  "chronology": {
+    "source": "V3 recorder timestamp_received plus sequence",
+    "timestamp_unit": "explicitly normalized to nanoseconds",
+    "pre_fill_rule": "book state must be strictly earlier than linked trade in (timestamp_received, sequence) order",
+    "equal_receive_time": "eligible only when sequence proves book event earlier than trade"
+  },
+  "book_reconstruction": {
+    "snapshot_event": "book replaces full bid/ask state",
+    "delta_event": "price_change updates or deletes one BUY/SELL price level",
+    "depth_windows_probability_points": [
+      0.01,
+      0.02,
+      0.05
+    ],
+    "replenishment_definition": "recovery of fixed consumed-side 2c price band relative to its strictly pre-trade visible depth",
+    "recovery_levels": [
+      0.25,
+      0.5,
+      0.8,
+      0.9,
+      1
+    ]
+  },
+  "splits": {
+    "TRAIN": "W17 / ev17_ak_fl_wy",
+    "DEV": "W18 / ev18_ok_sc_runoff_ga_runoff",
+    "FINAL": "B0 / baseline_sep",
+    "final_status": "SEALED"
+  },
+  "clock_horizons_seconds": [
+    1,
+    5,
+    15,
+    30,
+    60,
+    300
+  ],
+  "event_horizons_book_updates": [
+    1,
+    2,
+    5,
+    10,
+    25,
+    50
+  ],
+  "matched_control": {
+    "sampling": "first valid reconstructed state in each 5-minute token bucket",
+    "exclusion": "remove controls within 60 seconds of any linked accepted fill on that token",
+    "matching": "same window and token; nearest standardized state using mid, spread, log 2c depth, and 60s book-update activity; each control state may be used at most once",
+    "primary_contrast": "aggressor-signed 30s and 300s mid move: fill minus matched non-fill control",
+    "reuse": "WITHOUT_REPLACEMENT"
+  },
+  "primary_candidates": [
+    {
+      "candidate_id": "005H-C01-RELATIVE-SIZE",
+      "hypothesis": "episode size normalized by visible touch liquidity explains 30s signed response better than absolute episode size",
+      "eligible_rows": "exact venue price+size economic matches only",
+      "dev_gate": "relative-size model DEV R2 > absolute-size model DEV R2 and relative-size DEV R2 > 0"
+    },
+    {
+      "candidate_id": "005H-C02-FAILED-REPLENISHMENT",
+      "hypothesis": "failure to recover 80% of pre-trade consumed-side 2c depth within 30s is associated with larger aggressor-direction continuation",
+      "dev_gate": "DEV mean signed 30s move for failed-replenishment episodes exceeds recovered episodes"
+    },
+    {
+      "candidate_id": "005H-C03-FILL-BEYOND-STATE",
+      "hypothesis": "fills move further than comparable non-fill states",
+      "dev_gate": "at least 50 DEV matched pairs and token-cluster bootstrap 2.5% bound of fill-minus-control signed 30s move > 0"
+    }
+  ],
+  "secondary_challengers": [
+    "OFI-like 60s state",
+    "microprice deviation",
+    "60s signed trade flow and VPIN-like imbalance",
+    "venue absolute size",
+    "venue size divided by touch liquidity",
+    "price-region conditional response",
+    "flow persistence after the anchored fill"
+  ],
+  "promotion_rule": "secondary challengers are descriptive unless they show stable TRAIN-to-DEV improvement; they cannot be added to the B0 shortlist by post-DEV threshold invention",
+  "b0_rule": "B0 is not read by the V3 core. V3_CORE_SHORTLIST_FREEZE.json is provisional; experiment-wide PRE_HOLDOUT_FREEZE.json is written only after extended batteries, falsifications, and source robustness.",
+  "real_sig_orders_sent": false,
+  "episode_definition": {
+    "canonical_threshold_seconds": 10,
+    "rule": "same token + same aggressor side + adjacent linked fills no more than threshold apart",
+    "sensitivity_threshold_seconds": [
+      5,
+      10,
+      30
+    ],
+    "warning": "episode threshold is descriptive; no participant/metaorder identity is inferred"
+  }
+}

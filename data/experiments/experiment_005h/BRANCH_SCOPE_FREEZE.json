@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005H",
+  "branch": "experiment/005h-fill-orderbook-interaction-atlas",
+  "scope_status": "BRANCH_FROZEN_FOR_005H_ONLY",
+  "frozen_from_head_sha": "b5df967d86f0dbf458c5742c81b16bdcb2bb6ece",
+  "base_branch": "main",
+  "base_sha_at_freeze": "0a5ba79fb54760bb236299781e694cc4b1a4b832",
+  "rules": [
+    "All further work stays on this branch until MASTER_HANDOFF_005H.md is complete.",
+    "No unrelated branch inspection, merges, rebases, cleanup, or opportunistic feature work.",
+    "No refresh from main unless 005H cannot proceed without a hard dependency; any exception must be explicitly recorded here first.",
+    "Only EXPERIMENT-005H scientific code, audits, tests, outputs, and handoff material may be added.",
+    "B0 remains untouched until PRE_HOLDOUT_FREEZE.json exists."
+  ],
+  "current_join_fact": {
+    "canonical_identity_candidate": "transaction_hash",
+    "w18_accepted_groups": 2265,
+    "w18_groups_with_venue_print": 2257,
+    "coverage_fraction": 0.9964679911699779,
+    "median_venue_print_minus_polygon_block_seconds": -2.226528
+  },
+  "real_sig_orders_sent": false,
+  "known_issue_status": "RESOLVED_BEFORE_PROMOTED_OUTCOME_ANALYSIS",
+  "known_issue_resolution": [
+    "Recorder receive timestamps explicitly normalized to datetime64[ns] before integer conversion.",
+    "Corrected W18 transaction-hash + active-token join gate frozen in JOIN_AUDIT_W18.json.",
+    "Canonical core now keys identity by (transaction_hash, active_token_id).",
+    "Matched non-fill controls are without replacement.",
+    "Sparse requested clock/event horizons remain explicit rather than silently imputed."
+  ],
+  "promoted_core_requirement": {
+    "status": "PENDING_NEW_RUN",
+    "note": "Runs launched before the pre-outcome hardening commits are superseded diagnostics and must not be promoted.",
+    "minimum_code_head_includes": [
+      "b3a17d82febacdae2f1ab1dbf7c76224abb87529",
+      "5617436ef2b4a35d0d0b27d724dbedc5b8e6c364",
+      "f9bf5639f235d481a43d9c0a5197907075a2b900",
+      "481c1de632d0cd4f97a26fa5c4b4169135c25875"
+    ]
+  }
+}

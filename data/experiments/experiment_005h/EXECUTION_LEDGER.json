@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005H",
+  "branch": "experiment/005h-fill-orderbook-interaction-atlas",
+  "join_gate": {
+    "status": "PASSED",
+    "artifact": "data/experiments/experiment_005h/JOIN_AUDIT_W18.json",
+    "canonical_unit": "accepted active transaction episode",
+    "identity": "transaction_hash + active_token_id"
+  },
+  "core_runs": [
+    {
+      "workflow_run_id": 36834845024,
+      "status_for_science": "SUPERSEDED_PRE_OUTCOME",
+      "reason": "launched before later pre-outcome hardening"
+    },
+    {
+      "workflow_run_id": 36835172972,
+      "status_for_science": "SUPERSEDED_PRE_OUTCOME",
+      "reason": "launched before hash+token key hardening, sparse-horizon preservation, and without-replacement controls"
+    }
+  ],
+  "promoted_core": {
+    "status": "COMPLETE_SUCCESS",
+    "workflow_run_id": 36838276378,
+    "launch_head_sha": "a68b10ff34064118c33a37aba5a6ec4a426b4ee1",
+    "kernel": "polyleviathan/experiment-005h-v3-core",
+    "scientific_role": "SOLE_W17_TRAIN_W18_DEV_OUTCOME_SOURCE",
+    "required_properties": [
+      "explicit nanosecond receive clock",
+      "transaction_hash + active_token identity",
+      "strict V3 receive-time+sequence prebook",
+      "clock horizons 1/5/15/30/60/300s",
+      "event horizons 1/2/5/10/25/50 updates",
+      "10s canonical episodes with 5s/30s sensitivity",
+      "without-replacement matched controls",
+      "quiet-state last-observation-carried-forward as-of semantics"
+    ],
+    "artifact_id": 11151233575
+  },
+  "source_version_audit": {
+    "workflow_run_id": 36836613576,
+    "status": "COMPLETE_SUCCESS",
+    "scope": "identity and chronology only; no outcome inspection",
+    "artifact_id": 11150409739
+  },
+  "downstream": {
+    "v3_hostile_falsification": {
+      "status": "COMPLETE_SUCCESS",
+      "workflow_run_id": 36841406723,
+      "artifact_id": 11151173135,
+      "robust_v3_survivors": [],
+      "provisional_v3_only": [
+        "005H-C01-RELATIVE-SIZE",
+        "005H-C02-FAILED-REPLENISHMENT",
+        "005H-C03-FILL-BEYOND-STATE"
+      ]
+    },
+    "extended_v3_analysis": {
+      "status": "COMPLETE_SUCCESS",
+      "workflow_run_id": 36841411532,
+      "artifact_id": 11151144230,
+      "provisional_shortlist": [
+        "005H-C01-RELATIVE-SIZE",
+        "005H-C02-FAILED-REPLENISHMENT",
+        "005H-C03-FILL-BEYOND-STATE",
+        "005H-C04-ARRIVAL-STATE",
+        "005H-C05-DIRECTION-STATE"
+      ]
+    },
+    "source_stratified_replication": {
+      "status": "COMPLETE_SEMANTIC_ADJUDICATION",
+      "method": "SEMANTIC_PARITY_ADJUDICATION",
+      "result": {
+        "005H-C01-RELATIVE-SIZE": "NOT_APPLICABLE",
+        "005H-C02-FAILED-REPLENISHMENT": "NOT_APPLICABLE",
+        "005H-C03-FILL-BEYOND-STATE": "NOT_APPLICABLE",
+        "005H-C04-ARRIVAL-STATE": "UNTESTABLE_SOURCE",
+        "005H-C05-DIRECTION-STATE": "UNTESTABLE_SOURCE"
+      },
+      "reason": "eligible pre-V3 V2/AG6 strata lack recoverable sequence ordering, so exact frozen C04 mid_vol_60 and C05 event-wise OFI_60 semantics cannot be reconstructed; approximate replay is superseded pre-outcome",
+      "superseded_approximate_runs": [
+        36842830140,
+        36844053637
+      ]
+    },
+    "pre_holdout_freeze": {
+      "status": "COMPLETE_SUCCESS",
+      "workflow_run_id": 36847399975,
+      "artifact_id": 11153389633,
+      "freeze_status": "B0_AUTHORIZED_ONCE",
+      "candidate_ids": [
+        "005H-C04-ARRIVAL-STATE",
+        "005H-C05-DIRECTION-STATE"
+      ],
+      "excluded_before_holdout": [
+        "005H-C01-RELATIVE-SIZE",
+        "005H-C02-FAILED-REPLENISHMENT",
+        "005H-C03-FILL-BEYOND-STATE"
+      ],
+      "b0_opened_at_freeze": false
+    },
+    "b0": {
+      "status": "ONE_SHOT_BUILD_RUNNING_ON_KAGGLE",
+      "candidate_ids": [
+        "005H-C04-ARRIVAL-STATE",
+        "005H-C05-DIRECTION-STATE"
+      ],
+      "kernel": "polyleviathan/experiment-005h-one-shot-b0-build",
+      "launch_workflow_run_id": 36847624884,
+      "launch_wrapper_conclusion": "FAILURE_INFRA_CONNECTION_RESET_AFTER_KERNEL_REPORTED_RUNNING",
+      "launch_wrapper_artifact_id": 11153609526,
+      "relaunch_performed": false,
+      "status_check_workflow_run_id": 36847909360,
+      "status_check_conclusion": "SUCCESS",
+      "status_check_artifact_id": 11154551535,
+      "last_confirmed_kernel_state": "RUNNING",
+      "model_scoring_performed": false,
+      "no_retune_rule_active": true
+    }
+  },
+  "real_sig_orders_sent": false
+}

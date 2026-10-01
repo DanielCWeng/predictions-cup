@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/experiment_005h_hash_audit",
+  "kernel": "polyleviathan/experiment-005h-hash-audit-w18",
+  "poll_seconds": 30,
+  "timeout_minutes": 120,
+  "download_outputs": true,
+  "output_file_pattern": "(W18_HASH_AUDIT\\.json|W18_HASH_AUDIT\\.md|W18_LINKED_VENUE_TRADES\\.parquet|W18_ACTIVE_HASH_AUDIT\\.parquet|W18_PASSIVE_HASH_AUDIT\\.parquet|W18_EPISODE_HASH_AUDIT\\.parquet)$"
+}

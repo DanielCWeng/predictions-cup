@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005H",
+  "stage": "W18_CORRECTED_JOIN_GATE",
+  "disposition": "PASS_ACTIVE_TRANSACTION_EPISODE_ONLY",
+  "fill_source": "accepted DATA-003 W18 participant fills",
+  "orderbook_source": "DATA-003-linked W18 V3 order-book corpus",
+  "canonical_identity": "exact transaction_hash + active token_id",
+  "canonical_unit": "accepted transaction-condition active episode",
+  "rejected_units": [
+    {
+      "unit": "individual passive DATA-003 rows",
+      "reason": "passive rows have material non-observation/reuse and cannot support one-row-one-observed-trade sequential claims"
+    },
+    {
+      "unit": "price/size/time nearest match",
+      "reason": "diagnostic only; identity is not inferred from similarity"
+    }
+  ],
+  "ordering": "timestamp_received normalized to nanoseconds, then V3 sequence",
+  "prebook_rule": "last valid reconstructed state strictly earlier than linked venue trade in (timestamp_received, sequence) order",
+  "active_groups": {
+    "accepted": 2265,
+    "hash_token_exact_signature": 1814,
+    "hash_token_unique_signature_mismatch": 443,
+    "hash_token_linked_total": 2257,
+    "hash_token_link_fraction": 0.9964679911699779,
+    "unlinked": 8,
+    "hash_token_ambiguity": 0
+  },
+  "venue_print_minus_polygon_block_seconds": {
+    "min": -4.055282,
+    "p01": -3.49534666,
+    "p05": -3.1946201,
+    "p25": -2.644329,
+    "median": -2.227594,
+    "p75": -1.8109585,
+    "p95": -1.2433056,
+    "p99": -1.05865302,
+    "max_hash_linked_interpretation": "all canonical hash-linked active prints occur before Polygon block confirmation by a few seconds"
+  },
+  "passive_rows": {
+    "accepted": 3240,
+    "exact_signature_unique": 756,
+    "hash_token_unique_signature_mismatch": 659,
+    "unmatched_or_noncanonical": 1825,
+    "decision": "NOT_CANONICAL_ANALYSIS_UNIT"
+  },
+  "economic_consistency_rule": "price/size exactness is a high-confidence economic stratum for size/depth analysis; tx hash + active token remains the identity anchor for timing/response analysis",
+  "b0_opened": false,
+  "real_sig_orders_sent": false
+}

@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/experiment_005h_source_robustness_semantic",
+  "kernel": "polyleviathan/experiment-005h-source-robustness-semantic",
+  "poll_seconds": 30,
+  "timeout_minutes": 30,
+  "download_outputs": true,
+  "output_file_pattern": "(SOURCE_ROBUSTNESS_SUMMARY\\.json|SOURCE_ROBUSTNESS_REPORT\\.md)$"
+}

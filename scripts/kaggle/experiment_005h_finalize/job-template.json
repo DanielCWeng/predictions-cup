@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/experiment_005h_finalize",
+  "kernel": "polyleviathan/experiment-005h-finalize",
+  "poll_seconds": 30,
+  "timeout_minutes": 60,
+  "download_outputs": true,
+  "output_file_pattern": "(FINAL_SUMMARY\\.json|MASTER_HANDOFF_005H\\.md)$",
+  "launch_gate": "ONE_SHOT_B0_SCORE_COMPLETE_NO_RETUNE"
+}

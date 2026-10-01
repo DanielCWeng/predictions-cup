@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005H",
+  "status": "PRE_OUTCOME_SOURCE_ELIGIBILITY_FREEZE",
+  "scientific_boundary": "Primary evidence is DATA-003 fills linked to the DATA-003 current-universe order-book corpus. DATA-001 is not substituted as scientific evidence.",
+  "canonical_observable_clock": "orderbook recorder receive time; venue source timestamp is diagnostic only",
+  "fill_linkage_priority": [
+    "exact transaction_hash + token_id + economically consistent venue trade print",
+    "transaction_hash + token_id collision analysis",
+    "price/size/time signatures are diagnostics only and never sufficient for causal acceptance"
+  ],
+  "source_rules": {
+    "V1": {
+      "windows": [
+        "W01",
+        "W02",
+        "W03",
+        "W04",
+        "W05"
+      ],
+      "sequential_fill_claims": "EXCLUDED_UNLESS_EXACT_TRADE_ANCHOR_IS_DISCOVERED",
+      "reason": "V1 has book_snapshot/price_change evidence but no venue last_trade_price stream. DATA-003 block time is confirmation chronology, not proof of when the trade was observable relative to recorder book state."
+    },
+    "V2": {
+      "windows": [
+        "W06",
+        "W07",
+        "W08",
+        "W09",
+        "W10",
+        "W11",
+        "W12",
+        "W13",
+        "W14",
+        "W15",
+        "W16_PART"
+      ],
+      "sequential_fill_claims": "ELIGIBLE_IF_EXACT_VENUE_TRADE_LINK_SURVIVES_JOIN_AUDIT",
+      "prebook_rule": "book observed_at must be strictly earlier than linked venue trade observed_at; equal receive timestamps are AMBIGUOUS because no recoverable sequence exists",
+      "source_timestamp_rule": "retain venue timestamp for diagnosis; never use it to make a later recorder state appear pre-trade"
+    },
+    "AG6": {
+      "windows": [
+        "W16_PART"
+      ],
+      "source_interval_utc": "2026-08-09T20:00:00Z through 2026-08-13T23:59:59Z in the acquisition plan",
+      "sequential_fill_claims": "ELIGIBLE_ONLY_AS_SEPARATE_SOURCE_STRATUM_IF_EXACT_LINKAGE_AND_STRICT_RECEIVE_ORDER_SURVIVE",
+      "prebook_rule": "strictly earlier recorder receive time only; equal-time state is AMBIGUOUS",
+      "pooling_rule": "do not pool with V2/V3 until source-stratified effects agree"
+    },
+    "V3": {
+      "windows": [
+        "W17",
+        "W18",
+        "B0"
+      ],
+      "sequential_fill_claims": "ELIGIBLE_IF_EXACT_VENUE_TRADE_LINK_SURVIVES_JOIN_AUDIT",
+      "prebook_rule": "last valid book state with (timestamp_received, sequence) strictly before the linked venue trade (timestamp_received, sequence)",
+      "same_time_rule": "same receive timestamp is allowed only when sequence proves the book event was earlier"
+    }
+  },
+  "staged_split": {
+    "discovery_and_challenge": [
+      "W06",
+      "W07",
+      "W08",
+      "W09",
+      "W10",
+      "W11",
+      "W12",
+      "W13",
+      "W14",
+      "W15",
+      "W16",
+      "W17",
+      "W18"
+    ],
+    "final_holdout": [
+      "B0"
+    ],
+    "final_holdout_window_utc": "2026-09-01 through 2026-09-21 inclusive",
+    "final_holdout_rule": "Do not inspect B0 005H outcome effects until PRE_HOLDOUT_FREEZE.json is written for serious survivors."
+  },
+  "cross_source_falsification": [
+    "report V2, AG6 and V3 separately before pooling",
+    "require important mechanisms to survive market/event/time leave-outs",
+    "treat source-version dependence as evidence against transportability"
+  ],
+  "real_sig_orders_sent": false
+}
