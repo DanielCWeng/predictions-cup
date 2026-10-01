@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "mechanism": "ORDER_FLOW_PERSISTENCE",
+  "status": "DEV_SURVIVOR_DESCRIPTIVE",
+  "train": {
+    "period": "2026-09-01..2026-09-10",
+    "fill_rows": 14567,
+    "markets": 199,
+    "tokens": 900,
+    "tokens_with_at_least_5_active_5m_bins": 239,
+    "same_sign_rate_mean_ge5": 0.7008569476109757,
+    "same_sign_rate_median_ge5": 0.6666666666666666,
+    "share_same_sign_rate_gt_half_ge5": 0.7698744769874477,
+    "signed_volume_lag1_corr_mean_ge5": -0.10489056039694664,
+    "signed_volume_lag1_corr_median_ge5": -0.1038301756527169,
+    "event_same_side_mean_run_all_tokens": 2.2745386749280256,
+    "burstiness_mean_supported": 0.35755813762951677
+  },
+  "dev": {
+    "period": "2026-09-11..2026-09-20",
+    "fill_rows": 18706,
+    "markets": 211,
+    "tokens": 984,
+    "tokens_with_at_least_5_active_5m_bins": 276,
+    "same_sign_rate_mean_ge5": 0.7126736500765396,
+    "same_sign_rate_median_ge5": 0.75,
+    "share_same_sign_rate_gt_half_ge5": 0.7753623188405797,
+    "signed_volume_lag1_corr_mean_ge5": -0.1327798793229556,
+    "signed_volume_lag1_corr_median_ge5": -0.1102060339416626,
+    "event_same_side_mean_run_all_tokens": 2.3518142289622563,
+    "burstiness_mean_supported": 0.34177733948708355
+  },
+  "claim": "Fill direction exhibits stable same-side run persistence and bursty arrivals across TRAIN and DEV. This does not imply positive linear autocorrelation in size-weighted signed volume; that object is negative on the broad supported token set and approaches/turns positive only among the most active tokens.",
+  "claim_boundary": "Descriptive current-universe flow structure only. No participant identity, informed-trader claim, fill-by-book interaction, or executable alpha is inferred.",
+  "holdout_decision": "DO_NOT_SPEND_FILL_HOLDOUT: only 2026-09-21 is available inside the order-book HOLDOUT period; preserve it for future confirmation.",
+  "tradfi_disposition": "TRANSFERS_CONDITIONALLY",
+  "route": "SEND_TO_005H_OR_LIVE_DIAG_IF_FLOW_STATE_IS_NEEDED",
+  "holdout_read": false,
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}
