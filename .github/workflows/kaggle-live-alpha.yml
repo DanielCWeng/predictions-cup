@@ -70,6 +70,8 @@ jobs:
               exit 0
             fi
             if printf '%s' "$LOWER" | grep -Eq 'error|failed|cancel'; then
+              echo "=== KAGGLE KERNEL LOG ==="
+              kaggle kernels logs "$KERNEL" || true
               exit 1
             fi
             sleep 15
