@@ -42,7 +42,21 @@ RUNTIME_TARGET = "predictions-cup-runtime.target"
 SIG_CAPTURE_UNIT = "predictions-cup-sig-capture.service"
 POLYMARKET_CAPTURE_UNIT = "predictions-cup-polymarket-capture.service"
 MAKER_UNIT = "predictions-cup-maker.service"
+STATUS_SERVICE_UNIT = "predictions-cup-status.service"
 STATUS_TIMER_UNIT = "predictions-cup-status.timer"
+ALERT_TEMPLATE_UNIT = "predictions-cup-alert@.service"
+
+# Rehearsal owns exactly these units. Do not glob unrelated accepted-main
+# services into this lane's verification surface.
+FULLSTACK_SYSTEMD_UNITS = (
+    ALERT_TEMPLATE_UNIT,
+    SIG_CAPTURE_UNIT,
+    POLYMARKET_CAPTURE_UNIT,
+    MAKER_UNIT,
+    STATUS_SERVICE_UNIT,
+    STATUS_TIMER_UNIT,
+    RUNTIME_TARGET,
+)
 
 KNOWN_FROZEN_BASE_BLOCKERS = (
     "issue_84_live_sig_sink_observation_emitter_missing",
@@ -1006,8 +1020,16 @@ def rehearsal(settings: AppSettings, *, repo_root: Path) -> dict[str, object]:
     status = build_status(settings, repo_root=repo_root)
     record("status_aggregation", "PASS", status.get("schema_version"))
 
-    units = sorted((repo_root / "deploy" / "systemd").glob("predictions-cup-*"))
-    if shutil.which("systemd-analyze") and units:
+    systemd_root = repo_root / "deploy" / "systemd"
+    units = [systemd_root / name for name in FULLSTACK_SYSTEMD_UNITS]
+    missing_units = [unit.name for unit in units if not unit.is_file()]
+    if missing_units:
+        record(
+            "systemd_analyze_verify",
+            "BLOCKED",
+            "missing FULLSTACK-002 unit(s): " + ",".join(missing_units),
+        )
+    elif shutil.which("systemd-analyze"):
         with tempfile.TemporaryDirectory(prefix="fullstack002-systemd-") as raw:
             rendered_root = Path(raw)
             fixture_env = rendered_root / "runtime.env"
