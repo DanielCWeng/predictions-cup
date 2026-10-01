@@ -57,6 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           KERNEL="polyleviathan/sig-live-alpha-sweep-001"
+          cp data/kaggle_handoff/live_alpha_001/package/*.csv scripts/kaggle/live_alpha_001/
           kaggle kernels push -p scripts/kaggle/live_alpha_001
           for i in $(seq 1 240); do
             STATUS="$(kaggle kernels status "$KERNEL" 2>&1 || true)"
