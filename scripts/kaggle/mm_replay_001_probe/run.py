@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pyarrow.parquet as pq
+import pandas as pd
 
 ROOT = Path("/kaggle/input")
 OUT = Path("/kaggle/working")
