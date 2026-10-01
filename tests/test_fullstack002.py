@@ -272,3 +272,33 @@ def test_flatten_is_explicitly_not_exposed() -> None:
     ).read_text(encoding="utf-8")
     assert '"state": "NOT_READY"' in source
     assert "no accepted current-main operator flatten contract" in source
+
+
+def test_transition_alerts_include_unresolved_execution_operations(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    emitted: list[tuple[str, dict[str, object]]] = []
+
+    monkeypatch.setattr(
+        fullstack,
+        "append_alert",
+        lambda _path, *, event_type, detail: emitted.append((event_type, dict(detail))),
+    )
+    previous = {
+        "unresolved_operations": {"state": "CLEAR", "count": 0},
+        "process_health": {},
+    }
+    current = {
+        "unresolved_operations": {"state": "BLOCKED", "count": 1},
+        "process_health": {},
+    }
+
+    fullstack._transition_alerts(previous, current, tmp_path / "alerts.jsonl")
+
+    assert emitted == [
+        (
+            "UNRESOLVED_EXECUTION_OPERATIONS",
+            {"before": "CLEAR", "after": "BLOCKED"},
+        )
+    ]
