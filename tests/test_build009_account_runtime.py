@@ -17,7 +17,7 @@ from predictions_cup.runtime import OrderAction, OutcomeSide
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
 from predictions_cup.sig.account_runtime import AccountRealtimeController
 from predictions_cup.sig.account_state import AccountRealtimeStateEngine
-from predictions_cup.sig.realtime_models import RealtimeTokenDto
+from predictions_cup.sig.realtime_models import AccountBatchDto, RealtimeTokenDto
 from predictions_cup.sig.realtime_subscriber import SubscriberExit
 
 
@@ -61,6 +61,45 @@ def _batch(revision: int, previous: int) -> dict[str, object]:
     }
 
 
+def test_account_batch_accepts_openapi_nullable_fields() -> None:
+    # Field shapes and example values follow the SIG OpenAPI Realtime account
+    # batch documentation at /realtime/token and settlement schema examples.
+    payload = _batch(1, 0)
+    payload["fills"] = [
+        {
+            "orderId": None,
+            "exchangeId": "36",
+            "marketId": "26",
+            "price": None,
+            "quantity": 100,
+            "executedAt": "2026-10-01T16:00:00.000Z",
+            "tournamentId": None,
+        }
+    ]
+    payload["settlements"] = [
+        {
+            "marketId": "26",
+            "exchangeId": "36",
+            "outcomeSide": "YES",
+            "shares": 100,
+            "costBasis": None,
+            "payout": 100,
+            "realizedPnl": None,
+            "settlementOutcome": None,
+            "tournamentId": None,
+            "at": "2026-10-01T16:00:00.000Z",
+        }
+    ]
+
+    batch = AccountBatchDto.model_validate(payload)
+
+    assert batch.fills[0].order_id is None
+    assert batch.fills[0].price is None
+    assert batch.settlements[0].cost_basis is None
+    assert batch.settlements[0].realized_pnl is None
+    assert batch.settlements[0].settlement_outcome is None
+
+
 class FakeSubscriber:
     def __init__(
         self,
@@ -69,11 +108,13 @@ class FakeSubscriber:
         *,
         connect_delay: float = 0.001,
         payload_gate: asyncio.Event | None = None,
+        maintenance_call: bool = False,
     ) -> None:
         self.payloads = payloads
         self.outcome = outcome
         self.connect_delay = connect_delay
         self.payload_gate = payload_gate
+        self.maintenance_call = maintenance_call
 
     async def run(
         self,
@@ -83,9 +124,11 @@ class FakeSubscriber:
         stop_event: asyncio.Event,
         on_maintenance: Any = None,
     ) -> SubscriberExit:
-        del stop_event, on_maintenance
+        del stop_event
         on_connected()
         await asyncio.sleep(self.connect_delay)
+        if self.maintenance_call and on_maintenance is not None:
+            await on_maintenance(datetime(2026, 9, 28, 21, 0, tzinfo=UTC))
         if self.payload_gate is not None:
             await self.payload_gate.wait()
         for payload in self.payloads:
@@ -135,6 +178,143 @@ def test_revision_gap_forces_authoritative_resync() -> None:
         ("user:profile-1", "account_batch"),
     ]
     assert state.trusted is True
+
+
+def test_fill_resync_reuses_token_and_socket() -> None:
+    state = AccountRealtimeStateEngine(tournament_id="t1")
+    payload = _batch(1, 0)
+    payload["fills"] = [
+        {
+            "orderId": 91,
+            "exchangeId": "36",
+            "marketId": "26",
+            "price": 0.42,
+            "quantity": 1,
+            "executedAt": "2026-09-28T21:00:00Z",
+            "tournamentId": "t1",
+        }
+    ]
+    token_count = 0
+    resync_count = 0
+    subscription_count = 0
+
+    async def mint_token() -> RealtimeTokenDto:
+        nonlocal token_count
+        token_count += 1
+        return _token()
+
+    async def resync() -> AccountAuthoritativeSnapshot:
+        nonlocal resync_count
+        resync_count += 1
+        return _snapshot()
+
+    def factory(**kwargs: Any) -> FakeSubscriber:
+        nonlocal subscription_count
+        del kwargs
+        subscription_count += 1
+        return FakeSubscriber(
+            (payload,) if subscription_count == 1 else (),
+            SubscriberExit.STOPPED,
+        )
+
+    async def scenario() -> None:
+        await AccountRealtimeController(
+            state=state,
+            mint_token=mint_token,
+            authoritative_resync=resync,
+            subscriber_factory=factory,
+        ).run(stop_event=asyncio.Event())
+
+    asyncio.run(scenario())
+
+    assert token_count == 1
+    assert subscription_count == 2
+    assert resync_count == 2
+    assert state.trusted is True
+
+
+def test_quiet_socket_periodic_refresh_keeps_account_fresh() -> None:
+    state = AccountRealtimeStateEngine(tournament_id="t1")
+    token_count = 0
+    resync_count = 0
+    observed_times = [
+        datetime(2026, 9, 28, 21, 0, tzinfo=UTC),
+        datetime(2026, 9, 28, 21, 0, 5, tzinfo=UTC),
+    ]
+
+    async def mint_token() -> RealtimeTokenDto:
+        nonlocal token_count
+        token_count += 1
+        return _token()
+
+    async def resync() -> AccountAuthoritativeSnapshot:
+        nonlocal resync_count
+        observed_at = observed_times[min(resync_count, len(observed_times) - 1)]
+        resync_count += 1
+        snapshot = _snapshot()
+        return AccountAuthoritativeSnapshot(
+            tournament_id=snapshot.tournament_id,
+            tournament_slug=snapshot.tournament_slug,
+            open_orders=snapshot.open_orders,
+            positions=snapshot.positions,
+            observed_at=observed_at,
+        )
+
+    def factory(**kwargs: Any) -> FakeSubscriber:
+        del kwargs
+        return FakeSubscriber(
+            (), SubscriberExit.STOPPED, maintenance_call=True
+        )
+
+    async def scenario() -> None:
+        await AccountRealtimeController(
+            state=state,
+            mint_token=mint_token,
+            authoritative_resync=resync,
+            subscriber_factory=factory,
+            refresh_interval_seconds=5.0,
+        ).run(stop_event=asyncio.Event())
+
+    asyncio.run(scenario())
+
+    assert token_count == 1
+    assert resync_count == 2
+    assert state.trusted is True
+    assert state.last_authoritative_observed_at == observed_times[1]
+
+
+def test_periodic_rest_failure_revokes_account_trust() -> None:
+    state = AccountRealtimeStateEngine(tournament_id="t1")
+    resync_count = 0
+
+    async def mint_token() -> RealtimeTokenDto:
+        return _token()
+
+    async def resync() -> AccountAuthoritativeSnapshot:
+        nonlocal resync_count
+        resync_count += 1
+        if resync_count == 2:
+            raise RuntimeError("REST unavailable")
+        return _snapshot()
+
+    def factory(**kwargs: Any) -> FakeSubscriber:
+        del kwargs
+        return FakeSubscriber(
+            (), SubscriberExit.STOPPED, maintenance_call=True
+        )
+
+    async def scenario() -> None:
+        await AccountRealtimeController(
+            state=state,
+            mint_token=mint_token,
+            authoritative_resync=resync,
+            subscriber_factory=factory,
+        ).run(stop_event=asyncio.Event())
+
+    asyncio.run(scenario())
+
+    assert state.trusted is False
+    assert state.transition.value == "UNTRUSTED_REFRESH_FAILURE"
 
 
 def test_token_refresh_revokes_trust_before_resync() -> None:
@@ -381,4 +561,3 @@ def test_authoritative_account_snapshot_preserves_unacknowledged_reservation() -
 
     assert reservations.intent_ids() == frozenset({"intent-unacked"})
     assert state.trusted is True
-

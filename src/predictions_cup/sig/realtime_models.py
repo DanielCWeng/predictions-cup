@@ -205,17 +205,17 @@ class MarketBatchDto(TransportModel):
 
 
 class AccountFillDto(TransportModel):
-    order_id: int = Field(alias="orderId")
+    order_id: int | None = Field(alias="orderId")
     exchange_id: str = Field(alias="exchangeId")
     market_id: str = Field(alias="marketId")
-    price: WireProbability
+    price: WireProbability | None
     quantity: WireDecimal
     executed_at: WireDateTime = Field(alias="executedAt")
     tournament_id: str | None = Field(alias="tournamentId")
 
 
 class AccountOrderUpdateDto(TransportModel):
-    order_id: int = Field(alias="orderId")
+    order_id: int | None = Field(alias="orderId")
     exchange_id: str = Field(alias="exchangeId")
     market_id: str = Field(alias="marketId")
     open: bool
@@ -231,10 +231,10 @@ class AccountSettlementDto(TransportModel):
     exchange_id: str = Field(alias="exchangeId")
     outcome_side: str = Field(alias="outcomeSide")
     shares: WireDecimal
-    cost_basis: WireDecimal = Field(alias="costBasis")
+    cost_basis: WireDecimal | None = Field(alias="costBasis")
     payout: WireDecimal
-    realized_pnl: WireDecimal = Field(alias="realizedPnl")
-    settlement_outcome: str = Field(alias="settlementOutcome")
+    realized_pnl: WireDecimal | None = Field(alias="realizedPnl")
+    settlement_outcome: str | None = Field(alias="settlementOutcome")
     tournament_id: str | None = Field(alias="tournamentId")
     at: WireDateTime
 

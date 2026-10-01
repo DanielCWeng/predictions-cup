@@ -556,11 +556,13 @@ class MakerService:
             )
 
             async def account_resync() -> AccountAuthoritativeSnapshot:
-                authoritative = await reconcile_account(
-                    rest,
-                    tournament_id=tournament_id,
-                    tournament_slug=tournament_slug,
-                )
+                async with rest.priority(RestPriority.NORMAL):
+                    await rest.get_account()
+                    authoritative = await reconcile_account(
+                        rest,
+                        tournament_id=tournament_id,
+                        tournament_slug=tournament_slug,
+                    )
                 if journal is not None and live_sink is not None:
                     resolved_cancels = await recover_in_session_cancellations(
                         journal=journal,
@@ -600,6 +602,9 @@ class MakerService:
                 state=account_state,
                 mint_token=rest.mint_realtime_token,
                 authoritative_resync=account_resync,
+                refresh_interval_seconds=(
+                    self.settings.maker_account_refresh_interval_seconds
+                ),
                 execution_journal=journal,
                 observation_emitter=observation_emitter,
                 observation_process_instance_id=observe_recorder.session_id,
