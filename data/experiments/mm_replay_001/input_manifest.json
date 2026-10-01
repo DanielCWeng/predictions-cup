@@ -35,7 +35,8 @@
     "Mounted probe verified 2,900 total files / 2,893 parquet files / 19,119,822,430 bytes and four source-schema families.",
     "All historical OOM failures were recovered; only 30 predeclared ev17 upstream gaps and three ev11 SOURCE_MISSING hours remain.",
     "Raw corpus is landed but scientific status remains unbound until source-aware canonical compaction/audit passes.",
-    "Replay/005F compaction filters to the 693 accepted mapped outcome tokens, not both 1,386 binary complements."
+    "Replay/005F compaction filters to the 693 accepted mapped outcome tokens, not both 1,386 binary complements.",
+    "Full compaction must use source-aware timestamp/order semantics by window; one universal parser is forbidden."
   ],
   "relation_to_data003": "DATA-003-linked current SIG Cup mapped universe",
   "root_hint": "/kaggle/input",
@@ -100,5 +101,65 @@
       "NO_TRADE": 6
     },
     "unique_mapped_outcome_tokens": 693
+  },
+  "source_plan_by_window": {
+    "baseline_sep": {
+      "v3": 672
+    },
+    "ev01_tx_ar_nc_primary": {
+      "v1": 120
+    },
+    "ev02_ms_primary_ga14_special": {
+      "v1": 72
+    },
+    "ev03_il_primary": {
+      "v1": 96
+    },
+    "ev04_ar_runoff": {
+      "v1": 72
+    },
+    "ev05_ms_ga14_runoff": {
+      "v1": 72
+    },
+    "ev06_nj11_special": {
+      "v2": 72
+    },
+    "ev07_oh_in_primary": {
+      "v2": 72
+    },
+    "ev08_ne_nc_wv_la_senate": {
+      "v2": 168
+    },
+    "ev09_al_ga_id_ky_or_pa_tx": {
+      "v2": 264
+    },
+    "ev10_ca_ia_mt_nj_nm_sd": {
+      "v2": 96
+    },
+    "ev11_me_nv_nd_sc": {
+      "v2": 96
+    },
+    "ev12_al_runoff_dc_ga_runoff": {
+      "v2": 96
+    },
+    "ev13_md_ny_ut_sc_runoff_la": {
+      "v2": 168
+    },
+    "ev14_co_primary": {
+      "v2": 96
+    },
+    "ev15_az_me_sd_ga_special": {
+      "v2": 240
+    },
+    "ev16_ks_mi_mo_va_wa_tn_la_hi": {
+      "v2": 164,
+      "ag6": 100
+    },
+    "ev17_ak_fl_wy": {
+      "v3": 66
+    },
+    "ev18_ok_sc_runoff_ga_runoff": {
+      "v3": 96
+    }
   }
 }
