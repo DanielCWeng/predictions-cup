@@ -313,6 +313,14 @@ def dataset_analysis(data: dict[str, Any], output_dir: Path) -> None:
         "seed": int(data.get("seed", 505009)),
         "surface": str(data.get("surface", "TRAIN")),
     }
+    analysis_params = data.get("analysis_params", {})
+    if not isinstance(analysis_params, dict):
+        raise ValueError("analysis_params must be an object")
+    spec.update(analysis_params)
+    if "thresholds" in data:
+        if not isinstance(data["thresholds"], dict):
+            raise ValueError("thresholds must be an object")
+        spec["thresholds"] = data["thresholds"]
     spec_path = output_dir / "analysis_spec.json"
     spec_path.write_text(json.dumps(spec, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     results = output_dir / "results"
