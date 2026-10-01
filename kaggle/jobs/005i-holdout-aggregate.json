@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "action": "artifact_analysis",
+  "artifacts": [
+    11151610638,
+    11150536527,
+    11151341426,
+    11150675149,
+    11149624858
+  ],
+  "script": "scripts/kaggle/experiment_005i_holdout/aggregate.py",
+  "packages": [
+    "numpy==2.3.3",
+    "pandas==2.3.3",
+    "pyarrow==25.0.1"
+  ],
+  "note": "EXPERIMENT-005I read-only postprocessing of the five frozen HOLDOUT artifacts. No dataset reread, no refit, no threshold change."
+}
