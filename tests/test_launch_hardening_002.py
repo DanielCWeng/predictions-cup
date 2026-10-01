@@ -36,6 +36,7 @@ from predictions_cup.risk import (
     RiskContext,
     RiskExposureSnapshot,
     RiskLimits,
+    build_exposure_snapshot,
     evaluate_risk,
     trip_global_halt,
 )
@@ -625,6 +626,27 @@ def _stage(
     account_inventory = Decimal(str(account["signed_inventory"]))
     account_open = Decimal(str(account["open_order_exposure"]))
     account_uncertain = Decimal(str(account["uncertain_exposure"]))
+    risk_exposure = build_exposure_snapshot(
+        portfolio,
+        strategy_attribution_complete=True,
+    )
+    residuals.update(
+        {
+            "risk_total_gross_exposure": str(
+                oracle.gross_exposure
+                + oracle.open_order_exposure
+                - Decimal(str(risk_exposure.gross_exposure))
+            ),
+            "risk_open_order_exposure": str(
+                oracle.open_order_exposure
+                - Decimal(str(risk_exposure.open_order_exposure))
+            ),
+            "risk_uncertain_exposure": str(
+                oracle.uncertain_exposure
+                - Decimal(str(risk_exposure.uncertain_order_exposure))
+            ),
+        }
+    )
     if portfolio.account_trusted:
         residuals.update(
             {
@@ -664,7 +686,15 @@ def _stage(
                 order.reserved_exposure for order in reservation_orders
             ),
         },
-        "risk_state": risk_state,
+        "risk_state": {
+            **risk_state,
+            "exposure": {
+                "gross_exposure": risk_exposure.gross_exposure,
+                "open_order_exposure": risk_exposure.open_order_exposure,
+                "uncertain_order_exposure": risk_exposure.uncertain_order_exposure,
+                "trusted": risk_exposure.trusted,
+            },
+        },
         "journal_state": _journal_state(
             journal,
             ("lh002-placement", "lh002-cancel-101"),
@@ -1261,6 +1291,99 @@ def test_duplicate_reordered_and_unknown_order_evidence_fail_closed(
     journal.close()
 
 
+def test_authoritative_snapshot_before_delayed_realtime_fill_forces_reconcile(
+    tmp_path: Path,
+) -> None:
+    journal = ExecutionJournal(tmp_path / "delayed-after-snapshot.sqlite3")
+    reservations = ExecutionReservationBook()
+    intent = RuntimeOrderIntent(
+        intent_id="delayed-intent",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=5,
+        limit_price_ticks=80,
+        strategy_id="lh002-maker",
+        decision_observation_ns=1_000,
+    )
+    envelope = ExecutionEnvelope.placement(
+        logical_operation_id="delayed-placement",
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        sink_mode=ExecutionMode.LIVE,
+        idempotency_key="delayed-key",
+        intents=(intent,),
+        created_monotonic_ns=1_000,
+    )
+    journal.record_before_dispatch(
+        envelope,
+        (intent,),
+        submitted_monotonic_ns=1_010,
+    )
+    journal.record_event(
+        logical_operation_id="delayed-placement",
+        logical_intent_id="delayed-intent",
+        tournament_id="t1",
+        event_type="ACK",
+        observed_monotonic_ns=1_020,
+        exchange_id="36",
+        exchange_order_id="401",
+        terminal_status=LifecycleState.ACKED.value,
+    )
+    reservations.reserve("delayed-placement", (intent,))
+    reservations.bind_exchange_order(
+        "delayed-intent",
+        "401",
+        acknowledged_at=BASE + timedelta(seconds=1),
+    )
+    state = AccountRealtimeStateEngine(
+        tournament_id="t1",
+        reservations=reservations,
+    )
+    # Authoritative read occurs after the ACK and legitimately supersedes the
+    # reservation. A delayed realtime fill arriving afterward must not mutate
+    # the canonical account from stale evidence; it must revoke trust and be
+    # retained only as provisional audit evidence.
+    state.apply_authoritative(
+        _authoritative(
+            observed_at=BASE + timedelta(seconds=5),
+            position_quantity="0",
+        )
+    )
+    assert reservations.intent_ids() == frozenset()
+    assert state.trusted
+    before = state.runtime_portfolio()
+    controller = _account_controller(state, journal, TickClock(3_000))
+    payload = _fill_payload(
+        revision=7,
+        previous=6,
+        quantity="1",
+        at=BASE + timedelta(seconds=2),
+    )
+    fill = cast(list[dict[str, object]], payload["fills"])[0]
+    fill["orderId"] = 401
+    with pytest.raises(AccountResyncRequired):
+        asyncio.run(
+            controller._handle_batch(
+                "unused",
+                payload,
+                BASE + timedelta(seconds=6),
+            )
+        )
+    after = state.runtime_portfolio()
+    assert not state.trusted
+    assert after.positions == before.positions == ()
+    provisional = [
+        event
+        for event in journal.events("delayed-placement")
+        if event.event_type == "REALTIME_FILL"
+    ]
+    assert len(provisional) == 1
+    assert provisional[0].logical_intent_id == "delayed-intent"
+    journal.close()
+
+
 def test_fill_before_order_update_and_cancel_evidence_keeps_original_identity(
     tmp_path: Path,
 ) -> None:
@@ -1399,6 +1522,33 @@ def test_uncertain_placement_retains_reservation_and_recovery_authority(
         "lh002-placement",
         plan.envelope.intent_ids,
     )
+    unresolved_snapshot = reservations.overlay_snapshot(
+        _runtime(RuntimePortfolio(account_trusted=True), observed_ns=10_000)
+    )
+    unresolved_exposure = build_exposure_snapshot(
+        unresolved_snapshot.portfolio,
+        strategy_attribution_complete=True,
+    )
+    assert unresolved_exposure.uncertain_order_exposure == pytest.approx(20.0)
+    halted_capital = trip_global_halt(
+        _capital(marks_trusted=True, mark_ns=10_000),
+        reason="synthetic_unresolved_halt",
+        now_monotonic_ns=10_000,
+    )
+    halted = evaluate_risk(
+        _proposal(decision_ns=10_000),
+        unresolved_snapshot,
+        RiskContext(
+            mode=ExecutionMode.LIVE,
+            kill_switch=False,
+            limits=_limits(),
+            max_state_age_ns=1_000_000_000,
+            capital_state=halted_capital,
+            require_capital_state=True,
+        ),
+    )
+    assert halted.reason == "global_capital_halt"
+    assert unresolved_exposure.uncertain_order_exposure == pytest.approx(20.0)
 
     recovery_permit = _recovery_permit()
     assert not recovery_permit.fresh_admission_allowed
