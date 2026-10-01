@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "logs",
+  "kernel": "polyleviathan/mm-replay-001-ev18-canary-v4",
+  "note": "One-shot live log capture for EV18 canary v4."
+}

@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "output",
+  "kernel": "polyleviathan/mm-replay-001-strict-as-of-fast",
+  "output_file_pattern": "MM_FILL_RESULTS\\.parquet"
+}

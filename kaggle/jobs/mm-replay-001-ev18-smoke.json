@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/mm_replay_001_ev18_smoke",
+  "kernel": "polyleviathan/mm-replay-001-ev18-smoke",
+  "poll_seconds": 20,
+  "timeout_minutes": 120,
+  "download_outputs": true,
+  "output_file_pattern": "(EV18_.*\\.(json|csv|md))$",
+  "note": "Six-hour EV18 engineering smoke; identical v4 parser/replay path, not scientific evidence."
+}
