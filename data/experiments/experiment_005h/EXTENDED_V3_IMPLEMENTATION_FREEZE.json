@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005H",
+  "stage": "EXTENDED_V3_IMPLEMENTATION_FREEZE",
+  "status": "FROZEN_BEFORE_CANONICAL_ATTEMPT3_OUTCOME_INSPECTION",
+  "arrival_gate_details": {
+    "dev_auc_min": 0.60,
+    "dev_time_half_auc_min": 0.55,
+    "dev_token_median_auc_min": 0.55,
+    "matched_design": "one canonical same-token matched non-fill state per linked fill where available"
+  },
+  "direction_gate_details": {
+    "dev_auc_min": 0.58,
+    "minimum_dev_rows_each_side": 100,
+    "dev_time_half_auc_min": 0.52
+  },
+  "continuation_classification": {
+    "flat_threshold_probability_points": 0.005,
+    "rule": {
+      "CONTINUE": "initial signed move > threshold and later signed move >= initial",
+      "PARTIAL_REVERSE": "initial > threshold and later remains > threshold but below initial",
+      "FULL_REVERSE_OR_OVERSHOOT": "initial > threshold and later <= threshold",
+      "FLAT": "absolute initial signed move <= threshold"
+    }
+  },
+  "toxicity_thresholds": {
+    "reported_probability_point_moves": [0.01, 0.02],
+    "labels": ["adverse_gt_1pp_share", "adverse_gt_2pp_share"],
+    "tick_size_claim": "NOT_MADE_WITHOUT_CANONICAL_PER_MARKET_TICK_METADATA"
+  },
+  "price_regions": [
+    "0-5",
+    "5-15",
+    "15-30",
+    "30-45",
+    "45-55",
+    "55-70",
+    "70-85",
+    "85-95",
+    "95-100"
+  ],
+  "holdout_boundary": "EXTENDED_V3_SHORTLIST.json is provisional. Only experiment-wide PRE_HOLDOUT_FREEZE.json may authorize one-shot B0, after hostile V3 and source-version robustness.",
+  "real_sig_orders_sent": false
+}
