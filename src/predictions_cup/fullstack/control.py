@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from predictions_cup.config import AppSettings, load_settings
 from predictions_cup.observe import (
@@ -659,8 +661,41 @@ def _atomic_json(path: Path, payload: Mapping[str, object]) -> None:
             temporary.unlink()
 
 
-def append_alert(path: Path, *, event_type: str, detail: Mapping[str, object]) -> None:
+def _append_alert_payload(path: Path, payload: Mapping[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str) + "\n"
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(line)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _deliver_alert_webhook(payload: Mapping[str, object]) -> str:
+    url = os.environ.get("PREDICTIONS_CUP_FULLSTACK_ALERT_WEBHOOK_URL", "").strip()
+    if not url:
+        return "NOT_CONFIGURED"
+    if not url.startswith(("https://", "http://")):
+        return "INVALID_URL"
+    body = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode(
+        "utf-8"
+    )
+    request = Request(
+        url,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=2.0) as response:
+            status = getattr(response, "status", None)
+    except (HTTPError, URLError, TimeoutError, OSError) as exc:
+        return f"FAILED:{type(exc).__name__}"
+    if isinstance(status, int) and not 200 <= status < 300:
+        return f"HTTP_{status}"
+    return "DELIVERED"
+
+
+def append_alert(path: Path, *, event_type: str, detail: Mapping[str, object]) -> None:
     payload = {
         "schema_version": ALERT_SCHEMA_VERSION,
         "observed_at": _iso(_now()),
@@ -668,11 +703,25 @@ def append_alert(path: Path, *, event_type: str, detail: Mapping[str, object]) -
         "host_identity": socket.gethostname(),
         "detail": dict(detail),
     }
-    line = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str) + "\n"
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(line)
-        handle.flush()
-        os.fsync(handle.fileno())
+    # Durable local evidence is authoritative and is committed before any
+    # optional network notification attempt.
+    _append_alert_payload(path, payload)
+    delivery = _deliver_alert_webhook(payload)
+    if delivery in {"NOT_CONFIGURED", "DELIVERED"}:
+        return
+    _append_alert_payload(
+        path,
+        {
+            "schema_version": ALERT_SCHEMA_VERSION,
+            "observed_at": _iso(_now()),
+            "event_type": "ALERT_DELIVERY_FAILED",
+            "host_identity": socket.gethostname(),
+            "detail": {
+                "source_event_type": event_type,
+                "delivery_state": delivery,
+            },
+        },
+    )
 
 
 def _transition_alerts(
