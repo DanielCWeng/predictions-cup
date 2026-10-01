@@ -19,5 +19,6 @@
   "sample_per_hour": 1,
   "seed": 505019,
   "surface": "TRAIN",
-  "note": "EXPERIMENT-005I TRAIN signed-flow persistence only. Individual Sep1-10 files; no DEV/HOLDOUT read."
+  "note": "EXPERIMENT-005I TRAIN fill-flow rerun with explicit epoch timestamp semantics.",
+  "attempt": 2
 }
