@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "status",
+  "kernel": "polyleviathan/mm-replay-001-strict-as-of-fast",
+  "note": "Read-only status probe for attempt 5 at 2026-10-01 15:08 BST."
+}
