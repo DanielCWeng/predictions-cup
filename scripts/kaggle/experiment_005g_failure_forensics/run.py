@@ -2085,10 +2085,11 @@ def decomposition_for_policy(
     frozen_delta = float(candidate_net - baseline["net_markout"].sum())
 
     removed = affected.copy()
-    if fam == "SIZE_ONLY":
-        removed_fraction = 1.0 - float(policy["size_multiplier"])
-    else:
-        removed_fraction = 1.0
+    removed_fraction = (
+        1.0 - float(policy["size_multiplier"])
+        if fam == "SIZE_ONLY"
+        else 1.0
+    )
     affected_adverse_count = float((removed["is_adverse"].astype(float) * removed_fraction).sum())
     affected_favourable_count = float((removed["is_favourable"].astype(float) * removed_fraction).sum())
 
