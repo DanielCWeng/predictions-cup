@@ -712,6 +712,12 @@ def _transition_alerts(
             nested(current, "clock_health", "state"),
             "BLOCKED",
         ),
+        (
+            "UNRESOLVED_EXECUTION_OPERATIONS",
+            nested(previous, "unresolved_operations", "state"),
+            nested(current, "unresolved_operations", "state"),
+            "BLOCKED",
+        ),
     )
     for event_type, before, after, trigger in transitions:
         if after == trigger and before != trigger:
