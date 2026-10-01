@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -7,6 +8,7 @@ from pathlib import Path
 from predictions_cup.analysis.live_005f import (
     StateTransferSample,
     genuine_age_bucket,
+    load_persisted_005f_states,
     summarize_state_transfer,
 )
 from predictions_cup.maker.contracts import (
@@ -255,6 +257,57 @@ def test_serialized_model_absence_remains_fail_closed() -> None:
     assert not metadata.ready
     assert metadata.readiness_reason is not None
     assert metadata.readiness_reason.startswith("model_artifact_missing")
+    state = metadata.diagnostic_payload["005f_state"]
+    assert isinstance(state, dict)
+    assert state["provider_id"] == provider.provider_id
+    assert state["provider_version"] == provider.version
+    assert state["regime"] == "PRE_ELECTION"
+    features = state["features"]
+    assert isinstance(features, dict)
+    assert features["genuine_age_s"] == 15.0
+    assert features["genuine_60"] == 2.0
+
+
+def test_persisted_exact_state_loader_uses_candidate_decision_payload(
+    tmp_path: Path,
+) -> None:
+    journal = tmp_path / "shadow.jsonl"
+    record = {
+        "event_type": "decision",
+        "decision_id": "005f-decision-1",
+        "candidate_id": "experiment-005f-hazard",
+        "candidate_version": "candidate-runtime-001",
+        "input_snapshot_id": "snapshot-1",
+        "market_id": "market-1",
+        "exchange_id": "exchange-1",
+        "candidate_payload": {
+            "005f_state": {
+                "provider_id": "005f-live-exact-observable-state",
+                "provider_version": "005f-live-001-v1",
+                "scope_id": "token-1",
+                "grid_time_ns": 123,
+                "observed_monotonic_ns": 456,
+                "source_version": "clob-market-ws-v1",
+                "regime": "PRE_ELECTION",
+                "features": {
+                    "genuine_age_s": 2.5,
+                    "genuine_15": 1.0,
+                    "genuine_60": 3.0,
+                    "abs_ret_15": 0.01,
+                    "rv_60": 0.02,
+                },
+            }
+        },
+    }
+    journal.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+    states = load_persisted_005f_states(journal)
+    state = states["snapshot-1"]
+    assert state.state_decision_id == "005f-decision-1"
+    assert state.provider_version == "005f-live-001-v1"
+    assert state.regime == "PRE_ELECTION"
+    assert state.values["genuine_age_s"] == 2.5
+    assert state.values["genuine_60"] == 3.0
 
 
 def test_state_transfer_buckets_are_predeclared_and_non_directional() -> None:
