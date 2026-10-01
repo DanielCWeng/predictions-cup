@@ -15,7 +15,7 @@ import pyarrow.parquet as pq
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 
-INPUT = Path("/kaggle/input/sig-cup-data003-orderbooks")
+INPUT_BASE = Path("/kaggle/input")
 HERE = Path(__file__).resolve().parent
 OUT = Path("/kaggle/working/005g_economic_replay_v1")
 OUT.mkdir(parents=True, exist_ok=True)
@@ -745,6 +745,24 @@ TOKEN_LOOKUP = {
     for token in TOKEN_IDS
 }
 TOKEN_BYTES = pa.array(list(TOKEN_LOOKUP), type=pa.binary())
+
+
+def resolve_dataset_root() -> Path:
+    witness = f"baseline_sep/date={TRAIN_DATE}/hour=00/events.parquet"
+    matches = sorted(INPUT_BASE.rglob(witness))
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"expected exactly one DATA-003 mount containing {witness}; "
+            f"found {[str(path) for path in matches]}"
+        )
+    root = matches[0].parents[3]
+    if root.name == "baseline_sep":
+        raise RuntimeError(f"resolved DATA-003 root incorrectly: {root}")
+    return root
+
+
+INPUT = resolve_dataset_root()
+print(f"005G DATA-003 mount resolved: {INPUT}", flush=True)
 
 
 def now_iso() -> str:
