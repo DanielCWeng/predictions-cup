@@ -4,9 +4,9 @@
   "status": "COMPLETE",
   "headline": "Five of five preregistered HOLDOUT confirmation gates supported.",
   "confirmed_mechanisms": [
-    "Five-minute mean reversion is broad and robust across time, move magnitude, probability region, relative spread and transparent state.",
+    "Five-minute mean reversion is broad and robust across time, move magnitude, probability region, relative spread and transparent state; the 55,340 qualifying sampled minute-states/move observations are serially dependent because adjacent five-minute forward windows overlap and must not be treated as independent episodes.",
     "Depth-normalised BBO OFI carries small but stable incremental information beyond a frozen simple baseline; its naive sign is often contrarian.",
-    "PRICE_DISCOVERY is a short repricing/transition state, not a generic momentum regime.",
+    "PRICE_DISCOVERY is a short-lived high-activity large-move state, not a generic momentum regime; its observed transition into POST_SHOCK is partly mechanical by taxonomy construction and is descriptive rather than an independently discovered economic transition mechanism.",
     "LIQUIDITY_STRESS is metastable and has a meaningful transition path into REPLENISHMENT.",
     "Visible replenishment after withdrawal is associated with substantially lower subsequent absolute price movement."
   ],
