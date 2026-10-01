@@ -213,6 +213,13 @@ class SupervisorRuntime:
                 requested_by="deterministic_rule",
                 reason_code=reasons_by_action.get((code, target)),
             )
+            detail = result.get("detail")
+            if (
+                result.get("result") == "SUCCESS"
+                and isinstance(detail, dict)
+                and detail.get("skipped") is not None
+            ):
+                continue
             self.store.append_action(result)
 
 
