@@ -462,6 +462,101 @@ def permutation_test_relative_size(fills: pd.DataFrame, seed: int = 5006) -> dic
     }
 
 
+def cluster_bootstrap_mean(
+    frame: pd.DataFrame,
+    value: str,
+    cluster: str = "token_id",
+    seed: int = 5007,
+) -> dict[str, Any]:
+    work = frame[[cluster, value]].replace([np.inf, -np.inf], np.nan).dropna()
+    if work.empty:
+        return {"status": "INSUFFICIENT", "n": 0}
+    grouped = {
+        str(key): part[value].to_numpy(float)
+        for key, part in work.groupby(cluster, sort=False)
+    }
+    if len(grouped) < 2:
+        return {
+            "status": "INSUFFICIENT",
+            "n": int(len(work)),
+            "clusters": int(len(grouped)),
+        }
+    rng = np.random.default_rng(seed)
+    keys = list(grouped)
+    draws: list[float] = []
+    for _ in range(1000):
+        sampled = rng.choice(keys, size=len(keys), replace=True)
+        values = np.concatenate([grouped[str(key)] for key in sampled])
+        draws.append(float(np.mean(values)))
+    return {
+        "status": "OK",
+        "n": int(len(work)),
+        "clusters": int(len(grouped)),
+        "mean": float(work[value].mean()),
+        "median": float(work[value].median()),
+        "ci_2_5": float(np.quantile(draws, 0.025)),
+        "ci_97_5": float(np.quantile(draws, 0.975)),
+    }
+
+
+def replenishment_gap(
+    fills: pd.DataFrame,
+    mask: pd.Series,
+) -> dict[str, Any]:
+    work = fills.loc[mask].copy()
+    work = work[
+        work["signed_move_30s"].notna()
+        & work["failed_replenish_80_30s"].notna()
+    ]
+    failed = work[work["failed_replenish_80_30s"].astype(bool)]
+    recovered = work[~work["failed_replenish_80_30s"].astype(bool)]
+    if len(failed) < 20 or len(recovered) < 20:
+        return {
+            "status": "INSUFFICIENT",
+            "failed_n": int(len(failed)),
+            "recovered_n": int(len(recovered)),
+        }
+    return {
+        "status": "OK",
+        "failed_n": int(len(failed)),
+        "recovered_n": int(len(recovered)),
+        "failed_mean": float(failed["signed_move_30s"].mean()),
+        "recovered_mean": float(recovered["signed_move_30s"].mean()),
+        "gap": float(
+            failed["signed_move_30s"].mean()
+            - recovered["signed_move_30s"].mean()
+        ),
+    }
+
+
+def replenishment_dev_falsifications(fills: pd.DataFrame) -> dict[str, Any]:
+    train_p90 = float(
+        fills.loc[fills["split"] == "TRAIN", "activity_60"].quantile(0.90)
+    )
+    dev = fills[fills["split"] == "DEV"].copy()
+    dev = dev.sort_values("anchor_ts_ns")
+    midpoint = len(dev) // 2
+    return {
+        "FULL": replenishment_gap(dev, pd.Series(True, index=dev.index)),
+        "FIRST_HALF": replenishment_gap(
+            dev,
+            pd.Series(dev.index.isin(dev.iloc[:midpoint].index), index=dev.index),
+        ),
+        "SECOND_HALF": replenishment_gap(
+            dev,
+            pd.Series(dev.index.isin(dev.iloc[midpoint:].index), index=dev.index),
+        ),
+        "STALE_EXCLUDED": replenishment_gap(
+            dev,
+            pd.to_numeric(dev["book_age_ms"], errors="coerce") <= 5000,
+        ),
+        "HIGH_ACTIVITY_EXCLUDED": replenishment_gap(
+            dev,
+            pd.to_numeric(dev["activity_60"], errors="coerce") <= train_p90,
+        ),
+    }
+
+
 def filtered_models(fills: pd.DataFrame, mask: pd.Series) -> dict[str, Any]:
     work = fills.loc[mask].copy()
     train = work[work["split"] == "TRAIN"]
@@ -620,10 +715,16 @@ def main() -> None:
     tradfi.to_parquet(WORK / "TRADFI_CHALLENGERS.parquet", index=False)
 
     dev = fills[fills["split"] == "DEV"]
-    dev_repl = dev.groupby("failed_replenish_80_30s")["signed_move_30s"].agg(["count", "mean"])
-    repl_gap = math.nan
-    if True in dev_repl.index and False in dev_repl.index:
-        repl_gap = float(dev_repl.loc[True, "mean"] - dev_repl.loc[False, "mean"])
+    replenishment_checks = replenishment_dev_falsifications(fills)
+    matched_control_dev = (
+        cluster_bootstrap_mean(
+            pairs[pairs["split"] == "DEV"],
+            "delta_signed_move_30s",
+            cluster="token_id",
+        )
+        if "delta_signed_move_30s" in pairs.columns
+        else {"status": "INSUFFICIENT", "n": 0}
+    )
 
     candidates: list[dict[str, Any]] = []
     rel = full_models["rel_size"]
@@ -649,13 +750,51 @@ def main() -> None:
                 "classification": ["SEND_TO_MM_REPLAY", "SEND_TO_005I", "FUTURE_CONFIRMATION_REQUIRED"],
             }
         )
-    if math.isfinite(repl_gap) and repl_gap > 0:
+    repl_required = [
+        replenishment_checks.get(name, {})
+        for name in [
+            "FULL",
+            "FIRST_HALF",
+            "SECOND_HALF",
+            "STALE_EXCLUDED",
+            "HIGH_ACTIVITY_EXCLUDED",
+        ]
+    ]
+    if (
+        all(check.get("status") == "OK" for check in repl_required)
+        and all(float(check.get("gap", -999)) > 0 for check in repl_required)
+    ):
         candidates.append(
             {
                 "candidate_id": "005H-C02-FAILED-REPLENISHMENT",
                 "mechanism": "failed 80% consumed-side 2c recovery within 30s",
-                "dev_signed_move_gap": repl_gap,
-                "classification": ["SEND_TO_MM_REPLAY", "SEND_TO_LIVE_DIAG", "SEND_TO_SHADOW", "FUTURE_CONFIRMATION_REQUIRED"],
+                "dev_falsifications": replenishment_checks,
+                "classification": [
+                    "SEND_TO_MM_REPLAY",
+                    "SEND_TO_LIVE_DIAG",
+                    "SEND_TO_SHADOW",
+                    "FUTURE_CONFIRMATION_REQUIRED",
+                ],
+            }
+        )
+    if (
+        matched_control_dev.get("status") == "OK"
+        and int(matched_control_dev.get("n", 0)) >= 50
+        and float(matched_control_dev.get("ci_2_5", -999)) > 0
+    ):
+        candidates.append(
+            {
+                "candidate_id": "005H-C03-FILL-BEYOND-STATE",
+                "mechanism": (
+                    "linked fill episodes move further in aggressor direction "
+                    "than same-token matched non-fill states"
+                ),
+                "matched_control_dev": matched_control_dev,
+                "classification": [
+                    "SEND_TO_005I",
+                    "SEND_TO_LIVE_DIAG",
+                    "FUTURE_CONFIRMATION_REQUIRED",
+                ],
             }
         )
     if arrival_result.get("status") == "OK":
@@ -721,7 +860,10 @@ def main() -> None:
         }
         for candidate in candidates
     ]
-    discovery = pd.DataFrame(discovery_rows)
+    discovery = pd.DataFrame(
+        discovery_rows,
+        columns=["candidate_id", "mechanism", "classification_json"],
+    )
     discovery.to_parquet(WORK / "DISCOVERY_RESULTS.parquet", index=False)
 
     freeze = {
@@ -735,6 +877,8 @@ def main() -> None:
         "candidates": candidates,
         "arrival_result": arrival_result,
         "direction_result": direction_result,
+        "matched_control_dev": matched_control_dev,
+        "replenishment_dev_falsifications": replenishment_checks,
         "full_models": full_models,
         "stale_excluded_models": stale_models,
         "high_activity_excluded_models": quiet_models,
