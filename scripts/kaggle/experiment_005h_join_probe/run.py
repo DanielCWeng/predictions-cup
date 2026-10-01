@@ -134,7 +134,14 @@ def accepted_groups(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
     }
 
 
-def load_ev18(root: Path, tokens: set[str]) -> tuple[pd.DataFrame, dict[str, list[tuple[int, int, float, float]]], dict[str, Any]]:
+def load_ev18(
+    root: Path,
+    tokens: set[str],
+) -> tuple[
+    pd.DataFrame,
+    dict[str, list[tuple[int, int, float, float]]],
+    dict[str, Any],
+]:
     files = sorted((root / WINDOW).rglob("*.parquet"))
     if len(files) != 96:
         raise RuntimeError(f"expected 96 EV18 files, found {len(files)}")
@@ -197,7 +204,13 @@ def load_ev18(root: Path, tokens: set[str]) -> tuple[pd.DataFrame, dict[str, lis
                     if 0.0 < bb <= ba < 1.0:
                         bbo[token].append((int(rec["ts_ns"]), int(rec["sequence"]), bb, ba))
                         counts["bbo_rows"] += 1
-        print(json.dumps({"file": idx + 1, "of": len(files), "trades": counts["trade_rows"], "bbo": counts["bbo_rows"]}), flush=True)
+        progress = {
+            "file": idx + 1,
+            "of": len(files),
+            "trades": counts["trade_rows"],
+            "bbo": counts["bbo_rows"],
+        }
+        print(json.dumps(progress), flush=True)
     tdf = pd.DataFrame(trades)
     for token in bbo:
         bbo[token].sort(key=lambda x: (x[0], x[1]))
@@ -209,7 +222,10 @@ def rounded_key(token: str, price: float, size: float, side: str | None = None) 
     return base if side is None else base + (str(side or "").upper(),)
 
 
-def build_index(trades: pd.DataFrame, with_side: bool) -> dict[tuple[Any, ...], list[tuple[int, int, int]]]:
+def build_index(
+    trades: pd.DataFrame,
+    with_side: bool,
+) -> dict[tuple[Any, ...], list[tuple[int, int, int]]]:
     index: defaultdict[tuple[Any, ...], list[tuple[int, int, int]]] = defaultdict(list)
     for i, r in trades.iterrows():
         key = rounded_key(r["token_id"], r["price"], r["size"], r["side"] if with_side else None)
@@ -345,7 +361,11 @@ def summarize_matches(m: pd.DataFrame) -> dict[str, Any]:
         summary["abs_lag_le_5s"] = int((np.abs(lag) <= 5).sum())
         summary["abs_lag_le_15s"] = int((np.abs(lag) <= 15).sum())
         summary["abs_lag_le_30s"] = int((np.abs(lag) <= 30).sum())
-        summary["pre_book_found"] = int(matched.get("pre_book_found", pd.Series(False, index=matched.index)).fillna(False).sum())
+        pre_book = matched.get(
+            "pre_book_found",
+            pd.Series(False, index=matched.index),
+        )
+        summary["pre_book_found"] = int(pre_book.fillna(False).sum())
         ids = matched["trade_index"].astype(int)
         summary["distinct_matched_trade_events"] = int(ids.nunique())
         summary["data003_groups_per_trade_event_max"] = int(ids.value_counts().max())
