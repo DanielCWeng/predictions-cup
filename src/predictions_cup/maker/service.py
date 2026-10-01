@@ -575,7 +575,20 @@ class MakerService:
                 ),
             )
 
+            capital_refresh_task: asyncio.Task[object] | None = None
+
+            def _log_capital_refresh_failure(task: asyncio.Task[object]) -> None:
+                if not task.cancelled() and task.exception() is not None:
+                    # Capital state keeps its last account observation and so
+                    # ages out under RISK's max account age (fail closed).
+                    _LOG.warning(
+                        "RISK-002 capital refresh failed: %s: %s",
+                        type(task.exception()).__name__,
+                        task.exception(),
+                    )
+
             async def account_resync() -> AccountAuthoritativeSnapshot:
+                nonlocal capital_refresh_task
                 async with rest.priority(RestPriority.NORMAL):
                     await rest.get_account()
                     authoritative = await reconcile_account(
@@ -603,16 +616,26 @@ class MakerService:
                         quotes=self.core.quotes,
                         observed_monotonic_ns=monotonic_ns(),
                     )
-                if risk_context_source is not None and risk_service is not None:
-                    await self._refresh_capital_control(
-                        rest=rest,
-                        account=authoritative,
-                        journal=journal,
-                        service=risk_service,
-                        source=risk_context_source,
-                        tournament_id=tournament_id,
-                        tournament_slug=tournament_slug,
+                if (
+                    risk_context_source is not None
+                    and risk_service is not None
+                    and (capital_refresh_task is None or capital_refresh_task.done())
+                ):
+                    # RISK's ~5 extra reads run outside the account trust
+                    # window: account activity from our own orders during them
+                    # otherwise invalidated almost every account resync.
+                    capital_refresh_task = asyncio.create_task(
+                        self._refresh_capital_control(
+                            rest=rest,
+                            account=authoritative,
+                            journal=journal,
+                            service=risk_service,
+                            source=risk_context_source,
+                            tournament_id=tournament_id,
+                            tournament_slug=tournament_slug,
+                        )
                     )
+                    capital_refresh_task.add_done_callback(_log_capital_refresh_failure)
                 return authoritative
 
             if isinstance(adapter, LiveMakerExecutionAdapter):
