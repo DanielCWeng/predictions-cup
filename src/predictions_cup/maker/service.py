@@ -581,6 +581,8 @@ class MakerService:
                     dispatch=dispatch_taker_plan,
                     cancel=taker_sink.cancel,
                     kill_switch=self.core.kill_switch,
+                    min_fair_value=self.settings.maker_min_fair_value,
+                    max_fair_value=self.settings.maker_max_fair_value,
                 )
                 _LOG.warning("RESIDUAL-TAKER-001 LIVE enabled")
                 upstream_observer = model_execution_observer

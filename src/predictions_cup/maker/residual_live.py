@@ -68,6 +68,8 @@ class ResidualTakerLiveCoordinator:
         dispatch: PlanDispatcher,
         cancel: CancelDispatcher,
         kill_switch: MakerKillSwitch,
+        min_fair_value: float = 0.0,
+        max_fair_value: float = 1.0,
     ) -> None:
         if not tracked_exchange_ids:
             raise ValueError("LIVE residual taker requires an explicit universe")
@@ -84,6 +86,10 @@ class ResidualTakerLiveCoordinator:
         self._dispatch = dispatch
         self._cancel = cancel
         self._kill_switch = kill_switch
+        # Near-certain markets are not taken: a residual there is mostly
+        # settlement/bag-holding risk, not mean reversion.
+        self._min_fair_value = min_fair_value
+        self._max_fair_value = max_fair_value
         # Remainder cancels that did not conclude; retried every cycle so a
         # taker order is never left resting at a stale price.
         self._pending_cancels: dict[str, ExecutionEnvelope] = {}
@@ -112,7 +118,9 @@ class ResidualTakerLiveCoordinator:
                 max_pm_book_age_ns=self._max_pm_book_age_ns,
                 observed_monotonic_ns=snapshot.now_monotonic_ns,
             )
-            if state is None:
+            if state is None or not (
+                self._min_fair_value <= state.pm_mid <= self._max_fair_value
+            ):
                 continue
             signal = self._signal.on_state(state)
             if signal is None:
