@@ -295,6 +295,11 @@ class MakerService:
                 ),
                 governor_snapshot=rest.governor_snapshot,
                 bulk_prices_tracked_only=True,
+                extra_bulk_price_exchange_ids=tuple(
+                    value.strip()
+                    for value in self.settings.maker_mark_only_exchange_ids.split(",")
+                    if value.strip()
+                ),
                 observation_emitter=observation_emitter,
                 observation_process_instance_id=observe_recorder.session_id,
             )
