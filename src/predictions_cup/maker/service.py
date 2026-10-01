@@ -28,11 +28,12 @@ from predictions_cup.execution.interlocks import (
 )
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
-from predictions_cup.execution.models import ExecutionMode, LifecycleState
+from predictions_cup.execution.models import ExecutionEvent, ExecutionMode, LifecycleState
 from predictions_cup.execution.recovery import (
     recover_in_session_cancellations,
     recover_startup,
 )
+from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.external.polymarket.client import ClobMarketDataClient
 from predictions_cup.external.polymarket.health import IngestionHealth
 from predictions_cup.external.polymarket.models import JsonObject, PayloadError
@@ -42,6 +43,7 @@ from predictions_cup.maker.adapters import (
     LiveMakerExecutionAdapter,
     ShadowMakerExecutionAdapter,
 )
+from predictions_cup.maker.contracts import MakerMarketSnapshot
 from predictions_cup.maker.coordinator import MakerCoordinator
 from predictions_cup.maker.factory import MakerRuntimeComponents, build_maker_components
 from predictions_cup.maker.instance_lock import MakerInstanceLock
@@ -50,6 +52,8 @@ from predictions_cup.maker.recovery import reconcile_maker_quote_registry
 from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.mapping.models import MappingDocument
+from predictions_cup.models.registry import default_model_registry
+from predictions_cup.models.runtime import LiveModelCoordinator, ModelRuntime
 from predictions_cup.observe import (
     BoundedObservationEmitter,
     CaptureObservationSink,
@@ -89,7 +93,7 @@ from predictions_cup.sig.account_state import (
     AccountRealtimeStateEngine,
     AccountTrustTransition,
 )
-from predictions_cup.sig.errors import SigApiError
+from predictions_cup.sig.errors import SigApiError, SigExecutionUncertainError
 from predictions_cup.sig.governed_client import GovernedSigRestClient
 from predictions_cup.sig.launch_storage import ObservationCaptureRecorder
 from predictions_cup.sig.realtime_models import MarketBatchDto
@@ -144,6 +148,14 @@ class MakerService:
         self._last_health: tuple[bool, bool, bool, datetime | None] | None = None
         self._observation_health_provider: ObservationHealthProvider | None = None
         self._observation_health_publisher: ObservationHealthStatusPublisher | None = None
+        # Resolve/validate both model allowlists at service startup.  In
+        # particular, ENV live-on + code live-off fails before any market loop.
+        self._model_runtime = ModelRuntime.from_allowlists(
+            default_model_registry(),
+            paper_model_ids=settings.model_paper_ids,
+            live_model_ids=settings.model_live_ids,
+            platform_live_ready=False,
+        )
 
     def observation_health(self) -> ObservationHealthSnapshot | None:
         provider = self._observation_health_provider
@@ -453,6 +465,50 @@ class MakerService:
                     observation_process_instance_id=observe_recorder.session_id,
                 )
 
+            model_execution_observer = None
+            if (
+                self.settings.model_live_ids.strip()
+                and self.core.risk_context.mode is ExecutionMode.LIVE
+            ):
+                if (
+                    risk_context_source is None
+                    or live_sink is None
+                    or shadow_runtime is None
+                ):
+                    raise RuntimeError(
+                        "LIVE model runtime requires RISK-002, BUILD-009 and SHADOW"
+                    )
+                self._model_runtime = ModelRuntime.from_allowlists(
+                    default_model_registry(),
+                    paper_model_ids=self.settings.model_paper_ids,
+                    live_model_ids=self.settings.model_live_ids,
+                    platform_live_ready=True,
+                )
+                model_live_sink = live_sink
+
+                async def dispatch_model_plan(
+                    plan: ExecutionPlan,
+                    snapshot: MakerMarketSnapshot,
+                ) -> ExecutionEvent:
+                    del snapshot
+                    try:
+                        return await model_live_sink.dispatch(plan)
+                    except SigExecutionUncertainError:
+                        return await model_live_sink.dispatch_recovery(
+                            plan.envelope,
+                            plan=plan,
+                        )
+
+                model_coordinator = LiveModelCoordinator(
+                    self._model_runtime,
+                    mapping_version=shadow_runtime.mapping_version,
+                    risk_context=risk_context,
+                    reservations=self.core.reservations,
+                    dispatch=dispatch_model_plan,
+                    decision_observer=shadow_runtime.persist_model_decision,
+                )
+                model_execution_observer = model_coordinator.on_state_change
+
             coordinator = MakerCoordinator(
                 engine=self.core.engine,
                 lifecycle=self.core.lifecycle,
@@ -477,6 +533,7 @@ class MakerService:
                 snapshot_observer=(
                     None if shadow_runtime is None else shadow_runtime.observe
                 ),
+                execution_observer=model_execution_observer,
                 # LIVE writes are paced one exchange at a time so the asyncio
                 # shell regains control between governed REST operations and
                 # snapshots the next market from current state.

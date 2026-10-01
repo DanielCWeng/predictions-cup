@@ -69,6 +69,9 @@ jobs:
       - name: CANDIDATE-RUNTIME-001 benchmark
         run: python scripts/benchmark_candidate_runtime001.py --markets 237 --bursts 20
 
+      - name: MODEL-RUNTIME-001 benchmark
+        run: python benchmarks/model_runtime.py --iterations 20000
+
       - name: OBSERVE-001 emitter overhead benchmark
         run: python scripts/benchmark_observe001.py --iterations 100000
 
