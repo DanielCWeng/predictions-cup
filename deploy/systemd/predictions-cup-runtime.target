@@ -1,0 +1,7 @@
+[Unit]
+Description=Predictions Cup safe launch runtime
+Wants=predictions-cup-sig-capture.service predictions-cup-polymarket-capture.service predictions-cup-maker.service predictions-cup-status.timer
+After=network-online.target
+
+[Install]
+WantedBy=multi-user.target
