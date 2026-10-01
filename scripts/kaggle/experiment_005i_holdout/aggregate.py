@@ -205,6 +205,33 @@ def main() -> None:
         else None
     )
 
+    reversal_slices: dict[str, dict[str, dict[str, float | int]]] = {}
+    sample_slices = rev_agg[rev_agg["surface"] == "SAMPLE"]
+    for slice_type, group in sample_slices.groupby("slice_type", dropna=False):
+        key = str(slice_type)
+        reversal_slices[key] = {}
+        for row in group.itertuples(index=False):
+            reversal_slices[key][str(row.slice)] = {
+                "n": int(row.n),
+                "reversal_rate": float(row.reversal_rate),
+            }
+
+    regime_confirmation_rows: dict[str, list[dict[str, Any]]] = {}
+    for state in ("PRICE_DISCOVERY", "LIQUIDITY_STRESS"):
+        rows = regimes[regimes["state"] == state][
+            [
+                "worker_id",
+                "occupancy_minutes",
+                "exits",
+                "exit_hazard_per_minute",
+                "dwell_p90_min",
+                "future_abs_5m_mean",
+                "ofi_sign_agreement",
+                "ofi_sign_n",
+            ]
+        ].to_dict("records")
+        regime_confirmation_rows[state] = rows
+
     gates = {
         "OFI_INCREMENTAL": {
             "supported": (agg_sample_base - agg_sample_ofi) > 0 and sample_positive_workers >= 3,
@@ -258,6 +285,9 @@ def main() -> None:
         "artifact_ids": [int(x) for x in spec["artifacts"]],
         "workers": worker_rows,
         "confirmatory_gates": gates,
+        "reversal_falsification_slices": reversal_slices,
+        "regime_confirmation_by_worker": regime_confirmation_rows,
+        "resilience_confirmation_by_worker": resilience_worker_rows,
         "all_primary_gates_supported": all(v["supported"] for v in gates.values()),
         "holdout_read": True,
         "post_holdout_refit": False,
