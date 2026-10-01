@@ -10,5 +10,6 @@
     "ev18_ok_sc_runoff_ga_runoff/date=2026-08-24/hour=00/events.parquet",
     "baseline_sep/date=2026-09-01/hour=00/events.parquet"
   ],
-  "note": "EXPERIMENT-005G representative small sample across v1/v2/ag6/v3 plus ev18 and baseline for schema/observability audit; read-only."
+  "note": "EXPERIMENT-005G representative schema samples across v1/v2/ag6/v3 plus ev18/baseline; retry after preserving duplicate events.parquet basenames.",
+  "attempt": 2
 }
