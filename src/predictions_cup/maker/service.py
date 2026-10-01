@@ -294,6 +294,7 @@ class MakerService:
                     self.settings.sig_rest_governor_rate_per_second
                 ),
                 governor_snapshot=rest.governor_snapshot,
+                bulk_prices_tracked_only=True,
                 observation_emitter=observation_emitter,
                 observation_process_instance_id=observe_recorder.session_id,
             )

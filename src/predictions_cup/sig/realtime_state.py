@@ -175,6 +175,7 @@ class SigRealtimeStateEngine:
         bulk_price_refresh_seconds: float = 10.0,
         governed_rate_per_second: float = 2.0,
         periodic_bulk_refresh_enabled: bool = True,
+        bulk_prices_tracked_only: bool = False,
         governor_snapshot: GovernorSnapshotFn | None = None,
         clock: Clock = lambda: datetime.now(UTC),
         observation_emitter: ObservationEmitter | None = None,
@@ -205,6 +206,9 @@ class SigRealtimeStateEngine:
         self.topic = f"tournament:{tournament_id}"
         self._market_topic_prefix = f"{self.topic}:market:"
         self._configured_tracked_exchange_ids = tracked
+        # MAKE quotes a handful of exchanges; sweeping every tournament price
+        # through the shared REST governor starves its account/mark refreshes.
+        self._bulk_prices_tracked_only = bulk_prices_tracked_only and bool(tracked)
         self._book_depth = book_depth
         self._open_book_max_trusted_age = timedelta(
             seconds=open_book_max_trusted_age_seconds
@@ -500,7 +504,12 @@ class SigRealtimeStateEngine:
         reason: str,
         priority: RestPriority = RestPriority.BACKGROUND,
     ) -> None:
-        exchange_ids = sorted(self.states)
+        exchange_ids = sorted(
+            exchange_id
+            for exchange_id in self.states
+            if not self._bulk_prices_tracked_only
+            or exchange_id in self._configured_tracked_exchange_ids
+        )
         if not exchange_ids:
             self._last_bulk_price_refresh_at = self._clock()
             return
