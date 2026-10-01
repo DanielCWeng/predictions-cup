@@ -12,6 +12,9 @@ from __future__ import annotations
 class NoopSigRealtimeRecorder:
     """Accept SIG state-engine recorder callbacks without performing I/O."""
 
+    def record_raw_batch(self, **fields: object) -> None:
+        del fields
+
     def record_delivery(self, **fields: object) -> None:
         del fields
 
@@ -34,6 +37,9 @@ class NoopSigRealtimeRecorder:
         del fields
 
     def record_book(self, **fields: object) -> None:
+        del fields
+
+    def record_health(self, **fields: object) -> None:
         del fields
 
     def record_transition(self, **fields: object) -> None:
