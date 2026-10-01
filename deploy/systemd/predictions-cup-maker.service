@@ -1,0 +1,32 @@
+# FULLSTACK-002 safe MAKE/SHADOW composition. This unit can never authorize LIVE.
+[Unit]
+Description=Predictions Cup MAKE + SHADOW + OBSERVE + LIVE-LEARN safe runtime
+Wants=network-online.target
+After=network-online.target predictions-cup-sig-capture.service
+OnFailure=predictions-cup-alert@%n.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=@@RUNTIME_USER@@
+WorkingDirectory=@@REPO_ROOT@@
+EnvironmentFile=@@RUNTIME_ENV@@
+Environment=PYTHONUNBUFFERED=1
+Environment=PREDICTIONS_CUP_TRADING_ENABLED=false
+Environment=PREDICTIONS_CUP_EXECUTION_MODE=SHADOW
+UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL
+ExecCondition=@@PYTHON_BIN@@ -m predictions_cup.fullstack check maker-shadow --runtime-env-only
+ExecStart=@@PYTHON_BIN@@ -m predictions_cup.maker --runtime-env-only
+Restart=on-failure
+RestartSec=2s
+KillSignal=SIGTERM
+TimeoutStopSec=45s
+KillMode=control-group
+StandardOutput=journal
+StandardError=journal
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=predictions-cup-runtime.target

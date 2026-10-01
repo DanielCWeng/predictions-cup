@@ -32,8 +32,12 @@ jobs:
       - name: Shell validation
         run: |
           bash -n scripts/install_runtime_services.sh
+          bash -n scripts/install_fullstack002.sh
+          bash -n scripts/cupctl
           if command -v shellcheck >/dev/null 2>&1; then
             shellcheck scripts/install_runtime_services.sh
+            shellcheck scripts/install_fullstack002.sh
+            shellcheck scripts/cupctl
           fi
 
       - name: Type check
@@ -79,3 +83,6 @@ jobs:
 
       - name: LIVE-LEARN-001 237-market burst
         run: python scripts/benchmark_live_learn001.py --markets 237 --candidates 6
+
+      - name: FULLSTACK-002 simulation rehearsal
+        run: python -m predictions_cup.fullstack rehearse --runtime-env-only

@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh Predictions Cup launch status
+
+[Timer]
+OnBootSec=5s
+OnUnitActiveSec=15s
+AccuracySec=1s
+Persistent=true
+Unit=predictions-cup-status.service
+
+[Install]
+WantedBy=timers.target predictions-cup-runtime.target
