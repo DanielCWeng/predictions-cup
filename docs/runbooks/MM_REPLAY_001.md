@@ -1,16 +1,19 @@
 # MM-REPLAY-001 — Historical fair-value-anchored market-making replay
 
-## Status before the current-universe order-book dataset lands
+## Current status
 
 ```text
 IMPLEMENTATION_READY
-DATA_STATUS=WAITING_FOR_DATA
-SCIENTIFIC_RESULT=NOT_RUN
+DATA_STATUS=BOUND
+PRIMARY_SCOPE=baseline_sep
+EXECUTION_UNIVERSE=140 EXACT / SAME
+SCIENTIFIC_RESULT=PENDING_RUNNING_REPLAY
 REAL SIG ORDERS SENT: NO
 ```
 
-No DATA-001, Hungary, Colombia, Peru, or unrelated Polymarket sample is an
-allowed scientific substitute. Tiny deterministic fixtures are engineering tests only.
+The landed DATA-003-linked corpus is bound. The canonical strict-as-of replay is still pending completion/review; no scientific conclusion should be inferred from job status alone.
+
+No DATA-001, Hungary, Colombia, Peru, or unrelated Polymarket sample is an allowed scientific substitute. Tiny deterministic fixtures are engineering tests only.
 
 ## Accepted contracts reused
 
@@ -26,8 +29,7 @@ allowed scientific substitute. Tiny deterministic fixtures are engineering tests
 
 ## Dataset contract
 
-`data/experiments/mm_replay_001/input_manifest.json` deliberately starts in
-`WAITING_FOR_DATA`. A scientific run requires:
+`data/experiments/mm_replay_001/input_manifest.json` is now bound to the landed corpus. The scientific contract requires:
 
 - exact Kaggle dataset slug and version;
 - source, source schema version, acquisition version, and explicit DATA-003 relation;
@@ -65,9 +67,9 @@ toxicity, fair-value-convergence, latency and market-breakdown artifacts plus
 `FINAL_REPORT.md` and the empirical handoff. `MM_CANDIDATE_CONFIG.json` is optional
 and is not emitted automatically: live promotion requires a separate evidence review.
 
-## GO workflow
+## Binding / replay workflow
 
-When the new order-book dataset is present:
+The dataset has already landed and been bound. The commands below document the reproducible binding path rather than a current waiting-state instruction:
 
 ```bash
 python scripts/mm_replay_001.py bind-dataset <owner/slug> \
@@ -88,7 +90,7 @@ If the dataset is materialized locally, the same gate can be checked before subm
 python scripts/mm_replay_001.py audit <dataset-root>
 ```
 
-Prepare the canonical Kaggle job only after the binding is complete:
+Prepare a runnable Kaggle job only after the binding is complete:
 
 ```bash
 python scripts/mm_replay_001.py prepare-job
@@ -99,9 +101,7 @@ git commit -m "MM-REPLAY-001: bind current DATA-003 order-book corpus"
 git push
 ```
 
-GitHub Actions then uses `kaggle/jobs/mm-replay-001.json`. The Kaggle kernel runs
-the input audit first and returns `SCIENTIFIC_RESULT=NOT_RUN` if it fails; only a
-passing audit reaches 005F/MM replay.
+GitHub Actions uses `kaggle/jobs/mm-replay-001.json`. The Kaggle kernel runs the input audit first; only a passing audit reaches 005F/MM replay. Do not edit a runnable job manifest merely to retrieve outputs while Kaggle slots are saturated. Post-run output-only manifest examples are stored under `data/experiments/mm_replay_001/` and can be copied into `kaggle/jobs/` after the target kernel is COMPLETE.
 
 To return the branch to a non-runnable waiting state:
 
