@@ -86,6 +86,7 @@ class PolymarketStorage:
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=30)
         connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute("PRAGMA cache_size=-1024")
         return connection
 
     def upsert_markets(self, markets: Sequence[PolymarketMarket], refreshed_at: str) -> None:

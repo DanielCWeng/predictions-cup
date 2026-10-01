@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import threading
 import uuid
 from collections.abc import Iterable
@@ -126,15 +127,25 @@ class PolymarketResearchStorage:
         *,
         shard_seconds: int = 60,
         max_rows_per_shard: int = 100_000,
+        max_buffer_bytes: int = 8 * 1024 * 1024,
     ) -> None:
         if shard_seconds <= 0:
             raise ValueError("shard_seconds must be positive")
         if max_rows_per_shard <= 0:
             raise ValueError("max_rows_per_shard must be positive")
+        if max_buffer_bytes <= 0:
+            raise ValueError("max_buffer_bytes must be positive")
         self.root = root
         self.shard_seconds = shard_seconds
         self.max_rows_per_shard = max_rows_per_shard
+        self.max_buffer_bytes = max_buffer_bytes
         self._buffers: dict[str, dict[int, list[dict[str, Any]]]] = {
+            stream: {} for stream in _SCHEMAS
+        }
+        self._buffer_sizes: dict[str, dict[int, list[int]]] = {
+            stream: {} for stream in _SCHEMAS
+        }
+        self._buffer_bytes: dict[str, dict[int, int]] = {
             stream: {} for stream in _SCHEMAS
         }
         self._lock = threading.Lock()
@@ -276,13 +287,20 @@ class PolymarketResearchStorage:
                     raise TypeError(f"{stream}.{time_field} must be datetime")
                 bucket = self._bucket(value)
                 buckets.setdefault(bucket, []).append(row)
+                row_size = _estimated_object_size(row)
+                self._buffer_sizes[stream].setdefault(bucket, []).append(row_size)
+                stream_bytes = self._buffer_bytes[stream]
+                stream_bytes[bucket] = stream_bytes.get(bucket, 0) + row_size
                 touched.add(bucket)
 
             newest = max(touched)
             for bucket in sorted(tuple(buckets)):
                 if bucket < newest:
                     self._flush_bucket(stream, bucket, force=True)
-                elif len(buckets[bucket]) >= self.max_rows_per_shard:
+                elif (
+                    len(buckets[bucket]) >= self.max_rows_per_shard
+                    or self._buffer_bytes[stream][bucket] >= self.max_buffer_bytes
+                ):
                     self._flush_bucket(stream, bucket, force=False)
         return len(rows)
 
@@ -294,18 +312,37 @@ class PolymarketResearchStorage:
         rows = self._buffers[stream].get(bucket)
         if not rows:
             self._buffers[stream].pop(bucket, None)
+            self._buffer_sizes[stream].pop(bucket, None)
+            self._buffer_bytes[stream].pop(bucket, None)
             return 0
 
+        sizes = self._buffer_sizes[stream][bucket]
+        buffered_bytes = self._buffer_bytes[stream][bucket]
         written = 0
-        while len(rows) >= self.max_rows_per_shard or (force and rows):
+        while rows and (
+            force
+            or len(rows) >= self.max_rows_per_shard
+            or buffered_bytes >= self.max_buffer_bytes
+        ):
             take = min(len(rows), self.max_rows_per_shard)
+            chunk_bytes = 0
+            for index, size in enumerate(sizes[:take]):
+                if index > 0 and chunk_bytes + size > self.max_buffer_bytes:
+                    take = index
+                    break
+                chunk_bytes += size
             chunk = rows[:take]
             del rows[:take]
+            del sizes[:take]
+            buffered_bytes -= chunk_bytes
+            self._buffer_bytes[stream][bucket] = buffered_bytes
             self._write_atomic(stream, bucket, chunk)
             written += len(chunk)
 
         if not rows:
             self._buffers[stream].pop(bucket, None)
+            self._buffer_sizes[stream].pop(bucket, None)
+            self._buffer_bytes[stream].pop(bucket, None)
         return written
 
     def _write_atomic(
@@ -353,3 +390,22 @@ def _fsync_directory(path: Path) -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+
+
+def _estimated_object_size(value: object, seen: set[int] | None = None) -> int:
+    """Conservatively estimate the Python object graph retained by a buffer row."""
+    if seen is None:
+        seen = set()
+    identity = id(value)
+    if identity in seen:
+        return 0
+    seen.add(identity)
+    size = sys.getsizeof(value)
+    if isinstance(value, dict):
+        size += sum(
+            _estimated_object_size(key, seen) + _estimated_object_size(item, seen)
+            for key, item in value.items()
+        )
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        size += sum(_estimated_object_size(item, seen) for item in value)
+    return size

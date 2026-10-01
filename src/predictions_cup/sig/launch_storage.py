@@ -215,10 +215,12 @@ class ImmutableCaptureSink:
         *,
         shard_seconds: int = 60,
         max_rows_per_shard: int = 5_000,
-        queue_max: int = 200_000,
+        queue_max: int = 16_384,
     ) -> None:
         if shard_seconds <= 0 or max_rows_per_shard <= 0 or queue_max <= 0:
             raise ValueError("capture storage limits must be positive")
+        if queue_max > 65_536:
+            raise ValueError("capture queue capacity must not exceed 65,536 rows")
         self.root = root
         self.shard_seconds = shard_seconds
         self.max_rows_per_shard = max_rows_per_shard
@@ -516,7 +518,7 @@ class LaunchSigRecorder(SigRealtimeRecorder):
         path: Path,
         *,
         research_root: Path,
-        queue_max: int = 200_000,
+        queue_max: int = 16_384,
         shard_seconds: int = 60,
         max_rows_per_shard: int = 5_000,
         session_id: str | None = None,

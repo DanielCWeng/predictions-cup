@@ -94,3 +94,9 @@ def test_operational_sqlite_survives_restart(tmp_path: Path) -> None:
         assert connection.execute(
             "SELECT COUNT(*) FROM ingestion_health"
         ).fetchone()[0] == 1
+
+
+def test_sqlite_connection_uses_one_mib_page_cache(tmp_path: Path) -> None:
+    storage = PolymarketStorage(tmp_path / "capture.sqlite3")
+    with storage._connect() as connection:
+        assert connection.execute("PRAGMA cache_size").fetchone()[0] == -1024

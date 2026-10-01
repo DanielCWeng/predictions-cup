@@ -23,6 +23,10 @@ class RestPriority(IntEnum):
     BACKGROUND = 2
 
 
+class RestGovernorQueueFullError(RuntimeError):
+    """A caller exceeded the bounded SIG REST governor backlog."""
+
+
 @dataclass(frozen=True)
 class RestGovernorSnapshot:
     rate_per_second: float
@@ -51,6 +55,7 @@ class SigRestGovernor:
         max_shared_cooldown_seconds: float = 8.0,
         burst_capacity: float = 2.0,
         high_priority_reserve: float = 1.0,
+        queue_max: int = 512,
         sleep: SleepFn = asyncio.sleep,
         monotonic: MonotonicFn = time.monotonic,
         random_fn: RandomFn = random.random,
@@ -67,6 +72,8 @@ class SigRestGovernor:
             raise ValueError(
                 "burst_capacity must leave one request above high_priority_reserve"
             )
+        if queue_max <= 0:
+            raise ValueError("queue_max must be positive")
         self.rate_per_second = rate_per_second
         self._burst_capacity = burst_capacity
         self._high_priority_reserve = high_priority_reserve
@@ -74,10 +81,11 @@ class SigRestGovernor:
         self._sleep = sleep
         self._monotonic = monotonic
         self._random = random_fn
+        self._queue_max = queue_max
 
         self._queue: asyncio.PriorityQueue[
             tuple[int, int, asyncio.Future[None]]
-        ] = asyncio.PriorityQueue()
+        ] = asyncio.PriorityQueue(maxsize=queue_max)
         self._queue_event = asyncio.Event()
         self._worker: asyncio.Task[None] | None = None
         self._sequence = 0
@@ -101,6 +109,10 @@ class SigRestGovernor:
     async def acquire(self, priority: RestPriority = RestPriority.NORMAL) -> None:
         if self._closed:
             raise RuntimeError("SIG REST governor is closed")
+        if self._queue.full():
+            raise RestGovernorQueueFullError(
+                f"SIG REST governor backlog is full (capacity={self._queue_max})"
+            )
         loop = asyncio.get_running_loop()
         future: asyncio.Future[None] = loop.create_future()
         self._sequence += 1

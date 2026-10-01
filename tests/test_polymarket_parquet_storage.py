@@ -151,3 +151,35 @@ def test_parquet_event_streams_preserve_source_and_observed_time(tmp_path: Path)
     assert trade["source_timestamp"] == source
     assert trade["observed_at"] == observed
     assert trade["event_id"] == hashed_trade_event_id("token-1", "tx-1")
+
+
+def test_parquet_buffers_flush_when_estimated_bytes_reach_limit(tmp_path: Path) -> None:
+    root = tmp_path / "research"
+    storage = PolymarketResearchStorage(
+        root,
+        max_rows_per_shard=1_000,
+        max_buffer_bytes=1,
+    )
+    storage.initialize()
+    observed = datetime(2026, 9, 25, 12, 0, 1, tzinfo=UTC)
+    changes = tuple(
+        BookChangeEvent(
+            market_id="0xmarket",
+            token_id=f"token-{index}",
+            side="BUY",
+            price=Decimal("0.45"),
+            size=Decimal("10"),
+            source_timestamp=observed,
+            observed_at=observed,
+            best_bid=Decimal("0.45"),
+            best_ask=Decimal("0.46"),
+            book_hash="hash-1",
+        )
+        for index in range(2)
+    )
+
+    assert storage.append_book_changes(changes) == 2
+    assert storage._buffers["book_changes"] == {}
+    files = _files(root, "book_changes")
+    assert len(files) == 2
+    assert [pq.ParquetFile(path).metadata.num_rows for path in files] == [1, 1]
