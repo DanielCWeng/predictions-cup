@@ -10,5 +10,6 @@
   "script_args": [],
   "install_project": true,
   "pip_packages": [],
-  "note": "Read-only V3 semantic probe on TRAIN-era files only. No HOLDOUT, no modeling, no orders."
+  "note": "Read-only V3 semantic probe on TRAIN-era files; adds accepted-mapping token overlap and valid-BBO coverage after Lane A retained zero states. No HOLDOUT, modeling or orders.",
+  "attempt": 2
 }
