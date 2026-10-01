@@ -256,10 +256,14 @@ def load_ev18(
         counts["relevant_rows"] += len(frame)
         if frame.empty:
             continue
-        frame["ts_ns"] = pd.to_datetime(
+        received = pd.to_datetime(
             frame["timestamp_received"],
             utc=True,
-        ).astype("int64")
+        )
+        frame["ts_ns"] = (
+            received.to_numpy(dtype="datetime64[ns]")
+            .astype("int64")
+        )
         frame["sequence"] = pd.to_numeric(
             frame["sequence"],
             errors="raise",
