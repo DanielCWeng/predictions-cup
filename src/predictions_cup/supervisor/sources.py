@@ -273,7 +273,34 @@ class SupervisorSources:
             max_age_seconds=self.capture_max_age_seconds,
         )
         status, section = primary
-        if status.valid or not status.available:
+        if status.valid:
+            section = dict(section)
+            research_storage = section.get("research_storage")
+            if isinstance(research_storage, dict):
+                for key in (
+                    "writer_alive",
+                    "queue_depth",
+                    "queue_capacity",
+                    "queue_high_water",
+                    "dropped_rows",
+                    "storage_failures",
+                    "operational_sqlite_bytes",
+                    "operational_wal_bytes",
+                    "written_rows",
+                    "written_shards",
+                ):
+                    if key in research_storage:
+                        section[key] = research_storage[key]
+            last_rest = _parse_datetime(section.get("last_rest_reconciliation"))
+            section["last_rest_reconciliation_age_seconds"] = _age(
+                status.read_at, last_rest
+            )
+            last_realtime = _parse_datetime(section.get("last_realtime_receive"))
+            section["last_realtime_receive_age_seconds"] = _age(
+                status.read_at, last_realtime
+            )
+            return status, section
+        if not status.available:
             return primary
         if not str(section.get("error", "")).startswith("OperationalError:no such table"):
             return primary
