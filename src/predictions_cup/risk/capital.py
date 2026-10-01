@@ -582,6 +582,8 @@ class ReconciliationError(RuntimeError):
     pass
 
 
+MARK_DRIFT_PER_CONTRACT = Decimal("0.005")
+
 def reconcile_capital_state(
     *,
     previous: CapitalRiskState,
@@ -678,11 +680,17 @@ def reconcile_capital_state(
         raise ReconciliationError("authoritative_position_pnl_incomplete")
     # Each rounded SIG figure contributes up to one cent of error to sums.
     aggregate_tolerance = pnl_tolerance * (len(authoritative_positions) + 1)
-    if abs(authoritative_position_unrealised - unrealised) > aggregate_tolerance:
+    # Positions and the account PnL summary are separate SIG reads seconds
+    # apart; allow one tick (0.005) of mark drift per held contract between them.
+    cross_read_tolerance = aggregate_tolerance + MARK_DRIFT_PER_CONTRACT * sum(
+        (abs(item.signed_quantity) for item in authoritative_positions.values()),
+        ZERO,
+    )
+    if abs(authoritative_position_unrealised - unrealised) > cross_read_tolerance:
         raise ReconciliationError("authoritative_unrealised_pnl_disagreement")
     if (
         reconstruction is not None
-        and abs(locally_computed_unrealised - unrealised) > aggregate_tolerance
+        and abs(locally_computed_unrealised - unrealised) > cross_read_tolerance
     ):
         raise ReconciliationError("local_mark_pnl_disagreement")
 
@@ -691,7 +699,7 @@ def reconcile_capital_state(
     global_halt = previous.global_halt
     session_pnl = authoritative.equity - previous.session_start_equity
     unrealised_change = unrealised - previous.session_start_unrealised_pnl
-    if abs(realised + unrealised_change - session_pnl) > aggregate_tolerance:
+    if abs(realised + unrealised_change - session_pnl) > cross_read_tolerance:
         raise ReconciliationError("authoritative_session_pnl_disagreement")
     hard_reason: str | None = None
     if session_loss_limit is not None and session_pnl <= -session_loss_limit:
