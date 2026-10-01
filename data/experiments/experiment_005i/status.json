@@ -2,12 +2,17 @@
   "schema_version": 1,
   "experiment": "EXPERIMENT-005I",
   "branch": "experiment/005i-regime-dynamics-tradfi",
-  "phase": "INPUT_SEMANTICS",
-  "status": "AUDIT_JOB_PREPARED",
+  "phase": "TRAIN_DISCOVERY",
+  "status": "TRAIN_ORDERBOOK_SWEEP_RUNNING",
   "primary_dataset": "polyleviathan/sig-cup-data003-orderbooks",
   "accepted_mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
   "expiration_regime_research": "DEFERRED",
   "holdout_read": false,
   "make_modified": false,
-  "real_sig_orders_sent": false
+  "real_sig_orders_sent": false,
+  "visible_book_reconstruction": "VALIDATED_V3",
+  "level_reconstruction_gate": "data/experiments/experiment_005i/LEVEL_RECONSTRUCTION_GATE.json",
+  "split_plan": "data/experiments/experiment_005i/SPLIT_PLAN.json",
+  "predeclared_battery": "data/experiments/experiment_005i/PREDECLARED_BATTERY.json",
+  "flow_persistence_dev": "DEV_SURVIVOR_DESCRIPTIVE"
 }
