@@ -410,6 +410,20 @@ class MakerService:
                     raise RuntimeError(
                         "LIVE startup missing execution or RISK-002 recovery authority"
                     )
+                # Startup reads above can outlast the RISK mark age; refresh
+                # held-position marks right before the admission interlock.
+                held_exchange_ids = {
+                    position.exchange_id
+                    for position in (
+                        authoritative_account.positions
+                        if authoritative_account is not None
+                        else ()
+                    )
+                }.intersection(sig_state.states)
+                if held_exchange_ids:
+                    await sig_state.refresh_exchange_prices(
+                        held_exchange_ids, reason="live_startup_risk_marks"
+                    )
                 capital = risk_context_source().capital_state
                 capital_ready = (
                     capital is not None

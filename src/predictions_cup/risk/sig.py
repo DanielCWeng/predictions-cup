@@ -63,7 +63,17 @@ class SigRealtimeRiskMarkProvider:
             age_seconds = (
                 wall_now - observed_at.astimezone(UTC)
             ).total_seconds()
-            trusted = self._state.health.connected and age_seconds >= -1.0
+            # A REST (bulk price / snapshot) mark is authoritative without the
+            # Realtime socket, e.g. at the LIVE startup interlock; RISK applies
+            # its own max mark age. A Realtime-sourced mark needs the socket.
+            realtime_sourced = (
+                exchange.last_scalar_observed_at is None
+                and exchange.last_realtime_observed_at is not None
+                and observed_at == exchange.last_realtime_observed_at
+            )
+            trusted = age_seconds >= -1.0 and (
+                self._state.health.connected or not realtime_sourced
+            )
             age_ns = max(0, int(max(age_seconds, 0.0) * 1_000_000_000))
             marks.append(
                 RiskMark(
