@@ -28,6 +28,10 @@ DEFAULT_LANE_B = ROOT / (
     "data/experiments/experiment_005g/lane_b/"
     "SEP_TRAIN_DEV_EVIDENCE.json"
 )
+DEFAULT_LANE_B_SEQUENTIAL = ROOT / (
+    "data/experiments/experiment_005g/lane_b/"
+    "SEQUENTIAL_TRAIN_DEV_EVIDENCE.json"
+)
 
 DATASET = "polyleviathan/sig-cup-data003-orderbooks"
 DATASET_VERSION = 1
@@ -140,9 +144,48 @@ def lane_b_candidates(evidence: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(output, key=lambda row: str(row["candidate_id"]))
 
 
+def sequential_candidates(evidence: dict[str, Any]) -> list[dict[str, Any]]:
+    promoted = evidence.get("promoted_train_dev")
+    if not isinstance(promoted, list):
+        raise RuntimeError("Sequential Lane B evidence missing promoted_train_dev list")
+    output: list[dict[str, Any]] = []
+    for row in promoted:
+        if row.get("promotion_gate_pass") is not True:
+            raise RuntimeError(
+                "Sequential promoted list contains a row without promotion_gate_pass=true"
+            )
+        target = str(row["target"])
+        feature = str(row["feature"])
+        output.append(
+            {
+                "candidate_id": f"005G_DISCOVERY_SEQ|{target}|{feature}",
+                "lane": "B_OPEN_DISCOVERY",
+                "target": target,
+                "target_family": str(row["target_family"]),
+                "feature": feature,
+                "feature_family": str(row["feature_family"]),
+                "baseline": [str(value) for value in row["baseline"]],
+                "kind": str(row["kind"]),
+                "model": str(row["model"]),
+                "dev_mean_loss_improvement": row["mean_loss_improvement"],
+                "dev_relative_mse_improvement": row["relative_mse_improvement"],
+                "dev_signflip_p": row["signflip_p"],
+                "dev_p_bh": row.get("p_bh"),
+                "dev_block_bootstrap_lower": row["block_bootstrap_lower"],
+                "dev_leave_market_min": row["leave_market_min"],
+                "sequential_family": True,
+            }
+        )
+    return sorted(output, key=lambda row: str(row["candidate_id"]))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--lane-b", default=str(DEFAULT_LANE_B))
+    parser.add_argument(
+        "--lane-b-sequential",
+        default=str(DEFAULT_LANE_B_SEQUENTIAL),
+    )
     parser.add_argument("--output", required=True)
     parser.add_argument("--lane-a-runner-commit", required=True)
     parser.add_argument("--lane-b-runner-commit", required=True)
@@ -153,6 +196,8 @@ def main() -> None:
     pre = load_json(LANE_A_PRE)
     lane_b_path = Path(args.lane_b)
     lane_b = load_json(lane_b_path)
+    lane_b_sequential_path = Path(args.lane_b_sequential)
+    lane_b_sequential = load_json(lane_b_sequential_path)
 
     if active.get("lane") != "A_STRICT_005F_REPLICATION":
         raise RuntimeError("wrong active Lane A evidence")
@@ -160,14 +205,22 @@ def main() -> None:
         raise RuntimeError("wrong PRE Lane A evidence")
     if lane_b.get("lane") != "B_OPEN_DISCOVERY":
         raise RuntimeError("wrong Lane B evidence")
+    if lane_b_sequential.get("lane") != "B_SEQUENTIAL_FAMILIES":
+        raise RuntimeError("wrong sequential Lane B evidence")
     if active.get("provenance", {}).get("holdout_read") is not False:
         raise RuntimeError("active evidence indicates holdout read")
     if pre.get("provenance", {}).get("holdout_read") is not False:
         raise RuntimeError("PRE evidence indicates holdout read")
     if lane_b.get("holdout_read") is not False:
         raise RuntimeError("Lane B evidence indicates holdout read")
+    if lane_b_sequential.get("holdout_read") is not False:
+        raise RuntimeError("Sequential Lane B evidence indicates holdout read")
 
-    candidates = [lane_a_candidate(pre), *lane_b_candidates(lane_b)]
+    candidates = [
+        lane_a_candidate(pre),
+        *lane_b_candidates(lane_b),
+        *sequential_candidates(lane_b_sequential),
+    ]
     ids = {str(row["candidate_id"]) for row in candidates}
     if ids & FORBIDDEN_LANE_A:
         raise RuntimeError("forbidden Lane A candidate entered freeze")
@@ -197,6 +250,10 @@ def main() -> None:
             "lane_a_pre_sha256": sha256(LANE_A_PRE),
             "lane_b_path": str(lane_b_path.relative_to(ROOT)),
             "lane_b_sha256": sha256(lane_b_path),
+            "lane_b_sequential_path": str(
+                lane_b_sequential_path.relative_to(ROOT)
+            ),
+            "lane_b_sequential_sha256": sha256(lane_b_sequential_path),
         },
         "code": {
             "lane_a_runner_commit": args.lane_a_runner_commit,
@@ -205,7 +262,7 @@ def main() -> None:
         },
         "candidate_admission": {
             "lane_a_rule": "only 005F_REPL_PRE_UPDATE; all other Lane A coordinates frozen out",
-            "lane_b_rule": "only promotion_gate_pass=true rows from frozen Lane B screen",
+            "lane_b_rule": "only promotion_gate_pass=true rows from frozen broad and sequential Lane B screens",
             "manual_replacements_allowed": False,
             "post_holdout_tuning_allowed": False,
         },
