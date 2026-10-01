@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "status": "TRAIN_ONLY_PRE_DEV_SCREEN",
+  "target": "sign(future_ret_1m), conditional on non-zero future one-minute move",
+  "baseline": [
+    "mid",
+    "relative_spread",
+    "depth_total5",
+    "quote_events",
+    "rv_5m",
+    "imbalance1",
+    "ret_1m",
+    "ret_5m"
+  ],
+  "evaluation": "five temporal leave-one-worker-out folds; StandardScaler + LogisticRegression(C=0.1); log-loss primary; all selection before DEV read",
+  "candidates": {
+    "OFI_DEPTH_NORM": {
+      "mean_logloss_improvement": 0.004345,
+      "positive_workers": 5,
+      "worker_improvements": [
+        0.0026,
+        0.00693,
+        0.00266,
+        0.00414,
+        0.00539
+      ],
+      "decision": "ADVANCE_TO_DEV"
+    },
+    "OFI_EVENT_NORM": {
+      "mean_logloss_improvement": -0.000286,
+      "positive_workers": 4,
+      "worker_improvements": [
+        0.00019,
+        0.00008,
+        0.00009,
+        0.00013,
+        -0.00192
+      ],
+      "decision": "NO_INCREMENTAL_VALUE"
+    },
+    "LEVEL_FLOW_NORM": {
+      "mean_logloss_improvement": -0.000046,
+      "positive_workers": 4,
+      "worker_improvements": [
+        0.00006,
+        0.00002,
+        0.00002,
+        -0.00035,
+        0.00001
+      ],
+      "decision": "NO_INCREMENTAL_VALUE"
+    },
+    "STATIC_IMBALANCE5": {
+      "mean_logloss_improvement": 0.000266,
+      "positive_workers": 4,
+      "worker_improvements": [
+        0.00033,
+        0.00022,
+        -0.00091,
+        0.00083,
+        0.00086
+      ],
+      "decision": "DESCRIPTIVE_ONLY"
+    },
+    "LOB_SHAPE": {
+      "features": [
+        "depth_concentration",
+        "book_entropy",
+        "book_shape_distance",
+        "wall_ratio"
+      ],
+      "mean_logloss_improvement": 0.000339,
+      "positive_workers": 1,
+      "worker_improvements": [
+        0.00206,
+        -0.00014,
+        -0.00008,
+        -0.00005,
+        -0.00009
+      ],
+      "decision": "NO_INCREMENTAL_VALUE"
+    },
+    "COMMON_LIQUIDITY": {
+      "features": [
+        "common_median_spread",
+        "common_median_depth",
+        "common_quote_events",
+        "common_rv_5m"
+      ],
+      "mean_logloss_improvement": 0.000014,
+      "positive_workers": 3,
+      "worker_improvements": [
+        0.00011,
+        0.00027,
+        -0.00021,
+        0.00001,
+        -0.00011
+      ],
+      "decision": "NO_INCREMENTAL_VALUE"
+    },
+    "AGE_QUOTE": {
+      "mean_logloss_improvement": -0.000711,
+      "positive_workers": 1,
+      "worker_improvements": [
+        -0.00008,
+        -0.00345,
+        0,
+        0,
+        -0.00003
+      ],
+      "decision": "NO_INCREMENTAL_NEXT_MOVE_VALUE"
+    },
+    "REPLENISHMENT": {
+      "features": [
+        "replenishment_1m",
+        "withdrawal_1m",
+        "visible_add_share"
+      ],
+      "mean_logloss_improvement": -0.000048,
+      "positive_workers": 2,
+      "worker_improvements": [
+        0.00003,
+        -0.00007,
+        -0.00002,
+        -0.00023,
+        0.00006
+      ],
+      "decision": "NO_GENERIC_NEXT_MOVE_VALUE"
+    },
+    "PRESSURE_PROXY": {
+      "mean_logloss_improvement": 0.000508,
+      "positive_workers": 3,
+      "worker_improvements": [
+        -0.00071,
+        -0.00096,
+        0.00156,
+        0.00136,
+        0.00128
+      ],
+      "decision": "UNSTABLE"
+    }
+  },
+  "interpretation": "The result distinguishes a specific depth-normalised BBO OFI object from nearby textbook proxies. Generic book-shape, common-liquidity, age, visible multi-level flow and replenishment features do not earn DEV promotion for one-minute directional prediction.",
+  "boundaries": [
+    "This screen concerns incremental one-minute direction prediction only; a rejected feature may remain useful for hazard/state description.",
+    "The sampled TRAIN surface is activity/depth stratified; effect sizes are comparative model diagnostics, not population frequencies.",
+    "No DEV or HOLDOUT outcomes were used to choose these dispositions."
+  ],
+  "holdout_read": false,
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}
