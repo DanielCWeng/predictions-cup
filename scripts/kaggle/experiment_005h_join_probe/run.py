@@ -171,77 +171,207 @@ def accepted_groups(
 def load_ev18(
     root: Path,
     tokens: set[str],
-) -> tuple[
-    pd.DataFrame,
-    dict[str, list[tuple[int, int, float, float]]],
-    dict[str, Any],
-]:
+) -> tuple[pd.DataFrame, dict[str, Any]]:
     files = sorted((root / WINDOW).rglob("*.parquet"))
     if len(files) != 96:
         raise RuntimeError(f"expected 96 EV18 files, found {len(files)}")
     token_bytes = {int(t).to_bytes(32, "big") for t in tokens}
     trades: list[dict[str, Any]] = []
-    bbo: defaultdict[str, list[tuple[int, int, float, float]]] = defaultdict(list)
+    last_bbo: dict[str, tuple[int, int, float, float]] = {}
     counts: defaultdict[str, int] = defaultdict(int)
     wanted = [
-        "event_type", "timestamp_received", "sequence", "asset_id",
-        "best_bid", "best_ask", "bids", "asks", "price", "size", "side",
+        "event_type",
+        "timestamp_received",
+        "sequence",
+        "asset_id",
+        "best_bid",
+        "best_ask",
+        "bids",
+        "asks",
+        "price",
+        "size",
+        "side",
         "transaction_hash",
     ]
     for idx, path in enumerate(files):
         pf = pq.ParquetFile(path)
         available = [c for c in wanted if c in pf.schema_arrow.names]
         if "sequence" not in available or "timestamp_received" not in available:
-            raise RuntimeError(f"EV18 V3 ordering columns absent in {path}")
-        for batch in pf.iter_batches(batch_size=250_000, columns=available):
-            frame = batch.to_pandas()
-            counts["raw_rows"] += len(frame)
-            if frame.empty:
+            raise RuntimeError(
+                f"EV18 V3 ordering columns absent in {path}"
+            )
+        frame = pf.read(columns=available).to_pandas()
+        counts["raw_rows"] += len(frame)
+        if frame.empty:
+            continue
+        frame = frame[frame["asset_id"].isin(token_bytes)].copy()
+        counts["mapped_rows"] += len(frame)
+        if frame.empty:
+            continue
+        frame = frame[
+            frame["event_type"]
+            .astype(str)
+            .isin(["book", "price_change", "last_trade_price"])
+        ].copy()
+        counts["relevant_rows"] += len(frame)
+        if frame.empty:
+            continue
+        frame["ts_ns"] = pd.to_datetime(
+            frame["timestamp_received"],
+            utc=True,
+        ).astype("int64")
+        frame["sequence"] = pd.to_numeric(
+            frame["sequence"],
+            errors="raise",
+        ).astype("uint64")
+
+        bbo_frames: list[pd.DataFrame] = []
+        pc_rows = frame[
+            frame["event_type"].astype(str) == "price_change"
+        ].copy()
+        if not pc_rows.empty:
+            pc_rows["bb"] = pd.to_numeric(
+                pc_rows["best_bid"],
+                errors="coerce",
+            )
+            pc_rows["ba"] = pd.to_numeric(
+                pc_rows["best_ask"],
+                errors="coerce",
+            )
+            pc_rows = pc_rows[
+                pc_rows["bb"].notna()
+                & pc_rows["ba"].notna()
+                & (pc_rows["bb"] > 0.0)
+                & (pc_rows["ba"] < 1.0)
+                & (pc_rows["bb"] <= pc_rows["ba"])
+            ]
+            if not pc_rows.empty:
+                bbo_frames.append(
+                    pc_rows[
+                        [
+                            "asset_id",
+                            "ts_ns",
+                            "sequence",
+                            "bb",
+                            "ba",
+                        ]
+                    ]
+                )
+
+        book_rows = frame[
+            frame["event_type"].astype(str) == "book"
+        ]
+        book_records: list[dict[str, Any]] = []
+        for rec in book_rows[
+            ["asset_id", "ts_ns", "sequence", "bids", "asks"]
+        ].to_dict(orient="records"):
+            bb = best_from_levels(rec["bids"], bid=True)
+            ba = best_from_levels(rec["asks"], bid=False)
+            if bb is None or ba is None or not (0.0 < bb <= ba < 1.0):
+                counts["book_rows_invalid_bbo"] += 1
                 continue
-            frame = frame[frame["asset_id"].isin(token_bytes)]
-            counts["mapped_rows"] += len(frame)
-            if frame.empty:
-                continue
-            frame["ts_ns"] = pd.to_datetime(frame["timestamp_received"], utc=True).astype("int64")
-            frame["sequence"] = pd.to_numeric(frame["sequence"], errors="raise").astype("uint64")
-            for rec in frame.to_dict(orient="records"):
-                kind = str(rec["event_type"])
-                token = bytes_to_token(rec["asset_id"])
-                if kind == "last_trade_price":
-                    try:
-                        price = float(rec["price"])
-                        size = float(rec["size"])
-                    except (TypeError, ValueError):
-                        continue
-                    if not (math.isfinite(price) and math.isfinite(size) and size > 0):
-                        continue
-                    trades.append({
-                        "token_id": token,
-                        "ts_ns": int(rec["ts_ns"]),
-                        "sequence": int(rec["sequence"]),
-                        "price": price,
-                        "size": size,
-                        "side": str(rec.get("side") or "").upper(),
-                        "tx_hash": normalize_tx_hash(
-                            rec.get("transaction_hash")
-                        ),
-                    })
-                    counts["trade_rows"] += 1
-                elif kind in {"price_change", "book"}:
-                    if kind == "price_change":
-                        try:
-                            bb = float(rec["best_bid"])
-                            ba = float(rec["best_ask"])
-                        except (TypeError, ValueError):
-                            continue
-                    else:
-                        bb = best_from_levels(rec.get("bids"), bid=True)
-                        ba = best_from_levels(rec.get("asks"), bid=False)
-                        if bb is None or ba is None:
-                            continue
-                    if 0.0 < bb <= ba < 1.0:
-                        bbo[token].append((int(rec["ts_ns"]), int(rec["sequence"]), bb, ba))
-                        counts["bbo_rows"] += 1
+            book_records.append(
+                {
+                    "asset_id": rec["asset_id"],
+                    "ts_ns": int(rec["ts_ns"]),
+                    "sequence": int(rec["sequence"]),
+                    "bb": bb,
+                    "ba": ba,
+                }
+            )
+        if book_records:
+            bbo_frames.append(pd.DataFrame(book_records))
+
+        bbo_by_token: dict[
+            str,
+            list[tuple[int, int, float, float]],
+        ] = {}
+        if bbo_frames:
+            bbo = pd.concat(bbo_frames, ignore_index=True)
+            bbo.sort_values(
+                ["asset_id", "ts_ns", "sequence"],
+                kind="stable",
+                inplace=True,
+            )
+            counts["bbo_rows"] += len(bbo)
+            for asset_id, token_rows in bbo.groupby(
+                "asset_id",
+                sort=False,
+            ):
+                token = bytes_to_token(asset_id)
+                ordered = [
+                    (
+                        int(r["ts_ns"]),
+                        int(r["sequence"]),
+                        float(r["bb"]),
+                        float(r["ba"]),
+                    )
+                    for r in token_rows.to_dict(orient="records")
+                ]
+                bbo_by_token[token] = ordered
+
+        trade_rows = frame[
+            frame["event_type"].astype(str) == "last_trade_price"
+        ].copy()
+        if not trade_rows.empty:
+            trade_rows["trade_price"] = pd.to_numeric(
+                trade_rows["price"],
+                errors="coerce",
+            )
+            trade_rows["trade_size"] = pd.to_numeric(
+                trade_rows["size"],
+                errors="coerce",
+            )
+            trade_rows = trade_rows[
+                trade_rows["trade_price"].notna()
+                & trade_rows["trade_size"].notna()
+                & (trade_rows["trade_price"] >= 0.0)
+                & (trade_rows["trade_price"] <= 1.0)
+                & (trade_rows["trade_size"] > 0.0)
+            ]
+        for rec in trade_rows.to_dict(orient="records"):
+            token = bytes_to_token(rec["asset_id"])
+            ts_ns = int(rec["ts_ns"])
+            sequence = int(rec["sequence"])
+            trade: dict[str, Any] = {
+                "token_id": token,
+                "ts_ns": ts_ns,
+                "sequence": sequence,
+                "price": float(rec["trade_price"]),
+                "size": float(rec["trade_size"]),
+                "side": str(rec.get("side") or "").upper(),
+                "tx_hash": normalize_tx_hash(
+                    rec.get("transaction_hash")
+                ),
+                "pre_book_found": False,
+            }
+            local_books = bbo_by_token.get(token, [])
+            local_keys = [(x[0], x[1]) for x in local_books]
+            pos = bisect.bisect_left(
+                local_keys,
+                (ts_ns, sequence),
+            ) - 1
+            prior = local_books[pos] if pos >= 0 else last_bbo.get(token)
+            if prior is not None:
+                bts, bseq, bb, ba = prior
+                trade.update(
+                    {
+                        "pre_book_found": True,
+                        "pre_book_ts_ns": bts,
+                        "pre_book_sequence": bseq,
+                        "pre_bid": bb,
+                        "pre_ask": ba,
+                        "pre_mid": (bb + ba) / 2.0,
+                        "pre_spread": ba - bb,
+                        "book_age_ms": (ts_ns - bts) / 1e6,
+                    }
+                )
+            trades.append(trade)
+            counts["trade_rows"] += 1
+
+        for token, ordered in bbo_by_token.items():
+            if ordered:
+                last_bbo[token] = ordered[-1]
         progress = {
             "file": idx + 1,
             "of": len(files),
@@ -249,11 +379,7 @@ def load_ev18(
             "bbo": counts["bbo_rows"],
         }
         print(json.dumps(progress), flush=True)
-    tdf = pd.DataFrame(trades)
-    for token in bbo:
-        bbo[token].sort(key=lambda x: (x[0], x[1]))
-    return tdf, dict(bbo), dict(counts)
-
+    return pd.DataFrame(trades), dict(counts)
 
 def rounded_key(token: str, price: float, size: float, side: str | None = None) -> tuple[Any, ...]:
     base: tuple[Any, ...] = (token, round(float(price), 6), round(float(size), 6))
@@ -287,7 +413,6 @@ def candidate_rows(
 def match_groups(
     groups: pd.DataFrame,
     trades: pd.DataFrame,
-    bbo: dict[str, list[tuple[int, int, float, float]]],
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     idx_plain = build_index(trades, with_side=False)
     idx_side = build_index(trades, with_side=True)
@@ -401,23 +526,19 @@ def match_groups(
             rec["trade_sequence"] = seq
             rec["trade_index"] = trade_index
             rec["trade_minus_block_s"] = (ts_ns - block_ns) / 1e9
-            books = bbo.get(token, [])
-            order_keys = [(x[0], x[1]) for x in books]
-            j = bisect.bisect_left(order_keys, (ts_ns, seq)) - 1
-            if j >= 0:
-                bts, bseq, bb, ba = books[j]
-                rec.update({
-                    "pre_book_found": True,
-                    "pre_book_ts_ns": bts,
-                    "pre_book_sequence": bseq,
-                    "pre_bid": bb,
-                    "pre_ask": ba,
-                    "pre_mid": (bb + ba) / 2.0,
-                    "pre_spread": ba - bb,
-                    "book_age_ms": (ts_ns - bts) / 1e6,
-                })
-            else:
-                rec["pre_book_found"] = False
+            tr = trades.loc[trade_index]
+            rec["pre_book_found"] = bool(tr["pre_book_found"])
+            if rec["pre_book_found"]:
+                for field in [
+                    "pre_book_ts_ns",
+                    "pre_book_sequence",
+                    "pre_bid",
+                    "pre_ask",
+                    "pre_mid",
+                    "pre_spread",
+                    "book_age_ms",
+                ]:
+                    rec[field] = tr[field]
         out.append(rec)
     matches = pd.DataFrame(out)
     return matches, summarize_matches(matches)
@@ -483,14 +604,13 @@ def main() -> None:
     tokens = set(groups["token_id"].astype(str))
     tokens.update(passive_rows["token_id"].astype(str))
     root = locate_orderbook_root()
-    trades, bbo, ob_counts = load_ev18(root, tokens)
+    trades, ob_counts = load_ev18(root, tokens)
     if trades.empty:
         raise RuntimeError("zero EV18 orderbook trade events for W18 tokens")
-    active_matches, active_summary = match_groups(groups, trades, bbo)
+    active_matches, active_summary = match_groups(groups, trades)
     passive_matches, passive_summary = match_groups(
         passive_rows,
         trades,
-        bbo,
     )
 
     active_matches.to_parquet(
