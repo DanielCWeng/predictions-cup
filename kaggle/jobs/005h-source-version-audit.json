@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/experiment_005h_source_audit",
+  "kernel": "polyleviathan/experiment-005h-source-version-audit",
+  "poll_seconds": 30,
+  "timeout_minutes": 300,
+  "download_outputs": true,
+  "output_file_pattern": "(SOURCE_VERSION_AUDIT\\.(json|md)|SOURCE_LINK_COVERAGE\\.parquet)$"
+}
