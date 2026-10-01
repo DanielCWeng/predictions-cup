@@ -639,7 +639,19 @@ class MakerService:
                 return authoritative
 
             if isinstance(adapter, LiveMakerExecutionAdapter):
-                adapter.set_cancel_uncertainty_resolver(account_resync)
+                async def reconcile_uncertain_cancels() -> None:
+                    assert journal is not None and live_sink is not None
+                    # A closed-order 409 needs one order/fill check. A full
+                    # account and capital refresh can fail under SIG REST load
+                    # before reaching that targeted recovery.
+                    await recover_in_session_cancellations(
+                        journal=journal,
+                        rest=rest,
+                        live_sink=live_sink,
+                        tournament_id=tournament_id,
+                    )
+
+                adapter.set_cancel_uncertainty_resolver(reconcile_uncertain_cancels)
 
             account_controller = AccountRealtimeController(
                 state=account_state,

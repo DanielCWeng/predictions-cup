@@ -122,40 +122,44 @@ class LiveMakerExecutionAdapter:
         )
         try:
             return await self._sink.cancel(envelope)
-        except SigExecutionUncertainError:
-            try:
-                return await self._sink.cancel(envelope)
-            except SigExecutionUncertainError:
-                if self._cancel_uncertainty_resolver is not None:
-                    await self._cancel_uncertainty_resolver()
-                    resolved = next(
-                        (
-                            item
-                            for item in self._journal.envelopes()
-                            if item.logical_operation_id == logical_operation_id
-                        ),
-                        None,
+        except SigExecutionUncertainError as exc:
+            # A 409 means SIG says the order is already closed. Repeating the
+            # DELETE cannot help; ask the targeted order/fill recovery path.
+            if exc.status_code != 409:
+                try:
+                    return await self._sink.cancel(envelope)
+                except SigExecutionUncertainError:
+                    pass
+            if self._cancel_uncertainty_resolver is not None:
+                await self._cancel_uncertainty_resolver()
+                resolved = next(
+                    (
+                        item
+                        for item in self._journal.envelopes()
+                        if item.logical_operation_id == logical_operation_id
+                    ),
+                    None,
+                )
+                if resolved is not None and resolved.lifecycle_state in {
+                    LifecycleState.CANCELLED,
+                    LifecycleState.FILLED,
+                    LifecycleState.RECONCILED,
+                    LifecycleState.REJECTED,
+                }:
+                    events = self._journal.events(logical_operation_id)
+                    observed = (
+                        active.observed_monotonic_ns
+                        if not events
+                        else events[-1].observed_monotonic_ns
                     )
-                    if resolved is not None and resolved.lifecycle_state in {
-                        LifecycleState.CANCELLED,
-                        LifecycleState.FILLED,
-                        LifecycleState.RECONCILED,
-                        LifecycleState.REJECTED,
-                    }:
-                        events = self._journal.events(logical_operation_id)
-                        observed = (
-                            active.observed_monotonic_ns
-                            if not events
-                            else events[-1].observed_monotonic_ns
-                        )
-                        return ExecutionEvent(
-                            logical_operation_id=logical_operation_id,
-                            state=resolved.lifecycle_state,
-                            observed_monotonic_ns=observed,
-                            simulated=False,
-                            detail="targeted_cancel_reconcile",
-                        )
-                raise
+                    return ExecutionEvent(
+                        logical_operation_id=logical_operation_id,
+                        state=resolved.lifecycle_state,
+                        observed_monotonic_ns=observed,
+                        simulated=False,
+                        detail="targeted_cancel_reconcile",
+                    )
+            raise
 
     def _sync_quote_registry(
         self,
