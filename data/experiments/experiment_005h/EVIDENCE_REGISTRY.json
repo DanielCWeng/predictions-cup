@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005H",
+  "branch": "experiment/005h-fill-orderbook-interaction-atlas",
+  "purpose": "Single machine-readable registry of canonical scientific evidence, superseded executions, and one-shot holdout state.",
+  "canonical": {
+    "join_gate": {
+      "status": "PASSED",
+      "artifact": "data/experiments/experiment_005h/JOIN_AUDIT_W18.json",
+      "identity": "transaction_hash + active_token_id",
+      "canonical_unit": "accepted active transaction episode"
+    },
+    "promoted_v3_core": {
+      "workflow_run_id": 36838276378,
+      "artifact_id": 11151233575,
+      "scientific_role": "SOLE_W17_TRAIN_W18_DEV_OUTCOME_SOURCE"
+    },
+    "source_version_identity_audit": {
+      "workflow_run_id": 36836613576,
+      "artifact_id": 11150409739,
+      "scope": "identity and chronology only; no post-fill outcome inspection"
+    },
+    "hostile_v3_falsification": {
+      "workflow_run_id": 36841406723,
+      "artifact_id": 11151173135,
+      "robust_v3_survivors": [],
+      "provisional_v3_only": [
+        "005H-C01-RELATIVE-SIZE",
+        "005H-C02-FAILED-REPLENISHMENT",
+        "005H-C03-FILL-BEYOND-STATE"
+      ]
+    },
+    "extended_v3_analysis": {
+      "workflow_run_id": 36841411532,
+      "artifact_id": 11151144230,
+      "candidate_ids": [
+        "005H-C01-RELATIVE-SIZE",
+        "005H-C02-FAILED-REPLENISHMENT",
+        "005H-C03-FILL-BEYOND-STATE",
+        "005H-C04-ARRIVAL-STATE",
+        "005H-C05-DIRECTION-STATE"
+      ]
+    },
+    "source_robustness": {
+      "method": "SEMANTIC_PARITY_ADJUDICATION",
+      "005H-C01-RELATIVE-SIZE": "NOT_APPLICABLE",
+      "005H-C02-FAILED-REPLENISHMENT": "NOT_APPLICABLE",
+      "005H-C03-FILL-BEYOND-STATE": "NOT_APPLICABLE",
+      "005H-C04-ARRIVAL-STATE": "UNTESTABLE_SOURCE",
+      "005H-C05-DIRECTION-STATE": "UNTESTABLE_SOURCE",
+      "note": "Eligible pre-V3 V2/AG6 sources lack sequence ordering required for exact frozen C04/C05 feature parity."
+    },
+    "pre_holdout_freeze": {
+      "workflow_run_id": 36847399975,
+      "artifact_id": 11153389633,
+      "status": "B0_AUTHORIZED_ONCE",
+      "b0_opened": false,
+      "candidate_ids": [
+        "005H-C04-ARRIVAL-STATE",
+        "005H-C05-DIRECTION-STATE"
+      ],
+      "excluded": [
+        "005H-C01-RELATIVE-SIZE",
+        "005H-C02-FAILED-REPLENISHMENT",
+        "005H-C03-FILL-BEYOND-STATE"
+      ]
+    },
+    "b0_one_shot": {
+      "kernel": "polyleviathan/experiment-005h-one-shot-b0-build",
+      "candidate_ids": [
+        "005H-C04-ARRIVAL-STATE",
+        "005H-C05-DIRECTION-STATE"
+      ],
+      "launch_workflow_run_id": 36847624884,
+      "launch_wrapper_result": "INFRA_FAILURE_AFTER_KERNEL_REPORTED_RUNNING",
+      "launch_wrapper_artifact_id": 11153609526,
+      "relaunch_performed": false,
+      "status_check_workflow_run_id": 36847909360,
+      "status_check_artifact_id": 11154551535,
+      "last_confirmed_kernel_state": "RUNNING",
+      "model_scoring_performed": false,
+      "no_retune_rule_active": true
+    }
+  },
+  "superseded": [
+    {
+      "workflow_run_id": 36834845024,
+      "reason": "pre-outcome core superseded by later hardening"
+    },
+    {
+      "workflow_run_id": 36835172972,
+      "reason": "pre-outcome core superseded by hash+token, sparse-horizon, and without-replacement-control hardening"
+    },
+    {
+      "workflow_run_id": 36842830140,
+      "reason": "approximate pre-V3 source replay rejected before scientific outcome inspection; exact feature parity unprovable without sequence"
+    },
+    {
+      "workflow_run_id": 36844053637,
+      "reason": "approximate pre-V3 source replay rejected before scientific outcome inspection; exact feature parity unprovable without sequence"
+    }
+  ],
+  "invariants": {
+    "data001_substituted": false,
+    "b0_relaunch_performed": false,
+    "b0_model_refit_allowed": false,
+    "post_b0_candidate_addition_allowed": false,
+    "real_sig_orders_sent": false
+  }
+}
