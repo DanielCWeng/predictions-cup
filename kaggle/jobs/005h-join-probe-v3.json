@@ -7,6 +7,6 @@
   "timeout_minutes": 240,
   "download_outputs": true,
   "output_file_pattern": "(JOIN_PROBE_SUMMARY\\.json|JOIN_PROBE\\.md|JOIN_PROBE_ACTIVE_GROUPS\\.parquet|JOIN_PROBE_PASSIVE_FILLS\\.parquet)$",
-  "attempt": 2,
-  "note": "005H branch-frozen rerun after nanosecond normalization fix; protocol unchanged."
+  "attempt": 3,
+  "note": "005H branch-frozen rerun after nanosecond normalization; Kaggle title aligned to id."
 }
