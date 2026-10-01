@@ -508,13 +508,26 @@ def replay_condition(
             category="EXACT",
         )
 
+        # build_quote is pure in (observation, policy, inventory).  The
+        # latency and fill-assumption states frequently share the same
+        # policy/inventory, especially before sparse trade fills diverge
+        # their inventories.  Memoize within this timestamp only: stateful
+        # cancellation/fill handling below remains completely independent.
+        desired_cache: dict[tuple[str, float], QuoteIntent] = {}
         for state in states:
-            desired = build_quote(
-                observation,
-                state.policy,
-                inventory=state.inventory,
-                base_size=1.0,
+            desired_key = (
+                state.policy.policy_id,
+                state.inventory,
             )
+            desired = desired_cache.get(desired_key)
+            if desired is None:
+                desired = build_quote(
+                    observation,
+                    state.policy,
+                    inventory=state.inventory,
+                    base_size=1.0,
+                )
+                desired_cache[desired_key] = desired
             state.quotes += 1
             state.active_quotes += int(
                 desired.bid is not None
