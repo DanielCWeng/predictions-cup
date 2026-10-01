@@ -2,7 +2,7 @@
   "schema_version": 1,
   "action": "run",
   "kernel_dir": "scripts/kaggle/mm_replay_001",
-  "kernel": "polyleviathan/mm-replay-001-strict-asof",
+  "kernel": "polyleviathan/mm-replay-001-strict-as-of-fast",
   "poll_seconds": 30,
   "timeout_minutes": 330,
   "download_outputs": true,
@@ -37,7 +37,7 @@
       "destination": "repo_context/execution_universe_exact.json"
     }
   ],
-  "note": "Attempt 4: strict-asof 005F grid-boundary ordering; September baseline_sep, 140 EXACT markets, complement-book FV, observed-trade fills. Separate kernel identity so attempt 3 remains untouched.",
-  "attempt": 4,
+  "note": "Attempt 5: identical strict-as-of September science with per-timestamp memoization of pure build_quote(policy, inventory); 140 EXACT markets, complement-book FV, observed-trade fills. Performance-only optimization; economics and scenario grid unchanged.",
+  "attempt": 5,
   "embed_kernel_bundle": true
 }
