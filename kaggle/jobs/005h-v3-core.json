@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/experiment_005h_v3_core",
+  "kernel": "polyleviathan/experiment-005h-v3-core",
+  "poll_seconds": 30,
+  "timeout_minutes": 300,
+  "download_outputs": true,
+  "output_file_pattern": "(JOIN_AUDIT\\.(json|md)|PRE_HOLDOUT_FREEZE\\.json|V3_DISCOVERY_SUMMARY\\.json|V3_DISCOVERY_REPORT\\.md|FILL_INTERACTION_ATLAS\\.csv|REPLENISHMENT_ATLAS\\.csv|TOXICITY_ATLAS\\.csv|TRADE_STATE_RESPONSE\\.csv|MATCHED_CONTROLS\\.csv|TRADFI_CHALLENGERS\\.csv)$"
+}
