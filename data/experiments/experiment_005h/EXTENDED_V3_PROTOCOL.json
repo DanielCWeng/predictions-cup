@@ -11,52 +11,140 @@
       "NONFILL_CONTROLS.parquet",
       "MATCHED_CONTROLS.csv"
     ],
-    "raw_windows": {"TRAIN":"W17","DEV":"W18"},
+    "raw_windows": {
+      "TRAIN": "W17",
+      "DEV": "W18"
+    },
     "final_holdout": "B0 SEALED"
   },
   "batteries": {
     "arrival": {
       "design": "paired/case-control fill states versus same-token same-window matched non-fill states",
-      "features": ["mid","spread","log_depth_2c","activity_60","mid_vol_60","vpin_60"],
+      "features": [
+        "mid",
+        "spread",
+        "log_depth_2c",
+        "activity_60",
+        "mid_vol_60",
+        "vpin_60"
+      ],
       "candidate_id": "005H-C04-ARRIVAL-STATE",
       "dev_gate": "DEV AUC >= 0.60 with both classes supported and no collapse under token/time leave-outs"
     },
     "direction": {
       "design": "BUY versus SELL conditional on an actual linked fill",
-      "features": ["imbalance_touch","microprice_deviation","ofi_60","signed_flow_60","pre_move_30","spread","log_depth_2c"],
+      "features": [
+        "imbalance_touch",
+        "microprice_deviation",
+        "ofi_60",
+        "signed_flow_60",
+        "pre_move_30",
+        "spread",
+        "log_depth_2c"
+      ],
       "candidate_id": "005H-C05-DIRECTION-STATE",
       "dev_gate": "DEV AUC >= 0.58 with at least 100 observations per side and stable time-half sign"
     },
     "impact": {
       "primary": "aggressor-signed mid response",
-      "clock_horizons_seconds": [1,5,15,30,60,300],
-      "event_horizons": [1,2,5,10,25,50],
+      "clock_horizons_seconds": [
+        1,
+        5,
+        15,
+        30,
+        60,
+        300
+      ],
+      "event_horizons": [
+        1,
+        2,
+        5,
+        10,
+        25,
+        50
+      ],
       "relative_size_priority": true
     },
     "reversal_continuation": {
-      "initial_reference": ["first book event","5s"],
-      "later_reference": [30,60,300],
-      "classes": ["CONTINUE","PARTIAL_REVERSE","FULL_REVERSE_OR_OVERSHOOT","FLAT"]
+      "initial_reference": [
+        "first book event",
+        "5s"
+      ],
+      "later_reference": [
+        30,
+        60,
+        300
+      ],
+      "classes": [
+        "CONTINUE",
+        "PARTIAL_REVERSE",
+        "FULL_REVERSE_OR_OVERSHOOT",
+        "FLAT"
+      ]
     },
     "resilience": {
-      "recovery_levels": [0.25,0.5,0.8,0.9,1.0],
+      "recovery_levels": [
+        0.25,
+        0.5,
+        0.8,
+        0.9,
+        1
+      ],
       "primary_failed_replenishment_rule": "80% of fixed pre-trade consumed-side 2c band not recovered by 30s"
     },
     "flow_persistence": {
-      "objects": ["next-fill same-side probability","same-side run length","30s same-minus-opposite linked fill count","episode size and duration"],
+      "objects": [
+        "next-fill same-side probability",
+        "same-side run length",
+        "30s same-minus-opposite linked fill count",
+        "episode size and duration"
+      ],
       "identity_warning": "never infer participant/metaorder identity"
     },
     "toxicity": {
-      "objects": ["aggressor markout","maker realised spread","adverse move >1 tick", "adverse move >2 ticks"],
-      "clock_horizons_seconds": [5,15,60,300]
+      "objects": [
+        "aggressor markout",
+        "maker realised spread",
+        "maker-adverse move thresholds"
+      ],
+      "clock_horizons_seconds": [
+        5,
+        15,
+        60,
+        300
+      ],
+      "tick_rule": "Use literal >1 tick and >2 ticks only if canonical per-market tick size is bound in the event surface.",
+      "fallback_without_tick_metadata": "Report >0.01 and >0.02 probability-point maker-adverse movement as 1pp/2pp diagnostics and mark tick-threshold metrics unavailable."
     },
     "tradfi_challengers": {
-      "baseline": ["mid","spread","log_depth_2c","activity_60","pre_move_30"],
-      "challengers": ["OFI-like 60s","microprice deviation","VPIN-like flow imbalance","absolute size","size/touch depth"],
+      "baseline": [
+        "mid",
+        "spread",
+        "log_depth_2c",
+        "activity_60",
+        "pre_move_30"
+      ],
+      "challengers": [
+        "OFI-like 60s",
+        "microprice deviation",
+        "VPIN-like flow imbalance",
+        "absolute size",
+        "size/touch depth"
+      ],
       "complexity_rule": "prefer simpler feature if DEV performance is not materially improved"
     },
     "price_region": {
-      "buckets": ["0-5","5-15","15-30","30-45","45-55","55-70","70-85","85-95","95-100"]
+      "buckets": [
+        "0-5",
+        "5-15",
+        "15-30",
+        "30-45",
+        "45-55",
+        "55-70",
+        "70-85",
+        "85-95",
+        "95-100"
+      ]
     }
   },
   "falsifications": [
