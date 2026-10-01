@@ -13,7 +13,6 @@
   "kernel_sources": [
     "polyleviathan/experiment-005h-extended-analysis",
     "polyleviathan/experiment-005h-v3-falsification",
-    "polyleviathan/experiment-005h-source-version-audit",
-    "polyleviathan/experiment-005h-source-robustness-semantic"
+    "polyleviathan/experiment-005h-source-version-audit"
   ]
 }
