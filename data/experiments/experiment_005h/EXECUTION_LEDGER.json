@@ -69,16 +69,55 @@
       ]
     },
     "source_stratified_replication": {
-      "status": "CANONICAL_SEMANTIC_GATE_LAUNCHED",
-      "kernel": "polyleviathan/experiment-005h-source-robustness-semantic",
-      "reason": "exact C04/C05 feature parity is unidentifiable in eligible pre-V3 sources without sequence ordering; approximate replay superseded pre-outcome",
-      "superseded_runs": [
+      "status": "COMPLETE_SEMANTIC_ADJUDICATION",
+      "method": "SEMANTIC_PARITY_ADJUDICATION",
+      "result": {
+        "005H-C01-RELATIVE-SIZE": "NOT_APPLICABLE",
+        "005H-C02-FAILED-REPLENISHMENT": "NOT_APPLICABLE",
+        "005H-C03-FILL-BEYOND-STATE": "NOT_APPLICABLE",
+        "005H-C04-ARRIVAL-STATE": "UNTESTABLE_SOURCE",
+        "005H-C05-DIRECTION-STATE": "UNTESTABLE_SOURCE"
+      },
+      "reason": "eligible pre-V3 V2/AG6 strata lack recoverable sequence ordering, so exact frozen C04 mid_vol_60 and C05 event-wise OFI_60 semantics cannot be reconstructed; approximate replay is superseded pre-outcome",
+      "superseded_approximate_runs": [
         36842830140,
         36844053637
       ]
     },
-    "pre_holdout_freeze": "BLOCKED_PENDING_SOURCE_ROBUSTNESS",
-    "b0": "SEALED"
+    "pre_holdout_freeze": {
+      "status": "COMPLETE_SUCCESS",
+      "workflow_run_id": 36847399975,
+      "artifact_id": 11153389633,
+      "freeze_status": "B0_AUTHORIZED_ONCE",
+      "candidate_ids": [
+        "005H-C04-ARRIVAL-STATE",
+        "005H-C05-DIRECTION-STATE"
+      ],
+      "excluded_before_holdout": [
+        "005H-C01-RELATIVE-SIZE",
+        "005H-C02-FAILED-REPLENISHMENT",
+        "005H-C03-FILL-BEYOND-STATE"
+      ],
+      "b0_opened_at_freeze": false
+    },
+    "b0": {
+      "status": "ONE_SHOT_BUILD_RUNNING_ON_KAGGLE",
+      "candidate_ids": [
+        "005H-C04-ARRIVAL-STATE",
+        "005H-C05-DIRECTION-STATE"
+      ],
+      "kernel": "polyleviathan/experiment-005h-one-shot-b0-build",
+      "launch_workflow_run_id": 36847624884,
+      "launch_wrapper_conclusion": "FAILURE_INFRA_CONNECTION_RESET_AFTER_KERNEL_REPORTED_RUNNING",
+      "launch_wrapper_artifact_id": 11153609526,
+      "relaunch_performed": false,
+      "status_check_workflow_run_id": 36847909360,
+      "status_check_conclusion": "SUCCESS",
+      "status_check_artifact_id": 11154551535,
+      "last_confirmed_kernel_state": "RUNNING",
+      "model_scoring_performed": false,
+      "no_retune_rule_active": true
+    }
   },
   "real_sig_orders_sent": false
 }
