@@ -18,5 +18,6 @@
     "pandas==2.3.3",
     "scikit-learn==1.7.2"
   ],
-  "note": "EXPERIMENT-005G Lane A ACTIVE TRAIN/DEV only. Frozen four-hour ev18 slice; HOLDOUT hour 03 is deliberately absent. Raw bytes are deleted before Actions artifact upload. No orders."
+  "note": "EXPERIMENT-005G Lane A ACTIVE TRAIN/DEV only; retry after V3 semantic probe proved price_change BBO fields are present and binary asset_id normalization was fixed. HOLDOUT hour 03 remains absent. No orders.",
+  "attempt": 2
 }
