@@ -401,6 +401,7 @@ def _write_execution_journal(
                 fill_id TEXT,
                 quantity TEXT,
                 price TEXT,
+                terminal_status TEXT,
                 detail_json TEXT
             )
             """
@@ -455,8 +456,9 @@ def _write_execution_journal(
                 INSERT INTO execution_events (
                     logical_operation_id, logical_intent_id, event_type,
                     observed_monotonic_ns, source_timestamp, exchange_order_id,
-                    fill_id, quantity, price, exchange_id, tournament_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    fill_id, quantity, price, exchange_id, tournament_id,
+                    terminal_status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     "op-1",
@@ -470,6 +472,7 @@ def _write_execution_journal(
                     str(price),
                     decision.exchange_id,
                     decision.tournament_id,
+                    "FILLED" if event_type == "FILL_SUMMARY" else None,
                 ),
             )
         connection.commit()
