@@ -6,5 +6,7 @@
   "poll_seconds": 30,
   "timeout_minutes": 240,
   "download_outputs": true,
-  "output_file_pattern": "(JOIN_PROBE_SUMMARY\\.json|JOIN_PROBE\\.md)$"
+  "output_file_pattern": "(JOIN_PROBE_SUMMARY\\.json|JOIN_PROBE\\.md)$",
+  "attempt": 2,
+  "note": "Requeue after partition-safe DATA-003 Parquet reads; scientific protocol unchanged."
 }
