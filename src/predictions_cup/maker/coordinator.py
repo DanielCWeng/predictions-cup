@@ -226,7 +226,10 @@ class MakerCoordinator:
                         ),
                     )
                 )
-                self._log_outcome(exchange_id, "hold gate=HOLD")
+                self._log_outcome(
+                    exchange_id,
+                    f"hold gate=HOLD reason={decision.gate.reason}",
+                )
                 continue
             if force_cancel:
                 self._log_outcome(
@@ -340,6 +343,7 @@ class MakerCoordinator:
                 self._log_outcome(
                     exchange_id,
                     f"no_place gate={decision.gate.mode.value} "
+                    f"reason={decision.gate.reason} "
                     f"desired={decision.desired is not None} "
                     f"actions={[(a.kind.value, a.side.value, a.reason) for a in side_actions]}",
                 )
