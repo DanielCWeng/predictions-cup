@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import math
 import sqlite3
@@ -199,9 +200,10 @@ class JournalExecutionEvidenceProvider:
                 planned_quantity=0.0,
             )
         try:
-            operation_rows = connection.execute(
+            submission_rows = connection.execute(
                 """
-                SELECT DISTINCT e.logical_operation_id, x.payload_json, x.sink_mode
+                SELECT e.logical_operation_id, e.logical_intent_id, e.quantity,
+                       e.detail_json, x.payload_json, x.sink_mode
                 FROM execution_events AS e
                 JOIN execution_envelopes AS x
                   ON x.logical_operation_id = e.logical_operation_id
@@ -213,6 +215,7 @@ class JournalExecutionEvidenceProvider:
                     e.decision_monotonic_ns = ?
                     OR e.decision_observation_ns = ?
                   )
+                ORDER BY e.event_id
                 """,
                 (
                     decision.candidate_id,
@@ -222,7 +225,7 @@ class JournalExecutionEvidenceProvider:
                     decision.monotonic_time,
                 ),
             ).fetchall()
-            if not operation_rows:
+            if not submission_rows:
                 return ExecutionEvidence(
                     supported=False,
                     reason="no_execution_plan_for_decision",
@@ -232,37 +235,104 @@ class JournalExecutionEvidenceProvider:
             planned = 0.0
             fills: list[FillEvidence] = []
             authoritative_fills: dict[str, FillEvidence] = {}
+            provisional_fills: dict[str, FillEvidence] = {}
             sources: list[str] = []
             modes: set[str] = set()
-            for operation_id_raw, payload_json_raw, mode_raw in operation_rows:
+            provisional_seen = False
+            complete_source_seen = False
+
+            for (
+                operation_id_raw,
+                intent_id_raw,
+                submitted_quantity_raw,
+                detail_json_raw,
+                payload_json_raw,
+                mode_raw,
+            ) in submission_rows:
                 operation_id = str(operation_id_raw)
+                intent_id = None if intent_id_raw is None else str(intent_id_raw)
                 payload_json = str(payload_json_raw)
                 modes.add(str(mode_raw))
-                plans = _payload_legs(payload_json, decision.exchange_id)
-                planned += sum(float(item.quantity) for item in plans)
-                action = _single_action(plans)
-                if action is None:
+                plan = _submission_plan(
+                    submitted_quantity=submitted_quantity_raw,
+                    detail_json=detail_json_raw,
+                    payload_json=payload_json,
+                    exchange_id=decision.exchange_id,
+                )
+                if plan is None:
                     return ExecutionEvidence(
                         supported=False,
-                        reason="mixed_side_execution_requires_intent_fill_join",
-                        planned_quantity=0.0,
+                        reason="execution_intent_attribution_incomplete",
+                        planned_quantity=planned,
+                        evidence_source_ids=tuple(dict.fromkeys(sources)),
+                        execution_mode=(
+                            next(iter(modes)) if len(modes) == 1 else "MIXED"
+                        ),
                     )
+                planned += float(plan.quantity)
                 sources.append(f"build009:operation:{operation_id}")
-                rows = connection.execute(
-                    """
-                    SELECT event_id, event_type, observed_monotonic_ns,
-                           source_timestamp, exchange_order_id, fill_id,
-                           quantity, price
-                    FROM execution_events
-                    WHERE logical_operation_id = ?
-                      AND exchange_id = ?
-                      AND event_type IN ('FILL_SUMMARY', 'AUTHORITATIVE_FILL')
-                    ORDER BY event_id
-                    """,
-                    (operation_id, decision.exchange_id),
-                ).fetchall()
-                authoritative = [row for row in rows if str(row[1]) == "AUTHORITATIVE_FILL"]
-                selected = authoritative if authoritative else rows
+
+                if intent_id is None:
+                    rows = connection.execute(
+                        """
+                        SELECT event_id, event_type, observed_monotonic_ns,
+                               source_timestamp, exchange_order_id, fill_id,
+                               quantity, price
+                        FROM execution_events
+                        WHERE logical_operation_id = ?
+                          AND exchange_id = ?
+                          AND logical_intent_id IS NULL
+                          AND event_type IN (
+                              'FILL_SUMMARY',
+                              'REALTIME_FILL',
+                              'AUTHORITATIVE_FILL'
+                          )
+                        ORDER BY event_id
+                        """,
+                        (operation_id, decision.exchange_id),
+                    ).fetchall()
+                else:
+                    rows = connection.execute(
+                        """
+                        SELECT event_id, event_type, observed_monotonic_ns,
+                               source_timestamp, exchange_order_id, fill_id,
+                               quantity, price
+                        FROM execution_events
+                        WHERE logical_operation_id = ?
+                          AND exchange_id = ?
+                          AND logical_intent_id = ?
+                          AND event_type IN (
+                              'FILL_SUMMARY',
+                              'REALTIME_FILL',
+                              'AUTHORITATIVE_FILL'
+                          )
+                        ORDER BY event_id
+                        """,
+                        (operation_id, decision.exchange_id, intent_id),
+                    ).fetchall()
+
+                authoritative = [
+                    row for row in rows if str(row[1]) == "AUTHORITATIVE_FILL"
+                ]
+                immediate = [
+                    row for row in rows if str(row[1]) == "FILL_SUMMARY"
+                ]
+                realtime = [
+                    row for row in rows if str(row[1]) == "REALTIME_FILL"
+                ]
+                if authoritative:
+                    selected = authoritative
+                    source_kind = "authoritative"
+                    complete_source_seen = True
+                elif immediate:
+                    selected = immediate
+                    source_kind = "immediate"
+                    complete_source_seen = True
+                else:
+                    selected = realtime
+                    source_kind = "provisional"
+                    provisional_seen = provisional_seen or bool(realtime)
+
                 for row in selected:
                     filled_at = _parse_time(row[3])
                     if filled_at is not None and filled_at > maturity_at:
@@ -270,7 +340,8 @@ class JournalExecutionEvidenceProvider:
                     observed_ns = int(row[2])
                     if filled_at is None:
                         horizon_ns = int(
-                            (maturity_at - decision.observed_at).total_seconds() * 1e9
+                            (maturity_at - decision.observed_at).total_seconds()
+                            * 1e9
                         )
                         if observed_ns > decision.monotonic_time + horizon_ns:
                             continue
@@ -280,25 +351,33 @@ class JournalExecutionEvidenceProvider:
                     price = _probability(row[7])
                     event_id = int(row[0])
                     fill_id = None if row[5] is None else str(row[5])
-                    evidence_id = (
-                        f"sig-fill:{fill_id}"
-                        if fill_id is not None
-                        else f"build009-event:{event_id}"
-                    )
+                    order_id = None if row[4] is None else str(row[4])
+                    if source_kind == "authoritative" and fill_id is not None:
+                        evidence_id = f"sig-fill:{fill_id}"
+                    elif source_kind == "provisional":
+                        evidence_id = _provisional_fill_id(
+                            logical_operation_id=operation_id,
+                            logical_intent_id=intent_id,
+                            exchange_order_id=order_id,
+                            source_timestamp=None if row[3] is None else str(row[3]),
+                            quantity=quantity,
+                            price=price,
+                            action=plan.action,
+                        )
+                    else:
+                        evidence_id = f"build009-event:{event_id}"
                     fill = FillEvidence(
                         evidence_id=evidence_id,
                         logical_operation_id=operation_id,
-                        exchange_order_id=(
-                            None if row[4] is None else str(row[4])
-                        ),
+                        exchange_order_id=order_id,
                         exchange_id=decision.exchange_id,
-                        action=action,
+                        action=plan.action,
                         quantity=quantity,
                         price=price,
                         filled_at=filled_at,
                         observed_monotonic_ns=observed_ns,
                     )
-                    if authoritative:
+                    if source_kind == "authoritative":
                         previous = authoritative_fills.get(evidence_id)
                         if previous is not None:
                             if not _same_fill_economics(previous, fill):
@@ -317,6 +396,25 @@ class JournalExecutionEvidenceProvider:
                                 )
                             continue
                         authoritative_fills[evidence_id] = fill
+                    elif source_kind == "provisional":
+                        previous = provisional_fills.get(evidence_id)
+                        if previous is not None:
+                            if not _same_fill_economics(previous, fill):
+                                return ExecutionEvidence(
+                                    supported=False,
+                                    reason="conflicting_provisional_fill_evidence",
+                                    planned_quantity=planned,
+                                    evidence_source_ids=tuple(
+                                        dict.fromkeys((*sources, evidence_id))
+                                    ),
+                                    execution_mode=(
+                                        next(iter(modes))
+                                        if len(modes) == 1
+                                        else "MIXED"
+                                    ),
+                                )
+                            continue
+                        provisional_fills[evidence_id] = fill
                     fills.append(fill)
                     sources.append(evidence_id)
 
@@ -327,6 +425,24 @@ class JournalExecutionEvidenceProvider:
                     planned_quantity=0.0,
                 )
             mode = next(iter(modes)) if len(modes) == 1 else "MIXED"
+            if provisional_seen:
+                return ExecutionEvidence(
+                    supported=False,
+                    reason="provisional_fill_evidence_requires_authoritative_reconciliation",
+                    planned_quantity=planned,
+                    fills=tuple(fills),
+                    evidence_source_ids=tuple(dict.fromkeys(sources)),
+                    execution_mode=mode,
+                )
+            if not complete_source_seen:
+                return ExecutionEvidence(
+                    supported=False,
+                    reason="fill_evidence_incomplete",
+                    planned_quantity=planned,
+                    fills=tuple(fills),
+                    evidence_source_ids=tuple(dict.fromkeys(sources)),
+                    execution_mode=mode,
+                )
             return ExecutionEvidence(
                 supported=True,
                 reason=None,
@@ -389,6 +505,57 @@ def _single_action(plans: tuple[_PlannedLeg, ...]) -> str | None:
     if actions == {"sell"}:
         return "sell"
     return None
+
+
+def _submission_plan(
+    *,
+    submitted_quantity: object,
+    detail_json: object,
+    payload_json: str,
+    exchange_id: str,
+) -> _PlannedLeg | None:
+    quantity = _positive_number(submitted_quantity)
+    action: str | None = None
+    if detail_json is not None:
+        try:
+            detail = json.loads(str(detail_json))
+        except (TypeError, ValueError):
+            detail = None
+        if isinstance(detail, dict):
+            raw_action = detail.get("action")
+            if isinstance(raw_action, str) and raw_action in {"buy", "sell"}:
+                action = raw_action
+    if quantity is not None and float(quantity).is_integer() and action is not None:
+        return _PlannedLeg(quantity=int(quantity), action=action)
+
+    plans = _payload_legs(payload_json, exchange_id)
+    if len(plans) == 1:
+        return plans[0]
+    return None
+
+
+def _provisional_fill_id(
+    *,
+    logical_operation_id: str,
+    logical_intent_id: str | None,
+    exchange_order_id: str | None,
+    source_timestamp: str | None,
+    quantity: float,
+    price: float | None,
+    action: str,
+) -> str:
+    raw = "|".join(
+        (
+            logical_operation_id,
+            logical_intent_id or "",
+            exchange_order_id or "",
+            source_timestamp or "",
+            format(quantity, ".17g"),
+            "" if price is None else format(price, ".17g"),
+            action,
+        )
+    ).encode("utf-8")
+    return "sig-realtime:" + hashlib.sha256(raw).hexdigest()[:24]
 
 
 def _same_fill_economics(left: FillEvidence, right: FillEvidence) -> bool:
