@@ -193,6 +193,12 @@ class SupervisorRuntimeConfig:
             max_restarts_per_hour=_int(
                 "PREDICTIONS_CUP_SUPERVISOR_MAX_RESTARTS_PER_HOUR", 2
             ),
+            restart_grace_seconds=_float(
+                "PREDICTIONS_CUP_SUPERVISOR_RESTART_GRACE_SECONDS", 90.0
+            ),
+            startup_grace_seconds=_float(
+                "PREDICTIONS_CUP_SUPERVISOR_STARTUP_GRACE_SECONDS", 720.0
+            ),
         )
         return cls(
             repo_root=repo_root,
