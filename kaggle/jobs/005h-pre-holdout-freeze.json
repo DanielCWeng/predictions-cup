@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/experiment_005h_pre_holdout",
+  "kernel": "polyleviathan/experiment-005h-pre-holdout-freeze",
+  "poll_seconds": 30,
+  "timeout_minutes": 60,
+  "download_outputs": true,
+  "output_file_pattern": "(PRE_HOLDOUT_FREEZE\\.(json|md)|SOURCE_ROBUSTNESS_SUMMARY\\.json)$",
+  "launch_gate": "V3_EXTENDED_FALSIFICATION_AND_SOURCE_IDENTITY_COMPLETE_B0_STILL_SEALED"
+}
