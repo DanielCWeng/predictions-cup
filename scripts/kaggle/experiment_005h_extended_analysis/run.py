@@ -713,7 +713,8 @@ def spread_table(fills: pd.DataFrame) -> pd.DataFrame:
 
 def permutation_test_relative_size(fills: pd.DataFrame, seed: int = 5006) -> dict[str, Any]:
     work = fills[
-        fills["economic_exact"].astype(bool)
+        (fills["split"] == "DEV")
+        & fills["economic_exact"].astype(bool)
         & fills["log_episode_size_over_touch"].notna()
         & fills["signed_move_30s"].notna()
     ].copy()
@@ -923,10 +924,28 @@ def main() -> None:
         )
 
     arrival_rows = pd.DataFrame(
-        [{"model": "ARRIVAL_STATE", **arrival_result}]
+        [
+            {
+                "model": "ARRIVAL_STATE",
+                "payload_json": json.dumps(
+                    arrival_result,
+                    sort_keys=True,
+                    default=str,
+                ),
+            }
+        ]
     )
     direction_rows = pd.DataFrame(
-        [{"model": "DIRECTION_STATE", **direction_result}]
+        [
+            {
+                "model": "DIRECTION_STATE",
+                "payload_json": json.dumps(
+                    direction_result,
+                    sort_keys=True,
+                    default=str,
+                ),
+            }
+        ]
     )
     arrival_rows.to_parquet(WORK / "FILL_ARRIVAL_RESULTS.parquet", index=False)
     direction_rows.to_parquet(WORK / "FILL_DIRECTION_RESULTS.parquet", index=False)
