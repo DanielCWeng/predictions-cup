@@ -277,3 +277,40 @@ def test_hot_parquet_prune_is_scoped_to_old_parquet(tmp_path: Path) -> None:
     assert result["result"] == "SUCCESS"
     assert not old.exists()
     assert keep.exists()
+
+
+def test_polymarket_disconnected_is_critical() -> None:
+    collection = _healthy_collection()
+    sections = dict(collection.sections)
+    sections["polymarket_capture"] = {
+        "storage_failures": 0,
+        "websocket_connected": False,
+        "last_message_age_seconds": 1.0,
+    }
+    findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
+    assert any(item.code == "FEED_POLYMARKET_DISCONNECTED" for item in findings)
+
+
+def test_sig_activity_fallback_is_visible_warning() -> None:
+    collection = _healthy_collection()
+    sections = dict(collection.sections)
+    sections["sig_capture"] = {
+        "storage_failures": 0,
+        "dropped_rows": 0,
+        "writer_alive": True,
+        "health_surface": "activity_fallback",
+        "health_surface_reason": "OperationalError:no such table: capture_health",
+    }
+    findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
+    assert any(item.code == "SIG_STRUCTURED_HEALTH_UNAVAILABLE" for item in findings)
+
+
+def test_hourly_bundle_shape_matches_event_bundle(tmp_path: Path) -> None:
+    path = BundleWriter(tmp_path).emit(
+        bundle_type="hourly",
+        snapshot=_snapshot(tmp_path),
+        trigger_codes=("X",),
+    )
+    manifest = json.loads((path / "manifest.json").read_text())
+    assert manifest["bundle_type"] == "hourly"
+    assert manifest["trigger_codes"] == ["X"]
