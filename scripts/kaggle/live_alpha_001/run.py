@@ -6,9 +6,16 @@ import pandas as pd
 warnings.filterwarnings("ignore")
 OUT = Path(os.environ.get("LIVE_ALPHA_OUTPUT", "/kaggle/working"))
 override = os.environ.get("LIVE_ALPHA_INPUT")
-roots = [Path(override)] if override else list(Path("/kaggle/input").glob("sig-live-alpha-20261001-v1*"))
+if override:
+    roots = [Path(override)]
+else:
+    roots = list(Path("/kaggle/input").glob("sig-live-alpha-20261001-v1*"))
+    if not roots:
+        embedded = Path("/kaggle/src")
+        if list(embedded.glob("trade_features_part*.csv")):
+            roots = [embedded]
 if not roots or not roots[0].exists():
-    raise RuntimeError("live-alpha compact dataset not mounted")
+    raise RuntimeError("live-alpha compact tape unavailable")
 ROOT = roots[0]
 OUT.mkdir(parents=True, exist_ok=True)
 
