@@ -1983,8 +1983,8 @@ def candidate_side_records(
 
     if fam == "WAIT_ONLY":
         affected = base["decision_id"].isin(high_decisions)
-        base.loc[affected, "weight"] = 0.0
-        return base, base.loc[affected].copy()
+        candidate = base.loc[~affected].copy()
+        return candidate, base.loc[affected].copy()
 
     if fam == "SIZE_ONLY":
         affected = base["decision_id"].isin(high_decisions)
