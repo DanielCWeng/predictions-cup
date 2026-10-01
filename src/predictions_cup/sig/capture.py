@@ -191,7 +191,7 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                         reason=reason.value,
                     )
                     subscriber = SupabaseTournamentSubscriber(
-                        topic=engine.topic,
+                        topics=engine.subscription_topics(),
                         token=token,
                         token_refresh_margin_seconds=(
                             settings.sig_realtime_token_refresh_margin_seconds
