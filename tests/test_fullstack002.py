@@ -380,3 +380,23 @@ def test_status_contract_artifacts_are_versioned_and_fail_closed() -> None:
     assert sample["trading_authorization"]["authorized"] is False
     assert sample["trading_authorization"]["state"] == "NOT_READY"
     assert sample["host_identity"] == "EXAMPLE_ONLY_NOT_RUNTIME_EVIDENCE"
+
+
+def test_rehearsal_evidence_never_claims_real_host_or_orders() -> None:
+    evidence = json.loads(
+        (
+            PROJECT_ROOT
+            / "docs"
+            / "launch_hardening"
+            / "fullstack002"
+            / "REHEARSAL_EVIDENCE_20261001.json"
+        ).read_text(encoding="utf-8")
+    )
+    rehearsal = evidence["rehearsal"]
+
+    assert rehearsal["schema_version"] == fullstack.REHEARSAL_SCHEMA_VERSION
+    assert rehearsal["result"] == "SIMULATION_PASS"
+    assert rehearsal["economic_order_sent"] is False
+    assert rehearsal["real_host_evidence"] == "NOT_RUN"
+    assert rehearsal["real_result"] == "NOT_RUN"
+    assert all(check["state"] == "PASS" for check in rehearsal["checks"])
