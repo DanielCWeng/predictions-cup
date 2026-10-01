@@ -36,10 +36,11 @@ def best_from_levels(levels: Any, *, bid: bool) -> float | None:
     values: list[float] = []
     try:
         for level in levels:
-            if isinstance(level, dict):
-                p = float(level["price"])
-            else:
-                p = float(level[0])
+            p = (
+                float(level["price"])
+                if isinstance(level, dict)
+                else float(level[0])
+            )
             if math.isfinite(p):
                 values.append(p)
     except (TypeError, ValueError, KeyError):
@@ -74,7 +75,7 @@ def locate_fill_files() -> list[Path]:
 
 
 def load_fills(files: list[Path]) -> pd.DataFrame:
-    frames = [pq.read_table(p).to_pandas() for p in files]
+    frames = [pq.ParquetFile(p).read().to_pandas() for p in files]
     df = pd.concat(frames, ignore_index=True)
     required = {
         "timestamp", "tx_hash", "log_index", "condition_id", "token_id",
