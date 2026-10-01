@@ -267,7 +267,40 @@ def run_kernel(data: dict[str, Any], output_dir: Path) -> None:
 
     push_dir = staged_kernel_dir(data, kernel_dir, output_dir)
     embed_kernel_bundle(data, push_dir)
-    push_result = run_command(["kaggle", "kernels", "push", "-p", str(push_dir)])
+
+    quota_retry_seconds = int(data.get("quota_retry_seconds", 0))
+    quota_retry_minutes = int(data.get("quota_retry_minutes", 0))
+    if quota_retry_seconds < 0 or quota_retry_minutes < 0:
+        raise ValueError("quota retry settings must be non-negative")
+    quota_deadline = (
+        time.monotonic() + quota_retry_minutes * 60
+        if quota_retry_seconds > 0 and quota_retry_minutes > 0
+        else None
+    )
+
+    while True:
+        push_result = run_command(
+            ["kaggle", "kernels", "push", "-p", str(push_dir)],
+            check=False,
+        )
+        push_text = (push_result.stdout or "") + "\n" + (push_result.stderr or "")
+        quota_full = "Maximum batch CPU session count" in push_text
+        if not quota_full:
+            if push_result.returncode != 0:
+                raise RuntimeError(
+                    "Kaggle kernel push failed with exit code "
+                    f"{push_result.returncode}"
+                )
+            break
+        if quota_deadline is None or time.monotonic() >= quota_deadline:
+            raise RuntimeError("Kaggle CPU session quota remained full")
+        print(
+            "Kaggle CPU session quota full; retrying push after "
+            f"{quota_retry_seconds}s",
+            flush=True,
+        )
+        time.sleep(quota_retry_seconds)
+
     active_kernel = canonical_kernel_from_push(push_result, declared_kernel)
     (output_dir / "canonical_kernel.txt").write_text(active_kernel + "\n", encoding="utf-8")
     if active_kernel != declared_kernel:
