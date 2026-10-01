@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005G",
+  "lane": "A_STRICT_005F_REPLICATION",
+  "phase": "TRAIN_DEV",
+  "slice": "pre_baseline",
+  "regime": "PRE_ELECTION_BASELINE_SEP",
+  "job": {
+    "workflow_run_id": 36833152153,
+    "artifact_id": 11147659145,
+    "branch_head_at_job": "4aeb00d93078c4902880d09e681f5b7a42556979",
+    "outputs": {
+      "lane_a_audit_sha256": "dfee30b16521c4941eff07058f4aa515a6ce7f6ae4742cc595645789bd6ee3be",
+      "lane_a_dev_results_sha256": "67b9c9c0ada20a8356f7b35c95629934c4d149edc1d8c086b526205fe18b0021",
+      "lane_a_dev_block_evidence_sha256": "41e8fc9f11506c82f6b7e712cb98d9a105e939f02bfff044e92a78e8ab6a2277",
+      "lane_a_dev_block_evidence_bytes": 44477177
+    }
+  },
+  "provenance": {
+    "dataset": "polyleviathan/sig-cup-data003-orderbooks",
+    "dataset_version": 1,
+    "source_versions_seen": [
+      "V3"
+    ],
+    "accepted_mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
+    "representative_conditions": 693,
+    "downloaded_source_files": 96,
+    "source_window": [
+      "2026-09-01T00:00:00Z",
+      "2026-09-05T00:00:00Z"
+    ],
+    "holdout_window": [
+      "2026-09-05T00:00:00Z",
+      "2026-09-06T00:00:00Z"
+    ],
+    "holdout_read": false
+  },
+  "corpus_summary": {
+    "filtered_rows": 24760191,
+    "price_change_rows": 24759466,
+    "genuine_bbo": 1455270,
+    "state_rows_retained": 2865615,
+    "tokens_seen": 690,
+    "trade_rows": 725,
+    "trade_tokens_seen": 184,
+    "clock_rows": 967073,
+    "train_rows": 720528,
+    "dev_rows": 246545,
+    "train_jump_threshold_abs_logit15": 0
+  },
+  "candidates": [
+    {
+      "candidate_id": "005F_REPL_PRE_UPDATE",
+      "target": "update_h300",
+      "feature": "genuine_age_s",
+      "baseline": [
+        "genuine_15",
+        "genuine_60"
+      ],
+      "model": "HGB_D3_LR0.03",
+      "kind": "classification",
+      "train_rows": 219602,
+      "dev_rows": 192907,
+      "markets": 601,
+      "blocks": 48,
+      "positive_blocks": 48,
+      "baseline_mse": 0.10451980295861239,
+      "challenger_mse": 0.07242217950657666,
+      "mean_loss_improvement": 0.03209762345203572,
+      "relative_mse_improvement": 0.30709609608377936,
+      "signflip_p": 0.000244081034903588,
+      "block_bootstrap_lower": 0.030273825053670263,
+      "leave_market_min": 0.03147380540503433,
+      "delayed_300s_relative_improvement": 0.301896421909215,
+      "shifted_1800s_relative_improvement": 0.2286026485944828,
+      "future_feature_relative_improvement": 0.9994035475126045,
+      "dev_disposition": "HOLDOUT_ELIGIBLE",
+      "interpretation": "Fresh current-universe DATA-003 strongly supports genuine BBO age as an incremental 300s renewal-hazard state variable. Persistence under lag/shift is consistent with a slow state variable; the future-age diagnostic nearly encodes the target and is treated only as a leakage diagnostic."
+    },
+    {
+      "candidate_id": "005F_REPL_PRE_LIQUIDITY",
+      "target": "spread_h15",
+      "feature": "trade_abs_impact_60",
+      "baseline": [
+        "spread",
+        "ret_15"
+      ],
+      "model": "HGB_D3_LR0.03",
+      "kind": "regression",
+      "train_rows": 56337,
+      "dev_rows": 52901,
+      "markets": 183,
+      "blocks": 48,
+      "positive_blocks": 30,
+      "baseline_mse": 0.000026266291186953414,
+      "challenger_mse": 0.00002612977969712525,
+      "mean_loss_improvement": 1.365114898281644e-7,
+      "relative_mse_improvement": 0.005197212231316856,
+      "signflip_p": 0.13131559677813034,
+      "block_bootstrap_lower": -5.425944157563136e-8,
+      "leave_market_min": 2.3431533351192365e-8,
+      "dev_disposition": "REPLICATION_FAILED_DEV_GATE",
+      "reason": "Positive point estimate is too small to clear the frozen dependence-aware sign-flip and block-bootstrap gates; no HOLDOUT read is justified."
+    }
+  ],
+  "holdout_eligible_candidates": [
+    "005F_REPL_PRE_UPDATE"
+  ],
+  "holdout_rejected_candidates": [
+    "005F_REPL_PRE_LIQUIDITY"
+  ],
+  "original_005f_modified": false,
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}
