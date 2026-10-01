@@ -273,9 +273,15 @@ class SupervisorSources:
             max_age_seconds=self.capture_max_age_seconds,
         )
         status, section = primary
-        if status.valid or not status.available:
+        if status.valid:
             return primary
-        if not str(section.get("error", "")).startswith("OperationalError:no such table"):
+        fallback_reason = str(section.get("reason", ""))
+        fallback_error = str(section.get("error", ""))
+        may_fallback = (
+            fallback_reason == "capture_health_empty"
+            or fallback_error.startswith("OperationalError:no such table")
+        )
+        if not may_fallback:
             return primary
         fallback = self._read_activity_sqlite(
             source_id="sig_capture",
@@ -292,7 +298,9 @@ class SupervisorSources:
         fallback_status, fallback_section = fallback
         if fallback_status.valid:
             fallback_section["health_surface"] = "activity_fallback"
-            fallback_section["health_surface_reason"] = section.get("error")
+            fallback_section["health_surface_reason"] = (
+                section.get("error") or section.get("reason")
+            )
         return fallback
 
     def _read_activity_sqlite(

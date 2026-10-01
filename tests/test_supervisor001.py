@@ -6,6 +6,8 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from predictions_cup.supervisor.bundles import BundleWriter
 from predictions_cup.supervisor.contracts import (
     ActionCode,
@@ -21,6 +23,7 @@ from predictions_cup.supervisor.contracts import (
 from predictions_cup.supervisor.persistence import SupervisorStore
 from predictions_cup.supervisor.remediation import RemediationConfig, RemediationExecutor
 from predictions_cup.supervisor.rules import SupervisorPolicy, evaluate, severity_and_gate
+from predictions_cup.supervisor.runtime import ResourceGrowthTracker
 from predictions_cup.supervisor.sources import SourceCollection
 
 NOW = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
@@ -329,3 +332,20 @@ def test_fast_disk_growth_is_critical() -> None:
     }
     findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
     assert any(item.code == "DISK_GROWTH_CRITICAL" for item in findings)
+
+
+def test_resource_growth_resets_memory_history_on_pid_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tracker = ResourceGrowthTracker()
+    times = iter((0.0, 31.0, 62.0))
+    monkeypatch.setattr("predictions_cup.supervisor.runtime.time.monotonic", lambda: next(times))
+    first = {"services": {"svc": {"main_pid": "1", "memory_current_bytes": 100}}}
+    second = {"services": {"svc": {"main_pid": "1", "memory_current_bytes": 200}}}
+    restarted = {"services": {"svc": {"main_pid": "2", "memory_current_bytes": 500}}}
+    growth1, _ = tracker.update(first)
+    growth2, _ = tracker.update(second)
+    growth3, _ = tracker.update(restarted)
+    assert growth1 == {}
+    assert growth2["svc"] > 0
+    assert growth3 == {}

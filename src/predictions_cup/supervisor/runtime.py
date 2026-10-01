@@ -26,6 +26,7 @@ class ResourceGrowthTracker:
     def __init__(self, window_seconds: float = 300.0) -> None:
         self.window_seconds = window_seconds
         self._memory_history: dict[str, deque[tuple[float, int]]] = defaultdict(deque)
+        self._memory_pid: dict[str, str] = {}
         self._disk_history: deque[tuple[float, int]] = deque()
 
     def update(self, system: object) -> tuple[dict[str, float], float | None]:
@@ -43,7 +44,11 @@ class ResourceGrowthTracker:
                 memory = raw.get("memory_current_bytes")
                 if isinstance(memory, bool) or not isinstance(memory, int):
                     continue
+                pid = str(raw.get("main_pid") or "")
                 history = self._memory_history[service]
+                if self._memory_pid.get(service) != pid:
+                    history.clear()
+                    self._memory_pid[service] = pid
                 history.append((now, memory))
                 while history and now - history[0][0] > self.window_seconds:
                     history.popleft()
