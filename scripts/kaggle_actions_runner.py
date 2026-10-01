@@ -360,6 +360,26 @@ def publish_code_dataset(data: dict[str, Any], output_dir: Path) -> None:
                 archive.write(path, path.relative_to(parent))
 
     (stage / "CODE_SHA.txt").write_text(commit + "\n", encoding="utf-8")
+    static_paths = data.get("static_paths", [])
+    if not isinstance(static_paths, list):
+        raise ValueError("static_paths must be a list")
+    repo_root = Path.cwd().resolve()
+    for item in static_paths:
+        if not isinstance(item, dict):
+            raise ValueError("each static_paths entry must be an object")
+        source = (repo_root / str(item.get("source", ""))).resolve()
+        destination = Path(str(item.get("destination", "")))
+        if (
+            not source.is_file()
+            or destination.is_absolute()
+            or ".." in destination.parts
+            or not destination.parts
+        ):
+            raise ValueError(f"invalid static path entry: {item}")
+        target = stage / destination
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+
     (stage / "dataset-metadata.json").write_text(
         json.dumps(
             {
