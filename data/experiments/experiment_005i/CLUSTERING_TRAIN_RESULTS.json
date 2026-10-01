@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "status": "TRAIN_ONLY_DESCRIPTIVE",
+  "input": "50,000 TRAIN sampled minute-states; 10,000 independently seeded rows per 48h temporal worker",
+  "features": [
+    "relative_spread",
+    "depth_total5",
+    "quote_events",
+    "rv_5m",
+    "age_quote_s",
+    "ret_5m",
+    "ofi_depth_norm",
+    "replenishment_1m",
+    "withdrawal_1m"
+  ],
+  "preprocessing": "monotone tail transforms + TRAIN RobustScaler; no future targets used",
+  "kmeans": [
+    {
+      "k": 2,
+      "silhouette": 0.3701,
+      "mean_matched_centroid_distance": 0.241
+    },
+    {
+      "k": 3,
+      "silhouette": 0.442,
+      "mean_matched_centroid_distance": 0.195,
+      "global_occupancy": [
+        0.54752,
+        0.23124,
+        0.22124
+      ],
+      "worker_occupancy": [
+        [
+          0.615,
+          0.194,
+          0.191
+        ],
+        [
+          0.569,
+          0.221,
+          0.21
+        ],
+        [
+          0.459,
+          0.282,
+          0.259
+        ],
+        [
+          0.494,
+          0.258,
+          0.248
+        ],
+        [
+          0.6,
+          0.202,
+          0.198
+        ]
+      ],
+      "scaled_centroid_summary": [
+        {
+          "cluster": 0,
+          "interpretation": "lower-spread / more active-volatility coarse mode"
+        },
+        {
+          "cluster": 1,
+          "interpretation": "replenishment-heavy coarse mode"
+        },
+        {
+          "cluster": 2,
+          "interpretation": "directional-OFI-heavy coarse mode"
+        }
+      ]
+    },
+    {
+      "k": 4,
+      "silhouette": 0.4317,
+      "mean_matched_centroid_distance": 0.229
+    },
+    {
+      "k": 5,
+      "silhouette": 0.327,
+      "mean_matched_centroid_distance": 0.729
+    },
+    {
+      "k": 6,
+      "silhouette": 0.3022,
+      "mean_matched_centroid_distance": 1.421
+    },
+    {
+      "k": 7,
+      "silhouette": 0.3079,
+      "mean_matched_centroid_distance": 1.586
+    }
+  ],
+  "gmm_bic": [
+    {
+      "k": 2,
+      "bic": 110933.5
+    },
+    {
+      "k": 3,
+      "bic": -43831.3
+    },
+    {
+      "k": 4,
+      "bic": -107913
+    },
+    {
+      "k": 5,
+      "bic": -122782.3
+    },
+    {
+      "k": 6,
+      "bic": -137775.8
+    }
+  ],
+  "conclusion": "Three coarse observable modes are descriptively reproducible, but the likelihood criterion keeps rewarding additional Gaussian components while 5+ K-means states become temporally unstable. This is more consistent with a few interpretable axes plus continuous/heavy-tailed variation than a clean universal finite latent-state taxonomy.",
+  "hmm_decision": "DO_NOT_BUILD_YET",
+  "hmm_reason": "No TRAIN evidence that a latent-state layer would add stable economic information beyond frozen transparent states; adding HMM complexity now would violate the experiment hierarchy.",
+  "claim_boundary": "Sampling is activity/depth stratified, so occupancies are not population regime frequencies. Clustering is descriptive candidate structure only and cannot support transition-frequency claims.",
+  "holdout_read": false,
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}
