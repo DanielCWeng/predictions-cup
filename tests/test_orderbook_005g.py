@@ -16,6 +16,11 @@ T0 = datetime(2026, 8, 24, 0, tzinfo=UTC)
 TOKEN = "111"
 FOREIGN = "999"
 MARKET = "0x" + "a" * 64
+TX_HASH = "0x" + "c" * 64
+TOKEN_BYTES = int(TOKEN).to_bytes(32, byteorder="big", signed=False)
+FOREIGN_BYTES = int(FOREIGN).to_bytes(32, byteorder="big", signed=False)
+MARKET_BYTES = bytes.fromhex(MARKET[2:])
+TX_HASH_BYTES = bytes.fromhex(TX_HASH[2:])
 TOKENS = frozenset({TOKEN})
 
 
@@ -32,8 +37,8 @@ V3_SCHEMA = pa.schema(
         ("event_type", pa.string()),
         ("timestamp_received", pa.timestamp("us", tz="UTC")),
         ("timestamp", pa.timestamp("us", tz="UTC")),
-        ("market", pa.string()),
-        ("asset_id", pa.string()),
+        ("market", pa.binary()),
+        ("asset_id", pa.binary()),
         ("bids", V3_LEVELS),
         ("asks", V3_LEVELS),
         ("price", pa.string()),
@@ -43,7 +48,7 @@ V3_SCHEMA = pa.schema(
         ("best_ask", pa.string()),
         ("spread", pa.string()),
         ("fee_rate_bps", pa.int64()),
-        ("transaction_hash", pa.string()),
+        ("transaction_hash", pa.binary()),
         ("old_tick_size", pa.string()),
         ("new_tick_size", pa.string()),
         ("sequence", pa.uint64()),
@@ -61,8 +66,8 @@ def _v3_table() -> pa.Table:
                 "event_type": "book",
                 "timestamp_received": T0 + timedelta(microseconds=100),
                 "timestamp": T0,
-                "market": MARKET,
-                "asset_id": TOKEN,
+                "market": MARKET_BYTES,
+                "asset_id": TOKEN_BYTES,
                 "bids": [
                     {"price": "0.40", "size": "5"},
                     {"price": "0.41", "size": "3"},
@@ -80,8 +85,8 @@ def _v3_table() -> pa.Table:
                 "event_type": "price_change",
                 "timestamp_received": T0 + timedelta(microseconds=200),
                 "timestamp": T0 + timedelta(microseconds=50),
-                "market": MARKET,
-                "asset_id": TOKEN,
+                "market": MARKET_BYTES,
+                "asset_id": TOKEN_BYTES,
                 "price": "0.42",
                 "size": "4",
                 "side": "BUY",
@@ -96,8 +101,8 @@ def _v3_table() -> pa.Table:
                 "event_type": "best_bid_ask",
                 "timestamp_received": T0 + timedelta(microseconds=250),
                 "timestamp": T0 + timedelta(microseconds=60),
-                "market": MARKET,
-                "asset_id": TOKEN,
+                "market": MARKET_BYTES,
+                "asset_id": TOKEN_BYTES,
                 "best_bid": "0.42",
                 "best_ask": "0.55",
                 "spread": "0.13",
@@ -110,13 +115,13 @@ def _v3_table() -> pa.Table:
                 "event_type": "last_trade_price",
                 "timestamp_received": T0 + timedelta(microseconds=300),
                 "timestamp": T0 + timedelta(microseconds=70),
-                "market": MARKET,
-                "asset_id": TOKEN,
+                "market": MARKET_BYTES,
+                "asset_id": TOKEN_BYTES,
                 "price": "0.54",
                 "size": "2",
                 "side": "BUY",
                 "fee_rate_bps": 0,
-                "transaction_hash": "0xabc",
+                "transaction_hash": TX_HASH_BYTES,
                 "sequence": 4,
                 "source_witness": "w2",
                 "witness_set": "w1,w2",
@@ -126,8 +131,8 @@ def _v3_table() -> pa.Table:
                 "event_type": "tick_size_change",
                 "timestamp_received": T0 + timedelta(microseconds=350),
                 "timestamp": T0 + timedelta(microseconds=80),
-                "market": MARKET,
-                "asset_id": TOKEN,
+                "market": MARKET_BYTES,
+                "asset_id": TOKEN_BYTES,
                 "old_tick_size": "0.01",
                 "new_tick_size": "0.001",
                 "sequence": 5,
@@ -139,8 +144,8 @@ def _v3_table() -> pa.Table:
                 "event_type": "best_bid_ask",
                 "timestamp_received": T0 + timedelta(microseconds=400),
                 "timestamp": T0 + timedelta(microseconds=90),
-                "market": MARKET,
-                "asset_id": FOREIGN,
+                "market": MARKET_BYTES,
+                "asset_id": FOREIGN_BYTES,
                 "best_bid": "0.10",
                 "best_ask": "0.20",
                 "spread": "0.10",
@@ -170,6 +175,8 @@ def test_v3_uses_receive_time_and_preserves_capture_provenance() -> None:
     assert snap["source_timestamp"] == T0
     assert snap["source_generation"] == "v3"
     assert snap["source_version"] == "PENDULUM_V3"
+    assert snap["token_id"] == TOKEN
+    assert snap["market_id"] == MARKET
     assert snap["sequence"] == 1
     assert snap["source_witness"] == "w1"
     assert snap["witness_set"] == "w1,w2"
@@ -185,6 +192,7 @@ def test_v3_uses_receive_time_and_preserves_capture_provenance() -> None:
 
     trade = out.tables["trades"].to_pylist()[0]
     assert trade["event_id"].startswith("polymarket-trade:")
+    assert trade["transaction_hash"] == TX_HASH
     assert trade["observed_at"] == T0 + timedelta(microseconds=300)
     assert trade["arrival_skew_us"] == 9
 
@@ -207,8 +215,8 @@ def test_v3_early_schema_can_omit_witness_columns() -> None:
                 "event_type": "best_bid_ask",
                 "timestamp_received": T0,
                 "timestamp": T0 - timedelta(microseconds=5),
-                "market": MARKET,
-                "asset_id": TOKEN,
+                "market": MARKET_BYTES,
+                "asset_id": TOKEN_BYTES,
                 "best_bid": "0.45",
                 "best_ask": "0.46",
                 "spread": "0.01",
