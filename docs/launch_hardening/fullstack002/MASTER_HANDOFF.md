@@ -47,7 +47,10 @@ There is no FULLSTACK-002 LIVE start command. Status always returns `authorized=
 
 - Operator surface: `scripts/cupctl`
 - Canonical status: `<sig-research-parent>/runtime/status/latest.json` (default `data/runtime/status/latest.json`)
+- Machine-readable schema: `docs/launch_hardening/fullstack002/STATUS_CONTRACT.schema.json`
+- Explicitly non-runtime sample: `docs/launch_hardening/fullstack002/STATUS_SAMPLE.json`
 - Durable alerts: `<sig-research-parent>/runtime/alerts/events.jsonl`
+- Pinned CI rehearsal evidence: `docs/launch_hardening/fullstack002/REHEARSAL_EVIDENCE_20261001.json`
 - Operator card: `docs/runbooks/LAUNCH_OPERATOR_CARD.md`
 
 ## Tests / evidence
