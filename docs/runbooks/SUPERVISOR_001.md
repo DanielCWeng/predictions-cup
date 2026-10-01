@@ -283,6 +283,54 @@ revalidates action code, target, authority level, cooldown and restart budget.
 
 There is no arbitrary-shell action code.
 
+
+### Lightweight Anthropic adapter
+
+For the overnight analyst, prefer the lightweight Messages API adapter over installing
+Claude Code on the west execution host. West is a 2 GiB `t4g.small`; Claude Code's
+published system requirements are higher than that, while the API adapter is only a
+small Python HTTP client.
+
+Create a separate secret file that is never loaded by the trading/capture services:
+
+```text
+~/.config/predictions-cup/analyst.env
+```
+
+Example keys:
+
+```text
+ANTHROPIC_API_KEY=...
+PREDICTIONS_CUP_SUPERVISOR_ANTHROPIC_MODEL=claude-sonnet-5
+PREDICTIONS_CUP_SUPERVISOR_ANTHROPIC_MAX_TOKENS=6000
+```
+
+Permissions:
+
+```bash
+chmod 600 ~/.config/predictions-cup/analyst.env
+```
+
+Install only after the analyst secret exists:
+
+```bash
+sudo PREDICTIONS_CUP_RUNTIME_USER=ec2-user \
+  bash scripts/install_supervisor_analyst_service.sh
+```
+
+The analyst service:
+
+- reads only the supervisor bundle spool;
+- invokes Anthropic at most four times per hour by default;
+- has lower CPU/I/O priority than the deterministic sentry;
+- is capped at 256 MiB memory;
+- explicitly unsets the SIG trade credential;
+- can only request remediation through the existing deterministic allowlist.
+
+The Anthropic adapter itself has no shell/subagent access. If Codex/Claude Code is later
+added as a subagent layer, keep it outside the deterministic sentry and preserve the
+same request/revalidation boundary.
+
 ## First overnight burn-in
 
 Target:
