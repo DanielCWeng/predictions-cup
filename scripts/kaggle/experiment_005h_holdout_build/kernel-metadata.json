@@ -1,0 +1,19 @@
+{
+  "id": "polyleviathan/experiment-005h-holdout-build",
+  "title": "EXPERIMENT-005H One-Shot B0 Build",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [
+    "polyleviathan/sig-cup-data-003-sig-actual-fills",
+    "polyleviathan/sig-cup-data003-orderbooks"
+  ],
+  "competition_sources": [],
+  "kernel_sources": [
+    "polyleviathan/experiment-005h-pre-holdout-freeze"
+  ]
+}
