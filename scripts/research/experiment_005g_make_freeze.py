@@ -262,7 +262,10 @@ def main() -> None:
         },
         "candidate_admission": {
             "lane_a_rule": "only 005F_REPL_PRE_UPDATE; all other Lane A coordinates frozen out",
-            "lane_b_rule": "only promotion_gate_pass=true rows from frozen broad and sequential Lane B screens",
+            "lane_b_rule": (
+                "only promotion_gate_pass=true rows from frozen broad "
+                "and sequential Lane B screens"
+            ),
             "manual_replacements_allowed": False,
             "post_holdout_tuning_allowed": False,
         },
