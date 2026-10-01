@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -55,6 +56,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
         "auth_check",
         "dataset_fetch",
         "dataset_probe",
+        "dataset_script",
         "kernel_fetch",
         "logs",
         "output",
@@ -159,6 +161,122 @@ def dataset_fetch(data: dict[str, Any], output_dir: Path) -> None:
     )
     if not all(bool(item["downloaded"]) for item in results):
         raise RuntimeError("One or more requested Kaggle dataset files could not be fetched")
+
+
+def dataset_script(data: dict[str, Any], output_dir: Path) -> None:
+    """Download bounded private-dataset files, run a repo script, then delete raw bytes."""
+    dataset = str(data.get("dataset", "")).strip()
+    if "/" not in dataset:
+        raise ValueError("dataset_script manifest requires 'dataset' as owner/slug")
+    files_raw = data.get("files")
+    if not isinstance(files_raw, list) or not files_raw:
+        raise ValueError("dataset_script manifest requires non-empty 'files' list")
+    if len(files_raw) > 250:
+        raise ValueError("dataset_script is capped at 250 source files per job")
+
+    script_raw = str(data.get("script", "")).strip()
+    if not script_raw:
+        raise ValueError("dataset_script manifest requires 'script'")
+    script = repo_path(script_raw)
+    if not script.is_file():
+        raise FileNotFoundError(f"dataset_script script not found: {script_raw}")
+
+    script_args_raw = data.get("script_args", [])
+    if not isinstance(script_args_raw, list):
+        raise ValueError("dataset_script 'script_args' must be a list")
+    script_args = [str(value) for value in script_args_raw]
+
+    pip_packages_raw = data.get("pip_packages", [])
+    if not isinstance(pip_packages_raw, list):
+        raise ValueError("dataset_script 'pip_packages' must be a list")
+    pip_packages = [str(value).strip() for value in pip_packages_raw if str(value).strip()]
+
+    if bool(data.get("install_project", False)):
+        run_command([sys.executable, "-m", "pip", "install", "-e", "."])
+    if pip_packages:
+        run_command([sys.executable, "-m", "pip", "install", *pip_packages])
+
+    input_root = output_dir / "_dataset_script_inputs"
+    result_root = output_dir / "outputs"
+    input_root.mkdir(parents=True, exist_ok=True)
+    result_root.mkdir(parents=True, exist_ok=True)
+    downloaded: list[dict[str, str]] = []
+
+    try:
+        for index, raw in enumerate(files_raw):
+            file_name = str(raw).strip()
+            if not file_name:
+                raise ValueError("dataset_script file names must be non-empty")
+            file_dest = input_root / f"{index:04d}"
+            file_dest.mkdir(parents=True, exist_ok=True)
+            result = run_command(
+                [
+                    "kaggle",
+                    "datasets",
+                    "download",
+                    dataset,
+                    "-f",
+                    file_name,
+                    "-p",
+                    str(file_dest),
+                    "--force",
+                ],
+                check=False,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(f"Failed to download dataset file: {file_name}")
+
+            candidates = sorted(path for path in file_dest.rglob("*") if path.is_file())
+            if len(candidates) != 1:
+                raise RuntimeError(
+                    f"Expected one downloaded file for {file_name}; got "
+                    f"{[path.name for path in candidates]}"
+                )
+            downloaded.append(
+                {
+                    "remote": file_name,
+                    "local": str(candidates[0]),
+                }
+            )
+
+        input_manifest = output_dir / "dataset_script_inputs.json"
+        input_manifest.write_text(
+            json.dumps(
+                {
+                    "dataset": dataset,
+                    "files": downloaded,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        run_command(
+            [
+                sys.executable,
+                str(script),
+                "--input-manifest",
+                str(input_manifest),
+                "--output-dir",
+                str(result_root),
+                *script_args,
+            ]
+        )
+    finally:
+        shutil.rmtree(input_root, ignore_errors=True)
+
+    write_summary(
+        [
+            "## Kaggle dataset script",
+            "",
+            f"- Dataset: {dataset}",
+            f"- Source files: {len(downloaded)}",
+            f"- Script: {script_raw}",
+            "- Raw source bytes deleted before artifact upload: YES",
+        ]
+    )
 
 
 def dataset_probe(data: dict[str, Any], output_dir: Path) -> None:
@@ -370,6 +488,8 @@ def main() -> int:
         dataset_fetch(data, output_dir)
     elif action == "dataset_probe":
         dataset_probe(data, output_dir)
+    elif action == "dataset_script":
+        dataset_script(data, output_dir)
     elif action == "kernel_fetch":
         kernel_fetch(data, output_dir)
     elif action == "run":
