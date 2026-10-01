@@ -19,6 +19,40 @@ MARKET = "0x" + "a" * 64
 TOKENS = frozenset({TOKEN})
 
 
+V3_LEVELS = pa.list_(
+    pa.struct(
+        [
+            pa.field("price", pa.string()),
+            pa.field("size", pa.string()),
+        ]
+    )
+)
+V3_SCHEMA = pa.schema(
+    [
+        ("event_type", pa.string()),
+        ("timestamp_received", pa.timestamp("us", tz="UTC")),
+        ("timestamp", pa.timestamp("us", tz="UTC")),
+        ("market", pa.string()),
+        ("asset_id", pa.string()),
+        ("bids", V3_LEVELS),
+        ("asks", V3_LEVELS),
+        ("price", pa.string()),
+        ("size", pa.string()),
+        ("side", pa.string()),
+        ("best_bid", pa.string()),
+        ("best_ask", pa.string()),
+        ("spread", pa.string()),
+        ("fee_rate_bps", pa.int64()),
+        ("transaction_hash", pa.string()),
+        ("old_tick_size", pa.string()),
+        ("new_tick_size", pa.string()),
+        ("sequence", pa.uint64()),
+        ("source_witness", pa.string()),
+        ("witness_set", pa.string()),
+        ("arrival_skew", pa.int64()),
+    ]
+)
+
 def _v3_table() -> pa.Table:
     return pa.Table.from_pylist(
         [
@@ -158,6 +192,13 @@ def test_v3_uses_receive_time_and_preserves_capture_provenance() -> None:
 
 
 def test_v3_early_schema_can_omit_witness_columns() -> None:
+    early_schema = pa.schema(
+        [
+            field
+            for field in V3_SCHEMA
+            if field.name not in {"source_witness", "witness_set", "arrival_skew"}
+        ]
+    )
     table = pa.Table.from_pylist(
         [
             {
@@ -171,7 +212,8 @@ def test_v3_early_schema_can_omit_witness_columns() -> None:
                 "spread": "0.01",
                 "sequence": 7,
             }
-        ]
+        ],
+        schema=early_schema,
     )
     out = normalize_005g_extract(
         table,
