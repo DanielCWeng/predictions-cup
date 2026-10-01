@@ -302,3 +302,22 @@ def test_transition_alerts_include_unresolved_execution_operations(
             {"before": "CLEAR", "after": "BLOCKED"},
         )
     ]
+
+
+def test_alert_command_survives_invalid_runtime_settings(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    alert_path = tmp_path / "alerts.jsonl"
+    monkeypatch.setenv("PREDICTIONS_CUP_FULLSTACK_ALERT_PATH", str(alert_path))
+    monkeypatch.setenv("PREDICTIONS_CUP_EXECUTION_MODE", "INVALID")
+
+    result = fullstack.main(
+        ["alert", "--unit", "predictions-cup-maker.service", "--runtime-env-only"]
+    )
+
+    assert result == 0
+    assert alert_path.is_file()
+    payload = json.loads(alert_path.read_text(encoding="utf-8").strip())
+    assert payload["event_type"] == "SYSTEMD_ON_FAILURE"
+    assert payload["detail"]["unit"] == "predictions-cup-maker.service"
