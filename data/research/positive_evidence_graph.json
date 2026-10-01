@@ -1,0 +1,404 @@
+{
+  "schema_version": 1,
+  "title": "RESEARCH-SYNTHESIS-001 positive evidence graph",
+  "starting_main_sha": "611b048ce0ee4630c01a9500cb021a70afba8474",
+  "node_types": [
+    "SIGNAL",
+    "LATENT_FAMILY",
+    "RESULT",
+    "FAILURE",
+    "MISSING_LAYER"
+  ],
+  "nodes": [
+    {
+      "id": "genuine_age",
+      "type": "SIGNAL",
+      "label": "genuine_age_s / economic BBO age"
+    },
+    {
+      "id": "state_dwell",
+      "type": "SIGNAL",
+      "label": "state_dwell_s"
+    },
+    {
+      "id": "spread_distance",
+      "type": "SIGNAL",
+      "label": "spread × distance-from-0.5"
+    },
+    {
+      "id": "price_change_age",
+      "type": "SIGNAL",
+      "label": "price_change_age_s"
+    },
+    {
+      "id": "pred006_hazard",
+      "type": "SIGNAL",
+      "label": "PRED-006 next-price-change hazard"
+    },
+    {
+      "id": "price_discovery_state",
+      "type": "SIGNAL",
+      "label": "005I PRICE_DISCOVERY state"
+    },
+    {
+      "id": "liquidity_stress",
+      "type": "SIGNAL",
+      "label": "005I LIQUIDITY_STRESS state"
+    },
+    {
+      "id": "replenishment",
+      "type": "SIGNAL",
+      "label": "005I withdrawal→replenishment resilience"
+    },
+    {
+      "id": "mean_reversion",
+      "type": "SIGNAL",
+      "label": "005I 5m mean reversion"
+    },
+    {
+      "id": "depth_norm_ofi",
+      "type": "SIGNAL",
+      "label": "005I depth-normalised OFI"
+    },
+    {
+      "id": "participant_signed_flow",
+      "type": "SIGNAL",
+      "label": "005E conditional participant signed-flow/markout"
+    },
+    {
+      "id": "structural_latecount",
+      "type": "SIGNAL",
+      "label": "005D late-count structural convergence"
+    },
+    {
+      "id": "structural_reconstruction",
+      "type": "SIGNAL",
+      "label": "005D same-event reconstruction/coherence"
+    },
+    {
+      "id": "soft_competitive",
+      "type": "SIGNAL",
+      "label": "004C-B soft competitive-family redistribution"
+    },
+    {
+      "id": "same_family_5s",
+      "type": "SIGNAL",
+      "label": "005A same-family 5s effect"
+    },
+    {
+      "id": "market_transition_hazard",
+      "type": "LATENT_FAMILY",
+      "label": "MARKET_TRANSITION_HAZARD"
+    },
+    {
+      "id": "orderbook_renewal_hazard",
+      "type": "LATENT_FAMILY",
+      "label": "ORDERBOOK_RENEWAL_HAZARD"
+    },
+    {
+      "id": "activity_information_arrival",
+      "type": "LATENT_FAMILY",
+      "label": "ACTIVITY / INFORMATION ARRIVAL"
+    },
+    {
+      "id": "liquidity_resilience",
+      "type": "LATENT_FAMILY",
+      "label": "LIQUIDITY WITHDRAWAL / REPLENISHMENT"
+    },
+    {
+      "id": "directional_reversion_flow",
+      "type": "LATENT_FAMILY",
+      "label": "DIRECTIONAL REVERSION / FLOW"
+    },
+    {
+      "id": "structural_relative_value",
+      "type": "LATENT_FAMILY",
+      "label": "STRUCTURAL / RELATIVE VALUE"
+    },
+    {
+      "id": "participant_flow_quality",
+      "type": "LATENT_FAMILY",
+      "label": "PARTICIPANT / FLOW QUALITY"
+    },
+    {
+      "id": "fill_probability_missing",
+      "type": "MISSING_LAYER",
+      "label": "FILL PROBABILITY — not yet confirmed"
+    },
+    {
+      "id": "fill_toxicity_missing",
+      "type": "MISSING_LAYER",
+      "label": "FILL TOXICITY — not yet confirmed"
+    },
+    {
+      "id": "economics_missing",
+      "type": "MISSING_LAYER",
+      "label": "POST-COST REALIZED ECONOMICS — no positive E4/E5"
+    },
+    {
+      "id": "005g_conversion_failure",
+      "type": "FAILURE",
+      "label": "005G_STATE_HAZARD_V1 economic conversion failed"
+    },
+    {
+      "id": "005b_transfer_failure",
+      "type": "FAILURE",
+      "label": "005B fresh DATA-003 transfer 0/7"
+    },
+    {
+      "id": "005c_familywise_failure",
+      "type": "FAILURE",
+      "label": "005C familywise max-t null not rejected"
+    },
+    {
+      "id": "004c_crossvenue_failure",
+      "type": "FAILURE",
+      "label": "004C-C mapping-specific PM→SIG interpretation falsified"
+    },
+    {
+      "id": "pred007_failure",
+      "type": "FAILURE",
+      "label": "PRED-007 synthetic index no signal"
+    },
+    {
+      "id": "r3_fv_failure",
+      "type": "FAILURE",
+      "label": "R3 point-FV no independent signal"
+    }
+  ],
+  "edges": [
+    {
+      "source": "genuine_age",
+      "target": "orderbook_renewal_hazard",
+      "type": "MEASURES",
+      "evidence": "005F sealed holdout"
+    },
+    {
+      "source": "state_dwell",
+      "target": "market_transition_hazard",
+      "type": "MEASURES",
+      "evidence": "005G sealed holdout; NON_CANONICAL/UNMERGED"
+    },
+    {
+      "source": "spread_distance",
+      "target": "orderbook_renewal_hazard",
+      "type": "MEASURES",
+      "evidence": "005G h60/h300; NON_CANONICAL/UNMERGED"
+    },
+    {
+      "source": "price_change_age",
+      "target": "orderbook_renewal_hazard",
+      "type": "MEASURES",
+      "evidence": "005G h60/h300; NON_CANONICAL/UNMERGED"
+    },
+    {
+      "source": "pred006_hazard",
+      "target": "market_transition_hazard",
+      "type": "MEASURES",
+      "evidence": "PRED-006 one-shot FINAL"
+    },
+    {
+      "source": "price_discovery_state",
+      "target": "activity_information_arrival",
+      "type": "MEASURES",
+      "evidence": "005I sealed holdout"
+    },
+    {
+      "source": "liquidity_stress",
+      "target": "liquidity_resilience",
+      "type": "MEASURES",
+      "evidence": "005I sealed holdout"
+    },
+    {
+      "source": "replenishment",
+      "target": "liquidity_resilience",
+      "type": "MEASURES",
+      "evidence": "005I sealed holdout"
+    },
+    {
+      "source": "mean_reversion",
+      "target": "directional_reversion_flow",
+      "type": "MEASURES",
+      "evidence": "005I sealed holdout"
+    },
+    {
+      "source": "depth_norm_ofi",
+      "target": "directional_reversion_flow",
+      "type": "MEASURES",
+      "evidence": "005I sealed holdout"
+    },
+    {
+      "source": "participant_signed_flow",
+      "target": "participant_flow_quality",
+      "type": "MEASURES",
+      "evidence": "005E frozen secondary holdout"
+    },
+    {
+      "source": "structural_latecount",
+      "target": "structural_relative_value",
+      "type": "MEASURES",
+      "evidence": "005D sealed holdout"
+    },
+    {
+      "source": "structural_reconstruction",
+      "target": "structural_relative_value",
+      "type": "MEASURES",
+      "evidence": "005D reconstruction holdout"
+    },
+    {
+      "source": "soft_competitive",
+      "target": "structural_relative_value",
+      "type": "MEASURES",
+      "evidence": "004C-B"
+    },
+    {
+      "source": "same_family_5s",
+      "target": "structural_relative_value",
+      "type": "MEASURES",
+      "evidence": "005A"
+    },
+    {
+      "source": "genuine_age",
+      "target": "genuine_age",
+      "type": "REPLICATES",
+      "evidence": "005G strict fresh replication of 005F PRE_UPDATE: +26.50%, 48/48 blocks, 658 markets"
+    },
+    {
+      "source": "genuine_age",
+      "target": "state_dwell",
+      "type": "LIKELY_REDUNDANT_WITH",
+      "evidence": "Both primarily encode persistence/age of observable market state and predict renewal/transition timing."
+    },
+    {
+      "source": "genuine_age",
+      "target": "pred006_hazard",
+      "type": "LIKELY_REDUNDANT_WITH",
+      "evidence": "Different feature constructions, same broad impending-change latent variable."
+    },
+    {
+      "source": "state_dwell",
+      "target": "pred006_hazard",
+      "type": "LIKELY_REDUNDANT_WITH",
+      "evidence": "Both are current-universe change/transition hazards rather than direction."
+    },
+    {
+      "source": "price_discovery_state",
+      "target": "pred006_hazard",
+      "type": "LIKELY_REDUNDANT_WITH",
+      "evidence": "Both capture elevated near-term state/change activity; timescale and construction differ."
+    },
+    {
+      "source": "liquidity_stress",
+      "target": "replenishment",
+      "type": "COMPLEMENTS",
+      "evidence": "Stress describes persistent liquidity state; replenishment distinguishes recovery and subsequent movement."
+    },
+    {
+      "source": "pred006_hazard",
+      "target": "mean_reversion",
+      "type": "COMPLEMENTS",
+      "evidence": "Hazard answers WHEN a change is likely; mean reversion supplies conditional signed direction."
+    },
+    {
+      "source": "state_dwell",
+      "target": "depth_norm_ofi",
+      "type": "COMPLEMENTS",
+      "evidence": "Transition timing and signed flow are different layers."
+    },
+    {
+      "source": "genuine_age",
+      "target": "structural_latecount",
+      "type": "COMPLEMENTS",
+      "evidence": "Renewal timing plus structural relative-value direction."
+    },
+    {
+      "source": "liquidity_stress",
+      "target": "participant_signed_flow",
+      "type": "COMPLEMENTS",
+      "evidence": "Liquidity context plus conditional signed participant-flow quality."
+    },
+    {
+      "source": "structural_reconstruction",
+      "target": "mean_reversion",
+      "type": "COMPLEMENTS",
+      "evidence": "Level/coherence scaffold plus short-horizon directional path evidence."
+    },
+    {
+      "source": "genuine_age",
+      "target": "005g_conversion_failure",
+      "type": "FAILED_ECONOMIC_CONVERSION",
+      "evidence": "005G hazard bundle 0 DEV champions; adverse-fill AUC ~0.456; 28/28 policies lost more favourable-fill value than bad-fill loss avoided."
+    },
+    {
+      "source": "state_dwell",
+      "target": "005g_conversion_failure",
+      "type": "FAILED_ECONOMIC_CONVERSION",
+      "evidence": "Same frozen state-hazard bundle."
+    },
+    {
+      "source": "spread_distance",
+      "target": "005g_conversion_failure",
+      "type": "FAILED_ECONOMIC_CONVERSION",
+      "evidence": "Same frozen state-hazard bundle."
+    },
+    {
+      "source": "005b_transfer_failure",
+      "target": "market_transition_hazard",
+      "type": "CONTRADICTS",
+      "evidence": "Historical realised-movement models did not transfer 0/7; current-universe hazard discoveries must remain distinct."
+    },
+    {
+      "source": "005c_familywise_failure",
+      "target": "directional_reversion_flow",
+      "type": "CONTRADICTS",
+      "evidence": "Broad joint-panel directional story did not survive familywise correction; 005I directional evidence comes from a different fresh-orderbook design."
+    },
+    {
+      "source": "004c_crossvenue_failure",
+      "target": "structural_relative_value",
+      "type": "CONTRADICTS",
+      "evidence": "Raw mapped PM→SIG response was common-state dominated; do not treat cross-venue mapping as direct FV leadership."
+    },
+    {
+      "source": "pred007_failure",
+      "target": "activity_information_arrival",
+      "type": "CONTRADICTS",
+      "evidence": "Synthetic aggregate election index did not add machine-speed predictive information."
+    },
+    {
+      "source": "r3_fv_failure",
+      "target": "structural_relative_value",
+      "type": "CONTRADICTS",
+      "evidence": "Coherent structural levels do not automatically beat SIG persistence as next-price point FV."
+    },
+    {
+      "source": "orderbook_renewal_hazard",
+      "target": "fill_probability_missing",
+      "type": "COMPLEMENTS",
+      "evidence": "Missing conversion layer: renewal hazard says nothing reliable yet about fill probability."
+    },
+    {
+      "source": "orderbook_renewal_hazard",
+      "target": "fill_toxicity_missing",
+      "type": "COMPLEMENTS",
+      "evidence": "005G directly demonstrated hazard != toxicity."
+    },
+    {
+      "source": "directional_reversion_flow",
+      "target": "economics_missing",
+      "type": "COMPLEMENTS",
+      "evidence": "Direction still needs spread/fees/fill/inventory conversion."
+    },
+    {
+      "source": "structural_relative_value",
+      "target": "economics_missing",
+      "type": "COMPLEMENTS",
+      "evidence": "Relative-value/reconstruction evidence lacks executable economics."
+    }
+  ],
+  "notes": [
+    "REPLICATES is used only for an actual cross-dataset replication; the self-edge on genuine_age denotes the same frozen mechanism transferred from 005F to fresh DATA-003 in 005G.",
+    "005G edges are NON_CANONICAL / UNMERGED because PR #114 was still draft/unmerged at the starting main snapshot.",
+    "No node is assigned an E4 or E5 positive edge."
+  ]
+}
