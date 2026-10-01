@@ -83,3 +83,6 @@ jobs:
 
       - name: LIVE-LEARN-001 237-market burst
         run: python scripts/benchmark_live_learn001.py --markets 237 --candidates 6
+
+      - name: FULLSTACK-002 simulation rehearsal
+        run: python -m predictions_cup.fullstack rehearse --runtime-env-only
