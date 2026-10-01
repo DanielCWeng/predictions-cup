@@ -34,7 +34,8 @@
     "Kaggle dataset status independently verified READY via authenticated runner on 2026-10-01.",
     "Mounted probe verified 2,900 total files / 2,893 parquet files / 19,119,822,430 bytes and four source-schema families.",
     "All historical OOM failures were recovered; only 30 predeclared ev17 upstream gaps and three ev11 SOURCE_MISSING hours remain.",
-    "Raw corpus is landed but scientific status remains unbound until source-aware canonical compaction/audit passes."
+    "Raw corpus is landed but scientific status remains unbound until source-aware canonical compaction/audit passes.",
+    "Replay/005F compaction filters to the 693 accepted mapped outcome tokens, not both 1,386 binary complements."
   ],
   "relation_to_data003": "DATA-003-linked current SIG Cup mapped universe",
   "root_hint": "/kaggle/input",
@@ -88,5 +89,16 @@
       "2026-06-11T06"
     ],
     "unresolved_failed_hours": 0
+  },
+  "expected_mapped_outcome_tokens": 693,
+  "accepted_mapping_snapshot": {
+    "sig_records": 237,
+    "mapping_classes": {
+      "EXACT": 140,
+      "NEAR": 4,
+      "DERIVED": 87,
+      "NO_TRADE": 6
+    },
+    "unique_mapped_outcome_tokens": 693
   }
 }
