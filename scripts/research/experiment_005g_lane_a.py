@@ -626,12 +626,20 @@ def split_label(
 
 
 def stable_keep(token: str, times: pd.DatetimeIndex, mod: int) -> np.ndarray:
+    """Deterministic SplitMix64 hash over token and whole-second clock time."""
     if mod <= 1:
         return np.ones(len(times), dtype=bool)
-    token_hash = int.from_bytes(hashlib.sha256(token.encode()).digest()[:8], "big")
-    time_values = times.as_unit("ns").asi8.astype(np.uint64, copy=False)
-    mixed = time_values ^ np.uint64(token_hash)
-    return (mixed % np.uint64(mod)) == 0
+    token_hash = np.uint64(
+        int.from_bytes(hashlib.sha256(token.encode()).digest()[:8], "big")
+    )
+    seconds = (times.as_unit("ns").asi8 // NS).astype(np.uint64, copy=False)
+    values = seconds ^ token_hash
+    values ^= values >> np.uint64(30)
+    values *= np.uint64(0xBF58476D1CE4E5B9)
+    values ^= values >> np.uint64(27)
+    values *= np.uint64(0x94D049BB133111EB)
+    values ^= values >> np.uint64(31)
+    return (values % np.uint64(mod)) == 0
 
 
 def build_clock(
