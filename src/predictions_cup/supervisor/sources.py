@@ -668,9 +668,9 @@ class SupervisorSources:
                 now,
                 None,
                 reason,
-                {"path": str(path), "error": error},
+                {"path": str(path)},
             ),
-            {"path": str(path), "reason": reason, "error": error},
+            {"path": str(path), "reason": reason},
         )
 
     def _invalid(
@@ -694,7 +694,7 @@ class SupervisorSources:
                 now,
                 None,
                 reason,
-                {"path": str(path)},
+                {"path": str(path), "error": error},
             ),
-            {"path": str(path), "reason": reason},
+            {"path": str(path), "reason": reason, "error": error},
         )
