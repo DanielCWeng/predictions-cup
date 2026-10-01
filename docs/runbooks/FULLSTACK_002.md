@@ -107,11 +107,14 @@ Alerts are append-only JSONL. They are emitted for:
 - transition to stale Polymarket capture;
 - storage danger;
 - unhealthy NTP/clock state;
-- service failure/start-limit failure observed by the status poller.
+- service failure/start-limit failure observed by the status poller;
+- transition into unresolved execution operations.
 
-FULLSTACK-002 deliberately does not add a third-party network notification dependency. The alert
-journal is durable and machine-readable; external notification can consume it without entering the
-trading hot path.
+The JSONL journal is authoritative and is fsynced before any network delivery attempt. Optional
+out-of-band push delivery is enabled only when `PREDICTIONS_CUP_FULLSTACK_ALERT_WEBHOOK_URL` is
+configured on the runtime host. Delivery is a bounded 2-second HTTP(S) POST outside the trading hot
+path; failed delivery is itself recorded locally as `ALERT_DELIVERY_FAILED` and never erases the
+original alert.
 
 ## Installation
 
