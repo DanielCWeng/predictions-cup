@@ -11,6 +11,6 @@
   "sample_per_hour": 1000,
   "seed": 505009,
   "surface": "TRAIN",
-  "note": "EXPERIMENT-005I two-hour smoke after numeric-state fix.",
-  "attempt": 2
+  "note": "EXPERIMENT-005I two-hour smoke after validated continuous visible-book reconstruction.",
+  "attempt": 3
 }
