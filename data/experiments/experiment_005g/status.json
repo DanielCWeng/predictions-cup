@@ -2,21 +2,35 @@
   "schema_version": 1,
   "experiment": "EXPERIMENT-005G",
   "branch": "experiment/005g-data003-orderbook-atlas",
-  "phase": "LANE_A_TRAIN_DEV",
-  "status": "ACTIVE_EV18_TRAIN_DEV_RUNNING",
+  "phase": "LANE_B_TRAIN_DEV",
+  "status": "LANE_A_PRE_COMPLETE_LANE_B_RUNNING",
   "primary_dataset": "polyleviathan/sig-cup-data003-orderbooks",
   "dataset_version": 1,
   "accepted_mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
   "effective_acquisition_artifact_sha256": "d25f07e450f57647f198a9e2730889a7846b78a2c4d6f84474b5b45bc33f8532",
   "original_005f_sealed": true,
-  "scientific_result": "NOT_YET_EVALUATED",
-  "exploration_allowed": true,
+  "lane_a": {
+    "active_ev18": "COMPLETE_INCONCLUSIVE_OR_BLOCKED",
+    "pre_baseline": "COMPLETE",
+    "holdout_eligible": [
+      "005F_REPL_PRE_UPDATE"
+    ],
+    "rejected_before_holdout": [
+      "005F_REPL_PRE_LIQUIDITY",
+      "005F_REPL_ACTIVE_JUMP",
+      "005F_REPL_ACTIVE_PRICE_NEGATIVE"
+    ],
+    "active_update": "REPLICATION_INCONCLUSIVE_DEPENDENCE_UNDERPOWERED"
+  },
+  "lane_b": {
+    "status": "TRAIN_DEV_RUNNING",
+    "workflow_run_id": 36834096535,
+    "holdout_read": false
+  },
+  "scientific_result": "NO_FINAL_CLAIM_BEFORE_HOLDOUT",
   "holdout_allowed": false,
   "holdout_read": false,
+  "holdout_runner_commit": "a2b7e5e573a863e74bf92e414b216ae5f5ab609d",
   "make_modified": false,
-  "real_sig_orders_sent": false,
-  "lane_a_freeze_commit": "ed834189096d996aa1e96af66e2ae546b69f2224",
-  "lane_a_compute_freeze_commit": "98e986f87fac2c26c4c9ffff83fd4fbfd2e76fd3",
-  "lane_a_runner_commit": "5a4b099bf9486149e135f97096e00e1febf72739",
-  "active_job_manifest": "kaggle/jobs/005g-lane-a-active-ev18-train-dev.json"
+  "real_sig_orders_sent": false
 }
