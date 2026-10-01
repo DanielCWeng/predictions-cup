@@ -463,6 +463,10 @@ class SigRealtimeStateEngine:
             market_state = self.market_states.get(state.market_id)
             if market_state is None or market_state.status != "open":
                 continue
+            # Maintenance may run again while a governed REST request is queued.
+            # Do not advance its generation or force a second request.
+            task = self._reconcile_tasks.get(state.exchange_id)
+            reconciliation_running = task is not None and not task.done()
 
             if state.trusted:
                 last_rest = state.last_rest_observed_at
@@ -470,17 +474,18 @@ class SigRealtimeStateEngine:
                     last_rest is None
                     or observed_at - last_rest >= self._open_book_max_trusted_age
                 ):
-                    due_exchange_ids.append(state.exchange_id)
                     newly_stale.append(state.exchange_id)
+                    if not reconciliation_running:
+                        due_exchange_ids.append(state.exchange_id)
             else:
                 last_attempt = state.last_reconciliation_attempt_at
                 if (
                     last_attempt is None
                     or observed_at - last_attempt >= self._open_book_max_trusted_age
-                ):
+                ) and not reconciliation_running:
                     due_exchange_ids.append(state.exchange_id)
 
-        if not due_exchange_ids:
+        if not due_exchange_ids and not newly_stale:
             return
 
         if newly_stale:
@@ -491,14 +496,15 @@ class SigRealtimeStateEngine:
                 revision=self.last_accepted_revision,
             )
 
-        await self._reconcile_many(
-            due_exchange_ids,
-            reason="expiry_safety_refresh",
-            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
-            triggering_revision=self.last_accepted_revision,
-            priority=RestPriority.NORMAL,
-            wait=wait,
-        )
+        if due_exchange_ids:
+            await self._reconcile_many(
+                due_exchange_ids,
+                reason="expiry_safety_refresh",
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=self.last_accepted_revision,
+                priority=RestPriority.BACKGROUND,
+                wait=wait,
+            )
 
     async def refresh_bulk_prices(
         self,
