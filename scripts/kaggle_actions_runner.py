@@ -8,10 +8,10 @@ import json
 import os
 import re
 import shutil
-import zipfile
 import subprocess
 import sys
 import time
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -300,7 +300,8 @@ def dataset_probe(data: dict[str, Any], output_dir: Path) -> None:
         "    if isinstance(v,dict): return {str(k):conv(x) for k,x in v.items()}\n"
         "    if isinstance(v,(list,tuple)): return [conv(x) for x in v]\n"
         "    d=getattr(v,'__dict__',None)\n"
-        "    if isinstance(d,dict): return {str(k):conv(x) for k,x in d.items() if not str(k).startswith('_')}\n"
+        "    if isinstance(d,dict): return {str(k):conv(x) for k,x in d.items() "
+        "if not str(k).startswith('_')}\n"
         "    return str(v)\n"
         "print(json.dumps(conv(obj), indent=2, sort_keys=True))\n"
     )
