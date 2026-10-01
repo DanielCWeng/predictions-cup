@@ -37,7 +37,9 @@
       "destination": "repo_context/execution_universe_exact.json"
     }
   ],
-  "note": "Attempt 5: identical strict-as-of September science with per-timestamp memoization of pure build_quote(policy, inventory); 140 EXACT markets, complement-book FV, observed-trade fills. Performance-only optimization; economics and scenario grid unchanged.",
+  "note": "Attempt 5: identical strict-as-of September science with per-timestamp memoization of pure build_quote(policy, inventory); 140 EXACT markets, complement-book FV, observed-trade fills. Performance-only optimization; economics and scenario grid unchanged. Opt-in retry while Kaggle CPU quota is full.",
   "attempt": 5,
-  "embed_kernel_bundle": true
+  "embed_kernel_bundle": true,
+  "quota_retry_seconds": 60,
+  "quota_retry_minutes": 60
 }
