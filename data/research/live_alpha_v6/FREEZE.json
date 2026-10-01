@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "name": "LIVE-ALPHA-V6-OVERNIGHT",
+  "training_cutoff_utc": "2026-10-01T17:18:47Z",
+  "evaluation_window": {
+    "start_utc": "2026-10-01T17:18:47Z",
+    "end_policy": "explicit CLI end; tomorrow use latest complete capture minus 30m for 1800s horizons",
+    "no_retune_before_primary_score": true
+  },
+  "universe": {
+    "primary_mapping_class": "EXACT",
+    "primary_mapping_direction": "SAME",
+    "near_and_derived": "diagnostic_only"
+  },
+  "frozen_primary_rules": {
+    "maker": {
+      "pm_mid_offset_c": 1.5,
+      "pm_max_spread_c": 1,
+      "pm_min_top_size": 50,
+      "sig_min_excess_spread_c": 0.5,
+      "sig_bbo_max_age_s": 10,
+      "pm_max_age_s": 65,
+      "tick_c": 0.5
+    },
+    "residual_taker": {
+      "threshold_c": 2,
+      "pm_max_spread_c": 2,
+      "pm_min_top_size": 50,
+      "cooldown_s": 60,
+      "sig_bbo_max_age_s": 15,
+      "pm_max_age_s": 65
+    },
+    "structural_pair": {
+      "threshold_c": 1,
+      "pm_pair_distance_from_one_max_c": 3,
+      "pm_max_leg_spread_c": 1,
+      "pm_min_top_size_each_leg": 50,
+      "cooldown_s": 60
+    },
+    "pm_five_minute_reversal": {
+      "abs_pm_move_5m_min_c": 0.5,
+      "horizon_s": 300,
+      "context_only": true
+    },
+    "repricing_hazard": {
+      "model": "HistGradientBoostingClassifier",
+      "max_leaf_nodes": 7,
+      "max_iter": 120,
+      "learning_rate": 0.05,
+      "l2_regularization": 1,
+      "random_state": 7,
+      "targets": {
+        "60": "abs(SIG_mid_t+60 - SIG_mid_t) >= 0.5c",
+        "300": "abs(SIG_mid_t+300 - SIG_mid_t) >= 0.5c"
+      },
+      "promotion": "context_only"
+    }
+  },
+  "frozen_challengers": {
+    "maker_offsets_c": [
+      1,
+      1.25
+    ],
+    "residual_thresholds_c": [
+      1.5,
+      3
+    ],
+    "structural_thresholds_c": [
+      0.5,
+      1.5
+    ],
+    "maker_pm_max_spreads_c": [
+      0.5,
+      2
+    ],
+    "depth_thresholds": [
+      100,
+      200
+    ]
+  },
+  "primary_horizons_s": [
+    1,
+    5,
+    15,
+    30,
+    60,
+    300,
+    1800
+  ],
+  "cost_stress_c_per_unit": [
+    0,
+    0.25,
+    0.5,
+    1
+  ],
+  "inference": {
+    "unit": "market and market-time episode, not raw trade iid",
+    "bootstrap": "cluster bootstrap by exchange_id, 5000 draws when >=5 markets",
+    "block_episode_s": 300,
+    "leave_one_market_out": true,
+    "report_median_and_trimmed_mean": true
+  },
+  "promotion_gates": {
+    "maker": {
+      "min_oos_fills": 20,
+      "min_markets": 5,
+      "max_market_fill_share": 0.4,
+      "cluster_bootstrap_60s_lower_bound_c_gt": 0,
+      "mean_300s_markout_c_ge": 0,
+      "min_positive_market_fraction": 0.6
+    },
+    "residual_taker": {
+      "min_oos_opportunities": 20,
+      "min_markets": 7,
+      "max_market_opportunity_share": 0.35,
+      "cluster_bootstrap_60s_lower_bound_c_gt": 0,
+      "mean_300s_markout_c_ge": 0,
+      "must_survive_cost_c": 0.5
+    },
+    "structural_pair": {
+      "min_oos_opportunities": 12,
+      "min_races": 4,
+      "cluster_bootstrap_60s_lower_bound_c_gt": 0,
+      "mean_300s_markout_c_ge": 0
+    }
+  },
+  "quarantine_exchange_ids": [
+    "1026",
+    "1072"
+  ],
+  "notes": [
+    "Polymarket is an external fair-value anchor, not leaderboard marking.",
+    "Lead-lag is diagnostic only and cannot be promoted by V6.",
+    "Primary rules are scored untouched before any V6 discovery pass.",
+    "Queue realism is reported in optimistic, strict print-through, and executable-recycle views.",
+    "No strategy becomes LIVE automatically."
+  ]
+}
