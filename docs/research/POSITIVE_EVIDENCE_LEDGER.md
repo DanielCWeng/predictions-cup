@@ -3,6 +3,7 @@
 **RESEARCH-SYNTHESIS-001**  
 **Starting main:** `611b048ce0ee4630c01a9500cb021a70afba8474`  
 **Snapshot:** 2026-10-01  
+**Canonicality refresh main:** `662969df4e481f1cbd9417c923ae35d3a0aa9f9f` (PR #114 / EXPERIMENT-005G merged)  
 **Purpose:** canonical audit of positive predictive, structural and economic evidence found across the Predictions Cup research programme.
 
 ## Rules used in this ledger
@@ -43,12 +44,12 @@ Historical unmerged evidence is labelled **NON_CANONICAL / UNMERGED**. Active im
 | PRICE_DISCOVERY state | 005I | short-lived high-activity state exit | strong | none | E2 | NOT_TESTED | LIVE_LEARN_CONTEXT |
 | LIQUIDITY_STRESS state | 005I | persistent stressed-liquidity state | strong | none | E2 | NOT_TESTED | RISK_CONTEXT |
 | Withdrawal → replenishment | 005I | subsequent absolute movement | after withdrawal | none | E2 | NOT_TESTED | LIVE_LEARN_CONTEXT |
-| State dwell → transition | 005G | 60s/300s state transition | very strong | none | E2† | **FAILED as bundle** | SHADOW_ONLY |
-| Spread×distance renewal | 005G | 60s/300s BBO renewal | strong | none | E2† | **FAILED as bundle** | SHADOW_ONLY |
-| Smaller renewal-state variables | 005G | BBO renewal | supported | none | E2† | **FAILED as bundle** | SHADOW_ONLY |
+| State dwell → transition | 005G | 60s/300s state transition | very strong | none | E2 | **FAILED as bundle** | SHADOW_ONLY |
+| Spread×distance renewal | 005G | 60s/300s BBO renewal | strong | none | E2 | **FAILED as bundle** | SHADOW_ONLY |
+| Smaller renewal-state variables | 005G | BBO renewal | supported | none | E2 | **FAILED as bundle** | SHADOW_ONLY |
 
 \* 005E findings are frozen **secondary** HOLDOUT diagnostics and explicitly remain FOLLOW_UP_ONLY.  
-† 005G PR #114 is **NON_CANONICAL / UNMERGED** at the starting-main snapshot.
+005G PR #114 was subsequently merged into `main` at `662969df4e481f1cbd9417c923ae35d3a0aa9f9f`; the 005G evidence cited in this synthesis is therefore canonical repository evidence.
 
 There is **no positive E4 or E5 result** in the accepted history inspected.
 
@@ -201,7 +202,7 @@ The delay falsifications matter. The update-hazard signal remains predictive whe
 
 ### 005F → 005G — strongest fresh replication
 
-**005G artifact:** `experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json` / PR #114 (**NON_CANONICAL / UNMERGED**).
+**005G canonical artifact:** `data/experiments/experiment_005g/FINAL_RESULT.json` / merged PR #114.
 
 The exact 005F PRE update signal was frozen and retested on the fresh DATA-003 orderbook corpus:
 
@@ -286,7 +287,7 @@ Raw OFI sign is not the result; it is often contrarian. The multivariate frozen 
 
 These results are predictive/descriptive. None has yet demonstrated spread/fee/fill/inventory-adjusted economics.
 
-### 005G — sealed current-universe state hazards (NON_CANONICAL / UNMERGED)
+### 005G — sealed current-universe state hazards
 
 PR #114 froze 12 candidates and evaluated all 12 once. Ten passed.
 
@@ -308,7 +309,7 @@ Failed:
 - `distance_from_0_5 → abs_h60`: complete frozen gate not passed.
 - `ofi_acceleration → bbo_update_h60`: **-0.0351%**, 16/48.
 
-This whole branch remains **NON_CANONICAL / UNMERGED** at the frozen main snapshot.
+PR #114 was subsequently merged into `main` at `662969df4e481f1cbd9417c923ae35d3a0aa9f9f`. The underlying sealed result and economic-conversion failure are unchanged; only canonicality changed.
 
 ---
 
