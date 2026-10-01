@@ -112,11 +112,29 @@ def dataset_probe(data: dict[str, Any], output_dir: Path) -> None:
         text = (result.stdout or "") + (result.stderr or "")
         safe_name = dataset.replace("/", "__")
         (output_dir / f"dataset_{safe_name}.txt").write_text(text, encoding="utf-8")
+
+        status_result = None
+        status_text = ""
+        if result.returncode == 0:
+            status_result = run_command(
+                ["kaggle", "datasets", "status", dataset, "--format", "json"],
+                check=False,
+            )
+            status_text = (status_result.stdout or "") + (status_result.stderr or "")
+            (output_dir / f"dataset_{safe_name}_status.json").write_text(
+                status_text,
+                encoding="utf-8",
+            )
+
         summaries.append(
             {
                 "dataset": dataset,
                 "returncode": result.returncode,
                 "accessible": result.returncode == 0,
+                "status_returncode": (
+                    None if status_result is None else status_result.returncode
+                ),
+                "status": status_text.strip() or None,
             }
         )
 
