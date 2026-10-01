@@ -375,8 +375,8 @@ def scan_linked_trades(
     ob_window: str,
 ) -> tuple[dict[tuple[str, str], dict[str, Any]], dict[str, Any]]:
     accepted_hashes = set(groups["tx_hash"].astype(str))
-    active_tokens_by_hash = {
-        str(row.tx_hash): str(row.token_id)
+    accepted_keys = {
+        (str(row.tx_hash), str(row.token_id))
         for row in groups.itertuples(index=False)
     }
     found: defaultdict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
@@ -407,7 +407,7 @@ def scan_linked_trades(
         for rec in frame.itertuples(index=False):
             tx_hash = str(rec.tx_hash)
             token = bytes_to_token(rec.asset_id)
-            if active_tokens_by_hash.get(tx_hash) != token:
+            if (tx_hash, token) not in accepted_keys:
                 continue
             try:
                 price = float(rec.price)
