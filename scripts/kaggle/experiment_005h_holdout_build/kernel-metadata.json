@@ -1,7 +1,7 @@
 {
   "id": "polyleviathan/experiment-005h-holdout-build",
-  "title": "EXPERIMENT-005H One-Shot B0 Build",
-  "code_file": "run.py",
+  "title": "EXPERIMENT-005H One-Shot B0 Build (Memory-Bounded Technical Retry)",
+  "code_file": "run_memory_bounded.py",
   "language": "python",
   "kernel_type": "script",
   "is_private": true,
