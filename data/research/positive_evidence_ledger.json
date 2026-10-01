@@ -19,7 +19,9 @@
     "strongest_canonical_directional_signal": "005I five-minute mean reversion (67.26% sampled reversal; all temporal workers >66%)",
     "economic_positives": 0,
     "live_shadow_economic_positives": 0,
-    "central_hypothesis": "SUPPORTED_WITH_IMPORTANT_EXCEPTION: the strongest replicated/current-universe positives are movement/state/renewal hazards, but 005I supplies sealed-holdout directional information (mean reversion and depth-normalised OFI), and 005D/005E contain narrower directional/conditional evidence."
+    "central_hypothesis": "SUPPORTED_WITH_IMPORTANT_EXCEPTION: the strongest replicated/current-universe positives are movement/state/renewal hazards, but 005I supplies sealed-holdout directional information (mean reversion and depth-normalised OFI), and 005D/005E contain narrower directional/conditional evidence. 005H now adds historical B0-confirmed interaction/fill-arrival and conditional aggressor-direction evidence, while own-quote fill probability/toxicity and economics remain unconfirmed.",
+    "strongest_fill_interaction_signal": "005H C04 Arrival-State (B0 AUC 0.6882; 95% token-cluster bootstrap 0.6777–0.7000; PR #94 unmerged)",
+    "strongest_conditional_aggressor_direction_signal": "005H C05 Direction-State (B0 AUC 0.6745; 95% token-cluster bootstrap 0.6398–0.7192; PR #94 unmerged)"
   },
   "surviving_positive_results": [
     {
@@ -1347,6 +1349,100 @@
         "WHETHER_MAKES_MONEY": "conversion failed"
       },
       "routing": "SHADOW_ONLY"
+    },
+    {
+      "result_id": "005H-C04-ARRIVAL-STATE",
+      "programme": "EXPERIMENT-005H",
+      "pr": 94,
+      "commit_artifact": "docs/experiments/EXPERIMENT_005H_FINAL_REPORT.md",
+      "canonicality": "NON_CANONICAL_UNMERGED",
+      "dataset": "DATA-003 + V3 orderbooks",
+      "train_period": "W17",
+      "dev_period": "W18",
+      "holdout_period": "B0: 2026-09-01 through 2026-09-21 inclusive",
+      "markets_events": "14,396 fills + 14,396 matched controls; 1,101 token clusters",
+      "sample_count": 28792,
+      "feature_signal": "frozen pre-fill arrival-state model",
+      "target": [
+        "FILL_ARRIVAL",
+        "PARTICIPANT_BEHAVIOUR"
+      ],
+      "target_detail": "actual fill moment versus matched same-token non-fill state",
+      "effect_size": "B0 AUC 0.6882; token-cluster bootstrap 95% 0.6777–0.7000; halves 0.6913 / 0.6852",
+      "baseline": "matched non-fill controls under frozen construction",
+      "direction_of_improvement": "positive",
+      "temporal_consistency": "both chronological halves materially positive",
+      "cross_market_consistency": "1,101 token clusters; dependence-aware token bootstrap lower bound 0.6777",
+      "holdout_status": "ONE-SHOT HISTORICAL B0 SUPPORTED; FUTURE CONFIRMATION REQUIRED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "Predicts market fill/interaction state, not queue-position-aware probability that our own passive quote fills.",
+        "PR #94 remains unmerged/non-canonical.",
+        "Same-source historical B0 is weaker than prospective live confirmation."
+      ],
+      "known_failures": [],
+      "current_interpretation": "Robust historical interaction/fill-arrival state signal; route to LIVE_DIAG/PAPER context, not execution.",
+      "when_what_direction": {
+        "WHEN": "supported for market fill/interaction arrival",
+        "WHAT": "fill moment versus matched non-fill state",
+        "DIRECTION": "none",
+        "HOW_LARGE": "AUC 0.6882",
+        "WHETHER_FILL": "market interaction yes; our own quote not established",
+        "WHETHER_TOXIC": "not established",
+        "WHETHER_MAKES_MONEY": "not established"
+      },
+      "routing": "LIVE_DIAG_SHADOW_ONLY"
+    },
+    {
+      "result_id": "005H-C05-DIRECTION-STATE",
+      "programme": "EXPERIMENT-005H",
+      "pr": 94,
+      "commit_artifact": "docs/experiments/EXPERIMENT_005H_FINAL_REPORT.md",
+      "canonicality": "NON_CANONICAL_UNMERGED",
+      "dataset": "DATA-003 + V3 orderbooks",
+      "train_period": "W17",
+      "dev_period": "W18",
+      "holdout_period": "B0: 2026-09-01 through 2026-09-21 inclusive",
+      "markets_events": "12,661 scored fills; 7,794 BUY / 4,867 SELL; 1,074 token clusters",
+      "sample_count": 12661,
+      "feature_signal": "frozen pre-fill direction-state model",
+      "target": [
+        "DIRECTION",
+        "PARTICIPANT_BEHAVIOUR"
+      ],
+      "target_detail": "BUY versus SELL aggressor conditional on a fill",
+      "effect_size": "B0 AUC 0.6745; token-cluster bootstrap 95% 0.6398–0.7192; halves 0.6973 / 0.6547",
+      "baseline": "frozen aggressor-direction classifier",
+      "direction_of_improvement": "positive",
+      "temporal_consistency": "both chronological halves above frozen requirement; second half weaker but positive",
+      "cross_market_consistency": "1,074 token clusters; dependence-aware token bootstrap lower bound 0.6398",
+      "holdout_status": "ONE-SHOT HISTORICAL B0 SUPPORTED; FUTURE CONFIRMATION REQUIRED",
+      "evidence": [
+        "E2"
+      ],
+      "economic_replay_status": "NOT_TESTED",
+      "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
+      "known_caveats": [
+        "Conditional on a fill occurring; does not predict whether our own quote fills.",
+        "PR #94 remains unmerged/non-canonical.",
+        "Aggressor direction is not itself post-fill markout or profitable direction."
+      ],
+      "known_failures": [],
+      "current_interpretation": "Robust historical conditional aggressor-direction signal; prospective markout/economics confirmation required.",
+      "when_what_direction": {
+        "WHEN": "conditional on a fill",
+        "WHAT": "aggressor side",
+        "DIRECTION": "BUY versus SELL aggressor probability",
+        "HOW_LARGE": "AUC 0.6745",
+        "WHETHER_FILL": "conditioned on fill; arrival handled by C04",
+        "WHETHER_TOXIC": "not established",
+        "WHETHER_MAKES_MONEY": "not established"
+      },
+      "routing": "LIVE_DIAG_SHADOW_ONLY"
     }
   ],
   "historical_positive_subsequently_falsified_or_downgraded": [
@@ -1422,8 +1518,8 @@
       "programme": "EXPERIMENT-005H",
       "pr": 94,
       "canonicality": "NON_CANONICAL_UNMERGED",
-      "status": "PRE_HOLDOUT_CANDIDATES_WITH_NO_RESULT",
-      "details": "C04 ARRIVAL-STATE and C05 DIRECTION-STATE were frozen for one-shot B0. The B0 state replay completed 504/504 files but the process errored before canonical holdout tables/scoring; result_available=false. Do not count as positive holdout evidence."
+      "status": "HISTORICAL_B0_SURVIVORS_REQUIRE_FUTURE_CONFIRMATION",
+      "details": "C04 ARRIVAL-STATE passed frozen B0 at AUC 0.6882; C05 DIRECTION-STATE passed frozen B0 at AUC 0.6745. Both remain non-canonical/unmerged via PR #94 and require prospective LIVE-DIAG confirmation. Neither establishes own-quote fill probability, toxicity or P&L."
     },
     {
       "programme": "MM-REPLAY-001",
@@ -1467,5 +1563,10 @@
       "reason": "Implementation/certificate engine, not an empirical positive result."
     }
   ],
-  "canonicality_refresh_main_sha": "662969df4e481f1cbd9417c923ae35d3a0aa9f9f"
+  "canonicality_refresh_main_sha": "662969df4e481f1cbd9417c923ae35d3a0aa9f9f",
+  "latest_005h_refresh": {
+    "pr": 94,
+    "head_sha": "5d37a2f2a7b64685c4a012408fdca53e6bf75307",
+    "status": "HISTORICAL_B0_SURVIVORS_REQUIRE_FUTURE_CONFIRMATION"
+  }
 }
