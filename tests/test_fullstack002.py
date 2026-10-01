@@ -29,6 +29,8 @@ def test_fullstack_units_force_shadow_and_surface_failures() -> None:
     assert "OnFailure=predictions-cup-alert@%n.service" in maker
     assert "OnFailure=predictions-cup-alert@%n.service" in sig
     assert "OnFailure=predictions-cup-alert@%n.service" in poly
+    alert = (SYSTEMD / "predictions-cup-alert@.service").read_text(encoding="utf-8")
+    assert "EnvironmentFile=-@@RUNTIME_ENV@@" in alert
 
 
 def test_shadow_admission_rejects_live_configuration() -> None:
