@@ -53,7 +53,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     action = data.get("action")
     if action not in {
         "auth_check", "run", "status", "output", "logs", "dataset_files", "dataset_probe",
-        "dataset_fetch"
+        "dataset_fetch", "dataset_analysis"
     }:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
@@ -276,6 +276,69 @@ out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\\n", encoding="
     )
 
 
+
+def dataset_analysis(data: dict[str, Any], output_dir: Path) -> None:
+    dataset = str(data.get("dataset", "")).strip()
+    script_raw = str(data.get("script", "")).strip()
+    files = data.get("files")
+    if "/" not in dataset:
+        raise ValueError("dataset_analysis requires 'dataset' as owner/slug")
+    if not script_raw:
+        raise ValueError("dataset_analysis requires 'script'")
+    if not isinstance(files, list) or not files or not all(isinstance(x, str) and x for x in files):
+        raise ValueError("dataset_analysis requires a non-empty string list 'files'")
+
+    script = repo_path(script_raw)
+    if not script.is_file():
+        raise FileNotFoundError(f"Analysis script not found: {script_raw}")
+
+    packages = data.get(
+        "packages",
+        [
+            "numpy==2.3.3",
+            "pandas==2.3.3",
+            "pyarrow==25.0.1",
+            "scikit-learn==1.7.2",
+        ],
+    )
+    if not isinstance(packages, list) or not all(isinstance(x, str) and x for x in packages):
+        raise ValueError("packages must be a string list")
+    run_command([sys.executable, "-m", "pip", "install", "--quiet", *packages])
+
+    spec = {
+        "dataset": dataset,
+        "files": files,
+        "worker_id": str(data.get("worker_id", output_dir.name)),
+        "sample_per_hour": int(data.get("sample_per_hour", 3000)),
+        "seed": int(data.get("seed", 505009)),
+        "surface": str(data.get("surface", "TRAIN")),
+    }
+    spec_path = output_dir / "analysis_spec.json"
+    spec_path.write_text(json.dumps(spec, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    results = output_dir / "results"
+    results.mkdir(parents=True, exist_ok=True)
+    run_command(
+        [
+            sys.executable,
+            str(script),
+            "--spec",
+            str(spec_path),
+            "--output-dir",
+            str(results),
+        ]
+    )
+    write_summary(
+        [
+            "## Kaggle dataset streaming analysis",
+            "",
+            f"- Dataset: {dataset}",
+            f"- Files: {len(files)}",
+            f"- Worker: {spec['worker_id']}",
+            f"- Surface: {spec['surface']}",
+        ]
+    )
+
+
 def kernel_from_manifest(data: dict[str, Any]) -> str:
     kernel = str(data.get("kernel", "")).strip()
     if not kernel:
@@ -424,6 +487,8 @@ def main() -> int:
         dataset_probe(data, output_dir)
     elif action == "dataset_fetch":
         dataset_fetch(data, output_dir)
+    elif action == "dataset_analysis":
+        dataset_analysis(data, output_dir)
 
     return 0
 
