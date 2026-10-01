@@ -164,6 +164,53 @@ def main() -> None:
         encoding="utf-8",
     )
 
+    sample_specs = [
+        "ev06_nj11_special/date=2026-04-15/hour=00/events.parquet",
+        "baseline_sep/date=2026-09-01/hour=00/events.parquet",
+        "ev01_tx_ar_nc_primary/date=2026-02-28/hour=00/events.parquet",
+        "ev17_ak_fl_wy/date=2026-08-18/hour=06/events.parquet",
+    ]
+    samples: list[dict[str, Any]] = []
+    for suffix in sample_specs:
+        matches = [p for p in files if str(p.relative_to(root)).endswith(suffix)]
+        if len(matches) != 1:
+            samples.append({"suffix": suffix, "error": f"matches={len(matches)}"})
+            continue
+        path = matches[0]
+        pf = pq.ParquetFile(path)
+        table = next(pf.iter_batches(batch_size=2000)).to_pandas()
+        event_col = "event_type" if "event_type" in table.columns else (
+            "update_type" if "update_type" in table.columns else None
+        )
+        counts = (
+            table[event_col].astype(str).value_counts(dropna=False).head(30).to_dict()
+            if event_col is not None
+            else {}
+        )
+        rows_preview = []
+        for rec in table.head(8).to_dict(orient="records"):
+            clean = {}
+            for key, value in rec.items():
+                if hasattr(value, "item"):
+                    try:
+                        value = value.item()
+                    except Exception:
+                        pass
+                text_value = repr(value)
+                clean[str(key)] = text_value[:4000]
+            rows_preview.append(clean)
+        samples.append({
+            "path": str(path.relative_to(root)),
+            "columns": list(table.columns),
+            "event_column": event_col,
+            "event_counts_first_2000": counts,
+            "rows": rows_preview,
+        })
+    (OUT / "SAMPLE_ROWS.json").write_text(
+        json.dumps(samples, indent=2, sort_keys=True, default=str) + "\n",
+        encoding="utf-8",
+    )
+
     summary = {
         "dataset_root": str(root),
         "dataset_dir_name": root.name,
