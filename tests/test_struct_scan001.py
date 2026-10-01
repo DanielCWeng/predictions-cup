@@ -197,7 +197,7 @@ def test_stale_untrusted_mapping_and_semantics_fail_closed() -> None:
 
 
 def test_certificate_records_fee_slippage_and_edge_threshold() -> None:
-    certificate = structural.evaluate_relationship(
+    certificate = evaluate_relationship(
         _complement(),
         {
             "yes": _book("yes", bid=0.47, ask=0.48),
