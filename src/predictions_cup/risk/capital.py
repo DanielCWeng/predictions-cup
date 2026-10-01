@@ -285,6 +285,10 @@ class CapitalRiskState:
     strategy_halts: tuple[HaltState, ...]
     limit_profile_version: str
     realised_pnl_cursor: str | None = None
+    # Newest SIG tournament transaction already folded into net_external_cash_flow.
+    # Kept separate from realised_pnl_cursor (fill reconstruction), which the
+    # authoritative refresh overwrites; sharing them re-counted deposits.
+    external_cash_flow_cursor: str | None = None
 
     def __post_init__(self) -> None:
         if not self.session_id.strip() or not self.limit_profile_version.strip():
@@ -723,6 +727,7 @@ def reconcile_capital_state(
             if reconstruction is not None
             else authoritative.realised_pnl_cursor
         ),
+        external_cash_flow_cursor=previous.external_cash_flow_cursor,
     )
 
 

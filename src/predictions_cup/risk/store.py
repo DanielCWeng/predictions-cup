@@ -122,6 +122,7 @@ def _encode_state(state: CapitalRiskState) -> dict[str, object]:
         "strategy_halts": [_encode_halt(item) for item in state.strategy_halts],
         "limit_profile_version": state.limit_profile_version,
         "realised_pnl_cursor": state.realised_pnl_cursor,
+        "external_cash_flow_cursor": state.external_cash_flow_cursor,
     }
 
 
@@ -164,6 +165,11 @@ def _decode_state(payload: str) -> CapitalRiskState:
             None
             if data["realised_pnl_cursor"] is None
             else str(data["realised_pnl_cursor"])
+        ),
+        external_cash_flow_cursor=(
+            None
+            if data.get("external_cash_flow_cursor") is None
+            else str(data["external_cash_flow_cursor"])
         ),
     )
 

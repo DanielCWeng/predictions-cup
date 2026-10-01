@@ -347,9 +347,9 @@ def apply_external_cash_flow_scan(
     return replace(
         state,
         net_external_cash_flow=state.net_external_cash_flow + scan.delta,
-        realised_pnl_cursor=(
+        external_cash_flow_cursor=(
             scan.newest_event_id
             if scan.newest_event_id is not None
-            else state.realised_pnl_cursor
+            else state.external_cash_flow_cursor
         ),
     )

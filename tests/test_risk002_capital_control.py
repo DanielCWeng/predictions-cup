@@ -1099,7 +1099,34 @@ def test_external_cash_flow_scan_stops_at_durable_cursor() -> None:
 
     updated = apply_external_cash_flow_scan(_capital(), scan)
     assert updated.net_external_cash_flow == Decimal("25")
-    assert updated.realised_pnl_cursor == "new-2"
+    assert updated.external_cash_flow_cursor == "new-2"
+
+
+def test_external_cash_flow_cursor_survives_fill_cursor_overwrite() -> None:
+    """2026-10-01 LIVE canary: the authoritative refresh overwrote the shared
+    cursor with the (empty) fill cursor, so every scan re-counted the original
+    deposit and RISK-002 latched peak_drawdown_limit with zero exposure."""
+    deposit_only = (
+        _transaction_page([_transaction("engine-1059258", "deposit", amount="100000")]),
+    )
+    first = asyncio.run(
+        scan_external_cash_flows(
+            _TransactionRest(deposit_only), tournament_slug="cup", prior_event_id=None
+        )
+    )
+    state = apply_external_cash_flow_scan(_capital(), first)
+    # Simulate reconcile_capital_state replacing the fill-reconstruction cursor.
+    state = replace(state, realised_pnl_cursor=None)
+    again = asyncio.run(
+        scan_external_cash_flows(
+            _TransactionRest(deposit_only),
+            tournament_slug="cup",
+            prior_event_id=state.external_cash_flow_cursor,
+        )
+    )
+    assert again.delta == Decimal("0")
+    final = apply_external_cash_flow_scan(state, again)
+    assert final.net_external_cash_flow == state.net_external_cash_flow
 
 
 def test_external_cash_flow_scan_fails_if_durable_cursor_disappears() -> None:
