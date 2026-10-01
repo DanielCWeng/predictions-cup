@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/experiment_005h_v3_falsification",
+  "kernel": "polyleviathan/experiment-005h-v3-falsification",
+  "poll_seconds": 30,
+  "timeout_minutes": 120,
+  "download_outputs": true,
+  "output_file_pattern": "(V3_FALSIFICATION_SUMMARY\\.json|V3_FALSIFICATION_REPORT\\.md|FALSIFICATION_RESULTS\\.(csv|parquet)|STRICT_MATCHED_CONTROLS\\.csv)$",
+  "launch_gate": "PROMOTED_HARDENED_V3_CORE_COMPLETE_WORKFLOW_36838276378",
+  "upstream_artifact_id": 11151233575
+}
