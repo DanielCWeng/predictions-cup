@@ -1009,6 +1009,7 @@ class Frozen005FEvaluator:
                 quality_flags=("005f:genuine_bbo_not_websocket_age",),
             )
 
+        diagnostic_payload = self._diagnostic_state_payload(vector)
         regime = self._regime_provider.regime(snapshot)
         if regime is None:
             return RuntimeEvaluatorMetadata(
@@ -1021,6 +1022,7 @@ class Frozen005FEvaluator:
                 readiness_reason="regime_unavailable",
                 freshness_seconds=None,
                 quality_flags=("005f:pre_active_semantics_frozen",),
+                diagnostic_payload=diagnostic_payload,
             )
 
         required = (
@@ -1046,6 +1048,7 @@ class Frozen005FEvaluator:
                     "005f:no_refit",
                     "005f:frozen_artifact_hashes_required",
                 ),
+                diagnostic_payload=diagnostic_payload,
             )
 
         bad_hash = tuple(
@@ -1064,6 +1067,7 @@ class Frozen005FEvaluator:
                 readiness_reason="model_artifact_hash_mismatch:" + ",".join(bad_hash),
                 freshness_seconds=None,
                 quality_flags=("005f:frozen_artifact_hashes_required",),
+                diagnostic_payload=diagnostic_payload,
             )
 
         if any(
@@ -1081,6 +1085,7 @@ class Frozen005FEvaluator:
                 readiness_reason="required_orderbook_history_unavailable",
                 freshness_seconds=None,
                 quality_flags=("005f:insufficient_exact_grid_history",),
+                diagnostic_payload=diagnostic_payload,
             )
 
         age = max(
@@ -1100,7 +1105,29 @@ class Frozen005FEvaluator:
                 "005f:genuine_age_ns_exact",
                 f"005f:regime:{regime}",
             ),
+            diagnostic_payload=diagnostic_payload,
         )
+
+    @staticmethod
+    def _diagnostic_state_payload(
+        vector: Hazard005FFeatureVector,
+    ) -> dict[str, object]:
+        return {
+            "005f_state": {
+                "scope_id": vector.scope_id,
+                "grid_time_ns": vector.grid_time_ns,
+                "observed_monotonic_ns": vector.observed_monotonic_ns,
+                "source_version": vector.source_version,
+                "features": {
+                    name: (
+                        float(value)
+                        if math.isfinite(float(value))
+                        else None
+                    )
+                    for name, value in sorted(vector.values.items())
+                },
+            }
+        }
 
     def evaluate(
         self,
