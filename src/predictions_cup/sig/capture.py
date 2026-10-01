@@ -161,7 +161,7 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
             # maintains an in-process trading view. Duplicate governed reads are
             # preferable to silently losing launch price history or making the
             # supervisor treat deliberate capture idleness as a feed failure.
-            periodic_bulk_refresh_enabled=True,
+            periodic_bulk_refresh_enabled=CAPTURE_PERIODIC_BULK_REFRESH_ENABLED,
             governor_snapshot=rest.governor_snapshot,
             observation_emitter=observation_emitter,
             observation_process_instance_id=recorder.session_id,
