@@ -767,8 +767,18 @@ def add_derived(frame: pd.DataFrame) -> pd.DataFrame:
         frame["failed_replenish_80_30s"] = True
     frame["price_region"] = pd.cut(
         frame["mid"],
-        bins=[0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0],
-        labels=["0-.10", ".10-.25", ".25-.50", ".50-.75", ".75-.90", ".90-1"],
+        bins=[0.0, 0.05, 0.15, 0.30, 0.45, 0.55, 0.70, 0.85, 0.95, 1.0],
+        labels=[
+            "0-5",
+            "5-15",
+            "15-30",
+            "30-45",
+            "45-55",
+            "55-70",
+            "70-85",
+            "85-95",
+            "95-100",
+        ],
         include_lowest=True,
     ).astype(str)
     return frame
