@@ -51,7 +51,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     if data.get("schema_version") != 1:
         raise ValueError("schema_version must be 1")
     action = data.get("action")
-    if action not in {"auth_check", "run", "status", "output", "logs"}:
+    if action not in {"auth_check", "dataset_probe", "run", "status", "output", "logs"}:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
 
@@ -94,6 +94,45 @@ def auth_check(output_dir: Path) -> None:
             "## Kaggle auth check",
             "",
             "Authenticated successfully and listed owned kernels.",
+        ]
+    )
+
+
+def dataset_probe(data: dict[str, Any], output_dir: Path) -> None:
+    datasets_raw = data.get("datasets")
+    if not isinstance(datasets_raw, list) or not datasets_raw:
+        raise ValueError("dataset_probe manifest requires non-empty 'datasets' list")
+
+    summaries: list[dict[str, object]] = []
+    for raw in datasets_raw:
+        dataset = str(raw).strip()
+        if "/" not in dataset:
+            raise ValueError(f"Invalid Kaggle dataset id: {dataset!r}")
+        result = run_command(["kaggle", "datasets", "files", dataset], check=False)
+        text = (result.stdout or "") + (result.stderr or "")
+        safe_name = dataset.replace("/", "__")
+        (output_dir / f"dataset_{safe_name}.txt").write_text(text, encoding="utf-8")
+        summaries.append(
+            {
+                "dataset": dataset,
+                "returncode": result.returncode,
+                "accessible": result.returncode == 0,
+            }
+        )
+
+    (output_dir / "dataset_probe.json").write_text(
+        json.dumps(summaries, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    write_summary(
+        [
+            "## Kaggle dataset probe",
+            "",
+            *[
+                f"- {item['dataset']}: "
+                f"{'ACCESSIBLE' if item['accessible'] else 'NOT_ACCESSIBLE'}"
+                for item in summaries
+            ],
         ]
     )
 
@@ -226,6 +265,8 @@ def main() -> int:
     action = data["action"]
     if action == "auth_check":
         auth_check(output_dir)
+    elif action == "dataset_probe":
+        dataset_probe(data, output_dir)
     elif action == "run":
         run_kernel(data, output_dir)
     elif action == "status":
