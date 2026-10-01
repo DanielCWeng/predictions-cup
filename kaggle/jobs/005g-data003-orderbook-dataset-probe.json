@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "action": "dataset_probe",
+  "datasets": [
+    "polyleviathan/sig-cup-data003-orderbooks",
+    "polyleviathan/sig-cup-data-003-orderbooks",
+    "polyleviathan/sig-cup-data003-orderbook",
+    "polyleviathan/sig-cup-data-003-orderbook"
+  ],
+  "note": "Read-only authenticated probe to bind EXPERIMENT-005G to the exact private fresh DATA-003 orderbook dataset identity before scientific work."
+}
