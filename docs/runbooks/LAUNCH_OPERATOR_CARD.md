@@ -29,6 +29,9 @@ journalctl -u 'predictions-cup-*' -n 100 --no-pager
 cat data/runtime/status/latest.json
 tail -n 50 data/runtime/alerts/events.jsonl
 
+# optional out-of-band push delivery (runtime.env only; never commit the URL)
+# PREDICTIONS_CUP_FULLSTACK_ALERT_WEBHOOK_URL=https://your-alert-endpoint.example/path
+
 # existing durable risk state
 python scripts/risk002_control.py --runtime-env-only status
 
