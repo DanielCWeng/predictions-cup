@@ -554,6 +554,7 @@ def evaluate_relationship(
             net_edge,
         ),
         relationship_id=relationship.relationship_id,
+        event_group_id=relationship.event_group_id,
         relationship_type=relationship.relationship_type,
         observed_at=observed_at,
         leg_ids=tuple(leg.instrument_id for leg in relationship.legs),
