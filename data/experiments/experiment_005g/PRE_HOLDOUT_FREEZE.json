@@ -1,0 +1,323 @@
+{
+  "candidate_admission": {
+    "lane_a_rule": "only 005F_REPL_PRE_UPDATE; all other Lane A coordinates frozen out",
+    "lane_b_rule": "only promotion_gate_pass=true rows from frozen broad and sequential Lane B screens",
+    "manual_replacements_allowed": false,
+    "post_holdout_tuning_allowed": false
+  },
+  "candidate_count": 12,
+  "code": {
+    "holdout_runner_commit": "16e33c50e50c7285e7ef862f255163250351193a",
+    "lane_a_runner_commit": "4aeb00d93078c4902880d09e681f5b7a42556979",
+    "lane_b_runner_commit": "336b3cae675cda0ebf97859d3a742526e0be6a2a"
+  },
+  "dataset": {
+    "accepted_mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
+    "effective_acquisition_artifact_sha256": "d25f07e450f57647f198a9e2730889a7846b78a2c4d6f84474b5b45bc33f8532",
+    "slug": "polyleviathan/sig-cup-data003-orderbooks",
+    "version": 1
+  },
+  "evidence": {
+    "lane_a_active_path": "data/experiments/experiment_005g/lane_a/ACTIVE_EV18_TRAIN_DEV_EVIDENCE.json",
+    "lane_a_active_sha256": "22f7871f4c043cf8f5afb386947d370bd21e4d909fbac166d05722ee8bda3a04",
+    "lane_a_pre_path": "data/experiments/experiment_005g/lane_a/PRE_BASELINE_TRAIN_DEV_EVIDENCE.json",
+    "lane_a_pre_sha256": "da41cb058d171db7e0812f2c3132e6532e730ef1f7a9ae25d9e79eae1973c0f5",
+    "lane_b_path": "data/experiments/experiment_005g/lane_b/SEP_TRAIN_DEV_EVIDENCE.json",
+    "lane_b_sequential_path": "data/experiments/experiment_005g/lane_b/SEQUENTIAL_TRAIN_DEV_EVIDENCE.json",
+    "lane_b_sequential_sha256": "c849a3d9df98c70938579eb93ecd69f8f404a3bdce23f34209304519bbcee129",
+    "lane_b_sha256": "b1a22a80236f6457f5ce1bd3b39fa96fb8f2008d5a085f61a75df10861d495f9"
+  },
+  "experiment": "EXPERIMENT-005G",
+  "holdout_candidates": [
+    {
+      "baseline": [
+        "genuine_15",
+        "genuine_60"
+      ],
+      "candidate_id": "005F_REPL_PRE_UPDATE",
+      "dev_block_bootstrap_lower": 0.030273825053670263,
+      "dev_leave_market_min": 0.03147380540503433,
+      "dev_mean_loss_improvement": 0.03209762345203572,
+      "dev_relative_mse_improvement": 0.30709609608377936,
+      "dev_signflip_p": 0.000244081034903588,
+      "feature": "genuine_age_s",
+      "feature_family": "BBO_AGE",
+      "kind": "classification",
+      "lane": "A_STRICT_005F_REPLICATION",
+      "model": "HGB_D3_LR0.03",
+      "target": "update_h300",
+      "target_family": "UPDATE_HAZARD"
+    },
+    {
+      "baseline": [
+        "abs_ret_15",
+        "rv_60",
+        "spread"
+      ],
+      "candidate_id": "005G_DISCOVERY|abs_h60|distance_from_0_5",
+      "dev_block_bootstrap_lower": 4.375996208402908e-07,
+      "dev_leave_market_min": 3.220024974567579e-07,
+      "dev_mean_loss_improvement": 6.522243272077476e-07,
+      "dev_p_bh": 0.000244081034903588,
+      "dev_relative_mse_improvement": 0.0004253463291582679,
+      "dev_signflip_p": 0.000244081034903588,
+      "feature": "distance_from_0_5",
+      "feature_family": "BBO_STATE",
+      "kind": "regression",
+      "lane": "B_OPEN_DISCOVERY",
+      "model": "RIDGE_1.0",
+      "target": "abs_h60",
+      "target_family": "VOLATILITY"
+    },
+    {
+      "baseline": [
+        "abs_ret_15",
+        "rv_60",
+        "spread"
+      ],
+      "candidate_id": "005G_DISCOVERY|abs_h60|spread_x_distance",
+      "dev_block_bootstrap_lower": 3.4896107017153276e-06,
+      "dev_leave_market_min": 3.86581753386505e-06,
+      "dev_mean_loss_improvement": 4.552752237614497e-06,
+      "dev_p_bh": 0.000244081034903588,
+      "dev_relative_mse_improvement": 0.0029690650456520007,
+      "dev_signflip_p": 0.000244081034903588,
+      "feature": "spread_x_distance",
+      "feature_family": "BBO_STATE",
+      "kind": "regression",
+      "lane": "B_OPEN_DISCOVERY",
+      "model": "RIDGE_1.0",
+      "target": "abs_h60",
+      "target_family": "VOLATILITY"
+    },
+    {
+      "baseline": [
+        "bbo_age_s",
+        "bbo_updates_60",
+        "price_updates_60"
+      ],
+      "candidate_id": "005G_DISCOVERY|bbo_update_h300|price_change_age_s",
+      "dev_block_bootstrap_lower": 5.4122241194442126e-05,
+      "dev_leave_market_min": 4.539048212580183e-05,
+      "dev_mean_loss_improvement": 8.585624114193002e-05,
+      "dev_p_bh": 0.000488162069807176,
+      "dev_relative_mse_improvement": 0.001048628071827176,
+      "dev_signflip_p": 0.000244081034903588,
+      "feature": "price_change_age_s",
+      "feature_family": "RENEWAL_FRESHNESS",
+      "kind": "classification",
+      "lane": "B_OPEN_DISCOVERY",
+      "model": "LOGIT_C1.0",
+      "target": "bbo_update_h300",
+      "target_family": "RENEWAL"
+    },
+    {
+      "baseline": [
+        "bbo_age_s",
+        "bbo_updates_60",
+        "price_updates_60"
+      ],
+      "candidate_id": "005G_DISCOVERY|bbo_update_h300|spread_x_distance",
+      "dev_block_bootstrap_lower": 0.001921877892271438,
+      "dev_leave_market_min": 0.0021325747989048693,
+      "dev_mean_loss_improvement": 0.0022990890905218706,
+      "dev_p_bh": 0.00032544137987145064,
+      "dev_relative_mse_improvement": 0.035385684783896657,
+      "dev_signflip_p": 0.000244081034903588,
+      "feature": "spread_x_distance",
+      "feature_family": "BBO_STATE",
+      "kind": "classification",
+      "lane": "B_OPEN_DISCOVERY",
+      "model": "LOGIT_C1.0",
+      "target": "bbo_update_h300",
+      "target_family": "RENEWAL"
+    },
+    {
+      "baseline": [
+        "bbo_age_s",
+        "bbo_updates_60",
+        "price_updates_60"
+      ],
+      "candidate_id": "005G_DISCOVERY|bbo_update_h300|volatility_x_liquidity",
+      "dev_block_bootstrap_lower": 0.00011387705032700304,
+      "dev_leave_market_min": 0.00013242629177805557,
+      "dev_mean_loss_improvement": 0.00014898031564778308,
+      "dev_p_bh": 0.001464486209421528,
+      "dev_relative_mse_improvement": 0.0022988733042114892,
+      "dev_signflip_p": 0.000244081034903588,
+      "feature": "volatility_x_liquidity",
+      "feature_family": "INTERACTIONS",
+      "kind": "classification",
+      "lane": "B_OPEN_DISCOVERY",
+      "model": "LOGIT_C1.0",
+      "target": "bbo_update_h300",
+      "target_family": "RENEWAL"
+    },
+    {
+      "baseline": [
+        "bbo_age_s",
+        "bbo_updates_60",
+        "price_updates_60"
+      ],
+      "candidate_id": "005G_DISCOVERY|bbo_update_h60|distance_from_0_5",
+      "dev_block_bootstrap_lower": 3.889079682887347e-05,
+      "dev_leave_market_min": 5.451903685238338e-05,
+      "dev_mean_loss_improvement": 6.614902837075786e-05,
+      "dev_p_bh": 0.00032544137987145064,
+      "dev_relative_mse_improvement": 0.00195565979149246,
+      "dev_signflip_p": 0.000244081034903588,
+      "feature": "distance_from_0_5",
+      "feature_family": "BBO_STATE",
+      "kind": "classification",
+      "lane": "B_OPEN_DISCOVERY",
+      "model": "LOGIT_C1.0",
+      "target": "bbo_update_h60",
+      "target_family": "RENEWAL"
+    },
+    {
+      "baseline": [
+        "bbo_age_s",
+        "bbo_updates_60",
+        "price_updates_60"
+      ],
+      "candidate_id": "005G_DISCOVERY|bbo_update_h60|ofi_acceleration",
+      "dev_block_bootstrap_lower": 8.0275695208195e-06,
+      "dev_leave_market_min": 8.78690477647857e-06,
+      "dev_mean_loss_improvement": 9.095587978740222e-06,
+      "dev_p_bh": 0.000732243104710764,
+      "dev_relative_mse_improvement": 0.00026890607659881845,
+      "dev_signflip_p": 0.000244081034903588,
+      "feature": "ofi_acceleration",
+      "feature_family": "FLOW_PRESSURE",
+      "kind": "classification",
+      "lane": "B_OPEN_DISCOVERY",
+      "model": "LOGIT_C1.0",
+      "target": "bbo_update_h60",
+      "target_family": "RENEWAL"
+    },
+    {
+      "baseline": [
+        "bbo_age_s",
+        "bbo_updates_60",
+        "price_updates_60"
+      ],
+      "candidate_id": "005G_DISCOVERY|bbo_update_h60|price_change_age_s",
+      "dev_block_bootstrap_lower": 8.39853619908308e-06,
+      "dev_leave_market_min": 7.817196917921329e-06,
+      "dev_mean_loss_improvement": 1.082776343163049e-05,
+      "dev_p_bh": 0.000488162069807176,
+      "dev_relative_mse_improvement": 0.0002523288478344391,
+      "dev_signflip_p": 0.000244081034903588,
+      "feature": "price_change_age_s",
+      "feature_family": "RENEWAL_FRESHNESS",
+      "kind": "classification",
+      "lane": "B_OPEN_DISCOVERY",
+      "model": "LOGIT_C1.0",
+      "target": "bbo_update_h60",
+      "target_family": "RENEWAL"
+    },
+    {
+      "baseline": [
+        "bbo_age_s",
+        "bbo_updates_60",
+        "price_updates_60"
+      ],
+      "candidate_id": "005G_DISCOVERY|bbo_update_h60|spread_x_distance",
+      "dev_block_bootstrap_lower": 0.0004031096766132519,
+      "dev_leave_market_min": 0.0005137680943892877,
+      "dev_mean_loss_improvement": 0.0005622416092025407,
+      "dev_p_bh": 0.00032544137987145064,
+      "dev_relative_mse_improvement": 0.016622365215382354,
+      "dev_signflip_p": 0.000244081034903588,
+      "feature": "spread_x_distance",
+      "feature_family": "BBO_STATE",
+      "kind": "classification",
+      "lane": "B_OPEN_DISCOVERY",
+      "model": "LOGIT_C1.0",
+      "target": "bbo_update_h60",
+      "target_family": "RENEWAL"
+    },
+    {
+      "baseline": [
+        "spread_state",
+        "bbo_age_s",
+        "bbo_updates_60",
+        "bbo_updates_300"
+      ],
+      "candidate_id": "005G_DISCOVERY_SEQ|state_transition_h300|state_dwell_s",
+      "dev_block_bootstrap_lower": 0.05315079757507475,
+      "dev_leave_market_min": 0.058643745729656305,
+      "dev_mean_loss_improvement": 0.05974983600580854,
+      "dev_p_bh": 0.000244081034903588,
+      "dev_relative_mse_improvement": 0.26636102625029556,
+      "dev_signflip_p": 0.000244081034903588,
+      "feature": "state_dwell_s",
+      "feature_family": "STATE_TRANSITIONS",
+      "kind": "classification",
+      "lane": "B_OPEN_DISCOVERY",
+      "model": "LOGIT_C1.0",
+      "sequential_family": true,
+      "target": "state_transition_h300",
+      "target_family": "REGIME_TRANSITION"
+    },
+    {
+      "baseline": [
+        "spread_state",
+        "bbo_age_s",
+        "bbo_updates_60",
+        "bbo_updates_300"
+      ],
+      "candidate_id": "005G_DISCOVERY_SEQ|state_transition_h60|state_dwell_s",
+      "dev_block_bootstrap_lower": 0.015042260300483178,
+      "dev_leave_market_min": 0.016164399468104027,
+      "dev_mean_loss_improvement": 0.016803216549004327,
+      "dev_p_bh": 0.000244081034903588,
+      "dev_relative_mse_improvement": 0.1389849573113217,
+      "dev_signflip_p": 0.000244081034903588,
+      "feature": "state_dwell_s",
+      "feature_family": "STATE_TRANSITIONS",
+      "kind": "classification",
+      "lane": "B_OPEN_DISCOVERY",
+      "model": "LOGIT_C1.0",
+      "sequential_family": true,
+      "target": "state_transition_h60",
+      "target_family": "REGIME_TRANSITION"
+    }
+  ],
+  "holdout_files": [
+    "baseline_sep/date=2026-09-05/hour=00/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=01/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=02/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=03/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=04/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=05/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=06/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=07/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=08/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=09/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=10/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=11/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=12/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=13/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=14/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=15/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=16/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=17/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=18/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=19/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=20/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=21/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=22/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=23/events.parquet"
+  ],
+  "holdout_read": false,
+  "holdout_window": [
+    "2026-09-05T00:00:00Z",
+    "2026-09-06T00:00:00Z"
+  ],
+  "make_modified": false,
+  "phase": "PRE_HOLDOUT_FREEZE",
+  "real_sig_orders_sent": false,
+  "schema_version": 1,
+  "status": "FROZEN"
+}
