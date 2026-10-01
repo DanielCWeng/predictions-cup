@@ -1192,7 +1192,7 @@ def main() -> None:
     freeze = {
         "schema_version": 1,
         "experiment": "EXPERIMENT-005H",
-        "stage": "PRE_HOLDOUT_FREEZE",
+        "stage": "EXTENDED_V3_SHORTLIST",
         "train_window": "W17",
         "dev_window": "W18",
         "final_holdout": "B0",
@@ -1205,11 +1205,12 @@ def main() -> None:
         "full_models": full_models,
         "stale_excluded_models": stale_models,
         "high_activity_excluded_models": quiet_models,
+        "train_activity_p90": train_activity_p90,
+        "stale_book_max_ms": 5000.0,
         "relative_size_permutation": permutation,
         "rule": "Only candidates listed here may receive one-shot B0 evaluation. No post-B0 retuning, candidate addition, threshold change, feature change, or rescue.",
         "real_sig_orders_sent": False,
     }
-    freeze["stage"] = "EXTENDED_V3_SHORTLIST"
     freeze["rule"] = (
         "This is a V3 shortlist only. It does not authorize B0. "
         "Experiment-wide PRE_HOLDOUT_FREEZE.json may be written only after "
@@ -1227,6 +1228,8 @@ def main() -> None:
         "arrival": arrival_result,
         "direction": direction_result,
         "candidates": candidates,
+        "train_activity_p90": train_activity_p90,
+        "stale_book_max_ms": 5000.0,
         "b0_opened": False,
         "real_sig_orders_sent": False,
     }
