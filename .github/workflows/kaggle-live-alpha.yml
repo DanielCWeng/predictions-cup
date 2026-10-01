@@ -29,7 +29,10 @@ jobs:
         env:
           LIVE_ALPHA_INPUT: data/kaggle_handoff/live_alpha_001/package
           LIVE_ALPHA_OUTPUT: /tmp/live-alpha-preflight
-        run: python scripts/kaggle/live_alpha_001/run.py
+        run: |
+          python scripts/kaggle/live_alpha_001/run.py
+          echo "=== FULL PREFLIGHT ALPHA REPORT ==="
+          cat /tmp/live-alpha-preflight/FINAL_REPORT.md
 
       - name: Upload immutable live snapshot
         env:
