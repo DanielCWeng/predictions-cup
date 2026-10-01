@@ -221,14 +221,22 @@ def _storage_health(settings: AppSettings, paths: RuntimePaths) -> dict[str, obj
 def _mtime_freshness(path: Path, *, active: bool, max_age_seconds: float) -> dict[str, object]:
     if not active:
         return {"state": "NOT_RUNNING", "path": str(path), "age_seconds": None}
-    try:
-        observed = datetime.fromtimestamp(path.stat().st_mtime, UTC)
-    except OSError:
+    candidates = (path, Path(f"{path}-wal"))
+    observed_paths: list[tuple[Path, float]] = []
+    for candidate in candidates:
+        try:
+            observed_paths.append((candidate, candidate.stat().st_mtime))
+        except OSError:
+            continue
+    if not observed_paths:
         return {"state": "MISSING", "path": str(path), "age_seconds": None}
+    evidence_path, observed_timestamp = max(observed_paths, key=lambda item: item[1])
+    observed = datetime.fromtimestamp(observed_timestamp, UTC)
     age = max(0.0, (_now() - observed).total_seconds())
     return {
         "state": "HEALTHY" if age <= max_age_seconds else "STALE",
         "path": str(path),
+        "evidence_path": str(evidence_path),
         "observed_at": _iso(observed),
         "age_seconds": round(age, 3),
         "max_age_seconds": max_age_seconds,
@@ -324,14 +332,19 @@ def _risk_status(settings: AppSettings) -> dict[str, object]:
     halt_raw = payload.get("global_halt")
     halt = halt_raw if isinstance(halt_raw, dict) else None
     halted = bool(halt is not None and halt.get("active") is True)
+    reconciled = payload.get("reconciliation_complete") is True
+    account_trusted = payload.get("account_trusted") is True
+    marks_trusted = payload.get("marks_trusted") is True
+    ready = reconciled and account_trusted and marks_trusted
     return {
-        "state": "HALTED" if halted else "READY",
+        "state": "HALTED" if halted else "READY" if ready else "NOT_READY",
         "configured": True,
         "global_halt": halt,
         "session_id": payload.get("session_id"),
-        "reconciliation_complete": payload.get("reconciliation_complete"),
-        "account_trusted": payload.get("account_trusted"),
-        "marks_trusted": payload.get("marks_trusted"),
+        "reconciliation_complete": reconciled,
+        "account_trusted": account_trusted,
+        "marks_trusted": marks_trusted,
+        "detail": None if halted or ready else "risk_reconciliation_or_trust_incomplete",
     }
 
 
@@ -735,6 +748,12 @@ def write_status(settings: AppSettings, *, repo_root: Path | None = None) -> dic
 
 
 def check_component(settings: AppSettings, name: str) -> tuple[bool, str]:
+    if name == "sig-capture":
+        if settings.sig_read_credential is None:
+            return False, "sig_read_credential_missing"
+        if settings.tournament_id is None:
+            return False, "tournament_id_missing"
+        return True, "READY"
     if name == "maker-shadow":
         if not settings.maker_enabled:
             return False, "maker_disabled"
@@ -742,6 +761,12 @@ def check_component(settings: AppSettings, name: str) -> tuple[bool, str]:
             return False, "shadow_disabled"
         if settings.trading_enabled or settings.execution_mode != "SHADOW":
             return False, "unsafe_live_configuration"
+        if settings.global_kill_switch:
+            return False, "global_kill_switch_active"
+        if settings.tournament_id is None or settings.tournament_slug is None:
+            return False, "tournament_context_missing"
+        if not settings.maker_mapping_path.is_file():
+            return False, "maker_mapping_missing"
         return True, "READY"
     if name == "polymarket-capture":
         if not settings.polymarket_capture_enabled:
@@ -793,22 +818,53 @@ def halt_global(settings: AppSettings, *, reason: str) -> dict[str, object]:
     return payload
 
 
-def _service_action(action: str, units: Sequence[str]) -> dict[str, object]:
+def _service_action(
+    action: str,
+    units: Sequence[str],
+    *,
+    verify_active: Sequence[str] = (),
+) -> dict[str, object]:
     result = _systemctl(action, *units)
+    failed_active: list[str] = []
+    if result.returncode == 0:
+        for unit in verify_active:
+            active = _systemctl("is-active", "--quiet", unit)
+            if active.returncode != 0:
+                failed_active.append(unit)
     return {
-        "state": "OK" if result.returncode == 0 else "BLOCKED",
+        "state": (
+            "OK"
+            if result.returncode == 0 and not failed_active
+            else "BLOCKED"
+        ),
         "action": action,
         "units": list(units),
         "returncode": result.returncode,
+        "inactive_after_action": failed_active,
         "stderr": result.stderr,
     }
 
 
 def start_shadow(settings: AppSettings) -> dict[str, object]:
-    ready, reason = check_component(settings, "maker-shadow")
-    if not ready:
-        return {"state": "BLOCKED", "reason": reason}
-    return _service_action("start", (RUNTIME_TARGET,))
+    sig_ready, sig_reason = check_component(settings, "sig-capture")
+    if not sig_ready:
+        return {"state": "BLOCKED", "reason": sig_reason}
+    maker_ready, maker_reason = check_component(settings, "maker-shadow")
+    if not maker_ready:
+        return {"state": "BLOCKED", "reason": maker_reason}
+    required = [SIG_CAPTURE_UNIT, MAKER_UNIT]
+    if settings.polymarket_capture_enabled:
+        polymarket_ready, polymarket_reason = check_component(
+            settings, "polymarket-capture"
+        )
+        if not polymarket_ready:
+            return {"state": "BLOCKED", "reason": polymarket_reason}
+        required.append(POLYMARKET_CAPTURE_UNIT)
+    return _service_action(
+        "start",
+        (RUNTIME_TARGET,),
+        verify_active=tuple(required),
+    )
 
 
 def stop_runtime() -> dict[str, object]:
@@ -821,15 +877,26 @@ def stop_runtime() -> dict[str, object]:
 
 
 def restart_safe(settings: AppSettings) -> dict[str, object]:
-    ready, reason = check_component(settings, "maker-shadow")
+    sig_ready, sig_reason = check_component(settings, "sig-capture")
+    if not sig_ready:
+        return {"state": "BLOCKED", "reason": sig_reason}
+    maker_ready, maker_reason = check_component(settings, "maker-shadow")
+    if not maker_ready:
+        return {"state": "BLOCKED", "reason": maker_reason}
     units = [SIG_CAPTURE_UNIT]
-    if settings.polymarket_capture_enabled and settings.polymarket_supervised_ids.strip():
+    if settings.polymarket_capture_enabled:
+        polymarket_ready, polymarket_reason = check_component(
+            settings, "polymarket-capture"
+        )
+        if not polymarket_ready:
+            return {"state": "BLOCKED", "reason": polymarket_reason}
         units.append(POLYMARKET_CAPTURE_UNIT)
-    if ready:
-        units.append(MAKER_UNIT)
-    elif settings.maker_enabled:
-        return {"state": "BLOCKED", "reason": reason}
-    return _service_action("restart", tuple(units))
+    units.append(MAKER_UNIT)
+    return _service_action(
+        "restart",
+        tuple(units),
+        verify_active=tuple(units),
+    )
 
 
 def rehearsal(settings: AppSettings, *, repo_root: Path) -> dict[str, object]:
@@ -962,7 +1029,7 @@ def _parser() -> argparse.ArgumentParser:
     runtime_args(alert)
 
     check = sub.add_parser("check")
-    check.add_argument("component", choices=("maker-shadow", "polymarket-capture"))
+    check.add_argument("component", choices=("sig-capture", "maker-shadow", "polymarket-capture"))
     runtime_args(check)
 
     halt = sub.add_parser("halt")
