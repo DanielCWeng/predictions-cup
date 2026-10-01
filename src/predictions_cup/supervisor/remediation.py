@@ -91,15 +91,40 @@ class RemediationExecutor:
             "DISK_PRESSURE_WARN",
             "DISK_PRESSURE_CRITICAL",
             "DISK_PRESSURE_EMERGENCY",
+            "DISK_GROWTH_WARN",
+            "DISK_GROWTH_CRITICAL",
         }:
             planned.append((ActionCode.PRUNE_SUPERVISOR_BUNDLES, None))
             if self.config.host_role is HostRole.WEST_EXECUTION:
                 planned.append((ActionCode.PRUNE_HOT_PARQUET, None))
-        if "DISK_PRESSURE_EMERGENCY" in codes:
+        if codes & {"DISK_PRESSURE_EMERGENCY", "DISK_GROWTH_CRITICAL"}:
             planned.extend(
                 (ActionCode.STOP_NONESSENTIAL_SERVICE, service)
                 for service in self.config.nonessential_services
             )
+
+        recovery_reasons = {
+            "predictions-cup-sig-capture.service": {
+                "SOURCE_SIG_CAPTURE_STALE",
+                "FEED_SIG_DISCONNECTED",
+                "FEED_SIG_RECONCILIATION_STALE",
+                "CAPTURE_SIG_STORAGE_FAILURE",
+                "CAPTURE_SIG_WRITER_DEAD",
+                "CAPTURE_SIG_DROPPED_ROWS",
+            },
+            "predictions-cup-polymarket-capture.service": {
+                "SOURCE_POLYMARKET_CAPTURE_STALE",
+                "FEED_POLYMARKET_DISCONNECTED",
+                "FEED_POLYMARKET_STALE",
+                "CAPTURE_POLYMARKET_STORAGE_FAILURE",
+                "CAPTURE_POLYMARKET_WRITER_DEAD",
+                "CAPTURE_POLYMARKET_DROPPED_ROWS",
+            },
+        }
+        for service, reasons in recovery_reasons.items():
+            if service in self.config.safe_restart_services and codes & reasons:
+                planned.append((ActionCode.RESTART_SAFE_SERVICE, service))
+
         for finding in snapshot.findings:
             if finding.code not in {
                 "SERVICE_FAILURE",
