@@ -67,6 +67,7 @@ class MakerSourceBridge:
         account_state: AccountMakerState,
         polymarket_books: PolymarketBookSource,
         polymarket_source_version: str = "clob-market-ws-v1",
+        allowed_exchange_ids: frozenset[str] | None = None,
     ) -> None:
         if mapping.tournament_id != sig_state.tournament_id:
             raise ValueError("mapping/SIG tournament mismatch")
@@ -79,14 +80,27 @@ class MakerSourceBridge:
         self._account = account_state
         self._pm_books = polymarket_books
         self._pm_source_version = polymarket_source_version
+        records = tuple(
+            record
+            for record in mapping.records
+            if allowed_exchange_ids is None
+            or record.sig_exchange_id in allowed_exchange_ids
+        )
         self._records = {
-            record.sig_exchange_id: record for record in mapping.records
+            record.sig_exchange_id: record for record in records
         }
-        if len(self._records) != len(mapping.records):
+        if len(self._records) != len(records):
             raise ValueError("mapping contains duplicate SIG exchanges")
+        if allowed_exchange_ids is not None:
+            missing = allowed_exchange_ids.difference(self._records)
+            if missing:
+                raise ValueError(
+                    "allowed maker exchange ids are absent from mapping: "
+                    + ",".join(sorted(missing))
+                )
 
         token_to_exchanges: dict[str, set[str]] = defaultdict(set)
-        for record in mapping.records:
+        for record in records:
             for token_id in self._token_ids(record):
                 token_to_exchanges[token_id].add(record.sig_exchange_id)
         self._token_to_exchanges = {
@@ -94,7 +108,7 @@ class MakerSourceBridge:
             for token_id, exchange_ids in token_to_exchanges.items()
         }
         market_to_exchanges: dict[str, list[str]] = defaultdict(list)
-        for record in mapping.records:
+        for record in records:
             market_to_exchanges[record.sig_market_id].append(record.sig_exchange_id)
         self._market_exchange_ids = {
             market_id: tuple(sorted(exchange_ids))
@@ -105,7 +119,7 @@ class MakerSourceBridge:
     def tradeable_exchange_ids(self) -> frozenset[str]:
         return frozenset(
             record.sig_exchange_id
-            for record in self._mapping.records
+            for record in self._records.values()
             if self._record_tradeable(record)
         )
 
@@ -265,6 +279,9 @@ class MakerSourceBridge:
             inventory_observed_ns=account_observed_ns,
             external_quotes=external_quotes,
             volatility=volatility,
+            external_feed_observed_ns=(
+                monotonic_now_ns if polymarket_feed_trusted else None
+            ),
         )
 
     def _canonical_portfolio(self) -> RuntimePortfolio:

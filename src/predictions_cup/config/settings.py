@@ -326,6 +326,34 @@ class AppSettings(BaseSettings):
             )
             if any(value is None for value in limits):
                 raise ValueError("LIVE execution requires every central risk cap")
+            if self.risk_max_tournament_exposure is None:
+                raise ValueError(
+                    "LIVE execution requires explicit risk_max_tournament_exposure"
+                )
+            if (
+                self.risk_max_gross_exposure is not None
+                and self.risk_max_tournament_exposure
+                > self.risk_max_gross_exposure
+            ):
+                raise ValueError(
+                    "LIVE risk_max_tournament_exposure cannot exceed "
+                    "risk_max_gross_exposure"
+                )
+            if self.risk_profile_mode == "EXPLORATORY":
+                if self.risk_exploratory_max_tournament_exposure is None:
+                    raise ValueError(
+                        "LIVE EXPLORATORY requires explicit "
+                        "risk_exploratory_max_tournament_exposure"
+                    )
+                if (
+                    self.risk_exploratory_max_gross_exposure is not None
+                    and self.risk_exploratory_max_tournament_exposure
+                    > self.risk_exploratory_max_gross_exposure
+                ):
+                    raise ValueError(
+                        "LIVE exploratory tournament exposure cannot exceed "
+                        "exploratory gross exposure"
+                    )
         return self
 
     def diagnostic_fields(self) -> dict[str, str | bool | int | float | None]:

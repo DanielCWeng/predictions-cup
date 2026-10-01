@@ -72,8 +72,12 @@ async def recover_startup(
     wall_clock: WallClock = lambda: datetime.now(UTC),
     observation_emitter: ObservationEmitter | None = None,
     observation_process_instance_id: str | None = None,
+    max_placement_replay_age_seconds: float = 10.0,
+    placement_replay_allowed: Callable[[ExecutionEnvelope], bool] | None = None,
 ) -> StartupRecoveryResult:
     """Recover journal first; LIVE remains blocked if anything stays uncertain."""
+    if max_placement_replay_age_seconds <= 0:
+        raise ValueError("max_placement_replay_age_seconds must be positive")
     authoritative = await reconcile_account(
         rest,
         tournament_id=tournament_id,
@@ -91,6 +95,58 @@ async def recover_startup(
             clock_ns(),
             detail=(("original_state", original_state.value),),
         )
+        placement_kind = envelope.operation_kind in {
+            OperationKind.SINGLE_PLACEMENT,
+            OperationKind.BEST_EFFORT_BATCH,
+            OperationKind.ATOMIC_MULTI_LEG,
+        }
+        replayable_state = original_state in {
+            LifecycleState.PENDING,
+            LifecycleState.UNCERTAIN,
+            LifecycleState.RECONCILING,
+        }
+        if placement_kind and replayable_state:
+            created_at = journal.operation_created_at(envelope.logical_operation_id)
+            now = wall_clock()
+            fresh = (
+                created_at is not None
+                and now.tzinfo is not None
+                and now.utcoffset() is not None
+                and now >= created_at
+                and (now - created_at).total_seconds()
+                <= max_placement_replay_age_seconds
+            )
+            # Startup recovery has deliberately narrower authority than LIVE.
+            # Unless the caller can prove current eligibility independently,
+            # even a fresh unresolved placement is held rather than redispatched.
+            eligible = (
+                placement_replay_allowed is not None
+                and placement_replay_allowed(envelope)
+            )
+            if not fresh or not eligible:
+                if original_state is not LifecycleState.UNCERTAIN:
+                    journal.mark_state(
+                        envelope.logical_operation_id,
+                        LifecycleState.UNCERTAIN,
+                        clock_ns(),
+                    )
+                journal.record_event(
+                    logical_operation_id=envelope.logical_operation_id,
+                    tournament_id=envelope.tournament_id,
+                    event_type="RECOVERY_PLACEMENT_HELD",
+                    observed_monotonic_ns=clock_ns(),
+                    terminal_status=LifecycleState.UNCERTAIN.value,
+                    detail_json=json.dumps(
+                        {
+                            "fresh": fresh,
+                            "eligibility_proven": eligible,
+                        },
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                )
+                continue
+
         if original_state is not LifecycleState.RECONCILING:
             journal.mark_state(
                 envelope.logical_operation_id,
@@ -99,16 +155,8 @@ async def recover_startup(
             )
 
         try:
-            if envelope.operation_kind in {
-                OperationKind.SINGLE_PLACEMENT,
-                OperationKind.BEST_EFFORT_BATCH,
-                OperationKind.ATOMIC_MULTI_LEG,
-            }:
-                if original_state in {
-                    LifecycleState.PENDING,
-                    LifecycleState.UNCERTAIN,
-                    LifecycleState.RECONCILING,
-                }:
+            if placement_kind:
+                if replayable_state:
                     await live_sink.dispatch_recovery(envelope)
             elif envelope.operation_kind is OperationKind.SINGLE_CANCELLATION:
                 await _recover_single_cancel(
@@ -227,6 +275,66 @@ def _emit_recovery_observation(
         )
     except Exception:
         return
+
+
+async def recover_in_session_cancellations(
+    *,
+    journal: ExecutionJournal,
+    rest: RecoveryRest,
+    live_sink: SigLiveSink,
+    tournament_id: str,
+    clock_ns: ClockNs = monotonic_ns,
+) -> tuple[str, ...]:
+    """Resolve/retry only existing cancellation risk during a live session.
+
+    Fresh placements are deliberately out of scope. A cancellation gets one
+    authoritative order/fill check and at most one same-envelope cancel retry.
+    """
+    resolved: list[str] = []
+    for envelope in tuple(journal.unresolved()):
+        if envelope.tournament_id != tournament_id:
+            continue
+        if envelope.operation_kind not in {
+            OperationKind.SINGLE_CANCELLATION,
+            OperationKind.CANCEL_ALL,
+        }:
+            continue
+        if envelope.lifecycle_state is not LifecycleState.RECONCILING:
+            journal.mark_state(
+                envelope.logical_operation_id,
+                LifecycleState.RECONCILING,
+                clock_ns(),
+            )
+        try:
+            if envelope.operation_kind is OperationKind.SINGLE_CANCELLATION:
+                await _recover_single_cancel(
+                    journal=journal,
+                    rest=rest,
+                    live_sink=live_sink,
+                    envelope=envelope,
+                    clock_ns=clock_ns,
+                )
+            elif await _cancel_all_scope_has_open_orders(
+                rest=rest,
+                envelope_payload=envelope.payload_json,
+                tournament_id=tournament_id,
+            ):
+                await live_sink.cancel(envelope)
+            else:
+                journal.mark_state(
+                    envelope.logical_operation_id,
+                    LifecycleState.CANCELLED,
+                    clock_ns(),
+                )
+        except SigExecutionUncertainError:
+            continue
+
+        unresolved_ids = {
+            item.logical_operation_id for item in journal.unresolved()
+        }
+        if envelope.logical_operation_id not in unresolved_ids:
+            resolved.append(envelope.logical_operation_id)
+    return tuple(resolved)
 
 
 async def _recover_single_cancel(

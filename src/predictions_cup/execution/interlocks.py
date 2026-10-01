@@ -44,6 +44,7 @@ def _live_failures(
     *,
     explicit_live_invocation: bool,
     account_trusted: bool,
+    allow_global_kill_switch: bool = False,
 ) -> list[str]:
     failures: list[str] = []
     if not explicit_live_invocation:
@@ -56,7 +57,7 @@ def _live_failures(
         failures.append("trade_credential")
     if settings.tournament_id is None or settings.tournament_slug is None:
         failures.append("tournament_context")
-    if settings.global_kill_switch:
+    if settings.global_kill_switch and not allow_global_kill_switch:
         failures.append("global_kill_switch")
     if not account_trusted:
         failures.append("account_state")
@@ -94,6 +95,7 @@ def assert_live_recovery_interlocks(
         settings,
         explicit_live_invocation=explicit_live_invocation,
         account_trusted=account_trusted,
+        allow_global_kill_switch=True,
     )
     if failures:
         raise LiveInterlockError(

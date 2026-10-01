@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from predictions_cup.execution.models import (
@@ -64,6 +65,7 @@ class ExecutionJournal:
                 intent_ids_json TEXT NOT NULL,
                 lifecycle_state TEXT NOT NULL,
                 created_monotonic_ns INTEGER NOT NULL,
+                created_at_utc TEXT,
                 updated_monotonic_ns INTEGER NOT NULL,
                 relationship_constraint TEXT,
                 response_json TEXT
@@ -131,6 +133,10 @@ class ExecutionJournal:
         if "tournament_id" not in existing:
             self._connection.execute(
                 "ALTER TABLE execution_envelopes ADD COLUMN tournament_id TEXT"
+            )
+        if "created_at_utc" not in existing:
+            self._connection.execute(
+                "ALTER TABLE execution_envelopes ADD COLUMN created_at_utc TEXT"
             )
 
     def _ensure_execution_event_columns(self) -> None:
@@ -242,8 +248,8 @@ class ExecutionJournal:
                         logical_operation_id, tournament_id, idempotency_key,
                         operation_kind, sink_mode, payload_json, payload_sha256,
                         intent_ids_json, lifecycle_state, created_monotonic_ns,
-                        updated_monotonic_ns, relationship_constraint
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        created_at_utc, updated_monotonic_ns, relationship_constraint
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         envelope.logical_operation_id,
@@ -256,6 +262,7 @@ class ExecutionJournal:
                         json.dumps(envelope.intent_ids, separators=(",", ":")),
                         envelope.lifecycle_state.value,
                         envelope.created_monotonic_ns,
+                        datetime.now(UTC).isoformat(),
                         envelope.created_monotonic_ns,
                         envelope.relationship_constraint,
                     ),
@@ -346,6 +353,24 @@ class ExecutionJournal:
                 event_type="RESUBMISSION",
                 observed_monotonic_ns=submitted_monotonic_ns,
             )
+
+    def operation_created_at(self, logical_operation_id: str) -> datetime | None:
+        row = self._connection.execute(
+            """
+            SELECT created_at_utc
+            FROM execution_envelopes
+            WHERE logical_operation_id = ?
+            """,
+            (logical_operation_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"unknown logical operation: {logical_operation_id}")
+        if row[0] is None:
+            return None
+        value = datetime.fromisoformat(str(row[0]))
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise RuntimeError("execution journal created_at_utc must be timezone-aware")
+        return value.astimezone(UTC)
 
     def record_event(
         self,
