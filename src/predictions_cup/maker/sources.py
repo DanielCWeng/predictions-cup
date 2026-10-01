@@ -237,6 +237,7 @@ class MakerSourceBridge:
                 ),
                 trusted=polymarket_feed_trusted,
                 source_version=self._pm_source_version,
+                observed_at=book.observed_at,
             )
 
         runtime = RuntimeSnapshot(
