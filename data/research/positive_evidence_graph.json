@@ -123,7 +123,7 @@
     {
       "id": "fill_probability_missing",
       "type": "MISSING_LAYER",
-      "label": "FILL PROBABILITY — not yet confirmed"
+      "label": "OWN-QUOTE FILL PROBABILITY / QUEUE SELECTION — not yet confirmed"
     },
     {
       "id": "fill_toxicity_missing",
@@ -164,6 +164,21 @@
       "id": "r3_fv_failure",
       "type": "FAILURE",
       "label": "R3 point-FV no independent signal"
+    },
+    {
+      "id": "fill_arrival_state",
+      "type": "SIGNAL",
+      "label": "005H C04 arrival-state"
+    },
+    {
+      "id": "aggressor_direction_state",
+      "type": "SIGNAL",
+      "label": "005H C05 conditional aggressor direction"
+    },
+    {
+      "id": "participant_interaction_state",
+      "type": "LATENT_FAMILY",
+      "label": "PARTICIPANT INTERACTION / FILL ARRIVAL"
     }
   ],
   "edges": [
@@ -394,12 +409,37 @@
       "target": "economics_missing",
       "type": "COMPLEMENTS",
       "evidence": "Relative-value/reconstruction evidence lacks executable economics."
+    },
+    {
+      "source": "fill_arrival_state",
+      "target": "participant_interaction_state",
+      "type": "MEASURES",
+      "evidence": "005H C04 untouched B0: AUC 0.6882; PR #94 unmerged"
+    },
+    {
+      "source": "aggressor_direction_state",
+      "target": "participant_interaction_state",
+      "type": "MEASURES",
+      "evidence": "005H C05 untouched B0: AUC 0.6745; PR #94 unmerged"
+    },
+    {
+      "source": "participant_interaction_state",
+      "target": "fill_probability_missing",
+      "type": "COMPLEMENTS",
+      "evidence": "C04 predicts market fill moments, not queue-position-aware probability that our own quote fills."
+    },
+    {
+      "source": "aggressor_direction_state",
+      "target": "fill_toxicity_missing",
+      "type": "COMPLEMENTS",
+      "evidence": "Aggressor direction is not equivalent to adverse post-fill markout/toxicity."
     }
   ],
   "notes": [
     "REPLICATES is used only for an actual cross-dataset replication; the self-edge on genuine_age denotes the same frozen mechanism transferred from 005F to fresh DATA-003 in 005G.",
     "005G edges are canonical repository evidence because PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; scientific labels/effect sizes are unchanged.",
-    "No node is assigned an E4 or E5 positive edge."
+    "No node is assigned an E4 or E5 positive edge.",
+    "005H PR #94 remains unmerged. C04/C05 are historical B0 survivors requiring prospective confirmation; no E4/E5 economic edge is assigned."
   ],
   "canonicality_refresh_main_sha": "662969df4e481f1cbd9417c923ae35d3a0aa9f9f"
 }

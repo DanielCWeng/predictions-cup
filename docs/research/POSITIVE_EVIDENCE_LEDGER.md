@@ -429,11 +429,14 @@ The state signal survived. The economic interpretation failed.
 
 ## Pending / not countable yet
 
-### EXPERIMENT-005H — NON_CANONICAL / UNMERGED
+### EXPERIMENT-005H — NON_CANONICAL / UNMERGED; HISTORICAL B0 SURVIVORS
 
-C04 ARRIVAL-STATE and C05 DIRECTION-STATE reached a pre-holdout freeze. The one-shot B0 job completed **504/504** state-replay files, but the process errored before canonical holdout score tables were written. The evidence registry explicitly says `result_available=false`.
+C04 ARRIVAL-STATE and C05 DIRECTION-STATE were frozen before the one-shot B0 was opened and have now completed that untouched holdout without refitting.
 
-Therefore 005H contributes **no sealed positive result** to this ledger.
+- **C04 Arrival-State:** B0 AUC **0.6882**; token-cluster bootstrap 95% **0.6777–0.7000**; chronological halves **0.6913 / 0.6852**; 14,396 fills matched to 14,396 controls across 1,101 token clusters.
+- **C05 Direction-State:** B0 AUC **0.6745**; bootstrap **0.6398–0.7192**; halves **0.6973 / 0.6547**; 12,661 scored fills across 1,074 token clusters.
+
+Both are **E2 historical same-source B0 positives requiring prospective future confirmation**. C04 predicts market fill/interaction state rather than queue-position-aware probability that our own quote fills. C05 predicts aggressor BUY/SELL conditional on a fill rather than post-fill toxicity or profitable direction. Neither authorises MAKE or live execution.
 
 ### MM-REPLAY-001 — NON_CANONICAL / UNMERGED
 
