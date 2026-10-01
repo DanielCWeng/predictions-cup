@@ -88,6 +88,7 @@ class SupervisorSources:
         capture_max_age_seconds: float = 30.0,
         shadow_max_age_seconds: float = 15.0,
         learn_max_age_seconds: float = 600.0,
+        sig_progress_max_age_seconds: float = 60.0,
     ) -> None:
         self.settings = settings
         self.repo_root = repo_root
@@ -97,6 +98,9 @@ class SupervisorSources:
         self.capture_max_age_seconds = capture_max_age_seconds
         self.shadow_max_age_seconds = shadow_max_age_seconds
         self.learn_max_age_seconds = learn_max_age_seconds
+        self.sig_progress_max_age_seconds = sig_progress_max_age_seconds
+        self._sig_bulk_refresh_count: int | None = None
+        self._sig_bulk_refresh_progress_at = time.monotonic()
         self.host_id = socket.gethostname()
         self.git_head = self._git_head()
         self._system_cache_at = 0.0
@@ -283,6 +287,21 @@ class SupervisorSources:
             section["last_realtime_receive_age_seconds"] = _age(
                 status.read_at, last_realtime
             )
+            bulk_count = section.get("bulk_price_refresh_count")
+            if not isinstance(bulk_count, bool) and isinstance(bulk_count, int):
+                now_mono = time.monotonic()
+                if (
+                    self._sig_bulk_refresh_count is None
+                    or bulk_count != self._sig_bulk_refresh_count
+                ):
+                    self._sig_bulk_refresh_count = bulk_count
+                    self._sig_bulk_refresh_progress_at = now_mono
+                section["bulk_price_refresh_progress_age_seconds"] = (
+                    now_mono - self._sig_bulk_refresh_progress_at
+                )
+                section["bulk_price_refresh_progress_max_age_seconds"] = (
+                    self.sig_progress_max_age_seconds
+                )
             return status, section
         fallback_reason = str(section.get("reason", ""))
         fallback_error = str(section.get("error", ""))
