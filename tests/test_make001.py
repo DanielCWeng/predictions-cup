@@ -2349,7 +2349,7 @@ def test_fair_value_band_quotes_only_mid_range_markets() -> None:
 
 def test_zero_extra_width_mirrors_polymarket_touch_exactly() -> None:
     engine = _engine()
-    engine._spread = ConservativeSpreadPolicy(  # type: ignore[attr-defined]
+    engine._spread = ConservativeSpreadPolicy(
         base_half_spread_ticks=0.0,
         uncertainty_multiplier=1.0,
         volatility_multiplier=0.0,
