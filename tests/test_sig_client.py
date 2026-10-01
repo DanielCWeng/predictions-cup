@@ -712,7 +712,8 @@ def test_market_pagination_preserves_opaque_cursor_across_iteration() -> None:
     [
         httpx.Response(200, content=b"not-json"),
         httpx.Response(200, json={"id": "profile-only"}),
-        httpx.Response(200, json={**_account_payload(), "unexpectedField": True}),
+        # Unknown extras are ignored (SIG adds fields); wrong types still fail.
+        httpx.Response(200, json={**_account_payload(), "balance": "not-a-number"}),
     ],
 )
 def test_malformed_success_responses_fail_visibly(response: httpx.Response) -> None:
