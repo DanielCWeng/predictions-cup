@@ -1,0 +1,2179 @@
+{
+ "records": [
+  {
+   "candidate_polymarket_market_ids": [
+    "942084",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "943749",
+    "942304"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x0eda21c8b5651dba9fd69aad361e9d01481965e94241ac438486a16dab181344",
+    "event_id": "106050",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "67501795419284092111663134279812910460154992630407078593989658098590262577673",
+    "market_id": "942084",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the AZ-01 House seat?",
+    "slug": "will-the-democratic-party-win-the-az-01-house-seat",
+    "token_ids": [
+     "67501795419284092111663134279812910460154992630407078593989658098590262577673",
+     "100828434651155155710172841941100159662807201107427176770262475413650206834153"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "886",
+   "sig_market_id": "197",
+   "sig_market_title": "Will the Democratic Party win the AZ-01 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "942082",
+    "3660302",
+    "3660300",
+    "3660307",
+    "942084",
+    "3660312",
+    "3660314",
+    "943748"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x680a8d22cfe66bedefbc517a3640921b3164afe28f66af6afea4ce6feb73c0be",
+    "event_id": "106050",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "32591940863680290675071972744258239275874735179355360323845750782366119048535",
+    "market_id": "942082",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the AZ-01 House seat?",
+    "slug": "will-the-republican-party-win-the-az-01-house-seat",
+    "token_ids": [
+     "32591940863680290675071972744258239275874735179355360323845750782366119048535",
+     "3293156985749755727346175922245570855667073190426670969617507718070791646856"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "887",
+   "sig_market_id": "198",
+   "sig_market_title": "Will the Republican Party win the AZ-01 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "942304",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "3660316",
+    "944342"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x418fcd9c72501eea029eee747b522e4da91478dbf52829893aa7a55b36d84984",
+    "event_id": "106058",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "24395104702642353411948925889097630568855366590528757185881735998149149192479",
+    "market_id": "942304",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the CO-03 House seat?",
+    "slug": "will-the-democratic-party-win-the-co-03-house-seat",
+    "token_ids": [
+     "24395104702642353411948925889097630568855366590528757185881735998149149192479",
+     "20904118177412102896316191568338021059060941327365407257046608077345075967207"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "894",
+   "sig_market_id": "205",
+   "sig_market_title": "Will the Democratic Party win the CO-03 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "942301",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "1282880",
+    "3660314",
+    "942304"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xb7b4326e339012a34a5a5f052dd96b0d96ccfd0d80acb9f2f8ec94e21a522112",
+    "event_id": "106058",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "50051241364929222895693566081605692346197807854055532008099278772035698770870",
+    "market_id": "942301",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the CO-03 House seat?",
+    "slug": "will-the-republican-party-win-the-co-03-house-seat",
+    "token_ids": [
+     "50051241364929222895693566081605692346197807854055532008099278772035698770870",
+     "7139801413469770073401277532411270944032393438892966408026282230324220411324"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "895",
+   "sig_market_id": "206",
+   "sig_market_title": "Will the Republican Party win the CO-03 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "942304",
+    "1282881",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "1282880",
+    "3660314"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xd54c3be14cf32a2824bc8f125d200f84857e9ec11d426368dab57e1de90948f5",
+    "event_id": "191390",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "21114904170244249083059864962815455303156569744726868991298626905734505722454",
+    "market_id": "1282881",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the CO-04 House seat?",
+    "slug": "will-the-democratic-party-win-the-co-04-house-seat",
+    "token_ids": [
+     "21114904170244249083059864962815455303156569744726868991298626905734505722454",
+     "15815791635590728391037346651659758002684206094067758659888527434057277967338"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "896",
+   "sig_market_id": "207",
+   "sig_market_title": "Will the Democratic Party win the CO-04 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "1282880",
+    "942301",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "942304"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x13d25ac2d08197538635b4879303c2e01e1e6f2250eaeca4cd2a81fbf864fb9d",
+    "event_id": "191390",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "93912560256245525429984546771927493927155759286650495356669416323669943507847",
+    "market_id": "1282880",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the CO-04 House seat?",
+    "slug": "will-the-republican-party-win-the-co-04-house-seat",
+    "token_ids": [
+     "93912560256245525429984546771927493927155759286650495356669416323669943507847",
+     "70110943547081522356148631554852443099283839081646948533876907387738782299357"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "897",
+   "sig_market_id": "208",
+   "sig_market_title": "Will the Republican Party win the CO-04 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "1283017",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "1283016",
+    "942304"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xd0f009dd6d9c8b46db418c5b44af2566cdb7de8274685ca4f8dea3231b75900f",
+    "event_id": "191407",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "79995747672792115054716674475173589172446551682399210610955904338812431765392",
+    "market_id": "1283017",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the FL-09 House seat?",
+    "slug": "will-the-democratic-party-win-the-fl-09-house-seat",
+    "token_ids": [
+     "79995747672792115054716674475173589172446551682399210610955904338812431765392",
+     "72897556431793066534367144397662178052579777179114696231988414091530658276758"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "900",
+   "sig_market_id": "211",
+   "sig_market_title": "Will the Democratic Party win the FL-09 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "942400",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "1283000",
+    "1283016"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xb470bc5d43c2f41ce9e741f7c9f0041b2dbcc58ddccd65e006b816b545efa9c4",
+    "event_id": "106073",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "93455992331247261582609314876051620484985877396129230715122967612916153735084",
+    "market_id": "942400",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the FL-13 House seat?",
+    "slug": "will-the-republican-party-win-the-fl-13-house-seat",
+    "token_ids": [
+     "93455992331247261582609314876051620484985877396129230715122967612916153735084",
+     "42594420210859501049513307148403474101836341467382247264708847582692748761285"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "901",
+   "sig_market_id": "212",
+   "sig_market_title": "Will the Republican Party win the FL-13 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "1283289",
+    "942445",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "942878",
+    "3660314"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xf4051fc690cc6d64fb5132f0d1a50b864a41820ebf2bc82192858628d4015430",
+    "event_id": "191441",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "24808423328362642269928339618535398875519836942812329525201323299850907438220",
+    "market_id": "1283289",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the IA-02 House seat?",
+    "slug": "will-the-democratic-party-win-the-ia-02-house-seat",
+    "token_ids": [
+     "24808423328362642269928339618535398875519836942812329525201323299850907438220",
+     "74608226602627268611121407899971893976372758902169093133686117573260833124314"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "904",
+   "sig_market_id": "215",
+   "sig_market_title": "Will the Democratic Party win the IA-02 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "942444",
+    "1283288",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "3660316"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xbc6530ac376b0e2f5bc07bc1c34884295d378fd694383a36714b85350520ab12",
+    "event_id": "191441",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "106183024660666533834062502031813793169247762855988914383541855843680035368680",
+    "market_id": "1283288",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the IA-02 House seat?",
+    "slug": "will-the-republican-party-win-the-ia-02-house-seat",
+    "token_ids": [
+     "106183024660666533834062502031813793169247762855988914383541855843680035368680",
+     "50723444598226195342754184700957904925325694503103795593830038565334198169540"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "905",
+   "sig_market_id": "216",
+   "sig_market_title": "Will the Republican Party win the IA-02 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "942445",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "942304",
+    "3660316"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x87e411b5f2ee67fe075aa7f31214a54b5fbba9ceb114d3de78290326ef374d75",
+    "event_id": "106082",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "105724155866026243386456609196248574198788679514540436663740641053049222730942",
+    "market_id": "942445",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the IA-03 House seat?",
+    "slug": "will-the-democratic-party-win-the-ia-03-house-seat",
+    "token_ids": [
+     "105724155866026243386456609196248574198788679514540436663740641053049222730942",
+     "99910925406198095411505150408529683823605956793025882664293221366616297632948"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "906",
+   "sig_market_id": "217",
+   "sig_market_title": "Will the Democratic Party win the IA-03 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "942444",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "3660316",
+    "3660319"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xa5145e1792295ac4dc5eb50e75665c1bcb300d5627639b8603e3156b7ab2c9e9",
+    "event_id": "106082",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "57265565746838221378365038901649729198937414663367899972498812653529682469258",
+    "market_id": "942444",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the IA-03 House seat?",
+    "slug": "will-the-republican-party-win-the-ia-03-house-seat",
+    "token_ids": [
+     "57265565746838221378365038901649729198937414663367899972498812653529682469258",
+     "31219307402950122745952850812392973255070110377043726968508534613873683660739"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "907",
+   "sig_market_id": "218",
+   "sig_market_title": "Will the Republican Party win the IA-03 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "3006483",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "942878",
+    "3660314",
+    "942304"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x28621f3082ebe46c9a7ffbdb3fc07f3601d3e4e2d6f5975199abb0ef48c4e9d4",
+    "event_id": "726881",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "96914958250546616618098909674490573266030506817741031776466109480920768219053",
+    "market_id": "3006483",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the ME-02 House seat?",
+    "slug": "will-the-democratic-party-win-the-me-01-house-seat-20260720160014016",
+    "token_ids": [
+     "96914958250546616618098909674490573266030506817741031776466109480920768219053",
+     "115344862533823877787593931582052527994258645729917868626175818881592688447868"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "910",
+   "sig_market_id": "221",
+   "sig_market_title": "Will the Democratic Party win the ME-02 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "3006482",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "3660316",
+    "944289"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x6ed9458b312e732d307cbaf992e153acea62ad98ebc9b5190c52416489bed72c",
+    "event_id": "726881",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "58199720710299853890561431207407462985075458766612922964054758657487509750362",
+    "market_id": "3006482",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the ME-02 House seat?",
+    "slug": "will-the-republican-party-win-the-me-01-house-seat-20260720160014015",
+    "token_ids": [
+     "58199720710299853890561431207407462985075458766612922964054758657487509750362",
+     "12567907108472709587108529204902868853816143411690726275739815904850602686650"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "911",
+   "sig_market_id": "222",
+   "sig_market_title": "Will the Republican Party win the ME-02 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "942843",
+    "3660302",
+    "3660300",
+    "3660307",
+    "942084",
+    "3660312",
+    "3660314",
+    "943749"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xe0fbb3e61e61b14f5fef15ffdd0e2a0c6cf4336bb5b15877fe3e3c9fdcc6bc7f",
+    "event_id": "106114",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "94033987553817825990709512567031751048276730850154145976615728913102874968691",
+    "market_id": "942843",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the MT-01 House seat?",
+    "slug": "will-the-democratic-party-win-the-mt-01-house-seat",
+    "token_ids": [
+     "94033987553817825990709512567031751048276730850154145976615728913102874968691",
+     "89249778688472138415584633654306240159785502169216857650010692296295315613845"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "912",
+   "sig_market_id": "223",
+   "sig_market_title": "Will the Democratic Party win the MT-01 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "942841",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "943748",
+    "1283848"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xf207d480dde3add509a4b1a355d4f3b06195f917de37ff94f7814d9277df0cdd",
+    "event_id": "106114",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "70720420928389492978842914190430712299346582376255109200751838945374631181994",
+    "market_id": "942841",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the MT-01 House seat?",
+    "slug": "will-the-republican-party-win-the-mt-01-house-seat",
+    "token_ids": [
+     "70720420928389492978842914190430712299346582376255109200751838945374631181994",
+     "25966703589045426836441036500624688018124806866331192739825948073536875493904"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "913",
+   "sig_market_id": "224",
+   "sig_market_title": "Will the Republican Party win the MT-01 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "943441",
+    "3515297",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "942304"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x9735676a9c6bc3ee63496bfbe27c5f222d02463c41aa7f7a4e3b645f79cfa29c",
+    "event_id": "106170",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "51139697479054469944236132595348770797766976112763062697989474877845630491882",
+    "market_id": "943441",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the NY-17 House seat?",
+    "slug": "will-the-democratic-party-win-the-ny-17-house-seat",
+    "token_ids": [
+     "51139697479054469944236132595348770797766976112763062697989474877845630491882",
+     "69541728889474243559228458257667024729753704232262882473518688610039296438225"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "920",
+   "sig_market_id": "231",
+   "sig_market_title": "Will the Democratic Party win the NY-17 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "943440",
+    "3515297",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "3660316"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x9256274410a5fa5d9332cdc42b6898cdc27186c79792bb3dbf609153a433bd05",
+    "event_id": "106170",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "100483443247041044563874634953278400972311005965822139457018312114391318359850",
+    "market_id": "943440",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the NY-17 House seat?",
+    "slug": "will-the-republican-party-win-the-ny-17-house-seat",
+    "token_ids": [
+     "100483443247041044563874634953278400972311005965822139457018312114391318359850",
+     "14582545730228428482912971347572544281875999426839094041667501419038246618585"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "921",
+   "sig_market_id": "232",
+   "sig_market_title": "Will the Republican Party win the NY-17 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "943749",
+    "3660302",
+    "3660300",
+    "3660307",
+    "942084",
+    "3660312",
+    "3660314",
+    "943955"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x27a4dd39adf63849239f3b260b701e1ce1c3a08b8e3624b1dbc2c1268ea87537",
+    "event_id": "106186",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "90438836256571410927299008367228796312209722771624666597034907143954367060240",
+    "market_id": "943749",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the PA-01 House seat?",
+    "slug": "will-the-democratic-party-win-the-pa-01-house-seat",
+    "token_ids": [
+     "90438836256571410927299008367228796312209722771624666597034907143954367060240",
+     "90218845846153365380863189597931280535650997637137753229555191267606212456241"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "922",
+   "sig_market_id": "233",
+   "sig_market_title": "Will the Democratic Party win the PA-01 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "943748",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "943796",
+    "943942"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x44c315e3dd57007aaed17213010288ad8b5507123b38e0496fd90fcceb3537f8",
+    "event_id": "106186",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "108230243496498344855407302843123554399616537057761543327780472018667198839068",
+    "market_id": "943748",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the PA-01 House seat?",
+    "slug": "will-the-republican-party-win-the-pa-01-house-seat",
+    "token_ids": [
+     "108230243496498344855407302843123554399616537057761543327780472018667198839068",
+     "111369203211028727321456260421528238448769346191696860171769554446474401287060"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "923",
+   "sig_market_id": "234",
+   "sig_market_title": "Will the Republican Party win the PA-01 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "943943",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "943955",
+    "943942"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xddcb215d8c020c9794ed641720bde228d41f7fbbc8591e6c93e6cb7b9ed39efc",
+    "event_id": "106211",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "91391435832155617612019982139435697661029161851437556799916148343508709382987",
+    "market_id": "943943",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the PA-08 House seat?",
+    "slug": "will-the-democratic-party-win-the-pa-08-house-seat",
+    "token_ids": [
+     "91391435832155617612019982139435697661029161851437556799916148343508709382987",
+     "98793860786103429461036512093518407124361882646235919543546522571597697238170"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "926",
+   "sig_market_id": "237",
+   "sig_market_title": "Will the Democratic Party win the PA-08 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "943942",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "943796",
+    "943748"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x24a2f4194f009d82637b36e77e5ff1bcae5099d202b6c4e93fa48ff5e8f8255c",
+    "event_id": "106211",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "57072421827554294140721361338343029545070199210958375988932007732626623305617",
+    "market_id": "943942",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the PA-08 House seat?",
+    "slug": "will-the-republican-party-win-the-pa-08-house-seat",
+    "token_ids": [
+     "57072421827554294140721361338343029545070199210958375988932007732626623305617",
+     "86416905792050153858741450992843115075721076916569244288472661364377268335766"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "927",
+   "sig_market_id": "238",
+   "sig_market_title": "Will the Republican Party win the PA-08 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "1284672",
+    "4199205",
+    "4199206",
+    "3660302",
+    "3660300",
+    "3660307",
+    "942084",
+    "3660312"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xc411ca76644ed61d916cb8557168b949c402b69f821c999889d993c36c4bb882",
+    "event_id": "191617",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "85565449085981219626125045806096417728054675797071084365546294832037886206869",
+    "market_id": "1284672",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the SC-01 House seat?",
+    "slug": "will-the-democratic-party-win-the-sc-01-house-seat",
+    "token_ids": [
+     "85565449085981219626125045806096417728054675797071084365546294832037886206869",
+     "95569086156685738679963383810968750315205020131235891427787092890131241495362"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "930",
+   "sig_market_id": "241",
+   "sig_market_title": "Will the Democratic Party win the SC-01 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "4199206",
+    "1284671",
+    "4199205",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x0552200445ecb1d63dfc354bb383842b7138360378664203a0d0552391895f8c",
+    "event_id": "191617",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "9923678446010680223075564519648906123468834936314053947915034634742964733395",
+    "market_id": "1284671",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the SC-01 House seat?",
+    "slug": "will-the-republican-party-win-the-sc-01-house-seat",
+    "token_ids": [
+     "9923678446010680223075564519648906123468834936314053947915034634742964733395",
+     "5094605415135546698881240342398119272376247896615792697405924633887669079019"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "931",
+   "sig_market_id": "242",
+   "sig_market_title": "Will the Republican Party win the SC-01 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "1284960",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "944222",
+    "942304"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x11ecf669ab21e4849825f7167a4c4e6b49b56b474bd6b052d5a31f82f19c3d29",
+    "event_id": "191653",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "61226688777298855109760287075145560866932162430262148603800321887784593630496",
+    "market_id": "1284960",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the TX-23 House seat?",
+    "slug": "will-the-democratic-party-win-the-tx-23-house-seat",
+    "token_ids": [
+     "61226688777298855109760287075145560866932162430262148603800321887784593630496",
+     "81686321862694335565315446313311808418324458347147763318024314891537385440805"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "934",
+   "sig_market_id": "245",
+   "sig_market_title": "Will the Democratic Party win the TX-23 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "1284959",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "944221",
+    "3660316"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xa9cd0c9ef05fd4d9654ee8d960a84c4d6b68761137484289c89400742b1c98d5",
+    "event_id": "191653",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "55410211684588113064622608223269234944992958173935625527924582089831994856267",
+    "market_id": "1284959",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the TX-23 House seat?",
+    "slug": "will-the-republican-party-win-the-tx-23-house-seat",
+    "token_ids": [
+     "55410211684588113064622608223269234944992958173935625527924582089831994856267",
+     "110210117869221972962310848272994384668558691417609052791067099235013051529979"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "935",
+   "sig_market_id": "246",
+   "sig_market_title": "Will the Republican Party win the TX-23 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "944281",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "943748",
+    "944297"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xb47f229515c8720ca5ab0bb536f6e6b3fc2041e587179551358503741a1820db",
+    "event_id": "106232",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "19527325130044660074684336011478717458899906478875219180396447156299505391740",
+    "market_id": "944281",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the VA-01 House seat?",
+    "slug": "will-the-republican-party-win-the-va-01-house-seat",
+    "token_ids": [
+     "19527325130044660074684336011478717458899906478875219180396447156299505391740",
+     "109221185828609696152295126285793980024516683390733668492309397849318398468765"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "938",
+   "sig_market_id": "249",
+   "sig_market_title": "Will the Republican Party win the VA-01 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "4443225",
+    "4443119",
+    "3343788",
+    "3343786",
+    "3343787",
+    "3343789",
+    "634891",
+    "634976"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x66bbf6d55e0296278858b3147689f3df9259374f158f9f028b608baa322a639c",
+    "event_id": null,
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "7589880081658059374445882095611024032084645048848237404312287942463647821549",
+    "market_id": "630772",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democrats win the Maine Senate race in 2026?",
+    "slug": "will-the-democrats-win-the-maine-senate-race-in-2026",
+    "token_ids": [
+     "7589880081658059374445882095611024032084645048848237404312287942463647821549",
+     "6136336712352911156426560180855478229745540927722899997193789497766196705020"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same final 2026 election-winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed direct final-election winner identity against current Polymarket event metadata and public resolution rules.",
+   "sig_exchange_id": "959",
+   "sig_market_id": "270",
+   "sig_market_title": "Will the Democratic Party win the Maine Senate?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "4443226",
+    "4443120",
+    "3343785",
+    "3343783",
+    "3343784",
+    "3343782",
+    "4199206",
+    "634891"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x2c00cb09722a0f0501c5e49131b898ed57bb5c075db4dc2bcbc14908f45b8c48",
+    "event_id": null,
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "2142948285506077695096498341598672159464223074468931276310105532825810210121",
+    "market_id": "630773",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republicans win the Maine Senate race in 2026?",
+    "slug": "will-the-republicans-win-the-maine-senate-race-in-2026",
+    "token_ids": [
+     "2142948285506077695096498341598672159464223074468931276310105532825810210121",
+     "43295283577056639281694071578249936735369407445693289764095672178175084599787"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same final 2026 election-winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed direct final-election winner identity against current Polymarket event metadata and public resolution rules.",
+   "sig_exchange_id": "960",
+   "sig_market_id": "271",
+   "sig_market_title": "Will the Republican Party win the Maine Senate?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "634893",
+    "634891",
+    "634892",
+    "3364205",
+    "3364206",
+    "634976",
+    "634978",
+    "634975"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x5554740293afa7aafd5fed10fd2de43a898e2884c1f98bd65185e703f371b9db",
+    "event_id": "59204",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "47975366268282823322598946778919483335780002591367838795894307024076579116518",
+    "market_id": "634893",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will an independent win the Nebraska Senate race in 2026?",
+    "slug": "will-an-independent-win-the-nebraska-senate-race-in-2026",
+    "token_ids": [
+     "47975366268282823322598946778919483335780002591367838795894307024076579116518",
+     "89524111316754281233016446935787527194216234343076592935555965327756401377156"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "969",
+   "sig_market_id": "280",
+   "sig_market_title": "Will the Independent Party win the Nebraska Senate?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "634891",
+    "634893",
+    "634892",
+    "3364203",
+    "3364202",
+    "3364204",
+    "3364201",
+    "4443120"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x71e9f5312aac62bdc9b87fa8d171fa929eca6243d815298c4c7d61303f7d53dd",
+    "event_id": "59204",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "92576281548134350814800877416860562553699794074017301653635964206220838638047",
+    "market_id": "634892",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republicans win the Nebraska Senate race in 2026?",
+    "slug": "will-the-republicans-win-the-nebraska-senate-race-in-2026",
+    "token_ids": [
+     "92576281548134350814800877416860562553699794074017301653635964206220838638047",
+     "20545755397554366279105844241414821565747450256261992143596340747510834590543"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "970",
+   "sig_market_id": "281",
+   "sig_market_title": "Will the Republican Party win the Nebraska Senate?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "1280801",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "942878",
+    "3660314",
+    "942304"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x9ae9e84c0d3b66ee416c0caa915777397b9c656939a0621ecd8c2572073c8893",
+    "event_id": "190872",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "13189761649035136014216228195645475511361901020555722779072382901094466765019",
+    "market_id": "1280801",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the AL-02 House seat?",
+    "slug": "will-the-democratic-party-win-the-al-02-house-seat",
+    "token_ids": [
+     "13189761649035136014216228195645475511361901020555722779072382901094466765019",
+     "42735362457588261224761749559415584649649275846395314220964286734407090856284"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1007",
+   "sig_market_id": "318",
+   "sig_market_title": "Will the Democratic Party win the AL-02 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "1280800",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "3660316",
+    "944289"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x789e15c2a1581b37deaabb5fa555d0d8dbfba11b46424c65cd42e73cfe722eaa",
+    "event_id": "190872",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "110498646838643141699770234895735915394620065036723874056548571888067488950164",
+    "market_id": "1280800",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the AL-02 House seat?",
+    "slug": "will-the-republican-party-win-the-al-02-house-seat",
+    "token_ids": [
+     "110498646838643141699770234895735915394620065036723874056548571888067488950164",
+     "105896210412150332172576802914745590235885229895617849790568484198648827088432"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1008",
+   "sig_market_id": "319",
+   "sig_market_title": "Will the Republican Party win the AL-02 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "1283001",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "942722",
+    "1283000"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xc55de48b150591d3047f4f097ee8c3196d8f5c5099559d8c34d35dc36694bbb9",
+    "event_id": "191405",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "48595994389294380413605252588038399089739882614541392889205137632817333951567",
+    "market_id": "1283001",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the FL-07 House seat?",
+    "slug": "will-the-democratic-party-win-the-fl-07-house-seat",
+    "token_ids": [
+     "48595994389294380413605252588038399089739882614541392889205137632817333951567",
+     "16661917299889844562247566603559122251937209362630950418259738730496536105112"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1009",
+   "sig_market_id": "320",
+   "sig_market_title": "Will the Democratic Party win the FL-07 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "1283000",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "943796",
+    "1283016"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x1ca38119fa2b6100d7ed51b5cd6b6ee77148ea41504bb975bfe6e531f07f51dd",
+    "event_id": "191405",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "28134558928888227948813381987057565018866784201189850460618625875753502909061",
+    "market_id": "1283000",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the FL-07 House seat?",
+    "slug": "will-the-republican-party-win-the-fl-07-house-seat",
+    "token_ids": [
+     "28134558928888227948813381987057565018866784201189850460618625875753502909061",
+     "68389262464592733615855588858092426808489089321584563639781215061267356996104"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1010",
+   "sig_market_id": "321",
+   "sig_market_title": "Will the Republican Party win the FL-07 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "1283016",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "1283000",
+    "3660316"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x2c93da161ae234a971d93533333455c8fa79804ba7592503a22cde151b1b8e6f",
+    "event_id": "191407",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "14535768089815400273847771354088826502078939671987391994275253603566532191654",
+    "market_id": "1283016",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the FL-09 House seat?",
+    "slug": "will-the-republican-party-win-the-fl-09-house-seat",
+    "token_ids": [
+     "14535768089815400273847771354088826502078939671987391994275253603566532191654",
+     "44982192366147456074879158730587980888410068402154239295576380507554522137788"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1011",
+   "sig_market_id": "322",
+   "sig_market_title": "Will the Republican Party win the FL-09 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "942401",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "942304",
+    "3660316"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x89e54c86f437d7696d9789c5ff901dd5f3b35a5594f5aadf27af50bc6d2ca50e",
+    "event_id": "106073",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "10797071126504743123515085716419360987107478266428470507477377131012323100968",
+    "market_id": "942401",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the FL-13 House seat?",
+    "slug": "will-the-democratic-party-win-the-fl-13-house-seat",
+    "token_ids": [
+     "10797071126504743123515085716419360987107478266428470507477377131012323100968",
+     "1106923368851551027030312032236306759850849240017243702457900548841578674982"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1012",
+   "sig_market_id": "323",
+   "sig_market_title": "Will the Democratic Party win the FL-13 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "1283113",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "942304",
+    "3660316"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xe0c5c12f7d502ea64c77657b887d601c8d23b2006a5e7dc0d0f856782c187452",
+    "event_id": "191419",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "9888897571794010752121877049436014412394792546592129944638664529404498838517",
+    "market_id": "1283113",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the FL-22 House seat?",
+    "slug": "will-the-democratic-party-win-the-fl-22-house-seat",
+    "token_ids": [
+     "9888897571794010752121877049436014412394792546592129944638664529404498838517",
+     "35770751885924798388281446298756041002177848619471659098755120133048843736673"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1017",
+   "sig_market_id": "328",
+   "sig_market_title": "Will the Democratic Party win the FL-22 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "1283112",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "1283000",
+    "1283016"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x713a1aeadf85325d232ac794cf10115c6500b1e411df8b1c27c3c4262e4db0ef",
+    "event_id": "191419",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "12503562961051694670561093522011301968376611490945772097489304120208051360657",
+    "market_id": "1283112",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the FL-22 House seat?",
+    "slug": "will-the-republican-party-win-the-fl-22-house-seat",
+    "token_ids": [
+     "12503562961051694670561093522011301968376611490945772097489304120208051360657",
+     "114589907655331753023967672301985882107756018586381657604703637143282786220279"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1018",
+   "sig_market_id": "329",
+   "sig_market_title": "Will the Republican Party win the FL-22 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "942722",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "942304",
+    "3660316"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x192ddbbaa122191c951a73b780c808ef51190cc74d6400fae21e74685c60bdae",
+    "event_id": "106102",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "28428563408232158641020832230598845099279456308678642815367173717175353290703",
+    "market_id": "942722",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the MI-07 House seat?",
+    "slug": "will-the-democratic-party-win-the-mi-07-house-seat",
+    "token_ids": [
+     "28428563408232158641020832230598845099279456308678642815367173717175353290703",
+     "70766043286887214711082829510749001221536384974744297470820933886454245846858"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1019",
+   "sig_market_id": "330",
+   "sig_market_title": "Will the Democratic Party win the MI-07 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "942721",
+    "3660302",
+    "3660300",
+    "3660307",
+    "942774",
+    "3660312",
+    "3660314",
+    "942722"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x95b22110436ed02e65614a42e049e47e9cfeb55eb103cb0d997a3e802d8d52ce",
+    "event_id": "106102",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "90239537120799856559379339880905629013239262905922873444067766874892362837014",
+    "market_id": "942721",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the MI-07 House seat?",
+    "slug": "will-the-republican-party-win-the-mi-07-house-seat",
+    "token_ids": [
+     "90239537120799856559379339880905629013239262905922873444067766874892362837014",
+     "34054660368274062585986545135737111889365870709341665496215927536250129387407"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1020",
+   "sig_market_id": "331",
+   "sig_market_title": "Will the Republican Party win the MI-07 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "942776",
+    "3660302",
+    "3660300",
+    "3660307",
+    "942774",
+    "3660312",
+    "3660314",
+    "942722"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x9d54f82ccce95184f18f3a46dcbab3ce637fbb92a604a15ff74cefdf0b1eb38e",
+    "event_id": "106106",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "75685534826787951976275953631896177236439299709473517876953614908104349066066",
+    "market_id": "942776",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the MI-10 House seat?",
+    "slug": "will-the-democratic-party-win-the-mi-10-house-seat",
+    "token_ids": [
+     "75685534826787951976275953631896177236439299709473517876953614908104349066066",
+     "33304449079649201557387369847379560518290837271024516667508560413437432436345"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1021",
+   "sig_market_id": "332",
+   "sig_market_title": "Will the Democratic Party win the MI-10 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "942774",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "3660316",
+    "942721"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x088f7c361f9ad03a659def729f6e4f4b4ac888552c4e1b795deb5ce6a0700033",
+    "event_id": "106106",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "43752127134995564310826939255040140810170663034403700378883950354967468648845",
+    "market_id": "942774",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the MI-10 House seat?",
+    "slug": "will-the-republican-party-win-the-mi-10-house-seat",
+    "token_ids": [
+     "43752127134995564310826939255040140810170663034403700378883950354967468648845",
+     "58634004140550291850994935171725344346793564693622773016836026806180360106461"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1022",
+   "sig_market_id": "333",
+   "sig_market_title": "Will the Republican Party win the MI-10 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "1283849",
+    "3660302",
+    "3660300",
+    "3660307",
+    "942084",
+    "3660312",
+    "3660314",
+    "1283873"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xcdadbda6f89673336dc76bd48a5765d942494452073e366d9cefd37e6b37dd7e",
+    "event_id": "191511",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "53556044615407667948482140924138670085564709060050296606327145637179427254399",
+    "market_id": "1283849",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the MN-01 House seat?",
+    "slug": "will-the-democratic-party-win-the-mn-01-house-seat",
+    "token_ids": [
+     "53556044615407667948482140924138670085564709060050296606327145637179427254399",
+     "6929112768711637773301360425699390249119690152097910512296290624303791542087"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1023",
+   "sig_market_id": "334",
+   "sig_market_title": "Will the Democratic Party win the MN-01 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "1283848",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "1283872",
+    "943748"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x4f63b7dddfb9bec2d5185e732dd3eb8463d825bdf5efadf87eec600e96e08ab5",
+    "event_id": "191511",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "58414915443056575600546845688231939406497093430617962204950899073959516863962",
+    "market_id": "1283848",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the MN-01 House seat?",
+    "slug": "will-the-republican-party-win-the-mn-01-house-seat",
+    "token_ids": [
+     "58414915443056575600546845688231939406497093430617962204950899073959516863962",
+     "14642682607039369244277817434878478902698251399122597545654338578883729895178"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1024",
+   "sig_market_id": "335",
+   "sig_market_title": "Will the Republican Party win the MN-01 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "944282",
+    "3660302",
+    "3660300",
+    "3660307",
+    "942084",
+    "3660312",
+    "3660314",
+    "943749"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xf6ff4c55696ff8529e6e1021f4e4a17adaa305c4991d9001bcbf7a5fbdd326d3",
+    "event_id": "106232",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "88628412725357801969852238315853152041907755032296775468463465337049299853893",
+    "market_id": "944282",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the VA-01 House seat?",
+    "slug": "will-the-democratic-party-win-the-va-01-house-seat",
+    "token_ids": [
+     "88628412725357801969852238315853152041907755032296775468463465337049299853893",
+     "109032271391509221339029333717041891043884227340434642559043149086824287566768"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1031",
+   "sig_market_id": "342",
+   "sig_market_title": "Will the Democratic Party win the VA-01 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "1285080",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "1283873",
+    "942304"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xcef8e45eaf09b568ff3e7672dc656707792900b4ba2f0ffaf6b0388819b0dab8",
+    "event_id": "191668",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "30424541292784877350495001354252975055952568624850695789713995653053526735723",
+    "market_id": "1285080",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the VA-05 House seat?",
+    "slug": "will-the-democratic-party-win-the-va-05-house-seat",
+    "token_ids": [
+     "30424541292784877350495001354252975055952568624850695789713995653053526735723",
+     "104819787650357695281169823647378465024078714619256040408074745774984489506029"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1033",
+   "sig_market_id": "344",
+   "sig_market_title": "Will the Democratic Party win the VA-05 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "1285079",
+    "3660302",
+    "3660300",
+    "3660307",
+    "1284767",
+    "3660312",
+    "3660314",
+    "1283872"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x7dae18f53f698e29f24a8739aba96b9560034f6fabe31951fc1b4e6c9e624d59",
+    "event_id": "191668",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "83253007588985953900662535978265304048199216427463571583210985764316132662845",
+    "market_id": "1285079",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the VA-05 House seat?",
+    "slug": "will-the-republican-party-win-the-va-05-house-seat",
+    "token_ids": [
+     "83253007588985953900662535978265304048199216427463571583210985764316132662845",
+     "83208452942880339607911122438031742195323816449987096721739014238143102316792"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1034",
+   "sig_market_id": "345",
+   "sig_market_title": "Will the Republican Party win the VA-05 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "944334",
+    "944342",
+    "3660302",
+    "3660300",
+    "3660307",
+    "942084",
+    "3660312",
+    "3660314"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x55c186d303a88f67eb790a5486e0d5430352ed3c018e9602af313b873ae7c6ae",
+    "event_id": "106242",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "27864379735636967187061174592974985530606192477476602134082994654383977817622",
+    "market_id": "944334",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the WI-01 House seat?",
+    "slug": "will-the-democratic-party-win-the-wi-01-house-seat",
+    "token_ids": [
+     "27864379735636967187061174592974985530606192477476602134082994654383977817622",
+     "99427340178627001596249525275526063930070347555316661969816068920551832004909"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1038",
+   "sig_market_id": "349",
+   "sig_market_title": "Will the Democratic Party win the WI-01 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "944333",
+    "944341",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "943748"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x5907a57bb422718865f59393fa0779374d6a62965cce0d50637411762867a8f4",
+    "event_id": "106242",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "89691692433810708662044713280560196245651593280559985593960312638148344324296",
+    "market_id": "944333",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the WI-01 House seat?",
+    "slug": "will-the-republican-party-win-the-wi-01-house-seat",
+    "token_ids": [
+     "89691692433810708662044713280560196245651593280559985593960312638148344324296",
+     "48234106767694705830521871619587028700143463152512886313457017781051803465561"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1039",
+   "sig_market_id": "350",
+   "sig_market_title": "Will the Republican Party win the WI-01 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "944342",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "942304",
+    "3660316"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0x5b1d46c7f29397ca3a713ccdae49131bafdd0ff7f217895c3e7042a72d27ce1a",
+    "event_id": "106243",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "98533340650340151055858210214498969967462170000657407829633743183238896087456",
+    "market_id": "944342",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party win the WI-03 House seat?",
+    "slug": "will-the-democratic-party-win-the-wi-03-house-seat",
+    "token_ids": [
+     "98533340650340151055858210214498969967462170000657407829633743183238896087456",
+     "86746373001655437646455833103379273668271009789768201797953922809057924766586"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1040",
+   "sig_market_id": "351",
+   "sig_market_title": "Will the Democratic Party win the WI-03 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "944341",
+    "3660302",
+    "3660300",
+    "3660307",
+    "3660312",
+    "3660314",
+    "3660316",
+    "944333"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xff0755a0219789891e2385f9218d0a41279f5fee853a5a87deb608a93370cc29",
+    "event_id": "106243",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "83772236231104306836754599890295414817047560410380925946355605231115771621017",
+    "market_id": "944341",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Republican Party win the WI-03 House seat?",
+    "slug": "will-the-republican-party-win-the-wi-03-house-seat",
+    "token_ids": [
+     "83772236231104306836754599890295414817047560410380925946355605231115771621017",
+     "23845554936319009715186484560018543108651594834702697530673475407137141197932"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1041",
+   "sig_market_id": "352",
+   "sig_market_title": "Will the Republican Party win the WI-03 House race?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  },
+  {
+   "candidate_polymarket_market_ids": [
+    "4443119",
+    "3343547",
+    "634891",
+    "634976",
+    "634893",
+    "634978",
+    "634975",
+    "634977"
+   ],
+   "direct_polymarket": {
+    "condition_id": "0xf27428d419f187b1d261b60155f957c3c948ab0f653bf5967d428cc67c043205",
+    "event_id": "797235",
+    "mapped_outcome": "Yes",
+    "mapped_token_id": "112865931018535043924604877802427749327024008755764693656162236690266569063025",
+    "market_id": "3343547",
+    "outcomes": [
+     "Yes",
+     "No"
+    ],
+    "question": "Will the Democratic Party candidate win the 2026 Kansas Senate election?",
+    "slug": "will-the-democratic-party-candidate-win-the-2026-kansas-senate-election",
+    "token_ids": [
+     "112865931018535043924604877802427749327024008755764693656162236690266569063025",
+     "79749174176509234772895575538666927830704611020442497424973516522517246210950"
+    ]
+   },
+   "mapping_class": "EXACT",
+   "mapping_confidence": "1",
+   "mapping_direction": "SAME",
+   "polymarket_components": [],
+   "resolution_notes": "Same 2026 general-election winner outcome; mapped to Polymarket Yes.",
+   "semantic_notes": "Reviewed one-to-one party/race equivalence against live SIG and Polymarket metadata.",
+   "sig_exchange_id": "1045",
+   "sig_market_id": "356",
+   "sig_market_title": "Will the Democratic Party win the Kansas Senate?",
+   "sig_outcome_label": "YES",
+   "sig_tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+   "status": "VERIFIED"
+  }
+ ],
+ "schema_version": 1,
+ "tournament_id": "bda92870-621e-47b0-bc3c-3602c5c26f55"
+}
