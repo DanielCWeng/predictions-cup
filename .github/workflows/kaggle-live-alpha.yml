@@ -1,0 +1,86 @@
+name: Kaggle Live Alpha Sweep
+
+on:
+  push:
+    branches:
+      - analysis/live-alpha-kaggle-001
+    paths:
+      - "data/kaggle_handoff/live_alpha_001/**"
+      - "scripts/kaggle/live_alpha_001/**"
+      - "scripts/research/live_alpha/**"
+      - ".github/workflows/kaggle-live-alpha.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install analysis preflight dependencies
+        run: python -m pip install --upgrade kaggle pandas pyarrow tabulate
+
+      - name: Preflight exact Kaggle analysis
+        env:
+          LIVE_ALPHA_INPUT: data/kaggle_handoff/live_alpha_001/package
+          LIVE_ALPHA_OUTPUT: /tmp/live-alpha-preflight
+        run: python scripts/kaggle/live_alpha_001/run.py
+
+      - name: Upload immutable live snapshot
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$KAGGLE_API_TOKEN"
+          DATASET="polyleviathan/sig-live-alpha-20261001-v1"
+          DIR="data/kaggle_handoff/live_alpha_001/package"
+          if kaggle datasets files "$DATASET" --page-size 10 >/dev/null 2>&1; then
+            kaggle datasets version -p "$DIR" -m "refresh live alpha snapshot" --dir-mode zip
+          else
+            kaggle datasets create -p "$DIR" --private --dir-mode zip
+          fi
+          for i in $(seq 1 30); do
+            if kaggle datasets files "$DATASET" --page-size 10 >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "dataset did not become readable"
+          exit 1
+
+      - name: Run alpha sweep
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          KERNEL="polyleviathan/sig-live-alpha-sweep-001"
+          kaggle kernels push -p scripts/kaggle/live_alpha_001
+          for i in $(seq 1 240); do
+            STATUS="$(kaggle kernels status "$KERNEL" 2>&1 || true)"
+            echo "$STATUS"
+            LOWER="$(printf '%s' "$STATUS" | tr '[:upper:]' '[:lower:]')"
+            if printf '%s' "$LOWER" | grep -q complete; then
+              mkdir -p kaggle/live-alpha-output
+              kaggle kernels output "$KERNEL" -p kaggle/live-alpha-output --force
+              exit 0
+            fi
+            if printf '%s' "$LOWER" | grep -Eq 'error|failed|cancel'; then
+              exit 1
+            fi
+            sleep 15
+          done
+          echo "kernel timeout"
+          exit 1
+      - name: Upload analysis outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-alpha-kaggle-output
+          path: kaggle/live-alpha-output/
+          if-no-files-found: warn
+          retention-days: 3
