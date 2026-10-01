@@ -11,7 +11,7 @@ from predictions_cup.execution.models import ExecutionEvent, ExecutionMode, Life
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
-from predictions_cup.maker.contracts import MakerDecision, MakerMarketSnapshot, QuoteSide
+from predictions_cup.maker.contracts import GateMode, MakerDecision, MakerMarketSnapshot, QuoteSide
 from predictions_cup.maker.engine import MakerEngine
 from predictions_cup.maker.lifecycle import (
     ActiveQuote,
@@ -186,6 +186,27 @@ class MakerCoordinator:
                 )
             )
             force_cancel = self._kill_switch.active or capital_force_cancel
+            if decision.gate.mode is GateMode.HOLD and not force_cancel:
+                # Reconciliation HOLD freezes the current quote set exactly:
+                # no fresh placement, no reprice, no cancel storm. Invalid
+                # valuation/halts still win through force_cancel above.
+                actions.extend(
+                    (
+                        QuoteLifecycleAction(
+                            QuoteLifecycleActionKind.KEEP,
+                            QuoteSide.BID,
+                            "transient_account_hold",
+                            active=current.bid,
+                        ),
+                        QuoteLifecycleAction(
+                            QuoteLifecycleActionKind.KEEP,
+                            QuoteSide.ASK,
+                            "transient_account_hold",
+                            active=current.ask,
+                        ),
+                    )
+                )
+                continue
             desired = None if force_cancel else decision.desired
             side_actions = self._lifecycle.decide(
                 desired=desired,

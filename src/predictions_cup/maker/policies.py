@@ -292,7 +292,7 @@ class ConservativeEligibilityPolicy:
         if not market.mapping_accepted or not market.tradeable:
             return GateDecision(GateMode.NO_TRADE, "mapping_not_tradeable")
         if not snapshot.runtime.portfolio.account_trusted:
-            return GateDecision(GateMode.CANCEL, "account_untrusted")
+            return GateDecision(GateMode.HOLD, "account_untrusted")
         if not snapshot.sig_bbo_trusted:
             return GateDecision(GateMode.CANCEL, "sig_bbo_untrusted")
         if self._stale(
