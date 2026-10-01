@@ -336,6 +336,40 @@ def _capture_findings(venue: str, raw: object, findings: list[Finding]) -> None:
             )
         )
 
+    if venue == "SIG":
+        connected = capture.get("connected")
+        if connected is False:
+            findings.append(
+                Finding(
+                    "FEED_SIG_DISCONNECTED",
+                    Severity.CRITICAL,
+                    "SIG realtime connection is disconnected",
+                    {},
+                )
+            )
+        progress_age = _number(
+            capture.get("bulk_price_refresh_progress_age_seconds")
+        )
+        progress_limit = _number(
+            capture.get("bulk_price_refresh_progress_max_age_seconds")
+        )
+        if (
+            progress_age is not None
+            and progress_limit is not None
+            and progress_age > progress_limit
+        ):
+            findings.append(
+                Finding(
+                    "FEED_SIG_REST_PROGRESS_STALE",
+                    Severity.CRITICAL,
+                    "SIG successful bulk-price refresh progress is stale",
+                    {
+                        "progress_age_seconds": progress_age,
+                        "progress_limit_seconds": progress_limit,
+                    },
+                )
+            )
+
     if venue == "POLYMARKET":
         connected = capture.get("websocket_connected")
         if connected is False:
