@@ -300,9 +300,21 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     (out / "HOLDOUT_RESULTS.json").write_text(json.dumps(output, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     pq.write_table(pa.Table.from_pandas(rev_agg, preserve_index=False), out / "HOLDOUT_REVERSAL_AGG.parquet")
+    pq.write_table(pa.Table.from_pandas(rev_agg, preserve_index=False), out / "FALSIFICATION_RESULTS.parquet")
     pq.write_table(pa.Table.from_pandas(regimes, preserve_index=False), out / "HOLDOUT_REGIMES_BY_WORKER.parquet")
     pq.write_table(pa.Table.from_pandas(trans_agg, preserve_index=False), out / "HOLDOUT_TRANSITIONS_AGG.parquet")
+    pq.write_table(pa.Table.from_pandas(trans_agg, preserve_index=False), out / "REGIME_TRANSITIONS.parquet")
     pq.write_table(pa.Table.from_pandas(pd.DataFrame(resilience_worker_rows), preserve_index=False), out / "HOLDOUT_RESILIENCE_BY_WORKER.parquet")
+    gate_rows = []
+    for gate_name, gate in gates.items():
+        row = {"gate": gate_name, "supported": bool(gate["supported"])}
+        for key, value in gate.items():
+            if key == "supported":
+                continue
+            if isinstance(value, (str, int, float, bool)) or value is None:
+                row[key] = value
+        gate_rows.append(row)
+    pq.write_table(pa.Table.from_pylist(gate_rows), out / "HOLDOUT_RESULTS.parquet")
 
 
 if __name__ == "__main__":
