@@ -23,6 +23,7 @@ from predictions_cup.mm_replay_001 import (
     ConservativeTradeFillModel,
     Frozen005FTransferAdapter,
     TradeThroughSensitivityFillModel,
+    Side,
     default_policies,
     genuine_005f_change_times,
     group_bbo_for_005f,
@@ -38,6 +39,21 @@ BUCKETS = 32
 WORK = Path("/kaggle/working")
 HERE = Path(__file__).resolve().parent
 MAPPING_PATH = HERE / "repo_context" / "sig_polymarket_2026.json"
+
+COMPACT_SCHEMA = pa.schema(
+    [
+        ("token_id", pa.string()),
+        ("condition_id", pa.string()),
+        ("timestamp_ns", pa.int64()),
+        ("sequence", pa.uint64()),
+        ("event_kind", pa.string()),
+        ("best_bid", pa.float64()),
+        ("best_ask", pa.float64()),
+        ("trade_price", pa.float64()),
+        ("trade_size", pa.float64()),
+        ("trade_side", pa.string()),
+    ]
+)
 
 
 def find_raw_root() -> Path:
@@ -325,7 +341,11 @@ def compact_ev18(root: Path, accepted_tokens: set[str]) -> dict[str, Any]:
             out_dir = compact_root / f"bucket={bucket:02d}"
             out_dir.mkdir(parents=True, exist_ok=True)
             out = out_dir / f"{hour_label}.parquet"
-            pq.write_table(pa.Table.from_pylist(bucket_rows), out, compression="zstd")
+            pq.write_table(
+                pa.Table.from_pylist(bucket_rows, schema=COMPACT_SCHEMA),
+                out,
+                compression="zstd",
+            )
         counts["compact_rows"] += len(compact_rows)
         print(
             json.dumps(
@@ -368,7 +388,7 @@ def load_bucket(bucket_dir: Path) -> pd.DataFrame:
     tables = [pq.read_table(path) for path in sorted(bucket_dir.glob("*.parquet"))]
     if not tables:
         return pd.DataFrame()
-    frame = pa.concat_tables(tables, promote_options="default").to_pandas()
+    frame = pa.concat_tables(tables).to_pandas()
     frame.sort_values(
         ["token_id", "timestamp_ns", "sequence", "event_kind"],
         kind="stable",
@@ -409,7 +429,9 @@ def observations_for_token(frame: pd.DataFrame) -> tuple[list[BookObservation], 
                 best_ask=best_ask,
                 trade_price=float(rec["trade_price"]),
                 trade_size=float(rec["trade_size"]),
-                aggressor_side=str(rec["trade_side"]),
+                aggressor_side=(
+                    Side.BUY if str(rec["trade_side"]) == "BUY" else Side.SELL
+                ),
                 category=WINDOW,
             )
         )
