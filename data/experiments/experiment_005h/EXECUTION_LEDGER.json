@@ -110,7 +110,7 @@
       "b0_opened_at_freeze": false
     },
     "b0": {
-      "status": "ONE_SHOT_BUILD_RUNNING_ON_KAGGLE",
+      "status": "TECHNICAL_ERROR_AFTER_FULL_STATE_REPLAY",
       "candidate_ids": [
         "005H-C04-ARRIVAL-STATE",
         "005H-C05-DIRECTION-STATE"
@@ -118,13 +118,40 @@
       "kernel": "polyleviathan/experiment-005h-one-shot-b0-build",
       "launch_workflow_run_id": 36847624884,
       "launch_wrapper_conclusion": "FAILURE_INFRA_CONNECTION_RESET_AFTER_KERNEL_REPORTED_RUNNING",
-      "launch_wrapper_artifact_id": 11153609526,
       "relaunch_performed": false,
-      "status_check_workflow_run_id": 36847909360,
-      "status_check_conclusion": "SUCCESS",
-      "status_check_artifact_id": 11154551535,
-      "last_confirmed_kernel_state": "RUNNING",
+      "final_kernel_state": "ERROR",
+      "status_artifact_id": 11161628449,
+      "log_artifact_id": 11161024403,
+      "partial_output_artifact_id": 11160734767,
+      "replay_progress": {
+        "files_completed": 504,
+        "files_total": 504,
+        "fill_rows_observed": 14396,
+        "control_rows_observed": 6320158,
+        "target_rows_scanned": 354079747
+      },
+      "join_audit": {
+        "accepted_groups": 14509,
+        "unique_hash_token_links": 14443,
+        "unlinked_groups": 66,
+        "ambiguous_links": 0,
+        "rejected_groups": 2,
+        "rejection_reason": "size_conservation"
+      },
+      "preserved_outputs": [
+        "HOLDOUT_JOIN_AUDIT.json",
+        "kernel log"
+      ],
+      "missing_outputs": [
+        "HOLDOUT_FILL_EVENTS.parquet",
+        "HOLDOUT_FILL_EPISODES.parquet",
+        "HOLDOUT_NONFILL_CONTROLS.parquet",
+        "HOLDOUT_MATCHED_CONTROLS.csv",
+        "HOLDOUT_EPISODE_SENSITIVITY.csv",
+        "HOLDOUT_BUILD_SUMMARY.json"
+      ],
       "model_scoring_performed": false,
+      "scientific_interpretation": "NO_HOLDOUT_RESULT; technical resource failure only",
       "no_retune_rule_active": true
     }
   },
