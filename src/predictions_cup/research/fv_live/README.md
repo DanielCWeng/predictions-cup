@@ -8,6 +8,9 @@ mapping rows, and copied Polymarket observation partitions. The fitting cutoff
 is 2026-10-01 16:00Z. Calibration uses only PM samples whose five-minute
 forward endpoint also exists in the pre-live-only extract. The 16:00Z onward
 window is held out for forecasts and replay metrics.
+For the 005I minute-state input, each mapped token is collapsed to its last
+valid observable BBO in each UTC minute; intraminute panel rows are not treated
+as separate calibration or TEST states.
 
 The mean-reversion input is the frozen 005I five-minute return. Its price
 conversion coefficient was not frozen in the artifacts found, so the return

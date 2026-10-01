@@ -82,7 +82,7 @@ def _book_files(root: Path, prelive: bool) -> list[Path]:
 def load_pm(
     root: Path, accepted_tokens: set[str], *, prelive: bool
 ) -> dict[str, list[dict[str, Any]]]:
-    """Load valid mapped PM top-of-book observations, grouped by token."""
+    """Load last valid book observation per mapped token and UTC minute."""
     out: dict[str, list[dict[str, Any]]] = defaultdict(list)
     token_values = pa.array(tuple(accepted_tokens), type=pa.string())
     for path in _pm_files(root, prelive):
@@ -120,9 +120,20 @@ def load_pm(
                     "spread": ask - bid,
                 }
             )
-    for rows in out.values():
+    minute_states: dict[str, list[dict[str, Any]]] = {}
+    for token, rows in out.items():
         rows.sort(key=lambda item: item["t"])
-    return dict(out)
+        # 005I's reversal input is a sampled minute state. Keep the latest
+        # observable BBO in each UTC minute, rather than treating panel rows
+        # within a minute as separate training or TEST states.
+        last_by_minute: dict[int, dict[str, Any]] = {}
+        for row in rows:
+            minute = int(row["t"] // 60)
+            prior = last_by_minute.get(minute)
+            if prior is None or row["t"] >= prior["t"]:
+                last_by_minute[minute] = row
+        minute_states[token] = [last_by_minute[k] for k in sorted(last_by_minute)]
+    return minute_states
 
 
 def load_topbook_ofi(
