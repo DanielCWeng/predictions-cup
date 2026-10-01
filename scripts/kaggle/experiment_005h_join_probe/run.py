@@ -307,17 +307,36 @@ def match_groups(
         chosen = sided if len(sided) == 1 else plain
         status = "UNMATCHED"
         match = None
-        if len(hash_candidates) == 1:
-            i = hash_candidates[0]
-            tr = trades.loc[i]
-            status = "HASH_UNIQUE"
-            match = (
-                int(tr["ts_ns"]),
-                int(tr["sequence"]),
-                int(i),
-            )
-        elif len(hash_candidates) > 1:
-            status = "HASH_AMBIGUOUS"
+        if hash_candidates:
+            signature_hash_candidates = [
+                i
+                for i in hash_candidates
+                if math.isclose(
+                    float(trades.at[i, "price"]),
+                    float(r["price"]),
+                    rel_tol=1e-8,
+                    abs_tol=1e-8,
+                )
+                and math.isclose(
+                    float(trades.at[i, "size"]),
+                    float(r["size_shares"]),
+                    rel_tol=1e-8,
+                    abs_tol=1e-8,
+                )
+            ]
+            if len(signature_hash_candidates) == 1:
+                i = signature_hash_candidates[0]
+                tr = trades.loc[i]
+                status = "HASH_TOKEN_SIGNATURE_UNIQUE"
+                match = (
+                    int(tr["ts_ns"]),
+                    int(tr["sequence"]),
+                    int(i),
+                )
+            elif len(hash_candidates) == 1:
+                status = "HASH_TOKEN_UNIQUE_SIGNATURE_MISMATCH"
+            else:
+                status = "HASH_TOKEN_AMBIGUOUS"
         elif len(chosen) == 1:
             status = "SIGNATURE_UNIQUE"
             match = chosen[0]
@@ -343,6 +362,11 @@ def match_groups(
             "fill_side": side,
             "tx_hash": tx_hash,
             "hash_candidates_same_token": len(hash_candidates),
+            "hash_signature_candidates": (
+                len(signature_hash_candidates)
+                if hash_candidates
+                else 0
+            ),
             "plain_candidates_120s": len(plain),
             "side_candidates_120s": len(sided),
             "match_status": status,
@@ -382,9 +406,17 @@ def summarize_matches(m: pd.DataFrame) -> dict[str, Any]:
             str(k): int(v)
             for k, v in m["match_status"].value_counts().items()
         },
-        "hash_unique": int((m["match_status"] == "HASH_UNIQUE").sum()),
-        "hash_ambiguous": int(
-            (m["match_status"] == "HASH_AMBIGUOUS").sum()
+        "hash_token_signature_unique": int(
+            (m["match_status"] == "HASH_TOKEN_SIGNATURE_UNIQUE").sum()
+        ),
+        "hash_token_unique_signature_mismatch": int(
+            (
+                m["match_status"]
+                == "HASH_TOKEN_UNIQUE_SIGNATURE_MISMATCH"
+            ).sum()
+        ),
+        "hash_token_ambiguous": int(
+            (m["match_status"] == "HASH_TOKEN_AMBIGUOUS").sum()
         ),
         "signature_unique": int(
             (m["match_status"] == "SIGNATURE_UNIQUE").sum()
@@ -467,8 +499,15 @@ def main() -> None:
         f"- DATA-003 participant rows: {group_audit['participant_rows']}",
         f"- Accepted transaction-condition groups: {group_audit['accepted_groups']}",
         f"- Observed EV18 trade events: {ob_counts.get('trade_rows', 0)}",
-        f"- Exact tx-hash + token matches: {match_summary['hash_unique']}",
-        f"- Hash ambiguous: {match_summary['hash_ambiguous']}",
+        (
+            "- Exact hash+token+signature matches: "
+            f"{match_summary['hash_token_signature_unique']}"
+        ),
+        (
+            "- Hash+token unique but price/size mismatch: "
+            f"{match_summary['hash_token_unique_signature_mismatch']}"
+        ),
+        f"- Hash+token ambiguous: {match_summary['hash_token_ambiguous']}",
         f"- Signature unique: {match_summary['signature_unique']}",
         (
             "- Signature nearest diagnostics: "
