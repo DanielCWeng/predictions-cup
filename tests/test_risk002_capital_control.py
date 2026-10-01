@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import replace
 from datetime import datetime
 from decimal import Decimal
@@ -1329,6 +1330,39 @@ def test_sig_fifo_cost_basis_reconstructs_no_position_in_yes_space() -> None:
             canonical_cost_basis=Decimal("1.5"),
         ),
     )
+
+
+def test_live_audit_fixture_reconstructs_real_no_lots() -> None:
+    fixture_path = Path(__file__).parent / "fixtures/live_audit/no_side_positions.json"
+    payload = json.loads(fixture_path.read_text())
+    positions = tuple(
+        PositionReadDto.model_validate(item) for item in payload["positions"]
+    )
+    account = AccountAuthoritativeSnapshot(
+        tournament_id="fixture-tournament",
+        tournament_slug="fixture-cup",
+        open_orders=(),
+        positions=positions,
+        observed_at=datetime.fromisoformat("2026-10-01T19:52:00+00:00"),
+    )
+
+    reconstruction = reconstruct_sig_cost_basis(account)
+
+    assert [item.exchange_id for item in reconstruction.positions] == [
+        "1045",
+        "1077",
+        "960",
+    ]
+    assert [item.signed_quantity for item in reconstruction.positions] == [
+        Decimal("-193"),
+        Decimal("-100"),
+        Decimal("-10"),
+    ]
+    assert [item.canonical_cost_basis for item in reconstruction.positions] == [
+        Decimal("130.81"),
+        Decimal("98"),
+        Decimal("5.65"),
+    ]
 
 
 def test_sig_normalization_reconciles_fifo_cost_basis_marks_and_authoritative_pnl() -> None:

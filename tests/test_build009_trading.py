@@ -300,6 +300,26 @@ def test_request_in_flight_retries_identical_single_order_key() -> None:
     assert bodies[0] == bodies[1]
 
 
+def test_batch_request_timeout_covers_live_sig_batch_duration() -> None:
+    read_timeouts: list[float] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        timeout = request.extensions["timeout"]
+        assert isinstance(timeout, dict)
+        read_timeouts.append(float(timeout["read"]))
+        return httpx.Response(200, json={"results": []})
+
+    async def scenario(client: SigTradingClient) -> None:
+        await client.place_batch(
+            BatchOrderRequestDto.model_validate(
+                {"idempotencyKey": "slow-batch", "orders": [_order_input()]}
+            )
+        )
+
+    asyncio.run(_with_client(handler, scenario))
+    assert read_timeouts == [120.0]
+
+
 def test_terms_not_acknowledged_is_operator_condition_not_auto_retry() -> None:
     attempts = 0
 

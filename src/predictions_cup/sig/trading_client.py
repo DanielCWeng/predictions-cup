@@ -38,6 +38,7 @@ from predictions_cup.sig.trading_dto import (
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 SleepFn = Callable[[float], Awaitable[None]]
+_BATCH_REQUEST_TIMEOUT_SECONDS = 120.0
 
 
 
@@ -86,6 +87,7 @@ class SigTradingClient:
         self._governor = governor
         self._retry_policy = retry_policy or RetryPolicy()
         self._request_in_flight_wait_seconds = request_in_flight_wait_seconds
+        self._timeout_seconds = timeout_seconds
         self._sleep = sleep
         self._client = httpx.AsyncClient(
             base_url=str(settings.sig_api_base_url).rstrip("/") + "/",
@@ -285,6 +287,15 @@ class SigTradingClient:
         if resolved_payload is not None and resolved_content is not None:
             raise ValueError("resolved_payload and resolved_content are mutually exclusive")
         policy = self._retry_policy
+        # SIG may take about 90 seconds to finish a large best-effort batch.
+        # Keep single-order/cancel requests on the short default timeout, while
+        # allowing batch responses enough time to return before declaring the
+        # outcome uncertain and starting same-key recovery.
+        request_timeout = (
+            max(self._timeout_seconds, _BATCH_REQUEST_TIMEOUT_SECONDS)
+            if resume_incomplete_batch
+            else self._timeout_seconds
+        )
         for attempt in range(1, policy.max_attempts + 1):
             await self._governor.acquire(RestPriority.HIGH)
             try:
@@ -293,14 +304,18 @@ class SigTradingClient:
                         method,
                         path,
                         content=resolved_content,
+                        timeout=request_timeout,
                     )
                 elif resolved_payload is None:
-                    response = await self._client.request(method, path)
+                    response = await self._client.request(
+                        method, path, timeout=request_timeout
+                    )
                 else:
                     response = await self._client.request(
                         method,
                         path,
                         json=resolved_payload,
+                        timeout=request_timeout,
                     )
             except httpx.TransportError as exc:
                 if attempt < policy.max_attempts:
