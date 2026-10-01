@@ -1,0 +1,102 @@
+{
+  "cut": "2026-10-01 16:48:00+00:00",
+  "lane": "microstructure",
+  "notes": [
+    "005F genuine_age parity unavailable: SIG BBO age is proxy only.",
+    "005I quote-event/OFI parity unavailable in compact tape: stress/replenishment are proxy diagnostics.",
+    "Lead-lag is not promoted."
+  ],
+  "rows": 4220,
+  "top_validation": [
+    {
+      "ci_lo_c": 9.850817887056317,
+      "economic_c": 15.062043795620436,
+      "markets": 8,
+      "mechanism": "FLOW_CONTEXT_ONLY",
+      "n": 137,
+      "spec": "prior60_abs>DEV_q0.9",
+      "split": "VAL"
+    },
+    {
+      "ci_lo_c": 6.489269281575462,
+      "economic_c": 9.538223938223938,
+      "markets": 16,
+      "mechanism": "FLOW_CONTEXT_ONLY",
+      "n": 259,
+      "spec": "prior60_abs>DEV_q0.75",
+      "split": "VAL"
+    },
+    {
+      "ci_lo_c": 5.1749744554801715,
+      "economic_c": 7.348875,
+      "markets": 28,
+      "mechanism": "FLOW_CONTEXT_ONLY",
+      "n": 400,
+      "spec": "prior60_abs>DEV_q0.5",
+      "split": "VAL"
+    },
+    {
+      "ci_lo_c": 0.1364440990545821,
+      "economic_c": 0.2689655172413801,
+      "markets": 12,
+      "mechanism": "005I_5M_REVERSION_LIVE",
+      "n": 54,
+      "spec": "abs_pm_ret5>=0.005",
+      "split": "VAL"
+    },
+    {
+      "ci_lo_c": 0.0775730311484432,
+      "economic_c": 0.19761904761904808,
+      "markets": 18,
+      "mechanism": "005I_5M_REVERSION_LIVE",
+      "n": 88,
+      "spec": "abs_pm_ret5>=0.0025",
+      "split": "VAL"
+    },
+    {
+      "ci_lo_c": -0.05216271027751202,
+      "economic_c": -0.03114035087719301,
+      "markets": 95,
+      "mechanism": "005I_REPLENISHMENT_PROXY",
+      "n": 301,
+      "spec": "depth_delta1>=200",
+      "split": "VAL"
+    },
+    {
+      "ci_lo_c": -0.10251380234404185,
+      "economic_c": 0.17119883040935696,
+      "markets": 139,
+      "mechanism": "005F_SIG_BBO_AGE_PROXY",
+      "n": 698,
+      "spec": "sig_age_s>=15",
+      "split": "VAL"
+    },
+    {
+      "ci_lo_c": NaN,
+      "economic_c": 0.15166666666666934,
+      "markets": 7,
+      "mechanism": "005I_LIQUIDITY_STRESS_PROXY",
+      "n": 71,
+      "spec": "rel_spread>=0.9 depth_total<=605",
+      "split": "VAL"
+    },
+    {
+      "ci_lo_c": NaN,
+      "economic_c": -1.00000000000001,
+      "markets": 54,
+      "mechanism": "005F_SIG_BBO_AGE_PROXY",
+      "n": 56,
+      "spec": "sig_age_s>=30",
+      "split": "VAL"
+    },
+    {
+      "ci_lo_c": NaN,
+      "economic_c": NaN,
+      "markets": 1,
+      "mechanism": "005I_5M_REVERSION_LIVE",
+      "n": 2,
+      "spec": "abs_pm_ret5>=0.01",
+      "split": "VAL"
+    }
+  ]
+}
