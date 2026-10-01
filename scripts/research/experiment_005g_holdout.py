@@ -23,6 +23,7 @@ from sklearn.preprocessing import StandardScaler
 
 import experiment_005g_lane_a as lane_a
 import experiment_005g_lane_b as lane_b
+import experiment_005g_sequential as sequential
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_FREEZE = ROOT / "data/experiments/experiment_005g/PRE_HOLDOUT_FREEZE.json"
@@ -355,6 +356,175 @@ def build_full_panel(
     return panel, audit
 
 
+def build_transition_holdout_panel(bbo: pd.DataFrame) -> pd.DataFrame:
+    parts: list[pd.DataFrame] = []
+    for token, raw in bbo.groupby("token_id", sort=False):
+        events = raw.sort_values("bbo_time").copy().reset_index(drop=True)
+        train = events[
+            (events["bbo_time"] >= START)
+            & (events["bbo_time"] < TRAIN_END)
+        ]
+        if len(train) < 30:
+            continue
+        q1, q2 = train["spread"].quantile([1 / 3, 2 / 3]).tolist()
+        if not np.isfinite(q1) or not np.isfinite(q2) or q1 >= q2:
+            continue
+        events["spread_state"] = np.select(
+            [
+                events["spread"] <= q1,
+                events["spread"] <= q2,
+            ],
+            [0, 1],
+            default=2,
+        ).astype(int)
+        event_ns = lane_a.datetime_ns(events["bbo_time"])
+        states = events["spread_state"].to_numpy(int)
+        transitions = np.r_[False, states[1:] != states[:-1]]
+        transition_ns = event_ns[transitions]
+
+        grid = pd.date_range(
+            START,
+            HOLDOUT_END,
+            freq="15s",
+            inclusive="left",
+            tz="UTC",
+        )
+        query_ns = lane_a.datetime_ns(grid)
+        index = np.searchsorted(event_ns, query_ns, side="right") - 1
+        valid = index >= 0
+        current_state = np.full(len(grid), np.nan, float)
+        bbo_source_ns = np.full(len(grid), -1, np.int64)
+        current_state[valid] = states[index[valid]]
+        bbo_source_ns[valid] = event_ns[index[valid]]
+        bbo_age = np.where(
+            bbo_source_ns >= 0,
+            (query_ns - bbo_source_ns) / NS,
+            np.nan,
+        )
+        dwell = sequential.age_since(transition_ns, query_ns)
+        no_transition = ~np.isfinite(dwell) & valid
+        dwell[no_transition] = (
+            query_ns[no_transition] - event_ns[0]
+        ) / NS
+
+        frame = pd.DataFrame(
+            {
+                "token_id": str(token),
+                "time": grid,
+                "spread_state": current_state,
+                "bbo_age_s": bbo_age,
+                "state_dwell_s": dwell,
+                "bbo_updates_60": lane_a.rolling_counts(
+                    event_ns,
+                    query_ns,
+                    60,
+                ),
+                "bbo_updates_300": lane_a.rolling_counts(
+                    event_ns,
+                    query_ns,
+                    300,
+                ),
+            }
+        )
+        labels = full_split(grid)
+        frame["split"] = labels
+        for horizon in (60, 300):
+            future_ns = query_ns + horizon * NS
+            left = np.searchsorted(transition_ns, query_ns, side="right")
+            right = np.searchsorted(transition_ns, future_ns, side="right")
+            target = (right > left).astype(float)
+            future_labels = full_split(
+                pd.DatetimeIndex(pd.to_datetime(future_ns, utc=True))
+            )
+            invalid = (
+                (labels == "")
+                | (future_labels != labels)
+                | ~np.isfinite(current_state)
+                | (bbo_age > 300)
+            )
+            target[invalid] = np.nan
+            frame[f"state_transition_h{horizon}"] = target
+        keep = (
+            (frame["split"] != "")
+            & np.isfinite(frame["spread_state"])
+            & (frame["bbo_age_s"] <= 300)
+            & lane_a.stable_keep(str(token), grid, SAMPLE_MOD)
+        )
+        if np.any(keep):
+            parts.append(frame.loc[keep].copy())
+    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+
+
+def build_resilience_holdout_panel(
+    depth: pd.DataFrame,
+    bbo: pd.DataFrame,
+) -> pd.DataFrame:
+    depth = sequential.attach_bbo_context(depth, bbo)
+    parts: list[pd.DataFrame] = []
+    for _, raw in depth.groupby("token_id", sort=False):
+        d = raw.sort_values("depth_time").copy().reset_index(drop=True)
+        if len(d) < 2:
+            continue
+        times = lane_a.datetime_ns(d["depth_time"])
+        depth5 = d["depth_5c"].to_numpy(float)
+        spread = (
+            d["depth_best_ask"].to_numpy(float)
+            - d["depth_best_bid"].to_numpy(float)
+        )
+        previous_depth = np.r_[np.nan, depth5[:-1]]
+        interval = np.r_[np.nan, np.diff(times) / NS]
+        continuity = np.isfinite(interval) & (interval <= 300)
+        depth_loss = previous_depth - depth5
+        shock_fraction = depth_loss / np.where(
+            previous_depth > 0,
+            previous_depth,
+            np.nan,
+        )
+        shock_mask = (
+            continuity
+            & np.isfinite(shock_fraction)
+            & (shock_fraction >= 0.25)
+            & (depth_loss > 0)
+        )
+        indexes = np.flatnonzero(shock_mask)
+        if not len(indexes):
+            continue
+        shock = d.loc[indexes].copy().reset_index(drop=True)
+        shock["time"] = shock["depth_time"]
+        shock["shock_size"] = shock_fraction[indexes]
+        shock["pre_depth_5c"] = previous_depth[indexes]
+        shock["post_depth_5c"] = depth5[indexes]
+        shock["spread"] = spread[indexes]
+        shock["snapshot_interval_s"] = interval[indexes]
+        shock["split"] = full_split(pd.DatetimeIndex(shock["depth_time"]))
+
+        for horizon in (60, 300):
+            target = np.full(len(indexes), np.nan, float)
+            horizon_ns = times[indexes] + horizon * NS
+            source_index = np.searchsorted(times, horizon_ns, side="right") - 1
+            source_index = np.maximum(source_index, indexes)
+            source_time = times[source_index]
+            age_at_horizon = (horizon_ns - source_time) / NS
+            future_depth = depth5[source_index]
+            denom = previous_depth[indexes] - depth5[indexes]
+            recovery = (future_depth - depth5[indexes]) / denom
+            future_labels = full_split(
+                pd.DatetimeIndex(pd.to_datetime(horizon_ns, utc=True))
+            )
+            current_labels = shock["split"].astype(str).to_numpy()
+            valid = (
+                (current_labels != "")
+                & (future_labels == current_labels)
+                & (age_at_horizon <= 60)
+                & (source_index > indexes)
+                & np.isfinite(recovery)
+            )
+            target[valid] = (recovery[valid] >= 0.5).astype(float)
+            shock[f"depth_half_recovered_h{horizon}"] = target
+        parts.append(shock)
+    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+
+
 def thin(frame: pd.DataFrame, n: int = MAX_ROWS) -> pd.DataFrame:
     if len(frame) <= n:
         return frame
@@ -620,7 +790,23 @@ def main() -> None:
     )
     panel, panel_audit = build_full_panel(states, trades, depth, bbo)
 
-    results = [score_candidate(panel, candidate) for candidate in candidates]
+    transition_panel = build_transition_holdout_panel(bbo)
+    resilience_panel = build_resilience_holdout_panel(depth, bbo)
+    results: list[dict[str, Any]] = []
+    for candidate in candidates:
+        if candidate.get("sequential_family"):
+            target = str(candidate["target"])
+            if target.startswith("state_transition_"):
+                source_panel = transition_panel
+            elif target.startswith("depth_half_recovered_"):
+                source_panel = resilience_panel
+            else:
+                raise RuntimeError(
+                    f"unsupported sequential HOLDOUT target: {target}"
+                )
+        else:
+            source_panel = panel
+        results.append(score_candidate(source_panel, candidate))
     apply_discovery_holdout_fdr(results)
     out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -654,6 +840,20 @@ def main() -> None:
         "state_audit": state_audit,
         "extras_audit": extras_audit,
         "panel_audit": panel_audit,
+        "sequential_panel_audit": {
+            "transition_rows": len(transition_panel),
+            "transition_tokens": (
+                int(transition_panel["token_id"].nunique())
+                if not transition_panel.empty
+                else 0
+            ),
+            "resilience_rows": len(resilience_panel),
+            "resilience_tokens": (
+                int(resilience_panel["token_id"].nunique())
+                if not resilience_panel.empty
+                else 0
+            ),
+        },
         "file_audit": file_audit,
         "holdout_read": True,
         "selection_or_tuning_after_holdout": False,
