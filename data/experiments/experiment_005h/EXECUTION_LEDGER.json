@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005H",
+  "branch": "experiment/005h-fill-orderbook-interaction-atlas",
+  "join_gate": {
+    "status": "PASSED",
+    "artifact": "data/experiments/experiment_005h/JOIN_AUDIT_W18.json",
+    "canonical_unit": "accepted active transaction episode",
+    "identity": "transaction_hash + active_token_id"
+  },
+  "core_runs": [
+    {
+      "workflow_run_id": 36834845024,
+      "status_for_science": "SUPERSEDED_PRE_OUTCOME",
+      "reason": "launched before later pre-outcome hardening"
+    },
+    {
+      "workflow_run_id": 36835172972,
+      "status_for_science": "SUPERSEDED_PRE_OUTCOME",
+      "reason": "launched before hash+token key hardening, sparse-horizon preservation, and without-replacement controls"
+    }
+  ],
+  "promoted_core": {
+    "status": "NOT_YET_LAUNCHED",
+    "required_properties": [
+      "explicit nanosecond receive clock",
+      "transaction_hash + active_token identity",
+      "strict V3 receive-time+sequence prebook",
+      "clock horizons 1/5/15/30/60/300s",
+      "event horizons 1/2/5/10/25/50 updates",
+      "10s canonical episodes with 5s/30s sensitivity",
+      "without-replacement matched controls",
+      "quiet-state last-observation-carried-forward as-of semantics"
+    ]
+  },
+  "source_version_audit": {
+    "workflow_run_id": 36836613576,
+    "status": "RUNNING",
+    "scope": "identity and chronology only; no outcome inspection"
+  },
+  "downstream": {
+    "v3_hostile_falsification": "DEFERRED_UNTIL_PROMOTED_CORE_COMPLETE",
+    "extended_v3_analysis": "DEFERRED_UNTIL_PROMOTED_CORE_COMPLETE",
+    "source_stratified_replication": "DEFERRED_UNTIL_SOURCE_AUDIT_AND_V3_SHORTLIST",
+    "pre_holdout_freeze": "FORBIDDEN_YET",
+    "b0": "SEALED"
+  },
+  "real_sig_orders_sent": false
+}
