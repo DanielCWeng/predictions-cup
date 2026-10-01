@@ -36,6 +36,10 @@ def test_shadow_admission_rejects_live_configuration() -> None:
         shadow_enabled=True,
         trading_enabled=False,
         execution_mode="SHADOW",
+        global_kill_switch=False,
+        tournament_id="test-tournament",
+        tournament_slug="test-tournament",
+        maker_mapping_path=PROJECT_ROOT / "data" / "mappings" / "sig_polymarket_2026.json",
     )
     assert fullstack.check_component(safe, "maker-shadow") == (True, "READY")
 
@@ -125,6 +129,49 @@ def test_status_never_authorizes_live(
     assert isinstance(live_learn, dict)
     assert live_learn["state"] == "PROCESS_RUNNING_HEALTH_UNKNOWN"
     assert live_learn["health_evidence"] == "PROCESS_ONLY"
+
+
+def test_service_action_detects_failed_wanted_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def systemctl(*args: str) -> fullstack.CommandResult:
+        calls.append(args)
+        if args[:3] == ("is-active", "--quiet", fullstack.MAKER_UNIT):
+            return fullstack.CommandResult(3, "", "")
+        return fullstack.CommandResult(0, "", "")
+
+    monkeypatch.setattr(fullstack, "_systemctl", systemctl)
+    result = fullstack._service_action(
+        "start",
+        (fullstack.RUNTIME_TARGET,),
+        verify_active=(fullstack.SIG_CAPTURE_UNIT, fullstack.MAKER_UNIT),
+    )
+
+    assert result["state"] == "BLOCKED"
+    assert result["inactive_after_action"] == [fullstack.MAKER_UNIT]
+    assert ("start", fullstack.RUNTIME_TARGET) in calls
+
+
+def test_sig_capture_freshness_uses_newer_wal(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    db = tmp_path / "sig.sqlite3"
+    wal = Path(f"{db}-wal")
+    db.write_bytes(b"db")
+    wal.write_bytes(b"wal")
+    now = fullstack._now().timestamp()
+    import os
+
+    os.utime(db, (now - 120, now - 120))
+    os.utime(wal, (now, now))
+
+    result = fullstack._mtime_freshness(db, active=True, max_age_seconds=60.0)
+
+    assert result["state"] == "HEALTHY"
+    assert result["evidence_path"] == str(wal)
 
 
 def test_status_sqlite_reads_are_non_mutating(tmp_path: Path) -> None:
