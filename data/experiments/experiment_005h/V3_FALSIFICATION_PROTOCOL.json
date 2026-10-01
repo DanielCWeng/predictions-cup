@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005H",
+  "stage": "V3_FALSIFICATION_PRE_OUTCOME_PROTOCOL",
+  "status": "FROZEN_BEFORE_CANONICAL_ATTEMPT3_OUTCOME_INSPECTION",
+  "input_kernel": "polyleviathan/experiment-005h-v3-core",
+  "eligible_splits": ["TRAIN", "DEV"],
+  "forbidden_split": "B0",
+  "candidate_tests": {
+    "005H-C01-RELATIVE-SIZE": [
+      "fixed TRAIN coefficients evaluated on DEV",
+      "token-cluster bootstrap of DEV R2(relative)-R2(absolute)",
+      "DEV chronological halves",
+      "stale-book exclusions at 1s and 5s",
+      "per-token MSE win fraction"
+    ],
+    "005H-C02-FAILED-REPLENISHMENT": [
+      "TRAIN and DEV signed-30s continuation gaps",
+      "DEV token-cluster bootstrap of failed-minus-recovered gap",
+      "DEV chronological halves",
+      "stale-book exclusions at 1s and 5s",
+      "exact-economics subset sensitivity"
+    ],
+    "005H-C03-FILL-BEYOND-STATE": [
+      "canonical matched-control token bootstrap",
+      "DEV chronological halves",
+      "exclude worst match-score quartile",
+      "stricter same-token rematch including mid volatility, pre-move and time proximity",
+      "greedy control non-reuse",
+      "within-token randomized control pairing placebo"
+    ]
+  },
+  "robustness_labels": [
+    "ROBUST_V3_SURVIVOR",
+    "PROVISIONAL_V3_ONLY",
+    "REJECTED_V3"
+  ],
+  "experiment_wide_freeze_rule": "No V3 result alone authorizes PRE_HOLDOUT_FREEZE.json or B0 access. Extended batteries and source robustness remain required.",
+  "real_sig_orders_sent": false
+}
