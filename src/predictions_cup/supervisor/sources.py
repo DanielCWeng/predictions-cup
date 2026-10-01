@@ -355,7 +355,7 @@ class SupervisorSources:
         )
 
     def _read_polymarket_capture(self) -> tuple[SourceStatus, dict[str, object]]:
-        return self._read_health_sqlite(
+        result = self._read_health_sqlite(
             source_id="polymarket_capture",
             required=self.settings.polymarket_capture_enabled,
             path=_resolve(self.repo_root, self.settings.polymarket_storage_path),
@@ -364,6 +364,49 @@ class SupervisorSources:
             payload_column="payload_json",
             max_age_seconds=self.capture_max_age_seconds,
         )
+        status, section = result
+        if not status.valid:
+            return result
+        last_message = _parse_datetime(section.get("last_message_at"))
+        message_age = _age(status.read_at, last_message)
+        section["last_message_age_seconds"] = message_age
+        connected = section.get("websocket_connected")
+        if connected is False:
+            return (
+                SourceStatus(
+                    status.source_id,
+                    status.required,
+                    status.available,
+                    status.valid,
+                    False,
+                    last_message or status.observed_at,
+                    status.read_at,
+                    message_age if last_message is not None else status.age_seconds,
+                    "websocket_disconnected",
+                    status.detail,
+                ),
+                section,
+            )
+        if (
+            message_age is not None
+            and message_age > self.capture_max_age_seconds
+        ):
+            return (
+                SourceStatus(
+                    status.source_id,
+                    status.required,
+                    status.available,
+                    status.valid,
+                    False,
+                    last_message,
+                    status.read_at,
+                    message_age,
+                    "feed_message_stale",
+                    status.detail,
+                ),
+                section,
+            )
+        return status, section
 
     def _read_health_sqlite(
         self,
