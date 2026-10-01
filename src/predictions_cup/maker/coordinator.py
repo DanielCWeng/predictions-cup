@@ -139,14 +139,15 @@ class MakerCoordinator:
             last = {}
             self._outcome_log = last
         now = time.monotonic()
-        previous = last.get(exchange_id)
+        key = (exchange_id, outcome.split(" ", 1)[0])
+        previous = last.get(key)
         if (
             previous is not None
             and previous[0] == outcome
             and now - previous[1] < _OUTCOME_LOG_INTERVAL_SECONDS
         ):
             return
-        last[exchange_id] = (outcome, now)
+        last[key] = (outcome, now)
         logger.info("MAKE outcome exchange=%s %s", exchange_id, outcome)
 
     async def on_state_change(

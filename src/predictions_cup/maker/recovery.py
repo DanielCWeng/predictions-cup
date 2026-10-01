@@ -84,9 +84,7 @@ def reconcile_maker_quote_registry(
                 OperationKind.ATOMIC_MULTI_LEG,
             }
         )
-    maker_operation_ids = {
-        envelope.logical_operation_id for envelope in maker_envelopes
-    }
+    maker_operation_ids = {envelope.logical_operation_id for envelope in maker_envelopes}
 
     # Map durable per-intent ACK identity to its original payload leg.
     acked: dict[int, tuple[ExecutionEnvelope, dict[str, object]]] = {}
@@ -110,9 +108,7 @@ def reconcile_maker_quote_registry(
             if order_id > 0:
                 acked[order_id] = (envelope, leg)
 
-    authoritative_open = {
-        order.id: order for order in authoritative.open_orders if order.open
-    }
+    authoritative_open = {order.id: order for order in authoritative.open_orders if order.open}
     maker_open_ids = set(acked).intersection(authoritative_open)
 
     # Clear only locally known MAKE quotes proven absent from authoritative open
@@ -127,10 +123,7 @@ def reconcile_maker_quote_registry(
                 continue
             if active.logical_operation_id not in maker_operation_ids:
                 continue
-            if (
-                active.exchange_order_id is None
-                or active.exchange_order_id not in maker_open_ids
-            ):
+            if active.exchange_order_id is None or active.exchange_order_id not in maker_open_ids:
                 quotes.clear_side(
                     exchange_id=exchange_id,
                     side=side,
@@ -140,8 +133,6 @@ def reconcile_maker_quote_registry(
     for order_id in sorted(maker_open_ids):
         envelope, leg = acked[order_id]
         order = authoritative_open[order_id]
-        if order.side != "yes":
-            raise RuntimeError("MAKE journal/account recovery found non-YES quote side")
         action = str(leg.get("action", ""))
         if action == "buy":
             side = QuoteSide.BID
@@ -151,7 +142,15 @@ def reconcile_maker_quote_registry(
             raise RuntimeError("MAKE journal contains unsupported quote action")
         if order.price_limit is None:
             raise RuntimeError("MAKE authoritative open order is not a limit order")
-        price_ticks = limit_price_to_ticks(order.price_limit)
+        # SIG canonicalises a flat/short YES sell into its complement
+        # (`sell yes q@p` == `buy no q@(1-p)`), so a MAKE ask can rest as NO/BUY.
+        if order.side == "yes" and order.action == action:
+            yes_price = order.price_limit
+        elif order.side == "no" and action == "sell" and order.action == "buy":
+            yes_price = Decimal(1) - order.price_limit
+        else:
+            raise RuntimeError("MAKE authoritative open order does not match its journal quote leg")
+        price_ticks = limit_price_to_ticks(yes_price)
         quantity = _whole_quantity(order.quantity)
         quotes.apply_authoritative(
             exchange_id=order.exchange_id,
