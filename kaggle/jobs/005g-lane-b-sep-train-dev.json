@@ -107,6 +107,6 @@
     "pandas==2.3.3",
     "scikit-learn==1.7.2"
   ],
-  "note": "EXPERIMENT-005G Lane B open discovery on frozen Sep TRAIN/DEV only. Sep 5 HOLDOUT absent. Observable V3 timestamp_received only; sequential resilience/state families fail closed on sampled panel. No orders.",
-  "attempt": 1
+  "note": "EXPERIMENT-005G Lane B corrected TRAIN/DEV rerun. Same 96 Sep1-4 files, same frozen features/targets/models/FDR. Implements amendment 005G-LB-AMENDMENT-001 highest-activity-tail removal plus preregistered capture controls. Sep5 HOLDOUT absent. No orders.",
+  "attempt": 2
 }
