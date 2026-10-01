@@ -28,6 +28,7 @@ from predictions_cup.shadow import (
     CanonicalShadowSnapshot,
     FixedHazard005FRegimeProvider,
     Frozen005FEvaluator,
+    Hazard005FCandidate,
 )
 from predictions_cup.shadow.live_005f import Live005FStateProvider
 
@@ -266,6 +267,26 @@ def test_serialized_model_absence_remains_fail_closed() -> None:
     assert isinstance(features, dict)
     assert features["genuine_age_s"] == 15.0
     assert features["genuine_60"] == 2.0
+
+
+def test_not_ready_005f_candidate_still_persists_exact_state() -> None:
+    provider = _provider()
+    query = _prime(provider)
+    evaluator = Frozen005FEvaluator(
+        provider,
+        FixedHazard005FRegimeProvider("PRE_ELECTION"),
+    )
+    output = Hazard005FCandidate(evaluator).evaluate(query)
+
+    assert output.abstain_reason is not None
+    assert output.abstain_reason.startswith("model_artifact_missing")
+    state = output.candidate_payload["005f_state"]
+    assert isinstance(state, dict)
+    assert state["provider_id"] == provider.provider_id
+    assert state["regime"] == "PRE_ELECTION"
+    features = state["features"]
+    assert isinstance(features, dict)
+    assert features["genuine_age_s"] == 15.0
 
 
 def test_persisted_exact_state_loader_uses_candidate_decision_payload(
