@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "bundle_id": "005G_STATE_HAZARD_V1",
+  "source_experiment": "EXPERIMENT-005G",
+  "status": "FROZEN_FOR_ECONOMIC_CONVERSION",
+  "source_final_result": "data/experiments/experiment_005g/FINAL_RESULT.json",
+  "pre_holdout_freeze_sha256": "887592885c02ae9219232c40a8b9ce0b263f9a62e04da62c524b16162895cc1c",
+  "holdout_artifact_sha256": "2c5bb46ebcf5b8d79e7368afdb309c849e55992ad44a771ab849740a219ef4d0",
+  "features": [
+    {
+      "name": "state_dwell_s",
+      "role": "regime_transition_hazard",
+      "source_candidates": [
+        "005G_DISCOVERY_SEQ|state_transition_h60|state_dwell_s",
+        "005G_DISCOVERY_SEQ|state_transition_h300|state_dwell_s"
+      ]
+    },
+    {
+      "name": "genuine_age_s",
+      "role": "book_renewal_freshness",
+      "source_candidates": [
+        "005F_REPL_PRE_UPDATE"
+      ]
+    },
+    {
+      "name": "spread_x_distance",
+      "role": "persistent_bbo_state",
+      "source_candidates": [
+        "005G_DISCOVERY|abs_h60|spread_x_distance",
+        "005G_DISCOVERY|bbo_update_h60|spread_x_distance",
+        "005G_DISCOVERY|bbo_update_h300|spread_x_distance"
+      ]
+    },
+    {
+      "name": "distance_from_0_5",
+      "role": "renewal_context",
+      "source_candidates": [
+        "005G_DISCOVERY|bbo_update_h60|distance_from_0_5"
+      ]
+    },
+    {
+      "name": "volatility_x_liquidity",
+      "role": "renewal_context",
+      "source_candidates": [
+        "005G_DISCOVERY|bbo_update_h300|volatility_x_liquidity"
+      ]
+    },
+    {
+      "name": "price_change_age_s",
+      "role": "price_change_freshness",
+      "source_candidates": [
+        "005G_DISCOVERY|bbo_update_h60|price_change_age_s",
+        "005G_DISCOVERY|bbo_update_h300|price_change_age_s"
+      ]
+    }
+  ],
+  "explicit_exclusions": [
+    {
+      "name": "ofi_acceleration",
+      "reason": "sealed holdout not confirmed; negative relative MSE improvement"
+    },
+    {
+      "name": "distance_from_0_5 -> abs_h60",
+      "reason": "sealed holdout failed complete frozen gate"
+    },
+    {
+      "name": "PRE_LIQUIDITY",
+      "reason": "failed pre-holdout replication gate"
+    },
+    {
+      "name": "ACTIVE_JUMP",
+      "reason": "frozen exact threshold became one-class and was not replicable"
+    }
+  ],
+  "permitted_downstream_uses": [
+    "shadow telemetry",
+    "replay candidate features",
+    "quote width/aggressiveness conditioning",
+    "refresh/cancel timing conditioning",
+    "quote size conditioning",
+    "join-versus-wait conditioning",
+    "adverse-selection avoidance",
+    "fair-value confidence or regime gating"
+  ],
+  "prohibited_direct_claims": [
+    "direct directional fair-value alpha",
+    "positive expected trading return",
+    "positive Sharpe",
+    "live-maker improvement without economic replay"
+  ],
+  "economic_conversion_gate": {
+    "required": true,
+    "environment": "SHADOW_OR_REPLAY",
+    "minimum_metrics": [
+      "net_pnl",
+      "fills",
+      "markouts",
+      "adverse_selection",
+      "fees",
+      "turnover",
+      "inventory",
+      "drawdown"
+    ],
+    "live_make_change_allowed": false
+  },
+  "selection_or_tuning_after_holdout": false
+}
