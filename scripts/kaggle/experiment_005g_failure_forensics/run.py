@@ -2028,12 +2028,17 @@ def decomposition_for_policy(
     base_keys = set(base_by_key.index)
     cand_keys = set(cand_by_key.index)
 
-    if fam == "SIZE_ONLY":
+    if fam in {"SIZE_ONLY", "WAIT_ONLY"}:
         threshold = float(policy["hazard_threshold"])
         high = baseline["decision_id"].isin(
             set(np.flatnonzero(panel["hazard"].to_numpy(float) >= threshold).tolist())
         )
-        mult = np.where(high.to_numpy(), float(policy["size_multiplier"]), 1.0)
+        high_multiplier = (
+            float(policy["size_multiplier"])
+            if fam == "SIZE_ONLY"
+            else 0.0
+        )
+        mult = np.where(high.to_numpy(), high_multiplier, 1.0)
         cand_weighted_net = baseline["net_markout"].to_numpy(float) * mult
         cand_weighted_gross = baseline["gross_markout"].to_numpy(float) * mult
         cand_weighted_fee = baseline["fee_proxy"].to_numpy(float) * mult
@@ -2339,11 +2344,38 @@ def forensic_main() -> None:
     }
 
     variant_cache: dict[tuple[float, int], pd.DataFrame] = {}
+    aggregate_combinations = [(0.0, 15), (0.0, 30)]
+    aggregate_combinations += [(w, 60) for w in WIDTH_EXTRAS]
+    aggregate_combinations += [
+        (w, h) for w in WIDTH_EXTRAS for h in REFRESH_SECONDS
+    ]
+    aggregate_variants = make_variants(
+        dev_panel, dev.trades, aggregate_combinations
+    )
+    baseline_aggregate = aggregate(dev_panel, aggregate_variants["base"])
+
     decompositions = []
     for policy in FROZEN_POLICIES:
         result = decomposition_for_policy(
             baseline, dev_panel, dev.trades, policy, variant_cache
         )
+        aggregate_metrics = evaluate_policy(
+            dev_panel, aggregate_variants, policy
+        )
+        result["aggregate_metrics"] = aggregate_metrics
+        result["drawdown_proxy"] = aggregate_metrics["max_drawdown_proxy"]
+        result["aggregate_reproduction"] = {
+            "fills_error": float(
+                result["candidate_fills"] - aggregate_metrics["filled_sides"]
+            ),
+            "net_error": float(
+                result["net_pnl"]
+                - aggregate_metrics["net_markout_pnl_after_fee_proxy"]
+            ),
+            "turnover_error": float(
+                result["turnover"] - aggregate_metrics["turnover_proxy"]
+            ),
+        }
         decompositions.append(result)
 
     by_family: dict[str, Any] = {}
@@ -2388,6 +2420,7 @@ def forensic_main() -> None:
         },
         "frozen_conclusions_unchanged": True,
         "baseline_reproduction": {
+            "aggregate_metrics": baseline_aggregate,
             "filled_sides": int(len(baseline)),
             "net_markout_pnl_after_fee_proxy": baseline_net,
             "gross_markout_pnl_proxy": float(baseline["gross_markout"].sum()),
