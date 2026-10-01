@@ -284,9 +284,14 @@ def _capture_findings(venue: str, raw: object, findings: list[Finding]) -> None:
     capture = _as_dict(raw)
     if capture is None:
         return
-    storage_failures = _integer(capture.get("storage_failures"))
-    dropped_rows = _integer(capture.get("dropped_rows"))
-    writer_alive = capture.get("writer_alive")
+    storage = capture
+    if venue == "SIG":
+        nested = _as_dict(capture.get("research_storage"))
+        if nested is not None:
+            storage = nested
+    storage_failures = _integer(storage.get("storage_failures"))
+    dropped_rows = _integer(storage.get("dropped_rows"))
+    writer_alive = storage.get("writer_alive")
     if storage_failures is not None and storage_failures > 0:
         findings.append(
             Finding(
@@ -314,8 +319,8 @@ def _capture_findings(venue: str, raw: object, findings: list[Finding]) -> None:
                 {},
             )
         )
-    queue_depth = _integer(capture.get("queue_depth"))
-    queue_capacity = _integer(capture.get("queue_capacity"))
+    queue_depth = _integer(storage.get("queue_depth"))
+    queue_capacity = _integer(storage.get("queue_capacity"))
     if (
         queue_depth is not None
         and queue_capacity is not None
