@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import csv
 import math
-from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
