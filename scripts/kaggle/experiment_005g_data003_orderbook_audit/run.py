@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import csv
 import hashlib
 import json
-import os
 import re
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -33,7 +32,10 @@ ID_COLUMNS = (
     "sig_exchange_id",
 )
 VERSION_COLUMNS = ("source_version", "acquisition_version", "schema_version")
-TIME_RE = re.compile(r"(time|timestamp|observed_at|captured_at|sampled_at|created_at|updated_at)$", re.I)
+TIME_RE = re.compile(
+    r"(time|timestamp|observed_at|captured_at|sampled_at|created_at|updated_at)$",
+    re.I,
+)
 
 CONFIG = {
     "experiment": EXPERIMENT,
@@ -54,11 +56,16 @@ CONFIG = {
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def canonical_json_bytes(value: Any) -> bytes:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
 
 
 def sha256_bytes(value: bytes) -> str:
@@ -74,7 +81,10 @@ def sha256_file(path: Path) -> str:
 
 
 def write_json(path: Path, value: Any) -> None:
-    path.write_text(json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(value, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
 
 
 def safe_rel(path: Path, root: Path) -> str:
@@ -150,7 +160,11 @@ def parquet_schema_info(path: Path) -> dict[str, Any]:
     return out
 
 
-def iter_batches(path: Path, columns: list[str], batch_size: int = 262_144) -> Iterable[pa.RecordBatch]:
+def iter_batches(
+    path: Path,
+    columns: list[str],
+    batch_size: int = 262_144,
+) -> Iterable[pa.RecordBatch]:
     if not columns:
         return
     pf = pq.ParquetFile(path)
@@ -170,7 +184,10 @@ def normalize_scalar(value: Any) -> str | None:
     return str(value)
 
 
-def scan_coverage(path: Path, names: list[str]) -> tuple[dict[str, set[str]], dict[str, tuple[str | None, str | None]]]:
+def scan_coverage(
+    path: Path,
+    names: list[str],
+) -> tuple[dict[str, set[str]], dict[str, tuple[str | None, str | None]]]:
     id_sets: dict[str, set[str]] = {name: set() for name in names if name in ID_COLUMNS}
     time_bounds: dict[str, tuple[str | None, str | None]] = {
         name: (None, None) for name in names if TIME_RE.search(name)
@@ -212,9 +229,15 @@ def flatten_json_versions(value: Any, prefix: str = "") -> list[dict[str, Any]]:
     if isinstance(value, dict):
         for key, child in value.items():
             path = f"{prefix}.{key}" if prefix else str(key)
-            if "version" in str(key).lower() or "slug" in str(key).lower() or "dataset" in str(key).lower():
-                if isinstance(child, (str, int, float, bool)) or child is None:
-                    rows.append({"path": path, "value": child})
+            lowered = str(key).lower()
+            interesting = (
+                "version" in lowered
+                or "slug" in lowered
+                or "dataset" in lowered
+            )
+            scalar = isinstance(child, (str, int, float, bool)) or child is None
+            if interesting and scalar:
+                rows.append({"path": path, "value": child})
             rows.extend(flatten_json_versions(child, path))
     elif isinstance(value, list):
         for i, child in enumerate(value[:1000]):
@@ -232,7 +255,11 @@ def parse_small_manifest(path: Path, root: Path) -> dict[str, Any]:
     if path.suffix.lower() == ".json" and path.stat().st_size <= 64 * 1024 * 1024:
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            info["json_top_level"] = sorted(payload) if isinstance(payload, dict) else type(payload).__name__
+            info["json_top_level"] = (
+                sorted(payload)
+                if isinstance(payload, dict)
+                else type(payload).__name__
+            )
             info["version_like_fields"] = flatten_json_versions(payload)[:200]
         except Exception as exc:
             info["parse_error"] = f"{type(exc).__name__}: {exc}"
@@ -495,8 +522,9 @@ def main() -> None:
         "phase": "INPUT_AUDIT",
         "status": provenance_gate["status"],
         "next_required_step": (
-            "Interpret actual schemas/manifests, bind dataset version and DATA-003/mapping linkage, "
-            "then implement canonical BBO/depth panels and strict 005F replication."
+            "Interpret actual schemas/manifests, bind dataset version and "
+            "DATA-003/mapping linkage, then implement canonical BBO/depth panels "
+            "and strict 005F replication."
         ),
         "outputs": [
             "INPUT_AUDIT.json",
