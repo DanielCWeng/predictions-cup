@@ -114,10 +114,14 @@ def load_fills(files: list[Path]) -> pd.DataFrame:
     return df
 
 
-def accepted_groups(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
+def accepted_groups(
+    df: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
+    active_rows: list[dict[str, Any]] = []
+    passive_rows: list[dict[str, Any]] = []
     rejected: defaultdict[str, int] = defaultdict(int)
-    for (condition_id, tx_hash), g in df.groupby(["condition_id", "tx_hash"], sort=False):
+    grouped = df.groupby(["condition_id", "tx_hash"], sort=False)
+    for (condition_id, tx_hash), g in grouped:
         active = g[g["is_active"]]
         passive = g[~g["is_active"]]
         if len(active) != 1:
@@ -129,19 +133,37 @@ def accepted_groups(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
         a = active.iloc[0]
         active_size = float(a["size_shares"])
         passive_size = float(passive["size_shares"].sum())
-        if not np.isclose(active_size, passive_size, rtol=1e-8, atol=1e-8):
+        if not np.isclose(
+            active_size,
+            passive_size,
+            rtol=1e-8,
+            atol=1e-8,
+        ):
             rejected["size_conservation"] += 1
             continue
+        group_id = f"{condition_id}|{tx_hash}"
         rec = a.to_dict()
-        rec["group_id"] = f"{condition_id}|{tx_hash}"
+        rec["group_id"] = group_id
+        rec["entity_id"] = group_id
+        rec["entity_type"] = "ACTIVE_GROUP"
         rec["passive_rows"] = int(len(passive))
         rec["passive_size_sum"] = passive_size
-        rows.append(rec)
-    out = pd.DataFrame(rows)
-    return out, {
+        active_rows.append(rec)
+        for _, p in passive.iterrows():
+            passive_rec = p.to_dict()
+            passive_rec["group_id"] = group_id
+            passive_rec["entity_id"] = (
+                f"{group_id}|{int(p['log_index'])}|{p['token_id']}"
+            )
+            passive_rec["entity_type"] = "PASSIVE_FILL"
+            passive_rows.append(passive_rec)
+    active_out = pd.DataFrame(active_rows)
+    passive_out = pd.DataFrame(passive_rows)
+    return active_out, passive_out, {
         "participant_rows": int(len(df)),
-        "transaction_condition_groups": int(df.groupby(["condition_id", "tx_hash"]).ngroups),
-        "accepted_groups": int(len(out)),
+        "transaction_condition_groups": int(grouped.ngroups),
+        "accepted_groups": int(len(active_out)),
+        "accepted_passive_rows": int(len(passive_out)),
         "rejected": dict(rejected),
     }
 
@@ -355,6 +377,8 @@ def match_groups(
                 status = "SIGNATURE_AMBIGUOUS"
         rec = {
             "group_id": r["group_id"],
+            "entity_id": r.get("entity_id", r["group_id"]),
+            "entity_type": r.get("entity_type", "UNKNOWN"),
             "token_id": token,
             "block_timestamp_s": int(r["timestamp"]),
             "fill_price": float(r["price"]),
@@ -453,16 +477,30 @@ def summarize_matches(m: pd.DataFrame) -> dict[str, Any]:
 def main() -> None:
     fill_files = locate_fill_files()
     fills = load_fills(fill_files)
-    groups, group_audit = accepted_groups(fills)
+    groups, passive_rows, group_audit = accepted_groups(fills)
     if groups.empty:
         raise RuntimeError("zero accepted W18 trade groups")
+    tokens = set(groups["token_id"].astype(str))
+    tokens.update(passive_rows["token_id"].astype(str))
     root = locate_orderbook_root()
-    trades, bbo, ob_counts = load_ev18(root, set(groups["token_id"].astype(str)))
+    trades, bbo, ob_counts = load_ev18(root, tokens)
     if trades.empty:
         raise RuntimeError("zero EV18 orderbook trade events for W18 tokens")
-    matches, match_summary = match_groups(groups, trades, bbo)
+    active_matches, active_summary = match_groups(groups, trades, bbo)
+    passive_matches, passive_summary = match_groups(
+        passive_rows,
+        trades,
+        bbo,
+    )
 
-    matches.to_parquet(WORK / "JOIN_PROBE_MATCHES.parquet", index=False)
+    active_matches.to_parquet(
+        WORK / "JOIN_PROBE_ACTIVE_GROUPS.parquet",
+        index=False,
+    )
+    passive_matches.to_parquet(
+        WORK / "JOIN_PROBE_PASSIVE_FILLS.parquet",
+        index=False,
+    )
     summary = {
         "experiment": "EXPERIMENT-005H",
         "stage": "JOIN_PROBE_EV18",
@@ -477,7 +515,8 @@ def main() -> None:
         "match_tolerance_seconds": MATCH_TOLERANCE_S,
         "group_audit": group_audit,
         "orderbook_counts": ob_counts,
-        "match_summary": match_summary,
+        "active_group_match_summary": active_summary,
+        "passive_fill_match_summary": passive_summary,
         "scientific_boundary": (
             "probe only; nearest match is diagnostic and is not yet accepted "
             "as a causal join rule"
@@ -499,22 +538,31 @@ def main() -> None:
         f"- DATA-003 participant rows: {group_audit['participant_rows']}",
         f"- Accepted transaction-condition groups: {group_audit['accepted_groups']}",
         f"- Observed EV18 trade events: {ob_counts.get('trade_rows', 0)}",
+        "## Active transaction groups",
+        "",
         (
             "- Exact hash+token+signature matches: "
-            f"{match_summary['hash_token_signature_unique']}"
+            f"{active_summary['hash_token_signature_unique']}"
         ),
         (
             "- Hash+token unique but price/size mismatch: "
-            f"{match_summary['hash_token_unique_signature_mismatch']}"
+            f"{active_summary['hash_token_unique_signature_mismatch']}"
         ),
-        f"- Hash+token ambiguous: {match_summary['hash_token_ambiguous']}",
-        f"- Signature unique: {match_summary['signature_unique']}",
+        f"- Hash+token ambiguous: {active_summary['hash_token_ambiguous']}",
+        f"- Unmatched: {active_summary['unmatched']}",
+        "",
+        "## Passive on-chain fill rows",
+        "",
         (
-            "- Signature nearest diagnostics: "
-            f"{match_summary['signature_nearest_diagnostic']}"
+            "- Exact hash+token+signature matches: "
+            f"{passive_summary['hash_token_signature_unique']}"
         ),
-        f"- Signature ambiguous: {match_summary['signature_ambiguous']}",
-        f"- Unmatched: {match_summary['unmatched']}",
+        (
+            "- Hash+token unique but price/size mismatch: "
+            f"{passive_summary['hash_token_unique_signature_mismatch']}"
+        ),
+        f"- Hash+token ambiguous: {passive_summary['hash_token_ambiguous']}",
+        f"- Unmatched: {passive_summary['unmatched']}",
         "",
         (
             "Nearest-among-multiple matches are diagnostic only. The full 005H "
