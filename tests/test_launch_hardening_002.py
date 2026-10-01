@@ -52,7 +52,6 @@ from predictions_cup.shadow.contracts import CandidateDecision, DecisionStatus
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
 from predictions_cup.sig.account_runtime import (
     AccountRealtimeController,
-    AccountResyncRequired,
 )
 from predictions_cup.sig.account_state import (
     AccountRealtimeStateEngine,
@@ -878,14 +877,13 @@ def test_composed_lifecycle_oracle_restart_and_reconciliation(tmp_path: Path) ->
         quantity="4",
         at=BASE + timedelta(seconds=3),
     )
-    with pytest.raises(AccountResyncRequired):
-        asyncio.run(
-            controller._handle_batch(
-                "unused",
-                fill_one,
-                BASE + timedelta(seconds=3),
-            )
+    asyncio.run(
+        controller._handle_batch(
+            "unused",
+            fill_one,
+            BASE + timedelta(seconds=3),
         )
+    )
     truth.fill_buy(quantity=Decimal("4"), price=Decimal("0.4"))
     oracle.fill_buy(quantity=Decimal("4"), price=Decimal("0.4"))
     oracle.open_order_exposure = Decimal("16")
@@ -970,14 +968,13 @@ def test_composed_lifecycle_oracle_restart_and_reconciliation(tmp_path: Path) ->
         quantity="2",
         at=BASE + timedelta(seconds=6),
     )
-    with pytest.raises(AccountResyncRequired):
-        asyncio.run(
-            controller._handle_batch(
-                "unused",
-                fill_two,
-                BASE + timedelta(seconds=6),
-            )
+    asyncio.run(
+        controller._handle_batch(
+            "unused",
+            fill_two,
+            BASE + timedelta(seconds=6),
         )
+    )
     truth.fill_buy(quantity=Decimal("2"), price=Decimal("0.4"))
     oracle.fill_buy(quantity=Decimal("2"), price=Decimal("0.4"))
     oracle.open_order_exposure = Decimal("14")
@@ -1364,14 +1361,13 @@ def test_authoritative_snapshot_before_delayed_realtime_fill_forces_reconcile(
     )
     fill = cast(list[dict[str, object]], payload["fills"])[0]
     fill["orderId"] = 401
-    with pytest.raises(AccountResyncRequired):
-        asyncio.run(
-            controller._handle_batch(
-                "unused",
-                payload,
-                BASE + timedelta(seconds=6),
-            )
+    asyncio.run(
+        controller._handle_batch(
+            "unused",
+            payload,
+            BASE + timedelta(seconds=6),
         )
+    )
     after = state.runtime_portfolio()
     assert not state.trusted
     assert after.positions == before.positions == ()
@@ -1461,14 +1457,13 @@ def test_fill_before_order_update_and_cancel_evidence_keeps_original_identity(
         at=BASE + timedelta(seconds=2),
     )
     payload["fills"][0]["orderId"] = 301  # type: ignore[index]
-    with pytest.raises(AccountResyncRequired):
-        asyncio.run(
-            controller._handle_batch(
-                "unused",
-                payload,
-                BASE + timedelta(seconds=2),
-            )
+    asyncio.run(
+        controller._handle_batch(
+            "unused",
+            payload,
+            BASE + timedelta(seconds=2),
         )
+    )
     fills = [
         event
         for event in journal.events("reordered-placement")

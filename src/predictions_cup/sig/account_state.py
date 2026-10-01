@@ -29,6 +29,7 @@ class AccountTrustTransition(StrEnum):
         "UNTRUSTED_ECONOMIC_EVENT_REQUIRES_RECONCILIATION"
     )
     UNTRUSTED_RESYNC_ACTIVITY = "UNTRUSTED_RESYNC_ACTIVITY"
+    UNTRUSTED_REFRESH_FAILURE = "UNTRUSTED_REFRESH_FAILURE"
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,6 +184,14 @@ class AccountRealtimeStateEngine:
             )
 
         for update in batch.order_updates:
+            if update.order_id is None:
+                self.mark_untrusted(AccountTrustTransition.UNTRUSTED_UNKNOWN_OPEN_ORDER)
+                return AccountBatchApplyResult(
+                    accepted=False,
+                    duplicate=False,
+                    requires_reconciliation=True,
+                    transition=self.transition,
+                )
             existing = self._orders.get(update.order_id)
             if update.open:
                 if existing is None:

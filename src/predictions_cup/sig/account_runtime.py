@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -26,6 +27,7 @@ from predictions_cup.sig.realtime_subscriber import (
 MintToken = Callable[[], Awaitable[RealtimeTokenDto]]
 AuthoritativeResync = Callable[[], Awaitable[AccountAuthoritativeSnapshot]]
 ClockNs = Callable[[], int]
+logger = logging.getLogger(__name__)
 
 
 class AccountSubscriber(Protocol):
@@ -46,11 +48,8 @@ class AccountSubscriberFactory(Protocol):
         topic: str,
         token: RealtimeTokenDto,
         event_name: str,
+        maintenance_interval_seconds: float,
     ) -> AccountSubscriber: ...
-
-
-class AccountResyncRequired(RuntimeError):
-    """Internal control-flow signal: leave the socket and restore REST truth."""
 
 
 def _default_subscriber_factory(
@@ -58,11 +57,13 @@ def _default_subscriber_factory(
     topic: str,
     token: RealtimeTokenDto,
     event_name: str,
+    maintenance_interval_seconds: float,
 ) -> AccountSubscriber:
     return SupabaseTournamentSubscriber(
         topic=topic,
         token=token,
         event_name=event_name,
+        maintenance_interval_seconds=maintenance_interval_seconds,
     )
 
 
@@ -79,6 +80,7 @@ class AccountRealtimeController:
         state: AccountRealtimeStateEngine,
         mint_token: MintToken,
         authoritative_resync: AuthoritativeResync,
+        refresh_interval_seconds: float = 5.0,
         subscriber_factory: AccountSubscriberFactory = _default_subscriber_factory,
         execution_journal: ExecutionJournal | None = None,
         clock_ns: ClockNs = monotonic_ns,
@@ -88,6 +90,9 @@ class AccountRealtimeController:
         self._state = state
         self._mint_token = mint_token
         self._authoritative_resync = authoritative_resync
+        if refresh_interval_seconds <= 0:
+            raise ValueError("refresh_interval_seconds must be positive")
+        self._refresh_interval_seconds = refresh_interval_seconds
         self._subscriber_factory = subscriber_factory
         self._execution_journal = execution_journal
         self._clock_ns = clock_ns
@@ -109,6 +114,7 @@ class AccountRealtimeController:
                 topic=token.channels.user,
                 token=token,
                 event_name="account_batch",
+                maintenance_interval_seconds=self._refresh_interval_seconds,
             )
             connected = asyncio.Event()
             self._resyncing = True
@@ -118,6 +124,7 @@ class AccountRealtimeController:
                     on_batch=self._handle_batch,
                     on_connected=connected.set,
                     stop_event=stop_event,
+                    on_maintenance=self._refresh_authoritative,
                 )
             )
             connected_wait = asyncio.create_task(connected.wait())
@@ -148,10 +155,6 @@ class AccountRealtimeController:
                     outcome = subscriber_task.result()
                 else:
                     outcome = await subscriber_task
-            except AccountResyncRequired:
-                # The state engine has already revoked trust. Re-subscribe and
-                # reconcile authoritatively before accepting more account data.
-                continue
             except BaseException:
                 subscriber_task.cancel()
                 with suppress(asyncio.CancelledError):
@@ -220,7 +223,23 @@ class AccountRealtimeController:
             # fencing.
             self._record_execution_events(AccountBatchDto.model_validate(payload))
         if result.requires_reconciliation:
-            raise AccountResyncRequired
+            # Keep the active subscription in place while authoritative state
+            # catches up. A fill must not briefly restore trust after its socket
+            # has already closed, nor force a fresh token for the same connection.
+            await self._refresh_authoritative(observed_at)
+
+    async def _refresh_authoritative(self, observed_at: datetime) -> None:
+        del observed_at
+        self._resyncing = True
+        try:
+            authoritative = await self._authoritative_resync()
+        except Exception as exc:
+            self._state.mark_untrusted(AccountTrustTransition.UNTRUSTED_REFRESH_FAILURE)
+            logger.warning("SIG account authoritative refresh failed: %s", type(exc).__name__)
+        else:
+            self._state.apply_authoritative(authoritative)
+        finally:
+            self._resyncing = False
 
     def _observe(
         self,
@@ -265,6 +284,8 @@ class AccountRealtimeController:
             return
         observed_ns = self._clock_ns()
         for fill in batch.fills:
+            if fill.order_id is None:
+                continue
             order_id = str(fill.order_id)
             placement = journal.placement_identity_for_exchange_order_id(order_id)
             if placement is None:
@@ -279,7 +300,7 @@ class AccountRealtimeController:
                 exchange_id=fill.exchange_id,
                 exchange_order_id=order_id,
                 quantity=str(fill.quantity),
-                price=str(fill.price),
+                price=None if fill.price is None else str(fill.price),
             )
             self._observe(
                 ObservationKind.PARTIAL_FILL,
@@ -292,6 +313,8 @@ class AccountRealtimeController:
                 detail=(("quantity", str(fill.quantity)), ("price", str(fill.price))),
             )
         for update in batch.order_updates:
+            if update.order_id is None:
+                continue
             order_id = str(update.order_id)
             placement = journal.placement_identity_for_exchange_order_id(order_id)
             if placement is None:
@@ -313,4 +336,3 @@ class AccountRealtimeController:
                 ),
                 terminal_status="OPEN" if update.open else "CLOSED",
             )
-

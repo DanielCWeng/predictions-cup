@@ -136,14 +136,8 @@ class SupabaseTournamentSubscriber:
                         }
                         channel = client.channel(topic, channel_options)
                         shard_channels.append(channel)
-                        # NOTE: deliberately still "market_batch", not
-                        # self._event_name (pre-existing behavior). Honoring
-                        # event_name would switch on account_batch delivery in
-                        # the live MAKE AccountRealtimeController, whose DTOs
-                        # and per-fill resync/token-mint cost have not been
-                        # validated against the live feed. Tracked separately.
                         await channel.on_broadcast(
-                            "market_batch", broadcast_handler(topic)
+                            self._event_name, broadcast_handler(topic)
                         ).subscribe(status_handler(topic))
 
                 pending = set(self._topics)

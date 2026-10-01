@@ -26,9 +26,10 @@ class FakeChannel:
         self.is_errored = False
         self.is_closed = False
         self.broadcast_callback: BroadcastCallback | None = None
+        self.event: str | None = None
 
     def on_broadcast(self, event: str, callback: BroadcastCallback) -> Self:
-        assert event == "market_batch"
+        self.event = event
         self.broadcast_callback = callback
         return self
 
@@ -133,7 +134,37 @@ def test_subscriber_rejoin_ack_exits_for_authoritative_resync(
         assert client.options == {
             "config": {"broadcast": None, "presence": None, "private": True}
         }
+        assert client.fake_channel.event == "market_batch"
         assert client.realtime.removed is True
+
+    asyncio.run(scenario())
+
+
+def test_subscriber_uses_account_batch_event_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        client = _install_fake_client(monkeypatch, follow_up_status=None)
+        stop_event = asyncio.Event()
+
+        async def stop_on_maintenance(at: datetime) -> None:
+            del at
+            stop_event.set()
+
+        subscriber = SupabaseTournamentSubscriber(
+            topic="user:profile-1",
+            token=_token(expires_at=datetime.now(UTC) + timedelta(hours=2)),
+            event_name="account_batch",
+        )
+        outcome = await subscriber.run(
+            on_batch=_never_batch,
+            on_connected=lambda: None,
+            stop_event=stop_event,
+            on_maintenance=stop_on_maintenance,
+        )
+
+        assert outcome == SubscriberExit.STOPPED
+        assert client.fake_channel.event == "account_batch"
 
     asyncio.run(scenario())
 

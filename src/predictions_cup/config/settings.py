@@ -94,7 +94,8 @@ class AppSettings(BaseSettings):
     maker_toxicity_half_spread_ticks: float = Field(default=4.0, ge=0.0)
     maker_max_bbo_age_ms: int = Field(default=12_000, gt=0)
     maker_max_fv_age_ms: int = Field(default=1_000, gt=0)
-    maker_max_account_age_ms: int = Field(default=2_000, gt=0)
+    maker_account_refresh_interval_seconds: float = Field(default=5.0, gt=0.0)
+    maker_max_account_age_ms: int = Field(default=15_000, gt=0)
     maker_max_inventory_age_ms: int = Field(default=2_000, gt=0)
     maker_max_signal_age_ms: int = Field(default=1_000, gt=0)
     maker_require_trusted_depth: bool = False
