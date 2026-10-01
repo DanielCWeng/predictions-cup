@@ -14,7 +14,7 @@ MAPPING = ROOT / "data/mappings/sig_polymarket_2026.json"
 
 def text_id(value: object) -> str:
     if isinstance(value, (bytes, bytearray, memoryview)):
-        return bytes(value).decode("utf-8")
+        return str(int.from_bytes(bytes(value), byteorder="big", signed=False))
     return str(value)
 
 
