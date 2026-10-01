@@ -3,7 +3,8 @@
 **RESEARCH-SYNTHESIS-001**  
 **Starting main:** `611b048ce0ee4630c01a9500cb021a70afba8474`  
 **Evidence snapshot:** 2026-10-01  
-**Canonicality refresh main:** `662969df4e481f1cbd9417c923ae35d3a0aa9f9f` (005G merged via PR #114)
+**Canonicality refresh main:** `662969df4e481f1cbd9417c923ae35d3a0aa9f9f` (005G merged via PR #114)  
+**005H B0 refresh:** PR #94 head `5d37a2f2a7b64685c4a012408fdca53e6bf75307` (historical B0 complete; PR remains unmerged)
 
 ## Executive summary
 
@@ -13,6 +14,8 @@ The strongest, most replicated and most current-universe findings are overwhelmi
 
 That is not the whole story. Merged 005I supplies the first substantial canonical directional layer: **67.26% five-minute reversal** across 55,340 qualifying sampled HOLDOUT minute-states, every temporal worker above 66%, plus a frozen depth-normalised OFI challenger that improves next-minute directional log loss by **0.004165** across 1,195,563 non-zero observations with **5/5 workers positive**. Narrower directional evidence also exists in 005D late-count structural convergence and 005E's secondary signed-flow diagnostics.
 
+EXPERIMENT-005H now adds a distinct historical interaction layer. On the untouched B0 holdout, frozen **C04 Arrival-State** distinguished actual fill moments from matched non-fill states at **AUC 0.6882** (token-cluster bootstrap 95% interval **0.6777–0.7000**; chronological halves **0.6913 / 0.6852**), while **C05 Direction-State** predicted BUY versus SELL aggressor conditional on a fill at **AUC 0.6745** (bootstrap **0.6398–0.7192**; halves **0.6973 / 0.6547**). Nothing was refit on B0. PR #94 remains unmerged, so these are strong historical B0 survivors requiring prospective confirmation, not yet canonical main-branch evidence.
+
 The missing bridge is economics. There is **no positive E4 or E5 result**. The one clean attempt to convert the strongest state-hazard family into passive-execution decisions failed: all 28 frozen 005G WIDTH/SIZE/WAIT/REFRESH policies underperformed the DEV baseline. The post-hoc mechanism review showed why: the hazard still predicted BBO renewal and state transition, but it did **not** rank adverse fills (AUC ~0.456). High activity/transition hazard is not the same thing as toxic-to-quote.
 
 The project therefore has useful pieces of a trading model, but they sit at different layers:
@@ -20,7 +23,7 @@ The project therefore has useful pieces of a trading model, but they sit at diff
 - some credible direction;
 - structural/fair-value diagnostics;
 - weak/secondary participant-flow quality;
-- **no validated fill-probability/toxicity bridge**;
+- historical B0 evidence for **market interaction/fill-arrival state and aggressor direction** from 005H, but **no validated own-quote fill-probability/toxicity bridge**;
 - **no demonstrated post-cost economic conversion**.
 
 ---
@@ -116,6 +119,17 @@ This proves that the market set contains large amounts of structural/coherent in
 
 R3-FV-001 made that distinction explicit: extensive LP/QP/KL/MaxEnt/count-surface work did **not** produce an independent structural point-FV model that beat persistence. Structural information survives as a **diagnostic/identified-set/scanner layer**, not as a continuous point-FV alpha.
 
+## D. Market interaction and aggressor direction — 005H (unmerged)
+
+005H links accepted DATA-003 economic fills to strictly pre-fill V3 order-book state using `timestamp_received` plus sequence ordering. Its two frozen B0 candidates both passed without holdout refitting:
+
+- **C04 Arrival-State:** AUC **0.6882**, 95% token-cluster bootstrap **0.6777–0.7000**, chronological halves **0.6913 / 0.6852**, 14,396 fills matched to 14,396 controls across 1,101 token clusters.
+- **C05 Direction-State:** AUC **0.6745**, bootstrap **0.6398–0.7192**, halves **0.6973 / 0.6547**, 12,661 scored fills across 1,074 token clusters.
+
+The supported interpretation is narrower than own-order fill modelling: observable pre-fill state contains reproducible information about **when market interaction/fills occur** and, conditional on a fill, **which side aggresses**. It does not establish queue position, whether our own passive quote fills, post-fill toxicity, fees, inventory economics or P&L. C01 relative size, C02 failed replenishment and C03 fill-beyond-state were rejected before B0.
+
+**Bottom line:** 005H materially narrows the old fill-layer gap, but it does not close the execution/economics gap. Its correct route is prospective LIVE-DIAG / PAPER context before any execution-policy change.
+
 ---
 
 # 2. Evidence strength
@@ -128,6 +142,8 @@ R3-FV-001 made that distinction explicit: extensive LP/QP/KL/MaxEnt/count-surfac
 | 005I mean reversion | ✓ | ✓ | **✓** |  |  |  |
 | 005I depth-normalised OFI | ✓ | ✓ | **✓** |  |  |  |
 | 005I liquidity/regime/resilience | ✓ | ✓ | **✓** |  |  |  |
+| 005H C04 arrival-state† | ✓ | ✓ | **✓** |  |  |  |
+| 005H C05 aggressor-direction† | ✓ | ✓ | **✓** |  |  |  |
 | 005D late-count structural convergence | ✓ | ✓ | **✓** |  |  |  |
 | 005D reconstruction/coherence | ✓ | ✓ | **✓** | broad families, but reconstruction not predictive replication |  |  |
 | 005E signed-flow secondary | ✓ | ✓ | **✓*** |  |  |  |
@@ -135,7 +151,8 @@ R3-FV-001 made that distinction explicit: extensive LP/QP/KL/MaxEnt/count-surfac
 | 005A same-family 5s | ✓ | ✓ |  |  |  |  |
 
 \* Secondary frozen HOLDOUT diagnostic; not a promoted primary result.  
-005G PR #114 merged into `main` at `662969df4e481f1cbd9417c923ae35d3a0aa9f9f`; its sealed-holdout evidence is canonical.
+005G PR #114 merged into `main` at `662969df4e481f1cbd9417c923ae35d3a0aa9f9f`; its sealed-holdout evidence is canonical.  
+† 005H PR #94 remains unmerged; C04/C05 are untouched historical B0 passes requiring future confirmation.
 
 There are **zero E4 positives** and **zero E5 positives** in the research history inspected.
 
@@ -201,6 +218,19 @@ Answers:
 - **DIRECTION:** yes.
 - **ECONOMICS:** not yet.
 
+## PARTICIPANT INTERACTION / AGGRESSOR DIRECTION
+
+Signals:
+- 005H C04 Arrival-State;
+- 005H C05 Direction-State.
+
+Answers:
+- **WHEN:** C04 identifies observable states associated with actual fill moments versus matched non-fill states.
+- **WHAT:** elevated market interaction / fill-arrival propensity; conditional aggressor side.
+- **DIRECTION:** C05 supplies BUY-versus-SELL aggressor direction conditional on a fill.
+- **OUR FILL PROBABILITY:** not established; C04 is about market fill moments, not queue-position-aware fills of our own quote.
+- **TOXICITY / ECONOMICS:** not established.
+
 ## STRUCTURAL / RELATIVE VALUE
 
 Signals:
@@ -233,6 +263,8 @@ Answers:
 | PRED-006 price-change hazard | **Yes** | No | No |
 | PRICE_DISCOVERY / LIQUIDITY_STRESS | **Yes** | No | No |
 | Withdrawal/replenishment resilience | **Yes** | No | No |
+| 005H C04 arrival-state† | **Interaction/fill arrival** | No | No |
+| 005H C05 direction-state† | Conditional on fill | **Yes — aggressor side** | No |
 | Five-minute mean reversion | Context is move-triggered | **Yes** | No |
 | Depth-normalised OFI | Some state context | **Yes** | No |
 | 005D late-count structural convergence | Some | **Yes, narrow** | No |
@@ -285,6 +317,7 @@ It also supplies a general warning:
 
 - 004C-C: crossing economics strongly negative.
 - 005I: no completed accepted MM-REPLAY result at snapshot.
+- 005H: C04/C05 pass historical B0 for fill-arrival state and conditional aggressor direction, but no own-quote fill, toxicity or P&L conversion has been established.
 - PRED-006: no economic replay; future confirmation still required.
 - 005D: no executable P&L.
 - 005E: no economic conversion.
@@ -435,7 +468,11 @@ DIRECTION / FAIR VALUE                ← exists, less replicated
     005D structural reconstruction / coherence
     005E conditional signed flow (secondary)
             ↓
-FILL PROBABILITY                      ← MISSING / 005H unresolved
+MARKET INTERACTION / FILL ARRIVAL    ← 005H C04 historical B0 pass†
+    C04 arrival-state
+    C05 conditional aggressor direction
+            ↓
+OWN-QUOTE FILL PROBABILITY            ← STILL MISSING
             ↓
 ADVERSE SELECTION / FILL TOXICITY     ← MISSING
     005G specifically shows state hazard is not toxicity
@@ -454,7 +491,7 @@ This is the most important architectural result of the archaeology: **we are goo
 
 ## Fill probability
 
-Historical data does not provide a sufficiently trustworthy queue/cancel/passive-fill model. 005H was designed to attack this layer, but its one-shot B0 run died after replay and before result tables. No result should be inferred.
+005H now establishes that pre-fill V3 order-book state can distinguish actual market fill moments from matched non-fill states (C04) and predict aggressor BUY/SELL direction conditional on a fill (C05). This is meaningful progress on participant-interaction modelling, but it is **not** a queue/cancel/passive-fill model for our own quote. Queue position, our displayed price/size, cancellation latency and own-order selection remain unresolved.
 
 ## Fill toxicity
 
@@ -484,7 +521,8 @@ The launch-time evidence collector should treat the positive families as **diagn
 - transparent liquidity/discovery state;
 - withdrawal/replenishment state;
 - structural/coherence residuals;
-- participant-flow descriptors where legally/operationally observable.
+- participant-flow descriptors where legally/operationally observable;
+- 005H C04 arrival-state and C05 conditional aggressor-direction scores when exact runtime parity is available.
 
 The live-learning question is not “does the old backtest still have a good metric?” It is:
 
@@ -501,7 +539,7 @@ Nothing in this synthesis justifies direct promotion to LIVE execution.
 
 The smallest useful question is:
 
-> **On genuinely future capture, conditional on the frozen renewal/change-hazard state, does the frozen 005I directional layer add incremental signed markout information beyond hazard-only and direction-only baselines?**
+> **On genuinely future capture, conditional on frozen renewal/change hazard and 005H interaction state, do frozen 005I direction and 005H aggressor-direction add incremental signed-markout and own-fill economic information beyond state-only baselines?**
 
 Why this question:
 - it tests the most plausible complementary pair rather than inventing a new signal;
@@ -516,7 +554,7 @@ Do not reopen another broad feature search before answering this narrower increm
 
 # Direct answers to the ten required questions
 
-1. **Strongest positive findings:** renewal/transition hazard (005F, PRED-006, 005G), 005I mean reversion, 005I depth-normalised OFI, 005I liquidity/resilience states, and 005D structural reconstruction/convergence.
+1. **Strongest positive findings:** renewal/transition hazard (005F, PRED-006, 005G), 005I mean reversion and depth-normalised OFI, 005H C04 fill-arrival state and C05 conditional aggressor direction, 005I liquidity/resilience states, and 005D structural reconstruction/convergence.
 2. **Sealed-holdout evidence:** 005F, PRED-006, 005D, 005E secondary diagnostics, 005I, and 005G.
 3. **Cross-dataset/event replication:** the clearest is 005F `genuine_age_s → update_h300` freshly replicated in 005G DATA-003†. Other families have cross-market/event breadth but not equally clean fresh-dataset replication.
 4. **Economic value:** **none established as positive E4/E5**. 005G conversion failed; 004C-C crossing was negative.
@@ -524,8 +562,8 @@ Do not reopen another broad feature search before answering this narrower increm
 6. **Credible direction:** **yes** — especially 005I five-minute mean reversion and depth-normalised OFI; narrower evidence exists in 005D and 005E secondary diagnostics.
 7. **Likely redundancy:** genuine age, state dwell, price-change age, PRED-006 hazard, parts of PRICE_DISCOVERY and other renewal features likely share a transition/renewal latent factor.
 8. **Genuine complementarity:** hazard + mean reversion/OFI; hazard + structural relative value; liquidity state + conditional participant flow.
-9. **Obvious missing pieces:** fill probability, fill toxicity, independent fresh replication of direction, and post-cost economic conversion.
-10. **Smallest next research question:** does frozen direction add incremental future signed-markout information conditional on frozen hazard state?
+9. **Obvious missing pieces:** own-quote fill probability/queue selection, fill toxicity, prospective confirmation of 005H/005I directional layers, and post-cost economic conversion.
+10. **Smallest next research question:** on prospective live data, do frozen 005I direction and 005H aggressor-direction add incremental signed-markout / own-fill economic information conditional on frozen hazard and interaction state?
 
 005G PR #114 is merged into `main` at `662969df4e481f1cbd9417c923ae35d3a0aa9f9f`; canonicality has been refreshed without changing the scientific conclusions.
 
