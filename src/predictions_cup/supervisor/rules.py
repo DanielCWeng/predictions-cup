@@ -301,6 +301,37 @@ def _capture_findings(venue: str, raw: object, findings: list[Finding]) -> None:
             )
         )
 
+    if venue == "POLYMARKET":
+        connected = capture.get("websocket_connected")
+        if connected is False:
+            findings.append(
+                Finding(
+                    "FEED_POLYMARKET_DISCONNECTED",
+                    Severity.CRITICAL,
+                    "Polymarket websocket is disconnected",
+                    {"last_reconnect_reason": capture.get("last_reconnect_reason")},
+                )
+            )
+        message_age = _number(capture.get("last_message_age_seconds"))
+        if message_age is not None and message_age > 30.0:
+            findings.append(
+                Finding(
+                    "FEED_POLYMARKET_STALE",
+                    Severity.CRITICAL,
+                    "Polymarket websocket messages are stale",
+                    {"last_message_age_seconds": message_age},
+                )
+            )
+    if venue == "SIG" and capture.get("health_surface") == "activity_fallback":
+        findings.append(
+            Finding(
+                "SIG_STRUCTURED_HEALTH_UNAVAILABLE",
+                Severity.WARN,
+                "SIG capture is fresh, but structured CAPTURE-001 health is unavailable",
+                {"health_surface_reason": capture.get("health_surface_reason")},
+            )
+        )
+
 
 def _observe_findings(raw: object, findings: list[Finding]) -> None:
     observe = _as_dict(raw)
