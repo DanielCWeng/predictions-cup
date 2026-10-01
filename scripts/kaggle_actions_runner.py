@@ -51,7 +51,16 @@ def load_manifest(path: Path) -> dict[str, Any]:
     if data.get("schema_version") != 1:
         raise ValueError("schema_version must be 1")
     action = data.get("action")
-    if action not in {"auth_check", "dataset_fetch", "dataset_probe", "run", "status", "output", "logs"}:
+    supported_actions = {
+        "auth_check",
+        "dataset_fetch",
+        "dataset_probe",
+        "logs",
+        "output",
+        "run",
+        "status",
+    }
+    if action not in supported_actions:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
 
