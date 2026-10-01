@@ -20,6 +20,8 @@ class SupervisorPolicy:
     disk_warn_free_bytes: int = 8 * _GIB
     disk_critical_free_bytes: int = 4 * _GIB
     disk_emergency_free_bytes: int = 2 * _GIB
+    disk_growth_warn_bytes_per_min: float = 256 * _MIB
+    disk_growth_critical_bytes_per_min: float = 512 * _MIB
     service_memory_warn_bytes: int = 650 * _MIB
     service_memory_critical_bytes: int = 900 * _MIB
     service_memory_growth_warn_mb_per_min: float = 35.0
@@ -233,6 +235,34 @@ def _system_findings(
                 {"used_fraction": used_fraction, "free_bytes": free_bytes},
             )
         )
+
+    growth = _number(disk.get("growth_bytes_per_min"))
+    if growth is not None and growth > 0:
+        minutes_to_full = free_bytes / growth
+        if growth >= policy.disk_growth_critical_bytes_per_min:
+            findings.append(
+                Finding(
+                    "DISK_GROWTH_CRITICAL",
+                    Severity.CRITICAL,
+                    "Disk usage is growing at a critical rate",
+                    {
+                        "growth_bytes_per_min": growth,
+                        "minutes_to_full_at_current_rate": minutes_to_full,
+                    },
+                )
+            )
+        elif growth >= policy.disk_growth_warn_bytes_per_min:
+            findings.append(
+                Finding(
+                    "DISK_GROWTH_WARN",
+                    Severity.WARN,
+                    "Disk usage is growing rapidly",
+                    {
+                        "growth_bytes_per_min": growth,
+                        "minutes_to_full_at_current_rate": minutes_to_full,
+                    },
+                )
+            )
 
 
 def _clock_findings(raw: object, findings: list[Finding]) -> None:
