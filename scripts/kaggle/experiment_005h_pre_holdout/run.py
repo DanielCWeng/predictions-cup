@@ -88,6 +88,29 @@ def main() -> None:
         for value in falsification.get("rejected_v3", [])
     }
 
+    full_models = extended.get("full_models", {})
+    arrival_model = extended.get("arrival_result", {})
+    direction_model = extended.get("direction_result", {})
+
+    def frozen_spec(candidate_id: str, row: dict[str, Any]) -> dict[str, Any]:
+        if candidate_id == "005H-C01-RELATIVE-SIZE":
+            return {
+                "absolute_model": full_models.get("abs_size"),
+                "relative_model": full_models.get("rel_size"),
+            }
+        if candidate_id == "005H-C04-ARRIVAL-STATE":
+            return {"arrival_model": arrival_model}
+        if candidate_id == "005H-C05-DIRECTION-STATE":
+            return {"direction_model": direction_model}
+        if candidate_id == "005H-C06-BOOK-MICROSTRUCTURE-CHALLENGER":
+            mechanism = str(row.get("mechanism") or "")
+            return {
+                "challenger_name": mechanism,
+                "baseline_model": full_models.get("baseline"),
+                "challenger_model": full_models.get(mechanism),
+            }
+        return {}
+
     frozen: list[dict[str, Any]] = []
     excluded: list[dict[str, Any]] = []
     for candidate_id, row in sorted(extended_candidates.items()):
@@ -117,10 +140,30 @@ def main() -> None:
                 }
             )
             continue
+        spec = frozen_spec(candidate_id, row)
+        if candidate_id in {
+            "005H-C01-RELATIVE-SIZE",
+            "005H-C04-ARRIVAL-STATE",
+            "005H-C05-DIRECTION-STATE",
+            "005H-C06-BOOK-MICROSTRUCTURE-CHALLENGER",
+        }:
+            missing_spec = (
+                not spec
+                or any(value is None for value in spec.values())
+            )
+            if missing_spec:
+                excluded.append(
+                    {
+                        "candidate_id": candidate_id,
+                        "reason": "frozen model specification unavailable",
+                    }
+                )
+                continue
         frozen.append(
             {
                 **row,
                 "holdout_rule": HOLDOUT_RULES[candidate_id],
+                "frozen_spec": spec,
             }
         )
 
