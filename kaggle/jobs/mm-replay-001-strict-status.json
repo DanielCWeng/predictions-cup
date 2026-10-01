@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
   "action": "status",
-  "kernel": "polyleviathan/mm-replay-001-strict-asof",
-  "note": "Read-only status probe for strict-asof MM-REPLAY-001 attempt 4."
+  "kernel": "polyleviathan/mm-replay-001-strict-as-of",
+  "note": "Read-only status probe for canonical strict-as-of MM-REPLAY-001 attempt 4."
 }
