@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/experiment_005h_holdout_build",
+  "kernel": "polyleviathan/experiment-005h-holdout-build",
+  "poll_seconds": 30,
+  "timeout_minutes": 300,
+  "download_outputs": true,
+  "output_file_pattern": "(HOLDOUT_JOIN_AUDIT\\.json|HOLDOUT_BUILD_SUMMARY\\.json|HOLDOUT_BUILD_REPORT\\.md)$",
+  "launch_gate": "PRE_HOLDOUT_FREEZE_B0_AUTHORIZED_ONCE"
+}
