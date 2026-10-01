@@ -97,11 +97,12 @@ class AccountRealtimeStateEngine:
             )
             for order in snapshot.open_orders
         }
-        # The authoritative snapshot now contains every position/open order that
-        # can economically overlap with local in-flight reservations. Clear the
-        # overlay before trust is restored so Risk never sees a gap between them.
+        # Only reservations ACKed before this snapshot's conservative read-start
+        # fence are superseded. Newer/un-ACKed operations remain risk-bearing.
         if self._reservations is not None:
-            self._reservations.clear_after_authoritative_reconciliation()
+            self._reservations.reconcile_authoritative(
+                observed_at=snapshot.observed_at
+            )
         self.trusted = False
         self.last_accepted_revision = None
         if mark_trusted:
@@ -185,14 +186,32 @@ class AccountRealtimeStateEngine:
             existing = self._orders.get(update.order_id)
             if update.open:
                 if existing is None:
-                    self.mark_untrusted(
-                        AccountTrustTransition.UNTRUSTED_UNKNOWN_OPEN_ORDER
+                    local = (
+                        None
+                        if self._reservations is None
+                        else self._reservations.reservation_for_exchange_order_id(
+                            str(update.order_id)
+                        )
                     )
-                    return AccountBatchApplyResult(
-                        accepted=False,
-                        duplicate=False,
-                        requires_reconciliation=True,
-                        transition=self.transition,
+                    if local is None:
+                        self.mark_untrusted(
+                            AccountTrustTransition.UNTRUSTED_UNKNOWN_OPEN_ORDER
+                        )
+                        return AccountBatchApplyResult(
+                            accepted=False,
+                            duplicate=False,
+                            requires_reconciliation=True,
+                            transition=self.transition,
+                        )
+                    self._orders[update.order_id] = RuntimeOrderState(
+                        logical_intent_id=local.order.logical_intent_id,
+                        exchange_id=local.order.exchange_id,
+                        market_id=local.order.market_id,
+                        tournament_id=local.order.tournament_id,
+                        reserved_exposure=local.order.reserved_exposure,
+                        open=True,
+                        uncertain=True,
+                        strategy_id=local.order.strategy_id,
                     )
             else:
                 self._orders.pop(update.order_id, None)

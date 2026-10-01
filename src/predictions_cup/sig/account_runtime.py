@@ -266,13 +266,13 @@ class AccountRealtimeController:
         observed_ns = self._clock_ns()
         for fill in batch.fills:
             order_id = str(fill.order_id)
-            logical_operation_id = journal.logical_operation_for_exchange_order_id(
-                order_id
-            )
-            if logical_operation_id is None:
+            placement = journal.placement_identity_for_exchange_order_id(order_id)
+            if placement is None:
                 continue
+            logical_operation_id, logical_intent_id = placement
             journal.record_event(
                 logical_operation_id=logical_operation_id,
+                logical_intent_id=logical_intent_id,
                 event_type="REALTIME_FILL",
                 observed_monotonic_ns=observed_ns,
                 source_timestamp=fill.executed_at.isoformat(),
@@ -293,13 +293,13 @@ class AccountRealtimeController:
             )
         for update in batch.order_updates:
             order_id = str(update.order_id)
-            logical_operation_id = journal.logical_operation_for_exchange_order_id(
-                order_id
-            )
-            if logical_operation_id is None:
+            placement = journal.placement_identity_for_exchange_order_id(order_id)
+            if placement is None:
                 continue
+            logical_operation_id, logical_intent_id = placement
             journal.record_event(
                 logical_operation_id=logical_operation_id,
+                logical_intent_id=logical_intent_id,
                 event_type="REALTIME_ORDER_UPDATE",
                 observed_monotonic_ns=observed_ns,
                 source_timestamp=update.at.isoformat(),
