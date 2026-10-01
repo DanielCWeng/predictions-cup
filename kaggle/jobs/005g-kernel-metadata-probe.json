@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "kernel_fetch",
+  "kernel": "polyleviathan/005g-data-003-orderbook-input-audit-v2",
+  "note": "Read-only server-side Kaggle kernel metadata inspection for EXPERIMENT-005G dataset attachment diagnosis."
+}
