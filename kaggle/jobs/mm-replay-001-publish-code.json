@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "action": "publish_code_dataset",
+  "dataset": "polyleviathan/predictions-cup-code",
+  "source_dir": "src/predictions_cup",
+  "title": "Predictions Cup Code Snapshot",
+  "note": "Publish the branch-pinned predictions_cup package for Kaggle research kernels."
+}
