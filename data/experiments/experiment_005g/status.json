@@ -2,8 +2,8 @@
   "schema_version": 1,
   "experiment": "EXPERIMENT-005G",
   "branch": "experiment/005g-data003-orderbook-atlas",
-  "phase": "LANE_B_TRAIN_DEV",
-  "status": "LANE_A_PRE_COMPLETE_LANE_B_RUNNING",
+  "phase": "SEALED_HOLDOUT",
+  "status": "HOLDOUT_RUNNING_FROZEN_CANDIDATES_ONLY",
   "primary_dataset": "polyleviathan/sig-cup-data003-orderbooks",
   "dataset_version": 1,
   "accepted_mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
@@ -23,14 +23,31 @@
     "active_update": "REPLICATION_INCONCLUSIVE_DEPENDENCE_UNDERPOWERED"
   },
   "lane_b": {
-    "status": "TRAIN_DEV_RUNNING",
-    "workflow_run_id": 36834096535,
-    "holdout_read": false
+    "status": "TRAIN_DEV_COMPLETE",
+    "broad_promoted_train_dev": 9,
+    "sequential_promoted_train_dev": 2,
+    "holdout_read": true
   },
-  "scientific_result": "NO_FINAL_CLAIM_BEFORE_HOLDOUT",
+  "pre_holdout_freeze": {
+    "commit": "a9219762fb49faa7c98fd8f7a3c7a888a5352243",
+    "sha256": "887592885c02ae9219232c40a8b9ce0b263f9a62e04da62c524b16162895cc1c",
+    "candidate_count": 12,
+    "manual_replacements_allowed": false,
+    "post_holdout_tuning_allowed": false
+  },
+  "holdout": {
+    "workflow_run_id": 36843408540,
+    "launch_commit": "44a7cfc0120d778676a38e68a4863029078641b8",
+    "window": [
+      "2026-09-05T00:00:00Z",
+      "2026-09-06T00:00:00Z"
+    ],
+    "first_read_authorized_after_freeze": true,
+    "status": "RUNNING"
+  },
+  "scientific_result": "PENDING_SEALED_HOLDOUT",
   "holdout_allowed": false,
-  "holdout_read": false,
-  "holdout_runner_commit": "a2b7e5e573a863e74bf92e414b216ae5f5ab609d",
+  "holdout_read": true,
   "make_modified": false,
   "real_sig_orders_sent": false
 }
