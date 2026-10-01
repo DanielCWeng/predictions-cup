@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005G",
+  "lane": "A_STRICT_005F_REPLICATION",
+  "status": "FROZEN_BEFORE_FRESH_DEV_RESULTS",
+  "source_dataset": {
+    "slug": "polyleviathan/sig-cup-data003-orderbooks",
+    "version": 1,
+    "effective_acquisition_artifact_sha256": "d25f07e450f57647f198a9e2730889a7846b78a2c4d6f84474b5b45bc33f8532",
+    "accepted_mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2"
+  },
+  "semantics": {
+    "primary_event_stream": "V3 price_change only",
+    "v3_best_bid_ask_primary": false,
+    "reason": "Strict replication keeps the 005F observable BBO-change construction; V3-only best_bid_ask is reserved for a capture-quality challenger/falsification.",
+    "grid_seconds": 15,
+    "gap_seconds": 300,
+    "representative_token_rule": "one representative token per binary condition, using token_ids[0]; avoids complementary duplicate weighting and mirrors 005F yes-token de-duplication for orientation-invariant targets",
+    "genuine_bbo": "valid contiguous BBO group with best_bid or best_ask changed from previous observable group",
+    "genuine_age_s": "seconds since most recent genuine_bbo",
+    "update_h300": "at least one future genuine_bbo strictly after t and through t+300s",
+    "jump_threshold": "TRAIN-only 95th percentile of abs 15s logit-mid return, fixed on DEV/HOLDOUT",
+    "jump_h300": "future absolute 300s logit-mid return >= frozen TRAIN jump threshold",
+    "trade_abs_impact_60": "mean absolute trade-price displacement from immediately-prior observable midpoint over trailing 60s completed 5s bins; exact-time quote/trade matches excluded",
+    "spread_h15": "future spread minus current spread at 15s, same continuity segment"
+  },
+  "windows": {
+    "ACTIVE_RESULTS_CORE_EV18": {
+      "window_id": "ev18_ok_sc_runoff_ga_runoff",
+      "start": "2026-08-25T23:00:00Z",
+      "train": [
+        "2026-08-25T23:00:00Z",
+        "2026-08-26T02:00:00Z"
+      ],
+      "dev": [
+        "2026-08-26T02:00:00Z",
+        "2026-08-26T03:00:00Z"
+      ],
+      "holdout": [
+        "2026-08-26T03:00:00Z",
+        "2026-08-26T04:00:00Z"
+      ],
+      "note": "Five-hour core window kept within the original 005F +6h ACTIVE_RESULTS convention while aligning all splits to hourly source files."
+    },
+    "PRE_ELECTION_BASELINE_SEP": {
+      "window_id": "baseline_sep",
+      "start": "2026-09-01T00:00:00Z",
+      "train": [
+        "2026-09-01T00:00:00Z",
+        "2026-09-04T00:00:00Z"
+      ],
+      "dev": [
+        "2026-09-04T00:00:00Z",
+        "2026-09-05T00:00:00Z"
+      ],
+      "holdout": [
+        "2026-09-05T00:00:00Z",
+        "2026-09-06T00:00:00Z"
+      ],
+      "note": "120h current-universe V3 slice with exact 60/20/20 chronological split and file-aligned sealed holdout."
+    }
+  },
+  "candidates": [
+    {
+      "id": "005F_REPL_ACTIVE_UPDATE",
+      "regime": "ACTIVE_RESULTS_CORE_EV18",
+      "target": "update_h300",
+      "baseline": [
+        "genuine_15",
+        "genuine_60"
+      ],
+      "feature": "genuine_age_s",
+      "model": "HGB_D2_LR0.1",
+      "old_disposition": "HOLDOUT_SUPPORTED"
+    },
+    {
+      "id": "005F_REPL_ACTIVE_JUMP",
+      "regime": "ACTIVE_RESULTS_CORE_EV18",
+      "target": "jump_h300",
+      "baseline": [
+        "abs_ret_15",
+        "rv_60"
+      ],
+      "feature": "genuine_age_s",
+      "model": "HGB_D2_LR0.03",
+      "old_disposition": "HOLDOUT_SUPPORTED"
+    },
+    {
+      "id": "005F_REPL_ACTIVE_PRICE_NEGATIVE",
+      "regime": "ACTIVE_RESULTS_CORE_EV18",
+      "target": "price_h300",
+      "baseline": [
+        "ret_15",
+        "ret_30",
+        "ret_60"
+      ],
+      "feature": "genuine_age_s",
+      "model": "HGB_D2_LR0.1",
+      "old_disposition": "SHADOW_ONLY_NO_SUPPORT",
+      "role": "old-negative retest"
+    },
+    {
+      "id": "005F_REPL_PRE_UPDATE",
+      "regime": "PRE_ELECTION_BASELINE_SEP",
+      "target": "update_h300",
+      "baseline": [
+        "genuine_15",
+        "genuine_60"
+      ],
+      "feature": "genuine_age_s",
+      "model": "HGB_D3_LR0.03",
+      "old_disposition": "HOLDOUT_SUPPORTED"
+    },
+    {
+      "id": "005F_REPL_PRE_LIQUIDITY",
+      "regime": "PRE_ELECTION_BASELINE_SEP",
+      "target": "spread_h15",
+      "baseline": [
+        "spread",
+        "ret_15"
+      ],
+      "feature": "trade_abs_impact_60",
+      "model": "HGB_D3_LR0.03",
+      "old_disposition": "HOLDOUT_SUPPORTED_SMALL_EFFECT"
+    }
+  ],
+  "promotion_labels": [
+    "FRESH_REPLICATION",
+    "REPLICATION_FAILED",
+    "REPLICATION_INCONCLUSIVE",
+    "NOT_REPLICABLE_WITH_THIS_DATA"
+  ],
+  "dev_requirements": {
+    "incremental_loss_improvement_positive": true,
+    "dependence_aware_signflip": true,
+    "block_minutes": 30,
+    "leave_market_stability": true,
+    "minimum_distinct_markets": 3,
+    "holdout_read": false
+  },
+  "falsification_after_primary": [
+    "feature_delay_300s",
+    "time_shift_1800s",
+    "future_feature_diagnostic",
+    "V3 best_bid_ask capture challenger",
+    "activity/freshness restrictions"
+  ],
+  "holdout_rule": "No HOLDOUT file may be downloaded or scanned before PRE_HOLDOUT_FREEZE hashes the selected candidates, code/config, dataset identity and dev evidence.",
+  "original_005f_modified": false,
+  "make_modified": false,
+  "real_sig_orders_sent": false,
+  "computational_sampling": {
+    "rule": "Sampling is applied only to completed clock rows after full raw-state, trade-feature, target, split, purge and continuity construction. Raw input/state construction is never sampled.",
+    "active_ev18": {
+      "sample_mod": 1,
+      "effect": "none; every eligible 15s clock row is retained"
+    },
+    "pre_baseline": {
+      "sample_mod": 16,
+      "method": "deterministic token/timestamp hash-modulo retention",
+      "rationale": "Bound model-frame memory on the 96-hour current-universe V3 TRAIN/DEV slice without changing raw state or target construction.",
+      "candidate_thinning_after_sampling": "The existing 005F MAX_MODEL_ROWS=250000 deterministic thinning rule remains in force candidate-by-candidate."
+    },
+    "frozen_before_fresh_dev_results": true
+  },
+  "research_environment": {
+    "python": "3.12",
+    "project_install": "editable from branch head",
+    "pandas": "2.3.3",
+    "scikit_learn": "1.7.2",
+    "pyarrow": "project dependency 25.0.1",
+    "numpy": "project dependency 2.3.3"
+  }
+}

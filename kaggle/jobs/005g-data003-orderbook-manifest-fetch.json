@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "action": "dataset_fetch",
+  "dataset": "polyleviathan/sig-cup-data003-orderbooks",
+  "files": [
+    "_manifests/plan.json",
+    "_manifests/targets.json",
+    "_manifests/progress.jsonl"
+  ],
+  "note": "EXPERIMENT-005G read-only manifest fetch for immediate semantic/provenance inspection while full input audit runs."
+}

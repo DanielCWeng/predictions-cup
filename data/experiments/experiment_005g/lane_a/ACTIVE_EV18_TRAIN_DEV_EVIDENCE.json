@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005G",
+  "lane": "A_STRICT_005F_REPLICATION",
+  "phase": "TRAIN_DEV",
+  "slice": "active_ev18",
+  "regime": "ACTIVE_RESULTS_CORE_EV18",
+  "job": {
+    "workflow_run_id": 36799885828,
+    "artifact_id": 11134754932,
+    "branch_head_at_job": "6d3cbd87b6b162a2c16694d07d33a53caec867c8",
+    "raw_block_evidence_sha256": "6ae20662b4498d3aea255300020cef6b1fd35554eb397ae54ad4a7788e45ab05",
+    "raw_block_evidence_rows": 92873
+  },
+  "provenance": {
+    "dataset": "polyleviathan/sig-cup-data003-orderbooks",
+    "dataset_version": 1,
+    "source_versions_seen": [
+      "V3"
+    ],
+    "accepted_mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
+    "representative_conditions": 693,
+    "holdout_read": false,
+    "files": [
+      {
+        "remote": "ev18_ok_sc_runoff_ga_runoff/date=2026-08-25/hour=23/events.parquet",
+        "sha256": "8c96910e2c36b9a4b833b5b5ffae5972b904c21d088ffbd21a2dd6ff21920f9a",
+        "filtered_rows": 218155,
+        "price_change_rows": 218152,
+        "trade_rows": 3
+      },
+      {
+        "remote": "ev18_ok_sc_runoff_ga_runoff/date=2026-08-26/hour=00/events.parquet",
+        "sha256": "3ec8dc5a411b18f656668c76818a1fec11a3bb1113ad2163f7b3003fda18f1ef",
+        "filtered_rows": 283402,
+        "price_change_rows": 283399,
+        "trade_rows": 4
+      },
+      {
+        "remote": "ev18_ok_sc_runoff_ga_runoff/date=2026-08-26/hour=01/events.parquet",
+        "sha256": "3ece43748ec41e429ebb159778a12afc88dd6e1aa52599cac972deece02ce2d1",
+        "filtered_rows": 270621,
+        "price_change_rows": 270614,
+        "trade_rows": 8
+      },
+      {
+        "remote": "ev18_ok_sc_runoff_ga_runoff/date=2026-08-26/hour=02/events.parquet",
+        "sha256": "dfeac85b47e1e5d9cc1836a4778ced214a4bb096125c813317fcd3ab435e6517",
+        "filtered_rows": 279303,
+        "price_change_rows": 279286,
+        "trade_rows": 18
+      }
+    ]
+  },
+  "state_audit": {
+    "filtered_rows": 1051481,
+    "raw_groups": 1051448,
+    "valid_groups": 1051448,
+    "ambiguous_groups": 0,
+    "genuine_bbo": 46876,
+    "repeated_unchanged": 1001356,
+    "top_depth_changes": 45194,
+    "state_rows_retained": 88608,
+    "tokens_seen": 685,
+    "trade_rows": 33,
+    "trade_tokens_seen": 18
+  },
+  "clock_audit": {
+    "clock_rows": 546109,
+    "train_rows": 414109,
+    "dev_rows": 132000,
+    "tokens": 600,
+    "sample_mod": 1,
+    "train_jump_threshold_abs_logit15": 0
+  },
+  "primary": [
+    {
+      "candidate_id": "005F_REPL_ACTIVE_UPDATE",
+      "target": "update_h300",
+      "feature": "genuine_age_s",
+      "train_rows": 112314,
+      "dev_rows": 48660,
+      "markets": 284,
+      "baseline_mse": 0.15179175238967613,
+      "challenger_mse": 0.13187786709667687,
+      "mean_loss_improvement": 0.019913885292999277,
+      "relative_mse_improvement": 0.1311921430479097,
+      "blocks": 2,
+      "positive_blocks": 2,
+      "leave_market_min": 0.019103114052520347,
+      "leave_market_all_positive": true,
+      "signflip_p": 1,
+      "frozen_gate_pass": false,
+      "dev_disposition": "REPLICATION_INCONCLUSIVE_DEPENDENCE_UNDERPOWERED",
+      "reason": "Large positive increment and market stability, but frozen 30-minute dependence test has only two DEV blocks; confirmatory sign-flip/bootstrap gate cannot be evaluated with adequate support."
+    },
+    {
+      "candidate_id": "005F_REPL_ACTIVE_JUMP",
+      "target": "jump_h300",
+      "feature": "genuine_age_s",
+      "train_rows": 105663,
+      "dev_rows": 44768,
+      "status": "ONE_CLASS_TARGET",
+      "train_jump_threshold_abs_logit15": 0,
+      "frozen_gate_pass": false,
+      "dev_disposition": "NOT_REPLICABLE_WITH_THIS_DATA",
+      "reason": "Exact 005F TRAIN-only 95th percentile abs_ret_15 threshold is zero on the broad fresh current-universe slice, making jump_h300 one-class. Changing the threshold would no longer be strict replication."
+    },
+    {
+      "candidate_id": "005F_REPL_ACTIVE_PRICE_NEGATIVE",
+      "target": "price_h300",
+      "feature": "genuine_age_s",
+      "train_rows": 104676,
+      "dev_rows": 44213,
+      "markets": 284,
+      "baseline_mse": 0.007254960111452637,
+      "challenger_mse": 0.007268038715452592,
+      "mean_loss_improvement": -0.000013078603999956139,
+      "relative_mse_improvement": -0.001802712047900902,
+      "blocks": 2,
+      "positive_blocks": 0,
+      "leave_market_min": -0.000013783697007938657,
+      "old_negative_retest": "CONSISTENT_WITH_005F_NEGATIVE"
+    }
+  ],
+  "block_summary": [
+    {
+      "candidate_id": "005F_REPL_ACTIVE_UPDATE",
+      "block": "2026-08-26T02:00:00Z",
+      "rows": 28416,
+      "mean_loss_improvement": 0.0229922593
+    },
+    {
+      "candidate_id": "005F_REPL_ACTIVE_UPDATE",
+      "block": "2026-08-26T02:30:00Z",
+      "rows": 20244,
+      "mean_loss_improvement": 0.0155928482
+    },
+    {
+      "candidate_id": "005F_REPL_ACTIVE_PRICE_NEGATIVE",
+      "block": "2026-08-26T02:00:00Z",
+      "rows": 25826,
+      "mean_loss_improvement": -0.0000047988
+    },
+    {
+      "candidate_id": "005F_REPL_ACTIVE_PRICE_NEGATIVE",
+      "block": "2026-08-26T02:30:00Z",
+      "rows": 18387,
+      "mean_loss_improvement": -0.0000247083
+    }
+  ],
+  "placebo_summary": {
+    "update_feature_delay_300s_relative_improvement": 0.11865074508469346,
+    "update_time_shift_1800s_relative_improvement": 0.10714946848365664,
+    "update_future_feature_relative_improvement": 0.9990853316054201,
+    "interpretation": "Delayed/shifted age retains substantial increment, consistent with a persistent state variable rather than a short-lived lead-lag effect. Future age nearly encodes the renewal target and is therefore a leakage diagnostic, not a valid feature."
+  },
+  "next_step": "Run frozen PRE_ELECTION_BASELINE_SEP TRAIN/DEV before any HOLDOUT read; then create a single pre-holdout freeze for eligible/inconclusive candidates.",
+  "real_sig_orders_sent": false
+}

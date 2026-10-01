@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "action": "dataset_fetch",
+  "dataset": "polyleviathan/sig-cup-data003-orderbooks",
+  "files": [
+    "_manifests/progress_w0.jsonl",
+    "_manifests/progress_w1.jsonl",
+    "_manifests/progress_w2.jsonl",
+    "_manifests/progress_w3.jsonl"
+  ],
+  "note": "EXPERIMENT-005G full worker-manifest fetch. These manifests carry per-output rows/bytes/SHA256 and avoid unnecessary 18GB re-download for provenance audit."
+}

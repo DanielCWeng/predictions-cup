@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "action": "status",
+  "kernel": "polyleviathan/005g-economic-replay-v1",
+  "probe": 4,
+  "note": "005G attempt 4 status probe only"
+}

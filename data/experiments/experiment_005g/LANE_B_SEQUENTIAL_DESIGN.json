@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005G",
+  "lane": "B_SEQUENTIAL_FAMILIES",
+  "status": "FROZEN_BEFORE_RESULTS",
+  "data": {
+    "dataset": "polyleviathan/sig-cup-data003-orderbooks",
+    "dataset_version": 1,
+    "train": [
+      "2026-09-01T00:00:00Z",
+      "2026-09-04T00:00:00Z"
+    ],
+    "dev": [
+      "2026-09-04T00:00:00Z",
+      "2026-09-05T00:00:00Z"
+    ],
+    "holdout": [
+      "2026-09-05T00:00:00Z",
+      "2026-09-06T00:00:00Z"
+    ],
+    "holdout_read": false,
+    "source_generation": "V3"
+  },
+  "state_transition": {
+    "source": "native best_bid_ask sequence, timestamp_received observable clock",
+    "state_definition": "per-token TRAIN-only spread tertiles; tokens require >=30 TRAIN native BBO observations and distinct cutpoints",
+    "panel": "15-second clock; state and dwell are computed from the full native-BBO sequence before deterministic sample_mod=16",
+    "feature": "state_dwell_s",
+    "baseline": [
+      "spread_state",
+      "bbo_age_s",
+      "bbo_updates_60",
+      "bbo_updates_300"
+    ],
+    "targets": [
+      "state_transition_h60",
+      "state_transition_h300"
+    ],
+    "target_definition": "at least one future native BBO observation within horizon enters a spread-state different from state at t",
+    "model": "logistic C=1.0",
+    "caveat": "The target is transition occurrence, not direction."
+  },
+  "resilience": {
+    "source": "native book depth snapshots, timestamp_received observable clock",
+    "shock_definition": {
+      "depth": "depth_5c drops >=25% versus previous snapshot for same token",
+      "spread": "spread widens >=0.02 versus previous snapshot for same token",
+      "continuity": "snapshot gap <=300s; otherwise no sequential shock claim"
+    },
+    "rows": "shock events only",
+    "baseline": [
+      "shock_size",
+      "post_depth_5c",
+      "spread",
+      "snapshot_interval_s"
+    ],
+    "features": [
+      "top_imbalance",
+      "microprice_disp_over_spread",
+      "bbo_age_s",
+      "bbo_updates_60"
+    ],
+    "targets": [
+      "depth_half_recovered_h60",
+      "depth_half_recovered_h300"
+    ],
+    "target_definition": "future depth_5c recovers >=50% of the observed shock loss using the last snapshot at or before t+h, only when that future snapshot is <=60s old",
+    "model": "logistic C=1.0"
+  },
+  "statistics": {
+    "max_model_rows": 250000,
+    "dependence_unit": "30-minute time blocks",
+    "signflip_p_max": 0.1,
+    "block_bootstrap_lower_must_be_positive": true,
+    "leave_market_min_must_be_positive": true,
+    "fdr": "BH q=0.10 within target_family x feature_family",
+    "dev_min_rows": 200,
+    "min_markets": 3
+  },
+  "admission": "Only coordinates passing every frozen DEV gate may be added to PRE_HOLDOUT_FREEZE; otherwise retained as REJECTED_DISCOVERY or SUPPORT_BLOCKED.",
+  "direct_make_mutation": false,
+  "real_sig_orders_sent": false
+}

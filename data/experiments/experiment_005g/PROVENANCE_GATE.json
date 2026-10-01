@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005G",
+  "status": "PASS_INPUT_IDENTITY__CONFIRMATORY_PUBLICATION_REQUIRES_ACQUISITION_CODE_EXCEPTION_OR_RECOVERY",
+  "dataset_identity_pass": true,
+  "dataset_version_pass": true,
+  "file_hash_binding_pass": true,
+  "mapping_set_equality_pass": true,
+  "timestamp_semantics_pass": true,
+  "acquisition_code_version_recorded": false,
+  "source_completeness": "PARTIAL_WITH_EXPLICIT_EXCLUSIONS",
+  "required_exclusions": [
+    "ev11_me_nv_nd_sc 2026-06-11T04 through T06 SOURCE_MISSING",
+    "ev09_al_ga_id_ky_or_pa_tx 2026-05-22T17 and T18 zero-row placeholders"
+  ],
+  "publication_rule": "Do not present confirmatory 005G results as fully provenance-complete unless the missing acquisition-code version is recovered or a documented exception binds the immutable dataset bytes/manifests as the effective acquisition version.",
+  "exploration_allowed": true,
+  "holdout_allowed": false,
+  "real_sig_orders_sent": false
+}

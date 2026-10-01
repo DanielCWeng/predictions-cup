@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "action": "repo_script",
+  "script": "scripts/research/experiment_005g_make_freeze.py",
+  "script_args": [
+    "--output",
+    "kaggle/action-output/005g-pre-holdout-freeze/outputs/PRE_HOLDOUT_FREEZE.json",
+    "--lane-a-runner-commit",
+    "4aeb00d93078c4902880d09e681f5b7a42556979",
+    "--lane-b-runner-commit",
+    "336b3cae675cda0ebf97859d3a742526e0be6a2a",
+    "--holdout-runner-commit",
+    "16e33c50e50c7285e7ef862f255163250351193a"
+  ],
+  "install_project": false,
+  "pip_packages": [],
+  "note": "EXPERIMENT-005G mechanical pre-HOLDOUT freeze. Consumes only committed TRAIN/DEV evidence; no external dataset bytes and no Sep5 HOLDOUT read."
+}

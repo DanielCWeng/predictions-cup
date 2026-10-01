@@ -1,0 +1,428 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005G",
+  "phase": "INPUT_AUDIT",
+  "authoritative": true,
+  "generated_from_branch": "experiment/005g-data003-orderbook-atlas",
+  "audit_code_sha": "4c26a17625d15d61c6c46f61788aa175a84b3d49",
+  "scientific_result": "NOT_RUN",
+  "holdout_read": false,
+  "dataset": {
+    "slug": "polyleviathan/sig-cup-data003-orderbooks",
+    "kaggle_status": "ready",
+    "kaggle_current_version_number": 1,
+    "effective_acquisition_artifact_sha256": "d25f07e450f57647f198a9e2730889a7846b78a2c4d6f84474b5b45bc33f8532",
+    "acquisition_code_version": "NOT_RECORDED_IN_DATASET_OR_REPOSITORY",
+    "acquisition_code_note": "Worker traceback identifies an acquire_sig_cup.py script, but no source-control SHA/version is recorded. Dataset bytes remain transitively bound by dataset version, manifest hashes, and per-output SHA-256 values inside the progress manifests.",
+    "plan_hours": 2898,
+    "final_status_counts": {
+      "DONE": 2895,
+      "SOURCE_MISSING": 3
+    },
+    "physical_parquet_outputs": 2893,
+    "zero_row_placeholders": 2,
+    "total_rows": 1206616757,
+    "total_output_bytes": 19117561321,
+    "known_declared_gaps": 30,
+    "time_span_planned": [
+      "2026-02-28T00",
+      "2026-09-28T23"
+    ],
+    "source_generations": {
+      "v1": {
+        "planned_hours": 432,
+        "done_outputs": 432,
+        "rows": 45535096,
+        "bytes": 1195388125
+      },
+      "v2": {
+        "planned_hours": 1532,
+        "done_outputs": 1529,
+        "physical_outputs": 1527,
+        "rows": 384552951,
+        "bytes": 3484026651
+      },
+      "ag6": {
+        "planned_hours": 100,
+        "done_outputs": 100,
+        "rows": 81772222,
+        "bytes": 765757775
+      },
+      "v3": {
+        "planned_hours": 834,
+        "done_outputs": 834,
+        "rows": 694756488,
+        "bytes": 13672388770
+      }
+    },
+    "source_missing_hours": [
+      {
+        "window": "ev11_me_nv_nd_sc",
+        "hour": "2026-06-11T04",
+        "source": "v2"
+      },
+      {
+        "window": "ev11_me_nv_nd_sc",
+        "hour": "2026-06-11T05",
+        "source": "v2"
+      },
+      {
+        "window": "ev11_me_nv_nd_sc",
+        "hour": "2026-06-11T06",
+        "source": "v2"
+      }
+    ],
+    "zero_row_hours": [
+      {
+        "window": "ev09_al_ga_id_ky_or_pa_tx",
+        "hour": "2026-05-22T17",
+        "source": "v2"
+      },
+      {
+        "window": "ev09_al_ga_id_ky_or_pa_tx",
+        "hour": "2026-05-22T18",
+        "source": "v2"
+      }
+    ],
+    "manifest_hashes": {
+      "plan.json": {
+        "sha256": "ed0d027f58a36a5794f4c21006c39c4c7b53b2354dec98cfc0277505b377cb73",
+        "bytes": 599225
+      },
+      "targets.json": {
+        "sha256": "29b80b4577bd38f6b0efb49884f3c9d6f732d1106d18f2f7d5afb401b0e8f8d7",
+        "bytes": 340493
+      },
+      "progress.jsonl": {
+        "sha256": "cebcf9470a988e746c7f5e4821adee4f10bf76af9e7cdecb088ade8c363f5046",
+        "bytes": 13507
+      },
+      "progress_w0.jsonl": {
+        "sha256": "a05057c06145effc1e1602b821ff1d5c891ce1ec4e57f9256b0c6b63af618eec",
+        "bytes": 628113
+      },
+      "progress_w1.jsonl": {
+        "sha256": "8b54a6878bc8e3e6d16fd4c6d3f2c951e38c4ab14c10a2fbf2a6523ff7b7578c",
+        "bytes": 626878
+      },
+      "progress_w2.jsonl": {
+        "sha256": "aec6125b17f6e10f1a92aaec9aba1fd8ed48db475746106d703a1b5e36791fbc",
+        "bytes": 27121
+      },
+      "progress_w3.jsonl": {
+        "sha256": "c8f7811dac4f3b40d7b2636768178eb74c632b044df534f9c64267f51e31c06f",
+        "bytes": 25772
+      }
+    },
+    "file_hash_binding": "The four worker progress manifests plus base progress contain per-output path, rows, bytes and SHA-256. Their own hashes above therefore bind the complete physical output inventory without copying 19 GB into Git.",
+    "window_summary": [
+      {
+        "window": "ev01_tx_ar_nc_primary",
+        "planned_by_source": {
+          "v1": 120
+        },
+        "done_outputs": 120,
+        "physical_outputs": 120,
+        "rows": 11676665,
+        "bytes": 312967888,
+        "source_missing": 0
+      },
+      {
+        "window": "ev02_ms_primary_ga14_special",
+        "planned_by_source": {
+          "v1": 72
+        },
+        "done_outputs": 72,
+        "physical_outputs": 72,
+        "rows": 6283869,
+        "bytes": 168653046,
+        "source_missing": 0
+      },
+      {
+        "window": "ev03_il_primary",
+        "planned_by_source": {
+          "v1": 96
+        },
+        "done_outputs": 96,
+        "physical_outputs": 96,
+        "rows": 9743774,
+        "bytes": 262219180,
+        "source_missing": 0
+      },
+      {
+        "window": "ev04_ar_runoff",
+        "planned_by_source": {
+          "v1": 72
+        },
+        "done_outputs": 72,
+        "physical_outputs": 72,
+        "rows": 5965828,
+        "bytes": 158346552,
+        "source_missing": 0
+      },
+      {
+        "window": "ev05_ms_ga14_runoff",
+        "planned_by_source": {
+          "v1": 72
+        },
+        "done_outputs": 72,
+        "physical_outputs": 72,
+        "rows": 11864960,
+        "bytes": 293201459,
+        "source_missing": 0
+      },
+      {
+        "window": "ev06_nj11_special",
+        "planned_by_source": {
+          "v2": 72
+        },
+        "done_outputs": 72,
+        "physical_outputs": 72,
+        "rows": 7901242,
+        "bytes": 79308349,
+        "source_missing": 0
+      },
+      {
+        "window": "ev07_oh_in_primary",
+        "planned_by_source": {
+          "v2": 72
+        },
+        "done_outputs": 72,
+        "physical_outputs": 72,
+        "rows": 8992695,
+        "bytes": 86888340,
+        "source_missing": 0
+      },
+      {
+        "window": "ev08_ne_nc_wv_la_senate",
+        "planned_by_source": {
+          "v2": 168
+        },
+        "done_outputs": 168,
+        "physical_outputs": 168,
+        "rows": 33478590,
+        "bytes": 313618904,
+        "source_missing": 0
+      },
+      {
+        "window": "ev09_al_ga_id_ky_or_pa_tx",
+        "planned_by_source": {
+          "v2": 264
+        },
+        "done_outputs": 264,
+        "physical_outputs": 262,
+        "rows": 66314323,
+        "bytes": 585646244,
+        "source_missing": 0
+      },
+      {
+        "window": "ev10_ca_ia_mt_nj_nm_sd",
+        "planned_by_source": {
+          "v2": 96
+        },
+        "done_outputs": 96,
+        "physical_outputs": 96,
+        "rows": 22295449,
+        "bytes": 204019828,
+        "source_missing": 0
+      },
+      {
+        "window": "ev11_me_nv_nd_sc",
+        "planned_by_source": {
+          "v2": 96
+        },
+        "done_outputs": 93,
+        "physical_outputs": 93,
+        "rows": 12351933,
+        "bytes": 121228260,
+        "source_missing": 3
+      },
+      {
+        "window": "ev12_al_runoff_dc_ga_runoff",
+        "planned_by_source": {
+          "v2": 96
+        },
+        "done_outputs": 96,
+        "physical_outputs": 96,
+        "rows": 17016564,
+        "bytes": 152560273,
+        "source_missing": 0
+      },
+      {
+        "window": "ev13_md_ny_ut_sc_runoff_la",
+        "planned_by_source": {
+          "v2": 168
+        },
+        "done_outputs": 168,
+        "physical_outputs": 168,
+        "rows": 42090487,
+        "bytes": 365473001,
+        "source_missing": 0
+      },
+      {
+        "window": "ev14_co_primary",
+        "planned_by_source": {
+          "v2": 96
+        },
+        "done_outputs": 96,
+        "physical_outputs": 96,
+        "rows": 28112624,
+        "bytes": 260766437,
+        "source_missing": 0
+      },
+      {
+        "window": "ev15_az_me_sd_ga_special",
+        "planned_by_source": {
+          "v2": 240
+        },
+        "done_outputs": 240,
+        "physical_outputs": 240,
+        "rows": 51536770,
+        "bytes": 448734367,
+        "source_missing": 0
+      },
+      {
+        "window": "ev16_ks_mi_mo_va_wa_tn_la_hi",
+        "planned_by_source": {
+          "v2": 164,
+          "ag6": 100
+        },
+        "done_outputs": 264,
+        "physical_outputs": 264,
+        "rows": 176234496,
+        "bytes": 1631540423,
+        "source_missing": 0
+      },
+      {
+        "window": "ev17_ak_fl_wy",
+        "planned_by_source": {
+          "v3": 66
+        },
+        "done_outputs": 66,
+        "physical_outputs": 66,
+        "rows": 39279369,
+        "bytes": 669440984,
+        "source_missing": 0
+      },
+      {
+        "window": "ev18_ok_sc_runoff_ga_runoff",
+        "planned_by_source": {
+          "v3": 96
+        },
+        "done_outputs": 96,
+        "physical_outputs": 96,
+        "rows": 58758701,
+        "bytes": 1041860112,
+        "source_missing": 0
+      },
+      {
+        "window": "baseline_sep",
+        "planned_by_source": {
+          "v3": 672
+        },
+        "done_outputs": 672,
+        "physical_outputs": 672,
+        "rows": 596718418,
+        "bytes": 11961087674,
+        "source_missing": 0
+      }
+    ]
+  },
+  "mapping": {
+    "accepted_mapping_source": "data/mappings/sig_polymarket_2026.json",
+    "accepted_mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
+    "sig_records": 237,
+    "target_conditions": 693,
+    "target_tokens": 1386,
+    "target_conditions_equal_mapping_leg_union": true,
+    "target_tokens_equal_mapping_leg_union": true,
+    "equality_check": {
+      "condition_set_fnv1a64": "007cb76ffdfef1b9",
+      "token_set_fnv1a64": "df086ca629c3ebf3",
+      "note": "Diagnostic equality hashes computed independently over sorted ASCII JSON arrays on dataset targets and mapping-leg union; counts and hashes match."
+    }
+  },
+  "representative_schema_evidence": [
+    {
+      "source": "v1",
+      "window": "ev01_tx_ar_nc_primary",
+      "hour": "2026-02-28T00",
+      "sha256": "77fda1a5c64dd6f1c32911f64ba7f340bed9b38fc30df0cf113b4958f41d2dc8",
+      "bytes": 3536176,
+      "shape": "five-column V1 envelope plus window_id/source_version; JSON payload"
+    },
+    {
+      "source": "v2",
+      "window": "ev06_nj11_special",
+      "hour": "2026-04-15T00",
+      "sha256": "5b37cfa731ac11c681358bd356dc724e8ffab1265f88e7f649fffe9b3a49182e",
+      "bytes": 1192080,
+      "shape": "typed V2 event rows plus window_id/source_version"
+    },
+    {
+      "source": "ag6",
+      "window": "ev16_ks_mi_mo_va_wa_tn_la_hi",
+      "hour": "2026-08-09T20",
+      "sha256": "ab67142331c84ec64f4d1cb70719adbdf6d1ec0369546429edd2eec25d035d20",
+      "bytes": 10080092,
+      "shape": "same sixteen-column schema as PMXT V2, plus dataset provenance columns"
+    },
+    {
+      "source": "v3",
+      "window": "ev17_ak_fl_wy",
+      "hour": "2026-08-18T06",
+      "sha256": "65c756bfb10a2bac3ea4c7c288fb22ca968fd96fa2a408bbe27cef8df95681bc",
+      "bytes": 6345457,
+      "shape": "V3 event rows with microsecond receive time and sequence; early V3 may lack witness columns"
+    },
+    {
+      "source": "v3",
+      "window": "ev18_ok_sc_runoff_ga_runoff",
+      "hour": "2026-08-24T00",
+      "sha256": "adbf97e1b8a9322ab49a580c4aae91bebc5e7a32c904436aa5bbbab89642212c",
+      "bytes": 8649222,
+      "shape": "V3 event rows"
+    },
+    {
+      "source": "v3",
+      "window": "baseline_sep",
+      "hour": "2026-09-01T00",
+      "sha256": "1e624b8b8685e5fda2867bc887903599c7d6932a383ac55a74b77d2a454aaa90",
+      "bytes": 465601,
+      "shape": "V3 enriched schema including witness_set, arrival_skew and source_witness"
+    }
+  ],
+  "audit_dimensions": {
+    "schemas": "REPRESENTATIVE_SOURCE_GENERATIONS_AUDITED; FULL_SCHEMA_CENSUS_PENDING_CANONICAL_PASS",
+    "row_counts": "BOUND_BY_ACQUISITION_MANIFESTS",
+    "market_token_coverage": "TARGET_SET_EXACTLY_MATCHES_ACCEPTED_MAPPING_LEG_UNION",
+    "time_ranges": "PLAN_BOUND; ROW_LEVEL_RANGES_PENDING_CANONICAL_PASS",
+    "acquisition_versions": "SOURCE_GENERATIONS_BOUND; ORIGINAL_ACQUISITION_CODE_VERSION_NOT_RECORDED",
+    "source_versions": "v1/v2/ag6/v3",
+    "timestamp_precision": "BOUND_BY_SOURCE_FORMAT_SEMANTICS",
+    "event_ordering": "OBSERVABILITY_MODEL_DEFINED; ROW_LEVEL_VALIDATION_PENDING",
+    "snapshot_cadence": "PENDING_CANONICAL_PASS",
+    "depth_coverage": "PENDING_CANONICAL_PASS",
+    "data_representation": "v1 JSON envelope; v2/ag6 typed event rows; v3 typed event rows with nested depth",
+    "duplicated_observations": "PENDING_CANONICAL_PASS; v3 sequence supports exact within-hour dedupe; earlier eras require content rules",
+    "gaps": "30 DECLARED PRE-PLAN GAPS + 3 FINAL SOURCE_MISSING HOURS + 2 ZERO-ROW HOURS RECORDED",
+    "corrupt_files": "NO CORRUPTION CLAIM FROM MANIFESTS; FULL BYTE READ NOT PERFORMED",
+    "partial_markets": "PENDING_CANONICAL_PASS",
+    "mapping_coverage": "PASS_EXACT_TARGET_SET_EQUALITY",
+    "relationship_to_DATA_003": "PASS: target set equals union of all direct/derived Polymarket legs in accepted 237-record Cup mapping"
+  },
+  "operational_transport": {
+    "kaggle_kernel_dataset_attachment": "FAILED_TO_MATERIALIZE_PRIVATE_DATASET",
+    "dataset_api_access": "PASS",
+    "server_side_kernel_metadata_preserves_dataset_source": true,
+    "consequence": "Heavy 19 GB Kaggle canonicalization/discovery is operationally blocked on direct dataset mount. Audit proceeded through authenticated dataset API manifests and representative files without substituting another corpus."
+  },
+  "boundaries": {
+    "used_DATA_001_as_input": false,
+    "used_old_005F_corpus_as_input": false,
+    "used_unrelated_polymarket_samples": false,
+    "original_005F_modified": false,
+    "make_modified": false,
+    "real_sig_orders_sent": false
+  }
+}

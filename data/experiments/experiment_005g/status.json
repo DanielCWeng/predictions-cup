@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005G",
+  "branch": "experiment/005g-data003-orderbook-atlas",
+  "phase": "COMPLETE",
+  "status": "CLOSED_AFTER_FAILURE_FORENSICS",
+  "primary_dataset": "polyleviathan/sig-cup-data003-orderbooks",
+  "dataset_version": 1,
+  "accepted_mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
+  "effective_acquisition_artifact_sha256": "d25f07e450f57647f198a9e2730889a7846b78a2c4d6f84474b5b45bc33f8532",
+  "original_005f_sealed": true,
+  "lane_a": {
+    "active_ev18": "COMPLETE_INCONCLUSIVE_OR_BLOCKED",
+    "pre_baseline": "COMPLETE",
+    "holdout_eligible": [
+      "005F_REPL_PRE_UPDATE"
+    ],
+    "rejected_before_holdout": [
+      "005F_REPL_PRE_LIQUIDITY",
+      "005F_REPL_ACTIVE_JUMP",
+      "005F_REPL_ACTIVE_PRICE_NEGATIVE"
+    ],
+    "active_update": "REPLICATION_INCONCLUSIVE_DEPENDENCE_UNDERPOWERED",
+    "sealed_result": "005F_REPL_PRE_UPDATE_FRESH_REPLICATION"
+  },
+  "lane_b": {
+    "status": "SEALED_HOLDOUT_COMPLETE",
+    "broad_promoted_train_dev": 9,
+    "sequential_promoted_train_dev": 2,
+    "broad_confirmed_holdout": 7,
+    "sequential_confirmed_holdout": 2,
+    "discovery_not_confirmed": 2,
+    "holdout_read": true
+  },
+  "pre_holdout_freeze": {
+    "commit": "a9219762fb49faa7c98fd8f7a3c7a888a5352243",
+    "sha256": "887592885c02ae9219232c40a8b9ce0b263f9a62e04da62c524b16162895cc1c",
+    "candidate_count": 12,
+    "manual_replacements_allowed": false,
+    "post_holdout_tuning_allowed": false
+  },
+  "holdout": {
+    "workflow_run_id": 36843408540,
+    "workflow_job_id": 110307699563,
+    "launch_commit": "44a7cfc0120d778676a38e68a4863029078641b8",
+    "window": [
+      "2026-09-05T00:00:00Z",
+      "2026-09-06T00:00:00Z"
+    ],
+    "first_read_authorized_after_freeze": true,
+    "status": "SUCCESS",
+    "artifact_id": 11153497494,
+    "artifact_sha256": "2c5bb46ebcf5b8d79e7368afdb309c849e55992ad44a771ab849740a219ef4d0",
+    "holdout_results_sha256": "c0d567ace0dd9f1f801add05f69e673b9abb2689e4c9527650be49797587233f",
+    "holdout_audit_sha256": "bb93acbdbf78cbf9e4072a7c633db8c73b04a8e4736fd3d1b7badbbecd65cb33",
+    "raw_artifact_repo_path": "data/experiments/experiment_005g/holdout/kaggle-run-0-1.zip"
+  },
+  "scientific_result": {
+    "frozen_candidates": 12,
+    "fresh_replications": 1,
+    "independently_supported_discoveries": 9,
+    "discoveries_not_confirmed": 2,
+    "total_supported": 10,
+    "primary_finding": "STATE_DEPENDENT_RENEWAL_AND_TRANSITION_HAZARD",
+    "economic_claim": "NOT_ESTABLISHED",
+    "next_gate": "CLOSED"
+  },
+  "holdout_allowed": false,
+  "holdout_read": true,
+  "selection_or_tuning_after_holdout": false,
+  "make_modified": false,
+  "real_sig_orders_sent": false,
+  "economic_replay": {
+    "protocol_id": "005G_ECONOMIC_REPLAY_V1",
+    "status": "COMPLETE_NO_DEV_CHAMPION",
+    "workflow_run_id": 36859479989,
+    "workflow_job_id": 110359913766,
+    "artifact_id": 11161197062,
+    "artifact_sha256": "ecd0a08ef52c5c38bc14e408d472739fb69ef6fe869f4f04cfef685b10ac36f8",
+    "result_path": "data/experiments/experiment_005g/economic_replay/RESULT.json",
+    "train_date": "2026-09-06",
+    "dev_date": "2026-09-07",
+    "holdout_date": "2026-09-08",
+    "dev_champion": null,
+    "family_winners": 0,
+    "holdout_candidate_policy_evaluated": false,
+    "holdout_baseline_only": true,
+    "promotion": "NO_PROMOTION",
+    "post_holdout_tuning": false,
+    "make_modified": false,
+    "real_sig_orders_sent": false
+  },
+  "failure_forensics": {
+    "analysis_type": "POST_HOC_FAILURE_FORENSICS",
+    "workflow_run_id": 36866400386,
+    "artifact_id": 11164582583,
+    "artifact_sha256": "0a39d43740af611934ab35af1823d4c2c0f53991456e57de256631fbecceb2b0",
+    "classification": "MIXED",
+    "dominant_mechanism": "STATE_ONLY",
+    "secondary": [
+      "CONDITIONAL_CONTEXT",
+      "PROXY_LIMITED"
+    ],
+    "economic_holdout_read": false,
+    "live_make_promotion": "NO",
+    "real_sig_orders_sent": false,
+    "report": "docs/experiments/EXPERIMENT_005G_FAILURE_FORENSICS.md",
+    "result": "data/experiments/experiment_005g/FAILURE_FORENSICS.json"
+  }
+}

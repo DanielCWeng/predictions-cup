@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "status",
+  "kernel": "polyleviathan/005g-failure-forensics-v1",
+  "note": "Read-only status probe for 005G failure forensics."
+}

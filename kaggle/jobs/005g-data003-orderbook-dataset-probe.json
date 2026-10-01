@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "action": "dataset_probe",
+  "datasets": [
+    "polyleviathan/sig-cup-data003-orderbooks",
+    "polyleviathan/sig-cup-data-003-orderbooks",
+    "polyleviathan/sig-cup-data003-orderbook",
+    "polyleviathan/sig-cup-data-003-orderbook"
+  ],
+  "note": "Read-only authenticated probe: exact private DATA-003 orderbook identity plus Kaggle current version/status for EXPERIMENT-005G provenance.",
+  "attempt": 2
+}

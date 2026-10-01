@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005G",
+  "phase": "V3_SEMANTIC_PROBE",
+  "holdout_read": false,
+  "conclusion": "STRICT_005F_PRICE_CHANGE_BBO_SEMANTICS_AVAILABLE_IN_V3",
+  "root_cause_of_first_lane_a_failure": "V3 asset_id is a raw big-endian binary integer. It must be converted to Polymarket's decimal token-id string; UTF-8/string filtering matches zero rows.",
+  "files": [
+    {
+      "remote": "ev18_ok_sc_runoff_ga_runoff/date=2026-08-25/hour=23/events.parquet",
+      "rows": 470642,
+      "asset_id_type": "binary",
+      "timestamp_received_type": "timestamp[us, tz=UTC]",
+      "event_counts": {
+        "best_bid_ask": 29424,
+        "book": 4906,
+        "last_trade_price": 8,
+        "price_change": 436304
+      },
+      "price_change_fields": {
+        "best_bid_non_null": true,
+        "best_ask_non_null": true,
+        "price_non_null": true,
+        "size_non_null": true,
+        "side_non_null": true
+      },
+      "witness_columns_present": false,
+      "distinct_assets": 1370,
+      "mapped_asset_intersection": 1370,
+      "representative_asset_intersection": 685,
+      "representative_price_change_rows": 218152,
+      "representative_valid_bbo_price_change_rows": 218152
+    },
+    {
+      "remote": "baseline_sep/date=2026-09-01/hour=00/events.parquet",
+      "rows": 23244,
+      "asset_id_type": "binary",
+      "timestamp_received_type": "timestamp[us, tz=UTC]",
+      "event_counts": {
+        "best_bid_ask": 174,
+        "book": 200,
+        "price_change": 22870
+      },
+      "price_change_fields": {
+        "best_bid_non_null": true,
+        "best_ask_non_null": true,
+        "price_non_null": true,
+        "size_non_null": true,
+        "side_non_null": true
+      },
+      "witness_columns_present": true,
+      "distinct_assets": 1370,
+      "mapped_asset_intersection": 1370,
+      "representative_asset_intersection": 685,
+      "representative_price_change_rows": 11435,
+      "representative_valid_bbo_price_change_rows": 11295
+    }
+  ],
+  "strict_replication_decision": "Primary Lane A remains price_change-only. best_bid_ask remains a V3 capture-quality challenger/falsification, not a substitute.",
+  "source": "Authenticated Kaggle dataset API artifact from kaggle/jobs/005g-v3-semantic-probe.json",
+  "real_sig_orders_sent": false,
+  "identity_encoding": {
+    "asset_id": "raw unsigned big-endian bytes -> decimal integer string",
+    "market": "raw bytes -> 0x-prefixed condition-id hex",
+    "transaction_hash": "raw bytes -> 0x-prefixed hex"
+  },
+  "canonicalizer_identity_fix_commit": "bdaea85fae58bac3fdb29203bc205c205fb7ed9c",
+  "lane_a_identity_fix_commit": "4e5465dc2a1338b724b5704508490bd9640b4f57"
+}

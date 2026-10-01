@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005G",
+  "protocol_id": "005G_ECONOMIC_REPLAY_V1",
+  "status": "FROZEN_BEFORE_ECONOMIC_OUTCOME_READ",
+  "source_dataset": "polyleviathan/sig-cup-data003-orderbooks",
+  "source_dataset_version": 1,
+  "source_family": "baseline_sep",
+  "source_generation": "v3",
+  "mapped_token_count": 693,
+  "mapped_token_file": "scripts/kaggle/experiment_005g_economic_replay/token_ids.json",
+  "windows": {
+    "TRAIN": ["2026-09-06T00:00:00Z", "2026-09-07T00:00:00Z"],
+    "DEV": ["2026-09-07T00:00:00Z", "2026-09-08T00:00:00Z"],
+    "HOLDOUT": ["2026-09-08T00:00:00Z", "2026-09-09T00:00:00Z"]
+  },
+  "decision_grid_seconds": 30,
+  "forward_markout_seconds": 60,
+  "state_staleness_limit_seconds": 300,
+  "model_targets": [
+    "bbo_update_h60",
+    "state_transition_h300"
+  ],
+  "hazard_combiner": "max(p_bbo_update_h60,p_state_transition_h300)",
+  "features": [
+    "state_dwell_s",
+    "genuine_age_s",
+    "spread_x_distance",
+    "distance_from_0_5",
+    "volatility_x_liquidity",
+    "price_change_age_s"
+  ],
+  "policy_grid": {
+    "hazard_quantiles": [0.50, 0.65, 0.80, 0.90],
+    "WIDTH_ONLY_extra_probability": [0.005, 0.01],
+    "SIZE_ONLY_multiplier": [0.25, 0.50],
+    "WAIT_ONLY": [true],
+    "REFRESH_ONLY_seconds": [15, 30]
+  },
+  "fill_proxy": {
+    "type": "observed_last_trade_price_cross",
+    "bid_fill": "observed trade in quote lifetime with trade_price <= quoted_bid",
+    "ask_fill": "observed trade in quote lifetime with trade_price >= quoted_ask",
+    "fill_price": "quoted passive price",
+    "fee": "observed trade fee_rate_bps proxy applied to quote notional",
+    "economic_label": "HISTORICAL_PASSIVE_EXECUTION_PROXY_NOT_LIVE_SIG_PNL"
+  },
+  "selection": {
+    "read_holdout_before_policy_freeze": false,
+    "primary": "net_markout_pnl_after_fee_proxy",
+    "constraints": [
+      "adverse_selection <= baseline",
+      "max_drawdown <= baseline"
+    ],
+    "tie_breakers": [
+      "lower_turnover",
+      "lower_intervention_rate"
+    ]
+  },
+  "minimum_support": {
+    "fills_for_economic_claim": 50,
+    "otherwise": "SUPPORT_LIMITED"
+  },
+  "prohibited": [
+    "post-holdout retuning",
+    "candidate replacement after holdout",
+    "direct MAKE modification",
+    "real SIG orders",
+    "claiming markout proxy equals realised competition PnL"
+  ],
+  "source_005g_freeze_sha256": "887592885c02ae9219232c40a8b9ce0b263f9a62e04da62c524b16162895cc1c",
+  "source_005g_holdout_artifact_sha256": "2c5bb46ebcf5b8d79e7368afdb309c849e55992ad44a771ab849740a219ef4d0"
+}
