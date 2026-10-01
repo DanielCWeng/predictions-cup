@@ -6,6 +6,6 @@
   "poll_seconds": 20,
   "timeout_minutes": 90,
   "download_outputs": true,
-  "output_file_pattern": "(PROBE_SUMMARY\\.json|PROBE_FILES\\.csv|probe_manifests/.*)$",
-  "note": "Probe the landed private DATA-003-linked order-book dataset without downloading the 18 GB corpus into GitHub Actions."
+  "output_file_pattern": "(PROBE_SUMMARY\\.json|PROBE_FILES\\.csv|PROBE_SAMPLES\\.json|probe_manifests/.*)$",
+  "note": "Probe landed DATA-003-linked orderbook dataset, including representative source-version payload samples."
 }
