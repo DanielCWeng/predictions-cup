@@ -291,8 +291,17 @@ class ConservativeEligibilityPolicy:
             return GateDecision(GateMode.SUSPEND, "exchange_market_mismatch")
         if not market.mapping_accepted or not market.tradeable:
             return GateDecision(GateMode.NO_TRADE, "mapping_not_tradeable")
+        # Account reconciliation is a bounded HOLD, not permission to retain
+        # resting exposure indefinitely. Once the last accepted/authoritative
+        # account observation ages out, stale capital truth forces withdrawal.
+        if self._stale(
+            snapshot.now_monotonic_ns,
+            snapshot.account_observed_ns,
+            self._max_account_age_ns,
+        ):
+            return GateDecision(GateMode.CANCEL, "account_stale")
         if not snapshot.runtime.portfolio.account_trusted:
-            return GateDecision(GateMode.CANCEL, "account_untrusted")
+            return GateDecision(GateMode.HOLD, "account_untrusted")
         if not snapshot.sig_bbo_trusted:
             return GateDecision(GateMode.CANCEL, "sig_bbo_untrusted")
         if self._stale(
@@ -301,12 +310,6 @@ class ConservativeEligibilityPolicy:
             self._max_bbo_age_ns,
         ):
             return GateDecision(GateMode.CANCEL, "sig_bbo_stale")
-        if self._stale(
-            snapshot.now_monotonic_ns,
-            snapshot.account_observed_ns,
-            self._max_account_age_ns,
-        ):
-            return GateDecision(GateMode.CANCEL, "account_stale")
         if self._stale(
             snapshot.now_monotonic_ns,
             snapshot.inventory_observed_ns,

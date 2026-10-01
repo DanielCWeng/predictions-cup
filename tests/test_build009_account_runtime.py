@@ -308,10 +308,10 @@ def test_accepted_realtime_fill_is_linked_to_execution_journal(tmp_path: Path) -
     finally:
         journal.close()
 
-def test_authoritative_account_snapshot_clears_local_execution_reservations() -> None:
+def test_authoritative_account_snapshot_clears_only_covered_reservations() -> None:
     reservations = ExecutionReservationBook()
-    intent = RuntimeOrderIntent(
-        intent_id="intent-clear",
+    covered = RuntimeOrderIntent(
+        intent_id="intent-covered",
         exchange_id="36",
         market_id="m1",
         tournament_id="t1",
@@ -322,7 +322,30 @@ def test_authoritative_account_snapshot_clears_local_execution_reservations() ->
         strategy_id="fixture",
         decision_observation_ns=100,
     )
-    reservations.reserve("op-clear", (intent,))
+    in_flight = RuntimeOrderIntent(
+        intent_id="intent-in-flight",
+        exchange_id="37",
+        market_id="m2",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=2,
+        limit_price_ticks=100,
+        strategy_id="fixture",
+        decision_observation_ns=101,
+    )
+    reservations.reserve("op-covered", (covered,))
+    reservations.reserve("op-in-flight", (in_flight,))
+    reservations.bind_exchange_order(
+        "intent-covered",
+        "91",
+        acknowledged_at=datetime(2026, 9, 28, 20, 59, 59, tzinfo=UTC),
+    )
+    reservations.bind_exchange_order(
+        "intent-in-flight",
+        "92",
+        acknowledged_at=datetime(2026, 9, 28, 21, 0, 1, tzinfo=UTC),
+    )
     state = AccountRealtimeStateEngine(
         tournament_id="t1",
         reservations=reservations,
@@ -330,6 +353,32 @@ def test_authoritative_account_snapshot_clears_local_execution_reservations() ->
 
     state.apply_authoritative(_snapshot())
 
-    assert reservations.intent_ids() == frozenset()
+    assert reservations.intent_ids() == frozenset({"intent-in-flight"})
+    assert state.trusted is True
+
+
+def test_authoritative_account_snapshot_preserves_unacknowledged_reservation() -> None:
+    reservations = ExecutionReservationBook()
+    intent = RuntimeOrderIntent(
+        intent_id="intent-unacked",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=3,
+        limit_price_ticks=100,
+        strategy_id="fixture",
+        decision_observation_ns=100,
+    )
+    reservations.reserve("op-unacked", (intent,))
+    state = AccountRealtimeStateEngine(
+        tournament_id="t1",
+        reservations=reservations,
+    )
+
+    state.apply_authoritative(_snapshot())
+
+    assert reservations.intent_ids() == frozenset({"intent-unacked"})
     assert state.trusted is True
 

@@ -1097,6 +1097,240 @@ class _MutableMakerRiskMarkProvider:
         )
 
 
+def _seed_exact_desired_quotes(
+    engine: MakerEngine,
+    registry: QuoteRegistry,
+    snapshot: MakerMarketSnapshot,
+) -> None:
+    desired = engine.quote(snapshot).desired
+    assert desired is not None
+    assert desired.bid_ticks is not None and desired.ask_ticks is not None
+    registry.apply_authoritative(
+        exchange_id=snapshot.exchange_id,
+        side=QuoteSide.BID,
+        price_ticks=desired.bid_ticks,
+        size=desired.bid_size,
+        remaining_size=desired.bid_size,
+        logical_operation_id="current-bid",
+        exchange_order_id=91,
+        lifecycle_state=LifecycleState.OPEN,
+        observed_monotonic_ns=NOW - 1,
+    )
+    registry.apply_authoritative(
+        exchange_id=snapshot.exchange_id,
+        side=QuoteSide.ASK,
+        price_ticks=desired.ask_ticks,
+        size=desired.ask_size,
+        remaining_size=desired.ask_size,
+        logical_operation_id="current-ask",
+        exchange_order_id=92,
+        lifecycle_state=LifecycleState.OPEN,
+        observed_monotonic_ns=NOW - 1,
+    )
+
+
+def test_untrusted_portfolio_marks_withdraw_unchanged_resting_quotes() -> None:
+    engine = _engine()
+    snapshot = _maker_snapshot()
+    registry = QuoteRegistry()
+    _seed_exact_desired_quotes(engine, registry, snapshot)
+    adapter = ShadowMakerExecutionAdapter()
+    invalid = replace(_maker_capital(), marks_trusted=False)
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+            capital_state=invalid,
+            require_capital_state=True,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id="invalid-marks",
+                observed_monotonic_ns=NOW,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": snapshot},
+        )
+    )
+
+    assert len(result.execution_events) == 2
+    assert all(
+        action.kind is QuoteLifecycleActionKind.CANCEL
+        for action in result.lifecycle_actions
+    )
+    assert registry.state("36").bid is None
+    assert registry.state("36").ask is None
+
+
+def test_stale_other_market_mark_withdraws_unchanged_resting_quotes() -> None:
+    engine = _engine()
+    snapshot = _maker_snapshot()
+    other_position = RuntimePosition(
+        exchange_id="37",
+        market_id="m2",
+        tournament_id=TOURNAMENT,
+        gross_exposure=3.0,
+        signed_quantity=3.0,
+    )
+    snapshot = replace(
+        snapshot,
+        runtime=replace(
+            snapshot.runtime,
+            portfolio=replace(
+                snapshot.runtime.portfolio,
+                positions=snapshot.runtime.portfolio.positions + (other_position,),
+            ),
+        ),
+    )
+    registry = QuoteRegistry()
+    _seed_exact_desired_quotes(engine, registry, snapshot)
+    adapter = ShadowMakerExecutionAdapter()
+    stale = replace(
+        _maker_capital(),
+        oldest_mark_observed_monotonic_ns=NOW - 200_000_000,
+    )
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+            max_mark_age_ns=100_000_000,
+            capital_state=stale,
+            require_capital_state=True,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id="stale-other-mark",
+                observed_monotonic_ns=NOW,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": snapshot},
+        )
+    )
+
+    assert len(result.execution_events) == 2
+    assert registry.state("36").bid is None
+    assert registry.state("36").ask is None
+
+
+def test_transient_account_untrust_holds_resting_quotes_without_new_io() -> None:
+    engine = _engine()
+    trusted = _maker_snapshot()
+    registry = QuoteRegistry()
+    _seed_exact_desired_quotes(engine, registry, trusted)
+    adapter = ShadowMakerExecutionAdapter()
+    untrusted = replace(
+        trusted,
+        runtime=replace(
+            trusted.runtime,
+            portfolio=replace(trusted.runtime.portfolio, account_trusted=False),
+        ),
+    )
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id="account-hold",
+                observed_monotonic_ns=NOW,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": untrusted},
+        )
+    )
+
+    assert result.decisions[0].gate.mode is GateMode.HOLD
+    assert result.execution_events == ()
+    assert all(
+        action.kind is QuoteLifecycleActionKind.KEEP
+        for action in result.lifecycle_actions
+    )
+    assert registry.state("36").bid is not None
+    assert registry.state("36").ask is not None
+
+
+def test_persistent_account_untrust_withdraws_resting_quotes_at_freshness_deadline() -> None:
+    engine = _engine()
+    trusted = _maker_snapshot()
+    registry = QuoteRegistry()
+    _seed_exact_desired_quotes(engine, registry, trusted)
+    adapter = ShadowMakerExecutionAdapter()
+    stale_untrusted = replace(
+        trusted,
+        now_monotonic_ns=NOW + 100_000_000,
+        runtime=replace(
+            trusted.runtime,
+            observation_monotonic_ns=NOW + 100_000_000,
+            portfolio=replace(trusted.runtime.portfolio, account_trusted=False),
+        ),
+    )
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id="account-hold-expired",
+                observed_monotonic_ns=stale_untrusted.now_monotonic_ns,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": stale_untrusted},
+        )
+    )
+
+    assert result.decisions[0].gate.mode is GateMode.CANCEL
+    assert result.decisions[0].gate.reason == "account_stale"
+    assert len(result.execution_events) == 2
+    assert all(
+        action.kind is QuoteLifecycleActionKind.CANCEL
+        for action in result.lifecycle_actions
+    )
+    assert registry.state("36").bid is None
+    assert registry.state("36").ask is None
+
+
 def test_realtime_drawdown_trip_force_cancels_resting_quotes_same_cycle() -> None:
     engine = _engine()
     registry = QuoteRegistry()

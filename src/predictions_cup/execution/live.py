@@ -322,6 +322,16 @@ class SigLiveSink:
                 terminal_status=state.value,
                 detail_json=response_json,
             )
+            if (
+                require_reservation
+                and intent is not None
+                and single_response.order_id is not None
+            ):
+                self._reservations.bind_exchange_order(
+                    intent.intent_id,
+                    str(single_response.order_id),
+                    acknowledged_at=self._wall_clock(),
+                )
             self._observe(
                 ObservationKind.ACK,
                 envelope,
@@ -407,6 +417,17 @@ class SigLiveSink:
                         separators=(",", ":"),
                     ),
                 )
+                if (
+                    require_reservation
+                    and batch_result.ok
+                    and intent is not None
+                    and isinstance(order_id, (int, str))
+                ):
+                    self._reservations.bind_exchange_order(
+                        intent.intent_id,
+                        str(order_id),
+                        acknowledged_at=self._wall_clock(),
+                    )
                 self._observe(
                     (
                         ObservationKind.ACK
@@ -455,6 +476,17 @@ class SigLiveSink:
                         separators=(",", ":"),
                     ),
                 )
+                if (
+                    require_reservation
+                    and multi_result.ok
+                    and intent is not None
+                    and isinstance(order_id, (int, str))
+                ):
+                    self._reservations.bind_exchange_order(
+                        intent.intent_id,
+                        str(order_id),
+                        acknowledged_at=self._wall_clock(),
+                    )
                 self._observe(
                     (
                         ObservationKind.ACK

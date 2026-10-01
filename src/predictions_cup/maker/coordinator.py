@@ -11,7 +11,7 @@ from predictions_cup.execution.models import ExecutionEvent, ExecutionMode, Life
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
-from predictions_cup.maker.contracts import MakerDecision, MakerMarketSnapshot, QuoteSide
+from predictions_cup.maker.contracts import GateMode, MakerDecision, MakerMarketSnapshot, QuoteSide
 from predictions_cup.maker.engine import MakerEngine
 from predictions_cup.maker.lifecycle import (
     ActiveQuote,
@@ -155,10 +155,27 @@ class MakerCoordinator:
                 else self._risk_context_source
             )
             capital = current_risk_context.capital_state
+            mark_state_stale = (
+                capital is not None
+                and current_risk_context.max_mark_age_ns is not None
+                and capital.oldest_mark_observed_monotonic_ns is not None
+                and (
+                    snapshot.runtime.observation_monotonic_ns
+                    - capital.oldest_mark_observed_monotonic_ns
+                )
+                > current_risk_context.max_mark_age_ns
+            )
+            # Invalid/stale portfolio valuation is different from a transient
+            # account resync. Existing resting quotes can add exposure while they
+            # remain live, so valuation failure must withdraw them even when the
+            # desired price/size is otherwise unchanged. Account reconciliation
+            # alone remains HOLD unless a halt/kill switch says otherwise.
             capital_force_cancel = (
                 capital is not None
                 and (
-                    (
+                    not capital.marks_trusted
+                    or mark_state_stale
+                    or (
                         capital.global_halt is not None
                         and capital.global_halt.active
                     )
@@ -169,6 +186,27 @@ class MakerCoordinator:
                 )
             )
             force_cancel = self._kill_switch.active or capital_force_cancel
+            if decision.gate.mode is GateMode.HOLD and not force_cancel:
+                # Reconciliation HOLD freezes the current quote set exactly:
+                # no fresh placement, no reprice, no cancel storm. Invalid
+                # valuation/halts still win through force_cancel above.
+                actions.extend(
+                    (
+                        QuoteLifecycleAction(
+                            QuoteLifecycleActionKind.KEEP,
+                            QuoteSide.BID,
+                            "transient_account_hold",
+                            active=current.bid,
+                        ),
+                        QuoteLifecycleAction(
+                            QuoteLifecycleActionKind.KEEP,
+                            QuoteSide.ASK,
+                            "transient_account_hold",
+                            active=current.ask,
+                        ),
+                    )
+                )
+                continue
             desired = None if force_cancel else decision.desired
             side_actions = self._lifecycle.decide(
                 desired=desired,
