@@ -1,0 +1,391 @@
+        ],
+    )
+    convergence_sink = CsvSink(
+        WORK / "FV_CONVERGENCE.csv",
+        [
+            "market_id", "window_id", "source_segment", "mapping_class",
+            "sig_market_id", "timestamp_ns", "gap_t",
+            *[f"target_move_{h}s" for h in MARKOUT_HORIZONS_S],
+            *[f"external_move_{h}s" for h in MARKOUT_HORIZONS_S],
+            *[f"gap_{h}s" for h in MARKOUT_HORIZONS_S],
+        ],
+    )
+    latency_sink = CsvSink(
+        WORK / "LATENCY_SENSITIVITY.csv",
+        [
+            "market_id", "window_id", "source_segment", "mapping_class",
+            "sig_market_id", "latency_ms", "external_fv_moves",
+            "trade_events_inside_reaction_window", "reaction_window_share",
+            "interpretation",
+        ],
+    )
+    breakdown_sink = CsvSink(
+        WORK / "MARKET_BREAKDOWN.csv",
+        [
+            "market_id", "window_id", "source_segment", "mapping_class",
+            "sig_market_id", "sig_exchange_id", "policy_id", "fill_assumption",
+            "reaction_delay_ms", "scenario_family", "quotes", "active_quotes",
+            "fills", "active_fraction", "mean_gross_spread_capture",
+            "mean_markout_5m", "final_inventory", "gross_cash_flow",
+            "gross_terminal_local_pnl", "gross_terminal_external_pnl",
+        ],
+    )
+    fill_sink = ParquetSink(WORK / "MM_FILL_RESULTS.parquet", FILL_SCHEMA)
+
+    transfer_stats: dict[str, Any] = {
+        "rows": 0,
+        "target_sum": 0.0,
+        "brier_pre_sum": 0.0,
+        "brier_active_sum": 0.0,
+        "brier_risk_max_sum": 0.0,
+        "risk_bins_count": [0] * 10,
+        "risk_bins_target_sum": [0.0] * 10,
+        "risk_bins_score_sum": [0.0] * 10,
+    }
+    toxicity_stats: dict[tuple[str, str, str, int], dict[str, float]] = defaultdict(
+        lambda: {"fills": 0.0, "markout_5m_n": 0.0, "markout_5m_sum": 0.0}
+    )
+    window_stats: dict[str, Any] = {}
+    total_policy_rows = 0
+    total_fill_rows = 0
+    total_markout_rows = 0
+    tokens_replayed: set[str] = set()
+    exact_tokens_replayed: set[str] = set()
+    near_tokens_replayed: set[str] = set()
+
+    # Actual files define usable acquisition coverage.  V1-only windows are
+    # audited but excluded from fill claims before any strategy result is read.
+    windows = sorted(
+        [p for p in root.iterdir() if p.is_dir() and p.name != "_manifests"],
+        key=lambda p: min((hour_from_path(x) for x in p.rglob("*.parquet")), default=pd.Timestamp("2262-04-11T00:00:00Z")),
+    )
+    for window_path in windows:
+        all_files = sorted(window_path.rglob("*.parquet"), key=hour_from_path)
+        flat_files = []
+        v1_files = 0
+        for path in all_files:
+            names = set(pq.ParquetFile(path).schema_arrow.names)
+            if {"event_type", "asset_id", "timestamp"}.issubset(names):
+                flat_files.append(path)
+            elif {"update_type", "data"}.issubset(names):
+                v1_files += 1
+        if not flat_files:
+            window_stats[window_path.name] = {
+                "status": "EXCLUDED_NO_OBSERVED_TRADE_SCHEMA",
+                "parquet_files": len(all_files),
+                "v1_files": v1_files,
+            }
+            print(f"[{window_path.name}] excluded: V1-only / no last_trade_price schema", flush=True)
+            continue
+
+        start_ns = int(hour_from_path(flat_files[0]).value)
+        end_ns = int((hour_from_path(flat_files[-1]) + pd.Timedelta(hours=1)).value)
+        canonical_root, cstats = canonicalize_window(
+            window_id=window_path.name,
+            files=flat_files,
+            execution=execution,
+            complement=complement,
+        )
+        cstats["status"] = "REPLAYED"
+        cstats["flat_files"] = len(flat_files)
+        cstats["v1_files"] = v1_files
+        window_stats[window_path.name] = cstats
+        print(f"[{window_path.name}] canonicalization complete: {cstats}", flush=True)
+
+        for token_path in sorted(canonical_root.glob("*.parquet")):
+            token = token_path.stem
+            if token not in execution:
+                continue
+            frame = pq.read_table(token_path).to_pandas()
+            if frame.empty:
+                continue
+            frame.sort_values(["source_segment", "timestamp_ns", "order_seq"], inplace=True, kind="stable")
+            meta = execution[token]
+            for source_segment, seg in frame.groupby("source_segment", sort=True, observed=True):
+                seg = seg.copy()
+                if len(seg) < 2:
+                    continue
+                local_rows = seg[seg["row_kind"] == "LOCAL_BBO"]
+                local_bbo = [row_to_observation(rec) for rec in local_rows.to_dict(orient="records")]
+                if len(local_bbo) < 2:
+                    continue
+                segment_origin = (int(seg["timestamp_ns"].min()) // GRID_NS) * GRID_NS
+                scores = dual_005f_scores(
+                    local_bbo,
+                    grid_origin_ns=segment_origin,
+                    artifacts=artifacts,
+                    transfer_sink=transfer_sink,
+                    transfer_stats=transfer_stats,
+                    window_id=window_path.name,
+                    source_segment=int(source_segment),
+                    mapping_class=meta["mapping_class"],
+                    sig_market_id=meta["sig_market_id"],
+                )
+                observations = attach_hazard(seg, scores)
+                if len(observations) < 2:
+                    continue
+                tokens_replayed.add(token)
+                if meta["mapping_class"] == PRIMARY_CLASS:
+                    exact_tokens_replayed.add(token)
+                else:
+                    near_tokens_replayed.add(token)
+
+                policy_rows, fill_rows, markout_rows, breakdown = legacy.run_mm(
+                    {token: observations},
+                    edge_grid_reference_latency_ms=EDGE_REFERENCE_LATENCY_MS,
+                    fee_per_share=None,
+                    terminal_unwind_cost_per_share=None,
+                )
+                for row in policy_rows:
+                    row.update(
+                        {
+                            "window_id": window_path.name,
+                            "source_segment": int(source_segment),
+                            "mapping_class": meta["mapping_class"],
+                            "sig_market_id": meta["sig_market_id"],
+                            "sig_exchange_id": meta["sig_exchange_id"],
+                        }
+                    )
+                policy_sink.write(policy_rows)
+                total_policy_rows += len(policy_rows)
+                for row in breakdown:
+                    row.update(
+                        {
+                            "window_id": window_path.name,
+                            "source_segment": int(source_segment),
+                            "mapping_class": meta["mapping_class"],
+                            "sig_market_id": meta["sig_market_id"],
+                            "sig_exchange_id": meta["sig_exchange_id"],
+                        }
+                    )
+                breakdown_sink.write(breakdown)
+
+                obs_times = [obs.timestamp_ns for obs in observations]
+                obs_hazard = [obs.update_hazard for obs in observations]
+                def hazard_at(ts: int) -> float | None:
+                    idx = bisect_right(obs_times, ts) - 1
+                    return obs_hazard[idx] if idx >= 0 else None
+
+                fill_out: list[dict[str, Any]] = []
+                for row in fill_rows:
+                    ts = int(row["timestamp_ns"])
+                    hazard = hazard_at(ts)
+                    row["split"] = split_for_window(ts, start_ns, end_ns)
+                    row.update(
+                        {
+                            "window_id": window_path.name,
+                            "source_segment": int(source_segment),
+                            "mapping_class": meta["mapping_class"],
+                            "sig_market_id": meta["sig_market_id"],
+                            "sig_exchange_id": meta["sig_exchange_id"],
+                            "hazard_score": hazard,
+                            "toxicity_bucket": toxicity_bucket(hazard),
+                        }
+                    )
+                    fill_out.append(row)
+                fill_sink.write(fill_out)
+                total_fill_rows += len(fill_out)
+
+                markout_out: list[dict[str, Any]] = []
+                for row in markout_rows:
+                    ts = int(row["timestamp_ns"])
+                    hazard = hazard_at(ts)
+                    bucket = toxicity_bucket(hazard)
+                    row["split"] = split_for_window(ts, start_ns, end_ns)
+                    row.update(
+                        {
+                            "window_id": window_path.name,
+                            "source_segment": int(source_segment),
+                            "mapping_class": meta["mapping_class"],
+                            "sig_market_id": meta["sig_market_id"],
+                            "sig_exchange_id": meta["sig_exchange_id"],
+                            "hazard_score": hazard,
+                            "toxicity_bucket": bucket,
+                        }
+                    )
+                    markout_out.append(row)
+                    if int(row.get("horizon_s", -1)) == 300:
+                        key = (
+                            str(row["policy_id"]),
+                            str(row["fill_assumption"]),
+                            bucket,
+                            int(row["reaction_delay_ms"]),
+                        )
+                        acc = toxicity_stats[key]
+                        acc["fills"] += 1
+                        acc["markout_5m_n"] += 1
+                        acc["markout_5m_sum"] += float(row["markout"])
+                markout_sink.write(markout_out)
+                total_markout_rows += len(markout_out)
+
+                bbo_for_convergence = [obs for obs, kind in zip(observations, seg["row_kind"].tolist(), strict=True) if kind != "TRADE"]
+                convergence = list(fair_value_convergence(bbo_for_convergence))
+                for row in convergence:
+                    row.update(
+                        {
+                            "window_id": window_path.name,
+                            "source_segment": int(source_segment),
+                            "mapping_class": meta["mapping_class"],
+                            "sig_market_id": meta["sig_market_id"],
+                        }
+                    )
+                convergence_sink.write(convergence)
+
+                latency = legacy.latency_rows({token: observations})
+                for row in latency:
+                    row.update(
+                        {
+                            "window_id": window_path.name,
+                            "source_segment": int(source_segment),
+                            "mapping_class": meta["mapping_class"],
+                            "sig_market_id": meta["sig_market_id"],
+                        }
+                    )
+                latency_sink.write(latency)
+
+            # Free this token before loading the next one.
+            del frame
+
+        shutil.rmtree(canonical_root, ignore_errors=True)
+
+    transfer_sink.close()
+    policy_sink.close()
+    markout_sink.close()
+    convergence_sink.close()
+    latency_sink.close()
+    breakdown_sink.close()
+    fill_sink.close()
+
+    toxicity_rows: list[dict[str, Any]] = []
+    for (policy_id, fill_assumption, bucket, latency_ms), acc in sorted(toxicity_stats.items()):
+        n = int(acc["markout_5m_n"])
+        toxicity_rows.append(
+            {
+                "policy_id": policy_id,
+                "fill_assumption": fill_assumption,
+                "reaction_delay_ms": latency_ms,
+                "toxicity_bucket": bucket,
+                "fills_with_5m_markout": n,
+                "mean_markout_5m": (acc["markout_5m_sum"] / n) if n else None,
+            }
+        )
+    legacy.write_csv(WORK / "MM_TOXICITY_BUCKETS.csv", toxicity_rows)
+
+    n_transfer = int(transfer_stats["rows"])
+    calibration = []
+    for bin_id in range(10):
+        n = transfer_stats["risk_bins_count"][bin_id]
+        if n:
+            calibration.append(
+                {
+                    "score_bin": f"{bin_id/10:.1f}-{(bin_id+1)/10:.1f}",
+                    "rows": n,
+                    "mean_score": transfer_stats["risk_bins_score_sum"][bin_id] / n,
+                    "update_rate_h300": transfer_stats["risk_bins_target_sum"][bin_id] / n,
+                }
+            )
+    transfer_summary = {
+        "experiment": EXPERIMENT_ID,
+        "status": "SCORED" if n_transfer else "NOT_RUN",
+        "feature_definition": "accepted IncrementalHazard005FState",
+        "target_horizon_seconds": 300,
+        "score_mode": "dual frozen PRE/ACTIVE update-hazard models; B3 uses predeclared max-risk OR gate",
+        "production_threshold_selected": False,
+        "rows": n_transfer,
+        "update_rate": transfer_stats["target_sum"] / n_transfer if n_transfer else None,
+        "brier_pre_frozen": transfer_stats["brier_pre_sum"] / n_transfer if n_transfer else None,
+        "brier_active_frozen": transfer_stats["brier_active_sum"] / n_transfer if n_transfer else None,
+        "brier_risk_max": transfer_stats["brier_risk_max_sum"] / n_transfer if n_transfer else None,
+        "risk_max_calibration": calibration,
+        "frozen_artifacts_found": sorted(artifacts),
+        "interpretation": "cross-dataset predictive transfer diagnostic; max-risk is a conservative toxicity gate, not a newly fit model",
+    }
+    write_json(WORK / "005F_TRANSFER_SUMMARY.json", transfer_summary)
+
+    scientific_status = "RUN_COMPLETE" if total_policy_rows else "NOT_RUN"
+    report_lines = [
+        "# MM-REPLAY-001 — Final Report",
+        "",
+        f"SCIENTIFIC_RESULT={scientific_status}",
+        "",
+        f"- Dataset: `{binding.kaggle_dataset_slug}` version `{binding.dataset_version}`",
+        f"- Direct SIG-mapped PM execution tokens: **{len(execution)}** ({sum(1 for x in execution.values() if x['mapping_class']==PRIMARY_CLASS)} EXACT primary + {sum(1 for x in execution.values() if x['mapping_class']==SENSITIVITY_CLASS)} NEAR sensitivity)",
+        f"- Tokens actually replayed: **{len(tokens_replayed)}** ({len(exact_tokens_replayed)} EXACT + {len(near_tokens_replayed)} NEAR)",
+        f"- Policy/scenario rows: **{total_policy_rows}**",
+        f"- Simulated passive fills: **{total_fill_rows}**",
+        f"- Markout rows: **{total_markout_rows}**",
+        f"- 005F transfer rows: **{n_transfer}**",
+        "- Real SIG orders sent: **NO**",
+        "",
+        "## Fair-value definition",
+        "",
+        "B1/B2/B3 use the opposite binary outcome book as an independent as-of reference: `FV(token A) = 1 - midpoint(token B)`. The reference timestamp is retained and the existing 1-second freshness gate is enforced. This is a same-venue complement-book laboratory and must not be described as historical Polymarket-to-SIG lead/lag evidence.",
+        "",
+        "## Fill evidence",
+        "",
+        "Only `last_trade_price` events create simulated fills. `price_change` events are book updates and never fills. V1-only windows are excluded from passive-fill claims because the audited V1 schema did not expose `last_trade_price`; V2/V3 windows provide price, size and side on observed trade events. Queue-aware replay remains unavailable because queue-ahead was not observed.",
+        "",
+        "## Frozen 005F transfer",
+        "",
+        "Both hash-matched frozen PRE_ELECTION and ACTIVE_RESULTS update-hazard models are scored on the current corpus with the accepted exact 005F state. Rather than guessing a historical regime label, B3 uses a predeclared conservative score equal to the maximum of the two frozen probabilities. No replay outcome is used to choose between them.",
+        "",
+        "## Accounting boundary",
+        "",
+        "Gross cash/inventory accounting and markouts are reported separately. Net terminal P&L remains null because maker-fee and terminal-unwind assumptions were deliberately not invented. The 0–4 tick edge grid is evaluated at the predeclared 100 ms reference latency; the full 0/25/50/100/250/500/1000 ms sweep remains intact.",
+        "",
+        "## Coverage / known limitations",
+        "",
+        "See INPUT_AUDIT.json and the per-window statistics in MASTER_HANDOFF_MM_REPLAY_001.md. Missing source hours split replay segments so quotes/inventory do not bridge acquisition gaps. NEAR mappings are reported as sensitivity and are not mixed into the EXACT primary interpretation.",
+    ]
+    (WORK / "FINAL_REPORT.md").write_text("\n".join(report_lines) + "\n", encoding="utf-8")
+
+    handoff = {
+        "experiment": EXPERIMENT_ID,
+        "data_status": "BOUND",
+        "scientific_result": scientific_status,
+        "real_sig_orders_sent": False,
+        "dataset": binding.kaggle_dataset_slug,
+        "dataset_version": binding.dataset_version,
+        "execution_tokens": len(execution),
+        "tokens_replayed": len(tokens_replayed),
+        "exact_tokens_replayed": len(exact_tokens_replayed),
+        "near_tokens_replayed": len(near_tokens_replayed),
+        "policy_rows": total_policy_rows,
+        "fill_rows": total_fill_rows,
+        "markout_rows": total_markout_rows,
+        "005f_transfer": transfer_summary,
+        "window_stats": window_stats,
+        "external_fv_provider": "1 - opposite-outcome midpoint, backward as-of",
+        "b3_score_rule": manifest["005f_b3_score_rule"],
+        "edge_grid_reference_latency_ms": EDGE_REFERENCE_LATENCY_MS,
+        "maker_fee_per_share": None,
+        "terminal_unwind_cost_per_share": None,
+        "scientific_restrictions": [
+            "No DATA-001/Hungary/Colombia/Peru substitution",
+            "No price_change-as-trade inference",
+            "No queue position inference",
+            "No fee/unwind invention",
+            "No post-FINAL rescue tuning",
+            "No historical PM->SIG latency claim from same-venue complement FV",
+            "No real order placement",
+        ],
+    }
+    (WORK / "MASTER_HANDOFF_MM_REPLAY_001.md").write_text(
+        "# MASTER HANDOFF — MM-REPLAY-001\n\n"
+        f"DATA_STATUS=BOUND\n\nSCIENTIFIC_RESULT={scientific_status}\n\n"
+        "REAL SIG ORDERS SENT: NO\n\n"
+        "```json\n" + json.dumps(handoff, indent=2, sort_keys=True, default=str) + "\n```\n",
+        encoding="utf-8",
+    )
+    print(json.dumps({
+        "scientific_result": scientific_status,
+        "tokens_replayed": len(tokens_replayed),
+        "policy_rows": total_policy_rows,
+        "fills": total_fill_rows,
+        "005f_rows": n_transfer,
+        "window_stats": window_stats,
+    }, indent=2, sort_keys=True), flush=True)
+
+
+if __name__ == "__main__":
+    main()
