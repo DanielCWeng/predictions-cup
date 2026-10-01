@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -24,7 +25,7 @@ from predictions_cup.mapping.models import (
 )
 from predictions_cup.models import OrderBook, OrderBookLevel
 from predictions_cup.sig.dto import PriceSnapshotDto
-from predictions_cup.sig.launch_storage import LaunchSigRecorder
+from predictions_cup.sig.launch_storage import ImmutableCaptureSink, LaunchSigRecorder
 from predictions_cup.sig.realtime_models import RealtimeDeliveryDto, RealtimeTradeDto
 
 
@@ -57,6 +58,38 @@ def _rows(root: Path, stream: str) -> list[dict[str, object]]:
         format="parquet",
     ).to_table().to_pylist()
     return cast(list[dict[str, object]], rows)
+
+
+def test_capture_sink_flushes_strategy_rows_at_budget_before_shard_deadline(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "row-budget"
+    sink = ImmutableCaptureSink(
+        root,
+        shard_seconds=60,
+        max_rows_per_shard=2,
+        queue_max=8,
+    )
+    at = datetime(2026, 10, 1, 16, 0, tzinfo=UTC)
+    try:
+        for index in range(2):
+            sink.emit(
+                "strategy_events",
+                {
+                    "session_id": "row-budget-test",
+                    "observed_at": at,
+                    "event_type": f"decision-{index}",
+                },
+            )
+        deadline = time.monotonic() + 3.0
+        while sink.health_snapshot()["written_shards"] == 0:
+            if time.monotonic() >= deadline:
+                raise AssertionError("row budget did not flush before the shard deadline")
+            time.sleep(0.01)
+        assert sink.health_snapshot()["written_rows"] == 2
+        assert len(_rows(root, "strategy_events")) == 2
+    finally:
+        sink.close()
 
 
 def test_launch_recorder_persists_replayable_evidence_and_first_hours_report(

@@ -151,6 +151,7 @@ def build_live_shadow_runtime(
                 queue_capacity=settings.live_learn_queue_capacity,
                 evidence_grace_seconds=settings.live_learn_evidence_grace_seconds,
                 max_evidence_age_seconds=settings.live_learn_max_evidence_age_seconds,
+                max_retained_decisions=settings.live_learn_max_retained_decisions,
             )
         )
     store: ShadowEventStore = (
@@ -193,6 +194,9 @@ def build_live_shadow_runtime(
         queue_capacity=settings.shadow_candidate_queue_capacity,
         ingress_capacity=settings.shadow_ingress_queue_capacity,
         candidate_timeout_seconds=settings.shadow_candidate_timeout_ms / 1_000.0,
+        minimum_maker_snapshot_interval_seconds=(
+            settings.shadow_snapshot_min_interval_seconds
+        ),
         trading_enabled=False,
     )
     return LiveShadowRuntime(

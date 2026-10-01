@@ -4,9 +4,10 @@ import asyncio
 import json
 import sqlite3
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -203,10 +204,77 @@ def test_exact_boundary_and_no_future_leakage(tmp_path: Path) -> None:
         await engine.persist_snapshot(exact)
         await engine.flush()
         assert len(engine.outcomes()) == 1
+        assert engine.decisions() == ()
+        assert initial.snapshot_id not in engine._states_by_snapshot
+        report = cast(
+            RollingReport,
+            await engine.build_report_now(
+                cadence_seconds=300,
+                window_seconds=300,
+                window_end=t0 + timedelta(seconds=300),
+            ),
+        )
+        assert report.payload["decision_count"] == 1
         outcome = engine.outcomes()[0]
         assert outcome.horizon_seconds == 1
         assert outcome.evidence_observed_at == exact.observed_at
         assert outcome.metric_values["midpoint_markout"] == pytest.approx(0.01)
+        await engine.close()
+
+    asyncio.run(run())
+
+
+def test_retained_live_learn_state_is_bounded_for_fifty_thousand_decisions(
+    tmp_path: Path,
+) -> None:
+    async def run() -> None:
+        t0 = datetime.now(UTC) + timedelta(hours=2)
+        base_snapshot = _snapshot(t0, now_ns=10_000_000_000)
+        base_decision = _decision(base_snapshot)
+        cap = 256
+        engine = LiveLearnEngine(
+            shadow_journal_path=tmp_path / "shadow.jsonl",
+            outcome_store=JsonlOutcomeStore(tmp_path / "outcomes.jsonl"),
+            report_sink=_ReportSink([]),
+            horizons=(3_600,),
+            report_cadences=(300,),
+            max_retained_decisions=cap,
+        )
+        await engine.start()
+        total = 50_000
+        for index in range(total):
+            snapshot_id = f"snapshot-{index}"
+            observed_at = t0 + timedelta(milliseconds=index)
+            snapshot = replace(
+                base_snapshot,
+                snapshot_id=snapshot_id,
+                observed_at=observed_at,
+            )
+            decision = replace(
+                base_decision,
+                decision_id=f"decision-{index}",
+                input_snapshot_id=snapshot_id,
+                observed_at=observed_at,
+            )
+            await engine.persist_snapshot(snapshot)
+            await engine.persist_decision(decision)
+            if index % 1_000 == 999:
+                await asyncio.sleep(0)
+        await engine.flush()
+
+        health = engine.health
+        assert len(engine._decisions) == cap
+        assert len(engine._pending) == cap
+        assert len(engine._states_by_snapshot) <= cap * 2
+        assert len(engine._decision_ids_by_snapshot) <= cap
+        assert len(engine._decision_snapshot_ids) == cap
+        assert len(engine._pending_by_decision) == cap
+        assert len(engine._pending_by_exchange) == 1
+        assert len(engine._market_heaps["1"]) == cap
+        assert len(engine._expiry_heap) == cap
+        assert len(engine._decision_report_history) <= cap
+        assert health.retained_decisions == cap
+        assert health.dropped_decisions == total - cap
         await engine.close()
 
     asyncio.run(run())

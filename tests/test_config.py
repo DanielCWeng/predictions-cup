@@ -51,6 +51,9 @@ def test_defaults_load_without_credentials(
     assert settings.polymarket_supervised_ids == ""
     assert settings.polymarket_storage_path == Path("data/polymarket_operational.sqlite3")
     assert settings.polymarket_research_path == Path("data/polymarket_research")
+    assert settings.live_learn_max_retained_decisions == 20_000
+    assert settings.shadow_snapshot_min_interval_seconds == 1.0
+    assert settings.sig_capture_parquet_max_rows_per_shard == 5_000
 
 
 def test_maker_freshness_defaults_cover_sig_refresh_intervals(

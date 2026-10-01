@@ -214,7 +214,7 @@ class ImmutableCaptureSink:
         root: Path,
         *,
         shard_seconds: int = 60,
-        max_rows_per_shard: int = 100_000,
+        max_rows_per_shard: int = 5_000,
         queue_max: int = 200_000,
     ) -> None:
         if shard_seconds <= 0 or max_rows_per_shard <= 0 or queue_max <= 0:
@@ -463,7 +463,7 @@ class ObservationCaptureRecorder:
         *,
         queue_max: int = 65_536,
         shard_seconds: int = 60,
-        max_rows_per_shard: int = 100_000,
+        max_rows_per_shard: int = 5_000,
         session_id: str | None = None,
     ) -> None:
         self.session_id = session_id or uuid.uuid4().hex
@@ -518,7 +518,7 @@ class LaunchSigRecorder(SigRealtimeRecorder):
         research_root: Path,
         queue_max: int = 200_000,
         shard_seconds: int = 60,
-        max_rows_per_shard: int = 100_000,
+        max_rows_per_shard: int = 5_000,
         session_id: str | None = None,
     ) -> None:
         super().__init__(path)

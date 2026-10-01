@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 from collections import deque
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -56,6 +57,7 @@ class ShadowHealth:
     last_snapshot_age_ns: int | None
     snapshots_processed: int
     snapshots_dropped_or_coalesced: int
+    maker_snapshots_coalesced: int
     ingress_queue_depth: int
     ingress_queue_high_water: int
     ingress_rejected: int
@@ -115,6 +117,7 @@ class ShadowBus:
         queue_capacity: int = 512,
         ingress_capacity: int = 4096,
         candidate_timeout_seconds: float = 0.050,
+        minimum_maker_snapshot_interval_seconds: float = 1.0,
         trading_enabled: bool = False,
         clock_ns: ClockNs = monotonic_ns,
     ) -> None:
@@ -126,6 +129,11 @@ class ShadowBus:
             raise ValueError("ingress queue capacity must be positive")
         if candidate_timeout_seconds <= 0:
             raise ValueError("candidate timeout must be positive")
+        if (
+            not math.isfinite(minimum_maker_snapshot_interval_seconds)
+            or minimum_maker_snapshot_interval_seconds < 0.0
+        ):
+            raise ValueError("minimum maker snapshot interval must be non-negative")
 
         self._clock_ns = clock_ns
         self._store = store or InMemoryEventStore()
@@ -150,8 +158,15 @@ class ShadowBus:
         self._paused = False
         self._snapshots_processed = 0
         self._dropped_or_coalesced = 0
+        self._maker_snapshots_coalesced = 0
         self._last_snapshot_monotonic_ns: int | None = None
         self._last_accepted_observed_ns: int | None = None
+        self._maker_interval_ns = int(
+            minimum_maker_snapshot_interval_seconds * 1_000_000_000
+        )
+        self._last_maker_fanout_ns: dict[str, int] = {}
+        self._coalesced_maker: dict[str, _MakerIngress] = {}
+        self._coalesced_maker_handles: dict[str, asyncio.TimerHandle] = {}
 
     async def start(self) -> None:
         if self._running:
@@ -193,7 +208,43 @@ class ShadowBus:
             source_revision=source_revision,
             source_provenance=dict(source_provenance or {}),
         )
-        return self._submit_ingress(item)
+        exchange_id = maker.exchange_id
+        if self._maker_interval_ns == 0:
+            accepted = self._submit_ingress(item)
+            if accepted:
+                self._last_maker_fanout_ns[exchange_id] = self._clock_ns()
+            return accepted
+
+        now_ns = self._clock_ns()
+        last_fanout_ns = self._last_maker_fanout_ns.get(exchange_id)
+        if last_fanout_ns is None or now_ns - last_fanout_ns >= self._maker_interval_ns:
+            pending = self._coalesced_maker.pop(exchange_id, None)
+            handle = self._coalesced_maker_handles.pop(exchange_id, None)
+            if handle is not None:
+                handle.cancel()
+            if pending is not None:
+                self._count_coalesced_maker()
+            accepted = self._submit_ingress(item)
+            if accepted:
+                self._last_maker_fanout_ns[exchange_id] = now_ns
+            return accepted
+
+        if exchange_id in self._coalesced_maker:
+            self._count_coalesced_maker()
+        self._coalesced_maker[exchange_id] = item
+        if exchange_id not in self._coalesced_maker_handles:
+            remaining_ns = max(
+                0,
+                last_fanout_ns + self._maker_interval_ns - now_ns,
+            )
+            self._coalesced_maker_handles[exchange_id] = (
+                asyncio.get_running_loop().call_later(
+                    remaining_ns / 1_000_000_000,
+                    self._release_coalesced_maker,
+                    exchange_id,
+                )
+            )
+        return True
 
     async def publish(self, snapshot: CanonicalShadowSnapshot) -> None:
         """Awaitable direct path retained for tests/replay-oriented callers."""
@@ -219,6 +270,11 @@ class ShadowBus:
             await self.flush()
         except Exception as exc:  # pragma: no cover - defensive persistence shutdown
             flush_error = exc
+        try:
+            await self._flush_coalesced_maker()
+            await self.flush()
+        except Exception as exc:  # pragma: no cover - defensive persistence shutdown
+            flush_error = flush_error or exc
 
         if self._ingress_task is not None:
             self._ingress_task.cancel()
@@ -290,6 +346,7 @@ class ShadowBus:
             ),
             snapshots_processed=self._snapshots_processed,
             snapshots_dropped_or_coalesced=self._dropped_or_coalesced,
+            maker_snapshots_coalesced=self._maker_snapshots_coalesced,
             ingress_queue_depth=self._ingress.qsize(),
             ingress_queue_high_water=self._ingress_high_water,
             ingress_rejected=self._ingress_rejected,
@@ -309,6 +366,31 @@ class ShadowBus:
             return False
         self._ingress_high_water = max(self._ingress_high_water, self._ingress.qsize())
         return True
+
+    def _count_coalesced_maker(self) -> None:
+        self._maker_snapshots_coalesced += 1
+        self._dropped_or_coalesced += 1
+
+    def _release_coalesced_maker(self, exchange_id: str) -> None:
+        self._coalesced_maker_handles.pop(exchange_id, None)
+        item = self._coalesced_maker.pop(exchange_id, None)
+        if item is None or not self._running:
+            return
+        if self._submit_ingress(item):
+            self._last_maker_fanout_ns[exchange_id] = self._clock_ns()
+
+    async def _flush_coalesced_maker(self) -> None:
+        for handle in self._coalesced_maker_handles.values():
+            handle.cancel()
+        self._coalesced_maker_handles.clear()
+        pending = sorted(
+            self._coalesced_maker.values(),
+            key=lambda item: item.maker.now_monotonic_ns,
+        )
+        self._coalesced_maker.clear()
+        for item in pending:
+            if self._submit_ingress(item):
+                self._last_maker_fanout_ns[item.maker.exchange_id] = self._clock_ns()
 
     async def _ingress_worker(self) -> None:
         while True:

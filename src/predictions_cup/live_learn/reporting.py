@@ -27,6 +27,18 @@ class RollingReport:
     human_text: str
 
 
+@dataclass(frozen=True, slots=True)
+class DecisionSummary:
+    """Compact decision fields kept only for rolling report windows."""
+
+    decision_id: str
+    observed_at: datetime
+    candidate_id: str
+    candidate_version: str
+    strategy_family: str
+    decision_status: DecisionStatus
+
+
 class ReportSink(Protocol):
     async def emit(self, report: RollingReport) -> None: ...
 
@@ -62,7 +74,7 @@ class FileReportSink:
 
 def build_report(
     *,
-    decisions: Sequence[CandidateDecision],
+    decisions: Sequence[CandidateDecision | DecisionSummary],
     outcomes: Sequence[DecisionOutcome],
     cadence_seconds: int,
     window_seconds: int,
@@ -84,9 +96,9 @@ def build_report(
         for outcome in outcomes
         if outcome.decision_id in cohort_ids and outcome.maturity_at <= end
     )
-    by_candidate_decisions: dict[tuple[str, str, str], list[CandidateDecision]] = (
-        defaultdict(list)
-    )
+    by_candidate_decisions: dict[
+        tuple[str, str, str], list[CandidateDecision | DecisionSummary]
+    ] = defaultdict(list)
     for decision in cohort:
         key = (
             decision.candidate_id,

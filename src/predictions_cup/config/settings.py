@@ -112,6 +112,7 @@ class AppSettings(BaseSettings):
     shadow_persistence_batch_size: int = Field(default=256, gt=0, le=10_000)
     shadow_candidate_timeout_ms: int = Field(default=50, gt=0, le=60_000)
     shadow_capture_mirror_enabled: bool = True
+    shadow_snapshot_min_interval_seconds: float = Field(default=1.0, ge=0.0, le=60.0)
     # Explicit only: no post-hoc 005F grid origin is inferred from observed outcomes.
     shadow_005f_grid_origin: datetime | None = None
 
@@ -120,6 +121,9 @@ class AppSettings(BaseSettings):
     live_learn_outcome_path: Path = Path("data/live_learn/outcomes.jsonl")
     live_learn_report_path: Path = Path("data/live_learn/reports")
     live_learn_queue_capacity: int = Field(default=200_000, ge=1_000, le=2_000_000)
+    live_learn_max_retained_decisions: int = Field(
+        default=20_000, ge=1, le=500_000
+    )
     live_learn_evidence_grace_seconds: float = Field(default=5.0, ge=0.0, le=300.0)
     live_learn_max_evidence_age_seconds: float = Field(default=15.0, gt=0.0, le=300.0)
 
@@ -133,7 +137,7 @@ class AppSettings(BaseSettings):
     sig_capture_queue_max: int = Field(default=200_000, ge=10_000, le=2_000_000)
     sig_capture_parquet_shard_seconds: int = Field(default=60, ge=10, le=300)
     sig_capture_parquet_max_rows_per_shard: int = Field(
-        default=100_000, ge=1_000, le=1_000_000
+        default=5_000, ge=1_000, le=1_000_000
     )
     sig_realtime_book_depth: int = Field(default=20, ge=1, le=200)
     sig_realtime_tracked_exchange_ids: str = ""
@@ -449,10 +453,16 @@ class AppSettings(BaseSettings):
             "shadow_persistence_batch_size": self.shadow_persistence_batch_size,
             "shadow_candidate_timeout_ms": self.shadow_candidate_timeout_ms,
             "shadow_capture_mirror_enabled": self.shadow_capture_mirror_enabled,
+            "shadow_snapshot_min_interval_seconds": (
+                self.shadow_snapshot_min_interval_seconds
+            ),
             "live_learn_enabled": self.live_learn_enabled,
             "live_learn_outcome_path": str(self.live_learn_outcome_path),
             "live_learn_report_path": str(self.live_learn_report_path),
             "live_learn_queue_capacity": self.live_learn_queue_capacity,
+            "live_learn_max_retained_decisions": (
+                self.live_learn_max_retained_decisions
+            ),
             "live_learn_evidence_grace_seconds": self.live_learn_evidence_grace_seconds,
             "live_learn_max_evidence_age_seconds": (
                 self.live_learn_max_evidence_age_seconds

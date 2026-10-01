@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import heapq
 import math
+from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
@@ -25,7 +26,12 @@ from predictions_cup.live_learn.evidence import (
     ObservableMarketState,
 )
 from predictions_cup.live_learn.persistence import JsonlOutcomeStore
-from predictions_cup.live_learn.reporting import FileReportSink, ReportSink, build_report
+from predictions_cup.live_learn.reporting import (
+    DecisionSummary,
+    FileReportSink,
+    ReportSink,
+    build_report,
+)
 from predictions_cup.live_learn.scoring import ScoreContext, ScorerRegistry
 from predictions_cup.shadow.contracts import (
     CandidateDecision,
@@ -36,6 +42,7 @@ from predictions_cup.shadow.persistence import PersistenceHealth, read_jsonl_rec
 
 DEFAULT_HORIZONS = (1, 5, 15, 30, 60, 300, 900, 3600)
 DEFAULT_REPORT_CADENCES = (300, 900, 3600)
+DEFAULT_MAX_RETAINED_DECISIONS = 20_000
 SCORING_SPEC_ID = "live-learn-001"
 SCORING_SPEC_VERSION = "1"
 
@@ -78,6 +85,7 @@ class LiveLearnEngine:
         horizons: Sequence[int] = DEFAULT_HORIZONS,
         report_cadences: Sequence[int] = DEFAULT_REPORT_CADENCES,
         queue_capacity: int = 200_000,
+        max_retained_decisions: int = DEFAULT_MAX_RETAINED_DECISIONS,
         evidence_grace_seconds: float = 5.0,
         max_evidence_age_seconds: float = 15.0,
     ) -> None:
@@ -91,6 +99,8 @@ class LiveLearnEngine:
             raise ValueError("LIVE-LEARN report cadences must be positive")
         if queue_capacity <= 0:
             raise ValueError("LIVE-LEARN queue capacity must be positive")
+        if max_retained_decisions <= 0:
+            raise ValueError("LIVE-LEARN retained decision limit must be positive")
         if evidence_grace_seconds < 0.0:
             raise ValueError("evidence grace must be non-negative")
         if max_evidence_age_seconds <= 0.0:
@@ -107,6 +117,8 @@ class LiveLearnEngine:
         self._report_cadences = normalized_cadences
         self._evidence_grace_seconds = evidence_grace_seconds
         self._max_evidence_age_seconds = max_evidence_age_seconds
+        self._max_retained_decisions = max_retained_decisions
+        self._max_retained_snapshots = max_retained_decisions * 2
         self._queue: asyncio.Queue[QueueItem] = asyncio.Queue(maxsize=queue_capacity)
         self._queue_high_water = 0
         self._worker_task: asyncio.Task[None] | None = None
@@ -117,8 +129,18 @@ class LiveLearnEngine:
         self._failures = 0
         self._last_error: str | None = None
         self._decisions: dict[str, CandidateDecision] = {}
-        self._states_by_snapshot: dict[str, ObservableMarketState] = {}
+        self._states_by_snapshot: OrderedDict[str, ObservableMarketState] = (
+            OrderedDict()
+        )
+        self._decision_report_history: OrderedDict[str, DecisionSummary] = (
+            OrderedDict()
+        )
+        self._decision_ids_by_snapshot: dict[str, set[str]] = {}
+        self._decision_snapshot_ids: dict[str, str] = {}
+        self._pending_by_decision: dict[str, int] = {}
+        self._dropped_decisions = 0
         self._pending: dict[str, _Pending] = {}
+        self._pending_by_exchange: dict[str, int] = {}
         self._market_heaps: dict[str, list[tuple[float, int, str]]] = {}
         self._expiry_heap: list[tuple[float, int, str]] = []
         self._sequence = 0
@@ -134,6 +156,7 @@ class LiveLearnEngine:
         report_root: Path,
         execution_journal_path: Path | None = None,
         queue_capacity: int = 200_000,
+        max_retained_decisions: int = DEFAULT_MAX_RETAINED_DECISIONS,
         evidence_grace_seconds: float = 5.0,
         max_evidence_age_seconds: float = 15.0,
     ) -> LiveLearnEngine:
@@ -150,6 +173,7 @@ class LiveLearnEngine:
             report_sink=FileReportSink(report_root),
             execution_provider=execution_provider,
             queue_capacity=queue_capacity,
+            max_retained_decisions=max_retained_decisions,
             evidence_grace_seconds=evidence_grace_seconds,
             max_evidence_age_seconds=max_evidence_age_seconds,
         )
@@ -232,6 +256,8 @@ class LiveLearnEngine:
             queue_high_water=self._queue_high_water,
             write_batches=self._outcome_store.write_batches,
             write_latency_p95_ns=self._outcome_store.write_latency_p95_ns,
+            dropped_decisions=self._dropped_decisions,
+            retained_decisions=len(self._decisions),
         )
 
     @property
@@ -262,7 +288,7 @@ class LiveLearnEngine:
     ) -> object:
         end = (window_end or datetime.now(UTC)).astimezone(UTC)
         report = build_report(
-            decisions=self.decisions(),
+            decisions=self._report_decisions(),
             outcomes=self.outcomes(),
             cadence_seconds=cadence_seconds,
             window_seconds=window_seconds or cadence_seconds,
@@ -318,7 +344,38 @@ class LiveLearnEngine:
             if existing != decision:
                 raise ValueError("decision_id reused with changed decision")
             return
+        archived = self._decision_report_history.get(decision.decision_id)
+        if archived is not None:
+            if archived != _decision_summary(decision):
+                raise ValueError("decision_id reused with changed decision")
+            return
+        if all(
+            self._outcome_store.contains(
+                outcome_id_for(
+                    decision.decision_id,
+                    SCORING_SPEC_ID,
+                    SCORING_SPEC_VERSION,
+                    horizon,
+                )
+            )
+            for horizon in self._horizons
+        ):
+            self._archive_decision(decision)
+            return
+        if len(self._decisions) >= self._max_retained_decisions:
+            self._dropped_decisions += 1
+            return
         self._decisions[decision.decision_id] = decision
+        self._decision_snapshot_ids[decision.decision_id] = (
+            decision.input_snapshot_id
+        )
+        self._decision_ids_by_snapshot.setdefault(
+            decision.input_snapshot_id,
+            set(),
+        ).add(decision.decision_id)
+        if decision.input_snapshot_id in self._states_by_snapshot:
+            self._states_by_snapshot.move_to_end(decision.input_snapshot_id)
+        pending_count = 0
         for horizon in self._horizons:
             outcome_id = outcome_id_for(
                 decision.decision_id,
@@ -340,6 +397,10 @@ class LiveLearnEngine:
                 expires_at=expires,
             )
             self._pending[outcome_id] = pending
+            pending_count += 1
+            self._pending_by_exchange[decision.exchange_id] = (
+                self._pending_by_exchange.get(decision.exchange_id, 0) + 1
+            )
             self._sequence += 1
             heap = self._market_heaps.setdefault(decision.exchange_id, [])
             heapq.heappush(
@@ -350,11 +411,18 @@ class LiveLearnEngine:
                 self._expiry_heap,
                 (expires.timestamp(), self._sequence, outcome_id),
             )
+        if pending_count:
+            self._pending_by_decision[decision.decision_id] = pending_count
+        else:
+            self._release_decision(decision.decision_id)
+        self._trim_snapshot_cache()
 
     async def _handle_state(self, state: ObservableMarketState) -> None:
         self._states_by_snapshot[state.snapshot_id] = state
+        self._states_by_snapshot.move_to_end(state.snapshot_id)
         heap = self._market_heaps.get(state.exchange_id)
         if not heap:
+            self._trim_snapshot_cache()
             return
         due: list[_Pending] = []
         while heap and heap[0][0] <= state.observed_at.timestamp():
@@ -364,6 +432,7 @@ class LiveLearnEngine:
                 due.append(pending)
         retry: list[_Pending] = []
         outcomes: list[DecisionOutcome] = []
+        completed: list[_Pending] = []
         for pending in due:
             outcome = await self._score_pending(pending, state)
             if outcome is None:
@@ -371,6 +440,7 @@ class LiveLearnEngine:
             else:
                 outcomes.append(outcome)
                 self._pending.pop(pending.outcome_id, None)
+                completed.append(pending)
         for pending in retry:
             self._sequence += 1
             heapq.heappush(
@@ -379,6 +449,10 @@ class LiveLearnEngine:
             )
         if outcomes:
             await self._outcome_store.persist_many(outcomes)
+            for pending in completed:
+                self._complete_pending(pending)
+        self._trim_snapshot_cache()
+        self._compact_stale_heaps()
 
     async def _score_pending(
         self,
@@ -546,6 +620,7 @@ class LiveLearnEngine:
 
     async def _expire_due(self, now: datetime) -> None:
         expired: list[DecisionOutcome] = []
+        completed: list[_Pending] = []
         while self._expiry_heap and self._expiry_heap[0][0] <= now.timestamp():
             _, _, outcome_id = heapq.heappop(self._expiry_heap)
             pending = self._pending.pop(outcome_id, None)
@@ -563,8 +638,88 @@ class LiveLearnEngine:
                     reason,
                 )
             )
+            completed.append(pending)
         if expired:
             await self._outcome_store.persist_many(expired)
+            for pending in completed:
+                self._complete_pending(pending)
+        self._trim_snapshot_cache()
+        self._compact_stale_heaps()
+
+    def _complete_pending(self, pending: _Pending) -> None:
+        decision = self._decisions.get(pending.decision_id)
+        if decision is not None:
+            exchange_count = self._pending_by_exchange.get(decision.exchange_id, 0)
+            if exchange_count <= 1:
+                self._pending_by_exchange.pop(decision.exchange_id, None)
+            else:
+                self._pending_by_exchange[decision.exchange_id] = exchange_count - 1
+        remaining = self._pending_by_decision.get(pending.decision_id)
+        if remaining is None:
+            return
+        if remaining <= 1:
+            self._pending_by_decision.pop(pending.decision_id, None)
+            self._release_decision(pending.decision_id)
+        else:
+            self._pending_by_decision[pending.decision_id] = remaining - 1
+
+    def _release_decision(self, decision_id: str) -> None:
+        decision = self._decisions.pop(decision_id, None)
+        if decision is not None:
+            self._archive_decision(decision)
+        self._pending_by_decision.pop(decision_id, None)
+        snapshot_id = self._decision_snapshot_ids.pop(decision_id, None)
+        if snapshot_id is None:
+            return
+        decision_ids = self._decision_ids_by_snapshot.get(snapshot_id)
+        if decision_ids is None:
+            return
+        decision_ids.discard(decision_id)
+        if decision_ids:
+            return
+        self._decision_ids_by_snapshot.pop(snapshot_id, None)
+        self._states_by_snapshot.pop(snapshot_id, None)
+
+    def _archive_decision(self, decision: CandidateDecision) -> None:
+        self._decision_report_history[decision.decision_id] = _decision_summary(
+            decision
+        )
+        self._decision_report_history.move_to_end(decision.decision_id)
+        while len(self._decision_report_history) > self._max_retained_decisions:
+            self._decision_report_history.popitem(last=False)
+
+    def _report_decisions(self) -> tuple[CandidateDecision | DecisionSummary, ...]:
+        return (*self._decision_report_history.values(), *self._decisions.values())
+
+    def _trim_snapshot_cache(self) -> None:
+        while len(self._states_by_snapshot) > self._max_retained_snapshots:
+            for snapshot_id in tuple(self._states_by_snapshot):
+                if snapshot_id not in self._decision_ids_by_snapshot:
+                    del self._states_by_snapshot[snapshot_id]
+                    break
+            else:
+                break
+
+    def _compact_stale_heaps(self) -> None:
+        if len(self._expiry_heap) > max(64, len(self._pending) * 2):
+            self._expiry_heap = [
+                item for item in self._expiry_heap if item[2] in self._pending
+            ]
+            heapq.heapify(self._expiry_heap)
+
+        for exchange_id, heap in tuple(self._market_heaps.items()):
+            if not heap:
+                self._market_heaps.pop(exchange_id, None)
+            elif len(heap) > max(
+                64,
+                self._pending_by_exchange.get(exchange_id, 0) * 2,
+            ):
+                kept = [item for item in heap if item[2] in self._pending]
+                if kept:
+                    heapq.heapify(kept)
+                    self._market_heaps[exchange_id] = kept
+                else:
+                    self._market_heaps.pop(exchange_id, None)
 
     def _failure_outcome(
         self,
@@ -677,7 +832,7 @@ class LiveLearnEngine:
             due = self._next_report_at[cadence]
             while due <= now:
                 report = build_report(
-                    decisions=self.decisions(),
+                    decisions=self._report_decisions(),
                     outcomes=self.outcomes(),
                     cadence_seconds=cadence,
                     window_seconds=cadence,
@@ -703,6 +858,17 @@ class LiveLearnEngine:
     def _require_started(self) -> None:
         if not self._started:
             raise RuntimeError("LIVE-LEARN engine is not started")
+
+
+def _decision_summary(decision: CandidateDecision) -> DecisionSummary:
+    return DecisionSummary(
+        decision_id=decision.decision_id,
+        observed_at=decision.observed_at,
+        candidate_id=decision.candidate_id,
+        candidate_version=decision.candidate_version,
+        strategy_family=decision.strategy_family,
+        decision_status=decision.decision_status,
+    )
 
 
 def _decision_from_record(record: Mapping[str, object]) -> CandidateDecision:
