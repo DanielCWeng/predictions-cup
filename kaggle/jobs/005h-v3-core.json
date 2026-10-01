@@ -6,5 +6,7 @@
   "poll_seconds": 30,
   "timeout_minutes": 300,
   "download_outputs": true,
-  "output_file_pattern": "(JOIN_AUDIT\\.(json|md)|PRE_HOLDOUT_FREEZE\\.json|V3_DISCOVERY_SUMMARY\\.json|V3_DISCOVERY_REPORT\\.md|FILL_INTERACTION_ATLAS\\.csv|REPLENISHMENT_ATLAS\\.csv|TOXICITY_ATLAS\\.csv|TRADE_STATE_RESPONSE\\.csv|MATCHED_CONTROLS\\.csv|TRADFI_CHALLENGERS\\.csv)$"
+  "output_file_pattern": "(JOIN_AUDIT\\.(json|md)|V3_CORE_SHORTLIST_FREEZE\\.json|V3_DISCOVERY_SUMMARY\\.json|V3_DISCOVERY_REPORT\\.md|FILL_INTERACTION_ATLAS\\.csv|REPLENISHMENT_ATLAS\\.csv|TOXICITY_ATLAS\\.csv|TRADE_STATE_RESPONSE\\.csv|MATCHED_CONTROLS\\.csv|TRADFI_CHALLENGERS\\.csv)$",
+  "attempt": 2,
+  "note": "Rerun with provisional V3-core shortlist freeze; experiment-wide PRE_HOLDOUT remains reserved for full 005H."
 }
