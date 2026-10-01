@@ -1,14 +1,14 @@
+# ruff: noqa: E501
 from __future__ import annotations
 
 import json
 import re
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
-import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 EXPERIMENT = "EXPERIMENT-005I"
