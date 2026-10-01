@@ -3,7 +3,7 @@
   "experiment": "EXPERIMENT-005G",
   "branch": "experiment/005g-data003-orderbook-atlas",
   "phase": "COMPLETE",
-  "status": "SEALED_HOLDOUT_COMPLETE",
+  "status": "SEALED_HOLDOUT_AND_ECONOMIC_REPLAY_COMPLETE",
   "primary_dataset": "polyleviathan/sig-cup-data003-orderbooks",
   "dataset_version": 1,
   "accepted_mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
@@ -12,7 +12,9 @@
   "lane_a": {
     "active_ev18": "COMPLETE_INCONCLUSIVE_OR_BLOCKED",
     "pre_baseline": "COMPLETE",
-    "holdout_eligible": ["005F_REPL_PRE_UPDATE"],
+    "holdout_eligible": [
+      "005F_REPL_PRE_UPDATE"
+    ],
     "rejected_before_holdout": [
       "005F_REPL_PRE_LIQUIDITY",
       "005F_REPL_ACTIVE_JUMP",
@@ -61,11 +63,31 @@
     "total_supported": 10,
     "primary_finding": "STATE_DEPENDENT_RENEWAL_AND_TRANSITION_HAZARD",
     "economic_claim": "NOT_ESTABLISHED",
-    "next_gate": "SHADOW_REPLAY_ECONOMIC_CONVERSION"
+    "next_gate": "NONE_FROM_005G_V1"
   },
   "holdout_allowed": false,
   "holdout_read": true,
   "selection_or_tuning_after_holdout": false,
   "make_modified": false,
-  "real_sig_orders_sent": false
+  "real_sig_orders_sent": false,
+  "economic_replay": {
+    "protocol_id": "005G_ECONOMIC_REPLAY_V1",
+    "status": "COMPLETE_NO_DEV_CHAMPION",
+    "workflow_run_id": 36859479989,
+    "workflow_job_id": 110359913766,
+    "artifact_id": 11161197062,
+    "artifact_sha256": "ecd0a08ef52c5c38bc14e408d472739fb69ef6fe869f4f04cfef685b10ac36f8",
+    "result_path": "data/experiments/experiment_005g/economic_replay/RESULT.json",
+    "train_date": "2026-09-06",
+    "dev_date": "2026-09-07",
+    "holdout_date": "2026-09-08",
+    "dev_champion": null,
+    "family_winners": 0,
+    "holdout_candidate_policy_evaluated": false,
+    "holdout_baseline_only": true,
+    "promotion": "NO_PROMOTION",
+    "post_holdout_tuning": false,
+    "make_modified": false,
+    "real_sig_orders_sent": false
+  }
 }
