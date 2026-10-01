@@ -147,7 +147,7 @@ def bootstrap_r2_diff(common: pd.DataFrame, seed: int = SEED) -> dict[str, Any]:
     for _ in range(BOOTSTRAPS):
         sampled = rng.choice(keys, size=len(keys), replace=True)
         sample = pd.concat([by_token[k] for k in sampled], ignore_index=True)
-        y = sample.iloc[:, sample.columns.get_loc(common.columns[common.columns.str.contains("^signed_move_")][0])].to_numpy(float) if False else sample["signed_move_30s"].to_numpy(float)
+        y = sample["signed_move_30s"].to_numpy(float)
         a = r2(y, sample["abs_pred"].to_numpy(float))
         b = r2(y, sample["rel_pred"].to_numpy(float))
         if math.isfinite(a) and math.isfinite(b):
