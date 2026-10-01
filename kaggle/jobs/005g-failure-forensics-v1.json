@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/experiment_005g_failure_forensics",
+  "kernel": "polyleviathan/005g-failure-forensics-v1",
+  "poll_seconds": 30,
+  "timeout_minutes": 330,
+  "download_outputs": true,
+  "output_file_pattern": "(FAILURE_FORENSICS_RAW\\.json)$",
+  "note": "EXPERIMENT-005G FINAL ECONOMIC FAILURE FORENSICS. POST_HOC_FAILURE_FORENSICS only. TRAIN 2026-09-06 and DEV 2026-09-07 only. No economic HOLDOUT read, no threshold tuning, no new policy, no MAKE modification, no real SIG orders."
+}
