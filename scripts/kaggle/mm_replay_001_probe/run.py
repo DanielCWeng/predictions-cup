@@ -111,6 +111,58 @@ def main() -> None:
             "example": example,
         })
 
+    samples: list[dict[str, Any]] = []
+    seen_source_schema: set[tuple[str, tuple[str, ...]]] = set()
+    for path in files:
+        if path.suffix.lower() != ".parquet":
+            continue
+        try:
+            pf = pq.ParquetFile(path)
+            names = tuple(pf.schema_arrow.names)
+            if pf.metadata.num_row_groups == 0:
+                continue
+            table = pf.read_row_group(0)
+            if table.num_rows == 0:
+                continue
+            frame = table.slice(0, min(20, table.num_rows)).to_pylist()
+            source_values = {
+                str(row.get("source_version") or "")
+                for row in frame
+                if isinstance(row, dict)
+            }
+            source_value = sorted(source_values)[0] if source_values else ""
+            key = (source_value, names)
+            if key in seen_source_schema:
+                continue
+            seen_source_schema.add(key)
+            normalized = []
+            for row in frame[:8]:
+                rec: dict[str, Any] = {}
+                for k, v in row.items():
+                    if isinstance(v, (bytes, bytearray)):
+                        rec[k] = "0x" + bytes(v).hex()
+                    else:
+                        rec[k] = v
+                normalized.append(rec)
+            samples.append({
+                "path": str(path.relative_to(root)),
+                "source_version": source_value,
+                "columns": list(names),
+                "rows": normalized,
+            })
+        except Exception as exc:
+            samples.append({
+                "path": str(path.relative_to(root)),
+                "sample_error": repr(exc),
+            })
+        if len(samples) >= 8:
+            break
+
+    (OUT / "PROBE_SAMPLES.json").write_text(
+        json.dumps(samples, indent=2, sort_keys=True, default=str) + "\n",
+        encoding="utf-8",
+    )
+
     summary = {
         "dataset_root": str(root),
         "dataset_dir_name": root.name,
