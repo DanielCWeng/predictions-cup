@@ -2,7 +2,7 @@
   "schema_version": 1,
   "action": "run",
   "kernel_dir": "scripts/kaggle/mm_replay_001_ev18",
-  "kernel": "polyleviathan/mm-replay-001-ev18-canary",
+  "kernel": "polyleviathan/mm-replay-001-ev18-canary-v2",
   "stage_paths": [
     {
       "source": "src/predictions_cup",
@@ -17,5 +17,5 @@
   "timeout_minutes": 300,
   "download_outputs": true,
   "output_file_pattern": "(EV18_.*\\.(json|csv|md))$",
-  "note": "EV18 canary v2: fixed Side enum + explicit compact schema; V3 compaction + B0 local-mid replay + feature-level 005F transfer."
+  "note": "EV18 canary v2 isolated kernel: explicit compact schema, Side enum fix, V3 compaction + B0 local-mid replay + feature-level 005F transfer."
 }
