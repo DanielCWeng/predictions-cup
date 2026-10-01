@@ -51,7 +51,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     if data.get("schema_version") != 1:
         raise ValueError("schema_version must be 1")
     action = data.get("action")
-    if action not in {"auth_check", "run", "status", "output", "logs"}:
+    if action not in {"auth_check", "run", "status", "output", "logs", "dataset_files"}:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
 
@@ -94,6 +94,37 @@ def auth_check(output_dir: Path) -> None:
             "## Kaggle auth check",
             "",
             "Authenticated successfully and listed owned kernels.",
+        ]
+    )
+
+
+
+def dataset_files(data: dict[str, Any], output_dir: Path) -> None:
+    dataset = str(data.get("dataset", "")).strip()
+    if "/" not in dataset:
+        raise ValueError("dataset_files manifest requires 'dataset' as owner/slug")
+    page_size = int(data.get("page_size", 1000))
+    if not 1 <= page_size <= 10000:
+        raise ValueError("page_size must be between 1 and 10000")
+
+    result = run_command(
+        [
+            "kaggle",
+            "datasets",
+            "files",
+            dataset,
+            "--page-size",
+            str(page_size),
+            "--csv",
+        ]
+    )
+    (output_dir / "dataset_files.csv").write_text(result.stdout, encoding="utf-8")
+    write_summary(
+        [
+            "## Kaggle dataset file inventory",
+            "",
+            f"- Dataset: {dataset}",
+            f"- Page size: {page_size}",
         ]
     )
 
@@ -240,6 +271,8 @@ def main() -> int:
         kernel = kernel_from_manifest(data)
         capture_logs(kernel, output_dir)
         write_summary(["## Kaggle logs", "", f"Kernel: {kernel}"])
+    elif action == "dataset_files":
+        dataset_files(data, output_dir)
 
     return 0
 
