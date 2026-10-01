@@ -7,5 +7,6 @@
     "polyleviathan/sig-cup-data003-orderbook",
     "polyleviathan/sig-cup-data-003-orderbook"
   ],
-  "note": "Read-only authenticated probe to bind EXPERIMENT-005G to the exact private fresh DATA-003 orderbook dataset identity before scientific work."
+  "note": "Read-only authenticated probe: exact private DATA-003 orderbook identity plus Kaggle current version/status for EXPERIMENT-005G provenance.",
+  "attempt": 2
 }
