@@ -448,7 +448,10 @@ def build_states_and_trades(
         dataset = pads.dataset([str(path)], format="parquet")
         asset_type = dataset.schema.field("asset_id").type
         if pa.types.is_binary(asset_type) or pa.types.is_large_binary(asset_type):
-            token_filter = [token.encode("utf-8") for token in token_list]
+            token_filter = [
+                int(token).to_bytes(32, byteorder="big", signed=False)
+                for token in token_list
+            ]
         elif pa.types.is_string(asset_type) or pa.types.is_large_string(asset_type):
             token_filter = token_list
         else:
@@ -479,7 +482,13 @@ def build_states_and_trades(
         frame = table.to_pandas()
         frame["asset_id"] = frame["asset_id"].map(
             lambda value: (
-                value.decode("utf-8")
+                str(
+                    int.from_bytes(
+                        bytes(value),
+                        byteorder="big",
+                        signed=False,
+                    )
+                )
                 if isinstance(value, (bytes, bytearray, memoryview))
                 else str(value)
             )
