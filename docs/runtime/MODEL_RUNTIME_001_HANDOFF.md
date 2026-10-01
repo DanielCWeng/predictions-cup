@@ -83,7 +83,22 @@ PAPER models are SHADOW candidates. LIVE model decisions are persisted directly 
 
 ## BENCHMARK_RESULTS
 
-Pending exact-head CI. Benchmark surface: `benchmarks/model_runtime.py`.
+Validated on implementation head:
+
+```text
+ed9a078c5fec46c5835687ebc43b24e139e5b8ba
+```
+
+Benchmark surface: `benchmarks/model_runtime.py --iterations 20000`.
+
+```text
+registry/router                 median 0.140 us   p99   0.171 us
+single model evaluation         median 2.573 us   p99   4.267 us
+model -> candidate contract     median 30.276 us  p99  40.501 us
+1 PAPER model                   median 12.169 us  p99  20.301 us
+5 PAPER models                  median 57.897 us  p99  68.423 us
+10 PAPER models                 median 115.283 us p99 127.192 us
+```
 
 Engineering targets:
 
@@ -93,13 +108,30 @@ simple scalar model p99    <= 50 us
 >= 1 ms p99 is a CI regression guard
 ```
 
-Targets are reported, not used to alter scientific model logic.
+The lightweight model cleared the latency target comfortably. The benchmark explicitly recorded `real_sig_orders_sent=false`.
 
 ## TEST_RESULTS
 
-Pending exact-head CI.
+Exact implementation-head CI was green:
 
-Deterministic tests cover registry/config failure, PAPER isolation, the two-key truth table, central Risk denials, sizing, stale/missing state, model exception quarantine/recovery, provenance and reservation-before-dispatch.
+```text
+ruff:       PASS
+shell:      PASS
+mypy:       PASS — 298 source files
+pytest:     PASS — 878 passed, 3 skipped
+app smoke:  PASS
+BUILD-009:  PASS
+RISK-002:   PASS
+MAKE-001:   PASS
+CANDIDATE:  PASS
+MODEL:      PASS
+OBSERVE:    PASS
+SHADOW:     PASS
+LIVE-LEARN: PASS
+FULLSTACK:  PASS
+```
+
+Deterministic MODEL-RUNTIME tests cover registry/config failure, PAPER isolation, the two-key truth table, central Risk denials, sizing, stale/missing state, model exception quarantine/recovery, provenance and reservation-before-dispatch.
 
 ## KNOWN_LIMITATIONS
 
