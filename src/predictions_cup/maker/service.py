@@ -583,6 +583,7 @@ class MakerService:
                     kill_switch=self.core.kill_switch,
                     min_fair_value=self.settings.maker_min_fair_value,
                     max_fair_value=self.settings.maker_max_fair_value,
+                    max_position=self.settings.residual_taker_max_position,
                 )
                 _LOG.warning("RESIDUAL-TAKER-001 LIVE enabled")
                 upstream_observer = model_execution_observer

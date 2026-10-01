@@ -113,6 +113,7 @@ class AppSettings(BaseSettings):
     residual_taker_size: int = Field(default=50, gt=0, le=2_147_483_647)
     residual_taker_exchange_ids: str = ""
     residual_taker_max_pm_book_age_ms: int = Field(default=35_000, gt=0)
+    residual_taker_max_position: int | None = Field(default=None, gt=0)
 
     # SHADOW-002 is disabled by default and has no order-write capability.
     shadow_enabled: bool = False
