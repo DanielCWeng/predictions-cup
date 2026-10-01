@@ -134,9 +134,12 @@ class RemediationExecutor:
                 continue
             if finding.severity.value != "CRITICAL":
                 continue
-            service = finding.evidence.get("service")
-            if isinstance(service, str) and service in self.config.safe_restart_services:
-                planned.append((ActionCode.RESTART_SAFE_SERVICE, service))
+            finding_service = finding.evidence.get("service")
+            if (
+                isinstance(finding_service, str)
+                and finding_service in self.config.safe_restart_services
+            ):
+                planned.append((ActionCode.RESTART_SAFE_SERVICE, finding_service))
         return tuple(dict.fromkeys(planned))
 
     def execute(
