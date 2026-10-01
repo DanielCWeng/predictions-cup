@@ -45,7 +45,21 @@ jobs:
           set -euo pipefail
           DIR="scripts/kaggle/live_alpha_battery_001/$LANE"
           KERNEL="$(python -c "import json; print(json.load(open('$DIR/kernel-metadata.json'))['id'])")"
-          kaggle kernels push -p "$DIR"
+          PUSHED=0
+          for i in $(seq 1 180); do
+            OUT="$(kaggle kernels push -p "$DIR" 2>&1)" && RC=0 || RC=$?
+            echo "$OUT"
+            if [ "$RC" -eq 0 ]; then
+              PUSHED=1
+              break
+            fi
+            if printf '%s' "$OUT" | grep -q "Maximum batch CPU session count"; then
+              sleep 20
+              continue
+            fi
+            exit "$RC"
+          done
+          test "$PUSHED" -eq 1
           for i in $(seq 1 240); do
             STATUS="$(kaggle kernels status "$KERNEL" 2>&1 || true)"
             echo "$STATUS"
