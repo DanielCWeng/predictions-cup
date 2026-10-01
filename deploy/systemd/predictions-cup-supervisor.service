@@ -6,10 +6,11 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=@@RUNTIME_USER@@
-WorkingDirectory=@@REPO_ROOT@@
+WorkingDirectory=@@TARGET_REPO_ROOT@@
+Environment=PYTHONPATH=@@CODE_ROOT@@/src
 EnvironmentFile=@@RUNTIME_ENV@@
 UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL
-ExecStart=@@PYTHON_BIN@@ -m predictions_cup.supervisor.cli --runtime-env-only --repo-root @@REPO_ROOT@@
+ExecStart=@@PYTHON_BIN@@ -m predictions_cup.supervisor.cli --runtime-env-only --repo-root @@TARGET_REPO_ROOT@@
 Restart=always
 RestartSec=3
 TimeoutStopSec=20
