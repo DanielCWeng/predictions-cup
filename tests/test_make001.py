@@ -265,6 +265,7 @@ def _engine(
     direction: MappingDirection = MappingDirection.SAME,
     max_inventory: float = 10.0,
     max_age_ns: int = 100_000_000,
+    fair_value_band: tuple[float, float] = (0.0, 1.0),
 ) -> MakerEngine:
     provider = DirectPolymarketFairValueProvider(
         _mapping(
@@ -285,6 +286,8 @@ def _engine(
             max_account_age_ns=max_age_ns,
             max_inventory_age_ns=max_age_ns,
             max_optional_signal_age_ns=max_age_ns,
+            min_fair_value=fair_value_band[0],
+            max_fair_value=fair_value_band[1],
         ),
         config=MakerConfig(max_abs_inventory=max_inventory),
     )
@@ -2330,3 +2333,15 @@ def test_cancel_uncertainty_blocks_replacement_until_reconciliation() -> None:
     bid = next(action for action in actions if action.side is QuoteSide.BID)
     assert bid.kind is QuoteLifecycleActionKind.WAIT_RECONCILIATION
 
+
+
+def test_fair_value_band_quotes_only_mid_range_markets() -> None:
+    snapshot = _maker_snapshot(external={"token-yes": _external(bid=0.49, ask=0.51)})
+    inside = _engine(fair_value_band=(0.2, 0.8)).quote(snapshot)
+    assert inside.gate.reason != "fv_outside_band"
+    assert inside.desired is not None
+
+    tail = _maker_snapshot(external={"token-yes": _external(bid=0.90, ask=0.92)})
+    outside = _engine(fair_value_band=(0.2, 0.8)).quote(tail)
+    assert outside.gate.reason == "fv_outside_band"
+    assert outside.desired is None

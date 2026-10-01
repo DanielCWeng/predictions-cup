@@ -103,6 +103,8 @@ class AppSettings(BaseSettings):
     maker_min_replace_ticks: int = Field(default=1, gt=0)
     maker_min_replace_size: int = Field(default=1, gt=0)
     maker_min_requote_interval_ms: int = Field(default=0, ge=0)
+    maker_min_fair_value: float = Field(default=0.0, ge=0.0, le=1.0)
+    maker_max_fair_value: float = Field(default=1.0, ge=0.0, le=1.0)
 
     # SHADOW-002 is disabled by default and has no order-write capability.
     shadow_enabled: bool = False

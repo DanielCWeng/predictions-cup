@@ -108,7 +108,7 @@ from predictions_cup.sig.trading_client import SigTradingClient
 from predictions_cup.sig.trading_dto import PortfolioPnlDto
 
 _LOG = logging.getLogger(__name__)
-_LIVE_MAX_EXCHANGES = 20
+_LIVE_MAX_EXCHANGES = 160
 
 
 class MakerService:

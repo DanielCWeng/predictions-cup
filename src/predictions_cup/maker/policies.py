@@ -228,6 +228,8 @@ class ConservativeEligibilityPolicy:
         max_depth_age_ns: int | None = None,
         widen_toxicity_at: float = 0.35,
         suspend_toxicity_at: float = 0.80,
+        min_fair_value: float = 0.0,
+        max_fair_value: float = 1.0,
     ) -> None:
         ages = (
             max_bbo_age_ns,
@@ -244,6 +246,10 @@ class ConservativeEligibilityPolicy:
             raise ValueError("trusted-depth policy requires positive max_depth_age_ns")
         if not 0.0 <= widen_toxicity_at <= suspend_toxicity_at <= 1.0:
             raise ValueError("invalid toxicity thresholds")
+        if not 0.0 <= min_fair_value < max_fair_value <= 1.0:
+            raise ValueError("invalid fair-value band")
+        self._min_fair_value = min_fair_value
+        self._max_fair_value = max_fair_value
         self._max_bbo_age_ns = max_bbo_age_ns
         self._max_fv_age_ns = max_fv_age_ns
         self._max_account_age_ns = max_account_age_ns
@@ -324,6 +330,12 @@ class ConservativeEligibilityPolicy:
             self._max_fv_age_ns,
         ):
             return GateDecision(GateMode.CANCEL, "fv_stale")
+        fair = context.raw_fair_value.value
+        if fair is not None and not (
+            self._min_fair_value <= fair <= self._max_fair_value
+        ):
+            # Quote only mid-range markets; held inventory is kept, not dumped.
+            return GateDecision(GateMode.CANCEL, "fv_outside_band")
         if not context.prediction.trusted or self._stale(
             snapshot.now_monotonic_ns,
             context.prediction.observed_monotonic_ns,
