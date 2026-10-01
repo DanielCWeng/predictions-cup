@@ -337,7 +337,7 @@ def test_alert_webhook_is_optional_and_durable_first(
     class _Response:
         status = 204
 
-        def __enter__(self) -> "_Response":
+        def __enter__(self) -> _Response:
             return self
 
         def __exit__(self, *args: object) -> None:
