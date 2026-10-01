@@ -2,10 +2,11 @@
   "schema_version": 1,
   "action": "run",
   "kernel_dir": "scripts/kaggle/experiment_005g_data003_orderbook_audit",
-  "kernel": "polyleviathan/005g-data003-orderbook-input-audit",
+  "kernel": "polyleviathan/005g-data-003-orderbook-input-audit",
   "poll_seconds": 60,
   "timeout_minutes": 240,
   "download_outputs": true,
   "output_file_pattern": "(INPUT_AUDIT\\\\.json|INPUT_AUDIT\\\\.md|SCHEMA_INVENTORY\\\\.json|PROVENANCE_GATE\\\\.json|AUDIT_HANDOFF\\\\.json)$",
-  "note": "EXPERIMENT-005G phase A only: authoritative schema/provenance audit of the fresh DATA-003-linked orderbook corpus. No scientific model fitting, HOLDOUT access, MAKE mutation, or order placement."
+  "note": "EXPERIMENT-005G phase A authoritative audit; retry 2 after authenticated dataset probe confirmed polyleviathan/sig-cup-data003-orderbooks is accessible. No modelling, HOLDOUT access, MAKE mutation, or order placement.",
+  "attempt": 2
 }
