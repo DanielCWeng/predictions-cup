@@ -451,25 +451,19 @@ def match_groups(
             for i in hash_index.get(tx_hash, [])
             if str(trades.at[i, "token_id"]) == token
         ]
-        chosen = sided if len(sided) == 1 else plain
+        # DATA-003 source_side is not an aggressor-direction field.
+        # Side-matched candidates are audit-only; never use them to select a join.
+        chosen = plain
         status = "UNMATCHED"
         match = None
         if hash_candidates:
             signature_hash_candidates = [
                 i
                 for i in hash_candidates
-                if math.isclose(
-                    float(trades.at[i, "price"]),
-                    float(r["price"]),
-                    rel_tol=1e-8,
-                    abs_tol=1e-8,
-                )
-                and math.isclose(
-                    float(trades.at[i, "size"]),
-                    float(r["size_shares"]),
-                    rel_tol=1e-8,
-                    abs_tol=1e-8,
-                )
+                if round(float(trades.at[i, "price"]), 6)
+                == round(float(r["price"]), 6)
+                and round(float(trades.at[i, "size"]), 6)
+                == round(float(r["size_shares"]), 6)
             ]
             if len(signature_hash_candidates) == 1:
                 i = signature_hash_candidates[0]
