@@ -219,14 +219,22 @@ def build_index(trades: pd.DataFrame, with_side: bool) -> dict[tuple[Any, ...], 
     return dict(index)
 
 
-def candidate_rows(series: list[tuple[int, int, int]], center_ns: int, tolerance_ns: int) -> list[tuple[int, int, int]]:
+def candidate_rows(
+    series: list[tuple[int, int, int]],
+    center_ns: int,
+    tolerance_ns: int,
+) -> list[tuple[int, int, int]]:
     times = [x[0] for x in series]
     lo = bisect.bisect_left(times, center_ns - tolerance_ns)
     hi = bisect.bisect_right(times, center_ns + tolerance_ns)
     return series[lo:hi]
 
 
-def match_groups(groups: pd.DataFrame, trades: pd.DataFrame, bbo: dict[str, list[tuple[int, int, float, float]]]) -> tuple[pd.DataFrame, dict[str, Any]]:
+def match_groups(
+    groups: pd.DataFrame,
+    trades: pd.DataFrame,
+    bbo: dict[str, list[tuple[int, int, float, float]]],
+) -> tuple[pd.DataFrame, dict[str, Any]]:
     idx_plain = build_index(trades, with_side=False)
     idx_side = build_index(trades, with_side=True)
     tol_ns = int(MATCH_TOLERANCE_S * 1e9)
@@ -234,9 +242,26 @@ def match_groups(groups: pd.DataFrame, trades: pd.DataFrame, bbo: dict[str, list
     for _, r in groups.iterrows():
         token = str(r["token_id"])
         block_ns = int(r["timestamp"]) * 1_000_000_000
-        plain = candidate_rows(idx_plain.get(rounded_key(token, r["price"], r["size_shares"]), []), block_ns, tol_ns)
+        plain_key = rounded_key(token, r["price"], r["size_shares"])
+        plain = candidate_rows(
+            idx_plain.get(plain_key, []),
+            block_ns,
+            tol_ns,
+        )
         side = str(r.get("side_norm") or "")
-        sided = candidate_rows(idx_side.get(rounded_key(token, r["price"], r["size_shares"], side), []), block_ns, tol_ns) if side else []
+        sided: list[tuple[int, int, int]] = []
+        if side:
+            side_key = rounded_key(
+                token,
+                r["price"],
+                r["size_shares"],
+                side,
+            )
+            sided = candidate_rows(
+                idx_side.get(side_key, []),
+                block_ns,
+                tol_ns,
+            )
         chosen = sided if len(sided) == 1 else plain
         status = "UNMATCHED"
         match = None
@@ -246,7 +271,11 @@ def match_groups(groups: pd.DataFrame, trades: pd.DataFrame, bbo: dict[str, list
         elif len(chosen) > 1:
             distances = [abs(x[0] - block_ns) for x in chosen]
             m = min(distances)
-            nearest = [x for x, d in zip(chosen, distances) if d == m]
+            nearest = [
+                x
+                for x, d in zip(chosen, distances, strict=True)
+                if d == m
+            ]
             if len(nearest) == 1:
                 status = "NEAREST_UNIQUE_AMONG_MULTIPLE"
                 match = nearest[0]
@@ -294,8 +323,15 @@ def match_groups(groups: pd.DataFrame, trades: pd.DataFrame, bbo: dict[str, list
 def summarize_matches(m: pd.DataFrame) -> dict[str, Any]:
     summary: dict[str, Any] = {
         "groups": int(len(m)),
-        "status_counts": {str(k): int(v) for k, v in m["match_status"].value_counts().items()},
-        "unique_or_nearest": int(m["match_status"].isin(["UNIQUE", "NEAREST_UNIQUE_AMONG_MULTIPLE"]).sum()),
+        "status_counts": {
+            str(k): int(v)
+            for k, v in m["match_status"].value_counts().items()
+        },
+        "unique_or_nearest": int(
+            m["match_status"]
+            .isin(["UNIQUE", "NEAREST_UNIQUE_AMONG_MULTIPLE"])
+            .sum()
+        ),
         "strict_unique": int((m["match_status"] == "UNIQUE").sum()),
         "ambiguous": int((m["match_status"] == "AMBIGUOUS").sum()),
         "unmatched": int((m["match_status"] == "UNMATCHED").sum()),
@@ -336,20 +372,32 @@ def main() -> None:
         "fill_source": "accepted DATA-003 W18 participant fills",
         "orderbook_source": "DATA-003-linked EV18 V3 orderbook corpus",
         "orderbook_ordering": "timestamp_received then sequence",
-        "fill_time_semantics": "canonical Polygon block timestamp; accepted block gate proved equality to block header timestamp",
+        "fill_time_semantics": (
+            "canonical Polygon block timestamp; accepted block gate proved "
+            "equality to block header timestamp"
+        ),
         "accepted_block_gate_hashes": EXPECTED_BLOCK_GATE,
         "match_tolerance_seconds": MATCH_TOLERANCE_S,
         "group_audit": group_audit,
         "orderbook_counts": ob_counts,
         "match_summary": match_summary,
-        "scientific_boundary": "probe only; nearest match is diagnostic and is not yet accepted as a causal join rule",
+        "scientific_boundary": (
+            "probe only; nearest match is diagnostic and is not yet accepted "
+            "as a causal join rule"
+        ),
         "real_sig_orders_sent": False,
     }
-    (WORK / "JOIN_PROBE_SUMMARY.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    (WORK / "JOIN_PROBE_SUMMARY.json").write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n"
+    )
     lines = [
         "# EXPERIMENT-005H — EV18 Join Probe",
         "",
-        "This probe tests whether accepted DATA-003 transaction-condition trade episodes can be aligned to observed EV18 CLOB trade events before the full experiment is allowed to proceed.",
+        (
+            "This probe tests whether accepted DATA-003 transaction-condition "
+            "trade episodes can be aligned to observed EV18 CLOB trade events "
+            "before the full experiment is allowed to proceed."
+        ),
         "",
         f"- DATA-003 participant rows: {group_audit['participant_rows']}",
         f"- Accepted transaction-condition groups: {group_audit['accepted_groups']}",
@@ -359,7 +407,11 @@ def main() -> None:
         f"- Ambiguous: {match_summary['ambiguous']}",
         f"- Unmatched: {match_summary['unmatched']}",
         "",
-        "Nearest-among-multiple matches are diagnostic only. The full 005H join may use only a rule justified by collision rates, lag structure, source ordering, and matched-event reuse from this probe.",
+        (
+            "Nearest-among-multiple matches are diagnostic only. The full 005H "
+            "join may use only a rule justified by collision rates, lag "
+            "structure, source ordering, and matched-event reuse from this probe."
+        ),
         "",
         "REAL SIG ORDERS SENT: NO",
     ]
