@@ -2,13 +2,14 @@
 
 **RESEARCH-SYNTHESIS-001**  
 **Starting main:** `611b048ce0ee4630c01a9500cb021a70afba8474`  
-**Evidence snapshot:** 2026-10-01
+**Evidence snapshot:** 2026-10-01  
+**Canonicality refresh main:** `662969df4e481f1cbd9417c923ae35d3a0aa9f9f` (005G merged via PR #114)
 
 ## Executive summary
 
 The repository history supports the central hypothesis **with an important exception**.
 
-The strongest, most replicated and most current-universe findings are overwhelmingly about **WHEN a market/book is likely to update, transition, become active, remain stressed, or experience an unsigned move**. The clearest chain is `genuine_age_s → 300s BBO update hazard`: it passed the 005F sealed HOLDOUT and then, on the fresh DATA-003 orderbook corpus, the exact frozen mechanism replicated at **+26.50% relative MSE improvement across 658 markets with 48/48 positive blocks**. 005G also found `state_dwell_s → state_transition_h300` at **+40.30%**, although PR #114 remains **NON_CANONICAL / UNMERGED**.
+The strongest, most replicated and most current-universe findings are overwhelmingly about **WHEN a market/book is likely to update, transition, become active, remain stressed, or experience an unsigned move**. The clearest chain is `genuine_age_s → 300s BBO update hazard`: it passed the 005F sealed HOLDOUT and then, on the fresh DATA-003 orderbook corpus, the exact frozen mechanism replicated at **+26.50% relative MSE improvement across 658 markets with 48/48 positive blocks**. 005G also found `state_dwell_s → state_transition_h300` at **+40.30%**. PR #114 has since merged into `main` at `662969df4e481f1cbd9417c923ae35d3a0aa9f9f`, so this evidence is now canonical.
 
 That is not the whole story. Merged 005I supplies the first substantial canonical directional layer: **67.26% five-minute reversal** across 55,340 qualifying sampled HOLDOUT minute-states, every temporal worker above 66%, plus a frozen depth-normalised OFI challenger that improves next-minute directional log loss by **0.004165** across 1,195,563 non-zero observations with **5/5 workers positive**. Narrower directional evidence also exists in 005D late-count structural convergence and 005E's secondary signed-flow diagnostics.
 
@@ -39,7 +40,7 @@ Sealed HOLDOUT:
 
 The delayed-feature tests show this is primarily a **persistent staleness/renewal state**, not a fleeting lead-lag impulse.
 
-### 005G fresh replication — NON_CANONICAL / UNMERGED
+### 005G fresh replication — canonical
 
 The exact frozen 005F PRE_UPDATE mechanism was retested on fresh DATA-003:
 - `genuine_age_s → update_h300`;
@@ -50,7 +51,7 @@ The exact frozen 005F PRE_UPDATE mechanism was retested on fresh DATA-003:
 
 This is the programme's cleanest E3 result.
 
-### 005G state dwell — NON_CANONICAL / UNMERGED
+### 005G state dwell — canonical
 
 - `state_dwell_s → state_transition_h300`: **+40.2969%**, 48/48 blocks.
 - `state_dwell_s → state_transition_h60`: **+20.7621%**, 48/48 blocks.
@@ -121,8 +122,8 @@ R3-FV-001 made that distinction explicit: extensive LP/QP/KL/MaxEnt/count-surfac
 
 | Finding family | E0 | E1 | E2 | E3 | E4 | E5 |
 |---|---:|---:|---:|---:|---:|---:|
-| 005F genuine-age renewal hazard | ✓ | ✓ | **✓** | **✓ via 005G fresh replication†** |  |  |
-| 005G state-dwell transition hazard† | ✓ | ✓ | **✓** |  |  |  |
+| 005F genuine-age renewal hazard | ✓ | ✓ | **✓** | **✓ via 005G fresh replication** |  |  |
+| 005G state-dwell transition hazard | ✓ | ✓ | **✓** |  |  |  |
 | PRED-006 price-change hazard | ✓ | ✓ | **✓** |  |  |  |
 | 005I mean reversion | ✓ | ✓ | **✓** |  |  |  |
 | 005I depth-normalised OFI | ✓ | ✓ | **✓** |  |  |  |
@@ -134,7 +135,7 @@ R3-FV-001 made that distinction explicit: extensive LP/QP/KL/MaxEnt/count-surfac
 | 005A same-family 5s | ✓ | ✓ |  |  |  |  |
 
 \* Secondary frozen HOLDOUT diagnostic; not a promoted primary result.  
-† 005G PR #114 is **NON_CANONICAL / UNMERGED**.
+005G PR #114 merged into `main` at `662969df4e481f1cbd9417c923ae35d3a0aa9f9f`; its sealed-holdout evidence is canonical.
 
 There are **zero E4 positives** and **zero E5 positives** in the research history inspected.
 
@@ -228,7 +229,7 @@ Answers:
 | Signal family | Predicts movement/state? | Predicts direction? | Predicts economics? |
 |---|---:|---:|---:|
 | Genuine-age renewal hazard | **Yes** | No | No; conversion failed in 005G bundle |
-| State-dwell transition hazard† | **Yes** | No | No; conversion failed |
+| State-dwell transition hazard | **Yes** | No | No; conversion failed |
 | PRED-006 price-change hazard | **Yes** | No | No |
 | PRICE_DISCOVERY / LIQUIDITY_STRESS | **Yes** | No | No |
 | Withdrawal/replenishment resilience | **Yes** | No | No |
@@ -238,7 +239,6 @@ Answers:
 | 005E signed participant flow | Conditional | **Yes, secondary** | No |
 | 004C-B / 005A family effects | Some | **Yes, narrow** | No |
 
-† NON_CANONICAL / UNMERGED.
 
 The important asymmetry is not “zero direction.” It is:
 
@@ -425,7 +425,7 @@ EVENT / INFORMATION ARRIVAL
 TRANSITION / MOVEMENT HAZARD          ← strongest layer
     005F genuine_age update/jump hazard
     PRED-006 600s/1800s price-change hazard
-    005G state_dwell + renewal state †
+    005G state_dwell + renewal state
     005I PRICE_DISCOVERY / LIQUIDITY_STRESS / replenishment
             ↓
 DIRECTION / FAIR VALUE                ← exists, less replicated
@@ -445,7 +445,6 @@ EXECUTION CHOICE                      ← infrastructure exists; research mappin
 REALIZED ECONOMICS                    ← MISSING / no positive E4/E5
 ```
 
-† NON_CANONICAL / UNMERGED.
 
 This is the most important architectural result of the archaeology: **we are good higher up the causal/economic chain than we are at the bottom of it.**
 
@@ -517,8 +516,8 @@ Do not reopen another broad feature search before answering this narrower increm
 
 # Direct answers to the ten required questions
 
-1. **Strongest positive findings:** renewal/transition hazard (005F, PRED-006, 005G†), 005I mean reversion, 005I depth-normalised OFI, 005I liquidity/resilience states, and 005D structural reconstruction/convergence.
-2. **Sealed-holdout evidence:** 005F, PRED-006, 005D, 005E secondary diagnostics, 005I, and 005G†.
+1. **Strongest positive findings:** renewal/transition hazard (005F, PRED-006, 005G), 005I mean reversion, 005I depth-normalised OFI, 005I liquidity/resilience states, and 005D structural reconstruction/convergence.
+2. **Sealed-holdout evidence:** 005F, PRED-006, 005D, 005E secondary diagnostics, 005I, and 005G.
 3. **Cross-dataset/event replication:** the clearest is 005F `genuine_age_s → update_h300` freshly replicated in 005G DATA-003†. Other families have cross-market/event breadth but not equally clean fresh-dataset replication.
 4. **Economic value:** **none established as positive E4/E5**. 005G conversion failed; 004C-C crossing was negative.
 5. **Movement/state-only signals:** genuine-age update/jump hazard, state-dwell transition hazard†, PRED-006 price-change hazard, liquidity/discovery states and replenishment resilience.
@@ -528,6 +527,6 @@ Do not reopen another broad feature search before answering this narrower increm
 9. **Obvious missing pieces:** fill probability, fill toxicity, independent fresh replication of direction, and post-cost economic conversion.
 10. **Smallest next research question:** does frozen direction add incremental future signed-markout information conditional on frozen hazard state?
 
-† 005G PR #114 remains **NON_CANONICAL / UNMERGED** at this snapshot.
+005G PR #114 is merged into `main` at `662969df4e481f1cbd9417c923ae35d3a0aa9f9f`; canonicality has been refreshed without changing the scientific conclusions.
 
 **The Predictions Cup research programme is currently best at predicting when a market or order book is likely to change state or reprice.**
