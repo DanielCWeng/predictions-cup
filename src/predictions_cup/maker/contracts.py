@@ -79,6 +79,7 @@ class MakerMarketSnapshot:
     inventory_observed_ns: int
     external_quotes: Mapping[str, ExternalQuoteState]
     volatility: float | None = None
+    external_feed_observed_ns: int | None = None
 
     def __post_init__(self) -> None:
         if not self.exchange_id.strip() or not self.market_id.strip():
@@ -95,6 +96,11 @@ class MakerMarketSnapshot:
             raise ValueError("maker timestamps must be non-negative")
         if self.sig_depth_observed_ns is not None and self.sig_depth_observed_ns < 0:
             raise ValueError("depth timestamp must be non-negative")
+        if (
+            self.external_feed_observed_ns is not None
+            and self.external_feed_observed_ns < 0
+        ):
+            raise ValueError("external feed timestamp must be non-negative")
         if self.volatility is not None and (
             not math.isfinite(self.volatility) or self.volatility < 0.0
         ):

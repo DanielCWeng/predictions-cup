@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from time import monotonic_ns
 
@@ -53,6 +53,11 @@ def _parser() -> argparse.ArgumentParser:
     reset_strategy.add_argument("--value", required=True)
     reset_strategy.add_argument("--operator", required=True)
     reset_strategy.add_argument("--ack-service-stopped", action="store_true", required=True)
+
+    set_profile = sub.add_parser("set-profile")
+    set_profile.add_argument("--profile-version", required=True)
+    set_profile.add_argument("--operator", required=True)
+    set_profile.add_argument("--ack-service-stopped", action="store_true", required=True)
     return parser
 
 
@@ -115,6 +120,14 @@ def main(argv: list[str] | None = None) -> int:
             )
             event_type = "OPERATOR_STRATEGY_RESET"
             detail = f"{args.scope}:{args.value}:{args.operator}"
+        elif args.command == "set-profile":
+            profile_version = args.profile_version.strip()
+            operator = args.operator.strip()
+            if not profile_version or not operator:
+                raise ValueError("profile version and operator must not be blank")
+            updated = replace(state, limit_profile_version=profile_version)
+            event_type = "OPERATOR_PROFILE_VERSION_UPDATE"
+            detail = f"{operator}:{state.limit_profile_version}->{profile_version}"
         else:
             raise AssertionError("unreachable command")
 

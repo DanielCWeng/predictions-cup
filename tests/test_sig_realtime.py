@@ -715,6 +715,29 @@ def test_market_settlement_refetches_market_and_avoids_closed_book_read(
     asyncio.run(scenario())
 
 
+def test_periodic_bulk_refresh_can_be_disabled_for_capture(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        rest = FakeRest()
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            periodic_bulk_refresh_enabled=False,
+        )
+        await engine.initialize()
+        initial_bulk_calls = len(rest.bulk_calls)
+
+        await engine.maintenance(datetime.now(UTC) + timedelta(seconds=60))
+        await asyncio.sleep(0)
+
+        assert len(rest.bulk_calls) == initial_bulk_calls
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
 def test_capacity_check_rejects_impossible_tracked_freshness(tmp_path: Path) -> None:
     async def scenario() -> None:
         rest = FakeRest(market_count=10)

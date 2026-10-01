@@ -61,15 +61,36 @@ class SigLiveSink:
     async def dispatch(self, plan: ExecutionPlan) -> ExecutionEvent:
         return await self._dispatch_placement(plan, require_reservation=True)
 
-    async def dispatch_recovery(self, envelope: ExecutionEnvelope) -> ExecutionEvent:
-        """Redispatch one durable unresolved placement while fresh LIVE is blocked."""
-        self._assert_recovery_authority(envelope)
+    async def dispatch_recovery(
+        self,
+        envelope: ExecutionEnvelope,
+        *,
+        plan: ExecutionPlan | None = None,
+    ) -> ExecutionEvent:
+        """Redispatch one durable unresolved placement with the same identity."""
+        recovery_state = self._assert_recovery_authority(envelope)
+        if recovery_state is not LifecycleState.RECONCILING:
+            self._journal.mark_state(
+                envelope.logical_operation_id,
+                LifecycleState.RECONCILING,
+                self._clock_ns(),
+            )
+        recovery_plan = (
+            ExecutionPlan(envelope=envelope, intents=())
+            if plan is None
+            else plan
+        )
+        if recovery_plan.envelope != envelope:
+            raise ValueError("recovery plan envelope does not match durable identity")
         return await self._dispatch_placement(
-            ExecutionPlan(envelope=envelope, intents=()),
+            recovery_plan,
             require_reservation=False,
         )
 
-    def _assert_recovery_authority(self, envelope: ExecutionEnvelope) -> None:
+    def _assert_recovery_authority(
+        self,
+        envelope: ExecutionEnvelope,
+    ) -> LifecycleState:
         durable = next(
             (
                 candidate
@@ -106,6 +127,7 @@ class SigLiveSink:
             LifecycleState.RECONCILING,
         }:
             raise ValueError("recovery dispatch requires a recoverable lifecycle state")
+        return durable.lifecycle_state
 
     async def _dispatch_placement(
         self,

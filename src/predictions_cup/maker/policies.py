@@ -263,7 +263,7 @@ class ConservativeEligibilityPolicy:
             snapshot.sig_bbo_observed_ns + self._max_bbo_age_ns,
             snapshot.account_observed_ns + self._max_account_age_ns,
             snapshot.inventory_observed_ns + self._max_inventory_age_ns,
-            context.raw_fair_value.observed_monotonic_ns + self._max_fv_age_ns,
+            self._fair_value_observed_ns(context) + self._max_fv_age_ns,
             context.prediction.observed_monotonic_ns + self._max_signal_age_ns,
             context.toxicity.observed_monotonic_ns + self._max_signal_age_ns,
         ]
@@ -320,7 +320,7 @@ class ConservativeEligibilityPolicy:
             return GateDecision(GateMode.CANCEL, f"fv_{context.raw_fair_value.reason}")
         if self._stale(
             snapshot.now_monotonic_ns,
-            context.raw_fair_value.observed_monotonic_ns,
+            self._fair_value_observed_ns(context),
             self._max_fv_age_ns,
         ):
             return GateDecision(GateMode.CANCEL, "fv_stale")
@@ -366,6 +366,17 @@ class ConservativeEligibilityPolicy:
                 size_multiplier=max(0.1, 1.0 - toxic),
             )
         return GateDecision(GateMode.NORMAL, "ok")
+
+    @staticmethod
+    def _fair_value_observed_ns(context: QuoteContext) -> int:
+        observed = context.raw_fair_value.observed_monotonic_ns
+        feed_observed = context.snapshot.external_feed_observed_ns
+        if (
+            context.raw_fair_value.source_id == "direct-polymarket"
+            and feed_observed is not None
+        ):
+            return max(observed, feed_observed)
+        return observed
 
     @staticmethod
     def _stale(now_ns: int, observed_ns: int, max_age_ns: int) -> bool:

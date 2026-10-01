@@ -171,6 +171,7 @@ class SigRealtimeStateEngine:
         open_book_max_trusted_age_seconds: float = 30.0,
         bulk_price_refresh_seconds: float = 10.0,
         governed_rate_per_second: float = 2.0,
+        periodic_bulk_refresh_enabled: bool = True,
         governor_snapshot: GovernorSnapshotFn | None = None,
         clock: Clock = lambda: datetime.now(UTC),
         observation_emitter: ObservationEmitter | None = None,
@@ -202,6 +203,7 @@ class SigRealtimeStateEngine:
         )
         self._bulk_price_refresh_interval = timedelta(seconds=bulk_price_refresh_seconds)
         self._governed_rate_per_second = governed_rate_per_second
+        self._periodic_bulk_refresh_enabled = periodic_bulk_refresh_enabled
         self._governor_snapshot = governor_snapshot
         self._clock = clock
         self._observation_emitter = observation_emitter
@@ -355,7 +357,11 @@ class SigRealtimeStateEngine:
             not task.done() and task.get_name() == "sig-bulk-price-refresh"
             for task in self._background_tasks
         )
-        if bulk_refresh_due and not bulk_refresh_running:
+        if (
+            self._periodic_bulk_refresh_enabled
+            and bulk_refresh_due
+            and not bulk_refresh_running
+        ):
             task = asyncio.create_task(
                 self.refresh_bulk_prices(
                     reason="periodic_bulk_prices",

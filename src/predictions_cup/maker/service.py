@@ -13,6 +13,7 @@ import logging
 import signal
 from collections.abc import Iterable
 from contextlib import suppress
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from time import monotonic_ns
@@ -28,7 +29,10 @@ from predictions_cup.execution.interlocks import (
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import ExecutionMode, LifecycleState
-from predictions_cup.execution.recovery import recover_startup
+from predictions_cup.execution.recovery import (
+    recover_in_session_cancellations,
+    recover_startup,
+)
 from predictions_cup.external.polymarket.client import ClobMarketDataClient
 from predictions_cup.external.polymarket.health import IngestionHealth
 from predictions_cup.external.polymarket.models import JsonObject, PayloadError
@@ -40,6 +44,7 @@ from predictions_cup.maker.adapters import (
 )
 from predictions_cup.maker.coordinator import MakerCoordinator
 from predictions_cup.maker.factory import MakerRuntimeComponents, build_maker_components
+from predictions_cup.maker.instance_lock import MakerInstanceLock
 from predictions_cup.maker.noop_recorder import NoopSigRealtimeRecorder
 from predictions_cup.maker.recovery import reconcile_maker_quote_registry
 from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
@@ -60,6 +65,7 @@ from predictions_cup.risk import (
     CapitalRiskState,
     ExposureAttribution,
     ExternalCashFlowScan,
+    ReconciliationError,
     RiskContext,
     RiskContextSource,
     SigRealtimeRiskMarkProvider,
@@ -98,6 +104,7 @@ from predictions_cup.sig.trading_client import SigTradingClient
 from predictions_cup.sig.trading_dto import PortfolioPnlDto
 
 _LOG = logging.getLogger(__name__)
+_LIVE_MAX_EXCHANGES = 20
 
 
 class MakerService:
@@ -118,7 +125,22 @@ class MakerService:
         self.pm_books = OrderBookStore()
         self.pm_clob = ClobMarketDataClient(str(settings.polymarket_clob_base_url))
         self.pm_ws = MarketWebSocket(str(settings.polymarket_ws_url), self.pm_health)
-        self._pm_token_ids = _mapped_token_ids(self.core.mapping)
+        self._live_exchange_ids: frozenset[str] | None = None
+        if self.core.risk_context.mode is ExecutionMode.LIVE:
+            configured = frozenset(_configured_tracked_exchanges(settings))
+            if not configured:
+                raise ValueError(
+                    "LIVE MAKE requires an explicit sig_realtime_tracked_exchange_ids universe"
+                )
+            if len(configured) > _LIVE_MAX_EXCHANGES:
+                raise ValueError(
+                    f"LIVE MAKE launch universe exceeds {_LIVE_MAX_EXCHANGES} exchanges"
+                )
+            self._live_exchange_ids = configured
+        self._pm_token_ids = _mapped_token_ids(
+            self.core.mapping,
+            exchange_ids=self._live_exchange_ids,
+        )
         self._last_health: tuple[bool, bool, bool, datetime | None] | None = None
         self._observation_health_provider: ObservationHealthProvider | None = None
         self._observation_health_publisher: ObservationHealthStatusPublisher | None = None
@@ -172,6 +194,13 @@ class MakerService:
         risk_context_source: RiskContextSource | None = None
         authoritative_account: AccountAuthoritativeSnapshot | None = None
         live_sink: SigLiveSink | None = None
+        instance_lock: MakerInstanceLock | None = None
+        if self.core.risk_context.mode is ExecutionMode.LIVE:
+            lock_path = self.settings.execution_journal_path.with_name(
+                self.settings.execution_journal_path.name + ".make.lock"
+            )
+            instance_lock = MakerInstanceLock(lock_path)
+            instance_lock.acquire()
 
         try:
             if self.settings.risk_capital_control_enabled:
@@ -221,12 +250,16 @@ class MakerService:
 
             tracked = _configured_tracked_exchanges(self.settings)
             if self.settings.maker_require_trusted_depth:
-                missing = self.core.mapping.normalized().records
-                required = {
-                    record.sig_exchange_id
-                    for record in missing
-                    if record.mapping_class.value not in {"NO_TRADE", "MODEL_ONLY"}
-                }
+                records = self.core.mapping.normalized().records
+                required = (
+                    set(self._live_exchange_ids)
+                    if self._live_exchange_ids is not None
+                    else {
+                        record.sig_exchange_id
+                        for record in records
+                        if record.mapping_class.value not in {"NO_TRADE", "MODEL_ONLY"}
+                    }
+                )
                 if not required.issubset(set(tracked)):
                     raise ValueError(
                         "maker_require_trusted_depth requires every tradeable "
@@ -262,6 +295,7 @@ class MakerService:
                 sig_state=sig_state,
                 account_state=account_state,
                 polymarket_books=self.pm_books,
+                allowed_exchange_ids=self._live_exchange_ids,
             )
 
             if self.settings.shadow_enabled:
@@ -303,6 +337,10 @@ class MakerService:
                     tournament_slug=tournament_slug,
                     observation_emitter=observation_emitter,
                     observation_process_instance_id=observe_recorder.session_id,
+                    # The production service does not replay fresh economic
+                    # placements until current risk/market eligibility has been
+                    # independently proven. Cancellation recovery still runs.
+                    placement_replay_allowed=lambda _envelope: False,
                 )
                 if not recovery.safe_to_resume_live:
                     raise RuntimeError(
@@ -434,7 +472,7 @@ class MakerService:
             runtime = MakerRuntimeLoop(
                 bridge=bridge,
                 coordinator=coordinator,
-                polymarket_feed_trusted=lambda: self.pm_health.websocket_connected,
+                polymarket_feed_trusted=self._polymarket_feed_trusted,
                 telemetry=self.telemetry,
                 snapshot_observer=(
                     None if shadow_runtime is None else shadow_runtime.observe
@@ -455,6 +493,19 @@ class MakerService:
                     tournament_id=tournament_id,
                     tournament_slug=tournament_slug,
                 )
+                if journal is not None and live_sink is not None:
+                    resolved_cancels = await recover_in_session_cancellations(
+                        journal=journal,
+                        rest=rest,
+                        live_sink=live_sink,
+                        tournament_id=tournament_id,
+                    )
+                    if resolved_cancels:
+                        authoritative = await reconcile_account(
+                            rest,
+                            tournament_id=tournament_id,
+                            tournament_slug=tournament_slug,
+                        )
                 if journal is not None:
                     reconcile_maker_quote_registry(
                         journal=journal,
@@ -473,6 +524,9 @@ class MakerService:
                         tournament_slug=tournament_slug,
                     )
                 return authoritative
+
+            if isinstance(adapter, LiveMakerExecutionAdapter):
+                adapter.set_cancel_uncertainty_resolver(account_resync)
 
             account_controller = AccountRealtimeController(
                 state=account_state,
@@ -562,6 +616,8 @@ class MakerService:
             stop_waiter.cancel()
             await asyncio.gather(stop_waiter, return_exceptions=True)
         finally:
+            if instance_lock is not None:
+                instance_lock.close()
             self.pm_ws.stop()
             if shadow_runtime is not None:
                 with suppress(Exception):
@@ -643,11 +699,19 @@ class MakerService:
         if state is None:
             raise RuntimeError("RISK-002 context has no durable session state")
 
-        scan, pnl = await self._stable_incremental_risk_reads(
-            rest=rest,
-            tournament_slug=tournament_slug,
-            prior_event_id=state.realised_pnl_cursor,
-        )
+        try:
+            scan, pnl = await self._stable_incremental_risk_reads(
+                rest=rest,
+                tournament_slug=tournament_slug,
+                prior_event_id=state.realised_pnl_cursor,
+            )
+        except (ReconciliationError, SigApiError) as exc:
+            return self._block_risk_refresh(
+                state=state,
+                service=service,
+                source=source,
+                detail=f"{type(exc).__name__}:{exc}",
+            )
         updated = apply_external_cash_flow_scan(state, scan)
         if updated != state:
             service.checkpoint(
@@ -666,10 +730,18 @@ class MakerService:
             if journal is None:
                 attribution_complete = not account.positions and not account.open_orders
             else:
-                fills = await fetch_tournament_fills(
-                    rest,
-                    tournament_id=tournament_id,
-                )
+                try:
+                    fills = await fetch_tournament_fills(
+                        rest,
+                        tournament_id=tournament_id,
+                    )
+                except SigApiError as exc:
+                    return self._block_risk_refresh(
+                        state=state,
+                        service=service,
+                        source=source,
+                        detail=f"{type(exc).__name__}:{exc}",
+                    )
                 attribution = attribute_strategy_exposure(
                     journal=journal,
                     account=account,
@@ -682,9 +754,10 @@ class MakerService:
                 attributions = attribution.attributions
                 attribution_complete = attribution.complete
                 if not attribution.complete:
-                    raise RuntimeError(
-                        "RISK-002 strategy exposure attribution incomplete: "
-                        + attribution.reason
+                    _LOG.error(
+                        "RISK-002 strategy exposure attribution incomplete; "
+                        "fresh strategy risk remains blocked: %s",
+                        attribution.reason,
                     )
 
         observed_ns = monotonic_ns()
@@ -706,21 +779,54 @@ class MakerService:
             self.settings.risk_max_event_group_exposure is not None
             and not inputs.exposure.group_classification_complete
         ):
-            raise RuntimeError("RISK-002 event-group classification is incomplete")
+            _LOG.error(
+                "RISK-002 event-group classification incomplete; "
+                "event-group admission remains blocked"
+            )
 
-        reconciled = service.reconcile(
-            state=state,
-            authoritative=inputs.authoritative,
-            reconstruction=inputs.reconstruction,
-            exposure=inputs.exposure,
-            marks=inputs.marks,
-            now_monotonic_ns=observed_ns,
-        )
+        try:
+            reconciled = service.reconcile(
+                state=state,
+                authoritative=inputs.authoritative,
+                reconstruction=inputs.reconstruction,
+                exposure=inputs.exposure,
+                marks=inputs.marks,
+                now_monotonic_ns=observed_ns,
+            )
+        except ReconciliationError as exc:
+            return self._block_risk_refresh(
+                state=state,
+                service=service,
+                source=source,
+                detail=f"{type(exc).__name__}:{exc}",
+            )
         source.publish(
             reconciled,
             valuation_positions=inputs.valuation_positions,
         )
         return reconciled
+
+    @staticmethod
+    def _block_risk_refresh(
+        *,
+        state: CapitalRiskState,
+        service: CapitalControlService,
+        source: RiskContextSource,
+        detail: str,
+    ) -> CapitalRiskState:
+        blocked = replace(
+            state,
+            account_trusted=False,
+            marks_trusted=False,
+            reconciliation_complete=False,
+        )
+        service.checkpoint(
+            blocked,
+            event_type="RECONCILIATION_BLOCKED",
+            detail=detail,
+        )
+        source.publish(blocked)
+        return blocked
 
     async def _stable_risk_session_baseline(
         self,
@@ -767,7 +873,9 @@ class MakerService:
             )
             if after == observed_newest:
                 return scan, pnl
-        raise RuntimeError("RISK-002 authoritative reads did not reach a stable fence")
+        raise ReconciliationError(
+            "RISK-002 authoritative reads did not reach a stable fence"
+        )
 
     async def _checkpoint_realtime_risk_transition(
         self,
@@ -1069,7 +1177,7 @@ class MakerService:
         while not self.stop_event.is_set():
             self._publish_observation_health()
             current = (
-                self.pm_health.websocket_connected,
+                self._polymarket_feed_trusted(),
                 sig_state.health.connected,
                 account_state.trusted,
                 account_state.last_accepted_observed_at,
@@ -1082,6 +1190,18 @@ class MakerService:
                 if previous is None or current[3] != previous[3]:
                     runtime.notify_account(observed_monotonic_ns=monotonic_ns())
             await asyncio.sleep(0.05)
+
+    def _polymarket_feed_trusted(self) -> bool:
+        if not self.pm_health.websocket_connected:
+            return False
+        observed_at = self.pm_health.last_message_at
+        if observed_at is None:
+            return False
+        age_seconds = (datetime.now(UTC) - observed_at).total_seconds()
+        return (
+            0.0 <= age_seconds
+            <= self.pm_ws.receive_liveness_timeout_seconds
+        )
 
     def _publish_observation_health(self, *, force: bool = False) -> None:
         provider = self._observation_health_provider
@@ -1159,7 +1279,11 @@ def _risk_uncertain_operation_ids(
     )
 
 
-def _mapped_token_ids(mapping: MappingDocument) -> tuple[str, ...]:
+def _mapped_token_ids(
+    mapping: MappingDocument,
+    *,
+    exchange_ids: frozenset[str] | None = None,
+) -> tuple[str, ...]:
     # Polymarket price_change frames may contain both outcome tokens for a
     # subscribed market even when MAKE only consumes one aligned token for FV.
     # Seed/subscribe the full outcome-token set so every delta has an
@@ -1168,6 +1292,7 @@ def _mapped_token_ids(mapping: MappingDocument) -> tuple[str, ...]:
     token_ids = {
         token_id
         for record in mapping.records
+        if exchange_ids is None or record.sig_exchange_id in exchange_ids
         for identity in (
             (record.direct_polymarket,)
             if record.direct_polymarket is not None

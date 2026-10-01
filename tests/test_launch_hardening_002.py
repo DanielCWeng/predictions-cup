@@ -285,6 +285,7 @@ def _settings() -> AppSettings:
         global_kill_switch=False,
         risk_max_order_size=20,
         risk_max_gross_exposure=100.0,
+        risk_max_tournament_exposure=100.0,
         risk_max_per_market_exposure=100.0,
         risk_max_open_order_exposure=100.0,
         risk_max_concurrent_open_orders=20,

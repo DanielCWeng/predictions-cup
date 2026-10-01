@@ -296,6 +296,7 @@ _ALLOWED_LIFECYCLE_TRANSITIONS: dict[LifecycleState, frozenset[LifecycleState]] 
     }),
     LifecycleState.RECONCILING: frozenset({
         LifecycleState.RECONCILED,
+        LifecycleState.ACKED,
         LifecycleState.OPEN,
         LifecycleState.PARTIALLY_FILLED,
         LifecycleState.FILLED,
