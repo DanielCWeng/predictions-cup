@@ -248,7 +248,7 @@ def _normalize_v3(
     out = pmxt.NormalizedExtract(tables={})
     out.add("raw_rows", table.num_rows)
 
-    token = _text_array(table["asset_id"])
+    token = _token_array(table["asset_id"])
     observed = pc.cast(table["timestamp_received"], pmxt.UTC_US)
     token_match = pc.fill_null(
         pc.is_in(token, value_set=pa.array(sorted(token_ids), pa.string())),
@@ -321,8 +321,8 @@ def _v3_books(books: pa.Table) -> tuple[pa.Table, list[pa.Table]]:
 
     normalized = pa.table(
         {
-            "token_id": _text_array(books["asset_id"]),
-            "market_id": _text_array(books["market"]),
+            "token_id": _token_array(books["asset_id"]),
+            "market_id": _hex_array(books["market"]),
             "source_timestamp": pc.cast(books["timestamp"], pmxt.UTC_US),
             "state_observed_at": pc.cast(books["timestamp_received"], pmxt.UTC_US),
             "recorded_at": pc.cast(books["timestamp_received"], pmxt.UTC_US),
@@ -368,8 +368,8 @@ def _v3_changes(changes: pa.Table) -> tuple[pa.Table, list[pa.Table]]:
     _require_columns(changes, {"price", "size", "side", "best_bid", "best_ask"})
     normalized = pa.table(
         {
-            "token_id": _text_array(changes["asset_id"]),
-            "market_id": _text_array(changes["market"]),
+            "token_id": _token_array(changes["asset_id"]),
+            "market_id": _hex_array(changes["market"]),
             "side": pc.cast(changes["side"], pa.string()),
             "price": _decimal_array(changes["price"]),
             "size": _decimal_array(changes["size"]),
@@ -392,8 +392,8 @@ def _v3_bbo(rows: pa.Table) -> pa.Table:
     _require_columns(rows, {"best_bid", "best_ask", "spread"})
     return pa.table(
         {
-            "token_id": _text_array(rows["asset_id"]),
-            "market_id": _text_array(rows["market"]),
+            "token_id": _token_array(rows["asset_id"]),
+            "market_id": _hex_array(rows["market"]),
             "source_timestamp": pc.cast(rows["timestamp"], pmxt.UTC_US),
             "observed_at": pc.cast(rows["timestamp_received"], pmxt.UTC_US),
             "best_bid": _decimal_array(rows["best_bid"]),
@@ -413,8 +413,8 @@ def _v3_trades(trades: pa.Table) -> tuple[pa.Table, list[pa.Table]]:
         trades,
         {"price", "size", "side", "fee_rate_bps", "transaction_hash"},
     )
-    token = _text_array(trades["asset_id"])
-    tx_hash = _text_array(trades["transaction_hash"])
+    token = _token_array(trades["asset_id"])
+    tx_hash = _hex_array(trades["transaction_hash"])
     event_ids = [
         hashed_trade_event_id(t, h)
         for t, h in zip(token.to_pylist(), tx_hash.to_pylist(), strict=True)
@@ -423,7 +423,7 @@ def _v3_trades(trades: pa.Table) -> tuple[pa.Table, list[pa.Table]]:
         {
             "event_id": pa.array(event_ids, pa.string()),
             "token_id": token,
-            "market_id": _text_array(trades["market"]),
+            "market_id": _hex_array(trades["market"]),
             "price": _decimal_array(trades["price"]),
             "size": _decimal_array(trades["size"]),
             "side": pc.cast(trades["side"], pa.string()),
@@ -473,8 +473,8 @@ def _v3_ticks(rows: pa.Table) -> pa.Table:
     _require_columns(rows, {"old_tick_size", "new_tick_size"})
     return pa.table(
         {
-            "token_id": _text_array(rows["asset_id"]),
-            "market_id": _text_array(rows["market"]),
+            "token_id": _token_array(rows["asset_id"]),
+            "market_id": _hex_array(rows["market"]),
             "source_timestamp": pc.cast(rows["timestamp"], pmxt.UTC_US),
             "observed_at": pc.cast(rows["timestamp_received"], pmxt.UTC_US),
             "old_tick_size": _decimal_array(rows["old_tick_size"]),
@@ -562,6 +562,33 @@ def _decimal_array(array: pa.Array | pa.ChunkedArray) -> pa.Array:
         ],
         pa.string(),
     )
+
+
+def _token_array(array: pa.Array | pa.ChunkedArray) -> pa.Array:
+    """Canonical Polymarket token ids: raw V3 bytes -> unsigned decimal string."""
+    values: list[str | None] = []
+    for value in array.to_pylist():
+        if value is None:
+            values.append(None)
+        elif isinstance(value, bytes):
+            values.append(str(int.from_bytes(value, byteorder="big", signed=False)))
+        else:
+            values.append(str(value))
+    return pa.array(values, pa.string())
+
+
+def _hex_array(array: pa.Array | pa.ChunkedArray) -> pa.Array:
+    """Canonical hashes/condition ids: raw V3 bytes -> 0x-prefixed lowercase hex."""
+    values: list[str | None] = []
+    for value in array.to_pylist():
+        if value is None:
+            values.append(None)
+        elif isinstance(value, bytes):
+            values.append("0x" + value.hex())
+        else:
+            text = str(value)
+            values.append(text if text.startswith("0x") else text)
+    return pa.array(values, pa.string())
 
 
 def _text_array(array: pa.Array | pa.ChunkedArray) -> pa.Array:
