@@ -1,0 +1,64 @@
+{
+  "schema_version": "mm-replay-attempt-registry-v1",
+  "experiment": "MM-REPLAY-001",
+  "branch": "research/mm-replay-001-spread-capture",
+  "canonical_scientific_design": "STRICT_ASOF_005F_V1",
+  "attempts": [
+    {
+      "attempt": 1,
+      "github_action_run": 36798635727,
+      "kernel": "polyleviathan/mm-replay-001-spread-capture",
+      "disposition": "ENGINEERING_FAILURE",
+      "canonical_science": false,
+      "reason": "staged package import failure: ModuleNotFoundError: predictions_cup"
+    },
+    {
+      "attempt": 2,
+      "github_action_run": 36799138412,
+      "kernel": "polyleviathan/mm-replay-001-spread-capture",
+      "disposition": "ENGINEERING_FAILURE",
+      "canonical_science": false,
+      "reason": "staged package import failure: ModuleNotFoundError: predictions_cup"
+    },
+    {
+      "attempt": 3,
+      "launch_commit": "14d09c31ba0680f3b2e58d6ad52bdcacab8aa535",
+      "github_action_run": 36834718729,
+      "kernel": "polyleviathan/mm-replay-001-spread-capture",
+      "disposition": "SUPERSEDED_SCIENTIFICALLY",
+      "canonical_science": false,
+      "reusable_scope": "engineering canary for mechanics shared with the strict-as-of design",
+      "reason": "005F 15-second boundary ordering could admit a post-boundary event into the preceding grid bucket"
+    },
+    {
+      "attempt": 4,
+      "launch_commit": "79d94372737bccac8849512e1aea18a41c38afa8",
+      "github_action_run": 36836841085,
+      "kernel": "polyleviathan/mm-replay-001-strict-as-of",
+      "disposition": "CANONICAL_STRICT_ASOF",
+      "canonical_science": true,
+      "design": "STRICT_ASOF_005F_V1"
+    },
+    {
+      "attempt": 5,
+      "optimization_commit": "50b179fdf1e39692539b24b530f895b818e563b5",
+      "launch_commit": "43da4356820ed6fc880b27bae92792870ddeba15",
+      "github_action_run": 36849177822,
+      "kernel": "polyleviathan/mm-replay-001-strict-as-of-fast",
+      "disposition": "PERFORMANCE_EQUIVALENT_RETRY",
+      "canonical_science": true,
+      "design": "STRICT_ASOF_005F_V1",
+      "change_scope": "timestamp-local memoization of pure build_quote(policy, inventory); scenario state and economics remain independent"
+    }
+  ],
+  "interpretation_guardrails": {
+    "primary_scope": "baseline_sep",
+    "execution_markets": 140,
+    "primary_tokens": 280,
+    "external_fv": "1 - midpoint(binary complement token book), strictly as-of",
+    "source_venue": "POLYMARKET",
+    "historical_pm_to_sig_latency_claim": false,
+    "fee_complete_net_pnl_available": false,
+    "real_sig_orders_sent": false
+  }
+}
