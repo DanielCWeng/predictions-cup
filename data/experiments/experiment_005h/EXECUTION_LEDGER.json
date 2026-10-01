@@ -69,9 +69,13 @@
       ]
     },
     "source_stratified_replication": {
-      "status": "RUNNING",
-      "workflow_run_id": 36842830140,
-      "purpose": "feature-parity transportability challenge for C04/C05; C01-C03 cannot be restored after hostile V3 gate"
+      "status": "CANONICAL_SEMANTIC_GATE_LAUNCHED",
+      "kernel": "polyleviathan/experiment-005h-source-robustness-semantic",
+      "reason": "exact C04/C05 feature parity is unidentifiable in eligible pre-V3 sources without sequence ordering; approximate replay superseded pre-outcome",
+      "superseded_runs": [
+        36842830140,
+        36844053637
+      ]
     },
     "pre_holdout_freeze": "BLOCKED_PENDING_SOURCE_ROBUSTNESS",
     "b0": "SEALED"
