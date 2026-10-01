@@ -227,7 +227,7 @@ def main() -> None:
             "median": float(valid_burst.median()) if len(valid_burst) else None,
         },
         "holdout_read": surface.upper() == "HOLDOUT",
-        "make_modified": false if False else False,
+        "make_modified": False,
         "real_sig_orders_sent": False,
     }
     bins.to_csv(out / "FLOW_BINS.csv.gz", index=False, compression="gzip")
