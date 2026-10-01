@@ -32,9 +32,7 @@ def load_csv_gz(path: Path):
         for r in csv.DictReader(f):
             for k in list(r):
                 if k not in NUMERIC_EXCLUDE:
-                    v = num(r[k])
-                    if v is not None:
-                        r[k] = v
+                    r[k] = num(r[k])
             rows.append(r)
     return rows
 
