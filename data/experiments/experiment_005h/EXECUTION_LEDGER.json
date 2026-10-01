@@ -45,10 +45,35 @@
     "artifact_id": 11150409739
   },
   "downstream": {
-    "v3_hostile_falsification": "LAUNCHED",
-    "extended_v3_analysis": "LAUNCHED",
-    "source_stratified_replication": "DEFERRED_UNTIL_SOURCE_AUDIT_AND_V3_SHORTLIST",
-    "pre_holdout_freeze": "BLOCKED_PENDING_FALSIFICATION_EXTENDED_SOURCE_ROBUSTNESS",
+    "v3_hostile_falsification": {
+      "status": "COMPLETE_SUCCESS",
+      "workflow_run_id": 36841406723,
+      "artifact_id": 11151173135,
+      "robust_v3_survivors": [],
+      "provisional_v3_only": [
+        "005H-C01-RELATIVE-SIZE",
+        "005H-C02-FAILED-REPLENISHMENT",
+        "005H-C03-FILL-BEYOND-STATE"
+      ]
+    },
+    "extended_v3_analysis": {
+      "status": "COMPLETE_SUCCESS",
+      "workflow_run_id": 36841411532,
+      "artifact_id": 11151144230,
+      "provisional_shortlist": [
+        "005H-C01-RELATIVE-SIZE",
+        "005H-C02-FAILED-REPLENISHMENT",
+        "005H-C03-FILL-BEYOND-STATE",
+        "005H-C04-ARRIVAL-STATE",
+        "005H-C05-DIRECTION-STATE"
+      ]
+    },
+    "source_stratified_replication": {
+      "status": "RUNNING",
+      "workflow_run_id": 36842830140,
+      "purpose": "feature-parity transportability challenge for C04/C05; C01-C03 cannot be restored after hostile V3 gate"
+    },
+    "pre_holdout_freeze": "BLOCKED_PENDING_SOURCE_ROBUSTNESS",
     "b0": "SEALED"
   },
   "real_sig_orders_sent": false
