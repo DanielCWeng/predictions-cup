@@ -26,10 +26,11 @@ from predictions_cup.shadow.adapters import (
     Hazard005FCandidate,
     MakerCandidate,
     Pred006Candidate,
+    ResidualTakerCandidate,
     StructuralFairValueCandidate,
 )
 from predictions_cup.shadow.bus import ShadowBus
-from predictions_cup.shadow.contracts import CandidateDecision
+from predictions_cup.shadow.contracts import CandidateDecision, ShadowCandidate
 from predictions_cup.shadow.frozen_runtime import (
     Frozen005FEvaluator,
     FrozenPred006Evaluator,
@@ -178,18 +179,33 @@ def build_live_shadow_runtime(
         ModelRegistry(frozen_research_providers),
         FROZEN_RESEARCH_MODEL_IDS,
     )
+    candidates: list[ShadowCandidate] = [
+        MakerCandidate(core.engine),
+        DirectPmCandidate(direct_pm, mapping=core.mapping),
+        Pred006Candidate(FrozenPred006Evaluator()),
+        Hazard005FCandidate(Frozen005FEvaluator(provider=hazard_005f)),
+        StructuralFairValueCandidate(),
+        *frozen_research_candidates,
+        *model_candidates,
+    ]
+    if settings.residual_taker_enabled and settings.residual_taker_shadow_only:
+        configured_ids = settings.residual_taker_exchange_ids.strip()
+        universe = configured_ids or settings.sig_realtime_tracked_exchange_ids
+        candidates.append(
+            ResidualTakerCandidate(
+                core.mapping,
+                size=settings.residual_taker_size,
+                tracked_exchange_ids=frozenset(
+                    value.strip() for value in universe.split(",") if value.strip()
+                ),
+                max_pm_book_age_ns=(
+                    settings.residual_taker_max_pm_book_age_ms * 1_000_000
+                ),
+                max_account_age_ns=settings.maker_max_account_age_ms * 1_000_000,
+            )
+        )
     bus = ShadowBus(
-        (
-            MakerCandidate(core.engine),
-            DirectPmCandidate(direct_pm, mapping=core.mapping),
-            Pred006Candidate(FrozenPred006Evaluator()),
-            Hazard005FCandidate(
-                Frozen005FEvaluator(provider=hazard_005f)
-            ),
-            StructuralFairValueCandidate(),
-            *frozen_research_candidates,
-            *model_candidates,
-        ),
+        tuple(candidates),
         store=store,
         queue_capacity=settings.shadow_candidate_queue_capacity,
         ingress_capacity=settings.shadow_ingress_queue_capacity,

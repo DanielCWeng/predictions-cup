@@ -43,6 +43,8 @@ class ExternalQuoteState:
     trusted: bool
     source_version: str
     observed_at: datetime | None = None
+    best_bid_size: float | None = None
+    best_ask_size: float | None = None
 
     def __post_init__(self) -> None:
         if not self.token_id.strip() or not self.source_version.strip():
@@ -60,6 +62,9 @@ class ExternalQuoteState:
         for value in (self.best_bid, self.best_ask):
             if value is not None and (not math.isfinite(value) or not 0.0 <= value <= 1.0):
                 raise ValueError("external quote probability must be finite within [0,1]")
+        for value in (self.best_bid_size, self.best_ask_size):
+            if value is not None and (not math.isfinite(value) or value < 0.0):
+                raise ValueError("external quote size must be finite and non-negative")
 
 
 @dataclass(frozen=True, slots=True)

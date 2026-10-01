@@ -244,6 +244,12 @@ class MakerSourceBridge:
                 best_ask=(
                     None if book.best_ask is None else float(book.best_ask)
                 ),
+                best_bid_size=(
+                    None if not book.bids else float(book.bids[0].size)
+                ),
+                best_ask_size=(
+                    None if not book.asks else float(book.asks[0].size)
+                ),
                 observed_monotonic_ns=self._to_monotonic(
                     book.observed_at,
                     wall_now=wall_now,
