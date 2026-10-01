@@ -1,4 +1,4 @@
-# ruff: noqa: E501
+# ruff: noqa: E501,I001
 from __future__ import annotations
 
 import argparse
@@ -353,7 +353,7 @@ def aggregate_hour(path: Path, carry: dict[Any, dict[str, Any]], tail: pd.DataFr
     time_state = [c for c in STATE_COLUMNS if c.endswith("_ts")]
     for col in numeric_state + time_state:
         panel[col] = panel.groupby("asset_id", sort=False)[col].ffill()
-        lead = panel["asset_id"].map(lambda x: carry.get(x, {}).get(col))
+        lead = panel["asset_id"].map(lambda x, key=col: carry.get(x, {}).get(key))
         panel[col] = panel[col].where(panel[col].notna(), lead)
 
     for col in numeric_state + COUNT_COLUMNS:
