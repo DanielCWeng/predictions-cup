@@ -11,7 +11,7 @@
 - MAKE as the single current-main process boundary for MAKE + embedded SHADOW + OBSERVE + LIVE-LEARN + RISK + BUILD-009.
 - `predictions-cup-runtime.target`.
 - 15-second one-shot canonical status timer.
-- systemd `OnFailure` -> durable append-only alert journal.
+- systemd `OnFailure` -> durable append-only alert journal, with optional bounded HTTP(S) push delivery.
 
 ## Components intentionally absent
 
@@ -69,7 +69,7 @@ There is no FULLSTACK-002 LIVE start command. Status always returns `authorized=
 ## Issues / host tests still required
 
 - #80: code-side current launch/rehearsal plumbing implemented. Intended-host real canary/recovery acceptance remains `HOST_ACCEPTANCE_NOT_RUN`.
-- #87: service failure/StartLimit, global halt, stale capture, storage danger and clock failure are visible in canonical status and/or durable alert events.
+- #87: service failure/StartLimit, global halt, stale capture, storage danger, clock failure and unresolved execution state are durable alerts; optional webhook push delivery is code-complete but still requires intended-host configuration/acceptance.
 - #84: open on the frozen base; not owned or modified by this lane.
 
 Known blockers: frozen-base #84, no intended-host acceptance, no real-order lifecycle rehearsal and no accepted flatten primitive.
