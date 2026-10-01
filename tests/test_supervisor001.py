@@ -329,3 +329,100 @@ def test_fast_disk_growth_is_critical() -> None:
     }
     findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
     assert any(item.code == "DISK_GROWTH_CRITICAL" for item in findings)
+
+
+def test_sig_disconnected_is_critical() -> None:
+    collection = _healthy_collection()
+    sections = dict(collection.sections)
+    sections["sig_capture"] = {
+        "storage_failures": 0,
+        "dropped_rows": 0,
+        "writer_alive": True,
+        "connected": False,
+        "last_rest_reconciliation_age_seconds": 1.0,
+    }
+    findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
+    assert any(item.code == "FEED_SIG_DISCONNECTED" for item in findings)
+
+
+def test_sig_stale_reconciliation_is_critical() -> None:
+    collection = _healthy_collection()
+    sections = dict(collection.sections)
+    sections["sig_capture"] = {
+        "storage_failures": 0,
+        "dropped_rows": 0,
+        "writer_alive": True,
+        "connected": True,
+        "last_rest_reconciliation_age_seconds": 61.0,
+    }
+    findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
+    assert any(item.code == "FEED_SIG_RECONCILIATION_STALE" for item in findings)
+
+
+def test_remediation_plans_safe_capture_restart_for_stale_feed(tmp_path: Path) -> None:
+    config = RemediationConfig(
+        max_level=RemediationLevel.SERVICE_RECOVERY,
+        host_role=HostRole.WEST_EXECUTION,
+        supervisor_root=tmp_path,
+        hot_capture_roots=(),
+        hot_capture_retention_hours=24,
+        bundle_retention_hours=48,
+        safe_cache_paths=(),
+        safe_restart_services=("predictions-cup-polymarket-capture.service",),
+    )
+    finding = Finding(
+        "FEED_POLYMARKET_STALE",
+        Severity.CRITICAL,
+        "stale",
+    )
+    snapshot = SupervisorSnapshot(
+        snapshot_id="supervisor-stale",
+        host_id="host",
+        host_role=HostRole.WEST_EXECUTION,
+        git_head="deadbeef",
+        observed_at=NOW,
+        severity=Severity.CRITICAL,
+        launch_gate=LaunchGate.HOLD,
+        findings=(finding,),
+        sources=(),
+        sections={},
+    )
+    assert RemediationExecutor(config).plan(snapshot) == (
+        (
+            ActionCode.RESTART_SAFE_SERVICE,
+            "predictions-cup-polymarket-capture.service",
+        ),
+    )
+
+
+def test_disk_growth_plans_housekeeping(tmp_path: Path) -> None:
+    config = RemediationConfig(
+        max_level=RemediationLevel.HOST_PROTECTION,
+        host_role=HostRole.WEST_EXECUTION,
+        supervisor_root=tmp_path / "supervisor",
+        hot_capture_roots=(tmp_path / "capture",),
+        hot_capture_retention_hours=24,
+        bundle_retention_hours=48,
+        safe_cache_paths=(),
+        safe_restart_services=(),
+    )
+    finding = Finding(
+        "DISK_GROWTH_CRITICAL",
+        Severity.CRITICAL,
+        "rapid growth",
+    )
+    snapshot = SupervisorSnapshot(
+        snapshot_id="supervisor-disk",
+        host_id="host",
+        host_role=HostRole.WEST_EXECUTION,
+        git_head="deadbeef",
+        observed_at=NOW,
+        severity=Severity.CRITICAL,
+        launch_gate=LaunchGate.HOLD,
+        findings=(finding,),
+        sources=(),
+        sections={},
+    )
+    planned = RemediationExecutor(config).plan(snapshot)
+    assert (ActionCode.PRUNE_SUPERVISOR_BUNDLES, None) in planned
+    assert (ActionCode.PRUNE_HOT_PARQUET, None) in planned
