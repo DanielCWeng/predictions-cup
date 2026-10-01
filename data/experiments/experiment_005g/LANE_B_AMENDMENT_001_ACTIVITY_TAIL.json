@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005G",
+  "lane": "B_OPEN_DISCOVERY",
+  "amendment_id": "005G-LB-AMENDMENT-001",
+  "status": "FROZEN_BEFORE_CORRECTED_RERUN",
+  "reason": "The first TRAIN/DEV implementation used the DEV median of price_updates_60 as the activity split. The median was zero, so every retained row satisfied >= median and the activity-tail-removed subset was empty for all 126 screens. This did not implement the preregistered gate 'effect not concentrated exclusively in highest-activity tail'.",
+  "first_pass": {
+    "workflow_run_id": 36834096535,
+    "artifact_id": 11149057657,
+    "results_sha256": "012d2da57ebe7999f820f7987fdc7eae5bbc5d7b32e669ada0d7cb25323d2735",
+    "screen_cells": 126,
+    "promoted_train_dev": 0,
+    "defect": "low_activity_mean_improvement was NaN because the median cutoff equaled zero and all rows were assigned to the >= median subset."
+  },
+  "correction": {
+    "activity_cutoff": "max(1.0, TRAIN 90th percentile of price_updates_60), computed independently inside each target/feature support frame",
+    "highest_activity_tail": "DEV price_updates_60 >= frozen TRAIN cutoff",
+    "tail_removed_subset": "DEV price_updates_60 < frozen TRAIN cutoff",
+    "gate": "tail_removed_subset mean loss improvement must be finite and > 0; positivity inside the removed highest-activity tail is descriptive, not required",
+    "freshness_gate": "fresh-snapshot subset mean loss improvement must be finite and > 0",
+    "capture_control": "provisional promotions must also remain positive with p<=0.10, bootstrap lower>0, and leave-market minimum>0 after adding price_change_age_s, price_updates_60, and snapshot_age_s to the baseline",
+    "unchanged": [
+      "dataset and Sep TRAIN/DEV/HOLDOUT split",
+      "features and feature families",
+      "targets and horizons",
+      "strong baseline definitions",
+      "linear/logistic model forms",
+      "30-minute dependence blocks",
+      "BH-FDR q=0.10 scope",
+      "leave-market gate",
+      "delay/shift/future diagnostics",
+      "holdout remains unread"
+    ]
+  },
+  "holdout_read": false,
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}
