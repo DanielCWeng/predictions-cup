@@ -37,5 +37,6 @@
       "destination": "repo_context/execution_universe_exact.json"
     }
   ],
-  "note": "Run the bound September MM-REPLAY-001 primary science lane: 140 EXACT markets, complement-book FV, frozen PRE_ELECTION 005F. Never use DATA-001/Hungary/Colombia/Peru substitutes."
+  "note": "Attempt 2: optimized timestamp-collapsed September replay with Kaggle source-path fix.",
+  "attempt": 2
 }
