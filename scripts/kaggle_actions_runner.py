@@ -7,7 +7,6 @@ import argparse
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -52,19 +51,10 @@ def load_manifest(path: Path) -> dict[str, Any]:
     if data.get("schema_version") != 1:
         raise ValueError("schema_version must be 1")
     action = data.get("action")
-    supported_actions = {
-        "auth_check",
-        "dataset_fetch",
-        "dataset_probe",
-        "dataset_script",
-        "kernel_fetch",
-        "logs",
-        "output",
-        "repo_script",
-        "run",
-        "status",
-    }
-    if action not in supported_actions:
+    if action not in {
+        "auth_check", "run", "status", "output", "logs", "dataset_files", "dataset_probe",
+        "dataset_fetch", "dataset_analysis", "artifact_analysis"
+    }:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
 
@@ -111,296 +101,336 @@ def auth_check(output_dir: Path) -> None:
     )
 
 
-def dataset_fetch(data: dict[str, Any], output_dir: Path) -> None:
+
+def dataset_files(data: dict[str, Any], output_dir: Path) -> None:
     dataset = str(data.get("dataset", "")).strip()
     if "/" not in dataset:
-        raise ValueError("dataset_fetch manifest requires 'dataset' as owner/slug")
-    files_raw = data.get("files")
-    if not isinstance(files_raw, list) or not files_raw:
-        raise ValueError("dataset_fetch manifest requires non-empty 'files' list")
+        raise ValueError("dataset_files manifest requires 'dataset' as owner/slug")
+    page_size = int(data.get("page_size", 1000))
+    if not 1 <= page_size <= 10000:
+        raise ValueError("page_size must be between 1 and 10000")
 
-    dest = output_dir / "dataset_files"
-    dest.mkdir(parents=True, exist_ok=True)
-    results: list[dict[str, object]] = []
-    for raw in files_raw:
-        file_name = str(raw).strip()
-        if not file_name:
-            raise ValueError("dataset_fetch file names must be non-empty")
-        file_dest = dest / file_name.replace("/", "__")
-        file_dest.mkdir(parents=True, exist_ok=True)
-        result = run_command(
-            [
-                "kaggle",
-                "datasets",
-                "download",
-                dataset,
-                "-f",
-                file_name,
-                "-p",
-                str(file_dest),
-                "--force",
-            ],
-            check=False,
-        )
-        results.append(
-            {
-                "file": file_name,
-                "output_dir": str(file_dest.relative_to(output_dir)),
-                "returncode": result.returncode,
-                "downloaded": result.returncode == 0,
-            }
-        )
-
-    (output_dir / "dataset_fetch.json").write_text(
-        json.dumps(
-            {"dataset": dataset, "files": results},
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    if not all(bool(item["downloaded"]) for item in results):
-        raise RuntimeError("One or more requested Kaggle dataset files could not be fetched")
-
-
-def repo_script(data: dict[str, Any], output_dir: Path) -> None:
-    """Run one repository research script without downloading external dataset bytes."""
-    script_raw = str(data.get("script", "")).strip()
-    if not script_raw:
-        raise ValueError("repo_script manifest requires 'script'")
-    script = repo_path(script_raw)
-    if not script.is_file():
-        raise FileNotFoundError(f"repo_script script not found: {script_raw}")
-    research_root = (ROOT / "scripts" / "research").resolve()
-    try:
-        script.relative_to(research_root)
-    except ValueError as exc:
-        raise ValueError("repo_script is restricted to scripts/research/") from exc
-
-    script_args_raw = data.get("script_args", [])
-    if not isinstance(script_args_raw, list):
-        raise ValueError("repo_script 'script_args' must be a list")
-    script_args = [str(value) for value in script_args_raw]
-
-    pip_packages_raw = data.get("pip_packages", [])
-    if not isinstance(pip_packages_raw, list):
-        raise ValueError("repo_script 'pip_packages' must be a list")
-    pip_packages = [str(value).strip() for value in pip_packages_raw if str(value).strip()]
-
-    if bool(data.get("install_project", False)):
-        run_command([sys.executable, "-m", "pip", "install", "-e", "."])
-    if pip_packages:
-        run_command([sys.executable, "-m", "pip", "install", *pip_packages])
-
-    result_root = output_dir / "outputs"
-    result_root.mkdir(parents=True, exist_ok=True)
-    run_command(
+    result = run_command(
         [
-            sys.executable,
-            str(script),
-            *script_args,
+            "kaggle",
+            "datasets",
+            "files",
+            dataset,
+            "--page-size",
+            str(page_size),
+            "--csv",
         ]
     )
+    (output_dir / "dataset_files.csv").write_text(result.stdout, encoding="utf-8")
     write_summary(
         [
-            "## Repository script",
-            "",
-            f"- Script: {script_raw}",
-            "- External dataset bytes downloaded: NO",
-        ]
-    )
-
-
-def dataset_script(data: dict[str, Any], output_dir: Path) -> None:
-    """Download bounded private-dataset files, run a repo script, then delete raw bytes."""
-    dataset = str(data.get("dataset", "")).strip()
-    if "/" not in dataset:
-        raise ValueError("dataset_script manifest requires 'dataset' as owner/slug")
-    files_raw = data.get("files")
-    if not isinstance(files_raw, list) or not files_raw:
-        raise ValueError("dataset_script manifest requires non-empty 'files' list")
-    if len(files_raw) > 250:
-        raise ValueError("dataset_script is capped at 250 source files per job")
-
-    script_raw = str(data.get("script", "")).strip()
-    if not script_raw:
-        raise ValueError("dataset_script manifest requires 'script'")
-    script = repo_path(script_raw)
-    if not script.is_file():
-        raise FileNotFoundError(f"dataset_script script not found: {script_raw}")
-
-    script_args_raw = data.get("script_args", [])
-    if not isinstance(script_args_raw, list):
-        raise ValueError("dataset_script 'script_args' must be a list")
-    script_args = [str(value) for value in script_args_raw]
-
-    pip_packages_raw = data.get("pip_packages", [])
-    if not isinstance(pip_packages_raw, list):
-        raise ValueError("dataset_script 'pip_packages' must be a list")
-    pip_packages = [str(value).strip() for value in pip_packages_raw if str(value).strip()]
-
-    if bool(data.get("install_project", False)):
-        run_command([sys.executable, "-m", "pip", "install", "-e", "."])
-    if pip_packages:
-        run_command([sys.executable, "-m", "pip", "install", *pip_packages])
-
-    input_root = output_dir / "_dataset_script_inputs"
-    result_root = output_dir / "outputs"
-    input_root.mkdir(parents=True, exist_ok=True)
-    result_root.mkdir(parents=True, exist_ok=True)
-    downloaded: list[dict[str, str]] = []
-
-    try:
-        for index, raw in enumerate(files_raw):
-            file_name = str(raw).strip()
-            if not file_name:
-                raise ValueError("dataset_script file names must be non-empty")
-            file_dest = input_root / f"{index:04d}"
-            file_dest.mkdir(parents=True, exist_ok=True)
-            result = run_command(
-                [
-                    "kaggle",
-                    "datasets",
-                    "download",
-                    dataset,
-                    "-f",
-                    file_name,
-                    "-p",
-                    str(file_dest),
-                    "--force",
-                ],
-                check=False,
-            )
-            if result.returncode != 0:
-                raise RuntimeError(f"Failed to download dataset file: {file_name}")
-
-            candidates = sorted(path for path in file_dest.rglob("*") if path.is_file())
-            if len(candidates) != 1:
-                raise RuntimeError(
-                    f"Expected one downloaded file for {file_name}; got "
-                    f"{[path.name for path in candidates]}"
-                )
-            downloaded.append(
-                {
-                    "remote": file_name,
-                    "local": str(candidates[0]),
-                }
-            )
-
-        input_manifest = output_dir / "dataset_script_inputs.json"
-        input_manifest.write_text(
-            json.dumps(
-                {
-                    "dataset": dataset,
-                    "files": downloaded,
-                },
-                indent=2,
-                sort_keys=True,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-
-        run_command(
-            [
-                sys.executable,
-                str(script),
-                "--input-manifest",
-                str(input_manifest),
-                "--output-dir",
-                str(result_root),
-                *script_args,
-            ]
-        )
-    finally:
-        shutil.rmtree(input_root, ignore_errors=True)
-
-    write_summary(
-        [
-            "## Kaggle dataset script",
+            "## Kaggle dataset file inventory",
             "",
             f"- Dataset: {dataset}",
-            f"- Source files: {len(downloaded)}",
-            f"- Script: {script_raw}",
-            "- Raw source bytes deleted before artifact upload: YES",
+            f"- Page size: {page_size}",
+        ]
+    )
+
+
+
+
+def dataset_fetch(data: dict[str, Any], output_dir: Path) -> None:
+    dataset = str(data.get("dataset", "")).strip()
+    file_name = str(data.get("file", "")).strip()
+    if "/" not in dataset:
+        raise ValueError("dataset_fetch manifest requires 'dataset' as owner/slug")
+    if not file_name:
+        raise ValueError("dataset_fetch manifest requires 'file'")
+
+    dest = output_dir / "fetched"
+    dest.mkdir(parents=True, exist_ok=True)
+    run_command(
+        [
+            "kaggle",
+            "datasets",
+            "download",
+            dataset,
+            "-f",
+            file_name,
+            "-p",
+            str(dest),
+            "--unzip",
+        ]
+    )
+    files = sorted(p for p in dest.rglob("*") if p.is_file())
+    if not files:
+        raise RuntimeError(f"No file downloaded for {file_name!r}")
+    write_summary(
+        [
+            "## Kaggle dataset file fetch",
+            "",
+            f"- Dataset: {dataset}",
+            f"- File: {file_name}",
+            f"- Downloaded files: {len(files)}",
         ]
     )
 
 
 def dataset_probe(data: dict[str, Any], output_dir: Path) -> None:
-    datasets_raw = data.get("datasets")
-    if not isinstance(datasets_raw, list) or not datasets_raw:
-        raise ValueError("dataset_probe manifest requires non-empty 'datasets' list")
+    dataset = str(data.get("dataset", "")).strip()
+    file_name = str(data.get("file", "")).strip()
+    if "/" not in dataset:
+        raise ValueError("dataset_probe manifest requires 'dataset' as owner/slug")
+    if not file_name:
+        raise ValueError("dataset_probe manifest requires 'file'")
 
-    summaries: list[dict[str, object]] = []
-    for raw in datasets_raw:
-        dataset = str(raw).strip()
-        if "/" not in dataset:
-            raise ValueError(f"Invalid Kaggle dataset id: {dataset!r}")
-        result = run_command(["kaggle", "datasets", "files", dataset], check=False)
-        text = (result.stdout or "") + (result.stderr or "")
-        safe_name = dataset.replace("/", "__")
-        (output_dir / f"dataset_{safe_name}.txt").write_text(text, encoding="utf-8")
-
-        status_result = None
-        status_text = ""
-        if result.returncode == 0:
-            status_result = run_command(
-                ["kaggle", "datasets", "status", dataset, "--format", "json"],
-                check=False,
-            )
-            status_text = (status_result.stdout or "") + (status_result.stderr or "")
-            (output_dir / f"dataset_{safe_name}_status.json").write_text(
-                status_text,
-                encoding="utf-8",
-            )
-
-        summaries.append(
-            {
-                "dataset": dataset,
-                "returncode": result.returncode,
-                "accessible": result.returncode == 0,
-                "status_returncode": (
-                    None if status_result is None else status_result.returncode
-                ),
-                "status": status_text.strip() or None,
-            }
-        )
-
-    (output_dir / "dataset_probe.json").write_text(
-        json.dumps(summaries, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
+    probe_root = output_dir / "probe"
+    probe_root.mkdir(parents=True, exist_ok=True)
+    run_command(
+        [
+            "kaggle",
+            "datasets",
+            "download",
+            dataset,
+            "-f",
+            file_name,
+            "-p",
+            str(probe_root),
+            "--unzip",
+        ]
     )
+    run_command(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--quiet",
+            "pyarrow==25.0.1",
+        ]
+    )
+
+    candidates = sorted(probe_root.rglob("*.parquet"))
+    if len(candidates) != 1:
+        raise RuntimeError(
+            f"Expected one parquet for {file_name!r}; found "
+            f"{[p.relative_to(probe_root).as_posix() for p in candidates]}"
+        )
+    parquet = candidates[0]
+    probe_code = """
+import json
+import sys
+from pathlib import Path
+
+import pyarrow.parquet as pq
+
+path = Path(sys.argv[1])
+out = Path(sys.argv[2])
+pf = pq.ParquetFile(path)
+schema = pf.schema_arrow
+sample = []
+if pf.metadata.num_rows:
+    batch = next(pf.iter_batches(batch_size=5, use_threads=False), None)
+    if batch is not None:
+        sample = batch.to_pylist()[:5]
+        sample = [
+            {k: (v.isoformat() if hasattr(v, "isoformat") else str(v) if v is not None else None)
+             for k, v in row.items()}
+            for row in sample
+        ]
+time_stats = {}
+for index, field in enumerate(schema):
+    name = field.name
+    if not any(part in name.lower() for part in ("time", "timestamp", "observed", "received")):
+        continue
+    lo = None
+    hi = None
+    for rg in range(pf.metadata.num_row_groups):
+        stats = pf.metadata.row_group(rg).column(index).statistics
+        if stats is None or not stats.has_min_max:
+            continue
+        a, b = stats.min, stats.max
+        lo = a if lo is None or a < lo else lo
+        hi = b if hi is None or b > hi else hi
+    time_stats[name] = {"min": str(lo), "max": str(hi)}
+payload = {
+    "path": path.name,
+    "rows": int(pf.metadata.num_rows),
+    "row_groups": int(pf.metadata.num_row_groups),
+    "columns": [
+        {"name": f.name, "type": str(f.type), "nullable": bool(f.nullable)}
+        for f in schema
+    ],
+    "time_stats": time_stats,
+    "sample_rows": sample,
+}
+out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+"""
+    probe_script = output_dir / "_probe.py"
+    probe_script.write_text(probe_code, encoding="utf-8")
+    run_command([sys.executable, str(probe_script), str(parquet), str(output_dir / "probe.json")])
+    parquet.unlink()
+    probe_script.unlink()
     write_summary(
         [
-            "## Kaggle dataset probe",
+            "## Kaggle dataset parquet probe",
             "",
-            *[
-                f"- {item['dataset']}: "
-                f"{'ACCESSIBLE' if item['accessible'] else 'NOT_ACCESSIBLE'}"
-                for item in summaries
-            ],
+            f"- Dataset: {dataset}",
+            f"- File: {file_name}",
         ]
     )
 
 
-def kernel_fetch(data: dict[str, Any], output_dir: Path) -> None:
-    kernel = kernel_from_manifest(data)
-    dest = output_dir / "kernel"
-    dest.mkdir(parents=True, exist_ok=True)
-    run_command(
-        ["kaggle", "kernels", "pull", kernel, "-p", str(dest), "-m"]
+
+def dataset_analysis(data: dict[str, Any], output_dir: Path) -> None:
+    dataset = str(data.get("dataset", "")).strip()
+    script_raw = str(data.get("script", "")).strip()
+    files = data.get("files")
+    if "/" not in dataset:
+        raise ValueError("dataset_analysis requires 'dataset' as owner/slug")
+    if not script_raw:
+        raise ValueError("dataset_analysis requires 'script'")
+    if not isinstance(files, list) or not files or not all(isinstance(x, str) and x for x in files):
+        raise ValueError("dataset_analysis requires a non-empty string list 'files'")
+
+    script = repo_path(script_raw)
+    if not script.is_file():
+        raise FileNotFoundError(f"Analysis script not found: {script_raw}")
+
+    packages = data.get(
+        "packages",
+        [
+            "numpy==2.3.3",
+            "pandas==2.3.3",
+            "pyarrow==25.0.1",
+            "scikit-learn==1.7.2",
+        ],
     )
-    metadata = dest / "kernel-metadata.json"
-    if not metadata.is_file():
-        raise FileNotFoundError("Kaggle kernel pull did not return kernel-metadata.json")
+    if not isinstance(packages, list) or not all(isinstance(x, str) and x for x in packages):
+        raise ValueError("packages must be a string list")
+    run_command([sys.executable, "-m", "pip", "install", "--quiet", *packages])
+
+    spec = {
+        "dataset": dataset,
+        "files": files,
+        "worker_id": str(data.get("worker_id", output_dir.name)),
+        "sample_per_hour": int(data.get("sample_per_hour", 3000)),
+        "seed": int(data.get("seed", 505009)),
+        "surface": str(data.get("surface", "TRAIN")),
+    }
+    analysis_params = data.get("analysis_params", {})
+    if not isinstance(analysis_params, dict):
+        raise ValueError("analysis_params must be an object")
+    spec.update(analysis_params)
+    if "thresholds" in data:
+        if not isinstance(data["thresholds"], dict):
+            raise ValueError("thresholds must be an object")
+        spec["thresholds"] = data["thresholds"]
+    spec_path = output_dir / "analysis_spec.json"
+    spec_path.write_text(json.dumps(spec, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    results = output_dir / "results"
+    results.mkdir(parents=True, exist_ok=True)
+    run_command(
+        [
+            sys.executable,
+            str(script),
+            "--spec",
+            str(spec_path),
+            "--output-dir",
+            str(results),
+        ]
+    )
     write_summary(
         [
-            "## Kaggle kernel metadata fetch",
+            "## Kaggle dataset streaming analysis",
             "",
-            f"- Kernel: {kernel}",
-            f"- Metadata: {metadata.relative_to(ROOT)}",
+            f"- Dataset: {dataset}",
+            f"- Files: {len(files)}",
+            f"- Worker: {spec['worker_id']}",
+            f"- Surface: {spec['surface']}",
+        ]
+    )
+
+
+
+def artifact_analysis(data: dict[str, Any], output_dir: Path) -> None:
+    import urllib.parse
+    import urllib.request
+    import zipfile
+
+    artifacts = data.get("artifacts")
+    if not isinstance(artifacts, list) or not artifacts:
+        raise ValueError("artifact_analysis requires non-empty 'artifacts' list")
+    script_raw = str(data.get("script", "")).strip()
+    if not script_raw:
+        raise ValueError("artifact_analysis requires 'script'")
+    script = repo_path(script_raw)
+    if not script.is_file():
+        raise FileNotFoundError(f"Analysis script not found: {script_raw}")
+
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    repository = os.environ.get("GITHUB_REPOSITORY", "").strip()
+    if not token or "/" not in repository:
+        raise RuntimeError("artifact_analysis requires GITHUB_TOKEN and GITHUB_REPOSITORY")
+
+    packages = data.get("packages", ["numpy==2.3.3", "pandas==2.3.3", "pyarrow==25.0.1"])
+    if packages:
+        if not isinstance(packages, list) or not all(isinstance(x, str) and x for x in packages):
+            raise ValueError("'packages' must be a list of non-empty strings")
+        run_command([sys.executable, "-m", "pip", "install", "--quiet", *packages])
+
+    artifacts_root = output_dir / "artifacts"
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+    for raw in artifacts:
+        artifact_id = int(raw)
+        zip_path = artifacts_root / f"{artifact_id}.zip"
+        url = f"https://api.github.com/repos/{repository}/actions/artifacts/{artifact_id}/zip"
+        request = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "User-Agent": "predictions-cup-005i-artifact-analysis",
+            },
+        )
+        class _StripCrossHostAuth(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+                if (
+                    redirected is not None
+                    and urllib.parse.urlparse(req.full_url).netloc
+                    != urllib.parse.urlparse(newurl).netloc
+                ):
+                    redirected.remove_header("Authorization")
+                return redirected
+
+        opener = urllib.request.build_opener(_StripCrossHostAuth())
+        with opener.open(request, timeout=120) as response:
+            zip_path.write_bytes(response.read())
+        dest = artifacts_root / str(artifact_id)
+        dest.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(zip_path) as archive:
+            archive.extractall(dest)
+        zip_path.unlink()
+
+    spec_path = output_dir / "artifact_spec.json"
+    spec_path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    results = output_dir / "results"
+    results.mkdir(parents=True, exist_ok=True)
+    run_command(
+        [
+            sys.executable,
+            str(script),
+            "--artifacts-root",
+            str(artifacts_root),
+            "--spec",
+            str(spec_path),
+            "--output-dir",
+            str(results),
+        ]
+    )
+    write_summary(
+        [
+            "## Artifact analysis",
+            "",
+            f"- Artifacts: {len(artifacts)}",
+            f"- Script: {script_raw}",
         ]
     )
 
@@ -533,14 +563,6 @@ def main() -> int:
     action = data["action"]
     if action == "auth_check":
         auth_check(output_dir)
-    elif action == "dataset_fetch":
-        dataset_fetch(data, output_dir)
-    elif action == "dataset_probe":
-        dataset_probe(data, output_dir)
-    elif action == "dataset_script":
-        dataset_script(data, output_dir)
-    elif action == "kernel_fetch":
-        kernel_fetch(data, output_dir)
     elif action == "run":
         run_kernel(data, output_dir)
     elif action == "status":
@@ -551,12 +573,20 @@ def main() -> int:
         kernel = kernel_from_manifest(data)
         download_outputs(data, kernel, output_dir)
         write_summary(["## Kaggle output download", "", f"Kernel: {kernel}"])
-    elif action == "repo_script":
-        repo_script(data, output_dir)
     elif action == "logs":
         kernel = kernel_from_manifest(data)
         capture_logs(kernel, output_dir)
         write_summary(["## Kaggle logs", "", f"Kernel: {kernel}"])
+    elif action == "dataset_files":
+        dataset_files(data, output_dir)
+    elif action == "dataset_probe":
+        dataset_probe(data, output_dir)
+    elif action == "dataset_fetch":
+        dataset_fetch(data, output_dir)
+    elif action == "dataset_analysis":
+        dataset_analysis(data, output_dir)
+    elif action == "artifact_analysis":
+        artifact_analysis(data, output_dir)
 
     return 0
 

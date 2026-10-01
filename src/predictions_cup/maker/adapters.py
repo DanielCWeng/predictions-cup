@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -21,6 +21,7 @@ from predictions_cup.maker.contracts import MakerMarketSnapshot, QuoteSide
 from predictions_cup.maker.lifecycle import ActiveQuote, QuoteRegistry
 from predictions_cup.observe.contracts import ObservationEmitter, ObservationKind, VenueObservation
 from predictions_cup.runtime.models import OrderAction
+from predictions_cup.sig.errors import SigExecutionUncertainError
 
 
 class ShadowMakerExecutionAdapter:
@@ -68,6 +69,7 @@ class LiveMakerExecutionAdapter:
         self._sink = sink
         self._journal = journal
         self._quotes = quotes
+        self._cancel_uncertainty_resolver: Callable[[], Awaitable[object]] | None = None
         self._observation_emitter = observation_emitter
         self._observation_process_instance_id = (
             uuid4().hex
@@ -78,13 +80,26 @@ class LiveMakerExecutionAdapter:
             raise ValueError("observation_process_instance_id must not be blank")
         self._wall_clock = wall_clock
 
+    def set_cancel_uncertainty_resolver(
+        self,
+        resolver: Callable[[], Awaitable[object]],
+    ) -> None:
+        """Install the existing account reconciliation path as rare cancel recovery."""
+        self._cancel_uncertainty_resolver = resolver
+
     async def place(
         self,
         plan: ExecutionPlan,
         snapshot: MakerMarketSnapshot,
     ) -> ExecutionEvent:
         del snapshot
-        event = await self._sink.dispatch(plan)
+        try:
+            event = await self._sink.dispatch(plan)
+        except SigExecutionUncertainError:
+            event = await self._sink.dispatch_recovery(
+                plan.envelope,
+                plan=plan,
+            )
         self._sync_quote_registry(plan, event)
         return event
 
@@ -105,7 +120,42 @@ class LiveMakerExecutionAdapter:
             order_id=order_id,
             tournament_id=tournament_id,
         )
-        return await self._sink.cancel(envelope)
+        try:
+            return await self._sink.cancel(envelope)
+        except SigExecutionUncertainError:
+            try:
+                return await self._sink.cancel(envelope)
+            except SigExecutionUncertainError:
+                if self._cancel_uncertainty_resolver is not None:
+                    await self._cancel_uncertainty_resolver()
+                    resolved = next(
+                        (
+                            item
+                            for item in self._journal.envelopes()
+                            if item.logical_operation_id == logical_operation_id
+                        ),
+                        None,
+                    )
+                    if resolved is not None and resolved.lifecycle_state in {
+                        LifecycleState.CANCELLED,
+                        LifecycleState.FILLED,
+                        LifecycleState.RECONCILED,
+                        LifecycleState.REJECTED,
+                    }:
+                        events = self._journal.events(logical_operation_id)
+                        observed = (
+                            active.observed_monotonic_ns
+                            if not events
+                            else events[-1].observed_monotonic_ns
+                        )
+                        return ExecutionEvent(
+                            logical_operation_id=logical_operation_id,
+                            state=resolved.lifecycle_state,
+                            observed_monotonic_ns=observed,
+                            simulated=False,
+                            detail="targeted_cancel_reconcile",
+                        )
+                raise
 
     def _sync_quote_registry(
         self,

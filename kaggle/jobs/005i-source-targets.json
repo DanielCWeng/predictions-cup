@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "action": "dataset_fetch",
+  "dataset": "polyleviathan/sig-cup-data003-orderbooks",
+  "file": "_manifests/targets.json",
+  "note": "EXPERIMENT-005I independent source provenance fetch. No 005G artifacts; no HOLDOUT; no MAKE; no SIG orders."
+}

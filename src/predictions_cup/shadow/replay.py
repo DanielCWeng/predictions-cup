@@ -223,6 +223,11 @@ def _snapshot_from_record(record: dict[str, object]) -> CanonicalShadowSnapshot:
             observed_monotonic_ns=int(item["observed_monotonic_ns"]),
             trusted=bool(item["trusted"]),
             source_version=str(item["source_version"]),
+            observed_at=(
+                None
+                if item.get("observed_at") is None
+                else datetime.fromisoformat(str(item["observed_at"]))
+            ),
         )
         for token_id, item in external_raw.items()
     }

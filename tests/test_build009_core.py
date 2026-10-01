@@ -487,6 +487,7 @@ def test_live_interlocks_require_explicit_invocation_and_trusted_account() -> No
         global_kill_switch=False,
         risk_max_order_size=10,
         risk_max_gross_exposure=100.0,
+        risk_max_tournament_exposure=100.0,
         risk_max_per_market_exposure=100.0,
         risk_max_open_order_exposure=100.0,
         risk_max_concurrent_open_orders=10,
@@ -583,6 +584,7 @@ def test_settings_default_to_shadow_and_live_requires_complete_caps() -> None:
             global_kill_switch=False,
             risk_max_order_size=10,
             risk_max_gross_exposure=100.0,
+            risk_max_tournament_exposure=100.0,
             risk_max_per_market_exposure=100.0,
             risk_max_open_order_exposure=100.0,
             risk_max_concurrent_open_orders=10,
@@ -618,6 +620,33 @@ def test_settings_default_to_shadow_and_live_requires_complete_caps() -> None:
         drawdown=10.0,
     )
     assert settings.execution_mode == "LIVE"
+
+    base = settings.model_dump()
+    base["risk_max_tournament_exposure"] = None
+    with pytest.raises(ValidationError, match="risk_max_tournament_exposure"):
+        AppSettings(**base)
+
+    base = settings.model_dump()
+    base["risk_max_tournament_exposure"] = 101.0
+    with pytest.raises(
+        ValidationError,
+        match="cannot exceed risk_max_gross_exposure",
+    ):
+        AppSettings(**base)
+
+    exploratory = settings.model_dump()
+    exploratory["risk_profile_mode"] = "EXPLORATORY"
+    exploratory["risk_exploratory_max_order_size"] = 2
+    exploratory["risk_exploratory_max_gross_exposure"] = 20.0
+    exploratory["risk_exploratory_max_per_market_exposure"] = 5.0
+    exploratory["risk_exploratory_max_open_order_exposure"] = 10.0
+    exploratory["risk_exploratory_max_concurrent_open_orders"] = 4
+    exploratory["risk_exploratory_max_tournament_exposure"] = None
+    with pytest.raises(
+        ValidationError,
+        match="risk_exploratory_max_tournament_exposure",
+    ):
+        AppSettings(**exploratory)
 
 
 def test_registered_equivalent_kernel_candidates_match_reference() -> None:

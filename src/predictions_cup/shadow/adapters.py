@@ -195,6 +195,7 @@ class RuntimeEvaluatorMetadata:
     readiness_reason: str | None
     freshness_seconds: float | None
     quality_flags: tuple[str, ...] = ()
+    diagnostic_payload: Mapping[str, object] = field(default_factory=dict)
 
 
 class Pred006RuntimeEvaluator(Protocol):
@@ -454,6 +455,7 @@ def _runtime_metadata_payload(
         "readiness": metadata.ready,
         "readiness_reason": metadata.readiness_reason,
         "freshness_seconds": metadata.freshness_seconds,
+        **dict(metadata.diagnostic_payload),
     }
 
 def _sig_midpoint(snapshot: MakerMarketSnapshot) -> float | None:

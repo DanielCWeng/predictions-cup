@@ -1010,6 +1010,10 @@ class Frozen005FEvaluator:
             )
 
         regime = self._regime_provider.regime(snapshot)
+        diagnostic_payload = self._diagnostic_state_payload(
+            vector,
+            regime=regime,
+        )
         if regime is None:
             return RuntimeEvaluatorMetadata(
                 research_id=self.research_id,
@@ -1021,6 +1025,7 @@ class Frozen005FEvaluator:
                 readiness_reason="regime_unavailable",
                 freshness_seconds=None,
                 quality_flags=("005f:pre_active_semantics_frozen",),
+                diagnostic_payload=diagnostic_payload,
             )
 
         required = (
@@ -1046,6 +1051,7 @@ class Frozen005FEvaluator:
                     "005f:no_refit",
                     "005f:frozen_artifact_hashes_required",
                 ),
+                diagnostic_payload=diagnostic_payload,
             )
 
         bad_hash = tuple(
@@ -1064,6 +1070,7 @@ class Frozen005FEvaluator:
                 readiness_reason="model_artifact_hash_mismatch:" + ",".join(bad_hash),
                 freshness_seconds=None,
                 quality_flags=("005f:frozen_artifact_hashes_required",),
+                diagnostic_payload=diagnostic_payload,
             )
 
         if any(
@@ -1081,6 +1088,7 @@ class Frozen005FEvaluator:
                 readiness_reason="required_orderbook_history_unavailable",
                 freshness_seconds=None,
                 quality_flags=("005f:insufficient_exact_grid_history",),
+                diagnostic_payload=diagnostic_payload,
             )
 
         age = max(
@@ -1100,7 +1108,34 @@ class Frozen005FEvaluator:
                 "005f:genuine_age_ns_exact",
                 f"005f:regime:{regime}",
             ),
+            diagnostic_payload=diagnostic_payload,
         )
+
+    def _diagnostic_state_payload(
+        self,
+        vector: Hazard005FFeatureVector,
+        *,
+        regime: str | None,
+    ) -> dict[str, object]:
+        return {
+            "005f_state": {
+                "provider_id": self._provider.provider_id,
+                "provider_version": self._provider.version,
+                "scope_id": vector.scope_id,
+                "grid_time_ns": vector.grid_time_ns,
+                "observed_monotonic_ns": vector.observed_monotonic_ns,
+                "source_version": vector.source_version,
+                "regime": regime,
+                "features": {
+                    name: (
+                        float(value)
+                        if math.isfinite(float(value))
+                        else None
+                    )
+                    for name, value in sorted(vector.values.items())
+                },
+            }
+        }
 
     def evaluate(
         self,

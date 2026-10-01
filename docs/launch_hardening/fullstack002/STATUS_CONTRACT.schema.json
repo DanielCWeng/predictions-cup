@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DanielCWeng/predictions-cup/fullstack-002-status.schema.json",
+  "title": "FULLSTACK-002 canonical launch status",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "observed_at",
+    "starting_main_sha",
+    "code_sha",
+    "host_identity",
+    "config_hash",
+    "trading_authorization",
+    "effective_enabled_components",
+    "components",
+    "process_health",
+    "capture_freshness",
+    "clock_health",
+    "storage_health",
+    "risk_state",
+    "global_halt_state",
+    "unresolved_operation_count",
+    "unresolved_operations",
+    "maker_state",
+    "observe_health",
+    "live_learn_health",
+    "known_blockers"
+  ],
+  "properties": {
+    "schema_version": {"const": "fullstack-002-status-v1"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "starting_main_sha": {
+      "const": "4a040a7d309df26098af5e81e96c7f1108d03117"
+    },
+    "code_sha": {"type": ["string", "null"]},
+    "host_identity": {"type": "string"},
+    "config_hash": {"type": "string"},
+    "mapping_hash": {"type": ["string", "null"]},
+    "mapping_version": {"type": ["string", "null"]},
+    "risk_registry_hash": {"type": ["string", "null"]},
+    "risk_registry_version": {"type": "string"},
+    "session_id": {"type": ["string", "null"]},
+    "trading_authorization": {
+      "type": "object",
+      "required": ["authorized", "state", "reason", "blockers"],
+      "properties": {
+        "authorized": {"const": false},
+        "state": {"const": "NOT_READY"},
+        "reason": {"type": "string"},
+        "blockers": {
+          "type": "array",
+          "items": {"type": "string"},
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "effective_enabled_components": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "components": {
+      "type": "object",
+      "required": [
+        "CAPTURE_SIG",
+        "CAPTURE_POLYMARKET",
+        "MAKE",
+        "SHADOW",
+        "OBSERVE",
+        "LIVE_LEARN",
+        "RISK",
+        "BUILD_009_EXECUTION"
+      ],
+      "additionalProperties": {"$ref": "#/$defs/componentState"}
+    },
+    "process_health": {"type": "object"},
+    "capture_freshness": {"type": "object"},
+    "clock_health": {"type": "object"},
+    "storage_health": {"type": "object"},
+    "risk_state": {"type": "object"},
+    "global_halt_state": {
+      "type": "object",
+      "required": ["risk_halted", "global_kill_switch", "active"]
+    },
+    "unresolved_operation_count": {"type": ["integer", "null"], "minimum": 0},
+    "unresolved_operations": {"type": "object"},
+    "maker_state": {"type": "object"},
+    "observe_health": {"type": "object"},
+    "live_learn_health": {"type": "object"},
+    "known_blockers": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "componentState": {
+      "type": "object",
+      "required": [
+        "installed",
+        "configured",
+        "enabled",
+        "healthy",
+        "authorized",
+        "detail"
+      ],
+      "properties": {
+        "installed": {"type": "boolean"},
+        "configured": {"type": "boolean"},
+        "enabled": {"type": "boolean"},
+        "healthy": {"type": ["boolean", "null"]},
+        "authorized": {"type": "boolean"},
+        "detail": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

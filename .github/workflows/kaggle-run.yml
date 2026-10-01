@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   discover:
@@ -101,6 +102,7 @@ jobs:
       - name: Run Kaggle job
         env:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           test -n "$KAGGLE_API_TOKEN" || {
             echo "::error::KAGGLE_API_TOKEN repository secret is missing"

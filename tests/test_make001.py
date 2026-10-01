@@ -12,7 +12,12 @@ import pytest
 
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
-from predictions_cup.execution.models import ExecutionEvent, ExecutionMode, LifecycleState
+from predictions_cup.execution.models import (
+    ExecutionEnvelope,
+    ExecutionEvent,
+    ExecutionMode,
+    LifecycleState,
+)
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.maker import (
@@ -58,6 +63,7 @@ from predictions_cup.observe import (
 )
 from predictions_cup.risk import (
     CapitalRiskState,
+    ExposureBucket,
     HaltScope,
     RiskContextSource,
     RiskExposureSnapshot,
@@ -75,6 +81,7 @@ from predictions_cup.runtime.models import (
     RuntimePosition,
     RuntimeSnapshot,
 )
+from predictions_cup.sig.errors import SigExecutionUncertainError
 
 NOW = 1_000_000_000
 TOURNAMENT = "t1"
@@ -397,6 +404,94 @@ class _PerIntentBatchLiveSink:
         )
 
 
+class _AlwaysUncertainCancelLiveSink:
+    def __init__(self, journal: ExecutionJournal) -> None:
+        self.journal = journal
+        self.cancel_calls = 0
+
+    async def cancel(self, envelope: ExecutionEnvelope) -> ExecutionEvent:
+        self.cancel_calls += 1
+        if self.cancel_calls == 1:
+            self.journal.record_before_dispatch(
+                envelope,
+                submitted_monotonic_ns=NOW + 10,
+            )
+            self.journal.mark_state(
+                envelope.logical_operation_id,
+                LifecycleState.UNCERTAIN,
+                NOW + 11,
+            )
+        raise SigExecutionUncertainError(
+            status_code=None,
+            code="fixture_uncertain_cancel",
+            safe_message="fixture cancellation uncertainty",
+        )
+
+
+class _UncertainThenAckLiveSink:
+    def __init__(self, journal: ExecutionJournal) -> None:
+        self.journal = journal
+        self.dispatch_calls = 0
+        self.recovery_calls = 0
+
+    async def dispatch(self, plan: ExecutionPlan) -> ExecutionEvent:
+        self.dispatch_calls += 1
+        self.journal.record_before_dispatch(
+            plan.envelope,
+            plan.intents,
+            audit=plan.audit,
+            submitted_monotonic_ns=NOW + 10,
+        )
+        self.journal.mark_state(
+            plan.envelope.logical_operation_id,
+            LifecycleState.UNCERTAIN,
+            NOW + 11,
+        )
+        raise SigExecutionUncertainError(
+            status_code=None,
+            code="fixture_uncertain",
+            safe_message="fixture placement uncertainty",
+        )
+
+    async def dispatch_recovery(
+        self,
+        envelope: object,
+        *,
+        plan: ExecutionPlan | None = None,
+    ) -> ExecutionEvent:
+        self.recovery_calls += 1
+        assert plan is not None
+        assert plan.envelope == envelope
+        self.journal.mark_state(
+            plan.envelope.logical_operation_id,
+            LifecycleState.RECONCILING,
+            NOW + 12,
+        )
+        for index, intent in enumerate(plan.intents):
+            self.journal.record_event(
+                logical_operation_id=plan.envelope.logical_operation_id,
+                tournament_id=intent.tournament_id,
+                logical_intent_id=intent.intent_id,
+                event_type="ACK",
+                observed_monotonic_ns=NOW + 20 + index,
+                exchange_id=intent.exchange_id,
+                exchange_order_id=str(91 + index),
+                terminal_status=LifecycleState.ACKED.value,
+            )
+        self.journal.mark_state(
+            plan.envelope.logical_operation_id,
+            LifecycleState.ACKED,
+            NOW + 30,
+        )
+        return ExecutionEvent(
+            logical_operation_id=plan.envelope.logical_operation_id,
+            state=LifecycleState.ACKED,
+            observed_monotonic_ns=NOW + 30,
+            simulated=False,
+            detail="fixture_same_key_recovery",
+        )
+
+
 def _live_two_sided_cycle(
     tmp_path: Path,
     *,
@@ -558,6 +653,102 @@ def test_live_authoritative_terminal_refill_retains_replenishment_observation(
     assert state.bid is not None and state.bid.exchange_order_id == 91
 
 
+def test_uncertain_cancel_directly_triggers_bounded_reconciliation(
+    tmp_path: Path,
+) -> None:
+    journal = ExecutionJournal(tmp_path / "uncertain-cancel.sqlite3")
+    quotes = QuoteRegistry()
+    live = _AlwaysUncertainCancelLiveSink(journal)
+    adapter = LiveMakerExecutionAdapter(
+        cast(SigLiveSink, live),
+        journal=journal,
+        quotes=quotes,
+    )
+    resolver_calls = 0
+
+    async def resolver() -> object:
+        nonlocal resolver_calls
+        resolver_calls += 1
+        journal.mark_state("cancel-op", LifecycleState.RECONCILING, NOW + 12)
+        journal.record_event(
+            logical_operation_id="cancel-op",
+            tournament_id=TOURNAMENT,
+            event_type="RECONCILED_TERMINAL",
+            observed_monotonic_ns=NOW + 13,
+            exchange_order_id="91",
+            terminal_status=LifecycleState.CANCELLED.value,
+        )
+        journal.mark_state("cancel-op", LifecycleState.CANCELLED, NOW + 13)
+        return None
+
+    adapter.set_cancel_uncertainty_resolver(resolver)
+    try:
+        event = asyncio.run(
+            adapter.cancel(
+                _active(QuoteSide.BID, ticks=99, order_id=91),
+                "cancel-op",
+                TOURNAMENT,
+            )
+        )
+        assert live.cancel_calls == 2
+        assert resolver_calls == 1
+        assert event.state is LifecycleState.CANCELLED
+        assert journal.unresolved() == ()
+    finally:
+        journal.close()
+
+
+def test_live_adapter_retries_uncertain_placement_once_with_same_plan(
+    tmp_path: Path,
+) -> None:
+    journal = ExecutionJournal(tmp_path / "uncertain-retry.sqlite3")
+    quotes = QuoteRegistry()
+    live = _UncertainThenAckLiveSink(journal)
+    adapter = LiveMakerExecutionAdapter(
+        cast(SigLiveSink, live),
+        journal=journal,
+        quotes=quotes,
+    )
+    coordinator = MakerCoordinator(
+        engine=_engine(),
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=quotes,
+        risk_context=RiskContext(
+            mode=ExecutionMode.LIVE,
+            kill_switch=False,
+            limits=RiskLimits(
+                max_order_size=10,
+                max_gross_exposure=100.0,
+                max_per_market_exposure=100.0,
+                max_open_order_exposure=100.0,
+                max_concurrent_open_orders=10,
+            ),
+            max_state_age_ns=1_000_000_000,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+        reservations=ExecutionReservationBook(),
+    )
+    try:
+        result = asyncio.run(
+            coordinator.on_state_change(
+                MakerStateChange(
+                    event_id="same-key-retry",
+                    observed_monotonic_ns=NOW,
+                    exchange_ids=frozenset({"36"}),
+                ),
+                {"36": _maker_snapshot()},
+            )
+        )
+        assert live.dispatch_calls == 1
+        assert live.recovery_calls == 1
+        assert result.execution_events[0].state is LifecycleState.ACKED
+        assert quotes.state("36").bid is not None
+        assert quotes.state("36").ask is not None
+    finally:
+        journal.close()
+
+
 def test_direct_pm_preserves_value_orientation_and_source_observation_age() -> None:
     same = DirectPolymarketFairValueProvider(_mapping())
     snapshot = replace(
@@ -588,6 +779,26 @@ def test_direct_pm_preserves_value_orientation_and_source_observation_age() -> N
     stale_result = complement.fair_value(stale)
     assert stale_result.usable is True
     assert stale_result.observed_monotonic_ns == 899
+
+
+def test_direct_pm_fv_freshness_uses_live_feed_without_rewriting_provenance() -> None:
+    old_quote = _external(observed_ns=NOW - 101)
+    stale_snapshot = _maker_snapshot(external={"token-yes": old_quote})
+    stale = _engine(max_age_ns=100).quote(stale_snapshot)
+    assert stale.gate.reason == "fv_stale"
+
+    live_snapshot = replace(
+        stale_snapshot,
+        external_feed_observed_ns=NOW,
+    )
+    provider_result = DirectPolymarketFairValueProvider(_mapping()).fair_value(
+        live_snapshot
+    )
+    assert provider_result.observed_monotonic_ns == NOW - 101
+
+    live = _engine(max_age_ns=100).quote(live_snapshot)
+    assert live.gate.reason != "fv_stale"
+    assert live.desired is not None
 
 
 def test_derived_partition_sum_and_no_trade_are_explicit() -> None:
@@ -1097,6 +1308,240 @@ class _MutableMakerRiskMarkProvider:
         )
 
 
+def _seed_exact_desired_quotes(
+    engine: MakerEngine,
+    registry: QuoteRegistry,
+    snapshot: MakerMarketSnapshot,
+) -> None:
+    desired = engine.quote(snapshot).desired
+    assert desired is not None
+    assert desired.bid_ticks is not None and desired.ask_ticks is not None
+    registry.apply_authoritative(
+        exchange_id=snapshot.exchange_id,
+        side=QuoteSide.BID,
+        price_ticks=desired.bid_ticks,
+        size=desired.bid_size,
+        remaining_size=desired.bid_size,
+        logical_operation_id="current-bid",
+        exchange_order_id=91,
+        lifecycle_state=LifecycleState.OPEN,
+        observed_monotonic_ns=NOW - 1,
+    )
+    registry.apply_authoritative(
+        exchange_id=snapshot.exchange_id,
+        side=QuoteSide.ASK,
+        price_ticks=desired.ask_ticks,
+        size=desired.ask_size,
+        remaining_size=desired.ask_size,
+        logical_operation_id="current-ask",
+        exchange_order_id=92,
+        lifecycle_state=LifecycleState.OPEN,
+        observed_monotonic_ns=NOW - 1,
+    )
+
+
+def test_untrusted_portfolio_marks_withdraw_unchanged_resting_quotes() -> None:
+    engine = _engine()
+    snapshot = _maker_snapshot()
+    registry = QuoteRegistry()
+    _seed_exact_desired_quotes(engine, registry, snapshot)
+    adapter = ShadowMakerExecutionAdapter()
+    invalid = replace(_maker_capital(), marks_trusted=False)
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+            capital_state=invalid,
+            require_capital_state=True,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id="invalid-marks",
+                observed_monotonic_ns=NOW,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": snapshot},
+        )
+    )
+
+    assert len(result.execution_events) == 2
+    assert all(
+        action.kind is QuoteLifecycleActionKind.CANCEL
+        for action in result.lifecycle_actions
+    )
+    assert registry.state("36").bid is None
+    assert registry.state("36").ask is None
+
+
+def test_stale_other_market_mark_withdraws_unchanged_resting_quotes() -> None:
+    engine = _engine()
+    snapshot = _maker_snapshot()
+    other_position = RuntimePosition(
+        exchange_id="37",
+        market_id="m2",
+        tournament_id=TOURNAMENT,
+        gross_exposure=3.0,
+        signed_quantity=3.0,
+    )
+    snapshot = replace(
+        snapshot,
+        runtime=replace(
+            snapshot.runtime,
+            portfolio=replace(
+                snapshot.runtime.portfolio,
+                positions=snapshot.runtime.portfolio.positions + (other_position,),
+            ),
+        ),
+    )
+    registry = QuoteRegistry()
+    _seed_exact_desired_quotes(engine, registry, snapshot)
+    adapter = ShadowMakerExecutionAdapter()
+    stale = replace(
+        _maker_capital(),
+        oldest_mark_observed_monotonic_ns=NOW - 200_000_000,
+    )
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+            max_mark_age_ns=100_000_000,
+            capital_state=stale,
+            require_capital_state=True,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id="stale-other-mark",
+                observed_monotonic_ns=NOW,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": snapshot},
+        )
+    )
+
+    assert len(result.execution_events) == 2
+    assert registry.state("36").bid is None
+    assert registry.state("36").ask is None
+
+
+def test_transient_account_untrust_holds_resting_quotes_without_new_io() -> None:
+    engine = _engine()
+    trusted = _maker_snapshot()
+    registry = QuoteRegistry()
+    _seed_exact_desired_quotes(engine, registry, trusted)
+    adapter = ShadowMakerExecutionAdapter()
+    untrusted = replace(
+        trusted,
+        runtime=replace(
+            trusted.runtime,
+            portfolio=replace(trusted.runtime.portfolio, account_trusted=False),
+        ),
+    )
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id="account-hold",
+                observed_monotonic_ns=NOW,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": untrusted},
+        )
+    )
+
+    assert result.decisions[0].gate.mode is GateMode.HOLD
+    assert result.execution_events == ()
+    assert all(
+        action.kind is QuoteLifecycleActionKind.KEEP
+        for action in result.lifecycle_actions
+    )
+    assert registry.state("36").bid is not None
+    assert registry.state("36").ask is not None
+
+
+def test_persistent_account_untrust_withdraws_resting_quotes_at_freshness_deadline() -> None:
+    engine = _engine()
+    trusted = _maker_snapshot()
+    registry = QuoteRegistry()
+    _seed_exact_desired_quotes(engine, registry, trusted)
+    adapter = ShadowMakerExecutionAdapter()
+    stale_untrusted = replace(
+        trusted,
+        now_monotonic_ns=NOW + 100_000_000,
+        runtime=replace(
+            trusted.runtime,
+            observation_monotonic_ns=NOW + 100_000_000,
+            portfolio=replace(trusted.runtime.portfolio, account_trusted=False),
+        ),
+    )
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id="account-hold-expired",
+                observed_monotonic_ns=stale_untrusted.now_monotonic_ns,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": stale_untrusted},
+        )
+    )
+
+    assert result.decisions[0].gate.mode is GateMode.CANCEL
+    assert result.decisions[0].gate.reason == "account_stale"
+    assert len(result.execution_events) == 2
+    assert all(
+        action.kind is QuoteLifecycleActionKind.CANCEL
+        for action in result.lifecycle_actions
+    )
+    assert registry.state("36").bid is None
+    assert registry.state("36").ask is None
+
+
 def test_realtime_drawdown_trip_force_cancels_resting_quotes_same_cycle() -> None:
     engine = _engine()
     registry = QuoteRegistry()
@@ -1166,6 +1611,124 @@ def test_realtime_drawdown_trip_force_cancels_resting_quotes_same_cycle() -> Non
     )
     assert registry.state("36").bid is None
     assert registry.state("36").ask is None
+
+def test_untrusted_capital_marks_force_cancel_unchanged_resting_quotes() -> None:
+    engine = _engine()
+    snapshot = _maker_snapshot()
+    desired = engine.quote(snapshot).desired
+    assert desired is not None
+    assert desired.bid_ticks is not None and desired.ask_ticks is not None
+    registry = QuoteRegistry()
+    registry.apply_authoritative(
+        exchange_id="36",
+        side=QuoteSide.BID,
+        price_ticks=desired.bid_ticks,
+        size=desired.bid_size,
+        remaining_size=desired.bid_size,
+        logical_operation_id="current-bid",
+        exchange_order_id=91,
+        lifecycle_state=LifecycleState.OPEN,
+        observed_monotonic_ns=NOW - 1,
+    )
+    registry.apply_authoritative(
+        exchange_id="36",
+        side=QuoteSide.ASK,
+        price_ticks=desired.ask_ticks,
+        size=desired.ask_size,
+        remaining_size=desired.ask_size,
+        logical_operation_id="current-ask",
+        exchange_order_id=92,
+        lifecycle_state=LifecycleState.OPEN,
+        observed_monotonic_ns=NOW - 1,
+    )
+    adapter = ShadowMakerExecutionAdapter()
+    capital = _maker_capital()
+    invalid_marks = replace(
+        capital,
+        exposure=replace(
+            capital.exposure,
+            gross_exposure=3.0,
+            by_market=(ExposureBucket(key="another-held-market", exposure=3.0),),
+        ),
+        marks_trusted=False,
+        reconciliation_complete=False,
+    )
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+            capital_state=invalid_marks,
+            require_capital_state=True,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id="invalid-capital-marks",
+                observed_monotonic_ns=NOW,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": snapshot},
+        )
+    )
+
+    assert len(result.execution_events) == 2
+    assert all(
+        action.kind is QuoteLifecycleActionKind.CANCEL
+        for action in result.lifecycle_actions
+    )
+    assert registry.state("36").bid is None
+    assert registry.state("36").ask is None
+
+
+def test_brief_account_resync_holds_known_resting_quotes() -> None:
+    engine = _engine()
+    registry = QuoteRegistry()
+    _seed_resting_quotes(registry)
+    adapter = ShadowMakerExecutionAdapter()
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id="account-resync",
+                observed_monotonic_ns=NOW,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": _maker_snapshot(account_trusted=False)},
+        )
+    )
+
+    assert result.execution_events == ()
+    assert len(result.lifecycle_actions) == 2
+    assert all(
+        action.kind is QuoteLifecycleActionKind.KEEP
+        and action.reason == "transient_account_hold"
+        for action in result.lifecycle_actions
+    )
+    assert registry.state("36").bid is not None
+    assert registry.state("36").ask is not None
+
 
 def test_capital_global_halt_force_cancels_resting_make_quotes() -> None:
     engine = _engine()

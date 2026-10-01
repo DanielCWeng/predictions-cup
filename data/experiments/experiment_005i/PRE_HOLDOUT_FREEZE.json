@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "phase": "PRE_HOLDOUT_FREEZE",
+  "frozen_parent_head": "045477cbf7c41d6a4e21343180e56edcbc88d187",
+  "split": {
+    "TRAIN": "2026-09-01..2026-09-10",
+    "DEV": "2026-09-11..2026-09-20",
+    "HOLDOUT": "2026-09-21..2026-09-28"
+  },
+  "contamination_control": {
+    "holdout_read_before_freeze": false,
+    "one_batched_holdout_access": true,
+    "no_post_holdout_refit": true,
+    "no_post_holdout_threshold_change": true,
+    "fill_flow_holdout": "NOT_SPENT; separate fill persistence lane remains DEV-descriptive"
+  },
+  "frozen_blobs": {
+    "ofi_model": "c4c0370441a654e4670204c13157daf1f1ceff2b",
+    "regime_definition": "4b6d7e3aa2a1f686dc49af076d14012badd39e7d",
+    "dev_candidate_evaluation": "2b69b000fe0e6970914ef65d777d5150b6053d2a",
+    "regime_dev_evaluation": "05fb9dc1ac57278c60582123d861622556dfce8e",
+    "holdout_runner": "3ec397904489aa12a983622192702a4618d4b76a"
+  },
+  "confirmatory_objects": {
+    "OFI_INCREMENTAL": {
+      "primary_surface": "stratified sample matching TRAIN/DEV evaluation design",
+      "primary_metric": "baseline_logloss - frozen_ofi_logloss",
+      "support_gate": "aggregate improvement > 0 AND >=3/5 temporal HOLDOUT workers positive",
+      "secondary": [
+        "AUC delta",
+        "full-panel logloss delta"
+      ],
+      "no_refit": true
+    },
+    "FIVE_MINUTE_REVERSAL": {
+      "primary_metric": "P(sign(ret_5m) != sign(future_ret_5m))",
+      "support_gate": "aggregate sample reversal_rate > 0.60 AND no temporal worker below 0.55",
+      "falsification_slices": [
+        "move magnitude",
+        "price region",
+        "fixed relative-spread buckets",
+        "transparent state"
+      ]
+    },
+    "PRICE_DISCOVERY_TRANSITION": {
+      "definition": "frozen REGIME_DEFINITION_FREEZE.json",
+      "support_gate": "aggregate PRICE_DISCOVERY exit share to POST_SHOCK >= 0.40; worker dwell p90 should remain <=5 minutes in >=3/5 workers",
+      "secondary": [
+        "future_abs_5m state ordering",
+        "entry preconditions"
+      ]
+    },
+    "LIQUIDITY_STRESS_METASTABILITY": {
+      "support_gate": "aggregate LIQUIDITY_STRESS exit hazard < 0.10 per minute AND exit-to-REPLENISHMENT share >= 0.20",
+      "secondary": [
+        "worker dwell p90",
+        "future_abs_5m"
+      ]
+    },
+    "RESILIENCE_AFTER_WITHDRAWAL": {
+      "definition": "withdrawal_1m >= 200; recovered iff next-minute replenishment_1m >= 200",
+      "support_gate": "aggregate subsequent_abs_5m lower for RECOVERED than NOT_RECOVERED AND same direction in >=3/5 workers",
+      "claim_boundary": "predictive association only; no causal refill claim"
+    }
+  },
+  "non_confirmatory_final_dispositions_fixed_before_holdout": {
+    "MICROPRICE": "NO_INCREMENTAL_VALUE",
+    "RAW_EVENT_OFI": "NO_INCREMENTAL_VALUE",
+    "VISIBLE_MULTI_LEVEL_FLOW": "NO_INCREMENTAL_VALUE",
+    "LOB_SHAPE": "NO_INCREMENTAL_VALUE",
+    "GENERIC_COMMON_LIQUIDITY_DIRECTION": "NO_INCREMENTAL_VALUE",
+    "GENERIC_AGE_DIRECTION": "NO_INCREMENTAL_VALUE",
+    "HMM": "NOT_JUSTIFIED",
+    "HAWKES": "NOT_JUSTIFIED_BEFORE_REGIME_BASELINE",
+    "FLOW_PERSISTENCE": "DEV_SURVIVOR_DESCRIPTIVE",
+    "QUOTE_LIFETIME": "DEV_REPLICATED_DESCRIPTIVE",
+    "KYLE_AMIHUD": "NOT_OBSERVABLE_RELIABLY_ON_STRATIFIED_TRADE_SAMPLE",
+    "VPIN": "NOT_PROMOTED",
+    "SPREAD_DECOMPOSITION": "005H_BOUNDARY_NOT_DUPLICATED"
+  },
+  "holdout_worker_plan": {
+    "w0": [
+      "2026-09-21",
+      "2026-09-22"
+    ],
+    "w1": [
+      "2026-09-23",
+      "2026-09-24"
+    ],
+    "w2": [
+      "2026-09-25",
+      "2026-09-26"
+    ],
+    "w3": [
+      "2026-09-27"
+    ],
+    "w4": [
+      "2026-09-28"
+    ]
+  },
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}

@@ -331,6 +331,11 @@ def maker_snapshot_record(snapshot: MakerMarketSnapshot) -> dict[str, object]:
                 "best_bid": quote.best_bid,
                 "best_ask": quote.best_ask,
                 "observed_monotonic_ns": quote.observed_monotonic_ns,
+                "observed_at": (
+                    None
+                    if quote.observed_at is None
+                    else quote.observed_at.isoformat()
+                ),
                 "trusted": quote.trusted,
                 "source_version": quote.source_version,
             }

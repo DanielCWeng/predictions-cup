@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "mechanism": "OFI_INCREMENTAL",
+  "status": "TRAIN_MODEL_FROZEN_BEFORE_DEV_READ",
+  "training_surface": "five disjoint TRAIN workers / 2026-09-01..10 sampled minute states; conditional on non-zero future_ret_1m",
+  "fit_environment": "scikit-learn 1.8.0; parameters below are the canonical frozen numeric model, so later evaluation does not depend on refitting",
+  "artifact_digests": {
+    "train-w0": "sha256:42a12561b41bfdecb7e0bead1fb9844450d364211054cbb98e11eba8671fca9b",
+    "train-w1": "sha256:a8c5599941e1604dd397d653eff2129a04b8ba2a07661367446c4cbeba9d5e6f",
+    "train-w2": "sha256:5ae8ef419fe9ed220ce8ad2883431f3c5f9b3374559d3a986c76d44410d4a106",
+    "train-w3": "sha256:627524d514a010cb2f7d4430877d7af4950133fb01be70169d4fd87b4614c83c",
+    "train-w4": "sha256:6af4fc5cf9c175d773294be6f3684f6fd338b1f1dd3fbab045fac1c27ff8a712"
+  },
+  "models": {
+    "baseline": {
+      "features": [
+        "mid",
+        "relative_spread",
+        "depth_total5",
+        "quote_events",
+        "rv_5m",
+        "imbalance1",
+        "ret_1m",
+        "ret_5m"
+      ],
+      "medians": {
+        "mid": 0.47,
+        "relative_spread": 0.2479338842975207,
+        "depth_total5": 605.5899999999999,
+        "quote_events": 15,
+        "rv_5m": 0.0022360679774997,
+        "imbalance1": 0,
+        "ret_1m": 0,
+        "ret_5m": 0
+      },
+      "scaler_mean": [
+        0.49926132703457154,
+        0.6093899214720409,
+        1255.7557112181355,
+        46.28957943495199,
+        0.00651951604757511,
+        0.0050633144068354,
+        0.00007383662075523766,
+        0.00015296481487162234
+      ],
+      "scaler_scale": [
+        0.3614213501807598,
+        0.6563555961826829,
+        21735.340691848338,
+        134.0623967783279,
+        0.014815558240286596,
+        0.5153045000805079,
+        0.01709391729548788,
+        0.02461392090531114
+      ],
+      "coef": [
+        0.08914162645333838,
+        -0.04534509513142079,
+        0.015365339740198332,
+        -0.004165632368560771,
+        0.004981287607583386,
+        0.4054365162502355,
+        -0.40155968136093495,
+        -0.2744382393224963
+      ],
+      "intercept": 0.003004716964401294
+    },
+    "ofi_challenger": {
+      "features": [
+        "mid",
+        "relative_spread",
+        "depth_total5",
+        "quote_events",
+        "rv_5m",
+        "imbalance1",
+        "ret_1m",
+        "ret_5m",
+        "ofi_depth_norm"
+      ],
+      "medians": {
+        "mid": 0.47,
+        "relative_spread": 0.2479338842975207,
+        "depth_total5": 605.5899999999999,
+        "quote_events": 15,
+        "rv_5m": 0.0022360679774997,
+        "imbalance1": 0,
+        "ret_1m": 0,
+        "ret_5m": 0,
+        "ofi_depth_norm": 0
+      },
+      "scaler_mean": [
+        0.49926132703457154,
+        0.6093899214720409,
+        1255.7557112181355,
+        46.28957943495199,
+        0.00651951604757511,
+        0.0050633144068354,
+        0.00007383662075523766,
+        0.00015296481487162234,
+        0.0003953494884767887
+      ],
+      "scaler_scale": [
+        0.3614213501807598,
+        0.6563555961826829,
+        21735.340691848338,
+        134.0623967783279,
+        0.014815558240286596,
+        0.5153045000805079,
+        0.01709391729548788,
+        0.02461392090531114,
+        0.09439555541035766
+      ],
+      "coef": [
+        0.09164168425054639,
+        -0.052679168227685993,
+        0.01419651726981733,
+        -0.0049317690810563326,
+        0.006798088756926945,
+        0.4438542392351359,
+        -0.230839809333758,
+        -0.27025740362144657,
+        -0.2380956402390129
+      ],
+      "intercept": 0.003167796092707855
+    }
+  },
+  "fit_rows": 32599,
+  "positive_rate": 0.5013343967606368,
+  "selection_metric": "DEV log-loss challenger versus baseline; AUC descriptive secondary",
+  "dev_gate": "challenger aggregate DEV log-loss < baseline and positive log-loss improvement in at least 3/5 DEV temporal workers; no refit or feature change on DEV",
+  "holdout_read": false,
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}

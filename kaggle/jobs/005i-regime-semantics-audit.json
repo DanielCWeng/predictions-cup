@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "action": "dataset_files",
+  "dataset": "polyleviathan/sig-cup-data003-orderbooks",
+  "page_size": 10000,
+  "note": "EXPERIMENT-005I independent source inventory. Read-only Kaggle dataset API; no 005G artifacts, no HOLDOUT, no MAKE mutation, no SIG orders."
+}

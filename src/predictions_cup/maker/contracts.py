@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from typing import Protocol
 
@@ -20,6 +21,7 @@ class GateMode(StrEnum):
     WIDER = "WIDER"
     BID_ONLY = "BID_ONLY"
     ASK_ONLY = "ASK_ONLY"
+    HOLD = "HOLD"
     CANCEL = "CANCEL"
     SUSPEND = "SUSPEND"
     NO_TRADE = "NO_TRADE"
@@ -40,12 +42,21 @@ class ExternalQuoteState:
     observed_monotonic_ns: int
     trusted: bool
     source_version: str
+    observed_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if not self.token_id.strip() or not self.source_version.strip():
             raise ValueError("external quote identity/version must not be blank")
         if self.observed_monotonic_ns < 0:
             raise ValueError("external quote timestamp must be non-negative")
+        if (
+            self.observed_at is not None
+            and (
+                self.observed_at.tzinfo is None
+                or self.observed_at.utcoffset() is None
+            )
+        ):
+            raise ValueError("external quote observed_at must be timezone-aware")
         for value in (self.best_bid, self.best_ask):
             if value is not None and (not math.isfinite(value) or not 0.0 <= value <= 1.0):
                 raise ValueError("external quote probability must be finite within [0,1]")
@@ -68,6 +79,7 @@ class MakerMarketSnapshot:
     inventory_observed_ns: int
     external_quotes: Mapping[str, ExternalQuoteState]
     volatility: float | None = None
+    external_feed_observed_ns: int | None = None
 
     def __post_init__(self) -> None:
         if not self.exchange_id.strip() or not self.market_id.strip():
@@ -84,6 +96,11 @@ class MakerMarketSnapshot:
             raise ValueError("maker timestamps must be non-negative")
         if self.sig_depth_observed_ns is not None and self.sig_depth_observed_ns < 0:
             raise ValueError("depth timestamp must be non-negative")
+        if (
+            self.external_feed_observed_ns is not None
+            and self.external_feed_observed_ns < 0
+        ):
+            raise ValueError("external feed timestamp must be non-negative")
         if self.volatility is not None and (
             not math.isfinite(self.volatility) or self.volatility < 0.0
         ):

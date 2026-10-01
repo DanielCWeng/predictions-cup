@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "core_surface": "baseline_sep V3 current-universe order-book corpus",
+  "unit": "observable-time market state; no random-row split",
+  "train": {
+    "window_id": "baseline_sep",
+    "start": "2026-09-01T00:00:00Z",
+    "end_inclusive": "2026-09-10T23:59:59.999999Z",
+    "purpose": "state construction, thresholds, transparent regime discovery, candidate generation"
+  },
+  "dev": {
+    "window_id": "baseline_sep",
+    "start": "2026-09-11T00:00:00Z",
+    "end_inclusive": "2026-09-20T23:59:59.999999Z",
+    "purpose": "kill/freeze candidates; no replacement search after DEV rejection"
+  },
+  "holdout": {
+    "window_id": "baseline_sep",
+    "start": "2026-09-21T00:00:00Z",
+    "end_inclusive": "2026-09-28T23:59:59.999999Z",
+    "status": "SEALED",
+    "access_rule": "only after PRE_HOLDOUT_FREEZE.json is committed"
+  },
+  "external_stability": {
+    "windows": [
+      "ev01_tx_ar_nc_primary",
+      "ev02_ms_primary_ga14_special",
+      "ev03_il_primary",
+      "ev04_ar_runoff",
+      "ev05_ms_ga14_runoff",
+      "ev06_nj11_special",
+      "ev07_oh_in_primary",
+      "ev08_ne_nc_wv_la_senate",
+      "ev09_al_ga_id_ky_or_pa_tx",
+      "ev10_ca_ia_mt_nj_nm_sd",
+      "ev11_me_nv_nd_sc",
+      "ev12_al_runoff_dc_ga_runoff",
+      "ev13_md_ny_ut_sc_runoff_la",
+      "ev14_co_primary",
+      "ev15_az_me_sd_ga_special",
+      "ev16_ks_mi_mo_va_wa_tn_la_hi",
+      "ev17_ak_fl_wy",
+      "ev18_ok_sc_runoff_ga_runoff"
+    ],
+    "rule": "robustness/falsification only; may kill or narrow a DEV survivor but may not rescue a rejected candidate or tune a replacement"
+  },
+  "expiration_regime_research": "DEFERRED",
+  "holdout_read": false,
+  "real_sig_orders_sent": false
+}

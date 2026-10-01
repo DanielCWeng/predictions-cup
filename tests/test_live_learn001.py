@@ -388,6 +388,7 @@ def _write_execution_journal(
             CREATE TABLE execution_events (
                 event_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 logical_operation_id TEXT NOT NULL,
+                logical_intent_id TEXT,
                 event_type TEXT NOT NULL,
                 observed_monotonic_ns INTEGER NOT NULL,
                 source_timestamp TEXT,
@@ -399,7 +400,9 @@ def _write_execution_journal(
                 exchange_order_id TEXT,
                 fill_id TEXT,
                 quantity TEXT,
-                price TEXT
+                price TEXT,
+                terminal_status TEXT,
+                detail_json TEXT
             )
             """
         )
@@ -428,32 +431,38 @@ def _write_execution_journal(
         connection.execute(
             """
             INSERT INTO execution_events (
-                logical_operation_id, event_type, observed_monotonic_ns,
-                decision_observation_ns, decision_monotonic_ns, strategy_id,
-                exchange_id, tournament_id
-            ) VALUES (?, 'SUBMISSION', ?, ?, ?, ?, ?, ?)
+                logical_operation_id, logical_intent_id, event_type,
+                observed_monotonic_ns, decision_observation_ns,
+                decision_monotonic_ns, strategy_id, exchange_id, tournament_id,
+                quantity, detail_json
+            ) VALUES (?, ?, 'SUBMISSION', ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 "op-1",
+                "intent-1",
                 decision.monotonic_time,
                 decision.monotonic_time,
                 decision.monotonic_time,
                 decision.candidate_id,
                 decision.exchange_id,
                 decision.tournament_id,
+                "10",
+                json.dumps({"action": "buy", "outcome_side": "yes"}),
             ),
         )
         for event_type, fill_id, quantity, price, filled_at, observed_ns in rows:
             connection.execute(
                 """
                 INSERT INTO execution_events (
-                    logical_operation_id, event_type, observed_monotonic_ns,
-                    source_timestamp, exchange_order_id, fill_id, quantity, price,
-                    exchange_id, tournament_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    logical_operation_id, logical_intent_id, event_type,
+                    observed_monotonic_ns, source_timestamp, exchange_order_id,
+                    fill_id, quantity, price, exchange_id, tournament_id,
+                    terminal_status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     "op-1",
+                    "intent-1",
                     event_type,
                     observed_ns,
                     filled_at.isoformat(),
@@ -463,6 +472,7 @@ def _write_execution_journal(
                     str(price),
                     decision.exchange_id,
                     decision.tournament_id,
+                    "FILLED" if event_type == "FILL_SUMMARY" else None,
                 ),
             )
         connection.commit()
@@ -566,6 +576,59 @@ def test_conflicting_authoritative_fill_duplicate_fails_closed(
         )
         assert not evidence.supported
         assert evidence.reason == "conflicting_authoritative_fill_evidence"
+        assert evidence.planned_quantity == pytest.approx(10.0)
+        assert evidence.fills == ()
+
+    asyncio.run(run())
+
+
+def test_realtime_only_fill_is_explicitly_provisional(
+    tmp_path: Path,
+) -> None:
+    async def run() -> None:
+        observed = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)
+        decision = _decision(_snapshot(observed, now_ns=1_000_000_000))
+        filled_at = observed + timedelta(milliseconds=200)
+        journal = tmp_path / "execution.sqlite3"
+        _write_execution_journal(
+            journal,
+            decision,
+            (
+                ("REALTIME_FILL", None, 5.0, 0.49, filled_at, 1_200_000_000),
+                ("REALTIME_FILL", None, 5.0, 0.49, filled_at, 1_300_000_000),
+            ),
+        )
+        evidence = await JournalExecutionEvidenceProvider(journal).evidence_for(
+            decision,
+            maturity_at=observed + timedelta(seconds=1),
+        )
+        assert not evidence.supported
+        assert (
+            evidence.reason
+            == "provisional_fill_evidence_requires_authoritative_reconciliation"
+        )
+        assert evidence.planned_quantity == pytest.approx(10.0)
+        assert len(evidence.fills) == 1
+        assert evidence.fills[0].quantity == pytest.approx(5.0)
+        assert evidence.fills[0].evidence_id.startswith("sig-realtime:")
+
+    asyncio.run(run())
+
+
+def test_missing_fill_coverage_is_not_supported_zero(
+    tmp_path: Path,
+) -> None:
+    async def run() -> None:
+        observed = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)
+        decision = _decision(_snapshot(observed, now_ns=1_000_000_000))
+        journal = tmp_path / "execution.sqlite3"
+        _write_execution_journal(journal, decision, ())
+        evidence = await JournalExecutionEvidenceProvider(journal).evidence_for(
+            decision,
+            maturity_at=observed + timedelta(seconds=1),
+        )
+        assert not evidence.supported
+        assert evidence.reason == "fill_evidence_incomplete"
         assert evidence.planned_quantity == pytest.approx(10.0)
         assert evidence.fills == ()
 

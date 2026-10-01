@@ -11,7 +11,7 @@ from predictions_cup.execution.models import ExecutionEvent, ExecutionMode, Life
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
-from predictions_cup.maker.contracts import MakerDecision, MakerMarketSnapshot, QuoteSide
+from predictions_cup.maker.contracts import GateMode, MakerDecision, MakerMarketSnapshot, QuoteSide
 from predictions_cup.maker.engine import MakerEngine
 from predictions_cup.maker.lifecycle import (
     ActiveQuote,
@@ -24,6 +24,7 @@ from predictions_cup.maker.safety import MakerKillSwitch
 from predictions_cup.observe.contracts import ObservationEmitter, ObservationKind, VenueObservation
 from predictions_cup.risk.core import RiskContext, RiskDecision, evaluate_risk
 from predictions_cup.runtime.models import OrderAction, OutcomeSide
+from predictions_cup.sig.errors import SigApiError, SigExecutionUncertainError
 from predictions_cup.strategy.core import CandidateLeg, Opportunity, StrategyFamily
 
 PlacementDispatcher = Callable[
@@ -155,10 +156,27 @@ class MakerCoordinator:
                 else self._risk_context_source
             )
             capital = current_risk_context.capital_state
+            mark_state_stale = (
+                capital is not None
+                and current_risk_context.max_mark_age_ns is not None
+                and capital.oldest_mark_observed_monotonic_ns is not None
+                and (
+                    snapshot.runtime.observation_monotonic_ns
+                    - capital.oldest_mark_observed_monotonic_ns
+                )
+                > current_risk_context.max_mark_age_ns
+            )
+            # Invalid/stale portfolio valuation is different from a transient
+            # account resync. Existing resting quotes can add exposure while they
+            # remain live, so valuation failure must withdraw them even when the
+            # desired price/size is otherwise unchanged. Account reconciliation
+            # alone remains HOLD unless a halt/kill switch says otherwise.
             capital_force_cancel = (
                 capital is not None
                 and (
-                    (
+                    not capital.marks_trusted
+                    or mark_state_stale
+                    or (
                         capital.global_halt is not None
                         and capital.global_halt.active
                     )
@@ -166,9 +184,33 @@ class MakerCoordinator:
                         self._engine.strategy_id,
                         StrategyFamily.MAKE.value,
                     )
+                    # Invalid portfolio valuation is a retention failure, not
+                    # merely a fresh-admission failure. Resting risk comes off.
+                    or not capital.marks_trusted
                 )
             )
             force_cancel = self._kill_switch.active or capital_force_cancel
+            if decision.gate.mode is GateMode.HOLD and not force_cancel:
+                # Reconciliation HOLD freezes the current quote set exactly:
+                # no fresh placement, no reprice, no cancel storm. Invalid
+                # valuation/halts still win through force_cancel above.
+                actions.extend(
+                    (
+                        QuoteLifecycleAction(
+                            QuoteLifecycleActionKind.KEEP,
+                            QuoteSide.BID,
+                            "transient_account_hold",
+                            active=current.bid,
+                        ),
+                        QuoteLifecycleAction(
+                            QuoteLifecycleActionKind.KEEP,
+                            QuoteSide.ASK,
+                            "transient_account_hold",
+                            active=current.ask,
+                        ),
+                    )
+                )
+                continue
             desired = None if force_cancel else decision.desired
             side_actions = self._lifecycle.decide(
                 desired=desired,
@@ -211,6 +253,27 @@ class MakerCoordinator:
                         logical_id,
                         snapshot.tournament_id,
                     )
+                except (SigExecutionUncertainError, SigApiError) as exc:
+                    # Routine venue outcomes are exchange-local. Keep economic
+                    # exposure conservative and let authoritative reconciliation
+                    # resolve it without killing the maker process.
+                    self._registry.mark_lifecycle(
+                        exchange_id=exchange_id,
+                        side=action.side,
+                        lifecycle_state=LifecycleState.UNCERTAIN,
+                        observed_monotonic_ns=change.observed_monotonic_ns,
+                    )
+                    events.append(
+                        ExecutionEvent(
+                            logical_operation_id=logical_id,
+                            state=LifecycleState.UNCERTAIN,
+                            observed_monotonic_ns=change.observed_monotonic_ns,
+                            simulated=False,
+                            detail=type(exc).__name__,
+                        )
+                    )
+                    cancelled_side = True
+                    continue
                 except BaseException:
                     self._registry.mark_lifecycle(
                         exchange_id=exchange_id,
@@ -301,10 +364,64 @@ class MakerCoordinator:
 
             try:
                 event = await self._placement_dispatch(plan, snapshot)
+            except SigExecutionUncertainError as exc:
+                # Same-key retries/reconciliation own the unresolved economics.
+                # Keep the BUILD-009 reservation and block this quote locally.
+                for action in place_actions:
+                    self._registry.mark_lifecycle(
+                        exchange_id=exchange_id,
+                        side=action.side,
+                        lifecycle_state=LifecycleState.UNCERTAIN,
+                        observed_monotonic_ns=change.observed_monotonic_ns,
+                    )
+                events.append(
+                    ExecutionEvent(
+                        logical_operation_id=logical_operation_id,
+                        state=LifecycleState.UNCERTAIN,
+                        observed_monotonic_ns=change.observed_monotonic_ns,
+                        simulated=False,
+                        detail=type(exc).__name__,
+                    )
+                )
+                continue
+            except SigApiError as exc:
+                # SigLiveSink conclusively records REJECTED and releases the
+                # operation reservation exactly once before surfacing this.
+                retained = (
+                    self._reservations is not None
+                    and self._reservations.contains_operation(
+                        logical_operation_id,
+                        plan.envelope.intent_ids,
+                    )
+                )
+                if retained:
+                    for action in place_actions:
+                        self._registry.mark_lifecycle(
+                            exchange_id=exchange_id,
+                            side=action.side,
+                            lifecycle_state=LifecycleState.UNCERTAIN,
+                            observed_monotonic_ns=change.observed_monotonic_ns,
+                        )
+                    terminal = LifecycleState.UNCERTAIN
+                else:
+                    for action in place_actions:
+                        self._registry.clear_side(
+                            exchange_id=exchange_id,
+                            side=action.side,
+                            observed_monotonic_ns=change.observed_monotonic_ns,
+                        )
+                    terminal = LifecycleState.REJECTED
+                events.append(
+                    ExecutionEvent(
+                        logical_operation_id=logical_operation_id,
+                        state=terminal,
+                        observed_monotonic_ns=change.observed_monotonic_ns,
+                        simulated=False,
+                        detail=type(exc).__name__,
+                    )
+                )
+                continue
             except BaseException:
-                # Terminal rejection releases BUILD-009 risk reservation. If the
-                # reservation still exists the economic outcome is unresolved and
-                # local lifecycle must remain blocked pending reconciliation.
                 retained = (
                     self._reservations is not None
                     and self._reservations.contains_operation(

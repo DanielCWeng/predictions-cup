@@ -1,0 +1,14 @@
+[Unit]
+Description=Predictions Cup atomic launch status snapshot
+OnFailure=predictions-cup-alert@%n.service
+
+[Service]
+Type=oneshot
+User=@@RUNTIME_USER@@
+WorkingDirectory=@@REPO_ROOT@@
+EnvironmentFile=@@RUNTIME_ENV@@
+Environment=PYTHONUNBUFFERED=1
+UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL
+ExecStart=@@PYTHON_BIN@@ -m predictions_cup.fullstack status --json --write --runtime-env-only
+UMask=0077
+NoNewPrivileges=true

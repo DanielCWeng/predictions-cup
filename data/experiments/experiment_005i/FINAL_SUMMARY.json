@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "status": "COMPLETE",
+  "headline": "Five of five preregistered HOLDOUT confirmation gates supported.",
+  "confirmed_mechanisms": [
+    "Five-minute mean reversion is broad and robust across time, move magnitude, probability region, relative spread and transparent state; the 55,340 qualifying sampled minute-states/move observations are serially dependent because adjacent five-minute forward windows overlap and must not be treated as independent episodes.",
+    "Depth-normalised BBO OFI carries small but stable incremental information beyond a frozen simple baseline; its naive sign is often contrarian.",
+    "PRICE_DISCOVERY is a short-lived high-activity large-move state, not a generic momentum regime; its observed transition into POST_SHOCK is partly mechanical by taxonomy construction and is descriptive rather than an independently discovered economic transition mechanism.",
+    "LIQUIDITY_STRESS is metastable and has a meaningful transition path into REPLENISHMENT.",
+    "Visible replenishment after withdrawal is associated with substantially lower subsequent absolute price movement."
+  ],
+  "important_negatives": [
+    "Microprice did not add meaningful incremental directional value.",
+    "Raw event OFI, generic visible multi-level flow, generic LOB shape, generic common-liquidity direction and generic age direction did not earn promotion.",
+    "HMM and Hawkes complexity was not justified.",
+    "No claim is made that the confirmed mechanisms are executable after fees, queue position, latency and fill selection."
+  ],
+  "execution_boundary": "Route survivors to replay/live diagnostics first. Do not wire directly into MAKE from this experiment.",
+  "routes": {
+    "MM_REPLAY": [
+      "FIVE_MINUTE_MEAN_REVERSION",
+      "DEPTH_NORMALISED_OFI",
+      "PRICE_DISCOVERY",
+      "LIQUIDITY_STRESS",
+      "RESILIENCE_REPLENISHMENT",
+      "QUOTE_LIFETIME_UPDATE_HAZARD"
+    ],
+    "LIVE_DIAG": [
+      "DEPTH_NORMALISED_OFI",
+      "PRICE_DISCOVERY",
+      "LIQUIDITY_STRESS",
+      "RESILIENCE_REPLENISHMENT",
+      "FLOW_PERSISTENCE",
+      "QUOTE_LIFETIME_UPDATE_HAZARD",
+      "COMMON_LIQUIDITY"
+    ],
+    "SHADOW_AFTER_REPLAY": [
+      "FIVE_MINUTE_MEAN_REVERSION",
+      "DEPTH_NORMALISED_OFI",
+      "LIQUIDITY_STRESS"
+    ],
+    "FUTURE_CONFIRMATION_REQUIRED": [
+      "FLOW_PERSISTENCE",
+      "PRESSURE_PROXY",
+      "KYLE_AMIHUD_IMPACT"
+    ]
+  },
+  "holdout_artifact_sha256": "06ac9c648d9caf935ef50cba1de758f99557704411a6406421fe7d25bc8dd1b5",
+  "holdout_read": true,
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}

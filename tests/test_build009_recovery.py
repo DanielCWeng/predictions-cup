@@ -20,7 +20,11 @@ from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import ExecutionMode, LifecycleState, OperationKind
 from predictions_cup.execution.planner import build_execution_plan
-from predictions_cup.execution.recovery import RecoveryRest, recover_startup
+from predictions_cup.execution.recovery import (
+    RecoveryRest,
+    recover_in_session_cancellations,
+    recover_startup,
+)
 from predictions_cup.execution.replacement import quote_replacement_allowed
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.observe import (
@@ -418,6 +422,7 @@ def _recovery_permit() -> LiveExecutionPermit:
         global_kill_switch=False,
         risk_max_order_size=10,
         risk_max_gross_exposure=100.0,
+        risk_max_tournament_exposure=100.0,
         risk_max_per_market_exposure=100.0,
         risk_max_open_order_exposure=100.0,
         risk_max_concurrent_open_orders=10,
@@ -448,6 +453,48 @@ class _OpenOrderRecoveryRest(_RecoveryRestFixture):
                 "expirationDate": None,
             }
         )
+
+
+def test_in_session_recovery_resolves_uncertain_cancel_without_restart(
+    tmp_path: Path,
+) -> None:
+    from predictions_cup.execution.models import ExecutionEnvelope
+
+    journal = ExecutionJournal(tmp_path / "in-session-cancel.sqlite3")
+    cancel = ExecutionEnvelope.cancellation(
+        logical_operation_id="cancel-in-session-91",
+        operation_kind=OperationKind.SINGLE_CANCELLATION,
+        sink_mode=ExecutionMode.LIVE,
+        created_monotonic_ns=100,
+        order_id=91,
+        tournament_id="t1",
+    )
+    journal.record_before_dispatch(cancel, submitted_monotonic_ns=101)
+    journal.mark_state(cancel.logical_operation_id, LifecycleState.UNCERTAIN, 102)
+
+    trading = _RecoveryTradingFixture()
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, trading),
+        journal=journal,
+        permit=_recovery_permit(),
+        reservations=ExecutionReservationBook(),
+        clock_ns=iter(range(200, 500)).__next__,
+    )
+    try:
+        resolved = asyncio.run(
+            recover_in_session_cancellations(
+                journal=journal,
+                rest=cast(RecoveryRest, _OpenOrderRecoveryRest()),
+                live_sink=sink,
+                tournament_id="t1",
+                clock_ns=iter(range(500, 800)).__next__,
+            )
+        )
+        assert resolved == ("cancel-in-session-91",)
+        assert trading.cancelled_order_ids == [91]
+        assert journal.unresolved() == ()
+    finally:
+        journal.close()
 
 
 def test_recovery_only_authority_cancels_unresolved_open_order_but_cannot_place(
@@ -604,6 +651,7 @@ def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
                 clock_ns=iter(range(900, 1200)).__next__,
                 observation_emitter=emitter,
                 observation_process_instance_id="recovery-test-process",
+                placement_replay_allowed=lambda _envelope: True,
             )
         )
         emitter.close()

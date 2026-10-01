@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from predictions_cup.execution.models import RuntimeOrderIntent
 from predictions_cup.runtime.models import (
@@ -16,6 +17,8 @@ from predictions_cup.runtime.models import (
 class ExecutionReservation:
     logical_operation_id: str
     order: RuntimeOrderState
+    exchange_order_id: str | None = None
+    acknowledged_at: datetime | None = None
 
 
 class ExecutionReservationBook:
@@ -29,6 +32,7 @@ class ExecutionReservationBook:
 
     def __init__(self) -> None:
         self._by_intent: dict[str, ExecutionReservation] = {}
+        self._intent_by_exchange_order: dict[str, str] = {}
 
     def reserve(
         self,
@@ -64,6 +68,62 @@ class ExecutionReservationBook:
         for intent_id, reservation in pending:
             self._by_intent[intent_id] = reservation
 
+    def bind_exchange_order(
+        self,
+        intent_id: str,
+        exchange_order_id: str,
+        *,
+        acknowledged_at: datetime,
+    ) -> None:
+        if acknowledged_at.tzinfo is None or acknowledged_at.utcoffset() is None:
+            raise ValueError("acknowledged_at must be timezone-aware")
+        if not exchange_order_id.strip():
+            raise ValueError("exchange_order_id must not be blank")
+        reservation = self._by_intent.get(intent_id)
+        if reservation is None:
+            raise KeyError(f"unknown logical intent reservation: {intent_id}")
+        prior_intent = self._intent_by_exchange_order.get(exchange_order_id)
+        if prior_intent is not None and prior_intent != intent_id:
+            raise ValueError("exchange order identity cannot bind to multiple intents")
+        if (
+            reservation.exchange_order_id is not None
+            and reservation.exchange_order_id != exchange_order_id
+        ):
+            raise ValueError("logical intent cannot bind to multiple exchange orders")
+        self._by_intent[intent_id] = ExecutionReservation(
+            logical_operation_id=reservation.logical_operation_id,
+            order=reservation.order,
+            exchange_order_id=exchange_order_id,
+            acknowledged_at=acknowledged_at,
+        )
+        self._intent_by_exchange_order[exchange_order_id] = intent_id
+
+    def reservation_for_exchange_order_id(
+        self,
+        exchange_order_id: str,
+    ) -> ExecutionReservation | None:
+        intent_id = self._intent_by_exchange_order.get(exchange_order_id)
+        if intent_id is None:
+            return None
+        return self._by_intent.get(intent_id)
+
+    def reconcile_authoritative(self, *, observed_at: datetime) -> int:
+        """Drop only reservations definitely covered by a non-stale snapshot."""
+        if observed_at.tzinfo is None or observed_at.utcoffset() is None:
+            raise ValueError("authoritative observed_at must be timezone-aware")
+        releasable = tuple(
+            intent_id
+            for intent_id, reservation in self._by_intent.items()
+            if reservation.exchange_order_id is not None
+            and reservation.acknowledged_at is not None
+            and reservation.acknowledged_at <= observed_at
+        )
+        for intent_id in releasable:
+            reservation = self._by_intent.pop(intent_id)
+            assert reservation.exchange_order_id is not None
+            self._intent_by_exchange_order.pop(reservation.exchange_order_id, None)
+        return len(releasable)
+
     def contains_operation(
         self,
         logical_operation_id: str,
@@ -89,7 +149,12 @@ class ExecutionReservationBook:
             if reservation.logical_operation_id == logical_operation_id
         )
         for intent_id in intent_ids:
-            del self._by_intent[intent_id]
+            reservation = self._by_intent.pop(intent_id)
+            if reservation.exchange_order_id is not None:
+                self._intent_by_exchange_order.pop(
+                    reservation.exchange_order_id,
+                    None,
+                )
         return len(intent_ids)
 
     def intent_ids(self) -> frozenset[str]:
@@ -100,6 +165,7 @@ class ExecutionReservationBook:
 
     def clear_after_authoritative_reconciliation(self) -> None:
         self._by_intent.clear()
+        self._intent_by_exchange_order.clear()
 
     def overlay_snapshot(self, snapshot: RuntimeSnapshot) -> RuntimeSnapshot:
         existing_ids = {

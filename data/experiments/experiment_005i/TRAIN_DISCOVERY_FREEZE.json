@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "phase": "TRAIN_DISCOVERY_FREEZE",
+  "evidence_surface": "five disjoint 48-hour TRAIN workers covering 2026-09-01..2026-09-10; each worker emits stratified minute-state samples from its full hourly panel",
+  "artifact_digests": {
+    "train-w0": "sha256:42a12561b41bfdecb7e0bead1fb9844450d364211054cbb98e11eba8671fca9b",
+    "train-w1": "sha256:a8c5599941e1604dd397d653eff2129a04b8ba2a07661367446c4cbeba9d5e6f",
+    "train-w2": "sha256:5ae8ef419fe9ed220ce8ad2883431f3c5f9b3374559d3a986c76d44410d4a106",
+    "train-w3": "sha256:627524d514a010cb2f7d4430877d7af4950133fb01be70169d4fd87b4614c83c",
+    "train-w4": "sha256:6af4fc5cf9c175d773294be6f3684f6fd338b1f1dd3fbab045fac1c27ff8a712"
+  },
+  "candidates": {
+    "OFI_INCREMENTAL": {
+      "status": "ADVANCE_TO_DEV",
+      "target": "sign(future_ret_1m) conditional on non-zero 1m move",
+      "baseline_features": [
+        "mid",
+        "relative_spread",
+        "depth_total5",
+        "quote_events",
+        "rv_5m",
+        "imbalance1",
+        "ret_1m",
+        "ret_5m"
+      ],
+      "challenger_addition": [
+        "ofi_depth_norm"
+      ],
+      "fixed_model": "StandardScaler + LogisticRegression(C=0.1,max_iter=1000)",
+      "temporal_leave_one_worker_out": [
+        {
+          "worker": "train-w0",
+          "n": 4184,
+          "baseline_logloss": 0.6696253257172076,
+          "challenger_logloss": 0.6670228503797981,
+          "logloss_improvement": 0.0026024753374094267
+        },
+        {
+          "worker": "train-w1",
+          "n": 5350,
+          "baseline_logloss": 0.6597965514582116,
+          "challenger_logloss": 0.6528624604845751,
+          "logloss_improvement": 0.006934090973636509
+        },
+        {
+          "worker": "train-w2",
+          "n": 8038,
+          "baseline_logloss": 0.6584481121628526,
+          "challenger_logloss": 0.6557853043605499,
+          "logloss_improvement": 0.002662807802302658
+        },
+        {
+          "worker": "train-w3",
+          "n": 8016,
+          "baseline_logloss": 0.6500233027385007,
+          "challenger_logloss": 0.6458824533098931,
+          "logloss_improvement": 0.004140849428607596
+        },
+        {
+          "worker": "train-w4",
+          "n": 7011,
+          "baseline_logloss": 0.6577682325572143,
+          "challenger_logloss": 0.6523812793440681,
+          "logloss_improvement": 0.005386953213146195
+        }
+      ],
+      "dev_gate": "positive log-loss improvement against frozen baseline on DEV; report AUC but do not optimize to it; assess market/time stability and price/relative-spread confounding"
+    },
+    "FIVE_MINUTE_REVERSAL": {
+      "status": "ADVANCE_TO_DEV",
+      "definition": "rows with non-zero ret_5m and non-zero future_ret_5m; continuation iff signs match",
+      "train_workers": [
+        {
+          "worker": "train-w0",
+          "n": 4709,
+          "continuation_rate": 0.3064344871522616
+        },
+        {
+          "worker": "train-w1",
+          "n": 6128,
+          "continuation_rate": 0.3105417754569191
+        },
+        {
+          "worker": "train-w2",
+          "n": 8616,
+          "continuation_rate": 0.3490018570102136
+        },
+        {
+          "worker": "train-w3",
+          "n": 9191,
+          "continuation_rate": 0.2919160047872919
+        },
+        {
+          "worker": "train-w4",
+          "n": 8144,
+          "continuation_rate": 0.2975196463654224
+        }
+      ],
+      "dev_gate": "reversal rate remains >0.60 overall and does not collapse after conditioning on price region plus relative spread / observed step; report support by market and episode"
+    },
+    "MICROPRICE_INCREMENTAL": {
+      "status": "KILL_BEFORE_DEV",
+      "reason": "incremental log-loss versus the same frozen baseline is negligible across TRAIN and negative in one temporal shard",
+      "temporal_logloss_improvement": [
+        0.00010088720009338026,
+        0.00009402355954779562,
+        0.00018439432128902755,
+        -0.00036196169480406937,
+        0.00016999155888619555
+      ]
+    },
+    "ORDER_FLOW_PERSISTENCE": {
+      "status": "DEV_SURVIVOR_DESCRIPTIVE",
+      "reference": "data/experiments/experiment_005i/FLOW_PERSISTENCE_DEV_FREEZE.json"
+    }
+  },
+  "pending_non_sampled_questions": [
+    "transparent regime occupancy/duration/transition structure",
+    "regime-conditioned OFI/reversal",
+    "liquidity drought and resilience/replenishment",
+    "quote/trade event hazards",
+    "common-liquidity incremental structure"
+  ],
+  "sample_boundary": "TRAIN minute-state samples are deliberately stratified toward depth-trusted and active rows. They are acceptable for candidate ranking but not for unbiased regime occupancy or transition-frequency claims.",
+  "holdout_read": false,
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}

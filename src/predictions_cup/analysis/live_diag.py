@@ -1,0 +1,1534 @@
+"""First-hours economic diagnostics over existing CAPTURE, OBSERVE and LIVE-LEARN evidence."""
+
+from __future__ import annotations
+
+import bisect
+import json
+import math
+import os
+import random
+import statistics
+from collections import defaultdict
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
+from pathlib import Path
+
+import pyarrow as pa
+import pyarrow.dataset as ds
+import pyarrow.parquet as pq
+
+from predictions_cup.analysis.evidence import (
+    AnalysisEvidence,
+    AnalysisUncertainty,
+    canonical_config_hash,
+    sha256_file,
+    write_evidence,
+)
+from predictions_cup.live_learn.contracts import OutcomeStatus, outcome_from_record
+from predictions_cup.mapping.crosswalk import load_document
+from predictions_cup.mapping.models import MappingDirection
+from predictions_cup.risk.groups import load_exposure_group_provider
+from predictions_cup.runtime.models import SIG_TICK
+from predictions_cup.shadow.replay import load_persisted_snapshots
+
+ANALYSIS_VERSION = "live-diag-001-v1"
+DEFAULT_THRESHOLDS_TICKS = (1, 2, 3, 5)
+DEFAULT_HORIZONS_SECONDS = (1, 5, 15, 30, 60, 300)
+SIG_TICK_SIZE = float(SIG_TICK)
+
+
+class ResearchStatus(StrEnum):
+    MONETIZABLE_CANDIDATE = "MONETIZABLE_CANDIDATE"
+    DESCRIPTIVE_ONLY = "DESCRIPTIVE_ONLY"
+    TOO_FAST_TO_MONETIZE = "TOO_FAST_TO_MONETIZE"
+    NO_EXECUTABLE_EDGE = "NO_EXECUTABLE_EDGE"
+    NEGATIVE_ECONOMICS = "NEGATIVE_ECONOMICS"
+    INSUFFICIENT_DEPTH = "INSUFFICIENT_DEPTH"
+    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
+    INCONCLUSIVE = "INCONCLUSIVE"
+
+
+class MarketRecommendation(StrEnum):
+    QUOTE_MORE = "QUOTE_MORE"
+    QUOTE_NORMAL = "QUOTE_NORMAL"
+    WIDEN = "WIDEN"
+    ONE_SIDED = "ONE_SIDED"
+    PAUSE = "PAUSE"
+    NO_DATA = "NO_DATA"
+
+
+@dataclass(frozen=True, slots=True)
+class Quote:
+    observed_at: datetime
+    best_bid: float
+    best_ask: float
+    bid_depth: float | None = None
+    ask_depth: float | None = None
+    depth_observed_at: datetime | None = None
+    trusted: bool = True
+
+    @property
+    def midpoint(self) -> float:
+        return (self.best_bid + self.best_ask) / 2.0
+
+    @property
+    def spread(self) -> float:
+        return self.best_ask - self.best_bid
+
+
+@dataclass(frozen=True, slots=True)
+class GapTrigger:
+    trigger_id: str
+    observed_at: datetime
+    threshold_ticks: int
+    external_fv: float
+    sig_quote: Quote
+    signed_gap: float
+
+
+@dataclass(frozen=True, slots=True)
+class SnapbackObservation:
+    trigger_id: str
+    horizon_seconds: int
+    residual_gap: float
+    residual_ratio: float
+    fraction_closed: float
+    sig_move: float
+    same_direction_sig_response: bool
+    overshoot: bool
+    full_close: bool
+
+
+@dataclass(frozen=True, slots=True)
+class LeadLagObservation:
+    impulse_id: str
+    external_observed_at: datetime
+    external_move: float
+    lead_seconds: float | None
+    sig_response_at: datetime | None
+    same_direction: bool | None
+    sig_bid_at_trigger: float | None
+    sig_ask_at_trigger: float | None
+    available_depth: float | None
+    gross_executable_edge: float | None
+    latency_ms: float
+    latency_adjusted_executable_price: float | None
+    latency_adjusted_edge: float | None
+    signal_half_life: float | None
+    status: ResearchStatus
+    reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class InventoryPoint:
+    observed_at: datetime
+    inventory: float
+    capital_at_risk: float
+
+
+@dataclass(frozen=True, slots=True)
+class InventorySummary:
+    peak_abs_inventory: float
+    inventory_time_weighted_abs: float | None
+    time_to_flat_distribution: tuple[float, ...]
+    inventory_half_life: float | None
+    returns_to_flat_count: int
+    time_above_25pct_limit: float | None
+    time_above_50pct_limit: float | None
+    time_above_75pct_limit: float | None
+    capital_seconds_consumed: float
+    episode_count: int
+
+
+def align_probability(value: float, direction: MappingDirection) -> float:
+    if direction is MappingDirection.SAME:
+        return value
+    if direction is MappingDirection.COMPLEMENT:
+        return 1.0 - value
+    raise ValueError("LIVE-DIAG requires SAME or COMPLEMENT direct mapping")
+
+
+def _times(quotes: Sequence[Quote]) -> list[datetime]:
+    return [item.observed_at for item in quotes]
+
+
+def _asof(
+    quotes: Sequence[Quote],
+    at: datetime,
+    *,
+    max_age_seconds: float | None = None,
+) -> Quote | None:
+    if not quotes:
+        return None
+    index = bisect.bisect_right(_times(quotes), at) - 1
+    if index < 0:
+        return None
+    quote = quotes[index]
+    if max_age_seconds is not None:
+        age = (at - quote.observed_at).total_seconds()
+        if age < 0.0 or age > max_age_seconds:
+            return None
+    return quote
+
+
+def _economic(quotes: Sequence[Quote]) -> tuple[Quote, ...]:
+    result: list[Quote] = []
+    for item in sorted(quotes, key=lambda quote: quote.observed_at):
+        if not item.trusted or item.best_ask < item.best_bid:
+            continue
+        if result and (result[-1].best_bid, result[-1].best_ask) == (
+            item.best_bid,
+            item.best_ask,
+        ):
+            continue
+        result.append(item)
+    return tuple(result)
+
+
+def construct_gap_episodes(
+    *,
+    sig_quotes: Sequence[Quote],
+    external_quotes: Sequence[Quote],
+    threshold_ticks: int,
+    tick_size: float = SIG_TICK_SIZE,
+    max_quote_age_seconds: float = 15.0,
+) -> tuple[GapTrigger, ...]:
+    """Create independent threshold-crossing episodes using only observable-as-of state."""
+    if threshold_ticks <= 0 or tick_size <= 0:
+        raise ValueError("threshold_ticks and tick_size must be positive")
+    sig = _economic(sig_quotes)
+    external = _economic(external_quotes)
+    threshold = threshold_ticks * tick_size
+    timestamps = sorted(
+        {item.observed_at for item in sig} | {item.observed_at for item in external}
+    )
+    active = False
+    output: list[GapTrigger] = []
+    for at in timestamps:
+        sig_quote = _asof(sig, at, max_age_seconds=max_quote_age_seconds)
+        external_quote = _asof(
+            external,
+            at,
+            max_age_seconds=max_quote_age_seconds,
+        )
+        if sig_quote is None or external_quote is None:
+            continue
+        gap = external_quote.midpoint - sig_quote.midpoint
+        over = abs(gap) >= threshold
+        if over and not active:
+            output.append(
+                GapTrigger(
+                    trigger_id=(
+                        f"{at.astimezone(UTC).isoformat()}:{threshold_ticks}:{len(output)}"
+                    ),
+                    observed_at=at,
+                    threshold_ticks=threshold_ticks,
+                    external_fv=external_quote.midpoint,
+                    sig_quote=sig_quote,
+                    signed_gap=gap,
+                )
+            )
+        active = over
+    return tuple(output)
+
+
+def observe_snapback(
+    *,
+    triggers: Sequence[GapTrigger],
+    sig_quotes: Sequence[Quote],
+    external_quotes: Sequence[Quote],
+    horizons_seconds: Sequence[int] = DEFAULT_HORIZONS_SECONDS,
+    tick_size: float = SIG_TICK_SIZE,
+    max_quote_age_seconds: float = 15.0,
+) -> tuple[SnapbackObservation, ...]:
+    """Score future residual gaps without feeding future evidence into the trigger."""
+    sig = _economic(sig_quotes)
+    external = _economic(external_quotes)
+    output: list[SnapbackObservation] = []
+    for trigger in triggers:
+        for horizon in horizons_seconds:
+            at = trigger.observed_at + timedelta(seconds=horizon)
+            future_sig = _asof(
+                sig,
+                at,
+                max_age_seconds=max_quote_age_seconds,
+            )
+            future_external = _asof(
+                external,
+                at,
+                max_age_seconds=max_quote_age_seconds,
+            )
+            if future_sig is None or future_external is None:
+                continue
+            residual = future_external.midpoint - future_sig.midpoint
+            ratio = residual / trigger.signed_gap
+            fraction_closed = 1.0 - ratio
+            sig_move = future_sig.midpoint - trigger.sig_quote.midpoint
+            output.append(
+                SnapbackObservation(
+                    trigger_id=trigger.trigger_id,
+                    horizon_seconds=horizon,
+                    residual_gap=residual,
+                    residual_ratio=ratio,
+                    fraction_closed=fraction_closed,
+                    sig_move=sig_move,
+                    same_direction_sig_response=sig_move * trigger.signed_gap > 0.0,
+                    overshoot=ratio < 0.0,
+                    full_close=abs(residual) <= tick_size / 2.0,
+                )
+            )
+    return tuple(output)
+
+
+def _median(values: Iterable[float]) -> float | None:
+    materialized = tuple(values)
+    return None if not materialized else float(statistics.median(materialized))
+
+
+def _bootstrap_median(values: Sequence[float]) -> AnalysisUncertainty:
+    if len(values) < 10:
+        return AnalysisUncertainty(
+            point_estimate=_median(values),
+            interval=None,
+            method=None,
+            cluster_unit="gap_episode",
+            support=len(values),
+            reason="INSUFFICIENT_INDEPENDENT_EVENTS",
+        )
+    rng = random.Random(0)
+    estimates = sorted(
+        float(statistics.median(rng.choices(values, k=len(values)))) for _ in range(500)
+    )
+    return AnalysisUncertainty(
+        point_estimate=float(statistics.median(values)),
+        interval=(estimates[11], estimates[487]),
+        method="episode_bootstrap_percentile",
+        cluster_unit="gap_episode",
+        support=len(values),
+    )
+
+
+def summarize_snapback(
+    *,
+    triggers: Sequence[GapTrigger],
+    observations: Sequence[SnapbackObservation],
+    horizons_seconds: Sequence[int] = DEFAULT_HORIZONS_SECONDS,
+) -> dict[str, object]:
+    grouped: dict[int, list[SnapbackObservation]] = defaultdict(list)
+    by_trigger: dict[str, list[SnapbackObservation]] = defaultdict(list)
+    for item in observations:
+        grouped[item.horizon_seconds].append(item)
+        by_trigger[item.trigger_id].append(item)
+    half_lives: list[float] = []
+    for values in by_trigger.values():
+        for item in sorted(values, key=lambda value: value.horizon_seconds):
+            if abs(item.residual_ratio) <= 0.5:
+                half_lives.append(float(item.horizon_seconds))
+                break
+    summary: dict[str, object] = {
+        "trigger_count": len(triggers),
+        "independent_event_count": len(triggers),
+        "estimated_residual_half_life": _median(half_lives),
+    }
+    for horizon in horizons_seconds:
+        values = grouped[horizon]
+        fractions = [item.fraction_closed for item in values]
+        summary[f"residual_gap_{horizon}s"] = _median(
+            item.residual_gap for item in values
+        )
+        summary[f"residual_ratio_{horizon}s"] = _median(
+            item.residual_ratio for item in values
+        )
+        summary[f"fraction_gap_closed_{horizon}s"] = _median(fractions)
+        summary[f"full_close_rate_{horizon}s"] = (
+            None if not values else sum(item.full_close for item in values) / len(values)
+        )
+        summary[f"same_direction_sig_response_rate_{horizon}s"] = (
+            None
+            if not values
+            else sum(item.same_direction_sig_response for item in values) / len(values)
+        )
+        summary[f"overshoot_rate_{horizon}s"] = (
+            None if not values else sum(item.overshoot for item in values) / len(values)
+        )
+    return summary
+
+
+def _active_edge(
+    external_fv: float,
+    quote: Quote,
+) -> tuple[float, float | None, float | None]:
+    if external_fv > quote.best_ask:
+        return external_fv - quote.best_ask, quote.best_ask, quote.ask_depth
+    if external_fv < quote.best_bid:
+        return quote.best_bid - external_fv, quote.best_bid, quote.bid_depth
+    return 0.0, None, None
+
+
+def _first_response(
+    sig_quotes: Sequence[Quote],
+    *,
+    at: datetime,
+    direction: int,
+    max_quote_age_seconds: float,
+    max_response_seconds: float,
+) -> tuple[datetime | None, bool | None]:
+    baseline = _asof(
+        sig_quotes,
+        at,
+        max_age_seconds=max_quote_age_seconds,
+    )
+    if baseline is None:
+        return None, None
+    for quote in sig_quotes:
+        if quote.observed_at < at:
+            continue
+        if (quote.observed_at - at).total_seconds() > max_response_seconds:
+            break
+        move = quote.midpoint - baseline.midpoint
+        if move != 0.0:
+            return quote.observed_at, move * direction > 0.0
+    return None, None
+
+
+def analyze_lead_lag(
+    *,
+    sig_quotes: Sequence[Quote],
+    external_quotes: Sequence[Quote],
+    latency_ms: float,
+    minimum_impulse_ticks: int = 1,
+    tick_size: float = SIG_TICK_SIZE,
+    max_quote_age_seconds: float = 15.0,
+    max_depth_age_seconds: float = 60.0,
+    max_response_seconds: float = 60.0,
+) -> tuple[LeadLagObservation, ...]:
+    """Require the executable edge to survive the declared latency assumption."""
+    if latency_ms < 0:
+        raise ValueError("latency_ms must be non-negative")
+    if max_response_seconds <= 0:
+        raise ValueError("max_response_seconds must be positive")
+    sig = _economic(sig_quotes)
+    external = _economic(external_quotes)
+    output: list[LeadLagObservation] = []
+    for index, current in enumerate(external[1:], start=1):
+        prior = external[index - 1]
+        move = current.midpoint - prior.midpoint
+        if abs(move) < minimum_impulse_ticks * tick_size:
+            continue
+        trigger = _asof(
+            sig,
+            current.observed_at,
+            max_age_seconds=max_quote_age_seconds,
+        )
+        impulse_id = f"{current.observed_at.astimezone(UTC).isoformat()}:{index}"
+        if trigger is None:
+            output.append(
+                LeadLagObservation(
+                    impulse_id=impulse_id,
+                    external_observed_at=current.observed_at,
+                    external_move=move,
+                    lead_seconds=None,
+                    sig_response_at=None,
+                    same_direction=None,
+                    sig_bid_at_trigger=None,
+                    sig_ask_at_trigger=None,
+                    available_depth=None,
+                    gross_executable_edge=None,
+                    latency_ms=latency_ms,
+                    latency_adjusted_executable_price=None,
+                    latency_adjusted_edge=None,
+                    signal_half_life=None,
+                    status=ResearchStatus.INSUFFICIENT_EVIDENCE,
+                    reasons=("NO_SIG_ASOF_QUOTE",),
+                )
+            )
+            continue
+
+        direction = 1 if move > 0 else -1
+        response_at, same_direction = _first_response(
+            sig,
+            at=current.observed_at,
+            direction=direction,
+            max_quote_age_seconds=max_quote_age_seconds,
+            max_response_seconds=max_response_seconds,
+        )
+        lead_seconds = (
+            None
+            if response_at is None
+            else (response_at - current.observed_at).total_seconds()
+        )
+        gross_edge, _, trigger_depth = _active_edge(current.midpoint, trigger)
+        if (
+            trigger_depth is not None
+            and (
+                trigger.depth_observed_at is None
+                or (
+                    current.observed_at - trigger.depth_observed_at
+                ).total_seconds() > max_depth_age_seconds
+            )
+        ):
+            trigger_depth = None
+        delayed_at = current.observed_at + timedelta(milliseconds=latency_ms)
+        delayed = _asof(
+            sig,
+            delayed_at,
+            max_age_seconds=max_quote_age_seconds,
+        )
+        delayed_edge: float | None = None
+        delayed_price: float | None = None
+        delayed_depth: float | None = None
+        if delayed is not None:
+            delayed_edge, delayed_price, delayed_depth = _active_edge(
+                current.midpoint,
+                delayed,
+            )
+            if (
+                delayed_depth is not None
+                and (
+                    delayed.depth_observed_at is None
+                    or (
+                        delayed_at - delayed.depth_observed_at
+                    ).total_seconds() > max_depth_age_seconds
+                )
+            ):
+                delayed_depth = None
+        depth = (
+            min(trigger_depth, delayed_depth)
+            if trigger_depth is not None and delayed_depth is not None
+            else None
+        )
+
+        half_life: float | None = None
+        if gross_edge > 0:
+            for quote in sig:
+                if quote.observed_at < current.observed_at:
+                    continue
+                if (
+                    quote.observed_at - current.observed_at
+                ).total_seconds() > max_response_seconds:
+                    break
+                edge, _, _ = _active_edge(current.midpoint, quote)
+                if edge <= gross_edge / 2.0:
+                    half_life = (
+                        quote.observed_at - current.observed_at
+                    ).total_seconds()
+                    break
+
+        if response_at is None:
+            status = ResearchStatus.INSUFFICIENT_EVIDENCE
+            reasons = ("NO_SUBSEQUENT_SIG_RESPONSE",)
+        elif gross_edge <= 0:
+            status = ResearchStatus.NO_EXECUTABLE_EDGE
+            reasons = ("NO_ACTIVE_EDGE_AT_TRIGGER",)
+        elif trigger_depth is None or trigger_depth <= 0:
+            status = ResearchStatus.INSUFFICIENT_DEPTH
+            reasons = ("TRIGGER_EXECUTABLE_DEPTH_UNAVAILABLE",)
+        elif delayed_edge is None:
+            status = ResearchStatus.INSUFFICIENT_EVIDENCE
+            reasons = ("NO_LATENCY_ASOF_BOOK",)
+        elif delayed_edge <= 0:
+            status = ResearchStatus.TOO_FAST_TO_MONETIZE
+            reasons = ("EDGE_GONE_AFTER_LATENCY",)
+        elif delayed_depth is None or delayed_depth <= 0:
+            status = ResearchStatus.INSUFFICIENT_DEPTH
+            reasons = ("LATENCY_EXECUTABLE_DEPTH_UNAVAILABLE",)
+        else:
+            status = ResearchStatus.MONETIZABLE_CANDIDATE
+            reasons = ("LATENCY_ADJUSTED_ACTIVE_EDGE_POSITIVE",)
+
+        output.append(
+            LeadLagObservation(
+                impulse_id=impulse_id,
+                external_observed_at=current.observed_at,
+                external_move=move,
+                lead_seconds=lead_seconds,
+                sig_response_at=response_at,
+                same_direction=same_direction,
+                sig_bid_at_trigger=trigger.best_bid,
+                sig_ask_at_trigger=trigger.best_ask,
+                available_depth=depth,
+                gross_executable_edge=gross_edge,
+                latency_ms=latency_ms,
+                latency_adjusted_executable_price=delayed_price,
+                latency_adjusted_edge=delayed_edge,
+                signal_half_life=half_life,
+                status=status,
+                reasons=reasons,
+            )
+        )
+    return tuple(output)
+
+
+def summarize_inventory(
+    points: Sequence[InventoryPoint],
+    *,
+    inventory_limit: float | None,
+    flat_epsilon: float = 1e-12,
+) -> InventorySummary:
+    """Measure flat-to-flat inventory episodes and explicit capital-seconds."""
+    ordered = tuple(sorted(points, key=lambda item: item.observed_at))
+    if not ordered:
+        return InventorySummary(0.0, None, (), None, 0, None, None, None, 0.0, 0)
+    total_seconds = 0.0
+    weighted_inventory = 0.0
+    capital_seconds = 0.0
+    above = {0.25: 0.0, 0.50: 0.0, 0.75: 0.0}
+    for left, right in zip(ordered, ordered[1:], strict=False):
+        duration = max(0.0, (right.observed_at - left.observed_at).total_seconds())
+        total_seconds += duration
+        weighted_inventory += abs(left.inventory) * duration
+        capital_seconds += max(0.0, left.capital_at_risk) * duration
+        if inventory_limit is not None and inventory_limit > 0:
+            ratio = abs(left.inventory) / inventory_limit
+            for threshold in above:
+                if ratio >= threshold:
+                    above[threshold] += duration
+
+    time_to_flat: list[float] = []
+    half_lives: list[float] = []
+    in_episode = False
+    episode_start: datetime | None = None
+    episode_peak = 0.0
+    half_recorded = False
+    for item in ordered:
+        non_flat = abs(item.inventory) > flat_epsilon
+        if non_flat and not in_episode:
+            in_episode = True
+            episode_start = item.observed_at
+            episode_peak = abs(item.inventory)
+            half_recorded = False
+        elif non_flat and in_episode:
+            episode_peak = max(episode_peak, abs(item.inventory))
+            if (
+                not half_recorded
+                and episode_start is not None
+                and abs(item.inventory) <= episode_peak / 2.0
+            ):
+                half_lives.append((item.observed_at - episode_start).total_seconds())
+                half_recorded = True
+        elif not non_flat and in_episode:
+            assert episode_start is not None
+            time_to_flat.append((item.observed_at - episode_start).total_seconds())
+            in_episode = False
+            episode_start = None
+            episode_peak = 0.0
+            half_recorded = False
+
+    def threshold_time(value: float) -> float | None:
+        if inventory_limit is None or inventory_limit <= 0:
+            return None
+        return above[value]
+
+    return InventorySummary(
+        peak_abs_inventory=max(abs(item.inventory) for item in ordered),
+        inventory_time_weighted_abs=(
+            None if total_seconds <= 0 else weighted_inventory / total_seconds
+        ),
+        time_to_flat_distribution=tuple(time_to_flat),
+        inventory_half_life=_median(half_lives),
+        returns_to_flat_count=len(time_to_flat),
+        time_above_25pct_limit=threshold_time(0.25),
+        time_above_50pct_limit=threshold_time(0.50),
+        time_above_75pct_limit=threshold_time(0.75),
+        capital_seconds_consumed=capital_seconds,
+        episode_count=len(time_to_flat) + int(in_episode),
+    )
+
+
+def ecology_summary(quotes: Sequence[Quote]) -> dict[str, object]:
+    """Describe observable BBO state behaviour without inventing trader identities."""
+    economic = _economic(quotes)
+    lifetimes = [
+        (right.observed_at - left.observed_at).total_seconds()
+        for left, right in zip(economic, economic[1:], strict=False)
+    ]
+    spreads = [item.spread for item in economic]
+    active_seconds = (
+        0.0
+        if len(economic) < 2
+        else (economic[-1].observed_at - economic[0].observed_at).total_seconds()
+    )
+    return {
+        "bbo_renewal_count": max(0, len(economic) - 1),
+        "bbo_renewal_rate_per_second": (
+            None
+            if active_seconds <= 0
+            else max(0, len(economic) - 1) / active_seconds
+        ),
+        "bbo_state_lifetime_seconds_p50": _median(lifetimes),
+        "spread_p50": _median(spreads),
+        "spread_min": None if not spreads else min(spreads),
+        "spread_max": None if not spreads else max(spreads),
+        "terminology": (
+            "BBO state lifetime; no anonymous participant identity is inferred."
+        ),
+    }
+
+
+def recommend_market(
+    *,
+    sample_count: int,
+    independent_event_count: int,
+    expected_edge: float | None,
+    adverse_selection: float | None,
+    capital_time_efficiency: float | None,
+) -> tuple[MarketRecommendation, tuple[str, ...]]:
+    """Create a research-only recommendation with explicit support gates."""
+    if sample_count < 5 or independent_event_count < 5:
+        return MarketRecommendation.NO_DATA, ("INSUFFICIENT_INDEPENDENT_EVENTS",)
+    if (
+        adverse_selection is not None
+        and expected_edge is not None
+        and adverse_selection > max(0.0, expected_edge)
+    ):
+        return MarketRecommendation.WIDEN, ("ADVERSE_SELECTION_EXCEEDS_EDGE",)
+    if expected_edge is not None and expected_edge < 0:
+        return MarketRecommendation.PAUSE, ("NEGATIVE_EXPECTED_EDGE",)
+    if (
+        expected_edge is not None
+        and expected_edge > 0
+        and capital_time_efficiency is not None
+        and capital_time_efficiency > 0
+    ):
+        return MarketRecommendation.QUOTE_MORE, ("POSITIVE_EDGE_AND_CAPITAL_EFFICIENCY",)
+    return MarketRecommendation.QUOTE_NORMAL, ("NO_MATERIAL_NEGATIVE_EVIDENCE",)
+
+
+def _depth_from_payload(payload_json: object) -> tuple[float | None, float | None] | None:
+    if not isinstance(payload_json, str):
+        return None
+    try:
+        payload = json.loads(payload_json)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    def top_size(name: str) -> float | None:
+        raw = payload.get(name)
+        if not isinstance(raw, list):
+            return None
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            try:
+                quantity = float(str(item.get("quantity")))
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(quantity) and quantity > 0:
+                return quantity
+        return None
+
+    return top_size("bids"), top_size("asks")
+
+
+def _load_quotes(
+    root: Path,
+    *,
+    stream: str,
+    identity_column: str,
+    identities: set[str],
+    sig: bool,
+    max_depth_age_seconds: float = 30.0,
+) -> dict[str, tuple[Quote, ...]]:
+    files = sorted((root / stream).rglob("*.parquet"))
+    if not files or not identities:
+        return {}
+    dataset = ds.dataset([str(path) for path in files], format="parquet")
+    required = {identity_column, "observed_at", "best_bid", "best_ask"}
+    if not required <= set(dataset.schema.names):
+        return {}
+
+    columns = [identity_column, "observed_at", "best_bid", "best_ask"]
+    for optional in (
+        "bid_depth",
+        "ask_depth",
+        "book_valid",
+        "trust_state",
+        "event_type",
+        "payload_json",
+    ):
+        if optional in dataset.schema.names:
+            columns.append(optional)
+
+    scanner = dataset.scanner(
+        columns=columns,
+        filter=ds.field(identity_column).isin(sorted(identities)),
+        batch_size=65_536,
+    )
+    result: dict[str, list[Quote]] = defaultdict(list)
+    depths: dict[
+        str,
+        list[tuple[datetime, float, float, float | None, float | None]],
+    ] = defaultdict(list)
+    for batch in scanner.to_batches():
+        for row in batch.to_pylist():
+            if row.get("book_valid") is False:
+                continue
+            identity = row.get(identity_column)
+            observed = row.get("observed_at")
+            if not isinstance(identity, str) or not isinstance(observed, datetime):
+                continue
+            observed = observed.astimezone(UTC)
+            trust = row.get("trust_state")
+            trusted = trust not in {"UNTRUSTED", "INVALID", "STALE"}
+
+            if sig and row.get("event_type") == "DEPTH_SNAPSHOT":
+                parsed_depth = _depth_from_payload(row.get("payload_json"))
+                try:
+                    depth_bid = float(str(row.get("best_bid")))
+                    depth_ask = float(str(row.get("best_ask")))
+                except (TypeError, ValueError):
+                    depth_bid = math.nan
+                    depth_ask = math.nan
+                if (
+                    parsed_depth is not None
+                    and trusted
+                    and math.isfinite(depth_bid)
+                    and math.isfinite(depth_ask)
+                    and depth_ask >= depth_bid
+                ):
+                    bid_size, ask_size = parsed_depth
+                    depths[identity].append(
+                        (observed, depth_bid, depth_ask, bid_size, ask_size)
+                    )
+                continue
+            if sig and row.get("event_type") != "BBO_SNAPSHOT":
+                continue
+
+            try:
+                bid_value = float(str(row.get("best_bid")))
+                ask_value = float(str(row.get("best_ask")))
+            except (TypeError, ValueError):
+                continue
+            if ask_value < bid_value:
+                continue
+            result[identity].append(
+                Quote(
+                    observed_at=observed,
+                    best_bid=bid_value,
+                    best_ask=ask_value,
+                    bid_depth=(
+                        None
+                        if row.get("bid_depth") is None
+                        else float(str(row["bid_depth"]))
+                    ),
+                    ask_depth=(
+                        None
+                        if row.get("ask_depth") is None
+                        else float(str(row["ask_depth"]))
+                    ),
+                    trusted=trusted,
+                )
+            )
+
+    if sig:
+        for identity, quotes in result.items():
+            series = sorted(depths.get(identity, []), key=lambda item: item[0])
+            depth_times = [item[0] for item in series]
+            enriched: list[Quote] = []
+            for quote in quotes:
+                index = bisect.bisect_right(depth_times, quote.observed_at) - 1
+                if index < 0:
+                    enriched.append(quote)
+                    continue
+                (
+                    depth_at,
+                    depth_bid,
+                    depth_ask,
+                    bid_depth,
+                    ask_depth,
+                ) = series[index]
+                if (
+                    quote.observed_at - depth_at
+                ).total_seconds() > max_depth_age_seconds:
+                    enriched.append(quote)
+                    continue
+                if not (
+                    math.isclose(depth_bid, quote.best_bid, rel_tol=0.0, abs_tol=1e-12)
+                    and math.isclose(
+                        depth_ask,
+                        quote.best_ask,
+                        rel_tol=0.0,
+                        abs_tol=1e-12,
+                    )
+                ):
+                    enriched.append(quote)
+                    continue
+                enriched.append(
+                    Quote(
+                        observed_at=quote.observed_at,
+                        best_bid=quote.best_bid,
+                        best_ask=quote.best_ask,
+                        bid_depth=bid_depth,
+                        ask_depth=ask_depth,
+                        depth_observed_at=depth_at,
+                        trusted=quote.trusted,
+                    )
+                )
+            result[identity] = enriched
+
+    return {
+        key: tuple(sorted(values, key=lambda item: item.observed_at))
+        for key, values in result.items()
+    }
+
+def _align_quotes(
+    quotes: Sequence[Quote],
+    direction: MappingDirection,
+) -> tuple[Quote, ...]:
+    if direction is MappingDirection.SAME:
+        return tuple(quotes)
+    if direction is not MappingDirection.COMPLEMENT:
+        raise ValueError("direct quote alignment requires SAME or COMPLEMENT")
+    return tuple(
+        Quote(
+            observed_at=item.observed_at,
+            best_bid=1.0 - item.best_ask,
+            best_ask=1.0 - item.best_bid,
+            bid_depth=item.ask_depth,
+            ask_depth=item.bid_depth,
+            depth_observed_at=item.depth_observed_at,
+            trusted=item.trusted,
+        )
+        for item in quotes
+    )
+
+
+def analyze_maker_outcomes(
+    path: Path | None,
+) -> tuple[dict[str, object], list[dict[str, object]]]:
+    """Aggregate LIVE-LEARN quote economics already backed by BUILD-009 fill evidence."""
+    if path is None or not path.exists():
+        return {"available": False, "reason": "LIVE_LEARN_OUTCOMES_UNAVAILABLE"}, []
+    rows: list[dict[str, object]] = []
+    import json
+
+    with path.open("r", encoding="utf-8") as handle:
+        for raw in handle:
+            if not raw.strip():
+                continue
+            value = json.loads(raw)
+            if not isinstance(value, dict):
+                continue
+            outcome = outcome_from_record(value)
+            if outcome.strategy_family != "MAKE":
+                continue
+            if outcome.outcome_status is not OutcomeStatus.MATURED_SCORED:
+                continue
+            metrics = dict(outcome.metric_values)
+            if not any(
+                name in metrics
+                for name in (
+                    "fill_rate",
+                    "spread_capture",
+                    "post_fill_markout",
+                    "adverse_selection",
+                )
+            ):
+                continue
+            rows.append(
+                {
+                    "decision_id": outcome.decision_id,
+                    "candidate_id": outcome.candidate_id,
+                    "market_id": outcome.dimensions.get("market"),
+                    "horizon_seconds": outcome.horizon_seconds,
+                    "fill_rate": metrics.get("fill_rate"),
+                    "spread_capture": metrics.get("spread_capture"),
+                    "post_fill_markout": metrics.get("post_fill_markout"),
+                    "adverse_selection": metrics.get("adverse_selection"),
+                    "fill_latency_seconds": metrics.get("fill_latency_seconds"),
+                    "evidence_refs": list(outcome.evidence_source_ids),
+                    "status": outcome.outcome_status.value,
+                }
+            )
+    decisions = {str(row["decision_id"]) for row in rows}
+    filled = [
+        float(str(row["fill_rate"]))
+        for row in rows
+        if row["fill_rate"] is not None
+    ]
+    adverse = [
+        float(str(row["adverse_selection"]))
+        for row in rows
+        if row["adverse_selection"] is not None
+    ]
+    spread = [
+        float(str(row["spread_capture"]))
+        for row in rows
+        if row["spread_capture"] is not None
+    ]
+    summary: dict[str, object] = {
+        "available": True,
+        "sample_count": len(rows),
+        "independent_event_count": len(decisions),
+        "fill_rate_p50": _median(filled),
+        "spread_capture_p50": _median(spread),
+        "adverse_selection_p50": _median(adverse),
+        "accounting_boundary": (
+            "Diagnostic quote economics only; authoritative realised/unrealised "
+            "P&L remains RISK-002."
+        ),
+    }
+    return summary, rows
+
+
+
+def analyze_inventory_history(
+    path: Path | None,
+    *,
+    inventory_limit: float | None = None,
+) -> tuple[dict[str, object], list[dict[str, object]], dict[str, InventorySummary]]:
+    """Reconstruct canonical account inventory paths from durable SHADOW snapshots."""
+    if path is None or not path.exists():
+        return {
+            "available": False,
+            "reason": "SHADOW_SNAPSHOT_HISTORY_UNAVAILABLE",
+        }, [], {}
+
+    snapshots = load_persisted_snapshots(path)
+    by_market_time: dict[str, dict[datetime, InventoryPoint]] = defaultdict(dict)
+    for snapshot in snapshots:
+        market_id = snapshot.market_id
+        positions = tuple(
+            position
+            for position in snapshot.maker.runtime.portfolio.positions
+            if position.market_id == market_id
+        )
+        inventory = sum(position.signed_quantity for position in positions)
+        capital_at_risk = sum(max(0.0, position.gross_exposure) for position in positions)
+        by_market_time[market_id][snapshot.observed_at] = InventoryPoint(
+            observed_at=snapshot.observed_at,
+            inventory=inventory,
+            capital_at_risk=capital_at_risk,
+        )
+
+    rows: list[dict[str, object]] = []
+    summaries: dict[str, InventorySummary] = {}
+    for market_id, indexed in sorted(by_market_time.items()):
+        points = tuple(indexed[key] for key in sorted(indexed))
+        summary = summarize_inventory(
+            points,
+            inventory_limit=inventory_limit,
+        )
+        summaries[market_id] = summary
+        rows.append(
+            {
+                "market_id": market_id,
+                "sample_count": len(points),
+                "independent_event_count": summary.episode_count,
+                "peak_abs_inventory": summary.peak_abs_inventory,
+                "inventory_time_weighted_abs": summary.inventory_time_weighted_abs,
+                "time_to_flat_distribution": list(summary.time_to_flat_distribution),
+                "inventory_half_life": summary.inventory_half_life,
+                "returns_to_flat_count": summary.returns_to_flat_count,
+                "time_above_25pct_limit": summary.time_above_25pct_limit,
+                "time_above_50pct_limit": summary.time_above_50pct_limit,
+                "time_above_75pct_limit": summary.time_above_75pct_limit,
+                "capital_seconds_consumed": summary.capital_seconds_consumed,
+                "inventory_limit": inventory_limit,
+                "realised_pnl": None,
+                "unrealised_pnl": None,
+                "status": (
+                    ResearchStatus.INSUFFICIENT_EVIDENCE.value
+                    if summary.episode_count < 1
+                    else ResearchStatus.DESCRIPTIVE_ONLY.value
+                ),
+                "reasons": [
+                    "CANONICAL_SHADOW_ACCOUNT_SNAPSHOTS",
+                    "RISK_002_ACCOUNTING_PNL_NOT_RECONSTRUCTED",
+                    *(
+                        ["INVENTORY_LIMIT_UNAVAILABLE"]
+                        if inventory_limit is None
+                        else []
+                    ),
+                ],
+            }
+        )
+
+    return {
+        "available": bool(rows),
+        "market_count": len(rows),
+        "sample_count": sum(len(indexed) for indexed in by_market_time.values()),
+        "independent_event_count": sum(
+            summary.episode_count for summary in summaries.values()
+        ),
+        "inventory_limit": inventory_limit,
+        "accounting_boundary": (
+            "Inventory path uses canonical SHADOW account snapshots; authoritative "
+            "realised/unrealised P&L remains RISK-002."
+        ),
+    }, rows, summaries
+
+
+def analyze_market_selection(
+    maker_rows: Sequence[dict[str, object]],
+    *,
+    inventory_by_market: dict[str, InventorySummary] | None = None,
+) -> tuple[dict[str, object], list[dict[str, object]]]:
+    """Expose market-selection components without manufacturing missing cost terms."""
+    inventory = inventory_by_market or {}
+    grouped: dict[tuple[str, int], list[dict[str, object]]] = defaultdict(list)
+    for row in maker_rows:
+        market_id = row.get("market_id")
+        horizon = row.get("horizon_seconds")
+        if isinstance(market_id, str) and isinstance(horizon, int):
+            grouped[(market_id, horizon)].append(row)
+
+    output: list[dict[str, object]] = []
+    for (market_id, horizon), rows in sorted(grouped.items()):
+        decision_ids = {str(row["decision_id"]) for row in rows}
+        fill_values = [
+            float(str(value))
+            for row in rows
+            if (value := row.get("fill_rate")) is not None
+        ]
+        edge_values = [
+            float(str(value))
+            for row in rows
+            if (value := row.get("post_fill_markout")) is not None
+        ]
+        adverse_values = [
+            float(str(value))
+            for row in rows
+            if (value := row.get("adverse_selection")) is not None
+        ]
+        spread_values = [
+            float(str(value))
+            for row in rows
+            if (value := row.get("spread_capture")) is not None
+        ]
+        fill_rate = _median(fill_values)
+        expected_edge = _median(edge_values)
+        adverse_selection = _median(adverse_values)
+        spread_capture = _median(spread_values)
+        gross_mmev = (
+            None
+            if fill_rate is None or expected_edge is None
+            else fill_rate * expected_edge
+        )
+        inventory_summary = inventory.get(market_id)
+        capital_seconds = (
+            None
+            if inventory_summary is None
+            else inventory_summary.capital_seconds_consumed
+        )
+        recommendation, reasons = recommend_market(
+            sample_count=len(rows),
+            independent_event_count=len(decision_ids),
+            expected_edge=expected_edge,
+            adverse_selection=adverse_selection,
+            capital_time_efficiency=None,
+        )
+        output.append(
+            {
+                "market_id": market_id,
+                "horizon_seconds": horizon,
+                "sample_count": len(rows),
+                "independent_event_count": len(decision_ids),
+                "fill_rate": fill_rate,
+                "expected_edge": expected_edge,
+                "expected_edge_semantics": "median_post_fill_markout_conditional_on_fill",
+                "spread_capture": spread_capture,
+                "adverse_selection": adverse_selection,
+                "risk_cost": None,
+                "ops_cost": None,
+                "expected_holding_time": None,
+                "capital_required": None,
+                "capital_seconds": capital_seconds,
+                "gross_mmev_before_risk_ops": gross_mmev,
+                "MMEV": None,
+                "capital_time_efficiency": None,
+                "recommendation": recommendation.value,
+                "reasons": [
+                    *reasons,
+                    "RISK_COST_UNAVAILABLE",
+                    "OPS_COST_UNAVAILABLE",
+                    "MMEV_NOT_FORCED_WITH_MISSING_COSTS",
+                    "CAPITAL_TIME_EFFICIENCY_UNAVAILABLE",
+                ],
+            }
+        )
+
+    return {
+        "available": bool(output),
+        "row_count": len(output),
+        "market_count": len({market_id for market_id, _ in grouped}),
+        "formula": "MMEV = FillRate * ExpectedEdge - RiskCost - OpsCost",
+        "status": (
+            ResearchStatus.DESCRIPTIVE_ONLY.value
+            if output
+            else ResearchStatus.INSUFFICIENT_EVIDENCE.value
+        ),
+        "reason": (
+            "Exact MMEV/capital_time_efficiency remain null until risk and ops "
+            "cost terms are available; gross pre-cost economics are exposed separately."
+        ),
+    }, output
+
+
+def _write_rows(path: Path, rows: list[dict[str, object]]) -> None:
+    if rows:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        pq.write_table(pa.Table.from_pylist(rows), path)
+
+
+def analyze_live_diagnostics(
+    *,
+    sig_root: Path,
+    polymarket_root: Path | None,
+    mapping_path: Path | None,
+    output_root: Path | None = None,
+    live_learn_outcomes: Path | None = None,
+    shadow_journal: Path | None = None,
+    exposure_groups_path: Path | None = None,
+    inventory_limit: float | None = None,
+    max_quote_age_seconds: float = 15.0,
+    max_depth_age_seconds: float = 30.0,
+    max_response_seconds: float = 60.0,
+    latency_ms: float = 100.0,
+    latency_assumption_source: str = "fixed_sensitivity",
+    thresholds_ticks: Sequence[int] = DEFAULT_THRESHOLDS_TICKS,
+    horizons_seconds: Sequence[int] = DEFAULT_HORIZONS_SECONDS,
+) -> dict[str, object]:
+    """Run the first-hours economic layer without creating a new market-data process."""
+    if (
+        max_quote_age_seconds <= 0
+        or max_depth_age_seconds <= 0
+        or max_response_seconds <= 0
+    ):
+        raise ValueError("quote/depth freshness and response window must be positive")
+    generated_at = datetime.now(UTC)
+    config = {
+        "analysis_version": ANALYSIS_VERSION,
+        "latency_ms": latency_ms,
+        "latency_assumption_source": latency_assumption_source,
+        "max_quote_age_seconds": max_quote_age_seconds,
+        "max_depth_age_seconds": max_depth_age_seconds,
+        "max_response_seconds": max_response_seconds,
+        "thresholds_ticks": list(thresholds_ticks),
+        "horizons_seconds": list(horizons_seconds),
+        "tick_size": SIG_TICK_SIZE,
+        "trigger_rule": "threshold_crossing_rearms_only_below_threshold",
+    }
+    config_hash = canonical_config_hash(config)
+    git_sha = os.environ.get("PREDICTIONS_CUP_GIT_SHA", "UNKNOWN")
+    maker_summary, maker_rows = analyze_maker_outcomes(live_learn_outcomes)
+    inventory_summary, inventory_rows, inventory_by_market = analyze_inventory_history(
+        shadow_journal,
+        inventory_limit=inventory_limit,
+    )
+    market_selection_summary, market_selection_rows = analyze_market_selection(
+        maker_rows,
+        inventory_by_market=inventory_by_market,
+    )
+    if (
+        polymarket_root is None
+        or mapping_path is None
+        or not polymarket_root.exists()
+        or not mapping_path.exists()
+    ):
+        snapshot: dict[str, object] = {
+            "analysis_id": "LIVE-DIAG-001",
+            "analysis_version": ANALYSIS_VERSION,
+            "generated_at": generated_at.isoformat(),
+            "git_sha": git_sha,
+            "config_hash": config_hash,
+            "status": ResearchStatus.INSUFFICIENT_EVIDENCE.value,
+            "reasons": ["MISSING_POLYMARKET_OR_MAPPING_INPUT"],
+            "maker_economics": maker_summary,
+            "inventory_recycling": inventory_summary,
+            "market_selection": market_selection_summary,
+        }
+        if output_root is not None:
+            write_evidence(output_root=output_root, snapshot=snapshot, records=())
+            _write_rows(output_root / "maker_economics.parquet", maker_rows)
+            _write_rows(output_root / "inventory_recycling.parquet", inventory_rows)
+            _write_rows(output_root / "market_selection.parquet", market_selection_rows)
+        return snapshot
+
+    document = load_document(mapping_path)
+    group_provider = (
+        None
+        if exposure_groups_path is None or not exposure_groups_path.exists()
+        else load_exposure_group_provider(exposure_groups_path)
+    )
+    if group_provider is not None:
+        for row in inventory_rows:
+            market_id = row.get("market_id")
+            if isinstance(market_id, str):
+                row["risk_group_ids"] = list(
+                    group_provider.groups_for(market_id, document.tournament_id)
+                )
+        for row in market_selection_rows:
+            market_id = row.get("market_id")
+            if isinstance(market_id, str):
+                row["risk_group_ids"] = list(
+                    group_provider.groups_for(market_id, document.tournament_id)
+                )
+    direct = [
+        record
+        for record in document.records
+        if record.direct_polymarket is not None
+        and record.mapping_direction
+        in {MappingDirection.SAME, MappingDirection.COMPLEMENT}
+    ]
+    exchange_ids = {record.sig_exchange_id for record in direct}
+    token_ids = {
+        record.direct_polymarket.mapped_token_id
+        for record in direct
+        if record.direct_polymarket is not None
+    }
+    sig_quotes = _load_quotes(
+        sig_root,
+        stream="normalized_events",
+        identity_column="exchange_id",
+        identities=exchange_ids,
+        sig=True,
+        max_depth_age_seconds=max_depth_age_seconds,
+    )
+    pm_quotes = _load_quotes(
+        polymarket_root,
+        stream="observations",
+        identity_column="token_id",
+        identities=token_ids,
+        sig=False,
+    )
+    mapping_hash = sha256_file(mapping_path)
+    snapback_rows: list[dict[str, object]] = []
+    lead_lag_rows: list[dict[str, object]] = []
+    ecology_rows: list[dict[str, object]] = []
+    evidence: list[AnalysisEvidence] = []
+
+    for record in direct:
+        identity = record.direct_polymarket
+        direction = record.mapping_direction
+        assert identity is not None and direction is not None
+        sig = sig_quotes.get(record.sig_exchange_id, ())
+        pm = _align_quotes(pm_quotes.get(identity.mapped_token_id, ()), direction)
+        ecology_rows.append(
+            {
+                "market_id": record.sig_market_id,
+                "exchange_id": record.sig_exchange_id,
+                **ecology_summary(sig),
+            }
+        )
+        risk_group_ids = (
+            ()
+            if group_provider is None
+            else group_provider.groups_for(
+                record.sig_market_id,
+                document.tournament_id,
+            )
+        )
+        for threshold in thresholds_ticks:
+            triggers = construct_gap_episodes(
+                sig_quotes=sig,
+                external_quotes=pm,
+                threshold_ticks=threshold,
+                max_quote_age_seconds=max_quote_age_seconds,
+            )
+            observations = observe_snapback(
+                triggers=triggers,
+                sig_quotes=sig,
+                external_quotes=pm,
+                horizons_seconds=horizons_seconds,
+                max_quote_age_seconds=max_quote_age_seconds,
+            )
+            summary = summarize_snapback(
+                triggers=triggers,
+                observations=observations,
+                horizons_seconds=horizons_seconds,
+            )
+            snapback_rows.append(
+                {
+                    "market_id": record.sig_market_id,
+                    "exchange_id": record.sig_exchange_id,
+                    "polymarket_token_id": identity.mapped_token_id,
+                    "mapping_class": record.mapping_class.value,
+                    "mapping_direction": direction.value,
+                    "threshold_ticks": threshold,
+                    **summary,
+                }
+            )
+            for horizon in horizons_seconds:
+                values = [
+                    item.fraction_closed
+                    for item in observations
+                    if item.horizon_seconds == horizon
+                ]
+                metric = _median(values)
+                supported_trigger_ids = {
+                    item.trigger_id
+                    for item in observations
+                    if item.horizon_seconds == horizon
+                }
+                event_count = len(supported_trigger_ids)
+                evidence.append(
+                    AnalysisEvidence(
+                        analysis_id="LIVE-DIAG-001:SNAPBACK",
+                        analysis_version=ANALYSIS_VERSION,
+                        generated_at=generated_at,
+                        window_start=(
+                            None
+                            if not sig
+                            else min(item.observed_at for item in sig)
+                        ),
+                        window_end=(
+                            None
+                            if not sig
+                            else max(item.observed_at for item in sig)
+                        ),
+                        git_sha=git_sha,
+                        config_hash=config_hash,
+                        mapping_hash=mapping_hash,
+                        source_watermarks=tuple(
+                            (
+                                source,
+                                series[-1].observed_at.isoformat(),
+                            )
+                            for source, series in (("sig", sig), ("polymarket", pm))
+                            if series
+                        ),
+                        source_health=(
+                            ("sig", "AVAILABLE" if sig else "MISSING"),
+                            ("polymarket", "AVAILABLE" if pm else "MISSING"),
+                        ),
+                        market_id=record.sig_market_id,
+                        exchange_id=record.sig_exchange_id,
+                        risk_group_ids=risk_group_ids,
+                        sample_count=len(values),
+                        independent_event_count=event_count,
+                        metric_name=f"fraction_gap_closed_{horizon}s",
+                        metric_value=metric,
+                        uncertainty=_bootstrap_median(values),
+                        denominator="independent_gap_episodes",
+                        status=(
+                            ResearchStatus.INSUFFICIENT_EVIDENCE.value
+                            if event_count < 5
+                            else ResearchStatus.DESCRIPTIVE_ONLY.value
+                        ),
+                        reasons=(
+                            *(
+                                ("RISK_GROUP_PROVIDER_UNAVAILABLE",)
+                                if group_provider is None
+                                else ()
+                            ),
+                            *(
+                                ("INSUFFICIENT_INDEPENDENT_EVENTS",)
+                                if event_count < 5
+                                else ()
+                            ),
+                        ),
+                        evidence_refs=(
+                            f"sig:{record.sig_exchange_id}",
+                            f"pm:{identity.mapped_token_id}",
+                        ),
+                        horizon_seconds=horizon,
+                        metric_unit="fraction",
+                        method_version="snapback-threshold-episodes-v1",
+                        source_versions=(
+                            ("mapping", str(document.schema_version)),
+                        ),
+                    )
+                )
+
+        for item in analyze_lead_lag(
+            sig_quotes=sig,
+            external_quotes=pm,
+            latency_ms=latency_ms,
+            max_quote_age_seconds=max_quote_age_seconds,
+            max_depth_age_seconds=max_depth_age_seconds,
+            max_response_seconds=max_response_seconds,
+        ):
+            lead_lag_rows.append(
+                {
+                    "market_id": record.sig_market_id,
+                    "exchange_id": record.sig_exchange_id,
+                    "polymarket_token_id": identity.mapped_token_id,
+                    "mapping_direction": direction.value,
+                    "impulse_id": item.impulse_id,
+                    "external_observed_at": item.external_observed_at.isoformat(),
+                    "external_move": item.external_move,
+                    "lead_seconds": item.lead_seconds,
+                    "sig_response_at": (
+                        None
+                        if item.sig_response_at is None
+                        else item.sig_response_at.isoformat()
+                    ),
+                    "sig_response_definition": "first_material_midpoint_move",
+                    "same_direction": item.same_direction,
+                    "sig_bid_at_trigger": item.sig_bid_at_trigger,
+                    "sig_ask_at_trigger": item.sig_ask_at_trigger,
+                    "available_depth": item.available_depth,
+                    "gross_executable_edge": item.gross_executable_edge,
+                    "latency_assumption_source": latency_assumption_source,
+                    "latency_ms": item.latency_ms,
+                    "latency_adjusted_executable_price": (
+                        item.latency_adjusted_executable_price
+                    ),
+                    "latency_adjusted_edge": item.latency_adjusted_edge,
+                    "signal_half_life": item.signal_half_life,
+                    "status": item.status.value,
+                    "reasons": list(item.reasons),
+                }
+            )
+
+    snapshot = {
+        "analysis_id": "LIVE-DIAG-001",
+        "analysis_version": ANALYSIS_VERSION,
+        "generated_at": generated_at.isoformat(),
+        "git_sha": git_sha,
+        "config_hash": config_hash,
+        "mapping_hash": mapping_hash,
+        "source_health": {
+            "sig_markets_with_bbo": len(sig_quotes),
+            "pm_tokens_with_bbo": len(pm_quotes),
+        },
+        "latency": {
+            "source": latency_assumption_source,
+            "latency_ms": latency_ms,
+        },
+        "snapback": snapback_rows,
+        "lead_lag": lead_lag_rows,
+        "maker_economics": maker_summary,
+        "opponent_venue_ecology": ecology_rows,
+        "inventory_recycling": inventory_summary,
+        "market_selection": market_selection_summary,
+        "risk_group_status": (
+            "UNAVAILABLE_NOT_INFERRED"
+            if group_provider is None
+            else {
+                "status": "AVAILABLE_CANONICAL_PROVIDER",
+                "version": group_provider.version,
+                "source": str(exposure_groups_path),
+            }
+        ),
+        "limitations": [
+            "Passive touch is not treated as a fill.",
+            "Depth-unavailable active opportunities fail as INSUFFICIENT_DEPTH.",
+            "No participant identity is inferred from aggregate BBO behaviour.",
+            (
+                "Maker economics use LIVE-LEARN diagnostics backed by BUILD-009 "
+                "fill evidence; authoritative accounting P&L remains RISK-002."
+            ),
+        ],
+    }
+    if output_root is not None:
+        write_evidence(
+            output_root=output_root,
+            snapshot=snapshot,
+            records=tuple(evidence),
+        )
+        _write_rows(output_root / "snapback.parquet", snapback_rows)
+        _write_rows(output_root / "lead_lag.parquet", lead_lag_rows)
+        _write_rows(output_root / "maker_economics.parquet", maker_rows)
+        _write_rows(output_root / "inventory_recycling.parquet", inventory_rows)
+        _write_rows(output_root / "market_selection.parquet", market_selection_rows)
+        _write_rows(
+            output_root / "opponent_venue_ecology.parquet",
+            ecology_rows,
+        )
+    return snapshot

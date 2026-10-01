@@ -156,6 +156,10 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                 settings.sig_realtime_bulk_price_refresh_seconds
             ),
             governed_rate_per_second=settings.sig_rest_governor_rate_per_second,
+            # MAKE owns the launch-time periodic scalar refresh. CAPTURE keeps
+            # initial/reconnect authority and Realtime capture without issuing
+            # a second all-universe bulk-price sweep every interval.
+            periodic_bulk_refresh_enabled=False,
             governor_snapshot=rest.governor_snapshot,
             observation_emitter=observation_emitter,
             observation_process_instance_id=recorder.session_id,

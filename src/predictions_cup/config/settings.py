@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import Literal, Self
 
@@ -111,6 +112,8 @@ class AppSettings(BaseSettings):
     shadow_persistence_batch_size: int = Field(default=256, gt=0, le=10_000)
     shadow_candidate_timeout_ms: int = Field(default=50, gt=0, le=60_000)
     shadow_capture_mirror_enabled: bool = True
+    # Explicit only: no post-hoc 005F grid origin is inferred from observed outcomes.
+    shadow_005f_grid_origin: datetime | None = None
 
     # LIVE-LEARN-001 consumes SHADOW's durable decision stream. It never writes orders.
     live_learn_enabled: bool = False
@@ -323,6 +326,34 @@ class AppSettings(BaseSettings):
             )
             if any(value is None for value in limits):
                 raise ValueError("LIVE execution requires every central risk cap")
+            if self.risk_max_tournament_exposure is None:
+                raise ValueError(
+                    "LIVE execution requires explicit risk_max_tournament_exposure"
+                )
+            if (
+                self.risk_max_gross_exposure is not None
+                and self.risk_max_tournament_exposure
+                > self.risk_max_gross_exposure
+            ):
+                raise ValueError(
+                    "LIVE risk_max_tournament_exposure cannot exceed "
+                    "risk_max_gross_exposure"
+                )
+            if self.risk_profile_mode == "EXPLORATORY":
+                if self.risk_exploratory_max_tournament_exposure is None:
+                    raise ValueError(
+                        "LIVE EXPLORATORY requires explicit "
+                        "risk_exploratory_max_tournament_exposure"
+                    )
+                if (
+                    self.risk_exploratory_max_gross_exposure is not None
+                    and self.risk_exploratory_max_tournament_exposure
+                    > self.risk_exploratory_max_gross_exposure
+                ):
+                    raise ValueError(
+                        "LIVE exploratory tournament exposure cannot exceed "
+                        "exploratory gross exposure"
+                    )
         return self
 
     def diagnostic_fields(self) -> dict[str, str | bool | int | float | None]:

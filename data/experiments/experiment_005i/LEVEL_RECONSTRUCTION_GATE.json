@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "test": "V3 price_change order-book reconstruction semantics",
+  "hypotheses": [
+    "BUY_BID_ABSOLUTE",
+    "BUY_BID_DELTA",
+    "BUY_ASK_ABSOLUTE",
+    "BUY_ASK_DELTA"
+  ],
+  "winner": "BUY_BID_ABSOLUTE",
+  "interpretation": {
+    "BUY": "bid-side level update",
+    "SELL": "ask-side level update",
+    "size": "absolute post-update aggregate size at price",
+    "zero_size": "remove level"
+  },
+  "evidence": [
+    {
+      "source_file": "baseline_sep/date=2026-09-01/hour=00/events.parquet",
+      "seeded_assets": 198,
+      "price_change_rows_after_seed": 3224,
+      "winner_both_bbo_match_rate": 0.9801488833746899,
+      "runner_up": "BUY_BID_DELTA",
+      "runner_up_both_bbo_match_rate": 0.9447890818858561
+    },
+    {
+      "source_file": "baseline_sep/date=2026-09-05/hour=12/events.parquet",
+      "seeded_assets": 1386,
+      "price_change_rows_after_seed": 708326,
+      "winner_both_bbo_match_rate": 0.9971312644177963,
+      "runner_up": "BUY_BID_DELTA",
+      "runner_up_both_bbo_match_rate": 0.7626714253041679
+    },
+    {
+      "source_file": "baseline_sep/date=2026-09-09/hour=00/events.parquet",
+      "seeded_assets": 108,
+      "price_change_rows_after_seed": 109378,
+      "winner_both_bbo_match_rate": 0.9997440070215217,
+      "runner_up": "BUY_BID_DELTA",
+      "runner_up_both_bbo_match_rate": 0.16847995026422133
+    }
+  ],
+  "weighted_winner_both_bbo_match_rate": 0.997412684181804,
+  "claim_boundary": "This validates aggregate visible-level reconstruction after a full-book seed. It does not reveal queue position, per-order cancellations, hidden liquidity, or participant identity. Rows before a seed remain depth-untrusted.",
+  "research_decision": "ALLOW_EVENTWISE_VISIBLE_BOOK_RECONSTRUCTION_FOR_005I",
+  "holdout_read": false,
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}
