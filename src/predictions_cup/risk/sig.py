@@ -115,8 +115,6 @@ def reconstruct_sig_cost_basis(
             )
         expected_side = "YES" if position.quantity > 0 else "NO"
         lot_quantity = Decimal("0")
-        cash_cost_basis = Decimal("0")
-        yes_basis_numerator = Decimal("0")
         for lot in position.lots:
             side = lot.side.upper()
             if side != expected_side:
@@ -127,29 +125,25 @@ def reconstruct_sig_cost_basis(
             if quantity <= 0:
                 raise ValueError("SIG FIFO lot quantity must be positive")
             lot_quantity += quantity
-            cash_cost_basis += quantity * lot.entry_price
-            entry_yes = (
-                lot.entry_price
-                if side == "YES"
-                else Decimal("1") - lot.entry_price
-            )
-            yes_basis_numerator += quantity * entry_yes
 
         if abs(lot_quantity - abs(position.quantity)) > tolerance:
             raise ValueError(
                 f"SIG position {position.exchange_id} lot quantity disagrees with position"
             )
-        if abs(cash_cost_basis - position.cost_basis) > tolerance:
-            raise ValueError(
-                f"SIG position {position.exchange_id} lot cost basis disagrees with position"
-            )
+        # After a partial close SIG's position costBasis/avgCost (which its
+        # unrealizedPnl uses) is not the sum of surviving FIFO lots (live
+        # 2026-10-01: 1045 lots 93@0.67 = 62.31 vs costBasis 63.03). Value the
+        # position on SIG's own basis so RISK agrees with SIG's PnL; lots still
+        # prove quantity and side.
+        cost_basis = position.cost_basis
+        side_avg = cost_basis / lot_quantity
         positions.append(
             CostBasisPosition(
                 exchange_id=position.exchange_id,
                 market_id=position.market_id,
                 signed_quantity=position.quantity,
-                avg_entry_yes=yes_basis_numerator / lot_quantity,
-                canonical_cost_basis=cash_cost_basis,
+                avg_entry_yes=side_avg if expected_side == "YES" else Decimal("1") - side_avg,
+                canonical_cost_basis=cost_basis,
             )
         )
 

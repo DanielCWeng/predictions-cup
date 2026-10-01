@@ -1726,3 +1726,45 @@ def test_reconciliation_allows_one_tick_drift_between_position_and_pnl_reads(
     else:
         with pytest.raises(ReconciliationError, match="unrealised_pnl_disagreement"):
             reconcile()
+
+
+def test_sig_cost_basis_uses_position_basis_after_partial_close() -> None:
+    # Live 2026-10-01 20:00Z payload: surviving lot 93@0.67 (62.31) but SIG
+    # costBasis 63.03 / avgCost 0.677772, which its unrealizedPnl -7.72 uses.
+    position = PositionReadDto.model_validate(
+        {
+            "exchangeId": "1045",
+            "marketId": "356",
+            "marketTitle": "Will the Democratic Party win the Kansas Senate?",
+            "option": "YES",
+            "settled": False,
+            "quantity": -93,
+            "avgCost": 0.677772,
+            "currentPrice": 0.405269,
+            "marketValue": 55.31,
+            "costBasis": 63.03,
+            "unrealizedPnl": -7.72,
+            "unrealizedPnlPct": -12.25,
+            "moneyEarned": 0,
+            "lots": [
+                {
+                    "lotId": "2902571",
+                    "side": "NO",
+                    "quantity": 93,
+                    "entryPrice": 0.67,
+                    "openedAt": "2026-10-01T19:47:54.5909454+00:00",
+                }
+            ],
+        }
+    )
+    account = AccountAuthoritativeSnapshot(
+        tournament_id="t1",
+        tournament_slug="cup",
+        open_orders=(),
+        positions=(position,),
+        observed_at=datetime.fromisoformat("2026-10-01T20:00:00+00:00"),
+    )
+    (rebuilt,) = reconstruct_sig_cost_basis(account).positions
+    assert rebuilt.canonical_cost_basis == Decimal("63.03")
+    local_pnl = rebuilt.signed_quantity * (Decimal("0.405269") - rebuilt.avg_entry_yes)
+    assert abs(local_pnl - Decimal("-7.72")) <= Decimal("0.01")
