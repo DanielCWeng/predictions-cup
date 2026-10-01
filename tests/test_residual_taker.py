@@ -3,7 +3,14 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from predictions_cup.maker.residual_taker import ResidualInput, ResidualTakerSignal
+import pytest
+
+from predictions_cup.maker.residual_taker import (
+    ResidualInput,
+    ResidualTakerSignal,
+    resolve_residual_universe,
+)
+from predictions_cup.mapping.crosswalk import load_document
 from predictions_cup.runtime.models import OrderAction, OutcomeSide
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -102,3 +109,13 @@ def test_touch_depth_caps_size_and_flat_yes_sell_canonicalizes_to_no_buy() -> No
 def test_universe_is_fail_closed_when_configured() -> None:
     engine = ResidualTakerSignal(tracked_exchange_ids=frozenset({"market-b"}))
     assert engine.on_state(_state(0)) is None
+
+
+def test_universe_resolves_all_exact_and_rejects_non_exact_ids() -> None:
+    mapping = load_document(Path("data/mappings/sig_polymarket_2026.json"))
+    everything = resolve_residual_universe(mapping, "ALL_EXACT", "")
+    assert len(everything) == 140
+    some = sorted(everything)[:2]
+    assert resolve_residual_universe(mapping, "", ",".join(some)) == frozenset(some)
+    with pytest.raises(ValueError):
+        resolve_residual_universe(mapping, "not-a-market", "")

@@ -13,6 +13,7 @@ from predictions_cup.maker.contracts import MakerMarketSnapshot
 from predictions_cup.maker.coordinator import MakerStateChange
 from predictions_cup.maker.direct_pm import DirectPolymarketFairValueProvider
 from predictions_cup.maker.factory import MakerRuntimeComponents
+from predictions_cup.maker.residual_taker import resolve_residual_universe
 from predictions_cup.mapping.models import MappingDocument
 from predictions_cup.models.frozen_research import (
     FROZEN_RESEARCH_MODEL_IDS,
@@ -189,14 +190,14 @@ def build_live_shadow_runtime(
         *model_candidates,
     ]
     if settings.residual_taker_enabled and settings.residual_taker_shadow_only:
-        configured_ids = settings.residual_taker_exchange_ids.strip()
-        universe = configured_ids or settings.sig_realtime_tracked_exchange_ids
         candidates.append(
             ResidualTakerCandidate(
                 core.mapping,
                 size=settings.residual_taker_size,
-                tracked_exchange_ids=frozenset(
-                    value.strip() for value in universe.split(",") if value.strip()
+                tracked_exchange_ids=resolve_residual_universe(
+                    core.mapping,
+                    settings.residual_taker_exchange_ids,
+                    settings.sig_realtime_tracked_exchange_ids,
                 ),
                 max_pm_book_age_ns=(
                     settings.residual_taker_max_pm_book_age_ms * 1_000_000

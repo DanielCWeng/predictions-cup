@@ -11,6 +11,12 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from predictions_cup.mapping.models import (
+    MappingClass,
+    MappingDirection,
+    MappingDocument,
+    MappingStatus,
+)
 from predictions_cup.runtime.models import OrderAction, OutcomeSide
 
 STRATEGY_ID = "residual-taker-001"
@@ -18,6 +24,28 @@ THRESHOLD = 0.02
 PM_SPREAD_CAP = 0.02
 MIN_PM_DEPTH = 50.0
 COOLDOWN_NS = 60_000_000_000
+
+
+def resolve_residual_universe(
+    mapping: MappingDocument,
+    configured: str,
+    fallback: str,
+) -> frozenset[str]:
+    exact_ids = frozenset(
+        record.sig_exchange_id
+        for record in mapping.records
+        if record.mapping_class is MappingClass.EXACT
+        and record.mapping_direction is MappingDirection.SAME
+        and record.status is MappingStatus.VERIFIED
+        and record.direct_polymarket is not None
+    )
+    requested = configured.strip() or fallback.strip()
+    if requested == "ALL_EXACT":
+        return exact_ids
+    ids = frozenset(value.strip() for value in requested.split(",") if value.strip())
+    if not ids or not ids.issubset(exact_ids):
+        raise ValueError("residual-taker universe must contain verified EXACT exchange IDs")
+    return ids
 
 
 @dataclass(frozen=True, slots=True)
