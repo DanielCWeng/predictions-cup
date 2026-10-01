@@ -385,7 +385,7 @@ def label_struct(events,cfg):
     return "SURVIVES_OOS" if ok else "PAPER_EXTEND"
 
 
-def result_block(events,cluster="exchange_id",costs=(0,.0025,.005,.01)):
+def result_block(events,cluster="exchange_id",costs=(0,0.25,0.5,1.0)):
     episodes=decluster(events,300,cluster=(cluster,"direction"))
     return {
         "raw_count":len(events),"episode_count_5m":len(episodes),
