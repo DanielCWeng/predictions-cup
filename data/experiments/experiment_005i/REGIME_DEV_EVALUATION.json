@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "phase": "DEV_REGIME_EVALUATION",
+  "status": "REGIME_MECHANISMS_ADVANCE_TO_HOLDOUT",
+  "train_artifact_digests": {
+    "w0": "sha256:af7209ce3e8b2faa091095f7b6ba750e7ea92580319cd170212c6e7afb552bbf",
+    "w1": "sha256:99144dc686793f39f46b18c8320a2807646446ebec5df06410fdb9e9f6fe7648",
+    "w2": "sha256:9b0087443956c5cabe0ea1763bde853c05d926ca9a12f02bb2bdf5903e9423da",
+    "w3": "sha256:5bf0f8e5b932402380179d9b4ab24ca09b3bbaf6193f617fb654bdf66054cb51",
+    "w4": "sha256:7c2f3e4217e98f49b6a8b833d53d61e7a4d4effb569eb393030bcbd492a4452d"
+  },
+  "dev_artifact_digests": {
+    "w0": "sha256:ce42ed427ec8b4958a793d7d4155fe9846862cac2d30d2bd8ac0ce6196966f67",
+    "w1": "sha256:da89ca16d84579f330a20c53d695075a7f1121fd5547117c1d4c1243c9d2d4d3",
+    "w2": "sha256:ea775168c4deadd25edf843a4455cfb44965e88b2cb16d03133c18582bb2b76d",
+    "w3": "sha256:2b4f794cb70a08668a028970f0332e60bd6a95af4bc3b31d9dea3f7672b4d406",
+    "w4": "sha256:cfd50c2c0a1b3298a2e756458f596c00c815df0e7c7c008c4fdf680282a6f0b4"
+  },
+  "discovery": {
+    "train": {
+      "occupancy_minutes": 213610,
+      "exit_hazard_per_minute": 0.5754,
+      "worker_dwell_p90_min": [
+        3,
+        3,
+        3,
+        3,
+        4
+      ],
+      "future_abs_5m_mean": 0.012873,
+      "exit_to_post_shock_share": 0.564
+    },
+    "dev": {
+      "occupancy_minutes": 252614,
+      "exit_hazard_per_minute": 0.542,
+      "worker_dwell_p90_min": [
+        3,
+        4,
+        4,
+        4,
+        3
+      ],
+      "future_abs_5m_mean": 0.013796,
+      "exit_to_post_shock_share": 0.5164,
+      "exit_to_directional_pressure_share": 0.1703,
+      "exit_to_active_share": 0.1548
+    },
+    "decision": "ADVANCE_TO_HOLDOUT",
+    "interpretation": "PRICE_DISCOVERY is a short, high-volatility transition state. Its dominant immediate exit is POST_SHOCK, not a stable directional continuation state."
+  },
+  "liquidity_stress": {
+    "train": {
+      "occupancy_minutes": 1053718,
+      "exit_hazard_per_minute": 0.0504,
+      "worker_dwell_p90_min": [
+        34,
+        27,
+        22,
+        25,
+        35
+      ],
+      "future_abs_5m_mean": 0.003386,
+      "exit_to_replenishment_share": 0.3799
+    },
+    "dev": {
+      "occupancy_minutes": 871447,
+      "exit_hazard_per_minute": 0.0486,
+      "worker_dwell_p90_min": [
+        28,
+        25,
+        23,
+        22,
+        26
+      ],
+      "future_abs_5m_mean": 0.002768,
+      "exit_to_replenishment_share": 0.3141,
+      "exit_to_other_share": 0.2381
+    },
+    "decision": "ADVANCE_TO_HOLDOUT",
+    "interpretation": "LIQUIDITY_STRESS is metastable relative to the other observable states and often exits through visible replenishment."
+  },
+  "resilience": {
+    "definition": "withdrawal_1m >= 200; RECOVERED iff next-minute replenishment_1m >= 200; compare subsequent future_abs_5m",
+    "train": {
+      "not_recovered_n": 505295,
+      "not_recovered_abs_5m": 0.0011954462244826354,
+      "recovered_n": 243562,
+      "recovered_abs_5m": 0.0010460047133788594,
+      "relative_reduction": 0.12499960705120965
+    },
+    "dev": {
+      "not_recovered_n": 545081,
+      "not_recovered_abs_5m": 0.0011843716805391685,
+      "recovered_n": 277584,
+      "recovered_abs_5m": 0.0010954683987549545,
+      "relative_reduction": 0.0750643884498447,
+      "worker_direction": "5_OF_5_RECOVERED_LOWER"
+    },
+    "decision": "ADVANCE_TO_HOLDOUT",
+    "claim_boundary": "Predictive association/state descriptor only; does not establish that replenishment causally dampens price movement or that a passive quote would fill."
+  },
+  "transition_asymmetry": {
+    "dev_price_discovery_exits": {
+      "POST_SHOCK": 0.5164,
+      "DIRECTIONAL_PRESSURE": 0.1703,
+      "ACTIVE": 0.1548,
+      "OTHER": 0.0954,
+      "LIQUIDITY_STRESS": 0.029,
+      "REPLENISHMENT": 0.0274,
+      "QUIET": 0.0067
+    },
+    "dev_stress_exits": {
+      "REPLENISHMENT": 0.3141,
+      "OTHER": 0.2381,
+      "DIRECTIONAL_PRESSURE": 0.166,
+      "PRICE_DISCOVERY": 0.113,
+      "POST_SHOCK": 0.0885,
+      "ACTIVE": 0.0609,
+      "QUIET": 0.0194
+    },
+    "post_shock_note": "POST_SHOCK is not a clean refractory/quiet state; it retains material transition mass back into PRICE_DISCOVERY, so describe it as a post-repricing state rather than a refractory period."
+  },
+  "entry_preconditions_dev": {
+    "PRICE_DISCOVERY": {
+      "pre_quote_events_mean": 64.276189,
+      "pre_relative_spread_mean": 0.409651,
+      "pre_depth_total5_mean": 2361.828538,
+      "pre_age_quote_s_mean": 25.358392,
+      "pre_rv_5m_mean": 0.007872,
+      "pre_common_quote_events_mean": 11.265571,
+      "pre_common_median_depth_mean": 1102.358335
+    },
+    "LIQUIDITY_STRESS": {
+      "pre_quote_events_mean": 29.817744,
+      "pre_relative_spread_mean": 1.331566,
+      "pre_depth_total5_mean": 728.650507,
+      "pre_age_quote_s_mean": 42.50452,
+      "pre_rv_5m_mean": 0.004237,
+      "pre_common_quote_events_mean": 11.072341,
+      "pre_common_median_depth_mean": 1067.438447
+    }
+  },
+  "common_liquidity_interpretation": "Common quote intensity/depth differs only modestly in entry preconditions and generic common-liquidity features failed TRAIN directional increment. Keep common liquidity descriptive; do not promote a tournament-wide predictive factor.",
+  "latent_model_decision": "HMM_NOT_JUSTIFIED",
+  "hawkes_decision": "HAWKES_NOT_JUSTIFIED_BEFORE_BETTER_REGIME_BASELINE",
+  "holdout_read": false,
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}
