@@ -6,5 +6,7 @@
   "poll_seconds": 30,
   "timeout_minutes": 60,
   "download_outputs": true,
-  "output_file_pattern": "(SOURCE_ROBUSTNESS_SUMMARY\\.json|SOURCE_ROBUSTNESS_REPORT\\.md)$"
+  "output_file_pattern": "(SOURCE_ROBUSTNESS_SUMMARY\\.json|SOURCE_ROBUSTNESS_REPORT\\.md)$",
+  "attempt": 2,
+  "note": "Requeue after schema-aware V2/V3 asset_id filtering fix; earlier zero-row smoke is invalid."
 }
