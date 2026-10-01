@@ -986,6 +986,10 @@ def test_engine_subscribes_per_market_topics_not_tournament_topic(
         engine, recorder = _engine(tmp_path, rest)
         await engine.initialize()
         assert engine.subscription_topics() == ("tournament:cup:market:26",)
+        assert engine.subscription_topics(exchange_ids={"36"}) == (
+            "tournament:cup:market:26",
+        )
+        assert engine.subscription_topics(exchange_ids={"not-mapped"}) == ()
         assert engine.topic not in engine.subscription_topics()
         await engine.aclose()
         recorder.close()

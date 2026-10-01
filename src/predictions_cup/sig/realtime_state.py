@@ -247,25 +247,44 @@ class SigRealtimeStateEngine:
     def market_topic(self, market_id: str) -> str:
         return f"{self._market_topic_prefix}{market_id}"
 
-    def subscription_topics(self) -> tuple[str, ...]:
+    def subscription_topics(
+        self, *, exchange_ids: Iterable[str] | None = None
+    ) -> tuple[str, ...]:
         """Per-market Realtime topics for every unsettled known market.
 
         SIG documents that the tournament-wide ``tournament:{id}`` topic no
         longer carries market updates: ``market_batch`` is published only on
         ``tournament:{tournament_id}:market:{market_id}``. Call after the REST
         universe is seeded. Falls back to the tournament topic only when no
-        unsettled market is known, so the subscription lifecycle still runs.
+        unsettled market is known when no exchange filter was requested.
         """
+        allowed = None if exchange_ids is None else frozenset(exchange_ids)
+        allowed_market_ids = (
+            None
+            if allowed is None
+            else {
+                exchange.market_id
+                for exchange in self.states.values()
+                if exchange.exchange_id in allowed
+            }
+        )
         market_ids = sorted(
             (
                 market_id
                 for market_id, market in self.market_states.items()
                 if market.settled_with is None
                 and market.status not in _TERMINAL_MARKET_STATUSES
+                and (
+                    allowed is None
+                    or (
+                        allowed_market_ids is not None
+                        and market_id in allowed_market_ids
+                    )
+                )
             ),
             key=lambda value: (len(value), value),
         )
-        if not market_ids:
+        if not market_ids and allowed is None:
             return (self.topic,)
         return tuple(self.market_topic(market_id) for market_id in market_ids)
 
