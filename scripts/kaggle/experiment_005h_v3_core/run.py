@@ -749,7 +749,10 @@ def add_derived(frame: pd.DataFrame) -> pd.DataFrame:
     for horizon in CLOCK_HORIZONS:
         mid_col = f"mid_{horizon}s"
         if mid_col not in frame.columns:
-            continue
+            frame[mid_col] = np.nan
+        spread_col = f"spread_{horizon}s"
+        if spread_col not in frame.columns:
+            frame[spread_col] = np.nan
         frame[f"signed_move_{horizon}s"] = q * (frame[mid_col] - frame["mid"])
         frame[f"abs_move_{horizon}s"] = (frame[mid_col] - frame["mid"]).abs()
         if "venue_price" in frame.columns:
@@ -757,8 +760,9 @@ def add_derived(frame: pd.DataFrame) -> pd.DataFrame:
             frame[f"realized_spread_{horizon}s"] = q * (frame["venue_price"] - frame[mid_col])
     for count in EVENT_HORIZONS:
         col = f"mid_e{count}"
-        if col in frame.columns:
-            frame[f"signed_move_e{count}"] = q * (frame[col] - frame["mid"])
+        if col not in frame.columns:
+            frame[col] = np.nan
+        frame[f"signed_move_e{count}"] = q * (frame[col] - frame["mid"])
     if "replenish_80_ms" in frame.columns:
         frame["failed_replenish_80_30s"] = (
             frame["replenish_80_ms"].isna() | (frame["replenish_80_ms"] > 30000)
