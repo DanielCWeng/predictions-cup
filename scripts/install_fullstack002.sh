@@ -38,6 +38,51 @@ fi
 if grep -Eiq '^[[:space:]]*PREDICTIONS_CUP_TRADING_ENABLED[[:space:]]*=[[:space:]]*(1|true|yes|on)' "${runtime_env}"; then
   fail "FULLSTACK-002 runtime.env must not enable trading"
 fi
+if grep -Eiq '^[[:space:]]*PREDICTIONS_CUP_EXECUTION_MODE[[:space:]]*=[[:space:]]*LIVE([[:space:]]*(#.*)?)?
+units=(
+  predictions-cup-alert@.service
+  predictions-cup-sig-capture.service
+  predictions-cup-polymarket-capture.service
+  predictions-cup-maker.service
+  predictions-cup-status.service
+  predictions-cup-status.timer
+  predictions-cup-runtime.target
+)
+
+for unit in "${units[@]}"; do [[ -f "${SOURCE_DIR}/${unit}" ]] || fail "missing unit template ${unit}"; done
+"${python_bin}" -c 'import predictions_cup.fullstack; import predictions_cup.maker; import predictions_cup.sig.capture; import predictions_cup.external.polymarket.recorder'
+
+[[ "${SYSTEMD_DIR}" != "/etc/systemd/system" || "$(id -u)" -eq 0 ]] || fail "installing to /etc/systemd/system requires root"
+mkdir -p "${SYSTEMD_DIR}"
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "${tmp_dir}"' EXIT
+
+for unit in "${units[@]}"; do
+  sed \
+    -e "s|@@RUNTIME_USER@@|${runtime_user}|g" \
+    -e "s|@@REPO_ROOT@@|${REPO_ROOT}|g" \
+    -e "s|@@RUNTIME_ENV@@|${runtime_env}|g" \
+    -e "s|@@PYTHON_BIN@@|${python_bin}|g" \
+    "${SOURCE_DIR}/${unit}" > "${tmp_dir}/${unit}"
+  grep -q '@@[A-Z_][A-Z_]*@@' "${tmp_dir}/${unit}" && fail "unresolved placeholder in ${unit}"
+  grep -Eq 'PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL=.+' "${tmp_dir}/${unit}" && fail "trade credential embedded in ${unit}"
+done
+
+if command -v "${SYSTEMD_ANALYZE_BIN}" >/dev/null 2>&1 || [[ -x "${SYSTEMD_ANALYZE_BIN}" ]]; then
+  "${SYSTEMD_ANALYZE_BIN}" verify "${tmp_dir}"/*
+fi
+
+for unit in "${units[@]}"; do
+  install -m 0644 "${tmp_dir}/${unit}" "${SYSTEMD_DIR}/${unit}"
+done
+
+"${SYSTEMCTL_BIN}" daemon-reload
+"${SYSTEMCTL_BIN}" enable predictions-cup-runtime.target predictions-cup-status.timer
+printf 'Installed FULLSTACK-002 safe composition. No services were started and LIVE remains unavailable.\n'
+printf 'Start explicitly with: %s/scripts/cupctl start-shadow\n' "${REPO_ROOT}"
+ "${runtime_env}"; then
+  fail "FULLSTACK-002 runtime.env must not request EXECUTION_MODE=LIVE"
+fi
 
 units=(
   predictions-cup-alert@.service
