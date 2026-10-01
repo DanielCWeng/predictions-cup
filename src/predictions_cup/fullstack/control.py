@@ -8,6 +8,8 @@ and emits append-only alert evidence.  It never grants LIVE authorization.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping, Sequence
+from contextlib import suppress
 import hashlib
 import json
 import os
@@ -20,7 +22,7 @@ import tempfile
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Mapping, Sequence, cast
+from typing import cast
 
 from predictions_cup.config import AppSettings, load_settings
 from predictions_cup.execution.journal import ExecutionJournal
@@ -611,10 +613,8 @@ def _atomic_json(path: Path, payload: Mapping[str, object]) -> None:
             os.fsync(handle.fileno())
         os.replace(temporary, path)
     finally:
-        try:
+        with suppress(FileNotFoundError):
             temporary.unlink()
-        except FileNotFoundError:
-            pass
 
 
 def append_alert(path: Path, *, event_type: str, detail: Mapping[str, object]) -> None:
