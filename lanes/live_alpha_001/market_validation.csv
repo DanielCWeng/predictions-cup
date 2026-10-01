@@ -1,0 +1,96 @@
+exchange_id,title,dev_n,val_n,dev_edge_c,val_edge_c,val_m60_c,val_m60_ci_lo_c,val_m300_c,val_pre_move_against_c,val_notional,val_sig_spread_c,val_pm_spread_c
+1072,Will the Democratic Party win the Oklahoma Senate?,0,15,,26.763333333333332,26.763333333333332,8.752143795962095,26.763333333333332,0.0,98485.96999999999,0.99999999999999,1.0999999999999999
+980,Will the Democratic Party win the South Dakota Senate?,32,11,1.9999999999999991,3.168181818181813,3.168181818181813,2.705251875067948,3.238888888888884,0.0,34.58,2.4999999999999902,0.1
+933,Will the Republican Party win the TX-15 House race?,3,9,0.9999999999999932,2.722222222222218,2.37499999999999,2.1299999999999897,2.4999999999999902,0.05555555555555555,443.34,3.0,1.0
+928,Will the Democratic Party win the PA-10 House race?,0,4,,2.2499999999999902,2.2499999999999902,1.9670983680970735,2.2499999999999902,0.0,508.35,1.5,0.99999999999998
+1031,Will the Democratic Party win the VA-01 House race?,22,12,11.477272727272727,2.9583333333333335,2.9583333333333335,1.7078607963871735,3.3636363636363638,0.0,1355.8850000000002,1.5,1.0
+1014,Will the Republican Party win the FL-16 House race?,4,2,0.75,1.5,1.5,1.5,1.5,0.0,60.480000000000004,2.25,1.0
+1065,Will the Republican Party win the NH-01 House race?,4,7,2.0499999999999976,2.0214285714285647,2.0214285714285647,1.0268700429011217,2.0214285714285647,0.0,91.775,4.5,2.09999999999999
+1037,Will the Republican Party win the WA-03 House race?,9,2,-26.5,1.99999999999999,1.99999999999999,1.01999999999999,1.99999999999999,0.0,10.499999999999998,1.5,0.99999999999999
+1077,Will the Republican Party win the Rhode Island Senate?,73,16,19.791095890410958,6.499999999999997,7.214285714285711,1.0124218505254474,7.214285714285711,0.0,225.67000000000002,2.4999999999999902,0.8999999999999999
+1033,Will the Democratic Party win the VA-05 House race?,11,5,1.2727272727272727,0.899999999999998,0.899999999999998,0.7039999999999941,0.8749999999999974,0.0,163.5,1.5,1.0
+960,Will the Republican Party win the Maine Senate?,31,37,1.096774193548389,0.8783783783783784,0.8030303030303042,0.3682206225739594,0.9032258064516135,0.0,5726.75,1.0,0.99999999999999
+1075,Will the Republican Party win the Delaware Senate?,13,4,0.24999999999999978,1.7375000000000023,1.8750000000000024,0.35600000000000737,1.624999999999995,0.1875,69.295,3.5000000000000004,3.9
+1045,Will the Democratic Party win the Kansas Senate?,14,7,3.8214285714285716,0.4285714285714286,0.4285714285714286,0.2885714285714286,0.4285714285714286,0.0,441.93,0.5,1.0
+951,Will the Democratic Party win the Idaho Senate?,17,6,-0.49411764705882,0.533333333333335,0.3833333333333333,0.05666666666666667,0.05,0.0,10.825000000000001,2.7499999999999947,4.89999999999999
+970,Will the Republican Party win the Nebraska Senate?,21,7,0.047619047619047096,0.35714285714285715,0.35714285714285715,0.004817250163555555,0.25,0.0,2437.8100000000004,1.0,1.0
+1021,Will the Democratic Party win the MI-10 House race?,3,2,-0.16666666666666669,0.0,0.0,0.0,0.0,0.0,21.615000000000002,0.5,1.0
+1007,Will the Democratic Party win the AL-02 House race?,0,5,,0.9999999999999959,0.9999999999999959,-0.027832671206748892,0.9999999999999959,0.0,526.75,3.5000000000000004,1.0
+1010,Will the Republican Party win the FL-07 House race?,0,7,,-0.2857142857142857,-0.2857142857142857,-0.48370418444651897,-0.5,0.0,688.37,0.5,1.0
+1017,Will the Democratic Party win the FL-22 House race?,11,2,1.363636363636364,-0.5,-0.5,-0.5,-0.5,0.0,208.59,1.5,1.0
+938,Will the Republican Party win the VA-01 House race?,23,5,1.2826086956521745,1.399999999999998,1.399999999999998,-0.9273710490594241,0.8749999999999999,0.0,209.67000000000002,2.0,1.0
+889,Will the Republican Party win the AZ-06 House race?,2,4,-0.74999999999999,-0.99999999999999,-0.99999999999999,-0.99999999999999,-0.99999999999999,0.0,63.029999999999994,1.0,0.99999999999999
+932,Will the Democratic Party win the TX-15 House race?,12,18,-1.5000000000000004,-0.08333333333333325,-0.08823529411764693,-1.1250813902136971,-0.21874999999999994,0.0,4108.245,1.0,2.0
+969,Will the Independent Party win the Nebraska Senate?,28,10,1.2321428571428528,-3.018418848199644e-15,0.22222222222221888,-1.1551253808733386,0.22222222222221888,0.0,523.765,2.4999999999999902,1.0
+1034,Will the Republican Party win the VA-05 House race?,6,4,-0.6666666666666667,0.24999999999999997,0.24999999999999997,-1.1645081595145834,-0.16666666666666669,0.0,338.875,2.0,1.0
+959,Will the Democratic Party win the Maine Senate?,16,18,0.37500000000000006,-0.6944444444444444,-0.6944444444444444,-1.3189870948291886,-0.6944444444444444,0.0,9616.98,0.5,1.0
+922,Will the Democratic Party win the PA-01 House race?,11,4,-0.40909090909090723,-0.37499999999999495,-0.37499999999999495,-1.5999999999999852,-0.37499999999999495,0.0,62.349999999999994,0.5,1.0
+930,Will the Democratic Party win the SC-01 House race?,5,4,0.5,-0.75,-0.5,-1.8269262727572066,-0.5,-0.125,150.575,0.49999999999999,2.0
+1074,Will the Republican Party win the Rhode Island Governor?,3,2,0.28333333333333005,0.09999999999999497,0.09999999999999497,-2.3499999999999948,-1.15,0.0,1.94,3.25,0.1
+1060,Will the Republican Party win the Massachusetts Governor?,2,4,-4.15,-1.4,-1.4,-2.9234719120045063,-1.4,0.0,34.620000000000005,1.0,0.1
+895,Will the Republican Party win the CO-03 House race?,16,2,-0.3750000000000006,1.0000000000000002,3.5000000000000004,,3.5000000000000004,0.0,425.0,2.25,2.0
+901,Will the Republican Party win the FL-13 House race?,4,1,1.5,1.5,1.5,,1.5,0.0,37.0,2.0,1.0
+1020,Will the Republican Party win the MI-07 House race?,7,1,-0.5714285714285714,1.0,1.0,,1.0,0.0,79.21000000000001,3.5000000000000004,1.0
+931,Will the Republican Party win the SC-01 House race?,11,1,0.9545454545454546,1.0,1.0,,1.0,0.0,250.85,1.5,1.0
+1038,Will the Democratic Party win the WI-01 House race?,9,1,11.499999999999993,-0.5,-0.5,,-0.5,0.0,65.99999999999999,0.5,1.0
+912,Will the Democratic Party win the MT-01 House race?,0,1,,-0.5,-0.5,,-0.5,0.0,96.0,1.0,1.0
+844,Will the Democratic Party win the Alabama Governor?,0,1,,-1.6500000000000001,-0.75,,-1.95,0.1,27.71,0.49999999999999,7.9
+1011,Will the Republican Party win the FL-09 House race?,1,1,-0.49999999999997996,-0.99999999999998,-0.99999999999998,,-0.99999999999998,0.0,224.485,0.5,0.99999999999998
+911,Will the Republican Party win the ME-02 House race?,10,1,0.5,-1.5,-1.5,,-1.5,0.0,3.84,0.5,1.0
+1041,Will the Republican Party win the WI-03 House race?,1,1,2.0,-2.0,-2.0,,-2.0,0.0,27.500000000000004,1.0,1.0
+948,Will the Republican Party win the Georgia Senate?,0,4,,-3.6999999999999997,,,,0.0,477.2950000000001,0.99999999999999,1.7999999999999998
+1069,Will the Republican Party win the Massachusetts Senate?,2,1,-2.3,2.25,,,,0.0,0.63,1.99999999999999,0.5
+958,Will the Republican Party win the Louisiana Senate?,3,1,-0.49999999999997996,-0.49999999999997996,,,,0.0,188.0,0.5,0.99999999999998
+1001,Will the Democratic Party win the Vermont Governor?,4,0,-0.99999999999999,,,,,,0.0,,
+1008,Will the Republican Party win the AL-02 House race?,3,0,0.5,,,,,,0.0,,
+1009,Will the Democratic Party win the FL-07 House race?,2,0,0.24999999999999997,,,,,,0.0,,
+1012,Will the Democratic Party win the FL-13 House race?,8,0,-1.9375,,,,,,0.0,,
+1013,Will the Democratic Party win the FL-16 House race?,2,0,0.0,,,,,,0.0,,
+1018,Will the Republican Party win the FL-22 House race?,2,0,0.75,,,,,,0.0,,
+1019,Will the Democratic Party win the MI-07 House race?,10,0,1.05,,,,,,0.0,,
+1022,Will the Republican Party win the MI-10 House race?,1,0,0.5,,,,,,0.0,,
+1026,Will the Republican Party win the MN-02 House race?,22,0,36.27727272727273,,,,,,0.0,,
+1028,Will the Republican Party win the MN-05 House race?,1,0,-2.1999999999999997,,,,,,0.0,,
+1029,Will the Democratic Party win the TN-05 House race?,1,0,-1.04999999999999,,,,,,0.0,,
+1030,Will the Republican Party win the TN-05 House race?,1,0,0.0,,,,,,0.0,,
+1036,Will the Democratic Party win the WA-03 House race?,12,0,8.0,,,,,,0.0,,
+1039,Will the Republican Party win the WI-01 House race?,9,0,17.1111111111111,,,,,,0.0,,
+1051,Will the Democratic Party win the Tennessee Senate?,4,0,34.85,,,,,,0.0,,
+1054,Will the Democratic Party win the Wyoming Senate?,2,0,2.75,,,,,,0.0,,
+1064,Will the Democratic Party win the NH-01 House race?,12,0,0.21666666666666345,,,,,,0.0,,
+862,Will the Republican Party win the Illinois Governor?,7,0,4.7,,,,,,0.0,,
+880,Will the Independent Party win the Rhode Island Governor?,3,0,1.7000000000000033,,,,,,0.0,,
+883,Will the Democratic Party win the South Dakota Governor?,1,0,0.7000000000000001,,,,,,0.0,,
+887,Will the Republican Party win the AZ-01 House race?,1,0,-3.5000000000000004,,,,,,0.0,,
+891,Will the Republican Party win the CA-22 House race?,6,0,-1.4999999999999936,,,,,,0.0,,
+892,Will the Democratic Party win the CA-48 House race?,3,0,-0.5,,,,,,0.0,,
+894,Will the Democratic Party win the CO-03 House race?,16,0,-2.99999999999999,,,,,,0.0,,
+897,Will the Republican Party win the CO-04 House race?,2,0,0.5,,,,,,0.0,,
+899,Will the Republican Party win the CO-08 House race?,1,0,0.0,,,,,,0.0,,
+900,Will the Democratic Party win the FL-09 House race?,5,0,2.0,,,,,,0.0,,
+902,Will the Democratic Party win the IA-01 House race?,4,0,0.749999999999995,,,,,,0.0,,
+903,Will the Republican Party win the IA-01 House race?,8,0,1.1875,,,,,,0.0,,
+905,Will the Republican Party win the IA-02 House race?,1,0,-1.0,,,,,,0.0,,
+908,Will the Democratic Party win the KY-04 House race?,9,0,-0.7166666666666678,,,,,,0.0,,
+909,Will the Republican Party win the KY-04 House race?,1,0,-1.04999999999999,,,,,,0.0,,
+910,Will the Democratic Party win the ME-02 House race?,16,0,1.59375,,,,,,0.0,,
+915,Will the Republican Party win the NE-02 House race?,6,0,-1.0999999999999934,,,,,,0.0,,
+916,Will the Democratic Party win the NJ-07 House race?,13,0,-0.15384615384615385,,,,,,0.0,,
+917,Will the Republican Party win the NJ-07 House race?,2,0,1.3877787807814457e-15,,,,,,0.0,,
+920,Will the Democratic Party win the NY-17 House race?,28,0,12.249999999999998,,,,,,0.0,,
+921,Will the Republican Party win the NY-17 House race?,19,0,2.578947368421049,,,,,,0.0,,
+923,Will the Republican Party win the PA-01 House race?,1,0,-1.0,,,,,,0.0,,
+924,Will the Democratic Party win the PA-07 House race?,3,0,1.0,,,,,,0.0,,
+926,Will the Democratic Party win the PA-08 House race?,9,0,1.3333333333333266,,,,,,0.0,,
+927,Will the Republican Party win the PA-08 House race?,2,0,1.0,,,,,,0.0,,
+934,Will the Democratic Party win the TX-23 House race?,13,0,-0.730769230769227,,,,,,0.0,,
+935,Will the Republican Party win the TX-23 House race?,14,0,1.4285714285714286,,,,,,0.0,,
+939,Will the Republican Party win the VA-02 House race?,2,0,-0.25,,,,,,0.0,,
+940,Will the Democratic Party win the VA-07 House race?,3,0,2.24999999999999,,,,,,0.0,,
+941,Will the Democratic Party win the Alabama Senate?,3,0,-1.8499999999999999,,,,,,0.0,,
+943,Will the Democratic Party win the Arkansas Senate?,2,0,-1.95,,,,,,0.0,,
+947,Will the Democratic Party win the Georgia Senate?,1,0,-0.5499999999999899,,,,,,0.0,,
+955,Will the Democratic Party win the Kentucky Senate?,5,0,3.5400000000000014,,,,,,0.0,,
+957,Will the Democratic Party win the Louisiana Senate?,8,0,-0.24999999999999753,,,,,,0.0,,
+961,Will the Democratic Party win the Mississippi Senate?,4,0,2.24999999999999,,,,,,0.0,,
+977,Will the Republican Party win the Oregon Senate?,9,0,-0.8611111111111122,,,,,,0.0,,
