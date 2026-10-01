@@ -336,6 +336,28 @@ def _capture_findings(venue: str, raw: object, findings: list[Finding]) -> None:
             )
         )
 
+    if venue == "SIG":
+        connected = capture.get("connected")
+        if connected is False:
+            findings.append(
+                Finding(
+                    "FEED_SIG_DISCONNECTED",
+                    Severity.CRITICAL,
+                    "SIG realtime connection is disconnected",
+                    {},
+                )
+            )
+        rest_age = _number(capture.get("last_rest_reconciliation_age_seconds"))
+        if rest_age is not None and rest_age > 60.0:
+            findings.append(
+                Finding(
+                    "FEED_SIG_RECONCILIATION_STALE",
+                    Severity.CRITICAL,
+                    "SIG authoritative REST reconciliation is stale",
+                    {"last_rest_reconciliation_age_seconds": rest_age},
+                )
+            )
+
     if venue == "POLYMARKET":
         connected = capture.get("websocket_connected")
         if connected is False:
