@@ -7,6 +7,6 @@
   "timeout_minutes": 330,
   "download_outputs": true,
   "output_file_pattern": "(ECONOMIC_INPUT_AUDIT\\.json|ECONOMIC_HAZARD_MODEL\\.json|ECONOMIC_POLICY_FREEZE\\.json|ECONOMIC_DEV_RESULTS\\.json|ECONOMIC_HOLDOUT_RESULTS\\.json|FINAL_REPORT\\.md)$",
-  "note": "EXPERIMENT-005G economic conversion V1 attempt 3. Same frozen design; mount-discovery fix only. TRAIN 2026-09-06, DEV 2026-09-07, untouched economic HOLDOUT 2026-09-08. Historical passive-execution proxy only; no MAKE modification and no real SIG orders.",
-  "attempt": 3
+  "note": "EXPERIMENT-005G economic conversion V1 attempt 4. Same frozen design; timestamp precision normalization only after TRAIN-only attempt 3 exposed pandas us/ns mismatch. TRAIN 2026-09-06, DEV 2026-09-07, untouched economic HOLDOUT 2026-09-08. Historical passive-execution proxy only; no MAKE modification and no real SIG orders.",
+  "attempt": 4
 }
