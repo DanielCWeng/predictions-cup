@@ -49,6 +49,7 @@ def _complement(
         semantic_proof_version="proof-v1",
         semantic_proof_hash="semantic-hash",
         mapping_hash="mapping-hash",
+        event_group_id="event-group-1",
         action=action,
     )
 
@@ -193,6 +194,29 @@ def test_stale_untrusted_mapping_and_semantics_fail_closed() -> None:
         observed_at=NOW,
     )
     assert semantic.certificate_status is StructuralStatus.SEMANTICS_UNVERIFIED
+
+
+def test_certificate_records_fee_slippage_and_edge_threshold() -> None:
+    certificate = structural.evaluate_relationship(
+        _complement(),
+        {
+            "yes": _book("yes", bid=0.47, ask=0.48),
+            "no": _book("no", bid=0.48, ask=0.49),
+        },
+        observed_at=NOW,
+        fee_rate=0.001,
+        slippage_per_unit=0.002,
+        minimum_net_edge=0.003,
+    )
+    payload = certificate.to_dict()
+    assert payload["event_group_id"] == "event-group-1"
+    assert payload["fee_rate"] == pytest.approx(0.001)
+    assert payload["slippage_assumption"] == pytest.approx(0.002)
+    assert payload["minimum_net_edge_per_bundle"] == pytest.approx(0.003)
+    assert certificate.slippage_cost is not None
+    assert certificate.slippage_cost == pytest.approx(
+        0.002 * certificate.available_size
+    )
 
 
 def test_fees_erase_apparent_edge() -> None:
