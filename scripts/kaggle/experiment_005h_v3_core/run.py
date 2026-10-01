@@ -562,6 +562,7 @@ def process_window(
         "transaction_hash",
     ]
     last_seen_by_token: dict[str, int] = {}
+    window_end_ns = 0
 
     for number, path in enumerate(files, start=1):
         pf = pq.ParquetFile(path)
@@ -570,6 +571,9 @@ def process_window(
         counts["raw_rows"] += len(frame)
         if frame.empty:
             continue
+        raw_received_ns = receive_ns(frame["timestamp_received"])
+        if len(raw_received_ns):
+            window_end_ns = max(window_end_ns, int(raw_received_ns.max()))
         frame = frame[frame["asset_id"].isin(target_bytes)].copy()
         counts["target_token_rows"] += len(frame)
         if frame.empty:
@@ -703,8 +707,11 @@ def process_window(
     for token, rows in pending.items():
         state = states[token]
         last_seen = last_seen_by_token.get(token)
-        if last_seen is not None:
-            resolve_clock(rows, state, last_seen + 1)
+        if last_seen is not None and window_end_ns > 0:
+            # Clock-time outcomes are last-observation-carried-forward as of the
+            # horizon. A quiet token must not lose support merely because it had
+            # no later update to trigger resolve_clock.
+            resolve_clock(rows, state, window_end_ns + 1)
     fill_frame = pd.DataFrame(fills)
     control_frame = pd.DataFrame(controls)
     audit = {
@@ -717,6 +724,11 @@ def process_window(
         "controls_built": len(control_frame),
         "raw_rows_scanned": counts["raw_rows"],
         "target_token_rows": counts["target_token_rows"],
+        "window_end_ns": int(window_end_ns),
+        "clock_outcome_semantics": (
+            "last observable reconstructed state at or before horizon; "
+            "quiet tokens carry the last state forward through acquisition end"
+        ),
     }
     return fill_frame, control_frame, audit
 
