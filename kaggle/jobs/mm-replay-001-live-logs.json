@@ -2,5 +2,5 @@
   "schema_version": 1,
   "action": "logs",
   "kernel": "polyleviathan/mm-replay-001-spread-capture",
-  "note": "Read-only live log probe for MM-REPLAY-001 attempt 3."
+  "note": "Read-only live log probe for MM-REPLAY-001 attempt 3 (check 2)."
 }
