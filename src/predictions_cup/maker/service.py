@@ -94,7 +94,7 @@ from predictions_cup.sig.account_state import (
     AccountTrustTransition,
 )
 from predictions_cup.sig.errors import SigApiError, SigExecutionUncertainError
-from predictions_cup.sig.governed_client import GovernedSigRestClient
+from predictions_cup.sig.governed_client import GovernedSigRestClient, build_rest_governor
 from predictions_cup.sig.launch_storage import ObservationCaptureRecorder
 from predictions_cup.sig.realtime_models import MarketBatchDto
 from predictions_cup.sig.realtime_state import SigRealtimeStateEngine, SubscriptionReason
@@ -103,7 +103,7 @@ from predictions_cup.sig.realtime_subscriber import (
     SubscriberExit,
     SupabaseTournamentSubscriber,
 )
-from predictions_cup.sig.rest_governor import RestPriority, SigRestGovernor
+from predictions_cup.sig.rest_governor import RestPriority
 from predictions_cup.sig.trading_client import SigTradingClient
 from predictions_cup.sig.trading_dto import PortfolioPnlDto
 
@@ -163,12 +163,7 @@ class MakerService:
 
     async def run(self) -> None:
         tournament_id, tournament_slug = self._tournament_context()
-        governor = SigRestGovernor(
-            rate_per_second=self.settings.sig_rest_governor_rate_per_second,
-            max_shared_cooldown_seconds=(
-                self.settings.sig_rest_shared_cooldown_max_seconds
-            ),
-        )
+        governor = build_rest_governor(self.settings)
         rest = GovernedSigRestClient(self.settings, governor=governor)
         sig_recorder = cast(SigRealtimeRecorder, NoopSigRealtimeRecorder())
         observe_recorder = ObservationCaptureRecorder(
@@ -639,7 +634,19 @@ class MakerService:
                 return authoritative
 
             if isinstance(adapter, LiveMakerExecutionAdapter):
-                adapter.set_cancel_uncertainty_resolver(account_resync)
+                async def reconcile_uncertain_cancels() -> None:
+                    assert journal is not None and live_sink is not None
+                    # A closed-order 409 needs one order/fill check. A full
+                    # account and capital refresh can fail under SIG REST load
+                    # before reaching that targeted recovery.
+                    await recover_in_session_cancellations(
+                        journal=journal,
+                        rest=rest,
+                        live_sink=live_sink,
+                        tournament_id=tournament_id,
+                    )
+
+                adapter.set_cancel_uncertainty_resolver(reconcile_uncertain_cancels)
 
             account_controller = AccountRealtimeController(
                 state=account_state,
@@ -1388,9 +1395,13 @@ def _risk_uncertain_operation_ids(
 ) -> tuple[str, ...]:
     if journal is None:
         return ()
+    # CANCEL_PENDING is deliberately absent. A cancel in flight can only
+    # remove exposure; the order stays counted as open/uncertain exposure until
+    # SIG confirms, and a fill it races appears in the authoritative positions.
+    # Blocking on it made every capital refresh fail while MAKE was cancelling
+    # (LIVE 2026-10-01: marks went stale, forcing more cancels).
     uncertain_states = {
         LifecycleState.PENDING,
-        LifecycleState.CANCEL_PENDING,
         LifecycleState.UNCERTAIN,
         LifecycleState.RECONCILING,
     }

@@ -38,6 +38,10 @@ class SubscriptionReason(StrEnum):
     SOCKET_ERROR = "socket_error"
 
 
+# Refetch shortly after nextExpiryAt so SIG has removed the expired order.
+_EXPIRY_REFETCH_GRACE = timedelta(milliseconds=500)
+
+
 class DepthState(StrEnum):
     UNTRACKED_DEPTH = "UNTRACKED_DEPTH"
     TRACKED_UNTRUSTED = "TRACKED_UNTRUSTED"
@@ -119,6 +123,9 @@ class ExchangeRuntimeState:
     last_accepted_revision: int | None = None
     last_reconciliation_at: datetime | None = None
     last_reconciliation_attempt_at: datetime | None = None
+    # SIG emits no event when a resting order expires; the pushed book's
+    # ``nextExpiryAt`` is the only signal. Earliest pending expiry wins.
+    next_expiry_at: datetime | None = None
 
     @property
     def tracked(self) -> bool:
@@ -457,6 +464,7 @@ class SigRealtimeStateEngine:
 
         due_exchange_ids: list[str] = []
         newly_stale: list[str] = []
+        expired: list[str] = []
         for state in self.states.values():
             if not state.tracked:
                 continue
@@ -467,6 +475,18 @@ class SigRealtimeStateEngine:
             # Do not advance its generation or force a second request.
             task = self._reconcile_tasks.get(state.exchange_id)
             reconciliation_running = task is not None and not task.done()
+
+            expiry = state.next_expiry_at
+            if (
+                expiry is not None
+                and observed_at >= expiry + _EXPIRY_REFETCH_GRACE
+                and not reconciliation_running
+            ):
+                # A resting order expired silently; SIG sends no event.
+                state.next_expiry_at = None
+                self.health.bounded_book_refresh_count += 1
+                expired.append(state.exchange_id)
+                continue
 
             if state.trusted:
                 last_rest = state.last_rest_observed_at
@@ -485,8 +505,21 @@ class SigRealtimeStateEngine:
                 ) and not reconciliation_running:
                     due_exchange_ids.append(state.exchange_id)
 
-        if not due_exchange_ids and not newly_stale:
+        if not due_exchange_ids and not newly_stale and not expired:
             return
+
+        if expired:
+            # Targeted refetch only. Trust is kept: an expired foreign order
+            # leaves at most one vanished level for about one request, and
+            # flipping trust would make MAKE cancel/requote on every expiry.
+            await self._reconcile_many(
+                expired,
+                reason="order_expiry_refresh",
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=self.last_accepted_revision,
+                priority=RestPriority.NORMAL,
+                wait=wait,
+            )
 
         if newly_stale:
             self.health.bounded_book_refresh_count += len(newly_stale)
@@ -571,6 +604,14 @@ class SigRealtimeStateEngine:
                 observed_at=observed_at,
                 reason=reason,
             )
+
+    def _note_book_expiries(self, batch: MarketBatchDto) -> None:
+        for book in batch.books:
+            state = self.states.get(book.exchange_id)
+            if state is None or not state.tracked or book.next_expiry_at is None:
+                continue
+            if state.next_expiry_at is None or book.next_expiry_at < state.next_expiry_at:
+                state.next_expiry_at = book.next_expiry_at
 
     async def handle_raw_batch(
         self,
@@ -688,6 +729,8 @@ class SigRealtimeStateEngine:
                         refresh_bulk_prices=True,
                     )
             return
+
+        self._note_book_expiries(batch)
 
         for book_event in batch.book_dirty:
             self._recorder.record_book_dirty(

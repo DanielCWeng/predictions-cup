@@ -155,6 +155,11 @@ class AppSettings(BaseSettings):
     # Exchanges MAKE keeps fresh SIG marks for (held inventory) without quoting.
     maker_mark_only_exchange_ids: str = ""
     sig_rest_governor_rate_per_second: float = Field(default=2.0, gt=0.0, le=100.0)
+    # SIG rate limits are per account across all API keys. When a path is set,
+    # every process on the host also draws from one flock-guarded token bucket
+    # at this combined rate; HIGH (execution) priority keeps a reserved token.
+    sig_rest_account_budget_path: Path | None = None
+    sig_rest_account_rate_per_second: float = Field(default=3.0, gt=0.0, le=100.0)
     sig_rest_shared_cooldown_max_seconds: float = Field(default=8.0, ge=0.5, le=120.0)
     sig_realtime_open_book_refresh_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
     sig_realtime_bulk_price_refresh_seconds: float = Field(default=10.0, ge=1.0, le=300.0)

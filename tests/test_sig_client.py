@@ -793,3 +793,27 @@ def test_transport_models_ignore_unknown_extra_fields_but_keep_types() -> None:
     broken = dict(live, bids=[{"price": "not-a-price", "quantity": 1}])
     with pytest.raises(ValidationError):
         OrderBookSnapshotDto.model_validate(broken)
+
+
+def test_transport_failure_names_exception_class_in_log_and_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    async def fake_sleep(delay: float) -> None:
+        del delay
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.RemoteProtocolError("peer closed", request=request)
+
+    async def scenario() -> None:
+        async with SigRestClient(
+            _settings(),
+            transport=httpx.MockTransport(handler),
+            retry_policy=RetryPolicy(max_attempts=2, jitter_ratio=0),
+            sleep=fake_sleep,
+        ) as client:
+            with pytest.raises(SigApiError, match="RemoteProtocolError GET /account"):
+                await client.get_account()
+
+    with caplog.at_level("WARNING"):
+        asyncio.run(scenario())
+    assert "SIG REST transport failure: RemoteProtocolError GET /account attempt=1" in caplog.text
