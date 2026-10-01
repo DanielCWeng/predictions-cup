@@ -89,11 +89,12 @@ def locate_fill_files(window: str) -> list[Path]:
 
 
 def eligible_orderbook_files(root: Path, ob_window: str) -> list[Path]:
-    files = eligible_orderbook_files(root, ob_window)
+    files = sorted((root / ob_window).rglob("*.parquet"))
     if ob_window != "baseline_sep":
         return files
     return [
-        path for path in files
+        path
+        for path in files
         if _path_day(path) is not None
         and "2026-09-01" <= str(_path_day(path)) <= "2026-09-21"
     ]
