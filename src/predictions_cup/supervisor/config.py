@@ -128,6 +128,14 @@ class SupervisorRuntimeConfig:
             disk_emergency_free_bytes=_int(
                 "PREDICTIONS_CUP_SUPERVISOR_DISK_EMERGENCY_FREE_BYTES", 2 * 1024**3
             ),
+            disk_growth_warn_bytes_per_min=_float(
+                "PREDICTIONS_CUP_SUPERVISOR_DISK_GROWTH_WARN_BYTES_PER_MIN",
+                256 * 1024**2,
+            ),
+            disk_growth_critical_bytes_per_min=_float(
+                "PREDICTIONS_CUP_SUPERVISOR_DISK_GROWTH_CRITICAL_BYTES_PER_MIN",
+                512 * 1024**2,
+            ),
             service_memory_warn_bytes=_int(
                 "PREDICTIONS_CUP_SUPERVISOR_MEMORY_WARN_BYTES", 650 * 1024**2
             ),
