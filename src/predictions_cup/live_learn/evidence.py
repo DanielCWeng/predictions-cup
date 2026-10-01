@@ -239,7 +239,7 @@ class JournalExecutionEvidenceProvider:
             sources: list[str] = []
             modes: set[str] = set()
             provisional_seen = False
-            complete_source_seen = False
+            all_legs_complete = True
 
             for (
                 operation_id_raw,
@@ -277,7 +277,7 @@ class JournalExecutionEvidenceProvider:
                         """
                         SELECT event_id, event_type, observed_monotonic_ns,
                                source_timestamp, exchange_order_id, fill_id,
-                               quantity, price
+                               quantity, price, terminal_status
                         FROM execution_events
                         WHERE logical_operation_id = ?
                           AND exchange_id = ?
@@ -296,7 +296,7 @@ class JournalExecutionEvidenceProvider:
                         """
                         SELECT event_id, event_type, observed_monotonic_ns,
                                source_timestamp, exchange_order_id, fill_id,
-                               quantity, price
+                               quantity, price, terminal_status
                         FROM execution_events
                         WHERE logical_operation_id = ?
                           AND exchange_id = ?
@@ -323,15 +323,19 @@ class JournalExecutionEvidenceProvider:
                 if authoritative:
                     selected = authoritative
                     source_kind = "authoritative"
-                    complete_source_seen = True
+                    leg_complete = True
                 elif immediate:
                     selected = immediate
                     source_kind = "immediate"
-                    complete_source_seen = True
+                    leg_complete = all(
+                        str(row[8]) == "FILLED" for row in immediate
+                    )
                 else:
                     selected = realtime
                     source_kind = "provisional"
+                    leg_complete = False
                     provisional_seen = provisional_seen or bool(realtime)
+                all_legs_complete = all_legs_complete and leg_complete
 
                 for row in selected:
                     filled_at = _parse_time(row[3])
@@ -434,7 +438,7 @@ class JournalExecutionEvidenceProvider:
                     evidence_source_ids=tuple(dict.fromkeys(sources)),
                     execution_mode=mode,
                 )
-            if not complete_source_seen:
+            if not all_legs_complete:
                 return ExecutionEvidence(
                     supported=False,
                     reason="fill_evidence_incomplete",
