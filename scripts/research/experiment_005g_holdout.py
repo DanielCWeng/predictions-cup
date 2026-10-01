@@ -539,6 +539,54 @@ def score_candidate(panel: pd.DataFrame, candidate: dict[str, Any]) -> dict[str,
     return result
 
 
+def apply_discovery_holdout_fdr(results: list[dict[str, Any]]) -> None:
+    groups: dict[tuple[str, str], list[int]] = {}
+    for index, row in enumerate(results):
+        if (
+            row.get("lane") != "B_OPEN_DISCOVERY"
+            or row.get("status") != "EVALUATED"
+        ):
+            continue
+        key = (
+            str(row.get("target_family", "")),
+            str(row.get("feature_family", "")),
+        )
+        groups.setdefault(key, []).append(index)
+
+    for indexes in groups.values():
+        ordered = sorted(indexes, key=lambda idx: float(results[idx]["signflip_p"]))
+        total = len(ordered)
+        adjusted = [1.0] * total
+        running = 1.0
+        max_rank = 0
+        for rank, index in enumerate(ordered, 1):
+            raw = float(results[index]["signflip_p"])
+            if raw <= 0.10 * rank / total:
+                max_rank = rank
+        for offset in range(total - 1, -1, -1):
+            rank = offset + 1
+            raw = float(results[ordered[offset]]["signflip_p"])
+            running = min(running, raw * total / rank)
+            adjusted[offset] = min(1.0, running)
+        for rank, (index, adjusted_p) in enumerate(
+            zip(ordered, adjusted, strict=True),
+            1,
+        ):
+            row = results[index]
+            row["holdout_p_bh"] = adjusted_p
+            row["holdout_fdr_pass"] = rank <= max_rank
+            gate = bool(
+                row.get("holdout_gate_pass")
+                and row["holdout_fdr_pass"]
+            )
+            row["holdout_gate_pass"] = gate
+            row["disposition"] = (
+                "INDEPENDENTLY_SUPPORTED_DISCOVERY"
+                if gate
+                else "DISCOVERY_NOT_CONFIRMED"
+            )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-manifest", required=True)
@@ -573,6 +621,7 @@ def main() -> None:
     panel, panel_audit = build_full_panel(states, trades, depth, bbo)
 
     results = [score_candidate(panel, candidate) for candidate in candidates]
+    apply_discovery_holdout_fdr(results)
     out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -587,6 +636,7 @@ def main() -> None:
         ],
         "results": results,
         "selection_or_tuning_after_holdout": False,
+        "discovery_holdout_fdr": "BH q=0.10 within frozen target_family x feature_family cells",
         "make_modified": False,
         "real_sig_orders_sent": False,
     }
