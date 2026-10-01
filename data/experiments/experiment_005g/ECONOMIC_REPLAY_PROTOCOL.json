@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "protocol_id": "005G_ECONOMIC_REPLAY_V1",
+  "source_experiment": "EXPERIMENT-005G",
+  "source_bundle": "005G_STATE_HAZARD_V1",
+  "status": "PREREGISTERED_WAITING_FOR_COMPUTE",
+  "purpose": "Test whether frozen 005G orderbook-state information converts into improved execution economics without changing fair-value direction.",
+  "scientific_boundary": {
+    "new_feature_selection_allowed": false,
+    "post_005g_holdout_rescue_allowed": false,
+    "direct_make_modification_allowed": false,
+    "real_orders_allowed": false,
+    "economic_claim_before_replay": false
+  },
+  "frozen_features": [
+    "state_dwell_s",
+    "genuine_age_s",
+    "spread_x_distance",
+    "distance_from_0_5",
+    "volatility_x_liquidity",
+    "price_change_age_s"
+  ],
+  "frozen_exclusions": [
+    "ofi_acceleration",
+    "distance_from_0_5 -> abs_h60",
+    "PRE_LIQUIDITY",
+    "ACTIVE_JUMP"
+  ],
+  "economic_hypothesis": "State and renewal hazard information may improve passive execution by reducing exposure during adverse or unstable book states and by changing quote width, size, or willingness to quote.",
+  "not_a_hypothesis": [
+    "005G provides directional fair-value alpha",
+    "005G relative MSE improvements equal trading returns"
+  ],
+  "baseline": {
+    "id": "BASELINE_NO_005G",
+    "description": "Identical replay economics with no conditioning on 005G_STATE_HAZARD_V1."
+  },
+  "challenger_families": [
+    {
+      "id": "WIDTH_ONLY",
+      "description": "Use frozen 005G hazard information only to widen quotes in higher-hazard states."
+    },
+    {
+      "id": "SIZE_ONLY",
+      "description": "Use frozen 005G hazard information only to reduce quote size in higher-hazard states."
+    },
+    {
+      "id": "WAIT_ONLY",
+      "description": "Use frozen 005G hazard information only to abstain from initiating new passive exposure in the highest-hazard states."
+    },
+    {
+      "id": "REFRESH_ONLY",
+      "description": "Use frozen 005G hazard information only to alter refresh/cancel timing."
+    },
+    {
+      "id": "COMBINED",
+      "description": "Combine only effects that individually survive the preregistered development gate."
+    }
+  ],
+  "development_rule": {
+    "feature_set_fixed": true,
+    "policy_parameter_tuning": "TRAIN_DEV_ONLY",
+    "economic_holdout_must_remain_unread_until_policy_freeze": true,
+    "candidate_selection_rule": [
+      "maximize net_pnl_after_fees on DEV",
+      "subject to adverse_selection not worse than baseline",
+      "subject to max_drawdown not worse than baseline",
+      "break ties by lower turnover",
+      "then break ties by lower intervention rate"
+    ],
+    "manual_override_after_holdout": false
+  },
+  "primary_metrics": [
+    "net_pnl_after_fees",
+    "adverse_selection",
+    "realised_spread",
+    "post_fill_markout",
+    "max_drawdown"
+  ],
+  "secondary_metrics": [
+    "fill_rate",
+    "fill_count",
+    "turnover",
+    "fees",
+    "inventory_abs_mean",
+    "inventory_abs_max",
+    "cancel_rate",
+    "intervention_rate"
+  ],
+  "required_slices": [
+    "all",
+    "market",
+    "time_block",
+    "hazard_bucket"
+  ],
+  "promotion_gate": {
+    "net_pnl_after_fees_positive_vs_baseline": true,
+    "adverse_selection_non_worse": true,
+    "max_drawdown_non_worse": true,
+    "effect_not_concentrated_in_single_market": true,
+    "effect_not_concentrated_in_single_time_block": true,
+    "fees_included": true,
+    "latency_included": true,
+    "economic_holdout_pass_required": true
+  },
+  "failure_policy": {
+    "if_no_challenger_passes": "005G remains a predictive market-state result only; do not route to live execution.",
+    "if_only_one_component_passes": "Promote only that component; do not rescue the combined policy.",
+    "if_holdout_fails": "Do not retune on holdout and do not replace the failed challenger."
+  },
+  "next_action_when_compute_available": "Build the replay input audit, choose a disjoint economic holdout before reading economic outcomes, freeze the policy grid, then launch development replay.",
+  "source_provenance": {
+    "pre_holdout_freeze_sha256": "887592885c02ae9219232c40a8b9ce0b263f9a62e04da62c524b16162895cc1c",
+    "005g_holdout_artifact_sha256": "2c5bb46ebcf5b8d79e7368afdb309c849e55992ad44a771ab849740a219ef4d0"
+  }
+}
