@@ -53,7 +53,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     action = data.get("action")
     if action not in {
         "auth_check", "run", "status", "output", "logs", "dataset_files", "dataset_probe",
-        "dataset_fetch", "dataset_analysis"
+        "dataset_fetch", "dataset_analysis", "artifact_analysis"
     }:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
@@ -347,6 +347,81 @@ def dataset_analysis(data: dict[str, Any], output_dir: Path) -> None:
     )
 
 
+
+def artifact_analysis(data: dict[str, Any], output_dir: Path) -> None:
+    import urllib.request
+    import zipfile
+
+    artifacts = data.get("artifacts")
+    if not isinstance(artifacts, list) or not artifacts:
+        raise ValueError("artifact_analysis requires non-empty 'artifacts' list")
+    script_raw = str(data.get("script", "")).strip()
+    if not script_raw:
+        raise ValueError("artifact_analysis requires 'script'")
+    script = repo_path(script_raw)
+    if not script.is_file():
+        raise FileNotFoundError(f"Analysis script not found: {script_raw}")
+
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    repository = os.environ.get("GITHUB_REPOSITORY", "").strip()
+    if not token or "/" not in repository:
+        raise RuntimeError("artifact_analysis requires GITHUB_TOKEN and GITHUB_REPOSITORY")
+
+    packages = data.get("packages", ["numpy==2.3.3", "pandas==2.3.3", "pyarrow==25.0.1"])
+    if packages:
+        if not isinstance(packages, list) or not all(isinstance(x, str) and x for x in packages):
+            raise ValueError("'packages' must be a list of non-empty strings")
+        run_command([sys.executable, "-m", "pip", "install", "--quiet", *packages])
+
+    artifacts_root = output_dir / "artifacts"
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+    for raw in artifacts:
+        artifact_id = int(raw)
+        zip_path = artifacts_root / f"{artifact_id}.zip"
+        url = f"https://api.github.com/repos/{repository}/actions/artifacts/{artifact_id}/zip"
+        request = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "User-Agent": "predictions-cup-005i-artifact-analysis",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=120) as response:
+            zip_path.write_bytes(response.read())
+        dest = artifacts_root / str(artifact_id)
+        dest.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(zip_path) as archive:
+            archive.extractall(dest)
+        zip_path.unlink()
+
+    spec_path = output_dir / "artifact_spec.json"
+    spec_path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    results = output_dir / "results"
+    results.mkdir(parents=True, exist_ok=True)
+    run_command(
+        [
+            sys.executable,
+            str(script),
+            "--artifacts-root",
+            str(artifacts_root),
+            "--spec",
+            str(spec_path),
+            "--output-dir",
+            str(results),
+        ]
+    )
+    write_summary(
+        [
+            "## Artifact analysis",
+            "",
+            f"- Artifacts: {len(artifacts)}",
+            f"- Script: {script_raw}",
+        ]
+    )
+
+
 def kernel_from_manifest(data: dict[str, Any]) -> str:
     kernel = str(data.get("kernel", "")).strip()
     if not kernel:
@@ -497,6 +572,8 @@ def main() -> int:
         dataset_fetch(data, output_dir)
     elif action == "dataset_analysis":
         dataset_analysis(data, output_dir)
+    elif action == "artifact_analysis":
+        artifact_analysis(data, output_dir)
 
     return 0
 
