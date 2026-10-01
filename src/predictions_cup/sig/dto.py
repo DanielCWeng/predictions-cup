@@ -118,6 +118,9 @@ class MarketContextExchangeDto(TransportModel):
 
 class MarketPricingContextDto(MarketReadContextDescriptorDto):
     exchanges: tuple[MarketContextExchangeDto, ...]
+    status: MarketStatus | None = None
+    settled_with: str | None = Field(default=None, alias="settledWith")
+    settled_on: WireDateTime | None = Field(default=None, alias="settledOn")
 
 
 class CreatorDto(TransportModel):

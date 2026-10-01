@@ -66,6 +66,9 @@ def _public_market(market_id: str = "opaque-market") -> dict[str, object]:
             {
                 "type": "public",
                 "tournament": None,
+                "status": "open",
+                "settledWith": None,
+                "settledOn": None,
                 "exchanges": [
                     {"id": "opaque-yes", "latestPrice": "0.41"},
                     {"id": "opaque-no", "latestPrice": "0.59"},
@@ -737,5 +740,30 @@ def test_malformed_error_body_fails_without_exposing_raw_payload() -> None:
             with pytest.raises(SigMalformedResponseError) as caught:
                 await client.get_account()
         assert secretish_body not in str(caught.value)
+
+    asyncio.run(scenario())
+
+
+def test_market_context_accepts_current_settlement_fields() -> None:
+    payload = _public_market()
+    contexts = payload["contexts"]
+    assert isinstance(contexts, list)
+    context = contexts[0]
+    assert isinstance(context, dict)
+    context["status"] = "settled"
+    context["settledWith"] = "YES"
+    context["settledOn"] = "2026-10-01T12:00:00.000Z"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(200, json=payload)
+
+    async def scenario() -> None:
+        async with SigRestClient(_settings(), transport=httpx.MockTransport(handler)) as client:
+            market = await client.get_market("opaque-market")
+        parsed = market.contexts[0]
+        assert parsed.status == "settled"
+        assert parsed.settled_with == "YES"
+        assert parsed.settled_on == datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
 
     asyncio.run(scenario())
