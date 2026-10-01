@@ -287,6 +287,93 @@ def leave_one_token_out_auc(
     }
 
 
+def add_extended_features(fills: pd.DataFrame) -> pd.DataFrame:
+    out = fills.copy()
+    out["price_region_005h"] = pd.cut(
+        pd.to_numeric(out["mid"], errors="coerce"),
+        bins=[0.0, 0.05, 0.15, 0.30, 0.45, 0.55, 0.70, 0.85, 0.95, 1.000001],
+        labels=[
+            "0-5", "5-15", "15-30", "30-45", "45-55",
+            "55-70", "70-85", "85-95", "95-100",
+        ],
+        include_lowest=True,
+        right=False,
+    ).astype(str)
+    train_rel = pd.to_numeric(
+        out.loc[out["split"] == "TRAIN", "venue_size_over_touch"],
+        errors="coerce",
+    ).replace([np.inf, -np.inf], np.nan).dropna()
+    if len(train_rel) >= 50:
+        edges = np.unique(np.quantile(train_rel, [0, .2, .4, .6, .8, 1]))
+        if len(edges) >= 3:
+            out["relative_size_bin"] = pd.cut(
+                pd.to_numeric(out["venue_size_over_touch"], errors="coerce"),
+                bins=edges,
+                include_lowest=True,
+                duplicates="drop",
+            ).astype(str)
+        else:
+            out["relative_size_bin"] = "UNAVAILABLE"
+    else:
+        out["relative_size_bin"] = "UNAVAILABLE"
+
+    out["next_fill_dt_s"] = np.nan
+    out["next_fill_same_side"] = np.nan
+    out["prior_same_side_run"] = 0
+    for token, group in out.groupby("token_id", sort=False):
+        ordered = list(group.sort_values("anchor_ts_ns").index)
+        run = 0
+        previous_side: int | None = None
+        for pos, index in enumerate(ordered):
+            side = int(out.at[index, "q"])
+            run = run + 1 if previous_side == side else 1
+            out.at[index, "prior_same_side_run"] = max(0, run - 1)
+            previous_side = side
+            if pos + 1 < len(ordered):
+                nxt = ordered[pos + 1]
+                dt = (
+                    int(out.at[nxt, "anchor_ts_ns"])
+                    - int(out.at[index, "anchor_ts_ns"])
+                ) / 1e9
+                out.at[index, "next_fill_dt_s"] = dt
+                out.at[index, "next_fill_same_side"] = float(
+                    int(out.at[nxt, "q"]) == side
+                )
+    return out
+
+
+def categorical_response_rows(
+    fills: pd.DataFrame,
+    column: str,
+    label: str,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for (split, bucket), group in fills.groupby(
+        ["split", column],
+        observed=True,
+        dropna=False,
+    ):
+        rec: dict[str, Any] = {
+            "feature": label,
+            "split": split,
+            "bucket": str(bucket),
+            "fills": int(len(group)),
+            "tokens": int(group["token_id"].nunique()),
+        }
+        for horizon in CLOCK_HORIZONS:
+            col = f"signed_move_{horizon}s"
+            rec[f"mean_{col}"] = float(
+                pd.to_numeric(group[col], errors="coerce").mean()
+            )
+        for horizon in EVENT_HORIZONS:
+            col = f"signed_move_e{horizon}"
+            rec[f"mean_{col}"] = float(
+                pd.to_numeric(group[col], errors="coerce").mean()
+            )
+        rows.append(rec)
+    return rows
+
+
 def impact_curves(fills: pd.DataFrame) -> pd.DataFrame:
     train = fills[fills["split"] == "TRAIN"]
     rows: list[dict[str, Any]] = []
@@ -324,6 +411,20 @@ def impact_curves(fills: pd.DataFrame) -> pd.DataFrame:
                 col = f"signed_move_e{horizon}"
                 rec[f"mean_{col}"] = float(pd.to_numeric(group[col], errors="coerce").mean())
             rows.append(rec)
+    rows.extend(
+        categorical_response_rows(
+            fills,
+            "price_region_005h",
+            "price_region_005h",
+        )
+    )
+    rows.extend(
+        categorical_response_rows(
+            fills,
+            "relative_size_bin",
+            "relative_size_bin",
+        )
+    )
     return pd.DataFrame(rows)
 
 
@@ -377,6 +478,8 @@ def resilience_table(fills: pd.DataFrame) -> pd.DataFrame:
             rows.append(
                 {
                     "split": split,
+                    "dimension": "OVERALL",
+                    "bucket": "ALL",
                     "recovery_level_pct": level,
                     "fills": int(len(group)),
                     "recovered_30s_share": float((value <= 30000).mean()),
@@ -385,43 +488,128 @@ def resilience_table(fills: pd.DataFrame) -> pd.DataFrame:
                     "p90_ms_uncensored": float(value.quantile(0.9)),
                 }
             )
-        for failed, part in group.groupby("failed_replenish_80_30s"):
+        for dimension in (
+            "trade_side",
+            "price_region_005h",
+            "relative_size_bin",
+        ):
+            for bucket, part in group.groupby(
+                dimension,
+                observed=True,
+                dropna=False,
+            ):
+                value = pd.to_numeric(
+                    part.get("replenish_80_ms"),
+                    errors="coerce",
+                )
+                rows.append(
+                    {
+                        "split": split,
+                        "dimension": dimension,
+                        "bucket": str(bucket),
+                        "recovery_level_pct": 80,
+                        "fills": int(len(part)),
+                        "recovered_30s_share": float((value <= 30000).mean()),
+                        "recovered_60s_share": float((value <= 60000).mean()),
+                        "median_ms_uncensored": float(value.median()),
+                        "mean_signed_move_30s": float(
+                            pd.to_numeric(
+                                part["signed_move_30s"],
+                                errors="coerce",
+                            ).mean()
+                        ),
+                    }
+                )
+        for failed, part in group.groupby(
+            "failed_replenish_80_30s",
+            dropna=False,
+        ):
             rows.append(
                 {
                     "split": split,
+                    "dimension": "failed_replenish_80_30s",
+                    "bucket": str(bool(failed)),
                     "recovery_level_pct": 80,
-                    "condition": f"failed_30s={bool(failed)}",
                     "fills": int(len(part)),
                     "mean_signed_move_30s": float(part["signed_move_30s"].mean()),
                     "mean_signed_move_60s": float(part["signed_move_60s"].mean()),
                     "mean_signed_move_300s": float(part["signed_move_300s"].mean()),
-                    "mean_flow_persistence_30s": float(part["flow_persistence_30s"].mean()),
+                    "mean_flow_persistence_30s": float(
+                        part["flow_persistence_30s"].mean()
+                    ),
                 }
             )
     return pd.DataFrame(rows)
 
-
 def flow_table(fills: pd.DataFrame, episodes: pd.DataFrame) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
-    for split, group in fills.groupby("split"):
+    dt_bins = [-1e-12, 1, 5, 15, 30, 60, 300, np.inf]
+    dt_labels = ["0-1s", "1-5s", "5-15s", "15-30s", "30-60s", "60-300s", "300s+"]
+    run_bins = [-1, 0, 1, 2, 4, np.inf]
+    run_labels = ["0", "1", "2", "3-4", "5+"]
+    work = fills.copy()
+    work["next_dt_bucket"] = pd.cut(
+        pd.to_numeric(work["next_fill_dt_s"], errors="coerce"),
+        bins=dt_bins,
+        labels=dt_labels,
+        include_lowest=True,
+    )
+    work["prior_run_bucket"] = pd.cut(
+        pd.to_numeric(work["prior_same_side_run"], errors="coerce"),
+        bins=run_bins,
+        labels=run_labels,
+        include_lowest=True,
+    )
+    for split, group in work.groupby("split"):
+        next_valid = group["next_fill_same_side"].notna()
         rows.append(
             {
                 "split": split,
-                "metric": "next_30s_linked_fill_persistence",
-                "fills": int(len(group)),
-                "mean_same_minus_opp": float(group["flow_persistence_30s"].mean()),
-                "positive_share": float((group["flow_persistence_30s"] > 0).mean()),
+                "metric": "next_fill_same_side",
+                "bucket": "ALL",
+                "observations": int(next_valid.sum()),
+                "value": float(
+                    pd.to_numeric(
+                        group.loc[next_valid, "next_fill_same_side"],
+                        errors="coerce",
+                    ).mean()
+                ),
             }
         )
+        for dimension in (
+            "next_dt_bucket",
+            "prior_run_bucket",
+            "failed_replenish_80_30s",
+        ):
+            for bucket, part in group.groupby(
+                dimension,
+                observed=True,
+                dropna=False,
+            ):
+                y = pd.to_numeric(
+                    part["next_fill_same_side"],
+                    errors="coerce",
+                ).dropna()
+                rows.append(
+                    {
+                        "split": split,
+                        "metric": f"next_fill_same_side_by_{dimension}",
+                        "bucket": str(bucket),
+                        "observations": int(len(y)),
+                        "value": float(y.mean()) if len(y) else math.nan,
+                    }
+                )
         for position, part in group.groupby("episode_position"):
             rows.append(
                 {
                     "split": split,
                     "metric": "episode_position",
                     "bucket": str(position),
-                    "fills": int(len(part)),
+                    "observations": int(len(part)),
                     "mean_signed_move_30s": float(part["signed_move_30s"].mean()),
-                    "mean_markout_30s": float(part["aggressor_markout_30s"].mean()),
+                    "mean_markout_30s": float(
+                        part["aggressor_markout_30s"].mean()
+                    ),
                 }
             )
     for split, group in episodes.groupby("split"):
@@ -429,6 +617,7 @@ def flow_table(fills: pd.DataFrame, episodes: pd.DataFrame) -> pd.DataFrame:
             {
                 "split": split,
                 "metric": "episode_summary",
+                "bucket": "ALL",
                 "episodes": int(len(group)),
                 "multi_fill_share": float((group["fills"] > 1).mean()),
                 "mean_fills": float(group["fills"].mean()),
@@ -437,46 +626,90 @@ def flow_table(fills: pd.DataFrame, episodes: pd.DataFrame) -> pd.DataFrame:
         )
     return pd.DataFrame(rows)
 
-
 def toxicity_table(fills: pd.DataFrame) -> pd.DataFrame:
-    rows = []
+    rows: list[dict[str, Any]] = []
+    dimensions = [
+        ("OVERALL", None),
+        ("failed_replenish_80_30s", "failed_replenish_80_30s"),
+        ("relative_size_bin", "relative_size_bin"),
+        ("price_region_005h", "price_region_005h"),
+    ]
     for split, group in fills.groupby("split"):
-        for horizon in (5, 15, 60, 300):
-            mark = pd.to_numeric(group[f"aggressor_markout_{horizon}s"], errors="coerce")
-            rows.append(
-                {
-                    "split": split,
-                    "horizon_s": horizon,
-                    "fills": int(mark.notna().sum()),
-                    "mean_aggressor_markout": float(mark.mean()),
-                    "adverse_gt_1pp_share": float((mark > 0.01).mean()),
-                    "adverse_gt_2pp_share": float((mark > 0.02).mean()),
-                }
+        for label, column in dimensions:
+            parts = (
+                [("ALL", group)]
+                if column is None
+                else list(group.groupby(column, observed=True, dropna=False))
             )
+            for bucket, part in parts:
+                for horizon in (5, 15, 60, 300):
+                    mark = pd.to_numeric(
+                        part[f"aggressor_markout_{horizon}s"],
+                        errors="coerce",
+                    )
+                    rows.append(
+                        {
+                            "split": split,
+                            "dimension": label,
+                            "bucket": str(bucket),
+                            "horizon_s": horizon,
+                            "fills": int(mark.notna().sum()),
+                            "mean_aggressor_markout": float(mark.mean()),
+                            "median_aggressor_markout": float(mark.median()),
+                            "adverse_gt_1pp_share": float((mark > 0.01).mean()),
+                            "adverse_gt_2pp_share": float((mark > 0.02).mean()),
+                            "tick_threshold_metrics": (
+                                "NOT_ESTIMATED_NO_CANONICAL_TICK_FIELD"
+                            ),
+                        }
+                    )
     return pd.DataFrame(rows)
-
 
 def spread_table(fills: pd.DataFrame) -> pd.DataFrame:
-    rows = []
+    rows: list[dict[str, Any]] = []
+    dimensions = [
+        ("OVERALL", None),
+        ("price_region_005h", "price_region_005h"),
+        ("relative_size_bin", "relative_size_bin"),
+    ]
     for split, group in fills.groupby("split"):
-        for horizon in CLOCK_HORIZONS:
-            realized = pd.to_numeric(group[f"realized_spread_{horizon}s"], errors="coerce")
-            impact = pd.to_numeric(group[f"signed_move_{horizon}s"], errors="coerce")
-            effective = pd.to_numeric(group["effective_spread"], errors="coerce")
-            residual = effective - realized - impact
-            rows.append(
-                {
-                    "split": split,
-                    "horizon_s": horizon,
-                    "fills": int(residual.notna().sum()),
-                    "mean_effective_spread": float(effective.mean()),
-                    "mean_realized_spread": float(realized.mean()),
-                    "mean_adverse_movement": float(impact.mean()),
-                    "decomposition_residual_abs_mean": float(residual.abs().mean()),
-                }
+        for label, column in dimensions:
+            parts = (
+                [("ALL", group)]
+                if column is None
+                else list(group.groupby(column, observed=True, dropna=False))
             )
+            for bucket, part in parts:
+                for horizon in CLOCK_HORIZONS:
+                    realized = pd.to_numeric(
+                        part[f"realized_spread_{horizon}s"],
+                        errors="coerce",
+                    )
+                    impact = pd.to_numeric(
+                        part[f"signed_move_{horizon}s"],
+                        errors="coerce",
+                    )
+                    effective = pd.to_numeric(
+                        part["effective_spread"],
+                        errors="coerce",
+                    )
+                    residual = effective - realized - impact
+                    rows.append(
+                        {
+                            "split": split,
+                            "dimension": label,
+                            "bucket": str(bucket),
+                            "horizon_s": horizon,
+                            "fills": int(residual.notna().sum()),
+                            "mean_effective_spread": float(effective.mean()),
+                            "mean_realized_spread": float(realized.mean()),
+                            "mean_adverse_movement": float(impact.mean()),
+                            "decomposition_residual_abs_mean": float(
+                                residual.abs().mean()
+                            ),
+                        }
+                    )
     return pd.DataFrame(rows)
-
 
 def permutation_test_relative_size(fills: pd.DataFrame, seed: int = 5006) -> dict[str, Any]:
     work = fills[
@@ -623,6 +856,7 @@ def main() -> None:
     episodes = pd.read_parquet(locate("FILL_EPISODES.parquet"))
     controls = pd.read_parquet(locate("NONFILL_CONTROLS.parquet"))
     pairs = pd.read_csv(locate("MATCHED_CONTROLS.csv"))
+    fills = add_extended_features(fills)
     require_columns(
         fills,
         [
@@ -877,6 +1111,12 @@ def main() -> None:
         dev_n = int(direction_result.get("dev_n", 0))
         if (
             float(direction_result.get("dev_auc", 0)) >= 0.58
+            and float(
+                direction_result.get("token_leaveout", {}).get(
+                    "median_auc",
+                    0,
+                )
+            ) >= 0.52
             and dev_buy >= 100
             and dev_n - dev_buy >= 100
             and min(float(halves.get("FIRST", 0)), float(halves.get("SECOND", 0))) >= 0.52
