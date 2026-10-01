@@ -23,10 +23,35 @@ from predictions_cup.sig.rest_governor import (
     RestGovernorSnapshot,
     RestPriority,
     SigRestGovernor,
+    parse_retry_after,
 )
+from predictions_cup.sig.shared_budget import HostSharedRestBudget
 
 logger = logging.getLogger(__name__)
 SleepFn = Callable[[float], Awaitable[None]]
+
+
+def build_rest_governor(
+    settings: AppSettings,
+    *,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> SigRestGovernor:
+    """Process governor, joined to the host-shared account budget if configured."""
+
+    shared = (
+        None
+        if settings.sig_rest_account_budget_path is None
+        else HostSharedRestBudget(
+            settings.sig_rest_account_budget_path,
+            rate_per_second=settings.sig_rest_account_rate_per_second,
+        )
+    )
+    return SigRestGovernor(
+        rate_per_second=settings.sig_rest_governor_rate_per_second,
+        max_shared_cooldown_seconds=settings.sig_rest_shared_cooldown_max_seconds,
+        sleep=sleep,
+        shared_budget=shared,
+    )
 
 
 class GovernedSigRestClient(SigRestClient):
@@ -49,11 +74,7 @@ class GovernedSigRestClient(SigRestClient):
             transport=transport,
             sleep=sleep,
         )
-        self._rest_governor = governor or SigRestGovernor(
-            rate_per_second=settings.sig_rest_governor_rate_per_second,
-            max_shared_cooldown_seconds=settings.sig_rest_shared_cooldown_max_seconds,
-            sleep=sleep,
-        )
+        self._rest_governor = governor or build_rest_governor(settings, sleep=sleep)
         self._priority: ContextVar[RestPriority] = ContextVar(
             "sig_rest_priority", default=RestPriority.NORMAL
         )
@@ -104,7 +125,10 @@ class GovernedSigRestClient(SigRestClient):
                     raise SigTransportError(
                         status_code=None,
                         code=None,
-                        safe_message="SIG REST transport failed after bounded retries",
+                        safe_message=(
+                            "SIG REST transport failed after bounded retries: "
+                            f"{type(exc).__name__} GET {route_template}"
+                        ),
                     ) from exc
                 await self._sleep(self._retry_delay(attempt))
                 continue
@@ -154,7 +178,9 @@ class GovernedSigRestClient(SigRestClient):
             response = await self._client.post(path)
         except httpx.TransportError as exc:
             logger.warning(
-                "SIG REST transport failure",
+                "SIG REST transport failure: %s POST %s",
+                type(exc).__name__,
+                route_template,
                 extra={
                     "sig_method": "POST",
                     "sig_endpoint": route_template,
@@ -167,7 +193,9 @@ class GovernedSigRestClient(SigRestClient):
             raise SigTransportError(
                 status_code=None,
                 code=None,
-                safe_message="SIG REST transport failed",
+                safe_message=(
+                    f"SIG REST transport failed: {type(exc).__name__} POST {route_template}"
+                ),
             ) from exc
 
         logger.info(
@@ -191,11 +219,4 @@ class GovernedSigRestClient(SigRestClient):
 
 
 def _retry_after_seconds(response: httpx.Response) -> float | None:
-    raw = response.headers.get("Retry-After")
-    if raw is None:
-        return None
-    try:
-        parsed = float(raw)
-    except ValueError:
-        return None
-    return max(0.0, parsed)
+    return parse_retry_after(response.headers.get("Retry-After"))

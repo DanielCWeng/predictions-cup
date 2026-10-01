@@ -1185,3 +1185,43 @@ def test_make_noop_recorder_survives_connect_batches_and_disconnect() -> None:
         assert engine.health.connected is False
 
     asyncio.run(scenario())
+
+
+def test_book_next_expiry_triggers_one_targeted_refetch_without_dropping_trust(
+    tmp_path: Path,
+) -> None:
+    """SIG emits no event on order expiry; nextExpiryAt is the only signal."""
+
+    async def scenario() -> None:
+        rest = FakeRest()
+        engine, recorder = _engine(tmp_path, rest, tracked={"36"}, max_age=30.0)
+        await engine.initialize()
+        state = engine.states["36"]
+        assert state.last_rest_observed_at is not None
+
+        await engine.handle_raw_batch(
+            engine.topic,
+            _live_market_batch(revision=1, previous=0, with_trade=False),
+            state.last_rest_observed_at,
+        )
+        assert state.next_expiry_at == datetime(2026, 10, 1, 17, 0, tzinfo=UTC)
+
+        base = state.last_rest_observed_at
+        state.next_expiry_at = base + timedelta(seconds=5)
+        calls = len(rest.calls)
+
+        await engine.refresh_stale_open_books(base + timedelta(seconds=5))
+        assert len(rest.calls) == calls  # inside the grace window
+
+        await engine.refresh_stale_open_books(base + timedelta(seconds=6))
+        assert len(rest.calls) == calls + 1
+        assert "36" in str(rest.calls[-1])
+        assert state.trusted
+        assert state.next_expiry_at is None
+
+        await engine.refresh_stale_open_books(base + timedelta(seconds=7))
+        assert len(rest.calls) == calls + 1
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())

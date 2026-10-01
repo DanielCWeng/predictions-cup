@@ -8,7 +8,10 @@ import time
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from enum import IntEnum
+from typing import Protocol
 
 SleepFn = Callable[[float], Awaitable[None]]
 MonotonicFn = Callable[[], float]
@@ -25,6 +28,41 @@ class RestPriority(IntEnum):
 
 class RestGovernorQueueFullError(RuntimeError):
     """A caller exceeded the bounded SIG REST governor backlog."""
+
+
+
+# Upper bound on a server-supplied Retry-After so a garbage header cannot
+# silence SIG traffic indefinitely; staleness gates fail closed meanwhile.
+MAX_RETRY_AFTER_SECONDS = 60.0
+
+
+def parse_retry_after(raw: str | None, *, now: datetime | None = None) -> float | None:
+    """Parse Retry-After as delta-seconds or an HTTP-date; None if absent/invalid."""
+
+    if raw is None or not raw.strip():
+        return None
+    value = raw.strip()
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            when = parsedate_to_datetime(value)
+        except (TypeError, ValueError, IndexError):
+            return None
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=UTC)
+        seconds = (when - (now or datetime.now(UTC))).total_seconds()
+    if seconds != seconds or seconds in (float("inf"), float("-inf")):
+        return None
+    return min(MAX_RETRY_AFTER_SECONDS, max(0.0, seconds))
+
+
+class SharedRestBudget(Protocol):
+    """Cross-process account budget (see ``sig.shared_budget``)."""
+
+    def try_take(self, priority: RestPriority) -> float: ...
+
+    def extend_cooldown(self, delay_seconds: float) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -59,6 +97,7 @@ class SigRestGovernor:
         sleep: SleepFn = asyncio.sleep,
         monotonic: MonotonicFn = time.monotonic,
         random_fn: RandomFn = random.random,
+        shared_budget: SharedRestBudget | None = None,
     ) -> None:
         if rate_per_second <= 0:
             raise ValueError("rate_per_second must be positive")
@@ -82,6 +121,7 @@ class SigRestGovernor:
         self._monotonic = monotonic
         self._random = random_fn
         self._queue_max = queue_max
+        self._shared_budget = shared_budget
 
         self._queue: asyncio.PriorityQueue[
             tuple[int, int, asyncio.Future[None]]
@@ -133,6 +173,15 @@ class SigRestGovernor:
         *,
         retry_after_seconds: float | None = None,
     ) -> None:
+        if status_code == 503:
+            # SIG documents Retry-After on SERVICE_UNAVAILABLE too. Honour it
+            # as a process-wide cooldown; without the header the caller's own
+            # bounded backoff applies and no shared cooldown is invented.
+            if retry_after_seconds is not None:
+                self._extend_cooldown(
+                    min(MAX_RETRY_AFTER_SECONDS, max(0.0, retry_after_seconds))
+                )
+            return
         if status_code != 429:
             self._consecutive_429 = 0
             return
@@ -140,7 +189,7 @@ class SigRestGovernor:
         self._rate_limit_count += 1
         self._consecutive_429 += 1
         if retry_after_seconds is not None:
-            delay = max(0.0, retry_after_seconds)
+            delay = min(MAX_RETRY_AFTER_SECONDS, max(0.0, retry_after_seconds))
         else:
             base_delay = min(
                 self._max_shared_cooldown_seconds,
@@ -150,8 +199,13 @@ class SigRestGovernor:
                 self._max_shared_cooldown_seconds - base_delay,
                 base_delay * 0.2 * self._random(),
             )
-        now = self._monotonic()
-        candidate = now + delay
+        self._extend_cooldown(delay)
+
+    def _extend_cooldown(self, delay: float) -> None:
+        if self._shared_budget is not None:
+            # 429/503 limits are per account: tell the other processes too.
+            self._shared_budget.extend_cooldown(delay)
+        candidate = self._monotonic() + delay
         if candidate > self._cooldown_until:
             self._cooldown_until = candidate
             self._shared_cooldown_count += 1
@@ -285,6 +339,15 @@ class SigRestGovernor:
                     self._queue.put_nowait((int(priority), self._sequence, future))
                     self._queue_event.set()
                     continue
+
+                if self._shared_budget is not None:
+                    shared_delay = self._shared_budget.try_take(priority)
+                    if shared_delay > 0:
+                        self._pending[priority] += 1
+                        self._sequence += 1
+                        self._queue.put_nowait((int(priority), self._sequence, future))
+                        await self._wait_interruptibly(shared_delay)
+                        continue
 
                 self._tokens = max(0.0, self._tokens - 1.0)
                 self._requests_total += 1
