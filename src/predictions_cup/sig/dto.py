@@ -72,9 +72,14 @@ WireDateTime = Annotated[datetime, BeforeValidator(_wire_datetime)]
 
 
 class TransportModel(BaseModel):
-    """Strict immutable base for validated SIG payloads."""
+    """Strict immutable base for validated SIG payloads.
 
-    model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
+    Types and required fields stay strict. Unknown extra fields are ignored:
+    SIG adds response fields without notice (e.g. ``marketImage`` on portfolio
+    transactions, 2026-10-01), and rejecting them blocked RISK-002 startup.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="ignore", populate_by_name=True)
 
 
 class AccountDto(TransportModel):
