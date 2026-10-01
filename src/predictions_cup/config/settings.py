@@ -172,6 +172,7 @@ class AppSettings(BaseSettings):
     polymarket_include_ids: str = ""
     polymarket_exclude_ids: str = ""
     polymarket_supervised_ids: str = ""
+    polymarket_capture_mapping_path: Path | None = None
 
     @field_validator(
         "environment",
@@ -524,6 +525,11 @@ class AppSettings(BaseSettings):
                     for value in self.polymarket_supervised_ids.split(",")
                     if value.strip()
                 }
+            ),
+            "polymarket_capture_mapping_path": (
+                str(self.polymarket_capture_mapping_path)
+                if self.polymarket_capture_mapping_path is not None
+                else None
             ),
         }
 
