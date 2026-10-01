@@ -149,7 +149,7 @@ class MakerEngine:
                 predictive_shift=prediction.probability_shift,
             )
 
-        if gate.mode in {GateMode.CANCEL, GateMode.SUSPEND, GateMode.NO_TRADE}:
+        if gate.mode in {GateMode.HOLD, GateMode.CANCEL, GateMode.SUSPEND, GateMode.NO_TRADE}:
             return MakerDecision(
                 desired=None,
                 gate=gate,
@@ -247,7 +247,7 @@ class MakerEngine:
             gate = GateDecision(GateMode.SUSPEND, "size_policy_zero")
 
         desired = None
-        if gate.mode not in {GateMode.CANCEL, GateMode.SUSPEND, GateMode.NO_TRADE}:
+        if gate.mode not in {GateMode.HOLD, GateMode.CANCEL, GateMode.SUSPEND, GateMode.NO_TRADE}:
             desired = DesiredQuote(
                 exchange_id=snapshot.exchange_id,
                 market_id=snapshot.market_id,

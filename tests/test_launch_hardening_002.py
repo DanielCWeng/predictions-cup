@@ -1411,7 +1411,7 @@ def test_uncertain_placement_retains_reservation_and_recovery_authority(
         wall_clock=lambda: BASE,
         observation_process_instance_id="lh002-recovery-only",
     )
-    with pytest.raises(RuntimeError, match="recovery-only LIVE permit"):
+    with pytest.raises(ValueError, match="recovery-only LIVE permit"):
         asyncio.run(recovery_sink.dispatch(plan))
     journal.close()
 

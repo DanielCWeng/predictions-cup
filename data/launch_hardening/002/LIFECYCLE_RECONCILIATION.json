@@ -1,0 +1,805 @@
+{
+  "schema_version": "launch-hardening-002-v1",
+  "issue": 110,
+  "related_issue": 104,
+  "starting_main_sha": "4a040a7d309df26098af5e81e96c7f1108d03117",
+  "branch": "build/launch-hardening-002-lifecycle-reconciliation",
+  "real_sig_orders_sent": false,
+  "oracle": "Independent Decimal cash/inventory/open/uncertain exposure ledger owned by the synthetic venue/account fixture; production state is never used to derive expected economics.",
+  "fee_semantics": "Synthetic venue declares no fees, so fees are exactly zero. No fee is invented where the accepted fill contract exposes none.",
+  "stages": [
+    {
+      "stage": "stage_0_clean_startup",
+      "inputs": {
+        "authoritative_empty_account": true
+      },
+      "expected_oracle": {
+        "cash": "100",
+        "signed_inventory": "0",
+        "gross_exposure": "0",
+        "open_order_exposure": "0",
+        "uncertain_exposure": "0",
+        "filled_quantity": "0",
+        "remaining_quantity": "0",
+        "fees": "0",
+        "order_identity": [],
+        "operation_identity": []
+      },
+      "account_state": {
+        "trusted": true,
+        "signed_inventory": 0,
+        "gross_exposure": 0,
+        "open_order_exposure": 0,
+        "uncertain_exposure": 0,
+        "open_orders": [],
+        "cash": "NOT_EXPOSED_BY_RUNTIME_ACCOUNT_CONTRACT",
+        "synthetic_authoritative_cash": "100"
+      },
+      "reservation_state": {
+        "intent_ids": [],
+        "exposure": 0
+      },
+      "risk_state": {
+        "approved": true,
+        "reason": "approved"
+      },
+      "journal_state": {
+        "event_types": [],
+        "unresolved": []
+      },
+      "learner_state": {
+        "status": "not_yet_dispatched"
+      },
+      "residuals": {
+        "synthetic_cash": "0",
+        "synthetic_inventory": "0",
+        "synthetic_filled_quantity": "0",
+        "account_inventory": "0",
+        "account_open_order_exposure": "0",
+        "account_uncertain_exposure": "0"
+      },
+      "pass": true,
+      "failure_reason": null
+    },
+    {
+      "stage": "stage_1_two_sided_quote",
+      "inputs": {
+        "risk_approved": true,
+        "reserved_before_dispatch": true,
+        "durable_before_dispatch": true
+      },
+      "expected_oracle": {
+        "cash": "100",
+        "signed_inventory": "0",
+        "gross_exposure": "0",
+        "open_order_exposure": "20",
+        "uncertain_exposure": "20",
+        "filled_quantity": "0",
+        "remaining_quantity": "20",
+        "fees": "0",
+        "order_identity": [
+          "101",
+          "102"
+        ],
+        "operation_identity": [
+          "lh002-placement"
+        ]
+      },
+      "account_state": {
+        "trusted": true,
+        "signed_inventory": 0,
+        "gross_exposure": 0,
+        "open_order_exposure": 20,
+        "uncertain_exposure": 20,
+        "open_orders": [
+          "lh002-maker:1000:36:0",
+          "lh002-maker:1000:36:1"
+        ],
+        "cash": "NOT_EXPOSED_BY_RUNTIME_ACCOUNT_CONTRACT",
+        "synthetic_authoritative_cash": "100"
+      },
+      "reservation_state": {
+        "intent_ids": [
+          "lh002-maker:1000:36:0",
+          "lh002-maker:1000:36:1"
+        ],
+        "exposure": 20
+      },
+      "risk_state": {
+        "approved": true,
+        "reason": "approved"
+      },
+      "journal_state": {
+        "event_types": [
+          "SUBMISSION",
+          "NETWORK_DISPATCH",
+          "ACK",
+          "ACK"
+        ],
+        "unresolved": [
+          "lh002-placement"
+        ]
+      },
+      "learner_state": {
+        "supported": false,
+        "reason": "fill_evidence_incomplete",
+        "planned_quantity": 20,
+        "filled_quantity": 0,
+        "fill_ids": [],
+        "actions": []
+      },
+      "residuals": {
+        "synthetic_cash": "0",
+        "synthetic_inventory": "0",
+        "synthetic_filled_quantity": "0",
+        "account_inventory": "0",
+        "account_open_order_exposure": "0",
+        "account_uncertain_exposure": "0"
+      },
+      "pass": true,
+      "failure_reason": null
+    },
+    {
+      "stage": "stage_2_ack_and_open_orders",
+      "inputs": {
+        "ack_ids": [
+          101,
+          102
+        ],
+        "account_revision": 1
+      },
+      "expected_oracle": {
+        "cash": "100",
+        "signed_inventory": "0",
+        "gross_exposure": "0",
+        "open_order_exposure": "20",
+        "uncertain_exposure": "20",
+        "filled_quantity": "0",
+        "remaining_quantity": "20",
+        "fees": "0",
+        "order_identity": [
+          "101",
+          "102"
+        ],
+        "operation_identity": [
+          "lh002-placement"
+        ]
+      },
+      "account_state": {
+        "trusted": true,
+        "signed_inventory": 0,
+        "gross_exposure": 0,
+        "open_order_exposure": 20,
+        "uncertain_exposure": 20,
+        "open_orders": [
+          "lh002-maker:1000:36:0",
+          "lh002-maker:1000:36:1"
+        ],
+        "cash": "NOT_EXPOSED_BY_RUNTIME_ACCOUNT_CONTRACT",
+        "synthetic_authoritative_cash": "100"
+      },
+      "reservation_state": {
+        "intent_ids": [
+          "lh002-maker:1000:36:0",
+          "lh002-maker:1000:36:1"
+        ],
+        "exposure": 20
+      },
+      "risk_state": {
+        "approved": true,
+        "reason": "known_own_orders"
+      },
+      "journal_state": {
+        "event_types": [
+          "SUBMISSION",
+          "NETWORK_DISPATCH",
+          "ACK",
+          "ACK",
+          "REALTIME_ORDER_UPDATE",
+          "REALTIME_ORDER_UPDATE"
+        ],
+        "unresolved": [
+          "lh002-placement"
+        ]
+      },
+      "learner_state": {
+        "supported": false,
+        "reason": "fill_evidence_incomplete",
+        "planned_quantity": 20,
+        "filled_quantity": 0,
+        "fill_ids": [],
+        "actions": []
+      },
+      "residuals": {
+        "synthetic_cash": "0",
+        "synthetic_inventory": "0",
+        "synthetic_filled_quantity": "0",
+        "account_inventory": "0",
+        "account_open_order_exposure": "0",
+        "account_uncertain_exposure": "0"
+      },
+      "pass": true,
+      "failure_reason": null
+    },
+    {
+      "stage": "stage_3_partial_fill",
+      "inputs": {
+        "realtime_fill": {
+          "order_id": 101,
+          "quantity": "4",
+          "price": "0.4"
+        }
+      },
+      "expected_oracle": {
+        "cash": "98.4",
+        "signed_inventory": "4",
+        "gross_exposure": "4",
+        "open_order_exposure": "16",
+        "uncertain_exposure": "16",
+        "filled_quantity": "4",
+        "remaining_quantity": "16",
+        "fees": "0",
+        "order_identity": [
+          "101",
+          "102"
+        ],
+        "operation_identity": [
+          "lh002-placement"
+        ]
+      },
+      "account_state": {
+        "trusted": false,
+        "signed_inventory": 0,
+        "gross_exposure": 0,
+        "open_order_exposure": 20,
+        "uncertain_exposure": 20,
+        "open_orders": [
+          "lh002-maker:1000:36:0",
+          "lh002-maker:1000:36:1"
+        ],
+        "cash": "NOT_EXPOSED_BY_RUNTIME_ACCOUNT_CONTRACT",
+        "synthetic_authoritative_cash": "98.4"
+      },
+      "reservation_state": {
+        "intent_ids": [
+          "lh002-maker:1000:36:0",
+          "lh002-maker:1000:36:1"
+        ],
+        "exposure": 20
+      },
+      "risk_state": {
+        "approved": false,
+        "reason": "account_state_untrusted"
+      },
+      "journal_state": {
+        "event_types": [
+          "SUBMISSION",
+          "NETWORK_DISPATCH",
+          "ACK",
+          "ACK",
+          "REALTIME_ORDER_UPDATE",
+          "REALTIME_ORDER_UPDATE",
+          "REALTIME_FILL"
+        ],
+        "unresolved": [
+          "lh002-placement"
+        ]
+      },
+      "learner_state": {
+        "supported": false,
+        "reason": "provisional_fill_evidence_requires_authoritative_reconciliation",
+        "planned_quantity": 20,
+        "filled_quantity": 4,
+        "fill_ids": [
+          "sig-realtime:<stable-hash>"
+        ],
+        "actions": [
+          "buy"
+        ]
+      },
+      "residuals": {
+        "synthetic_cash": "0",
+        "synthetic_inventory": "0",
+        "synthetic_filled_quantity": "0",
+        "account_inventory": "UNTRUSTED_RECONCILE",
+        "account_open_order_exposure": "UNTRUSTED_RECONCILE",
+        "account_uncertain_exposure": "UNTRUSTED_RECONCILE"
+      },
+      "pass": true,
+      "failure_reason": null
+    },
+    {
+      "stage": "stage_4_cancel_disconnect_uncertain",
+      "inputs": {
+        "cancel_order_id": 101,
+        "disconnect": true
+      },
+      "expected_oracle": {
+        "cash": "98.4",
+        "signed_inventory": "4",
+        "gross_exposure": "4",
+        "open_order_exposure": "16",
+        "uncertain_exposure": "16",
+        "filled_quantity": "4",
+        "remaining_quantity": "16",
+        "fees": "0",
+        "order_identity": [
+          "101",
+          "102"
+        ],
+        "operation_identity": [
+          "lh002-placement",
+          "lh002-cancel-101"
+        ]
+      },
+      "account_state": {
+        "trusted": false,
+        "signed_inventory": 0,
+        "gross_exposure": 0,
+        "open_order_exposure": 20,
+        "uncertain_exposure": 20,
+        "open_orders": [
+          "lh002-maker:1000:36:0",
+          "lh002-maker:1000:36:1"
+        ],
+        "cash": "NOT_EXPOSED_BY_RUNTIME_ACCOUNT_CONTRACT",
+        "synthetic_authoritative_cash": "98.4"
+      },
+      "reservation_state": {
+        "intent_ids": [
+          "lh002-maker:1000:36:0",
+          "lh002-maker:1000:36:1"
+        ],
+        "exposure": 20
+      },
+      "risk_state": {
+        "approved": false,
+        "reason": "account_state_untrusted",
+        "uncertain_exposure_preserved": true
+      },
+      "journal_state": {
+        "event_types": [
+          "SUBMISSION",
+          "NETWORK_DISPATCH",
+          "ACK",
+          "ACK",
+          "REALTIME_FILL",
+          "SUBMISSION",
+          "CANCEL_SUBMITTED",
+          "CANCEL_UNCERTAIN"
+        ],
+        "unresolved": [
+          "lh002-placement",
+          "lh002-cancel-101"
+        ]
+      },
+      "learner_state": {
+        "supported": false,
+        "reason": "provisional_fill_evidence_requires_authoritative_reconciliation",
+        "planned_quantity": 20,
+        "filled_quantity": 4,
+        "fill_ids": [
+          "sig-realtime:<stable-hash>"
+        ],
+        "actions": [
+          "buy"
+        ]
+      },
+      "residuals": {
+        "synthetic_cash": "0",
+        "synthetic_inventory": "0",
+        "synthetic_filled_quantity": "0",
+        "account_inventory": "UNTRUSTED_RECONCILE",
+        "account_open_order_exposure": "UNTRUSTED_RECONCILE",
+        "account_uncertain_exposure": "UNTRUSTED_RECONCILE"
+      },
+      "pass": true,
+      "failure_reason": null
+    },
+    {
+      "stage": "stage_5_late_fill_during_cancel_uncertainty",
+      "inputs": {
+        "late_fill": {
+          "order_id": 101,
+          "quantity": "2",
+          "price": "0.4"
+        }
+      },
+      "expected_oracle": {
+        "cash": "97.6",
+        "signed_inventory": "6",
+        "gross_exposure": "6",
+        "open_order_exposure": "14",
+        "uncertain_exposure": "14",
+        "filled_quantity": "6",
+        "remaining_quantity": "14",
+        "fees": "0",
+        "order_identity": [
+          "101",
+          "102"
+        ],
+        "operation_identity": [
+          "lh002-placement",
+          "lh002-cancel-101"
+        ]
+      },
+      "account_state": {
+        "trusted": false,
+        "signed_inventory": 0,
+        "gross_exposure": 0,
+        "open_order_exposure": 20,
+        "uncertain_exposure": 20,
+        "open_orders": [
+          "lh002-maker:1000:36:0",
+          "lh002-maker:1000:36:1"
+        ],
+        "cash": "NOT_EXPOSED_BY_RUNTIME_ACCOUNT_CONTRACT",
+        "synthetic_authoritative_cash": "97.6"
+      },
+      "reservation_state": {
+        "intent_ids": [
+          "lh002-maker:1000:36:0",
+          "lh002-maker:1000:36:1"
+        ],
+        "exposure": 20
+      },
+      "risk_state": {
+        "approved": false,
+        "reason": "account_state_untrusted",
+        "uncertain_exposure_preserved": true
+      },
+      "journal_state": {
+        "event_types": [
+          "SUBMISSION",
+          "NETWORK_DISPATCH",
+          "ACK",
+          "ACK",
+          "REALTIME_FILL",
+          "REALTIME_FILL",
+          "SUBMISSION",
+          "CANCEL_SUBMITTED",
+          "CANCEL_UNCERTAIN"
+        ],
+        "unresolved": [
+          "lh002-placement",
+          "lh002-cancel-101"
+        ]
+      },
+      "learner_state": {
+        "supported": false,
+        "reason": "provisional_fill_evidence_requires_authoritative_reconciliation",
+        "planned_quantity": 20,
+        "filled_quantity": 6,
+        "fill_ids": [
+          "sig-realtime:<stable-hash-1>",
+          "sig-realtime:<stable-hash-2>"
+        ],
+        "actions": [
+          "buy",
+          "buy"
+        ]
+      },
+      "residuals": {
+        "synthetic_cash": "0",
+        "synthetic_inventory": "0",
+        "synthetic_filled_quantity": "0",
+        "account_inventory": "UNTRUSTED_RECONCILE",
+        "account_open_order_exposure": "UNTRUSTED_RECONCILE",
+        "account_uncertain_exposure": "UNTRUSTED_RECONCILE"
+      },
+      "pass": true,
+      "failure_reason": null
+    },
+    {
+      "stage": "stage_6_reconnect_authoritative_snapshot",
+      "inputs": {
+        "position_quantity": "6",
+        "open_order_ids": [
+          102
+        ],
+        "authoritative": true
+      },
+      "expected_oracle": {
+        "cash": "97.6",
+        "signed_inventory": "6",
+        "gross_exposure": "6",
+        "open_order_exposure": "10",
+        "uncertain_exposure": "0",
+        "filled_quantity": "6",
+        "remaining_quantity": "10",
+        "fees": "0",
+        "order_identity": [
+          "101",
+          "102"
+        ],
+        "operation_identity": [
+          "lh002-placement",
+          "lh002-cancel-101"
+        ]
+      },
+      "account_state": {
+        "trusted": true,
+        "signed_inventory": 6,
+        "gross_exposure": 6,
+        "open_order_exposure": 10,
+        "uncertain_exposure": 0,
+        "open_orders": [
+          "sig-order-102"
+        ],
+        "cash": "NOT_EXPOSED_BY_RUNTIME_ACCOUNT_CONTRACT",
+        "synthetic_authoritative_cash": "97.6"
+      },
+      "reservation_state": {
+        "intent_ids": [],
+        "exposure": 0
+      },
+      "risk_state": {
+        "approved": true,
+        "reason": "trusted_reconciled_account"
+      },
+      "journal_state": {
+        "event_types": [
+          "SUBMISSION",
+          "NETWORK_DISPATCH",
+          "ACK",
+          "ACK",
+          "REALTIME_FILL",
+          "REALTIME_FILL",
+          "SUBMISSION",
+          "CANCEL_SUBMITTED",
+          "CANCEL_UNCERTAIN"
+        ],
+        "unresolved": [
+          "lh002-placement",
+          "lh002-cancel-101"
+        ]
+      },
+      "learner_state": {
+        "supported": false,
+        "reason": "provisional_fill_evidence_requires_authoritative_reconciliation",
+        "planned_quantity": 20,
+        "filled_quantity": 6,
+        "actions": [
+          "buy",
+          "buy"
+        ]
+      },
+      "residuals": {
+        "synthetic_cash": "0",
+        "synthetic_inventory": "0",
+        "synthetic_filled_quantity": "0",
+        "account_inventory": "0",
+        "account_open_order_exposure": "0",
+        "account_uncertain_exposure": "0"
+      },
+      "pass": true,
+      "failure_reason": null
+    },
+    {
+      "stage": "stage_7_restart_and_recovery",
+      "inputs": {
+        "process_objects_recreated": true,
+        "recovery_passes": 2,
+        "fill_queries": 1
+      },
+      "expected_oracle": {
+        "cash": "97.6",
+        "signed_inventory": "6",
+        "gross_exposure": "6",
+        "open_order_exposure": "10",
+        "uncertain_exposure": "0",
+        "filled_quantity": "6",
+        "remaining_quantity": "10",
+        "fees": "0",
+        "order_identity": [
+          "101",
+          "102"
+        ],
+        "operation_identity": [
+          "lh002-placement",
+          "lh002-cancel-101"
+        ]
+      },
+      "account_state": {
+        "trusted": true,
+        "signed_inventory": 6,
+        "gross_exposure": 6,
+        "open_order_exposure": 10,
+        "uncertain_exposure": 0,
+        "open_orders": [
+          "sig-order-102"
+        ],
+        "cash": "NOT_EXPOSED_BY_RUNTIME_ACCOUNT_CONTRACT",
+        "synthetic_authoritative_cash": "97.6"
+      },
+      "reservation_state": {
+        "intent_ids": [],
+        "exposure": 0
+      },
+      "risk_state": {
+        "safe_to_resume_live": true,
+        "unresolved_operation_ids": []
+      },
+      "journal_state": {
+        "event_types": [
+          "SUBMISSION",
+          "NETWORK_DISPATCH",
+          "ACK",
+          "ACK",
+          "REALTIME_FILL",
+          "REALTIME_FILL",
+          "AUTHORITATIVE_FILL",
+          "AUTHORITATIVE_FILL",
+          "SUBMISSION",
+          "CANCEL_SUBMITTED",
+          "CANCEL_UNCERTAIN",
+          "RECONCILED_TERMINAL"
+        ],
+        "unresolved": []
+      },
+      "learner_state": {
+        "supported": false,
+        "reason": "fill_evidence_incomplete",
+        "planned_quantity": 20,
+        "filled_quantity": 6,
+        "fill_ids": [
+          "sig-fill:5001",
+          "sig-fill:5002"
+        ],
+        "actions": [
+          "buy",
+          "buy"
+        ]
+      },
+      "residuals": {
+        "synthetic_cash": "0",
+        "synthetic_inventory": "0",
+        "synthetic_filled_quantity": "0",
+        "account_inventory": "0",
+        "account_open_order_exposure": "0",
+        "account_uncertain_exposure": "0"
+      },
+      "pass": true,
+      "failure_reason": null
+    },
+    {
+      "stage": "stage_8_final_state",
+      "inputs": {
+        "fresh_risk_healthy": true,
+        "halt_blocks_fresh": true,
+        "recovery_permit_fresh_admission_allowed": false
+      },
+      "expected_oracle": {
+        "cash": "97.6",
+        "signed_inventory": "6",
+        "gross_exposure": "6",
+        "open_order_exposure": "10",
+        "uncertain_exposure": "0",
+        "filled_quantity": "6",
+        "remaining_quantity": "10",
+        "fees": "0",
+        "order_identity": [
+          "101",
+          "102"
+        ],
+        "operation_identity": [
+          "lh002-placement",
+          "lh002-cancel-101"
+        ]
+      },
+      "account_state": {
+        "trusted": true,
+        "signed_inventory": 6,
+        "gross_exposure": 6,
+        "open_order_exposure": 10,
+        "uncertain_exposure": 0,
+        "open_orders": [
+          "sig-order-102"
+        ],
+        "cash": "NOT_EXPOSED_BY_RUNTIME_ACCOUNT_CONTRACT",
+        "synthetic_authoritative_cash": "97.6"
+      },
+      "reservation_state": {
+        "intent_ids": [],
+        "exposure": 0
+      },
+      "risk_state": {
+        "approved": true,
+        "reason": "approved",
+        "halted_fresh_reason": "global_kill_switch"
+      },
+      "journal_state": {
+        "event_types": [
+          "SUBMISSION",
+          "NETWORK_DISPATCH",
+          "ACK",
+          "ACK",
+          "REALTIME_FILL",
+          "REALTIME_FILL",
+          "AUTHORITATIVE_FILL",
+          "AUTHORITATIVE_FILL",
+          "SUBMISSION",
+          "CANCEL_SUBMITTED",
+          "CANCEL_UNCERTAIN",
+          "RECONCILED_TERMINAL"
+        ],
+        "unresolved": []
+      },
+      "learner_state": {
+        "supported": false,
+        "reason": "fill_evidence_incomplete",
+        "planned_quantity": 20,
+        "filled_quantity": 6,
+        "fill_ids": [
+          "sig-fill:5001",
+          "sig-fill:5002"
+        ],
+        "actions": [
+          "buy",
+          "buy"
+        ]
+      },
+      "residuals": {
+        "synthetic_cash": "0",
+        "synthetic_inventory": "0",
+        "synthetic_filled_quantity": "0",
+        "account_inventory": "0",
+        "account_open_order_exposure": "0",
+        "account_uncertain_exposure": "0"
+      },
+      "pass": true,
+      "failure_reason": null
+    }
+  ],
+  "hostile_variants": [
+    {
+      "name": "duplicate_ack_and_account_batch",
+      "test": "test_duplicate_reordered_and_unknown_order_evidence_fail_closed",
+      "outcome": "ACK identity remains unique; duplicate account revision applies once",
+      "pass": true
+    },
+    {
+      "name": "stale_snapshot_before_inflight_operation",
+      "test": "test_duplicate_reordered_and_unknown_order_evidence_fail_closed",
+      "outcome": "reservation survives when ACK is newer than snapshot read-start fence",
+      "pass": true
+    },
+    {
+      "name": "known_vs_unknown_open_order",
+      "test": "test_duplicate_reordered_and_unknown_order_evidence_fail_closed",
+      "outcome": "known local venue order is accepted; external unknown order revokes trust",
+      "pass": true
+    },
+    {
+      "name": "fill_after_cancel_evidence",
+      "test": "test_fill_before_order_update_and_cancel_evidence_keeps_original_identity",
+      "outcome": "fill remains attributed to original placement leg, never cancel operation",
+      "pass": true
+    },
+    {
+      "name": "disconnect_during_placement",
+      "test": "test_uncertain_placement_retains_reservation_and_recovery_authority",
+      "outcome": "placement stays UNCERTAIN and reserved; recovery permit cannot admit fresh risk",
+      "pass": true
+    },
+    {
+      "name": "invalid_and_stale_multi_market_marks",
+      "test": "test_multi_market_invalid_or_stale_mark_and_global_halt_block_fresh_risk plus test_make001 stale-mark coordinator regressions",
+      "outcome": "fresh risk blocked and unchanged resting quotes withdrawn on invalid valuation",
+      "pass": true
+    },
+    {
+      "name": "transient_account_untrust",
+      "test": "test_transient_account_untrust_holds_resting_quotes_without_new_io",
+      "outcome": "HOLD emits no placement/cancel I/O while valuation remains valid",
+      "pass": true
+    }
+  ],
+  "limitations": [
+    "RuntimePortfolio does not expose cash; cash is cross-checked against a separate synthetic authoritative account ledger rather than fabricated into production account state.",
+    "Realtime fills are intentionally provisional and revoke account trust until authoritative reconciliation; they are not directionally applied to RuntimePortfolio.",
+    "An open ask leg with no terminal/authoritative fill coverage keeps learner evidence incomplete; zero observed fills is not reported as supported.",
+    "Legacy journals lacking an ACK-to-placement identity can only use the conservative recovery fallback; new journal entries preserve stable placement/intent identity.",
+    "No production fill fee field is available on this evidence path; the synthetic scenario explicitly fixes fees at zero."
+  ]
+}
