@@ -15,7 +15,7 @@
   },
   "critical_rule": "Evidence categories are not scores. No E4/E5 is assigned without positive economic evidence.",
   "summary": {
-    "strongest_cross_dataset_signal": "genuine_age_s -> 300s BBO update/renewal hazard (005F E2; fresh 005G DATA-003 replication E3, but 005G PR is unmerged)",
+    "strongest_cross_dataset_signal": "genuine_age_s -> 300s BBO update/renewal hazard (005F E2; fresh 005G DATA-003 replication E3; both canonical on main)",
     "strongest_canonical_directional_signal": "005I five-minute mean reversion (67.26% sampled reversal; all temporal workers >66%)",
     "economic_positives": 0,
     "live_shadow_economic_positives": 0,
@@ -502,9 +502,9 @@
     {
       "result_id": "005F-PRE-UPDATE-H300",
       "programme": "EXPERIMENT-005F + EXPERIMENT-005G replication",
-      "pr": "005F canonical; 005G PR #114 unmerged",
+      "pr": "005F canonical; 005G PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f",
       "commit_artifact": "docs/experiments/EXPERIMENT_005F_FINAL_REPORT.md + experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
-      "canonicality": "CANONICAL_005F_WITH_NON_CANONICAL_UNMERGED_FRESH_REPLICATION",
+      "canonicality": "CANONICAL_ON_MAIN",
       "dataset": "DATA-001 historical PMXT -> fresh DATA-003 orderbooks",
       "train_period": null,
       "dev_period": null,
@@ -531,7 +531,7 @@
       "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
       "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
       "known_caveats": [
-        "005G replication branch/PR #114 is NON_CANONICAL / UNMERGED.",
+        "005G PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; replication is canonical repository evidence.",
         "Predicts renewal, not sign or toxicity."
       ],
       "known_failures": [
@@ -921,9 +921,9 @@
     {
       "result_id": "005G-STATE-DWELL-H300",
       "programme": "EXPERIMENT-005G",
-      "pr": 114,
+      "pr": "114",
       "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
-      "canonicality": "NON_CANONICAL_UNMERGED",
+      "canonicality": "CANONICAL_ON_MAIN",
       "dataset": "DATA-003 orderbooks",
       "train_period": null,
       "dev_period": null,
@@ -947,7 +947,7 @@
       "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
       "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
       "known_caveats": [
-        "PR #114 is draft/unmerged and must remain labelled NON_CANONICAL / UNMERGED.",
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
         "Predictive state evidence is not directional or economic evidence."
       ],
       "known_failures": [
@@ -968,9 +968,9 @@
     {
       "result_id": "005G-STATE-DWELL-H60",
       "programme": "EXPERIMENT-005G",
-      "pr": 114,
+      "pr": "114",
       "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
-      "canonicality": "NON_CANONICAL_UNMERGED",
+      "canonicality": "CANONICAL_ON_MAIN",
       "dataset": "DATA-003 orderbooks",
       "train_period": null,
       "dev_period": null,
@@ -994,7 +994,7 @@
       "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
       "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
       "known_caveats": [
-        "PR #114 is draft/unmerged and must remain labelled NON_CANONICAL / UNMERGED.",
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
         "Predictive state evidence is not directional or economic evidence."
       ],
       "known_failures": [
@@ -1015,9 +1015,9 @@
     {
       "result_id": "005G-SPREAD-DIST-BBO-H60",
       "programme": "EXPERIMENT-005G",
-      "pr": 114,
+      "pr": "114",
       "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
-      "canonicality": "NON_CANONICAL_UNMERGED",
+      "canonicality": "CANONICAL_ON_MAIN",
       "dataset": "DATA-003 orderbooks",
       "train_period": null,
       "dev_period": null,
@@ -1042,7 +1042,7 @@
       "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
       "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
       "known_caveats": [
-        "PR #114 is draft/unmerged and must remain labelled NON_CANONICAL / UNMERGED.",
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
         "Predictive state evidence is not directional or economic evidence."
       ],
       "known_failures": [
@@ -1063,9 +1063,9 @@
     {
       "result_id": "005G-SPREAD-DIST-BBO-H300",
       "programme": "EXPERIMENT-005G",
-      "pr": 114,
+      "pr": "114",
       "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
-      "canonicality": "NON_CANONICAL_UNMERGED",
+      "canonicality": "CANONICAL_ON_MAIN",
       "dataset": "DATA-003 orderbooks",
       "train_period": null,
       "dev_period": null,
@@ -1090,7 +1090,7 @@
       "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
       "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
       "known_caveats": [
-        "PR #114 is draft/unmerged and must remain labelled NON_CANONICAL / UNMERGED.",
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
         "Predictive state evidence is not directional or economic evidence."
       ],
       "known_failures": [
@@ -1111,9 +1111,9 @@
     {
       "result_id": "005G-DIST05-BBO-H60",
       "programme": "EXPERIMENT-005G",
-      "pr": 114,
+      "pr": "114",
       "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
-      "canonicality": "NON_CANONICAL_UNMERGED",
+      "canonicality": "CANONICAL_ON_MAIN",
       "dataset": "DATA-003 orderbooks",
       "train_period": null,
       "dev_period": null,
@@ -1138,7 +1138,7 @@
       "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
       "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
       "known_caveats": [
-        "PR #114 is draft/unmerged and must remain labelled NON_CANONICAL / UNMERGED.",
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
         "Predictive state evidence is not directional or economic evidence."
       ],
       "known_failures": [
@@ -1159,9 +1159,9 @@
     {
       "result_id": "005G-VOL-LIQ-BBO-H300",
       "programme": "EXPERIMENT-005G",
-      "pr": 114,
+      "pr": "114",
       "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
-      "canonicality": "NON_CANONICAL_UNMERGED",
+      "canonicality": "CANONICAL_ON_MAIN",
       "dataset": "DATA-003 orderbooks",
       "train_period": null,
       "dev_period": null,
@@ -1186,7 +1186,7 @@
       "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
       "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
       "known_caveats": [
-        "PR #114 is draft/unmerged and must remain labelled NON_CANONICAL / UNMERGED.",
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
         "Predictive state evidence is not directional or economic evidence."
       ],
       "known_failures": [
@@ -1207,9 +1207,9 @@
     {
       "result_id": "005G-SPREAD-DIST-ABS-H60",
       "programme": "EXPERIMENT-005G",
-      "pr": 114,
+      "pr": "114",
       "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
-      "canonicality": "NON_CANONICAL_UNMERGED",
+      "canonicality": "CANONICAL_ON_MAIN",
       "dataset": "DATA-003 orderbooks",
       "train_period": null,
       "dev_period": null,
@@ -1234,7 +1234,7 @@
       "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
       "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
       "known_caveats": [
-        "PR #114 is draft/unmerged and must remain labelled NON_CANONICAL / UNMERGED.",
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
         "Predictive state evidence is not directional or economic evidence."
       ],
       "known_failures": [
@@ -1255,9 +1255,9 @@
     {
       "result_id": "005G-PRICE-AGE-BBO-H300",
       "programme": "EXPERIMENT-005G",
-      "pr": 114,
+      "pr": "114",
       "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
-      "canonicality": "NON_CANONICAL_UNMERGED",
+      "canonicality": "CANONICAL_ON_MAIN",
       "dataset": "DATA-003 orderbooks",
       "train_period": null,
       "dev_period": null,
@@ -1282,7 +1282,7 @@
       "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
       "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
       "known_caveats": [
-        "PR #114 is draft/unmerged and must remain labelled NON_CANONICAL / UNMERGED.",
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
         "Predictive state evidence is not directional or economic evidence."
       ],
       "known_failures": [
@@ -1303,9 +1303,9 @@
     {
       "result_id": "005G-PRICE-AGE-BBO-H60",
       "programme": "EXPERIMENT-005G",
-      "pr": 114,
+      "pr": "114",
       "commit_artifact": "experiment/005g-data003-orderbook-atlas:data/experiments/experiment_005g/FINAL_RESULT.json",
-      "canonicality": "NON_CANONICAL_UNMERGED",
+      "canonicality": "CANONICAL_ON_MAIN",
       "dataset": "DATA-003 orderbooks",
       "train_period": null,
       "dev_period": null,
@@ -1330,7 +1330,7 @@
       "economic_replay_status": "FAILED_AS_PART_OF_005G_STATE_HAZARD_V1",
       "live_status": "NO_LIVE_ECONOMIC_SUPPORT",
       "known_caveats": [
-        "PR #114 is draft/unmerged and must remain labelled NON_CANONICAL / UNMERGED.",
+        "PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; result is canonical repository evidence.",
         "Predictive state evidence is not directional or economic evidence."
       ],
       "known_failures": [
@@ -1466,5 +1466,6 @@
       "programme": "STRUCT-SCAN-001",
       "reason": "Implementation/certificate engine, not an empirical positive result."
     }
-  ]
+  ],
+  "canonicality_refresh_main_sha": "662969df4e481f1cbd9417c923ae35d3a0aa9f9f"
 }
