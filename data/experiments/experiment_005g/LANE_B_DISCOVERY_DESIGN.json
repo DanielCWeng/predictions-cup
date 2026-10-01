@@ -1,0 +1,250 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005G",
+  "lane": "B_OPEN_DISCOVERY",
+  "status": "FAMILY_LEVEL_FROZEN_BEFORE_FRESH_DEV_RESULTS",
+  "data_boundary": {
+    "dataset": "polyleviathan/sig-cup-data003-orderbooks",
+    "dataset_version": 1,
+    "accepted_mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
+    "primary_source_generation": "v3",
+    "holdout_read": false
+  },
+  "observability": "All features use timestamp_received <= t. Exchange timestamp, file order and sequence may not create a feature lead.",
+  "feature_families": {
+    "RENEWAL_FRESHNESS": [
+      "bbo_age_s",
+      "price_change_age_s",
+      "book_snapshot_age_s",
+      "bbo_updates_15_60_300",
+      "price_updates_15_60_300",
+      "renewal_acceleration",
+      "unchanged_run_length",
+      "update_interarrival"
+    ],
+    "BBO_STATE": [
+      "spread",
+      "midpoint",
+      "distance_from_0_5",
+      "spread_percentile",
+      "recent_logit_returns_15_60_300",
+      "realized_vol_60_300"
+    ],
+    "DEPTH_GEOMETRY": [
+      "top_bid_size",
+      "top_ask_size",
+      "top_imbalance",
+      "depth_1c_2c_5c",
+      "depth_imbalance_1c_2c_5c",
+      "depth_concentration",
+      "depth_slope",
+      "depth_convexity",
+      "buy_sell_impact_q10_q50_q100",
+      "microprice_displacement"
+    ],
+    "FLOW_PRESSURE": [
+      "signed_top_of_book_flow_5_15_60",
+      "signed_all_level_flow_5_15_60",
+      "add_cancel_imbalance",
+      "ofi_5_15_60",
+      "flow_acceleration",
+      "distance_weighted_flow"
+    ],
+    "TRADE_PRESSURE": [
+      "trade_count_15_60_300",
+      "trade_value_15_60_300",
+      "signed_trade_imbalance_15_60",
+      "trade_burstiness",
+      "trade_interarrival",
+      "trade_abs_impact_60",
+      "trade_to_depth_ratio"
+    ],
+    "RESILIENCE": [
+      "time_since_spread_widen",
+      "time_since_depth_shock",
+      "time_since_price_jump",
+      "spread_recovery_fraction",
+      "depth_replenishment_fraction",
+      "post_shock_update_intensity"
+    ],
+    "STATE_TRANSITIONS": [
+      "spread_state",
+      "depth_state",
+      "activity_state",
+      "volatility_state",
+      "freshness_state",
+      "state_dwell_time",
+      "transition_count_300"
+    ],
+    "INTERACTIONS": [
+      "freshness_x_spread",
+      "freshness_x_flow",
+      "imbalance_x_flow",
+      "trade_pressure_x_depth",
+      "spread_x_depth_concentration",
+      "microprice_x_renewal",
+      "volatility_x_liquidity"
+    ]
+  },
+  "target_families": {
+    "PRICE": {
+      "horizons_s": [
+        5,
+        15,
+        60,
+        300
+      ],
+      "targets": [
+        "signed_logit_mid_change"
+      ],
+      "baseline": [
+        "recent_returns",
+        "spread",
+        "recent_volatility"
+      ]
+    },
+    "VOLATILITY": {
+      "horizons_s": [
+        15,
+        60,
+        300
+      ],
+      "targets": [
+        "absolute_logit_mid_change"
+      ],
+      "baseline": [
+        "recent_absolute_return",
+        "recent_volatility"
+      ]
+    },
+    "LIQUIDITY": {
+      "horizons_s": [
+        15,
+        60,
+        300
+      ],
+      "targets": [
+        "spread_change",
+        "depth_change"
+      ],
+      "baseline": [
+        "current_spread",
+        "current_depth",
+        "recent_return"
+      ]
+    },
+    "RENEWAL": {
+      "horizons_s": [
+        15,
+        60,
+        300
+      ],
+      "targets": [
+        "next_bbo_update",
+        "next_price_change",
+        "update_count"
+      ],
+      "baseline": [
+        "recent_update_counts",
+        "current_age"
+      ]
+    },
+    "TOXICITY": {
+      "horizons_s": [
+        15,
+        60,
+        300
+      ],
+      "targets": [
+        "future_adverse_move_after_trade_pressure",
+        "future_spread_widening"
+      ],
+      "baseline": [
+        "recent_return",
+        "recent_volatility",
+        "spread",
+        "trade_activity"
+      ]
+    },
+    "RESILIENCE": {
+      "horizons_s": [
+        15,
+        60,
+        300
+      ],
+      "targets": [
+        "spread_recovery",
+        "depth_replenishment"
+      ],
+      "baseline": [
+        "shock_size",
+        "spread",
+        "depth",
+        "activity"
+      ]
+    },
+    "REGIME_TRANSITION": {
+      "horizons_s": [
+        60,
+        300
+      ],
+      "targets": [
+        "future_state_transition"
+      ],
+      "baseline": [
+        "current_state",
+        "state_dwell_time"
+      ]
+    }
+  },
+  "modelling": {
+    "linear_baselines": [
+      "OLS/Ridge or logistic depending on target"
+    ],
+    "nonlinear_challengers": [
+      "HGB depth 2/3 with frozen small learning-rate grid"
+    ],
+    "max_model_rows": 250000,
+    "chronological_split": true,
+    "purge_seconds": 300,
+    "fdr_q": 0.1,
+    "fdr_scope": "within (regime,target_family,feature_family)",
+    "dependence_unit": "30-minute time blocks, with market-level stability checks"
+  },
+  "promotion_gates": [
+    "positive incremental dev loss improvement over strong baseline",
+    "BH-FDR pass inside frozen discovery family",
+    "block sign-flip support",
+    "block-bootstrap lower bound > 0",
+    "leave-market-out improvement remains positive",
+    "effect not concentrated exclusively in highest-activity tail",
+    "feature remains observable under freshness restriction",
+    "source/capture controls do not explain the increment",
+    "horizon shape is coherent with proposed mechanism",
+    "future-information diagnostic does not reveal implementation leakage"
+  ],
+  "mandatory_falsifications": [
+    "feature delay 300s",
+    "time shift 1800s",
+    "future-feature diagnostic",
+    "sign or side inversion where meaningful",
+    "V3 best_bid_ask versus price_change capture-control comparison",
+    "activity and freshness restrictions",
+    "leave-market-out",
+    "leave-window/event-out when more than one event window is used",
+    "source-generation split if non-v3 eras are added"
+  ],
+  "labels": {
+    "train_dev_positive": "DISCOVERY_ONLY",
+    "train_dev_negative": "REJECTED_DISCOVERY",
+    "holdout_positive": "INDEPENDENTLY_SUPPORTED_DISCOVERY",
+    "no_exact_semantics": "SEMANTICS_BLOCKED"
+  },
+  "economic_routing": {
+    "price_or_fv": "R2/R3-FV and SHADOW candidate bus",
+    "maker_spread_or_toxicity": "MM-REPLAY-001",
+    "live_diagnostic": "LIVE-DIAG",
+    "direct_make_mutation": false
+  },
+  "real_sig_orders_sent": false
+}
