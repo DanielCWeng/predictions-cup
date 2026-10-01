@@ -380,6 +380,7 @@ def test_live_authorization_only_yields_build009_plan_after_risk_approval() -> N
     assert result.risk_decision is not None and result.risk_decision.approved
     assert result.execution_plan is not None
     assert result.execution_plan.envelope.logical_operation_id == "test:model:live"
+    assert result.execution_plan.audit is not None
     assert result.execution_plan.audit.strategy_id.startswith("MODEL::live::v1::")
 
 

@@ -11,7 +11,7 @@ import argparse
 import asyncio
 import logging
 import signal
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from contextlib import suppress
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -44,7 +44,7 @@ from predictions_cup.maker.adapters import (
     ShadowMakerExecutionAdapter,
 )
 from predictions_cup.maker.contracts import MakerMarketSnapshot
-from predictions_cup.maker.coordinator import MakerCoordinator
+from predictions_cup.maker.coordinator import MakerCoordinator, MakerStateChange
 from predictions_cup.maker.factory import MakerRuntimeComponents, build_maker_components
 from predictions_cup.maker.instance_lock import MakerInstanceLock
 from predictions_cup.maker.noop_recorder import NoopSigRealtimeRecorder
@@ -507,7 +507,18 @@ class MakerService:
                     dispatch=dispatch_model_plan,
                     decision_observer=shadow_runtime.persist_model_decision,
                 )
-                model_execution_observer = model_coordinator.on_state_change
+                async def observe_live_models(
+                    change: MakerStateChange,
+                    observed_at: datetime,
+                    snapshots: Mapping[str, MakerMarketSnapshot],
+                ) -> None:
+                    await model_coordinator.on_state_change(
+                        change,
+                        observed_at,
+                        snapshots,
+                    )
+
+                model_execution_observer = observe_live_models
 
             coordinator = MakerCoordinator(
                 engine=self.core.engine,

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from datetime import datetime
 from enum import StrEnum
 from time import monotonic_ns
 
@@ -418,13 +419,9 @@ class LiveModelCoordinator:
     async def on_state_change(
         self,
         change: MakerStateChange,
-        observed_at: object,
+        observed_at: datetime,
         snapshots: Mapping[str, MakerMarketSnapshot],
     ) -> tuple[ExecutionEvent, ...]:
-        from datetime import datetime
-
-        if not isinstance(observed_at, datetime):
-            raise TypeError("observed_at must be datetime")
         events: list[ExecutionEvent] = []
         for exchange_id in sorted(snapshots):
             original = snapshots[exchange_id]
