@@ -25,13 +25,11 @@ from pathlib import Path
 from typing import cast
 
 from predictions_cup.config import AppSettings, load_settings
-from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.observe import (
     ObservationStatusState,
     default_observation_health_status_path,
     read_observation_health_status,
 )
-from predictions_cup.risk import SqliteRiskStateStore
 
 STATUS_SCHEMA_VERSION = "fullstack-002-status-v1"
 ALERT_SCHEMA_VERSION = "fullstack-002-alert-v1"
@@ -297,35 +295,43 @@ def _risk_status(settings: AppSettings) -> dict[str, object]:
             "session_id": None,
             "detail": "risk_state_missing",
         }
+    uri = f"file:{path.resolve().as_posix()}?mode=ro"
     try:
-        with SqliteRiskStateStore(path) as store:
-            state = store.load()
-    except Exception as exc:  # status path must report corruption, not mask it
+        with sqlite3.connect(uri, uri=True, timeout=0.5) as connection:
+            row = connection.execute(
+                "SELECT payload_json FROM risk_state WHERE singleton = 1"
+            ).fetchone()
+        if row is None:
+            return {
+                "state": "NOT_READY",
+                "configured": True,
+                "global_halt": None,
+                "session_id": None,
+                "detail": "risk_state_uninitialized",
+            }
+        payload = json.loads(str(row[0]))
+        if not isinstance(payload, dict):
+            raise TypeError("risk state payload must be an object")
+    except (sqlite3.Error, OSError, TypeError, json.JSONDecodeError) as exc:
         return {
             "state": "BLOCKED",
             "configured": True,
             "global_halt": None,
             "session_id": None,
             "detail": f"risk_state_error:{type(exc).__name__}",
-              }
-    if state is None:
-        return {
-            "state": "NOT_READY",
-            "configured": True,
-            "global_halt": None,
-            "session_id": None,
-            "detail": "risk_state_uninitialized",
         }
-    halt = state.global_halt
-    halted = bool(halt is not None and halt.active)
+
+    halt_raw = payload.get("global_halt")
+    halt = halt_raw if isinstance(halt_raw, dict) else None
+    halted = bool(halt is not None and halt.get("active") is True)
     return {
         "state": "HALTED" if halted else "READY",
         "configured": True,
-        "global_halt": None if halt is None else asdict(halt),
-        "session_id": state.session_id,
-        "reconciliation_complete": state.reconciliation_complete,
-        "account_trusted": state.account_trusted,
-        "marks_trusted": state.marks_trusted,
+        "global_halt": halt,
+        "session_id": payload.get("session_id"),
+        "reconciliation_complete": payload.get("reconciliation_complete"),
+        "account_trusted": payload.get("account_trusted"),
+        "marks_trusted": payload.get("marks_trusted"),
     }
 
 
@@ -333,20 +339,31 @@ def _unresolved_operations(settings: AppSettings) -> dict[str, object]:
     path = settings.execution_journal_path
     if not path.is_file():
         return {"count": 0, "state": "NOT_PRESENT", "path": str(path)}
-    journal: ExecutionJournal | None = None
+    uri = f"file:{path.resolve().as_posix()}?mode=ro"
+    terminal = ("FILLED", "CANCELLED", "RECONCILED", "REJECTED")
     try:
-        journal = ExecutionJournal(path)
-        unresolved = journal.unresolved()
+        with sqlite3.connect(uri, uri=True, timeout=0.5) as connection:
+            row = connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM execution_envelopes
+                WHERE lifecycle_state NOT IN (?, ?, ?, ?)
+                """,
+                terminal,
+            ).fetchone()
+    except (sqlite3.Error, OSError) as exc:
         return {
-            "count": len(unresolved),
-            "state": "CLEAR" if not unresolved else "BLOCKED",
+            "count": None,
+            "state": "BLOCKED",
             "path": str(path),
+            "detail": type(exc).__name__,
         }
-    except Exception as exc:
-        return {"count": None, "state": "BLOCKED", "path": str(path), "detail": type(exc).__name__}
-    finally:
-        if journal is not None:
-            journal.close()
+    count = 0 if row is None else int(row[0])
+    return {
+        "count": count,
+        "state": "CLEAR" if count == 0 else "BLOCKED",
+        "path": str(path),
+    }
 
 
 def _observe_status(settings: AppSettings, *, maker_active: bool) -> dict[str, object]:
