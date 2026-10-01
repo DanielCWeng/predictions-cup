@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005G",
+  "phase": "V3_SEMANTIC_PROBE",
+  "holdout_read": false,
+  "conclusion": "STRICT_005F_PRICE_CHANGE_BBO_SEMANTICS_AVAILABLE_IN_V3",
+  "root_cause_of_first_lane_a_failure": "V3 asset_id is binary while accepted mapping token IDs are text; string predicate matched zero rows.",
+  "files": [
+    {
+      "remote": "ev18_ok_sc_runoff_ga_runoff/date=2026-08-25/hour=23/events.parquet",
+      "rows": 470642,
+      "asset_id_type": "binary",
+      "timestamp_received_type": "timestamp[us, tz=UTC]",
+      "event_counts": {
+        "best_bid_ask": 29424,
+        "book": 4906,
+        "last_trade_price": 8,
+        "price_change": 436304
+      },
+      "price_change_fields": {
+        "best_bid_non_null": true,
+        "best_ask_non_null": true,
+        "price_non_null": true,
+        "size_non_null": true,
+        "side_non_null": true
+      },
+      "witness_columns_present": false
+    },
+    {
+      "remote": "baseline_sep/date=2026-09-01/hour=00/events.parquet",
+      "rows": 23244,
+      "asset_id_type": "binary",
+      "timestamp_received_type": "timestamp[us, tz=UTC]",
+      "event_counts": {
+        "best_bid_ask": 174,
+        "book": 200,
+        "price_change": 22870
+      },
+      "price_change_fields": {
+        "best_bid_non_null": true,
+        "best_ask_non_null": true,
+        "price_non_null": true,
+        "size_non_null": true,
+        "side_non_null": true
+      },
+      "witness_columns_present": true
+    }
+  ],
+  "strict_replication_decision": "Primary Lane A remains price_change-only. best_bid_ask remains a V3 capture-quality challenger/falsification, not a substitute.",
+  "source": "Authenticated Kaggle dataset API artifact from kaggle/jobs/005g-v3-semantic-probe.json",
+  "real_sig_orders_sent": false
+}
