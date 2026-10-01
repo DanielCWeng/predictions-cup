@@ -262,14 +262,96 @@ class SupervisorSources:
         )
 
     def _read_sig_capture(self) -> tuple[SourceStatus, dict[str, object]]:
-        return self._read_health_sqlite(
+        path = _resolve(self.repo_root, self.settings.sig_realtime_storage_path)
+        primary = self._read_health_sqlite(
             source_id="sig_capture",
             required=True,
-            path=_resolve(self.repo_root, self.settings.sig_realtime_storage_path),
+            path=path,
             table="capture_health",
             timestamp_column="observed_at",
             payload_column="payload_json",
             max_age_seconds=self.capture_max_age_seconds,
+        )
+        status, section = primary
+        if status.valid or not status.available:
+            return primary
+        if not str(section.get("error", "")).startswith("OperationalError:no such table"):
+            return primary
+        fallback = self._read_activity_sqlite(
+            source_id="sig_capture",
+            required=True,
+            path=path,
+            candidates=(
+                ("price_observations", "rest_observed_at"),
+                ("realtime_deliveries", "observed_at"),
+                ("realtime_trades", "observed_at"),
+                ("market_observations", "rest_observed_at"),
+            ),
+            max_age_seconds=self.capture_max_age_seconds,
+        )
+        fallback_status, fallback_section = fallback
+        if fallback_status.valid:
+            fallback_section["health_surface"] = "activity_fallback"
+            fallback_section["health_surface_reason"] = section.get("error")
+        return fallback
+
+    def _read_activity_sqlite(
+        self,
+        *,
+        source_id: str,
+        required: bool,
+        path: Path,
+        candidates: tuple[tuple[str, str], ...],
+        max_age_seconds: float,
+    ) -> tuple[SourceStatus, dict[str, object]]:
+        now = utc_now()
+        latest: datetime | None = None
+        latest_table: str | None = None
+        try:
+            with _ro_connect(path) as connection:
+                for table, timestamp_column in candidates:
+                    try:
+                        row = connection.execute(
+                            f"SELECT {timestamp_column} FROM {table} "
+                            f"ORDER BY rowid DESC LIMIT 1"
+                        ).fetchone()
+                    except sqlite3.OperationalError:
+                        continue
+                    observed = None if row is None else _parse_datetime(row[0])
+                    if observed is not None and (latest is None or observed > latest):
+                        latest = observed
+                        latest_table = table
+        except (OSError, sqlite3.Error, ValueError, TypeError) as exc:
+            return self._invalid(source_id, required, path, now, exc)
+        if latest is None:
+            return self._missing(
+                source_id,
+                required,
+                path,
+                now,
+                "capture_activity_unavailable",
+            )
+        age = _age(now, latest)
+        fresh = age is not None and -1.0 <= age <= max_age_seconds
+        return (
+            SourceStatus(
+                source_id,
+                required,
+                True,
+                True,
+                fresh,
+                latest,
+                now,
+                age,
+                None if fresh else "capture_activity_stale",
+                {"path": str(path), "health_surface": "activity_fallback"},
+            ),
+            {
+                "path": str(path),
+                "health_surface": "activity_fallback",
+                "latest_activity_table": latest_table,
+                "latest_activity_at": latest.isoformat(),
+            },
         )
 
     def _read_polymarket_capture(self) -> tuple[SourceStatus, dict[str, object]]:
@@ -586,9 +668,9 @@ class SupervisorSources:
                 now,
                 None,
                 reason,
-                {"path": str(path)},
+                {"path": str(path), "error": error},
             ),
-            {"path": str(path), "reason": reason},
+            {"path": str(path), "reason": reason, "error": error},
         )
 
     def _invalid(
@@ -600,6 +682,7 @@ class SupervisorSources:
         exc: BaseException,
     ) -> tuple[SourceStatus, dict[str, object]]:
         reason = f"source_invalid:{type(exc).__name__}"
+        error = f"{type(exc).__name__}:{str(exc)[:200]}"
         return (
             SourceStatus(
                 source_id,
