@@ -31,10 +31,16 @@ tmp="$(mktemp)"
 trap 'rm -f "${tmp}"' EXIT
 sed \
   -e "s|@@RUNTIME_USER@@|${runtime_user}|g" \
-  -e "s|@@REPO_ROOT@@|${REPO_ROOT}|g" \
+  -e "s|@@CODE_ROOT@@|${REPO_ROOT}|g" \
+  -e "s|@@TARGET_REPO_ROOT@@|${TARGET_REPO_ROOT}|g" \
   -e "s|@@RUNTIME_ENV@@|${runtime_env}|g" \
   -e "s|@@PYTHON_BIN@@|${python_bin}|g" \
   "${UNIT_SOURCE}" > "${tmp}"
+
+if grep -Eq '@@[A-Z_]+@@' "${tmp}"; then
+  echo "ERROR: unresolved systemd placeholder" >&2
+  exit 1
+fi
 
 grep -q '^UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL$' "${tmp}" || {
   echo "ERROR: supervisor unit must strip trade credential" >&2
