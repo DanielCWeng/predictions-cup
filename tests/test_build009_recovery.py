@@ -677,3 +677,28 @@ def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
         emitter.close()
         journal.close()
 
+
+
+def test_order_fills_accepts_live_sig_item_shape() -> None:
+    # Live 2026-10-01 19:51Z: per-order fill rows omit orderId/exchangeId/marketId.
+    payload = {
+        "orderId": 972918,
+        "exchangeId": "1045",
+        "tournamentId": "bda92870-621e-47b0-bc3c-3602c5c26f55",
+        "data": [
+            {
+                "id": 2902569,
+                "price": 0.67,
+                "quantity": -93,
+                "side": "no",
+                "filledAt": "2026-10-01T19:47:54.590Z",
+            }
+        ],
+        "pagination": {"limit": 50, "hasMore": False, "nextCursor": None},
+        "coverage": {"complete": True, "projectedThroughSequence": 2927025},
+        "totalQuantityFilled": -93,
+        "avgFillPrice": 0.67,
+    }
+    parsed = OrderFillsResponseDto.model_validate(payload)
+    assert parsed.data[0].exchange_id is None
+    assert parsed.exchange_id == "1045"
