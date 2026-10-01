@@ -177,19 +177,19 @@
       "source": "state_dwell",
       "target": "market_transition_hazard",
       "type": "MEASURES",
-      "evidence": "005G sealed holdout; NON_CANONICAL/UNMERGED"
+      "evidence": "005G sealed holdout; canonical on main via merged PR #114"
     },
     {
       "source": "spread_distance",
       "target": "orderbook_renewal_hazard",
       "type": "MEASURES",
-      "evidence": "005G h60/h300; NON_CANONICAL/UNMERGED"
+      "evidence": "005G h60/h300; canonical on main via merged PR #114"
     },
     {
       "source": "price_change_age",
       "target": "orderbook_renewal_hazard",
       "type": "MEASURES",
-      "evidence": "005G h60/h300; NON_CANONICAL/UNMERGED"
+      "evidence": "005G h60/h300; canonical on main via merged PR #114"
     },
     {
       "source": "pred006_hazard",
@@ -398,7 +398,8 @@
   ],
   "notes": [
     "REPLICATES is used only for an actual cross-dataset replication; the self-edge on genuine_age denotes the same frozen mechanism transferred from 005F to fresh DATA-003 in 005G.",
-    "005G edges are NON_CANONICAL / UNMERGED because PR #114 was still draft/unmerged at the starting main snapshot.",
+    "005G edges are canonical repository evidence because PR #114 merged into main at 662969df4e481f1cbd9417c923ae35d3a0aa9f9f; scientific labels/effect sizes are unchanged.",
     "No node is assigned an E4 or E5 positive edge."
-  ]
+  ],
+  "canonicality_refresh_main_sha": "662969df4e481f1cbd9417c923ae35d3a0aa9f9f"
 }
