@@ -524,9 +524,9 @@ def build_status(settings: AppSettings, *, repo_root: Path | None = None) -> dic
             installed=True,
             configured=maker_shadow_configured,
             enabled=maker_active and settings.shadow_enabled,
-            healthy=observe_healthy if maker_active and settings.shadow_enabled else None,
+            healthy=None,
             authorized=True,
-            detail="in-process with MAKE",
+            detail="in-process with MAKE; no independent health surface",
         ),
         "OBSERVE": _component_state(
             installed=True,
@@ -540,9 +540,12 @@ def build_status(settings: AppSettings, *, repo_root: Path | None = None) -> dic
             installed=True,
             configured=live_learn_configured,
             enabled=maker_active and settings.live_learn_enabled,
-            healthy=None if not (maker_active and settings.live_learn_enabled) else observe_healthy,
+            healthy=None,
             authorized=True,
-            detail="SHADOW mirror in-process with MAKE; no order-write capability",
+            detail=(
+                "SHADOW mirror in-process with MAKE; process state only, "
+                "no independent health surface"
+            ),
         ),
         "RISK": _component_state(
             installed=True,
@@ -606,12 +609,11 @@ def build_status(settings: AppSettings, *, repo_root: Path | None = None) -> dic
         "live_learn_health": {
             "configured": settings.live_learn_enabled,
             "state": (
-                "IN_PROCESS_HEALTHY"
-                if maker_active and settings.live_learn_enabled and observe_healthy
+                "PROCESS_RUNNING_HEALTH_UNKNOWN"
+                if maker_active and settings.live_learn_enabled
                 else "NOT_RUNNING"
-                if not (maker_active and settings.live_learn_enabled)
-                else "DEGRADED"
             ),
+            "health_evidence": "PROCESS_ONLY",
             "outcome_path": str(settings.live_learn_outcome_path),
             "report_path": str(settings.live_learn_report_path),
         },
