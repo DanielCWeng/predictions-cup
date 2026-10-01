@@ -509,3 +509,69 @@ def test_disk_growth_plans_housekeeping(tmp_path: Path) -> None:
     planned = RemediationExecutor(config).plan(snapshot)
     assert (ActionCode.PRUNE_SUPERVISOR_BUNDLES, None) in planned
     assert (ActionCode.PRUNE_HOT_PARQUET, None) in planned
+
+
+def _pm_snapshot(code: str, pid: str, severity: Severity = Severity.CRITICAL) -> SupervisorSnapshot:
+    evidence = {"service": "predictions-cup-polymarket-capture.service"}
+    return SupervisorSnapshot(
+        snapshot_id="supervisor-grace",
+        host_id="host",
+        host_role=HostRole.WEST_EXECUTION,
+        git_head="deadbeef",
+        observed_at=NOW,
+        severity=severity,
+        launch_gate=LaunchGate.HOLD,
+        findings=(Finding(code, severity, "x", evidence),),
+        sources=(),
+        sections={
+            "system": {
+                "services": {
+                    "predictions-cup-polymarket-capture.service": {"main_pid": pid}
+                }
+            }
+        },
+    )
+
+
+def test_restart_waits_for_grace_and_startup_window(tmp_path: Path) -> None:
+    """2026-10-01: a 2 s PM websocket drop was restarted into an 11-minute cold
+    reseed, then the reseeding process was restarted for startup memory growth."""
+    service = "predictions-cup-polymarket-capture.service"
+    config = RemediationConfig(
+        max_level=RemediationLevel.SERVICE_RECOVERY,
+        host_role=HostRole.WEST_EXECUTION,
+        supervisor_root=tmp_path,
+        hot_capture_roots=(),
+        hot_capture_retention_hours=24,
+        bundle_retention_hours=48,
+        safe_cache_paths=(),
+        safe_restart_services=(service,),
+        restart_grace_seconds=90.0,
+        startup_grace_seconds=720.0,
+    )
+    now = [1000.0]
+    executor = RemediationExecutor(config, clock=lambda: now[0])
+    restart = ((ActionCode.RESTART_SAFE_SERVICE, service),)
+
+    # Long-running process (first seen well before) with a transient disconnect.
+    assert executor.plan(_pm_snapshot("FEED_SIG_REST_PROGRESS_STALE", "1")) == ()
+    now[0] += 800.0
+    assert executor.plan(_pm_snapshot("FEED_POLYMARKET_DISCONNECTED", "1")) == ()
+    now[0] += 30.0
+    assert executor.plan(_pm_snapshot("FEED_POLYMARKET_DISCONNECTED", "1")) == ()
+    now[0] += 61.0
+    assert executor.plan(_pm_snapshot("FEED_POLYMARKET_DISCONNECTED", "1")) == restart
+
+    # New PID: stale feed and memory growth are deferred during startup grace.
+    now[0] += 5.0
+    assert executor.plan(_pm_snapshot("FEED_POLYMARKET_STALE", "2")) == ()
+    now[0] += 300.0
+    assert executor.plan(_pm_snapshot("SERVICE_MEMORY_GROWTH", "2")) == ()
+    assert executor.plan(_pm_snapshot("FEED_POLYMARKET_STALE", "2")) == ()
+    # A dead service is still restarted immediately.
+    assert executor.plan(_pm_snapshot("SERVICE_FAILURE", "2")) == restart
+    # After the startup window, a stale feed that persists past the grace is acted on.
+    now[0] += 500.0
+    assert executor.plan(_pm_snapshot("FEED_POLYMARKET_STALE", "2")) == ()
+    now[0] += 91.0
+    assert executor.plan(_pm_snapshot("FEED_POLYMARKET_STALE", "2")) == restart

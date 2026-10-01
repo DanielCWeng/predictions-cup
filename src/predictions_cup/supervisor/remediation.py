@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 import shutil
 import subprocess
 import time
 from collections import defaultdict, deque
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,6 +27,8 @@ from predictions_cup.supervisor.contracts import (
     SupervisorSnapshot,
     deterministic_id,
 )
+
+logger = logging.getLogger(__name__)
 
 _ACTION_LEVEL = {
     ActionCode.PRUNE_SUPERVISOR_BUNDLES: RemediationLevel.HOUSEKEEPING,
@@ -49,6 +52,13 @@ class RemediationConfig:
     nonessential_services: tuple[str, ...] = ()
     restart_cooldown_seconds: float = 300.0
     max_restarts_per_hour: int = 2
+    # A feed/staleness condition must persist this long before a capture
+    # restart; capture services reconnect in-process within seconds, and a
+    # restart turns a transient drop into a cold reseed (PM: ~11 min).
+    restart_grace_seconds: float = 0.0
+    # After a service's MainPID changes, suppress feed/staleness and
+    # memory-growth restarts for this long so a cold start can finish.
+    startup_grace_seconds: float = 0.0
 
 
 class ActionLimiter:
@@ -80,11 +90,53 @@ class ActionLimiter:
 
 
 class RemediationExecutor:
-    def __init__(self, config: RemediationConfig) -> None:
+    def __init__(
+        self,
+        config: RemediationConfig,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         self.config = config
         self._limiter = ActionLimiter()
+        self._clock = clock
+        self._condition_since: dict[str, float] = {}
+        self._pid_since: dict[str, tuple[object, float]] = {}
+
+    def _observe_service_pids(self, snapshot: SupervisorSnapshot, now: float) -> None:
+        system = snapshot.sections.get("system")
+        services = system.get("services") if isinstance(system, dict) else None
+        if not isinstance(services, dict):
+            return
+        for service in self.config.safe_restart_services:
+            entry = services.get(service)
+            pid = entry.get("main_pid") if isinstance(entry, dict) else None
+            if pid in (None, "", "0", 0):
+                continue
+            previous = self._pid_since.get(service)
+            if previous is None or previous[0] != pid:
+                # First sighting after a Supervisor restart counts as a fresh
+                # start: process age is not probed, so stay conservative.
+                self._pid_since[service] = (pid, now)
+
+    def _service_in_startup(self, service: str, now: float) -> bool:
+        if self.config.startup_grace_seconds <= 0:
+            return False
+        seen = self._pid_since.get(service)
+        return seen is not None and now - seen[1] < self.config.startup_grace_seconds
+
+    def _recovery_due(self, service: str, now: float) -> bool:
+        since = self._condition_since.setdefault(service, now)
+        if now - since < self.config.restart_grace_seconds:
+            logger.info("Supervisor restart deferred service=%s reason=grace", service)
+            return False
+        if self._service_in_startup(service, now):
+            logger.info("Supervisor restart deferred service=%s reason=startup", service)
+            return False
+        return True
 
     def plan(self, snapshot: SupervisorSnapshot) -> tuple[tuple[ActionCode, str | None], ...]:
+        now = self._clock()
+        self._observe_service_pids(snapshot, now)
         codes = set(snapshot.reason_codes)
         planned: list[tuple[ActionCode, str | None]] = []
         if codes & {
@@ -122,7 +174,12 @@ class RemediationExecutor:
             },
         }
         for service, reasons in recovery_reasons.items():
-            if service in self.config.safe_restart_services and codes & reasons:
+            if service not in self.config.safe_restart_services:
+                continue
+            if not codes & reasons:
+                self._condition_since.pop(service, None)
+                continue
+            if self._recovery_due(service, now):
                 planned.append((ActionCode.RESTART_SAFE_SERVICE, service))
 
         for finding in snapshot.findings:
@@ -139,6 +196,14 @@ class RemediationExecutor:
                 isinstance(finding_service, str)
                 and finding_service in self.config.safe_restart_services
             ):
+                if finding.code == "SERVICE_MEMORY_GROWTH" and self._service_in_startup(
+                    finding_service, now
+                ):
+                    logger.info(
+                        "Supervisor restart deferred service=%s reason=startup_memory_growth",
+                        finding_service,
+                    )
+                    continue
                 planned.append((ActionCode.RESTART_SAFE_SERVICE, finding_service))
         unique = tuple(dict.fromkeys(planned))
         return tuple(
