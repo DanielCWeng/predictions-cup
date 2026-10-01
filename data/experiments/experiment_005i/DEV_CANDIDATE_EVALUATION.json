@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "phase": "DEV_EVALUATION",
+  "status": "DEV_GATES_PASSED_FOR_OFI_AND_REVERSAL",
+  "dev_artifacts": {
+    "005i-dev-w0": "sha256:21a7d2827611dc61a5c7d3f605652603129b6750ece035a351f801c3714a775f",
+    "005i-dev-w1": "sha256:73f8e3434e3080bd4aff242ed8c53bddfab69b4f145b1cd3e9212a715ea47040",
+    "005i-dev-w2": "sha256:c443fa2ab17bfc9287f4fab2e9f89985be1a7f8c1d626b9e469b5a893d9b908c",
+    "005i-dev-w3": "sha256:a93ba4c5bf0fdcad1ffb3c02342cfcfdb56b21c80a070c8b7b2a5b7f32f20879",
+    "005i-dev-w4": "sha256:4ea79c4ab67482fe858facb41e02ea05c687856a809a937b21a2318d02e4f892"
+  },
+  "ofi_incremental": {
+    "decision": "PASS_DEV_ADVANCE_TO_HOLDOUT",
+    "model": "frozen numeric model in OFI_TRAIN_MODEL_FREEZE.json; no DEV refit",
+    "aggregate_n": 38947,
+    "aggregate_baseline_logloss": 0.6660631945684256,
+    "aggregate_ofi_logloss": 0.662045408010564,
+    "aggregate_logloss_improvement": 0.004017786557861558,
+    "aggregate_baseline_auc": 0.6410842400678125,
+    "aggregate_ofi_auc": 0.6443253226407507,
+    "worker_logloss_improvements": [
+      0.00432666646960711,
+      0.004368259779754302,
+      0.004961979044584064,
+      0.0023804404409506486,
+      0.003987601227247617
+    ],
+    "positive_workers": 5,
+    "dev_gate": "PASSED: aggregate improvement positive and 5/5 temporal workers positive"
+  },
+  "five_minute_reversal": {
+    "decision": "PASS_DEV_ADVANCE_TO_HOLDOUT",
+    "aggregate_n": 44972,
+    "aggregate_reversal_rate": 0.693542648759228,
+    "worker_rates": [
+      0.6947960618846695,
+      0.7046161825726142,
+      0.7008791658147618,
+      0.6834137041605921,
+      0.6858111476717519
+    ],
+    "by_move_magnitude": {
+      "LE_0.1c": 0.6784996651038178,
+      "0.1_0.2c": 0.6891284815813118,
+      "0.2_0.5c": 0.7149717514124294,
+      "0.5_1c": 0.7064993122420908,
+      "1_2c": 0.6859154929577465,
+      "2_5c": 0.6926691729323309,
+      "GT_5c": 0.6886075949367089
+    },
+    "by_price_region": {
+      "P00_10": 0.6925472432585462,
+      "P10_20": 0.6573909171861086,
+      "P20_40": 0.7403395784543325,
+      "P40_60": 0.7761363636363636,
+      "P60_80": 0.736060521154385,
+      "P80_90": 0.6649659863945578,
+      "P90_100": 0.6882165142940067
+    },
+    "relative_spread_quintile_rates": [
+      0.7419139713237746,
+      0.6840876237073279,
+      0.6591414590747331,
+      0.7037695985766708,
+      0.6787818161609426
+    ],
+    "dev_gate": "PASSED: every temporal block exceeds 0.68 reversal and effect survives movement-size, price-region and relative-spread slices"
+  },
+  "regime_interaction_sampled_dev": {
+    "ACTIVE": {
+      "reversal_n": 4712,
+      "reversal_rate": 0.6676570458404074,
+      "ofi_sign_agreement": 0.35630730319317105
+    },
+    "DIRECTIONAL_PRESSURE": {
+      "reversal_n": 5321,
+      "reversal_rate": 0.645931215936854,
+      "ofi_sign_agreement": 0.382498965659909
+    },
+    "LIQUIDITY_STRESS": {
+      "reversal_n": 5979,
+      "reversal_rate": 0.7158387690249206,
+      "ofi_sign_agreement": 0.38107582631237846
+    },
+    "POST_SHOCK": {
+      "reversal_n": 7420,
+      "reversal_rate": 0.7238544474393531,
+      "ofi_sign_agreement": 0.41412520064205455
+    },
+    "PRICE_DISCOVERY": {
+      "reversal_n": 6895,
+      "reversal_rate": 0.6796229151559101,
+      "ofi_sign_agreement": 0.4610009442870633
+    },
+    "QUIET": {
+      "reversal_n": 1671,
+      "reversal_rate": 0.7522441651705566,
+      "ofi_sign_agreement": 0.6454545454545455
+    },
+    "REPLENISHMENT": {
+      "reversal_n": 1375,
+      "reversal_rate": 0.7258181818181818,
+      "ofi_sign_agreement": 0.40134907251264756
+    },
+    "STALE": {
+      "reversal_n": 188,
+      "reversal_rate": 0.7074468085106383,
+      "ofi_sign_agreement": null
+    }
+  },
+  "interpretation": [
+    "Prediction-market short-horizon price action is strongly mean-reverting on DEV, including larger moves and tail price regions.",
+    "Regime changes the strength of reversal rather than flipping discovery into broad continuation: QUIET and POST_SHOCK revert more strongly; DIRECTIONAL_PRESSURE is least mean-reverting; PRICE_DISCOVERY still reverses about 68%.",
+    "Depth-normalised OFI adds a small but temporally stable amount of information beyond the frozen baseline. Its simple sign relationship is generally contrarian outside QUIET, so this is not conventional trend-following OFI."
+  ],
+  "killed_before_dev": [
+    "MICROPRICE_INCREMENTAL",
+    "RAW_EVENT_OFI",
+    "VISIBLE_MULTI_LEVEL_FLOW",
+    "GENERIC_LOB_SHAPE",
+    "GENERIC_COMMON_LIQUIDITY_DIRECTION",
+    "GENERIC_AGE_DIRECTION"
+  ],
+  "holdout_read": false,
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}
