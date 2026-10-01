@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 INPUT = Path("/kaggle/input")
@@ -28,7 +29,6 @@ ID_COLUMNS = (
     "market_id",
     "condition_id",
     "exchange_id",
-    "event_id",
     "risk_group_id",
     "sig_exchange_id",
 )
@@ -191,7 +191,7 @@ def scan_coverage(path: Path, names: list[str]) -> tuple[dict[str, set[str]], di
             if len(arr) == 0:
                 continue
             try:
-                mm = pa.compute.min_max(arr)
+                mm = pc.min_max(arr)
                 lo = normalize_scalar(mm["min"])
                 hi = normalize_scalar(mm["max"])
             except Exception:
