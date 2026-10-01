@@ -16,6 +16,8 @@ ORDERBOOK_SLUG = "sig-cup-data003-orderbooks"
 WINDOW = "ev18_ok_sc_runoff_ga_runoff"
 FILL_WINDOW = "W18"
 MATCH_TOLERANCE_S = 120.0
+SIZE_TOLERANCE = 1e-8
+YES_NOTIONAL_TOLERANCE = 1e-3
 
 EXPECTED_BLOCK_GATE = {
     "economic_fills_sha256": "4528926586ef41cdf785016fff657dbb3034bdc41973a307b99561dd0d9ce265",
@@ -130,17 +132,45 @@ def accepted_groups(
         if passive.empty:
             rejected["no_passive"] += 1
             continue
+        if not g["outcome_side_norm"].isin(["YES", "NO"]).all():
+            rejected["non_binary"] += 1
+            continue
+
         a = active.iloc[0]
         active_size = float(a["size_shares"])
         passive_size = float(passive["size_shares"].sum())
-        if not np.isclose(
-            active_size,
-            passive_size,
-            rtol=1e-8,
-            atol=1e-8,
-        ):
+        size_limit = SIZE_TOLERANCE * max(
+            1.0,
+            abs(active_size),
+            abs(passive_size),
+        )
+        if abs(active_size - passive_size) > size_limit:
             rejected["size_conservation"] += 1
             continue
+
+        active_p_yes = (
+            float(a["price"])
+            if a["outcome_side_norm"] == "YES"
+            else 1.0 - float(a["price"])
+        )
+        active_yes_notional = active_p_yes * active_size
+        passive_yes_notional = 0.0
+        for _, p in passive.iterrows():
+            p_yes = (
+                float(p["price"])
+                if p["outcome_side_norm"] == "YES"
+                else 1.0 - float(p["price"])
+            )
+            passive_yes_notional += p_yes * float(p["size_shares"])
+        yes_limit = YES_NOTIONAL_TOLERANCE * max(
+            1.0,
+            abs(active_yes_notional),
+            abs(passive_yes_notional),
+        )
+        if abs(active_yes_notional - passive_yes_notional) > yes_limit:
+            rejected["yes_notional_conservation"] += 1
+            continue
+
         group_id = f"{condition_id}|{tx_hash}"
         rec = a.to_dict()
         rec["group_id"] = group_id
@@ -148,6 +178,8 @@ def accepted_groups(
         rec["entity_type"] = "ACTIVE_GROUP"
         rec["passive_rows"] = int(len(passive))
         rec["passive_size_sum"] = passive_size
+        rec["active_yes_notional"] = active_yes_notional
+        rec["passive_yes_notional"] = passive_yes_notional
         active_rows.append(rec)
         for _, p in passive.iterrows():
             passive_rec = p.to_dict()
@@ -157,6 +189,7 @@ def accepted_groups(
             )
             passive_rec["entity_type"] = "PASSIVE_FILL"
             passive_rows.append(passive_rec)
+
     active_out = pd.DataFrame(active_rows)
     passive_out = pd.DataFrame(passive_rows)
     return active_out, passive_out, {
@@ -164,9 +197,16 @@ def accepted_groups(
         "transaction_condition_groups": int(grouped.ngroups),
         "accepted_groups": int(len(active_out)),
         "accepted_passive_rows": int(len(passive_out)),
-        "rejected": dict(rejected),
+        "rejected_groups": int(grouped.ngroups - len(active_out)),
+        "failure_counts": dict(rejected),
+        "acceptance_contract": {
+            "active_count": 1,
+            "minimum_passive_count": 1,
+            "binary_outcomes": ["YES", "NO"],
+            "size_tolerance": SIZE_TOLERANCE,
+            "yes_notional_tolerance": YES_NOTIONAL_TOLERANCE,
+        },
     }
-
 
 def load_ev18(
     root: Path,
