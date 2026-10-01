@@ -75,11 +75,116 @@ def load_json(name: str) -> dict[str, Any]:
     return json.loads(locate(name).read_text(encoding="utf-8"))
 
 
+def derive_source_robustness(
+    source: dict[str, Any],
+    extended: dict[str, Any],
+    falsification: dict[str, Any],
+) -> dict[str, Any]:
+    candidates = {
+        str(row["candidate_id"])
+        for row in extended.get("candidates", [])
+    }
+    eligible = [
+        row
+        for row in source.get("best_window_source_decisions", [])
+        if row.get("sequential_eligibility") == "ELIGIBLE"
+    ]
+    sequence_windows = [
+        str(row["window_id"])
+        for row in eligible
+        if bool(row.get("sequence_available"))
+    ]
+    no_sequence_windows = [
+        str(row["window_id"])
+        for row in eligible
+        if not bool(row.get("sequence_available"))
+    ]
+    robust_v3 = {
+        str(value)
+        for value in falsification.get("robust_v3_survivors", [])
+    }
+    records: list[dict[str, Any]] = []
+    for candidate_id in sorted(candidates):
+        if candidate_id in V3_HOSTILE_REQUIRED and candidate_id not in robust_v3:
+            records.append(
+                {
+                    "candidate_id": candidate_id,
+                    "status": "NOT_APPLICABLE",
+                    "interpretation": (
+                        "candidate did not achieve ROBUST_V3_SURVIVOR status; "
+                        "pre-V3 evidence cannot restore B0 eligibility"
+                    ),
+                }
+            )
+        elif candidate_id == "005H-C04-ARRIVAL-STATE":
+            records.append(
+                {
+                    "candidate_id": candidate_id,
+                    "status": "UNTESTABLE_SOURCE",
+                    "eligible_pre_v3_windows": [
+                        str(row["window_id"]) for row in eligible
+                    ],
+                    "sequence_available_windows": sequence_windows,
+                    "sequence_missing_windows": no_sequence_windows,
+                    "interpretation": (
+                        "frozen C04 includes mid_vol_60 from an ordered BBO "
+                        "path; every eligible V2/AG6 source lacks sequence, "
+                        "so exact frozen feature semantics cannot be proven"
+                    ),
+                }
+            )
+        elif candidate_id == "005H-C05-DIRECTION-STATE":
+            records.append(
+                {
+                    "candidate_id": candidate_id,
+                    "status": "UNTESTABLE_SOURCE",
+                    "eligible_pre_v3_windows": [
+                        str(row["window_id"]) for row in eligible
+                    ],
+                    "sequence_available_windows": sequence_windows,
+                    "sequence_missing_windows": no_sequence_windows,
+                    "interpretation": (
+                        "frozen C05 includes event-wise OFI_60; every eligible "
+                        "V2/AG6 source lacks sequence, so exact event-wise OFI "
+                        "semantics cannot be reconstructed"
+                    ),
+                }
+            )
+        else:
+            records.append(
+                {
+                    "candidate_id": candidate_id,
+                    "status": "UNTESTABLE_SOURCE",
+                    "interpretation": (
+                        "no exact preregistered pre-V3 feature-parity test "
+                        "is available for this shortlisted mechanism"
+                    ),
+                }
+            )
+    return {
+        "schema_version": 1,
+        "experiment": "EXPERIMENT-005H",
+        "stage": "SOURCE_VERSION_ROBUSTNESS",
+        "method": "SEMANTIC_PARITY_ADJUDICATION",
+        "candidate_records": records,
+        "eligible_pre_v3_windows": [
+            str(row["window_id"]) for row in eligible
+        ],
+        "all_eligible_sources_missing_sequence": not sequence_windows,
+        "b0_opened": False,
+        "real_sig_orders_sent": False,
+    }
+
+
 def main() -> None:
     extended = load_json("EXTENDED_V3_SHORTLIST.json")
     falsification = load_json("V3_FALSIFICATION_SUMMARY.json")
     source = load_json("SOURCE_VERSION_AUDIT.json")
-    source_robustness = load_json("SOURCE_ROBUSTNESS_SUMMARY.json")
+    source_robustness = derive_source_robustness(
+        source,
+        extended,
+        falsification,
+    )
 
     if extended.get("b0_opened") is not False:
         raise RuntimeError("extended source does not prove B0 stayed sealed")
@@ -89,8 +194,18 @@ def main() -> None:
         raise RuntimeError("source audit does not prove B0 stayed sealed")
     if source_robustness.get("b0_opened") is not False:
         raise RuntimeError(
-            "source robustness does not prove B0 stayed sealed"
+            "derived source robustness does not prove B0 stayed sealed"
         )
+    (WORK / "SOURCE_ROBUSTNESS_SUMMARY.json").write_text(
+        json.dumps(
+            source_robustness,
+            indent=2,
+            sort_keys=True,
+            default=str,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
     extended_candidates = {
         str(row["candidate_id"]): row
