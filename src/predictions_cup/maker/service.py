@@ -1008,7 +1008,12 @@ class MakerService:
                     runtime.notify_global(observed_monotonic_ns=monotonic_ns())
 
                 subscriber = SupabaseTournamentSubscriber(
-                    topics=sig_state.subscription_topics(),
+                    topics=sig_state.subscription_topics(
+                        exchange_ids=_mapped_sig_exchange_ids(
+                            self.core.mapping,
+                            allowed_exchange_ids=self._live_exchange_ids,
+                        )
+                    ),
                     token=token,
                     token_refresh_margin_seconds=(
                         self.settings.sig_realtime_token_refresh_margin_seconds
@@ -1383,6 +1388,21 @@ def _configured_tracked_exchanges(settings: AppSettings) -> tuple[str, ...]:
             value.strip()
             for value in settings.sig_realtime_tracked_exchange_ids.split(",")
             if value.strip()
+        )
+    )
+
+
+def _mapped_sig_exchange_ids(
+    mapping: MappingDocument, *, allowed_exchange_ids: frozenset[str] | None
+) -> frozenset[str]:
+    """Return mapped tradeable SIG exchanges, intersected with the live allowlist."""
+    return frozenset(
+        record.sig_exchange_id
+        for record in mapping.normalized().records
+        if record.mapping_class.value not in {"NO_TRADE", "MODEL_ONLY"}
+        and (
+            allowed_exchange_ids is None
+            or record.sig_exchange_id in allowed_exchange_ids
         )
     )
 

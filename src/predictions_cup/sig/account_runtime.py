@@ -106,66 +106,85 @@ class AccountRealtimeController:
             raise ValueError("observation_process_instance_id must not be blank")
         self._resyncing = False
         self._resync_generation = 0
+        self._refresh_lock = asyncio.Lock()
 
     async def run(self, *, stop_event: asyncio.Event) -> None:
-        while not stop_event.is_set():
-            token = await self._mint_token()
-            subscriber = self._subscriber_factory(
-                topic=token.channels.user,
-                token=token,
-                event_name="account_batch",
-                maintenance_interval_seconds=self._refresh_interval_seconds,
-            )
-            connected = asyncio.Event()
-            self._resyncing = True
-
-            subscriber_task = asyncio.create_task(
-                subscriber.run(
-                    on_batch=self._handle_batch,
-                    on_connected=connected.set,
-                    stop_event=stop_event,
-                    on_maintenance=self._refresh_authoritative,
+        refresh_task = asyncio.create_task(self._refresh_periodically(stop_event))
+        try:
+            while not stop_event.is_set():
+                token = await self._mint_token()
+                subscriber = self._subscriber_factory(
+                    topic=token.channels.user,
+                    token=token,
+                    event_name="account_batch",
+                    maintenance_interval_seconds=self._refresh_interval_seconds,
                 )
-            )
-            connected_wait = asyncio.create_task(connected.wait())
-            waiters = {
-                cast(asyncio.Task[object], subscriber_task),
-                cast(asyncio.Task[object], connected_wait),
-            }
-            done, _ = await asyncio.wait(
-                waiters,
-                return_when=asyncio.FIRST_COMPLETED,
-            )
+                connected = asyncio.Event()
+                self._resyncing = True
 
-            if subscriber_task in done and not connected.is_set():
-                connected_wait.cancel()
-                with suppress(asyncio.CancelledError):
-                    await connected_wait
-                outcome = subscriber_task.result()
+                subscriber_task = asyncio.create_task(
+                    subscriber.run(
+                        on_batch=self._handle_batch,
+                        on_connected=connected.set,
+                        stop_event=stop_event,
+                    )
+                )
+                connected_wait = asyncio.create_task(connected.wait())
+                waiters = {
+                    cast(asyncio.Task[object], subscriber_task),
+                    cast(asyncio.Task[object], connected_wait),
+                }
+                done, _ = await asyncio.wait(
+                    waiters,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+
+                if subscriber_task in done and not connected.is_set():
+                    connected_wait.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await connected_wait
+                    outcome = subscriber_task.result()
+                    if outcome is SubscriberExit.STOPPED:
+                        return
+                    self._mark_exit_untrusted(outcome)
+                    continue
+
+                await connected_wait
+
+                try:
+                    await self._restore_trust_while_subscribed()
+                    if subscriber_task.done():
+                        outcome = subscriber_task.result()
+                    else:
+                        outcome = await subscriber_task
+                except BaseException:
+                    subscriber_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await subscriber_task
+                    raise
+
                 if outcome is SubscriberExit.STOPPED:
                     return
                 self._mark_exit_untrusted(outcome)
-                continue
+        finally:
+            refresh_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await refresh_task
 
-            await connected_wait
-
+    async def _refresh_periodically(self, stop_event: asyncio.Event) -> None:
+        while not stop_event.is_set():
             try:
-                await self._restore_trust_while_subscribed()
-                if subscriber_task.done():
-                    outcome = subscriber_task.result()
-                else:
-                    outcome = await subscriber_task
-            except BaseException:
-                subscriber_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await subscriber_task
-                raise
-
-            if outcome is SubscriberExit.STOPPED:
-                return
-            self._mark_exit_untrusted(outcome)
+                await asyncio.wait_for(
+                    stop_event.wait(), timeout=self._refresh_interval_seconds
+                )
+            except TimeoutError:
+                await self._refresh_authoritative(datetime.now(UTC))
 
     async def _restore_trust_while_subscribed(self) -> None:
+        async with self._refresh_lock:
+            await self._restore_trust_while_subscribed_locked()
+
+    async def _restore_trust_while_subscribed_locked(self) -> None:
         while True:
             self._resyncing = True
             generation_before = self._resync_generation
@@ -230,16 +249,28 @@ class AccountRealtimeController:
 
     async def _refresh_authoritative(self, observed_at: datetime) -> None:
         del observed_at
-        self._resyncing = True
-        try:
-            authoritative = await self._authoritative_resync()
-        except Exception as exc:
-            self._state.mark_untrusted(AccountTrustTransition.UNTRUSTED_REFRESH_FAILURE)
-            logger.warning("SIG account authoritative refresh failed: %s", type(exc).__name__)
-        else:
-            self._state.apply_authoritative(authoritative)
-        finally:
-            self._resyncing = False
+        async with self._refresh_lock:
+            self._resyncing = True
+            generation_before = self._resync_generation
+            try:
+                authoritative = await self._authoritative_resync()
+            except Exception as exc:
+                self._state.mark_untrusted(AccountTrustTransition.UNTRUSTED_REFRESH_FAILURE)
+                logger.warning("SIG account authoritative refresh failed: %s", type(exc).__name__)
+            else:
+                # REST is the authoritative source. A quiet/disconnected socket
+                # does not invalidate a successful reconciliation; activity
+                # arriving during the fetch does, and requires another refresh.
+                self._state.apply_authoritative(authoritative, mark_trusted=False)
+                await asyncio.sleep(0)
+                if self._resync_generation == generation_before:
+                    self._state.mark_trusted_after_reconciliation()
+                else:
+                    self._state.mark_untrusted(
+                        AccountTrustTransition.UNTRUSTED_RESYNC_ACTIVITY
+                    )
+            finally:
+                self._resyncing = False
 
     def _observe(
         self,

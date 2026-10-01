@@ -257,32 +257,121 @@ def test_quiet_socket_periodic_refresh_keeps_account_fresh() -> None:
             observed_at=observed_at,
         )
 
-    def factory(**kwargs: Any) -> FakeSubscriber:
-        del kwargs
-        return FakeSubscriber(
-            (), SubscriberExit.STOPPED, maintenance_call=True
-        )
+    class QuietSubscriber:
+        async def run(
+            self,
+            *,
+            on_batch: Any,
+            on_connected: Any,
+            stop_event: asyncio.Event,
+            on_maintenance: Any = None,
+        ) -> SubscriberExit:
+            del on_batch, on_maintenance
+            on_connected()
+            await stop_event.wait()
+            return SubscriberExit.STOPPED
+
+    def factory(
+        *,
+        topic: str,
+        token: RealtimeTokenDto,
+        event_name: str,
+        maintenance_interval_seconds: float,
+    ) -> QuietSubscriber:
+        del topic, token, event_name, maintenance_interval_seconds
+        return QuietSubscriber()
 
     async def scenario() -> None:
-        await AccountRealtimeController(
+        stop = asyncio.Event()
+        task = asyncio.create_task(AccountRealtimeController(
             state=state,
             mint_token=mint_token,
             authoritative_resync=resync,
             subscriber_factory=factory,
-            refresh_interval_seconds=5.0,
-        ).run(stop_event=asyncio.Event())
+            refresh_interval_seconds=0.001,
+        ).run(stop_event=stop))
+        await asyncio.sleep(0.01)
+        stop.set()
+        await task
 
     asyncio.run(scenario())
 
     assert token_count == 1
-    assert resync_count == 2
+    assert resync_count >= 2
     assert state.trusted is True
     assert state.last_authoritative_observed_at == observed_times[1]
+
+
+def test_periodic_refresh_recovers_trust_after_socket_disconnect() -> None:
+    state = AccountRealtimeStateEngine(tournament_id="t1")
+    resync_count = 0
+    refreshed = asyncio.Event()
+    subscriptions = 0
+
+    async def mint_token() -> RealtimeTokenDto:
+        return _token()
+
+    async def resync() -> AccountAuthoritativeSnapshot:
+        nonlocal resync_count
+        resync_count += 1
+        if resync_count >= 2:
+            refreshed.set()
+        return _snapshot()
+
+    class DisconnectThenWaitSubscriber:
+        async def run(
+            self,
+            *,
+            on_batch: Any,
+            on_connected: Any,
+            stop_event: asyncio.Event,
+            on_maintenance: Any = None,
+        ) -> SubscriberExit:
+            del on_batch, on_maintenance
+            on_connected()
+            if subscriptions == 1:
+                return SubscriberExit.SOCKET_ERROR
+            await stop_event.wait()
+            return SubscriberExit.STOPPED
+
+    def factory(
+        *,
+        topic: str,
+        token: RealtimeTokenDto,
+        event_name: str,
+        maintenance_interval_seconds: float,
+    ) -> DisconnectThenWaitSubscriber:
+        nonlocal subscriptions
+        del topic, token, event_name, maintenance_interval_seconds
+        subscriptions += 1
+        return DisconnectThenWaitSubscriber()
+
+    async def scenario() -> None:
+        stop = asyncio.Event()
+        controller = AccountRealtimeController(
+            state=state,
+            mint_token=mint_token,
+            authoritative_resync=resync,
+            subscriber_factory=factory,
+            refresh_interval_seconds=0.001,
+        )
+        task = asyncio.create_task(controller.run(stop_event=stop))
+        await asyncio.wait_for(refreshed.wait(), timeout=1.0)
+        await asyncio.sleep(0)
+        stop.set()
+        await task
+
+    asyncio.run(scenario())
+
+    assert subscriptions >= 2
+    assert resync_count >= 2
+    assert state.trusted is True
 
 
 def test_periodic_rest_failure_revokes_account_trust() -> None:
     state = AccountRealtimeStateEngine(tournament_id="t1")
     resync_count = 0
+    failure_seen = asyncio.Event()
 
     async def mint_token() -> RealtimeTokenDto:
         return _token()
@@ -291,22 +380,46 @@ def test_periodic_rest_failure_revokes_account_trust() -> None:
         nonlocal resync_count
         resync_count += 1
         if resync_count == 2:
+            failure_seen.set()
             raise RuntimeError("REST unavailable")
         return _snapshot()
 
-    def factory(**kwargs: Any) -> FakeSubscriber:
-        del kwargs
-        return FakeSubscriber(
-            (), SubscriberExit.STOPPED, maintenance_call=True
-        )
+    class QuietSubscriber:
+        async def run(
+            self,
+            *,
+            on_batch: Any,
+            on_connected: Any,
+            stop_event: asyncio.Event,
+            on_maintenance: Any = None,
+        ) -> SubscriberExit:
+            del on_batch, on_maintenance
+            on_connected()
+            await stop_event.wait()
+            return SubscriberExit.STOPPED
+
+    def factory(
+        *,
+        topic: str,
+        token: RealtimeTokenDto,
+        event_name: str,
+        maintenance_interval_seconds: float,
+    ) -> QuietSubscriber:
+        del topic, token, event_name, maintenance_interval_seconds
+        return QuietSubscriber()
 
     async def scenario() -> None:
-        await AccountRealtimeController(
+        stop = asyncio.Event()
+        task = asyncio.create_task(AccountRealtimeController(
             state=state,
             mint_token=mint_token,
             authoritative_resync=resync,
             subscriber_factory=factory,
-        ).run(stop_event=asyncio.Event())
+            refresh_interval_seconds=0.001,
+        ).run(stop_event=stop))
+        await asyncio.wait_for(failure_seen.wait(), timeout=1.0)
+        stop.set()
+        await task
 
     asyncio.run(scenario())
 
