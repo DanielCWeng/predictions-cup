@@ -446,10 +446,17 @@ def build_states_and_trades(
     for index, item in enumerate(inputs, 1):
         path = Path(item["local"])
         dataset = pads.dataset([str(path)], format="parquet")
+        asset_type = dataset.schema.field("asset_id").type
+        if pa.types.is_binary(asset_type) or pa.types.is_large_binary(asset_type):
+            token_filter = [token.encode("utf-8") for token in token_list]
+        elif pa.types.is_string(asset_type) or pa.types.is_large_string(asset_type):
+            token_filter = token_list
+        else:
+            raise RuntimeError(f"unsupported V3 asset_id type: {asset_type}")
         expression = (
             (pads.field("timestamp_received") >= start_scalar)
             & (pads.field("timestamp_received") < end_scalar)
-            & pads.field("asset_id").isin(token_list)
+            & pads.field("asset_id").isin(token_filter)
             & pads.field("event_type").isin(["price_change", "last_trade_price"])
         )
         table = dataset.scanner(
@@ -470,6 +477,13 @@ def build_states_and_trades(
             continue
 
         frame = table.to_pandas()
+        frame["asset_id"] = frame["asset_id"].map(
+            lambda value: (
+                value.decode("utf-8")
+                if isinstance(value, (bytes, bytearray, memoryview))
+                else str(value)
+            )
+        )
         changes = frame[frame["event_type"] == "price_change"].copy()
         trades = frame[frame["event_type"] == "last_trade_price"].copy()
 
