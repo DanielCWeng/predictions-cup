@@ -1145,7 +1145,7 @@ def main() -> None:
     freeze = {
         "schema_version": 1,
         "experiment": "EXPERIMENT-005H",
-        "stage": "PRE_HOLDOUT_FREEZE",
+        "stage": "V3_CORE_SHORTLIST_FREEZE",
         "train_window": "W17",
         "dev_window": "W18",
         "final_holdout": "B0",
@@ -1154,10 +1154,10 @@ def main() -> None:
         "model_diagnostics": models,
         "matched_control_diagnostics": matched_stats,
         "replay_audits": replay_audits,
-        "rule": "No candidate may be added or retuned after B0 is opened. If survivors are empty, B0 remains sealed.",
+        "rule": "This freezes only V3-core candidates. It is not the experiment-wide pre-holdout freeze and does not authorize B0 access.",
         "real_sig_orders_sent": False,
     }
-    (WORK / "PRE_HOLDOUT_FREEZE.json").write_text(json.dumps(freeze, indent=2, sort_keys=True) + "\n")
+    (WORK / "V3_CORE_SHORTLIST_FREEZE.json").write_text(json.dumps(freeze, indent=2, sort_keys=True) + "\n")
 
     summary = {
         "experiment": "EXPERIMENT-005H",
