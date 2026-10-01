@@ -42,7 +42,7 @@ jobs:
           if kaggle datasets files "$DATASET" --page-size 10 >/dev/null 2>&1; then
             kaggle datasets version -p "$DIR" -m "refresh live alpha snapshot" --dir-mode zip
           else
-            kaggle datasets create -p "$DIR" --private --dir-mode zip
+            kaggle datasets create -p "$DIR" --dir-mode zip
           fi
           for i in $(seq 1 30); do
             if kaggle datasets files "$DATASET" --page-size 10 >/dev/null 2>&1; then
