@@ -14,5 +14,6 @@
     "pandas==2.3.3",
     "pyarrow==25.0.1"
   ],
-  "note": "EXPERIMENT-005I read-only postprocessing of the five frozen HOLDOUT artifacts. No dataset reread, no refit, no threshold change."
+  "note": "EXPERIMENT-005I read-only postprocessing of the five frozen HOLDOUT artifacts. No dataset reread, no refit, no threshold change.",
+  "retry_reason": "artifact blob redirect auth fix; evidence inputs unchanged"
 }
