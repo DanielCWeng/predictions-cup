@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from collections.abc import Sequence
 from pathlib import Path
@@ -154,17 +155,12 @@ def test_service_action_detects_failed_wanted_service(
     assert ("start", fullstack.RUNTIME_TARGET) in calls
 
 
-def test_sig_capture_freshness_uses_newer_wal(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
+def test_sig_capture_freshness_uses_newer_wal(tmp_path: Path) -> None:
     db = tmp_path / "sig.sqlite3"
     wal = Path(f"{db}-wal")
     db.write_bytes(b"db")
     wal.write_bytes(b"wal")
     now = fullstack._now().timestamp()
-    import os
-
     os.utime(db, (now - 120, now - 120))
     os.utime(wal, (now, now))
 
