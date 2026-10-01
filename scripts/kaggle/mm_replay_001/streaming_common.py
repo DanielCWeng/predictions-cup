@@ -161,22 +161,32 @@ def compact_baseline(
 ) -> dict[str, Any]:
     compact_dir = WORK / "compact"
     compact_dir.mkdir(parents=True, exist_ok=True)
+
     token_meta: dict[bytes, dict[str, str]] = {}
+    sig_map: dict[bytes, str] = {}
+    condition_map: dict[bytes, str] = {}
+    token_id_map: dict[bytes, str] = {}
+    role_map: dict[bytes, str] = {}
 
     for record in universe["records"]:
         sig_market_id = str(record["sig_market_id"])
-        token_meta[token_bytes(str(record["local_token_id"]))] = {
-            "sig_market_id": sig_market_id,
-            "condition_id": str(record["condition_id"]),
-            "token_id": str(record["local_token_id"]),
-            "role": "LOCAL",
-        }
-        token_meta[token_bytes(str(record["complement_token_id"]))] = {
-            "sig_market_id": sig_market_id,
-            "condition_id": str(record["condition_id"]),
-            "token_id": str(record["complement_token_id"]),
-            "role": "COMPLEMENT",
-        }
+        for token_key, role in (
+            ("local_token_id", "LOCAL"),
+            ("complement_token_id", "COMPLEMENT"),
+        ):
+            token_id = str(record[token_key])
+            raw = token_bytes(token_id)
+            meta = {
+                "sig_market_id": sig_market_id,
+                "condition_id": str(record["condition_id"]),
+                "token_id": token_id,
+                "role": role,
+            }
+            token_meta[raw] = meta
+            sig_map[raw] = sig_market_id
+            condition_map[raw] = str(record["condition_id"])
+            token_id_map[raw] = token_id
+            role_map[raw] = role
 
     files = sorted((root / PRIMARY_SCOPE).rglob("events.parquet"))
     writers: dict[str, pq.ParquetWriter] = {}
@@ -228,26 +238,20 @@ def compact_baseline(
             frame["asset_key"] = frame["asset_id"].map(
                 lambda value: bytes(value) if value is not None else None
             )
-            frame["meta"] = frame["asset_key"].map(token_meta)
-            frame = frame[frame["meta"].notna()].copy()
+            frame["sig_market_id"] = frame["asset_key"].map(sig_map)
+            frame["condition_id"] = frame["asset_key"].map(condition_map)
+            frame["token_id"] = frame["asset_key"].map(token_id_map)
+            frame["role"] = frame["asset_key"].map(role_map)
+            frame = frame[frame["sig_market_id"].notna()].copy()
             if frame.empty:
                 continue
 
-            frame["timestamp_ns"] = datetime_ns(
-                frame["timestamp_received"]
-            )
+            frame["timestamp_ns"] = datetime_ns(frame["timestamp_received"])
             min_file = int(frame["timestamp_ns"].min())
             max_file = int(frame["timestamp_ns"].max())
-            min_ts = (
-                min_file
-                if min_ts is None
-                else min(min_ts, min_file)
-            )
-            max_ts = (
-                max_file
-                if max_ts is None
-                else max(max_ts, max_file)
-            )
+            min_ts = min_file if min_ts is None else min(min_ts, min_file)
+            max_ts = max_file if max_ts is None else max(max_ts, max_file)
+
             sequence_source = (
                 frame["sequence"]
                 if "sequence" in frame.columns
@@ -259,96 +263,159 @@ def compact_baseline(
                 .astype("int64")
             )
             frame["event_type"] = frame["event_type"].astype(str)
-            for source, dest in (
+            for source, destination in (
                 ("best_bid", "best_bid_num"),
                 ("best_ask", "best_ask_num"),
                 ("price", "price_num"),
                 ("size", "size_num"),
             ):
                 if source in frame.columns:
-                    frame[dest] = pd.to_numeric(
+                    frame[destination] = pd.to_numeric(
                         frame[source],
                         errors="coerce",
                     )
                 else:
-                    frame[dest] = np.nan
+                    frame[destination] = np.nan
 
-            output: list[dict[str, Any]] = []
-
-            scalar_bbo = frame["event_type"].isin(
-                ["price_change", "best_bid_ask"]
-            )
-            for row in frame.loc[scalar_bbo].itertuples(index=False):
-                output.append(
-                    {
-                        **row.meta,
-                        "timestamp_ns": int(row.timestamp_ns),
-                        "sequence": int(row.sequence),
-                        "kind": "BBO",
-                        "best_bid": finite(row.best_bid_num),
-                        "best_ask": finite(row.best_ask_num),
-                        "trade_price": None,
-                        "trade_size": None,
-                        "trade_side": None,
-                        "source_version": str(row.source_version),
-                    }
-                )
-            counters["scalar_bbo_rows"] += int(scalar_bbo.sum())
-
-            book_rows = frame[frame["event_type"] == "book"]
-            for row in book_rows.itertuples(index=False):
-                output.append(
-                    {
-                        **row.meta,
-                        "timestamp_ns": int(row.timestamp_ns),
-                        "sequence": int(row.sequence),
-                        "kind": "BBO",
-                        "best_bid": best_from_levels(
-                            row.bids,
-                            bid=True,
-                        ),
-                        "best_ask": best_from_levels(
-                            row.asks,
-                            bid=False,
-                        ),
-                        "trade_price": None,
-                        "trade_size": None,
-                        "trade_side": None,
-                        "source_version": str(row.source_version),
-                    }
-                )
-            counters["book_rows"] += len(book_rows)
-
-            trade_rows = frame[
-                frame["event_type"] == "last_trade_price"
+            key_columns = [
+                "sig_market_id",
+                "condition_id",
+                "token_id",
+                "role",
+                "timestamp_ns",
             ]
-            for row in trade_rows.itertuples(index=False):
-                price = finite(row.price_num)
-                size = finite(row.size_num)
-                side = str(row.side or "").strip().upper()
-                if (
-                    price is None
-                    or size is None
-                    or size <= 0.0
-                    or side not in {"BUY", "SELL"}
-                ):
-                    counters["invalid_trade_rows"] += 1
-                    continue
-                output.append(
-                    {
-                        **row.meta,
-                        "timestamp_ns": int(row.timestamp_ns),
-                        "sequence": int(row.sequence),
-                        "kind": "TRADE",
-                        "best_bid": None,
-                        "best_ask": None,
-                        "trade_price": price,
-                        "trade_size": size,
-                        "trade_side": side,
-                        "source_version": str(row.source_version),
-                    }
+
+            scalar = frame[
+                frame["event_type"].isin(["price_change", "best_bid_ask"])
+            ].copy()
+            counters["scalar_bbo_rows"] += len(scalar)
+            bbo_parts: list[pd.DataFrame] = []
+            if not scalar.empty:
+                grouped = scalar.groupby(
+                    key_columns,
+                    sort=False,
+                    observed=True,
                 )
-            counters["trade_rows"] += len(trade_rows)
+                first = grouped[
+                    ["best_bid_num", "best_ask_num", "sequence", "source_version"]
+                ].first()
+                unique = grouped[
+                    ["best_bid_num", "best_ask_num"]
+                ].nunique(dropna=True)
+                first["best_bid"] = first["best_bid_num"].where(
+                    (unique["best_bid_num"] == 1)
+                    & (unique["best_ask_num"] == 1)
+                )
+                first["best_ask"] = first["best_ask_num"].where(
+                    (unique["best_bid_num"] == 1)
+                    & (unique["best_ask_num"] == 1)
+                )
+                scalar_compact = first.reset_index()
+                scalar_compact["kind"] = "BBO"
+                scalar_compact["trade_price"] = np.nan
+                scalar_compact["trade_size"] = np.nan
+                scalar_compact["trade_side"] = None
+                bbo_parts.append(
+                    scalar_compact[
+                        [
+                            *key_columns,
+                            "sequence",
+                            "kind",
+                            "best_bid",
+                            "best_ask",
+                            "trade_price",
+                            "trade_size",
+                            "trade_side",
+                            "source_version",
+                        ]
+                    ]
+                )
+                counters["scalar_bbo_groups"] += len(scalar_compact)
+
+            books = frame[frame["event_type"] == "book"].copy()
+            counters["book_rows"] += len(books)
+            if not books.empty:
+                boundary = pd.concat(
+                    [
+                        books.groupby(
+                            ["sig_market_id", "token_id"],
+                            sort=False,
+                            observed=True,
+                        ).head(1),
+                        books.groupby(
+                            ["sig_market_id", "token_id"],
+                            sort=False,
+                            observed=True,
+                        ).tail(1),
+                    ],
+                    ignore_index=False,
+                ).drop_duplicates(
+                    subset=[
+                        "sig_market_id",
+                        "token_id",
+                        "timestamp_ns",
+                        "sequence",
+                    ]
+                )
+                book_rows: list[dict[str, Any]] = []
+                for row in boundary.itertuples(index=False):
+                    book_rows.append(
+                        {
+                            "sig_market_id": str(row.sig_market_id),
+                            "condition_id": str(row.condition_id),
+                            "token_id": str(row.token_id),
+                            "role": str(row.role),
+                            "timestamp_ns": int(row.timestamp_ns),
+                            "sequence": int(row.sequence),
+                            "kind": "BBO",
+                            "best_bid": best_from_levels(row.bids, bid=True),
+                            "best_ask": best_from_levels(row.asks, bid=False),
+                            "trade_price": None,
+                            "trade_size": None,
+                            "trade_side": None,
+                            "source_version": str(row.source_version),
+                        }
+                    )
+                if book_rows:
+                    bbo_parts.append(pd.DataFrame(book_rows))
+                counters["book_boundary_rows"] += len(book_rows)
+
+            trades = frame[frame["event_type"] == "last_trade_price"].copy()
+            counters["trade_rows_raw"] += len(trades)
+            trade_parts: list[pd.DataFrame] = []
+            if not trades.empty:
+                trades["trade_side"] = trades["side"].astype(str).str.upper()
+                good = (
+                    trades["price_num"].notna()
+                    & trades["size_num"].notna()
+                    & (trades["size_num"] > 0.0)
+                    & trades["trade_side"].isin(["BUY", "SELL"])
+                )
+                counters["invalid_trade_rows"] += int((~good).sum())
+                trades = trades[good].copy()
+                if not trades.empty:
+                    trades["kind"] = "TRADE"
+                    trades["best_bid"] = np.nan
+                    trades["best_ask"] = np.nan
+                    trades["trade_price"] = trades["price_num"].astype(float)
+                    trades["trade_size"] = trades["size_num"].astype(float)
+                    trade_parts.append(
+                        trades[
+                            [
+                                *key_columns,
+                                "sequence",
+                                "kind",
+                                "best_bid",
+                                "best_ask",
+                                "trade_price",
+                                "trade_size",
+                                "trade_side",
+                                "source_version",
+                            ]
+                        ]
+                    )
+                counters["trade_rows"] += len(trades)
+
             counters["best_bid_ask_rows"] += int(
                 (frame["event_type"] == "best_bid_ask").sum()
             )
@@ -365,22 +432,19 @@ def compact_baseline(
                 ).sum()
             )
 
-            if not output:
+            parts = bbo_parts + trade_parts
+            if not parts:
                 continue
-            compact = pd.DataFrame(output)
+            compact = pd.concat(parts, ignore_index=True, sort=False)
             compact.sort_values(
-                [
-                    "sig_market_id",
-                    "timestamp_ns",
-                    "sequence",
-                    "kind",
-                ],
+                ["sig_market_id", "timestamp_ns", "sequence", "kind"],
                 inplace=True,
                 kind="stable",
             )
             for sig_market_id, group in compact.groupby(
                 "sig_market_id",
                 sort=False,
+                observed=True,
             ):
                 sig_market_id = str(sig_market_id)
                 writer = writers.get(sig_market_id)
@@ -404,7 +468,8 @@ def compact_baseline(
                 print(
                     "compact progress "
                     f"{file_index + 1}/{len(files)} "
-                    f"selected_rows={counters['selected_raw_rows']}",
+                    f"selected={counters['selected_raw_rows']} "
+                    f"compact={counters['compact_rows']}",
                     flush=True,
                 )
     finally:
@@ -418,6 +483,8 @@ def compact_baseline(
         "selected_tokens": len(token_meta),
         "min_timestamp_ns": min_ts,
         "max_timestamp_ns": max_ts,
+        "book_compaction": "first_and_last_snapshot_per_token_per_hour",
+        "scalar_bbo_compaction": "token_timestamp_group_with_ambiguity_preserved",
         **dict(counters),
     }
 
