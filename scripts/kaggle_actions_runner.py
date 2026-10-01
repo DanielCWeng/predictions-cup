@@ -122,6 +122,8 @@ def dataset_fetch(data: dict[str, Any], output_dir: Path) -> None:
         file_name = str(raw).strip()
         if not file_name:
             raise ValueError("dataset_fetch file names must be non-empty")
+        file_dest = dest / file_name.replace("/", "__")
+        file_dest.mkdir(parents=True, exist_ok=True)
         result = run_command(
             [
                 "kaggle",
@@ -131,7 +133,7 @@ def dataset_fetch(data: dict[str, Any], output_dir: Path) -> None:
                 "-f",
                 file_name,
                 "-p",
-                str(dest),
+                str(file_dest),
                 "--force",
             ],
             check=False,
@@ -139,6 +141,7 @@ def dataset_fetch(data: dict[str, Any], output_dir: Path) -> None:
         results.append(
             {
                 "file": file_name,
+                "output_dir": str(file_dest.relative_to(output_dir)),
                 "returncode": result.returncode,
                 "downloaded": result.returncode == 0,
             }
