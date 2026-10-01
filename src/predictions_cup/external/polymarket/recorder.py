@@ -13,7 +13,7 @@ from typing import Any
 
 from predictions_cup.config import AppSettings, load_settings
 from predictions_cup.external.polymarket.client import ClobMarketDataClient
-from predictions_cup.external.polymarket.gamma import GammaClient
+from predictions_cup.external.polymarket.gamma import GammaClient, GammaDiscovery
 from predictions_cup.external.polymarket.health import IngestionHealth
 from predictions_cup.external.polymarket.models import JsonObject, TradeEvent, utc_now
 from predictions_cup.external.polymarket.orderbook import OrderBookStore, event_type
@@ -64,30 +64,50 @@ class PolymarketRecorder:
 
     async def refresh_universe(self, *, fail_soft_if_initialized: bool = False) -> bool:
         try:
-            discovery = await self.gamma.discover_active_markets()
-            selection = self.selector.select(discovery.markets)
             if self.settings.polymarket_capture_mapping_path is not None:
                 mapping = json.loads(
                     self.settings.polymarket_capture_mapping_path.read_text()
                 )
-                exact_tokens = {
-                    record["direct_polymarket"]["mapped_token_id"]
+                exact_records = [
+                    record["direct_polymarket"]
                     for record in mapping["records"]
                     if record["mapping_class"] == "EXACT"
                     and record.get("direct_polymarket") is not None
+                ]
+                exact_tokens = {
+                    record["mapped_token_id"] for record in exact_records
                 }
+                market_ids = {record["market_id"] for record in exact_records}
+                if not market_ids:
+                    raise RuntimeError("EXACT Polymarket mapping is empty")
+                discovery = GammaDiscovery(
+                    markets=await self.gamma.fetch_markets_by_ids(market_ids),
+                    parse_failures=0,
+                )
                 subscribed_tokens = tuple(
-                    sorted(exact_tokens.intersection(selection.token_ids))
+                    sorted(
+                        exact_tokens.intersection(
+                            token
+                            for market in discovery.markets
+                            if market.active and not market.closed
+                            for token in market.token_ids
+                        )
+                    )
                 )
                 subscribed_markets = tuple(
                     market
-                    for market in selection.markets
-                    if set(market.token_ids).intersection(subscribed_tokens)
+                    for market in discovery.markets
+                    if market.active
+                    and not market.closed
+                    and set(market.token_ids).intersection(subscribed_tokens)
                 )
                 selection = UniverseSelection(
                     markets=subscribed_markets,
                     explicit_token_ids=subscribed_tokens,
                 )
+            else:
+                discovery = await self.gamma.discover_active_markets()
+                selection = self.selector.select(discovery.markets)
             if not selection.markets:
                 raise RuntimeError("Polymarket universe selector returned no markets")
         except asyncio.CancelledError:
