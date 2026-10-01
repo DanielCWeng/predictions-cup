@@ -1,0 +1,23 @@
+[Unit]
+Description=Predictions Cup SUPERVISOR-001 launch sentry
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@@RUNTIME_USER@@
+WorkingDirectory=@@REPO_ROOT@@
+EnvironmentFile=@@RUNTIME_ENV@@
+UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL
+ExecStart=@@PYTHON_BIN@@ -m predictions_cup.supervisor.cli --runtime-env-only --repo-root @@REPO_ROOT@@
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+Nice=10
+CPUWeight=25
+IOWeight=25
+MemoryMax=384M
+OOMScoreAdjust=500
+
+[Install]
+WantedBy=multi-user.target
