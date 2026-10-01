@@ -712,7 +712,8 @@ def test_market_pagination_preserves_opaque_cursor_across_iteration() -> None:
     [
         httpx.Response(200, content=b"not-json"),
         httpx.Response(200, json={"id": "profile-only"}),
-        httpx.Response(200, json={**_account_payload(), "unexpectedField": True}),
+        # Unknown extras are ignored (SIG adds fields); wrong types still fail.
+        httpx.Response(200, json={**_account_payload(), "balance": "not-a-number"}),
     ],
 )
 def test_malformed_success_responses_fail_visibly(response: httpx.Response) -> None:
@@ -767,3 +768,28 @@ def test_market_context_accepts_current_settlement_fields() -> None:
         assert parsed.settled_on == datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
 
     asyncio.run(scenario())
+
+
+def test_transport_models_ignore_unknown_extra_fields_but_keep_types() -> None:
+    import pytest
+    from pydantic import ValidationError
+
+    from predictions_cup.sig.dto import OrderBookSnapshotDto
+
+    live = {
+        "exchangeId": "1077",
+        "marketId": "388",
+        "asOf": {"sequence": 2238285, "at": "2026-10-01T17:24:55.7940832+00:00"},
+        "depth": 3,
+        "bids": [{"price": 0.025, "quantity": 4370}],
+        "asks": [{"price": 0.04, "quantity": 50}],
+        "bestBid": 0.025,
+        "bestAsk": 0.04,
+        "spread": 0.015,
+        "someFutureField": "ignored",
+    }
+    book = OrderBookSnapshotDto.model_validate(live)
+    assert book.exchange_id == "1077"
+    broken = dict(live, bids=[{"price": "not-a-price", "quantity": 1}])
+    with pytest.raises(ValidationError):
+        OrderBookSnapshotDto.model_validate(broken)
