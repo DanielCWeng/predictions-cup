@@ -1,0 +1,83 @@
+{
+  "schema_version": "launch-stress-001-final-v1",
+  "host": "ip-172-31-19-67.us-west-1.compute.internal",
+  "host_role": "west-execution",
+  "observed_at": "2026-10-01T15:20:32Z",
+  "starting_main_sha": "662969df4e481f1cbd9417c923ae35d3a0aa9f9f",
+  "latest_main_sha": "7e726b32649bfb8450418fefbf95260ad25ba493",
+  "tests": {
+    "focused_deterministic_passed": 207,
+    "failed": 0,
+    "real_orders_sent": 0
+  },
+  "components": {
+    "CAPTURE_SIG": {
+      "state": "HEALTHY",
+      "blocker": false
+    },
+    "CAPTURE_POLYMARKET": {
+      "state": "HEALTHY",
+      "blocker": false
+    },
+    "SHADOW": {
+      "state": "NOT_RUNNING",
+      "blocker_for_full_composition": true
+    },
+    "MAKE": {
+      "state": "NOT_INSTALLED_NOT_RUNNING",
+      "blocker_for_full_composition": true
+    },
+    "RISK": {
+      "state": "DEPLOYMENT_DISABLED",
+      "harness": "PASS",
+      "blocker_for_live": true
+    },
+    "EXECUTION": {
+      "state": "NO_UNRESOLVED_OPERATIONS",
+      "journal": "NOT_PRESENT",
+      "harness": "PASS"
+    },
+    "OBSERVE": {
+      "state": "NOT_RUNNING",
+      "blocker_for_full_composition": true
+    },
+    "LIVE_LEARN": {
+      "state": "NOT_RUNNING",
+      "blocker_for_full_composition": true
+    },
+    "SUPERVISOR": {
+      "state": "HOLD",
+      "reason_codes": [
+        "FEED_SIG_REST_PROGRESS_STALE"
+      ],
+      "fail_closed": true
+    },
+    "CLOCK": {
+      "state": "HEALTHY",
+      "ntp_synchronized": true
+    },
+    "DISK": {
+      "state": "HEALTHY"
+    },
+    "GIT": {
+      "state": "CLEAN_AT_OBSERVATION"
+    },
+    "MAPPING": {
+      "version": "sig_polymarket_2026.json",
+      "sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2"
+    }
+  },
+  "trading_authorization": {
+    "authorized": false,
+    "capture_only_go": true,
+    "full_composition_go": false,
+    "live_go": false
+  },
+  "known_limitations": [
+    "accepted FULLSTACK systemd composition not installed on West",
+    "deployed RISK capital control/hard limits not armed",
+    "SIG periodic REST progress ownership requires MAKE in intended composition",
+    "no real-order canary performed",
+    "Polymarket cold recovery observed around 11.5 minutes"
+  ]
+}
