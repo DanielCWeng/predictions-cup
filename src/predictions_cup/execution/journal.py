@@ -113,6 +113,12 @@ class ExecutionJournal:
             ON execution_events(strategy_id, event_type, logical_operation_id)
             """
         )
+        self._connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS execution_events_exchange_order_idx
+            ON execution_events(exchange_order_id, event_type, event_id)
+            """
+        )
         self._connection.commit()
 
     def _ensure_execution_envelope_columns(self) -> None:
@@ -278,6 +284,13 @@ class ExecutionJournal:
                             fair_value=None if audit is None else audit.fair_value,
                             exchange_id=intent.exchange_id,
                             quantity=str(intent.quantity),
+                            detail_json=json.dumps(
+                                {
+                                    "action": intent.action.value,
+                                    "outcome_side": intent.outcome_side.value,
+                                },
+                                separators=(",", ":"),
+                            ),
                         )
                 else:
                     self._insert_event(
@@ -536,10 +549,57 @@ class ExecutionJournal:
                 ),
             )
 
+    def placement_identity_for_exchange_order_id(
+        self,
+        exchange_order_id: str,
+    ) -> tuple[str, str | None] | None:
+        """Resolve venue order identity back to its original placement/intent."""
+        if not exchange_order_id.strip():
+            raise ValueError("exchange_order_id must not be blank")
+        rows = self._connection.execute(
+            """
+            SELECT event.logical_operation_id, event.logical_intent_id
+            FROM execution_events AS event
+            JOIN execution_envelopes AS envelope
+              ON envelope.logical_operation_id = event.logical_operation_id
+            WHERE event.exchange_order_id = ?
+              AND event.event_type = 'ACK'
+              AND envelope.operation_kind IN (?, ?, ?)
+            ORDER BY event.event_id
+            """,
+            (
+                exchange_order_id,
+                OperationKind.SINGLE_PLACEMENT.value,
+                OperationKind.BEST_EFFORT_BATCH.value,
+                OperationKind.ATOMIC_MULTI_LEG.value,
+            ),
+        ).fetchall()
+        identities = tuple(
+            dict.fromkeys(
+                (
+                    str(row[0]),
+                    None if row[1] is None else str(row[1]),
+                )
+                for row in rows
+            )
+        )
+        if not identities:
+            return None
+        if len(identities) != 1:
+            raise RuntimeError(
+                "venue order identity maps to multiple placement operations"
+            )
+        return identities[0]
+
     def logical_operation_for_exchange_order_id(
         self,
         exchange_order_id: str,
     ) -> str | None:
+        placement = self.placement_identity_for_exchange_order_id(
+            exchange_order_id
+        )
+        if placement is not None:
+            return placement[0]
         row = self._connection.execute(
             """
             SELECT logical_operation_id

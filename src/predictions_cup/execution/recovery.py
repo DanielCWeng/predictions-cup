@@ -249,9 +249,15 @@ async def _recover_single_cancel(
 
     fills = await rest.get_order_fills(order_id, limit=200)
     observed = clock_ns()
+    placement = journal.placement_identity_for_exchange_order_id(str(order_id))
+    fill_operation_id = (
+        envelope.logical_operation_id if placement is None else placement[0]
+    )
+    fill_intent_id = None if placement is None else placement[1]
     for fill in fills.data:
         journal.record_event(
-            logical_operation_id=envelope.logical_operation_id,
+            logical_operation_id=fill_operation_id,
+            logical_intent_id=fill_intent_id,
             event_type="AUTHORITATIVE_FILL",
             observed_monotonic_ns=observed,
             source_timestamp=fill.filled_at.isoformat(),

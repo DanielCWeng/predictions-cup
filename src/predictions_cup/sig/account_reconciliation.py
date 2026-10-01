@@ -90,6 +90,10 @@ async def reconcile_account(
 ) -> AccountAuthoritativeSnapshot:
     if not tournament_id.strip() or not tournament_slug.strip():
         raise ValueError("explicit tournament id and slug are required for reconciliation")
+    # A snapshot can only supersede local in-flight reservations that were
+    # acknowledged before the authoritative read began. Using the read-start
+    # fence prevents a placement racing the REST calls from being erased.
+    observed_at = datetime.now(UTC)
     open_orders = tuple(
         [
             order
@@ -106,5 +110,5 @@ async def reconcile_account(
         tournament_slug=tournament_slug,
         open_orders=open_orders,
         positions=positions_response.positions,
-        observed_at=datetime.now(UTC),
+        observed_at=observed_at,
     )
