@@ -741,6 +741,7 @@ def halt_global(settings: AppSettings, *, reason: str) -> dict[str, object]:
     paths = RuntimePaths.from_environment(settings)
     stop = _stop_maker()
     active = _systemctl("is-active", "--quiet", MAKER_UNIT)
+    payload: dict[str, object]
     if active.returncode == 0:
         payload = {"state": "BLOCKED", "reason": "maker_service_still_active"}
         append_alert(paths.alerts, event_type="HALT_FAILED", detail=payload)
