@@ -307,9 +307,26 @@ def _reasons_by_action(
     result: dict[tuple[ActionCode, str | None], str] = {}
     for finding in snapshot.findings:
         service = finding.evidence.get("service")
-        if finding.code.startswith("DISK_PRESSURE_"):
+        if finding.code.startswith(("DISK_PRESSURE_", "DISK_GROWTH_")):
             result[(ActionCode.PRUNE_SUPERVISOR_BUNDLES, None)] = finding.code
             result[(ActionCode.PRUNE_HOT_PARQUET, None)] = finding.code
+        capture_recovery_targets = {
+            "FEED_SIG_DISCONNECTED": "predictions-cup-sig-capture.service",
+            "FEED_SIG_RECONCILIATION_STALE": "predictions-cup-sig-capture.service",
+            "SOURCE_SIG_CAPTURE_STALE": "predictions-cup-sig-capture.service",
+            "CAPTURE_SIG_STORAGE_FAILURE": "predictions-cup-sig-capture.service",
+            "CAPTURE_SIG_WRITER_DEAD": "predictions-cup-sig-capture.service",
+            "CAPTURE_SIG_DROPPED_ROWS": "predictions-cup-sig-capture.service",
+            "FEED_POLYMARKET_DISCONNECTED": "predictions-cup-polymarket-capture.service",
+            "FEED_POLYMARKET_STALE": "predictions-cup-polymarket-capture.service",
+            "SOURCE_POLYMARKET_CAPTURE_STALE": "predictions-cup-polymarket-capture.service",
+            "CAPTURE_POLYMARKET_STORAGE_FAILURE": "predictions-cup-polymarket-capture.service",
+            "CAPTURE_POLYMARKET_WRITER_DEAD": "predictions-cup-polymarket-capture.service",
+            "CAPTURE_POLYMARKET_DROPPED_ROWS": "predictions-cup-polymarket-capture.service",
+        }
+        recovery_target = capture_recovery_targets.get(finding.code)
+        if recovery_target is not None:
+            result[(ActionCode.RESTART_SAFE_SERVICE, recovery_target)] = finding.code
         if (
             finding.code
             in {"SERVICE_FAILURE", "SERVICE_MEMORY_HIGH", "SERVICE_MEMORY_GROWTH"}
