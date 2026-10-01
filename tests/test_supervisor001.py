@@ -334,7 +334,9 @@ def test_fast_disk_growth_is_critical() -> None:
     assert any(item.code == "DISK_GROWTH_CRITICAL" for item in findings)
 
 
-def test_resource_growth_resets_memory_history_on_pid_change(\n    monkeypatch: pytest.MonkeyPatch,\n) -> None:
+def test_resource_growth_resets_memory_history_on_pid_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     tracker = ResourceGrowthTracker()
     times = iter((0.0, 31.0, 62.0))
     monkeypatch.setattr("predictions_cup.supervisor.runtime.time.monotonic", lambda: next(times))
