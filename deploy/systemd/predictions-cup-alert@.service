@@ -5,7 +5,7 @@ Description=Predictions Cup durable failure alert for %i
 Type=oneshot
 User=@@RUNTIME_USER@@
 WorkingDirectory=@@REPO_ROOT@@
-EnvironmentFile=@@RUNTIME_ENV@@
+EnvironmentFile=-@@RUNTIME_ENV@@
 Environment=PYTHONUNBUFFERED=1
 UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL
 ExecStart=@@PYTHON_BIN@@ -m predictions_cup.fullstack alert --unit %i --runtime-env-only
