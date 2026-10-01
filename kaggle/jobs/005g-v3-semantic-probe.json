@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "action": "dataset_script",
+  "dataset": "polyleviathan/sig-cup-data003-orderbooks",
+  "files": [
+    "ev18_ok_sc_runoff_ga_runoff/date=2026-08-25/hour=23/events.parquet",
+    "baseline_sep/date=2026-09-01/hour=00/events.parquet"
+  ],
+  "script": "scripts/research/experiment_005g_v3_probe.py",
+  "script_args": [],
+  "install_project": true,
+  "pip_packages": [],
+  "note": "Read-only V3 semantic probe on TRAIN-era files; raw binary asset ids are decoded as unsigned big-endian decimal token ids to verify accepted-mapping overlap. No HOLDOUT/modeling/orders.",
+  "attempt": 3
+}

@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005G",
+  "lane": "B_SEQUENTIAL_FAMILIES",
+  "phase": "TRAIN_DEV",
+  "dataset_version": 1,
+  "holdout_read": false,
+  "make_modified": false,
+  "real_sig_orders_sent": false,
+  "artifact_provenance": {
+    "workflow_run_id": 36836953266,
+    "workflow_artifact_id": 11150026889,
+    "workflow_head_sha": "85ce96584974f1097527ac9f68566359d07f942d",
+    "artifact_output_path": "005g-lane-b-sequential-train-dev/outputs/LANE_B_SEQUENTIAL_RESULTS.json",
+    "artifact_output_sha256": "2c36a1a40517cc2e6fabc72ba007839babd8aca012bfdfad0e9a9569e7503487",
+    "artifact_zip_sha256": "173329c0876339c3bfb2b628ba130b5c8c9ed8dfabb7c9d42be80c5d0be59ebb"
+  },
+  "extras_audit": {
+    "bbo_rows": 1515022,
+    "bbo_tokens": 690,
+    "book_rows": 93084,
+    "depth_tokens": 690
+  },
+  "transition_audit": {
+    "transition_rows": 100423
+  },
+  "resilience_audit": {
+    "depth_shocks_25pct": 266,
+    "depth_target_future_snapshot_max_age_s": 60,
+    "shock_rows": 266,
+    "spread_widens_2c": 122,
+    "tokens": 173
+  },
+  "screen_summary": {
+    "screen_cells": 10,
+    "promoted_train_dev": 2
+  },
+  "promoted_train_dev": [
+    {
+      "baseline": [
+        "spread_state",
+        "bbo_age_s",
+        "bbo_updates_60",
+        "bbo_updates_300"
+      ],
+      "baseline_mse": 0.1208995338349148,
+      "block_bootstrap_lower": 0.015042260300483178,
+      "blocks": 48,
+      "challenger_mse": 0.10409631728591047,
+      "dev_rows": 26235,
+      "fdr_pass": true,
+      "feature": "state_dwell_s",
+      "feature_family": "STATE_TRANSITIONS",
+      "kind": "classification",
+      "leave_market_min": 0.016164399468104027,
+      "markets": 294,
+      "mean_loss_improvement": 0.016803216549004327,
+      "model": "LOGIT_C1.0",
+      "p_bh": 0.000244081034903588,
+      "positive_blocks": 48,
+      "promotion_gate_pass": true,
+      "relative_mse_improvement": 0.1389849573113217,
+      "signflip_p": 0.000244081034903588,
+      "status": "EVALUATED",
+      "target": "state_transition_h60",
+      "target_family": "REGIME_TRANSITION",
+      "train_rows": 74166
+    },
+    {
+      "baseline": [
+        "spread_state",
+        "bbo_age_s",
+        "bbo_updates_60",
+        "bbo_updates_300"
+      ],
+      "baseline_mse": 0.22431898858079372,
+      "block_bootstrap_lower": 0.05315079757507475,
+      "blocks": 48,
+      "challenger_mse": 0.16456915257498514,
+      "dev_rows": 26180,
+      "fdr_pass": true,
+      "feature": "state_dwell_s",
+      "feature_family": "STATE_TRANSITIONS",
+      "kind": "classification",
+      "leave_market_min": 0.058643745729656305,
+      "markets": 294,
+      "mean_loss_improvement": 0.05974983600580854,
+      "model": "LOGIT_C1.0",
+      "p_bh": 0.000244081034903588,
+      "positive_blocks": 48,
+      "promotion_gate_pass": true,
+      "relative_mse_improvement": 0.26636102625029556,
+      "signflip_p": 0.000244081034903588,
+      "status": "EVALUATED",
+      "target": "state_transition_h300",
+      "target_family": "REGIME_TRANSITION",
+      "train_rows": 74091
+    }
+  ],
+  "not_promoted_summary": {
+    "resilience": "INSUFFICIENT_SUPPORT on TRAIN/DEV under frozen exact shock/recovery semantics"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "action": "dataset_fetch",
+  "dataset": "polyleviathan/sig-cup-data003-orderbooks",
+  "files": [
+    "ev01_tx_ar_nc_primary/date=2026-02-28/hour=00/events.parquet",
+    "ev06_nj11_special/date=2026-04-15/hour=00/events.parquet",
+    "ev16_ks_mi_mo_va_wa_tn_la_hi/date=2026-08-09/hour=20/events.parquet",
+    "ev17_ak_fl_wy/date=2026-08-18/hour=06/events.parquet",
+    "ev18_ok_sc_runoff_ga_runoff/date=2026-08-24/hour=00/events.parquet",
+    "baseline_sep/date=2026-09-01/hour=00/events.parquet"
+  ],
+  "note": "EXPERIMENT-005G representative schema samples across v1/v2/ag6/v3 plus ev18/baseline; retry after preserving duplicate events.parquet basenames.",
+  "attempt": 2
+}

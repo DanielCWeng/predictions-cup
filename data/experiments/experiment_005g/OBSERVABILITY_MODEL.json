@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005G",
+  "rule": "information_available_at(feature) <= t",
+  "ordering_key_by_source": {
+    "v1": {
+      "observed_time": "timestamp_received",
+      "source_time": null,
+      "forbidden_time": "timestamp_created_at",
+      "precision": "milliseconds",
+      "tie_policy": "same-time ambiguity fails closed for sequential claims; deterministic content ordering is not asserted to be true arrival order",
+      "evidence": [
+        "src/predictions_cup/historical/pmxt.py"
+      ]
+    },
+    "v2": {
+      "observed_time": "timestamp_received",
+      "source_time": "timestamp",
+      "precision": "milliseconds",
+      "tie_policy": "timestamp_received orders observable replay; same-ms groups are ambiguous and must be batched/fail closed for within-group sequencing",
+      "evidence": [
+        "src/predictions_cup/historical/pmxt.py",
+        "https://archive.pendulumflow.com/formats"
+      ]
+    },
+    "ag6": {
+      "observed_time": "timestamp_received",
+      "source_time": "timestamp",
+      "precision": "milliseconds",
+      "tie_policy": "same as V2; AG6 is independently captured but schema-compatible with PMXT V2",
+      "evidence": [
+        "https://archive.pendulumflow.com/formats/ag6"
+      ]
+    },
+    "v3": {
+      "observed_time": "timestamp_received",
+      "source_time": "timestamp",
+      "dedupe_key": "sequence (unique within hour; provenance/deduplication only)",
+      "precision": "microseconds",
+      "tie_policy": "sort by timestamp_received for observable-time approximation; never use file row order or sequence as a global event order",
+      "witness_rule": "source_witness/witness_set/arrival_skew are capture-provenance fields; absence on oldest V3 hours is expected and requires schema union-by-name",
+      "evidence": [
+        "https://archive.pendulumflow.com/formats/v3"
+      ]
+    }
+  },
+  "hard_fail_rules": [
+    "No future snapshots or forward nearest-neighbour joins.",
+    "No backfill/future-fill of depth.",
+    "No use of V1 timestamp_created_at as observable time.",
+    "No use of V2/ag6/v3 exchange timestamp as the replay-observable ordering clock.",
+    "No use of V3 sequence as a global cross-witness ordering clock.",
+    "No interpretation of V3 physical file row order as live arrival order.",
+    "Same-time ambiguity fails closed when a claim requires within-timestamp sequence."
+  ],
+  "continuity_rule": "Source-missing/zero-row hours break continuity. Features/targets crossing those holes must be invalidated rather than bridged.",
+  "real_sig_orders_sent": false
+}

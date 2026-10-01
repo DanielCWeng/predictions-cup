@@ -1,0 +1,16 @@
+{
+  "id": "polyleviathan/005g-data-003-orderbook-input-audit-v2",
+  "title": "005G Data 003 Orderbook Input Audit V2",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [
+    "polyleviathan/sig-cup-data003-orderbooks"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}

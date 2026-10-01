@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "action": "logs",
+  "kernel": "polyleviathan/005g-economic-replay-v1",
+  "note": "Read-only live log snapshot for 005G economic replay attempt 5."
+}
