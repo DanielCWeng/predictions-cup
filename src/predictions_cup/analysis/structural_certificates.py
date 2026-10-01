@@ -90,6 +90,7 @@ class StructuralLeg:
 @dataclass(frozen=True, slots=True)
 class StructuralRelationship:
     relationship_id: str
+    event_group_id: str
     relationship_type: str
     legs: tuple[StructuralLeg, ...]
     payoff_state_ids: tuple[str, ...]
@@ -99,8 +100,12 @@ class StructuralRelationship:
     semantics_verified: bool
 
     def __post_init__(self) -> None:
-        if not self.relationship_id.strip() or not self.relationship_type.strip():
-            raise ValueError("relationship identity/type must not be blank")
+        if (
+            not self.relationship_id.strip()
+            or not self.event_group_id.strip()
+            or not self.relationship_type.strip()
+        ):
+            raise ValueError("relationship/event-group identity/type must not be blank")
         if len(self.legs) < 2:
             raise ValueError("structural relationship requires at least two legs")
         if len(self.payoff_state_ids) < 2:
@@ -125,6 +130,7 @@ class StructuralRelationship:
 class StructuralCertificate:
     certificate_id: str
     relationship_id: str
+    event_group_id: str
     relationship_type: str
     observed_at: datetime
     leg_ids: tuple[str, ...]
@@ -138,7 +144,10 @@ class StructuralCertificate:
     gross_cost: float | None
     gross_edge: float | None
     fees: float | None
+    fee_rate: float
     slippage_assumption: float
+    slippage_cost: float | None
+    minimum_net_edge_per_bundle: float
     net_edge: float | None
     certificate_status: StructuralStatus
     reasons: tuple[str, ...]
@@ -148,6 +157,7 @@ class StructuralCertificate:
         return {
             "certificate_id": self.certificate_id,
             "relationship_id": self.relationship_id,
+            "event_group_id": self.event_group_id,
             "relationship_type": self.relationship_type,
             "observed_at": self.observed_at.astimezone(UTC).isoformat(),
             "legs": list(self.leg_ids),
@@ -164,7 +174,10 @@ class StructuralCertificate:
             "gross_cost": self.gross_cost,
             "gross_edge": self.gross_edge,
             "fees": self.fees,
+            "fee_rate": self.fee_rate,
             "slippage_assumption": self.slippage_assumption,
+            "slippage_cost": self.slippage_cost,
+            "minimum_net_edge_per_bundle": self.minimum_net_edge_per_bundle,
             "net_edge": self.net_edge,
             "certificate_status": self.certificate_status.value,
             "reasons": list(self.reasons),
@@ -304,7 +317,9 @@ def _empty_certificate(
     observed_at: datetime,
     status: StructuralStatus,
     reasons: tuple[str, ...],
+    fee_rate: float,
     slippage_per_unit: float,
+    minimum_net_edge: float,
 ) -> StructuralCertificate:
     return StructuralCertificate(
         certificate_id=_certificate_id(
@@ -314,6 +329,7 @@ def _empty_certificate(
             None,
         ),
         relationship_id=relationship.relationship_id,
+        event_group_id=relationship.event_group_id,
         relationship_type=relationship.relationship_type,
         observed_at=observed_at,
         leg_ids=tuple(leg.instrument_id for leg in relationship.legs),
@@ -327,7 +343,10 @@ def _empty_certificate(
         gross_cost=None,
         gross_edge=None,
         fees=None,
+        fee_rate=fee_rate,
         slippage_assumption=slippage_per_unit,
+        slippage_cost=None,
+        minimum_net_edge_per_bundle=minimum_net_edge,
         net_edge=None,
         certificate_status=status,
         reasons=reasons,
@@ -367,7 +386,9 @@ def evaluate_relationship(
             observed_at=observed_at,
             status=StructuralStatus.SEMANTICS_UNVERIFIED,
             reasons=("SEMANTIC_PROOF_NOT_VERIFIED",),
+            fee_rate=fee_rate,
             slippage_per_unit=slippage_per_unit,
+            minimum_net_edge=minimum_net_edge,
         )
     if not mapping_valid:
         return _empty_certificate(
@@ -375,7 +396,9 @@ def evaluate_relationship(
             observed_at=observed_at,
             status=StructuralStatus.MAPPING_INVALID,
             reasons=("MAPPING_INVALID",),
+            fee_rate=fee_rate,
             slippage_per_unit=slippage_per_unit,
+            minimum_net_edge=minimum_net_edge,
         )
     if missing:
         return _empty_certificate(
@@ -383,7 +406,9 @@ def evaluate_relationship(
             observed_at=observed_at,
             status=StructuralStatus.INSUFFICIENT_DEPTH,
             reasons=("MISSING_LEG_BOOK:" + ",".join(sorted(missing)),),
+            fee_rate=fee_rate,
             slippage_per_unit=slippage_per_unit,
+            minimum_net_edge=minimum_net_edge,
         )
 
     selected = [books[leg.instrument_id] for leg in relationship.legs]
@@ -393,7 +418,9 @@ def evaluate_relationship(
             observed_at=observed_at,
             status=StructuralStatus.UNTRUSTED_BOOK,
             reasons=("UNTRUSTED_LEG_BOOK",),
+            fee_rate=fee_rate,
             slippage_per_unit=slippage_per_unit,
+            minimum_net_edge=minimum_net_edge,
         )
     if any(
         (observed_at - book.observed_at.astimezone(UTC)).total_seconds()
@@ -406,7 +433,9 @@ def evaluate_relationship(
             observed_at=observed_at,
             status=StructuralStatus.STALE_BOOK,
             reasons=("STALE_OR_FUTURE_LEG_BOOK",),
+            fee_rate=fee_rate,
             slippage_per_unit=slippage_per_unit,
+            minimum_net_edge=minimum_net_edge,
         )
 
     max_size = _max_bundle_depth(relationship, books)
@@ -416,7 +445,9 @@ def evaluate_relationship(
             observed_at=observed_at,
             status=StructuralStatus.INSUFFICIENT_DEPTH,
             reasons=("ZERO_EXECUTABLE_DEPTH",),
+            fee_rate=fee_rate,
             slippage_per_unit=slippage_per_unit,
+            minimum_net_edge=minimum_net_edge,
         )
 
     tiny = min(max_size, 1e-6)
@@ -443,6 +474,7 @@ def evaluate_relationship(
                 net_edge,
             ),
             relationship_id=relationship.relationship_id,
+            event_group_id=relationship.event_group_id,
             relationship_type=relationship.relationship_type,
             observed_at=observed_at,
             leg_ids=tuple(
@@ -458,7 +490,10 @@ def evaluate_relationship(
             gross_cost=gross_cost,
             gross_edge=gross_edge,
             fees=fees,
+            fee_rate=fee_rate,
             slippage_assumption=slippage_per_unit,
+            slippage_cost=slippage_per_unit * max_size,
+            minimum_net_edge_per_bundle=minimum_net_edge,
             net_edge=net_edge,
             certificate_status=StructuralStatus.NO_VIOLATION,
             reasons=("NO_POSITIVE_NET_EDGE_AT_TOP_OF_BOOK",),
@@ -532,7 +567,10 @@ def evaluate_relationship(
         gross_cost=gross_cost,
         gross_edge=gross_edge,
         fees=fees,
+        fee_rate=fee_rate,
         slippage_assumption=slippage_per_unit,
+        slippage_cost=slippage_per_unit * executable_size,
+        minimum_net_edge_per_bundle=minimum_net_edge,
         net_edge=net_edge,
         certificate_status=status,
         reasons=reasons,
@@ -550,11 +588,13 @@ def complement_relationship(
     semantic_proof_version: str,
     semantic_proof_hash: str,
     mapping_hash: str,
+    event_group_id: str | None = None,
     action: LegAction = LegAction.BUY,
 ) -> StructuralRelationship:
     """Build an explicitly verified binary complement portfolio."""
     return StructuralRelationship(
         relationship_id=relationship_id,
+        event_group_id=event_group_id or relationship_id,
         relationship_type="COMPLEMENT",
         legs=(
             StructuralLeg(
@@ -586,6 +626,7 @@ def exhaustive_partition_relationship(
     semantic_proof_hash: str,
     mapping_hash: str,
     relationship_type: str = "EXHAUSTIVE_PARTITION",
+    event_group_id: str | None = None,
 ) -> StructuralRelationship:
     """Build a mutually-exclusive exhaustive long portfolio from audited semantics."""
     if len(instrument_ids) < 2:
@@ -609,6 +650,7 @@ def exhaustive_partition_relationship(
         )
     return StructuralRelationship(
         relationship_id=relationship_id,
+        event_group_id=event_group_id or relationship_id,
         relationship_type=relationship_type,
         legs=tuple(legs),
         payoff_state_ids=states,
