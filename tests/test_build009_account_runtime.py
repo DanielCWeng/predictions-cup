@@ -290,7 +290,10 @@ def test_quiet_socket_periodic_refresh_keeps_account_fresh() -> None:
             subscriber_factory=factory,
             refresh_interval_seconds=0.001,
         ).run(stop_event=stop))
-        await asyncio.sleep(0.01)
+        for _ in range(2000):
+            if resync_count >= 2:
+                break
+            await asyncio.sleep(0.001)
         stop.set()
         await task
 

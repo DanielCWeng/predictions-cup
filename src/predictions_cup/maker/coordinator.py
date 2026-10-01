@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -32,6 +34,8 @@ PlacementDispatcher = Callable[
     Awaitable[ExecutionEvent],
 ]
 CancelDispatcher = Callable[[ActiveQuote, str, str], Awaitable[ExecutionEvent]]
+logger = logging.getLogger(__name__)
+_OUTCOME_LOG_INTERVAL_SECONDS = 10.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +132,23 @@ class MakerCoordinator:
             snapshots,
         )
 
+    def _log_outcome(self, exchange_id: str, outcome: str) -> None:
+        """Rate-limited per-exchange outcome log; MAKE otherwise runs silently."""
+        last = getattr(self, "_outcome_log", None)
+        if last is None:
+            last = {}
+            self._outcome_log = last
+        now = time.monotonic()
+        previous = last.get(exchange_id)
+        if (
+            previous is not None
+            and previous[0] == outcome
+            and now - previous[1] < _OUTCOME_LOG_INTERVAL_SECONDS
+        ):
+            return
+        last[exchange_id] = (outcome, now)
+        logger.info("MAKE outcome exchange=%s %s", exchange_id, outcome)
+
     async def on_state_change(
         self,
         change: MakerStateChange,
@@ -171,23 +192,17 @@ class MakerCoordinator:
             # remain live, so valuation failure must withdraw them even when the
             # desired price/size is otherwise unchanged. Account reconciliation
             # alone remains HOLD unless a halt/kill switch says otherwise.
-            capital_force_cancel = (
-                capital is not None
-                and (
-                    not capital.marks_trusted
-                    or mark_state_stale
-                    or (
-                        capital.global_halt is not None
-                        and capital.global_halt.active
-                    )
-                    or capital.strategy_halted(
-                        self._engine.strategy_id,
-                        StrategyFamily.MAKE.value,
-                    )
-                    # Invalid portfolio valuation is a retention failure, not
-                    # merely a fresh-admission failure. Resting risk comes off.
-                    or not capital.marks_trusted
+            capital_force_cancel = capital is not None and (
+                not capital.marks_trusted
+                or mark_state_stale
+                or (capital.global_halt is not None and capital.global_halt.active)
+                or capital.strategy_halted(
+                    self._engine.strategy_id,
+                    StrategyFamily.MAKE.value,
                 )
+                # Invalid portfolio valuation is a retention failure, not
+                # merely a fresh-admission failure. Resting risk comes off.
+                or not capital.marks_trusted
             )
             force_cancel = self._kill_switch.active or capital_force_cancel
             if decision.gate.mode is GateMode.HOLD and not force_cancel:
@@ -210,7 +225,16 @@ class MakerCoordinator:
                         ),
                     )
                 )
+                self._log_outcome(exchange_id, "hold gate=HOLD")
                 continue
+            if force_cancel:
+                self._log_outcome(
+                    exchange_id,
+                    "force_cancel "
+                    f"kill={self._kill_switch.active} "
+                    f"marks_trusted={None if capital is None else capital.marks_trusted} "
+                    f"mark_stale={mark_state_stale}",
+                )
             desired = None if force_cancel else decision.desired
             side_actions = self._lifecycle.decide(
                 desired=desired,
@@ -244,9 +268,7 @@ class MakerCoordinator:
                     lifecycle_state=LifecycleState.CANCEL_PENDING,
                     observed_monotonic_ns=change.observed_monotonic_ns,
                 )
-                logical_id = (
-                    f"{change.event_id}:make-cancel:{exchange_id}:{action.side.value}"
-                )
+                logical_id = f"{change.event_id}:make-cancel:{exchange_id}:{action.side.value}"
                 try:
                     event = await self._cancel_dispatch(
                         active,
@@ -311,11 +333,15 @@ class MakerCoordinator:
                 continue
 
             place_actions = tuple(
-                action
-                for action in side_actions
-                if action.kind is QuoteLifecycleActionKind.PLACE
+                action for action in side_actions if action.kind is QuoteLifecycleActionKind.PLACE
             )
             if not place_actions or decision.desired is None:
+                self._log_outcome(
+                    exchange_id,
+                    f"no_place gate={decision.gate.mode.value} "
+                    f"desired={decision.desired is not None} "
+                    f"actions={[(a.kind.value, a.side.value, a.reason) for a in side_actions]}",
+                )
                 continue
 
             opportunity = self._opportunity(
@@ -335,7 +361,9 @@ class MakerCoordinator:
             risk = evaluate_risk(opportunity, risk_snapshot, risk_context)
             risk_decisions.append(risk)
             if not risk.approved:
+                self._log_outcome(exchange_id, f"risk_denied reason={risk.reason}")
                 continue
+            self._log_outcome(exchange_id, "risk_approved placing")
 
             logical_operation_id = f"{change.event_id}:make-place:{exchange_id}"
             plan = build_execution_plan(
@@ -387,12 +415,9 @@ class MakerCoordinator:
             except SigApiError as exc:
                 # SigLiveSink conclusively records REJECTED and releases the
                 # operation reservation exactly once before surfacing this.
-                retained = (
-                    self._reservations is not None
-                    and self._reservations.contains_operation(
-                        logical_operation_id,
-                        plan.envelope.intent_ids,
-                    )
+                retained = self._reservations is not None and self._reservations.contains_operation(
+                    logical_operation_id,
+                    plan.envelope.intent_ids,
                 )
                 if retained:
                     for action in place_actions:
@@ -422,12 +447,9 @@ class MakerCoordinator:
                 )
                 continue
             except BaseException:
-                retained = (
-                    self._reservations is not None
-                    and self._reservations.contains_operation(
-                        logical_operation_id,
-                        plan.envelope.intent_ids,
-                    )
+                retained = self._reservations is not None and self._reservations.contains_operation(
+                    logical_operation_id,
+                    plan.envelope.intent_ids,
                 )
                 if not retained:
                     for action in place_actions:
