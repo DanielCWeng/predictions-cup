@@ -53,6 +53,7 @@ V3_SCHEMA = pa.schema(
     ]
 )
 
+
 def _v3_table() -> pa.Table:
     return pa.Table.from_pylist(
         [
@@ -145,7 +146,8 @@ def _v3_table() -> pa.Table:
                 "spread": "0.10",
                 "sequence": 6,
             },
-        ]
+        ],
+        schema=V3_SCHEMA,
     )
 
 
