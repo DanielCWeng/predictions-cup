@@ -404,8 +404,8 @@ def toxicity_table(fills: pd.DataFrame) -> pd.DataFrame:
                     "horizon_s": horizon,
                     "fills": int(mark.notna().sum()),
                     "mean_aggressor_markout": float(mark.mean()),
-                    "adverse_gt_1tick_share": float((mark > 0.01).mean()),
-                    "adverse_gt_2tick_share": float((mark > 0.02).mean()),
+                    "adverse_gt_1pp_share": float((mark > 0.01).mean()),
+                    "adverse_gt_2pp_share": float((mark > 0.02).mean()),
                 }
             )
     return pd.DataFrame(rows)
@@ -886,7 +886,13 @@ def main() -> None:
         "rule": "Only candidates listed here may receive one-shot B0 evaluation. No post-B0 retuning, candidate addition, threshold change, feature change, or rescue.",
         "real_sig_orders_sent": False,
     }
-    (WORK / "PRE_HOLDOUT_FREEZE.json").write_text(
+    freeze["stage"] = "EXTENDED_V3_SHORTLIST"
+    freeze["rule"] = (
+        "This is a V3 shortlist only. It does not authorize B0. "
+        "Experiment-wide PRE_HOLDOUT_FREEZE.json may be written only after "
+        "hostile V3 falsification and source-version robustness are complete."
+    )
+    (WORK / "EXTENDED_V3_SHORTLIST.json").write_text(
         json.dumps(freeze, indent=2, sort_keys=True, default=str) + "\n"
     )
     summary = {
@@ -909,9 +915,9 @@ def main() -> None:
         f"- Fill events: **{len(fills):,}**\n"
         f"- 10-second episodes: **{len(episodes):,}**\n"
         f"- Matched fill/non-fill pairs: **{len(pairs):,}**\n"
-        f"- Frozen B0 candidates: **{len(candidates)}**\n"
+        f"- Provisional V3 shortlist: **{len(candidates)}**\n"
         "- B0 opened: **NO**\n\n"
-        "All final-evaluation candidates are frozen in PRE_HOLDOUT_FREEZE.json.\n\n"
+        "This is not the experiment-wide holdout freeze. B0 remains sealed.\n\n"
         "REAL SIG ORDERS SENT: NO\n"
     )
     print(json.dumps(summary, sort_keys=True, default=str), flush=True)
