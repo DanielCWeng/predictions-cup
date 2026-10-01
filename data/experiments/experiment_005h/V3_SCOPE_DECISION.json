@@ -12,9 +12,15 @@
     "DEV": "W18 V3",
     "FINAL": "B0 V3"
   },
-  "v2_ag6_policy": "Do not pool into candidate selection or B0 evaluation. Source-stratified replication is future confirmation for any surviving mechanism.",
-  "deployment_implication": "Every B0 survivor remains FUTURE_CONFIRMATION_REQUIRED until live/future data and, where relevant, source-version robustness are demonstrated.",
+  "v2_ag6_policy": "Do not pool V2/AG6 into candidate selection or B0 evaluation. Before the experiment-wide PRE_HOLDOUT_FREEZE, record source-stratified replication for every V3 survivor wherever exact hash+token linkage and strict pre-trade receive ordering are supportable. Equal-time V2 states are excluded as AMBIGUOUS. If a source stratum is not chronologically testable, record UNTESTABLE_SOURCE rather than imputing evidence.",
+  "deployment_implication": "Every B0 survivor remains FUTURE_CONFIRMATION_REQUIRED until genuinely future/live confirmation; source-specific failures further restrict transportability and MM use.",
   "v1_policy": "No sequential fill claims without an exact venue trade anchor.",
   "b0_opened": false,
-  "real_sig_orders_sent": false
+  "real_sig_orders_sent": false,
+  "pre_holdout_source_rule": {
+    "required_record": true,
+    "candidate_selection_source": "V3 W17 TRAIN / W18 DEV only",
+    "v2_ag6_effect_on_b0_eligibility": "Does not add candidates or change frozen V3 thresholds. Negative source-stratified replication marks SOURCE_SPECIFIC / FUTURE_CONFIRMATION_REQUIRED but does not by itself invalidate a same-source one-shot B0 test. Untestable source strata are explicit.",
+    "pooling_forbidden": true
+  }
 }
