@@ -2,7 +2,7 @@
   "schema_version": 1,
   "action": "run",
   "kernel_dir": "scripts/kaggle/experiment_005h_holdout_score",
-  "kernel": "polyleviathan/experiment-005h-holdout-score",
+  "kernel": "polyleviathan/experiment-005h-one-shot-b0-score",
   "poll_seconds": 30,
   "timeout_minutes": 120,
   "download_outputs": true,
