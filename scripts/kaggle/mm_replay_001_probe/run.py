@@ -211,6 +211,49 @@ def main() -> None:
         encoding="utf-8",
     )
 
+    event_type_audit: list[dict[str, Any]] = []
+    for suffix in sample_specs:
+        matches = [p for p in files if str(p.relative_to(root)).endswith(suffix)]
+        if len(matches) != 1:
+            continue
+        path = matches[0]
+        pf = pq.ParquetFile(path)
+        names = set(pf.schema_arrow.names)
+        type_col = "event_type" if "event_type" in names else ("update_type" if "update_type" in names else None)
+        columns = [c for c in [
+            type_col, "timestamp", "timestamp_received", "timestamp_created_at",
+            "market", "market_id", "asset_id", "data", "price", "size", "side",
+            "best_bid", "best_ask", "transaction_hash", "source_version", "window_id"
+        ] if c and c in names]
+        counts: Counter[str] = Counter()
+        examples: dict[str, list[dict[str, str]]] = {}
+        for batch in pf.iter_batches(batch_size=250_000, columns=columns):
+            df = batch.to_pandas()
+            if type_col is None:
+                continue
+            vals = df[type_col].astype(str)
+            counts.update(vals.tolist())
+            for event_name in vals.unique().tolist():
+                if len(examples.get(event_name, [])) >= 3:
+                    continue
+                subset = df[vals == event_name].head(3 - len(examples.get(event_name, [])))
+                bucket = examples.setdefault(event_name, [])
+                for rec in subset.to_dict(orient="records"):
+                    clean: dict[str, str] = {}
+                    for key, value in rec.items():
+                        text_value = repr(value)
+                        clean[str(key)] = text_value[:5000]
+                    bucket.append(clean)
+        event_type_audit.append({
+            "path": str(path.relative_to(root)),
+            "counts": dict(counts.most_common()),
+            "examples": examples,
+        })
+    (OUT / "EVENT_TYPE_AUDIT.json").write_text(
+        json.dumps(event_type_audit, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
     summary = {
         "dataset_root": str(root),
         "dataset_dir_name": root.name,
