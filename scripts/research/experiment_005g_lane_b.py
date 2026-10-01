@@ -712,10 +712,17 @@ def screen_one(
     family: str,
     override_feature: str | None = None,
     label: str = "PRIMARY",
+    extra_baseline: list[str] | None = None,
 ) -> tuple[dict[str, Any], pd.DataFrame]:
     spec = TARGETS[target]
     feature_col = override_feature or feature
     baseline = [col for col in spec["baseline"] if col != feature_col]
+    if extra_baseline:
+        baseline.extend(
+            col
+            for col in extra_baseline
+            if col in panel.columns and col != feature_col and col not in baseline
+        )
     needed = [
         "split",
         "token_id",
@@ -971,6 +978,45 @@ def main() -> None:
                     evidence_frames.append(tagged)
 
     apply_bh(rows)
+    provisional = [
+        row for row in rows
+        if row.get("promotion_gate_pass")
+    ]
+
+    capture_control_rows: list[dict[str, Any]] = []
+    capture_controls = [
+        "price_change_age_s",
+        "price_updates_60",
+        "snapshot_age_s",
+    ]
+    for row in provisional:
+        controlled, _ = screen_one(
+            panel,
+            str(row["target"]),
+            str(row["feature"]),
+            str(row["feature_family"]),
+            label="CAPTURE_CONTROL",
+            extra_baseline=capture_controls,
+        )
+        capture_control_rows.append(controlled)
+        capture_pass = bool(
+            controlled.get("status") == "EVALUATED"
+            and float(controlled.get("mean_loss_improvement", float("nan"))) > 0
+            and float(controlled.get("signflip_p", 1.0)) <= 0.10
+            and np.isfinite(controlled.get("block_bootstrap_lower", np.nan))
+            and float(controlled["block_bootstrap_lower"]) > 0
+            and np.isfinite(controlled.get("leave_market_min", np.nan))
+            and float(controlled["leave_market_min"]) > 0
+        )
+        row["capture_control_pass"] = capture_pass
+        row["capture_control_mean_loss_improvement"] = controlled.get(
+            "mean_loss_improvement"
+        )
+        row["capture_control_signflip_p"] = controlled.get("signflip_p")
+        row["promotion_gate_pass"] = bool(
+            row.get("promotion_gate_pass") and capture_pass
+        )
+
     promoted = [
         row for row in rows
         if row.get("promotion_gate_pass")
@@ -1046,6 +1092,7 @@ def main() -> None:
         "targets": TARGETS,
         "screen": rows,
         "promoted_train_dev": promoted,
+        "capture_control": capture_control_rows,
         "falsification": falsification_rows,
         "horizon_shape": horizon_rows,
         "labels": {
@@ -1057,6 +1104,7 @@ def main() -> None:
             "STATE_TRANSITIONS": "SEMANTICS_BLOCKED: exact dwell/transition clocks require an unsampled sequential panel; sampled approximations are not accepted.",
             "TOXICITY": "SUPPORT_BLOCKED unless sufficiently dense observable trades exist; absence is not treated as a negative result."
         },
+        "capture_control_rule": "Every provisionally promoted coordinate must remain positive with p<=0.10, bootstrap lower>0 and leave-market minimum>0 after adding price_change_age_s, price_updates_60 and snapshot_age_s where observable.",
         "limitations": [
             "TRADE_PRESSURE may be support-limited because V3 last_trade_price rows are sparse.",
             "No HOLDOUT bytes were supplied to this job."
