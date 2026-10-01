@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "final_regime_interpretation": {
+    "PRICE_DISCOVERY": {
+      "disposition": "CONFIRMED_SHORT_LIVED_HIGH_ACTIVITY_MOVE_STATE",
+      "holdout_exit_hazard_per_minute": 0.5355569,
+      "holdout_exit_to_post_shock_share": 0.4738004,
+      "holdout_dwell_p90_min": [
+        4,
+        4,
+        4,
+        3,
+        4
+      ],
+      "sampled_holdout_reversal_rate": 0.6808,
+      "construction_caveat": "PRICE_DISCOVERY requires |ret_5m| >= 0.005 plus high quote activity, while POST_SHOCK retains |ret_5m| >= 0.005 without requiring high quote activity. A fall in activity while the rolling move remains elevated therefore mechanically creates some PRICE_DISCOVERY -> POST_SHOCK relabelling. The 47.38% transition share is descriptive evidence, not an independently discovered economic transition mechanism.",
+      "economic_read": "Short-lived high-activity large-move state with elevated movement risk. It is not synonymous with momentum; broad five-minute reversal remains dominant inside the state."
+    },
+    "LIQUIDITY_STRESS": {
+      "disposition": "CONFIRMED_METASTABLE_STATE",
+      "holdout_exit_hazard_per_minute": 0.04933596,
+      "holdout_exit_to_replenishment_share": 0.2315497,
+      "holdout_dwell_p90_min": [
+        38.1,
+        26,
+        36,
+        33,
+        27
+      ],
+      "sampled_holdout_reversal_rate": 0.66803,
+      "economic_read": "Persistent stressed-liquidity state with a meaningful replenishment exit channel."
+    },
+    "REPLENISHMENT": {
+      "disposition": "CONFIRMED_RESILIENCE_ASSOCIATION",
+      "recovered_future_abs_5m": 0.000841836,
+      "not_recovered_future_abs_5m": 0.0012721377,
+      "holdout_relative_reduction": 0.3382508973,
+      "worker_direction": "5_OF_5_RECOVERED_LOWER",
+      "economic_read": "Visible refill following withdrawal is a useful resilience descriptor; causality and fill economics remain unproven."
+    },
+    "DIRECTIONAL_PRESSURE": {
+      "disposition": "CONDITIONAL_AXIS_NOT_MOMENTUM_REGIME",
+      "sampled_holdout_reversal_rate": 0.62957,
+      "economic_read": "The least mean-reverting transparent state, but reversal still exceeds continuation."
+    },
+    "QUIET": {
+      "disposition": "DESCRIPTIVE_STATE",
+      "sampled_holdout_reversal_rate": 0.74927,
+      "economic_read": "Strongest sampled reversal state; low event counts require care with execution relevance."
+    },
+    "POST_SHOCK": {
+      "disposition": "POST_REPRICING_STATE",
+      "sampled_holdout_reversal_rate": 0.70883,
+      "economic_read": "Not a clean refractory state; movement often mean-reverts but can re-enter discovery."
+    }
+  },
+  "mean_reversion_dependence_caveat": "The 55,340 qualifying HOLDOUT reversal observations are sampled minute-states/move observations, not independent episodes. Adjacent observations substantially overlap through the five-minute forward construction and are serially dependent; robustness comes from temporal-worker consistency and frozen slice survival rather than treating n=55,340 as an independent sample size.",
+  "latent_models": {
+    "HMM": "NOT_JUSTIFIED",
+    "HAWKES": "NOT_JUSTIFIED_BEFORE_BETTER_REGIME_BASELINE",
+    "reason": "Transparent observable states and simple activity/intensity structure already explain the stable economic distinctions found here; extra latent/self-exciting complexity did not earn promotion."
+  },
+  "expiration_regime_research": "DEFERRED",
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}

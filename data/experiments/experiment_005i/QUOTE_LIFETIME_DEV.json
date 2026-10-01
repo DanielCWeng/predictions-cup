@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "status": "DEV_REPLICATED_DESCRIPTIVE",
+  "object": "QUOTE_OR_BBO_EVENT_INTERARRIVAL",
+  "claim_boundary": "Random event-level archive interarrival sample. This is not queue position, passive fill probability, exact quote survival for our order, or latency-to-execution. It describes how quickly the observed market state tends to update after an observed quote/BBO event.",
+  "train_temporal_workers": [
+    {
+      "worker": "train-w0",
+      "median_s": 0.049152,
+      "p_le_25ms": 0.3638569881,
+      "p_le_50ms": 0.5028385699,
+      "p_le_100ms": 0.6147345612,
+      "p_le_1s": 0.7278006501,
+      "p_le_5s": 0.7954712893
+    },
+    {
+      "worker": "train-w1",
+      "median_s": 0.0414085,
+      "p_le_25ms": 0.3773580897,
+      "p_le_50ms": 0.5320360299,
+      "p_le_100ms": 0.6338162814,
+      "p_le_1s": 0.7403339565,
+      "p_le_5s": 0.8156653637
+    },
+    {
+      "worker": "train-w2",
+      "median_s": 0.0342385,
+      "p_le_25ms": 0.4204791667,
+      "p_le_50ms": 0.5652916667,
+      "p_le_100ms": 0.6465833333,
+      "p_le_1s": 0.766625,
+      "p_le_5s": 0.8363333333
+    },
+    {
+      "worker": "train-w3",
+      "median_s": 0.031334,
+      "p_le_25ms": 0.4368932039,
+      "p_le_50ms": 0.5925246885,
+      "p_le_100ms": 0.6817575732,
+      "p_le_1s": 0.7918663278,
+      "p_le_5s": 0.8569107046
+    },
+    {
+      "worker": "train-w4",
+      "median_s": 0.032195,
+      "p_le_25ms": 0.4306548053,
+      "p_le_50ms": 0.5892414425,
+      "p_le_100ms": 0.6837642451,
+      "p_le_1s": 0.7990166462,
+      "p_le_5s": 0.8557053272
+    }
+  ],
+  "dev_temporal_workers": [
+    {
+      "worker": "dev-w0",
+      "n": 48000,
+      "median_s": 0.0303585,
+      "p90_s": 15.200885,
+      "p_le_25ms": 0.4420625,
+      "p_le_50ms": 0.603625,
+      "p_le_100ms": 0.6946666667,
+      "p_le_250ms": 0.7386458333,
+      "p_le_500ms": 0.7661458333,
+      "p_le_1s": 0.7947291667,
+      "p_le_5s": 0.8507916667
+    },
+    {
+      "worker": "dev-w1",
+      "n": 48000,
+      "median_s": 0.0287235,
+      "p90_s": 10.8302458,
+      "p_le_25ms": 0.4625208333,
+      "p_le_50ms": 0.6154375,
+      "p_le_100ms": 0.7178125,
+      "p_le_250ms": 0.7660625,
+      "p_le_500ms": 0.7914583333,
+      "p_le_1s": 0.8157916667,
+      "p_le_5s": 0.8689375
+    },
+    {
+      "worker": "dev-w2",
+      "n": 48000,
+      "median_s": 0.0302125,
+      "p90_s": 7.1213445,
+      "p_le_25ms": 0.450625,
+      "p_le_50ms": 0.6087083333,
+      "p_le_100ms": 0.7101041667,
+      "p_le_250ms": 0.7751458333,
+      "p_le_500ms": 0.804125,
+      "p_le_1s": 0.8281458333,
+      "p_le_5s": 0.885375
+    },
+    {
+      "worker": "dev-w3",
+      "n": 48000,
+      "median_s": 0.035478,
+      "p90_s": 10.9376498,
+      "p_le_25ms": 0.4161875,
+      "p_le_50ms": 0.5676875,
+      "p_le_100ms": 0.6646041667,
+      "p_le_250ms": 0.7383958333,
+      "p_le_500ms": 0.7747291667,
+      "p_le_1s": 0.80075,
+      "p_le_5s": 0.8622291667
+    },
+    {
+      "worker": "dev-w4",
+      "n": 47999,
+      "median_s": 0.032904,
+      "p90_s": 12.1903138,
+      "p_le_25ms": 0.4292589429,
+      "p_le_50ms": 0.5823871331,
+      "p_le_100ms": 0.6575970333,
+      "p_le_250ms": 0.720577512,
+      "p_le_500ms": 0.7590366466,
+      "p_le_1s": 0.7870997312,
+      "p_le_5s": 0.858413717
+    }
+  ],
+  "disposition": "TRANSFERS_CONDITIONALLY",
+  "economic_interpretation": "The market state often changes on the same order of magnitude as realistic 25-100ms quote exposure/transport. Replay should model state-update hazard during exposure rather than assume a static BBO.",
+  "route": [
+    "SEND_TO_MM_REPLAY",
+    "SEND_TO_LIVE_DIAG"
+  ],
+  "holdout_required": false,
+  "holdout_read": false,
+  "real_sig_orders_sent": false
+}

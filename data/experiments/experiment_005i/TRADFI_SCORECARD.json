@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "classifications": {
+    "FIVE_MINUTE_MEAN_REVERSION": {
+      "classification": "TRANSFERS_STRONGLY",
+      "evidence": "67.26% HOLDOUT reversal over 55,340 qualifying sampled minute-states/move observations; every temporal worker >66%; survives move-size, price-region, relative-spread and state slices. Adjacent observations overlap through the five-minute forward window and are serially dependent, so 55,340 must not be interpreted as 55,340 independent episodes.",
+      "route": [
+        "MM_REPLAY",
+        "LIVE_DIAG",
+        "SHADOW_AFTER_REPLAY"
+      ]
+    },
+    "DEPTH_NORMALISED_OFI": {
+      "classification": "TRANSFERS_CONDITIONALLY",
+      "evidence": "Frozen OFI challenger improves full-panel HOLDOUT log-loss by 0.004165 over 1,195,563 observations; 5/5 workers positive. Simple sign is often contrarian, so do not import textbook trend-following interpretation.",
+      "route": [
+        "MM_REPLAY",
+        "LIVE_DIAG",
+        "SHADOW_AFTER_REPLAY"
+      ]
+    },
+    "PRICE_DISCOVERY": {
+      "classification": "TRANSFERS_CONDITIONALLY",
+      "evidence": "Short high-activity large-move state with p90 dwell <=4 minutes in all workers and 68.08% sampled reversal. 47.38% of HOLDOUT exits go to POST_SHOCK, but that path is partly mechanical because PRICE_DISCOVERY requires |ret_5m| >= 0.005 plus high quote activity while POST_SHOCK retains the move threshold without the activity requirement. Treat the transition share as descriptive, not as an independently discovered economic mechanism.",
+      "route": [
+        "LIVE_DIAG",
+        "MM_REPLAY"
+      ]
+    },
+    "LIQUIDITY_STRESS": {
+      "classification": "TRANSFERS_STRONGLY",
+      "evidence": "HOLDOUT exit hazard 4.93%/min with long dwell; 23.15% of exits to REPLENISHMENT.",
+      "route": [
+        "LIVE_DIAG",
+        "MM_REPLAY",
+        "SHADOW_AFTER_REPLAY"
+      ]
+    },
+    "RESILIENCE_REPLENISHMENT": {
+      "classification": "TRANSFERS_CONDITIONALLY",
+      "evidence": "After large withdrawal, next-minute recovered observations have 33.83% lower subsequent abs-5m movement on HOLDOUT, 5/5 workers same direction. Association only.",
+      "route": [
+        "MM_REPLAY",
+        "LIVE_DIAG"
+      ]
+    },
+    "FLOW_PERSISTENCE": {
+      "classification": "TRANSFERS_CONDITIONALLY",
+      "evidence": "TRAIN/DEV fill-direction same-side run persistence is stable; broad signed-volume lag-1 correlation is negative. Fill HOLDOUT intentionally unspent.",
+      "route": [
+        "005H",
+        "LIVE_DIAG",
+        "FUTURE_CONFIRMATION_REQUIRED"
+      ]
+    },
+    "QUOTE_LIFETIME_UPDATE_HAZARD": {
+      "classification": "TRANSFERS_CONDITIONALLY",
+      "evidence": "DEV quote/BBO interarrival median roughly 29-35ms; state often changes during realistic 25-100ms exposure. Not queue/fill probability.",
+      "route": [
+        "MM_REPLAY",
+        "LIVE_DIAG"
+      ]
+    },
+    "STATIC_DEPTH_IMBALANCE": {
+      "classification": "DESCRIPTIVE_ONLY",
+      "evidence": "Weak/unstable incremental directional value relative to frozen baseline.",
+      "route": [
+        "DESCRIPTIVE_ONLY"
+      ]
+    },
+    "MICROPRICE": {
+      "classification": "NO_INCREMENTAL_VALUE",
+      "evidence": "Killed on TRAIN before DEV; negligible/unstable incremental log-loss.",
+      "route": [
+        "DEAD"
+      ]
+    },
+    "RAW_EVENT_OFI": {
+      "classification": "NO_INCREMENTAL_VALUE",
+      "evidence": "Nearby event OFI object did not improve the frozen baseline reliably.",
+      "route": [
+        "DEAD"
+      ]
+    },
+    "VISIBLE_MULTI_LEVEL_FLOW": {
+      "classification": "NO_INCREMENTAL_VALUE",
+      "evidence": "Normalised visible level flow did not add stable one-minute directional information.",
+      "route": [
+        "DEAD"
+      ]
+    },
+    "LOB_SHAPE": {
+      "classification": "NO_INCREMENTAL_VALUE",
+      "evidence": "Depth concentration, entropy, shape distance and wall ratio were not temporally stable incremental predictors.",
+      "route": [
+        "DESCRIPTIVE_ONLY"
+      ]
+    },
+    "COMMON_LIQUIDITY": {
+      "classification": "DESCRIPTIVE_ONLY",
+      "evidence": "Useful context for market-wide state, but generic common-liquidity direction did not add stable TRAIN prediction.",
+      "route": [
+        "LIVE_DIAG"
+      ]
+    },
+    "GENERIC_BOOK_AGE_DIRECTION": {
+      "classification": "NO_INCREMENTAL_VALUE",
+      "evidence": "Age did not add stable next-move direction here; separate renewal/update-hazard evidence from other experiments was deliberately not duplicated.",
+      "route": [
+        "DEAD_FOR_005I_DIRECTION"
+      ]
+    },
+    "PRESSURE_PROXY": {
+      "classification": "UNSTABLE",
+      "evidence": "Positive average TRAIN increment but inconsistent temporal signs.",
+      "route": [
+        "FUTURE_CONFIRMATION_REQUIRED"
+      ]
+    },
+    "COARSE_CLUSTERING": {
+      "classification": "DESCRIPTIVE_ONLY",
+      "evidence": "Three coarse modes reproducible, but higher-state solutions unstable and Gaussian likelihood kept rewarding extra components.",
+      "route": [
+        "DESCRIPTIVE_ONLY"
+      ]
+    },
+    "HMM_MARKOV_SWITCHING": {
+      "classification": "REJECTED",
+      "evidence": "Did not earn complexity beyond transparent states.",
+      "route": [
+        "DEAD"
+      ]
+    },
+    "HAWKES": {
+      "classification": "REJECTED",
+      "evidence": "Not justified before a materially better simple regime/intensity baseline.",
+      "route": [
+        "DEAD"
+      ]
+    },
+    "KYLE_AMIHUD_IMPACT": {
+      "classification": "NOT_OBSERVABLE_RELIABLY",
+      "evidence": "Available sampled trade/order-book surface does not support a clean impact estimate with the required semantics.",
+      "route": [
+        "FUTURE_CONFIRMATION_REQUIRED"
+      ]
+    },
+    "VPIN": {
+      "classification": "REJECTED",
+      "evidence": "Not promoted after simpler flow/state diagnostics.",
+      "route": [
+        "DEAD"
+      ]
+    },
+    "SPREAD_DECOMPOSITION": {
+      "classification": "NOT_OBSERVABLE_RELIABLY",
+      "evidence": "Fill/book decomposition belongs to 005H and was not duplicated.",
+      "route": [
+        "005H"
+      ]
+    },
+    "TICK_BOUNDARY_PRICE_REGION": {
+      "classification": "DESCRIPTIVE_ONLY",
+      "evidence": "Mean reversion survives fixed price-region and relative-spread slices; exact causal tick-boundary attribution is not established.",
+      "route": [
+        "MM_REPLAY",
+        "DESCRIPTIVE_ONLY"
+      ]
+    }
+  },
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}

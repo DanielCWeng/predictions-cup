@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "phase": "HOLDOUT_CONFIRMATION",
+  "status": "ALL_PRIMARY_GATES_SUPPORTED",
+  "evidence_artifact": {
+    "workflow_run_id": 36843502562,
+    "artifact_id": 11152905981,
+    "sha256": "06ac9c648d9caf935ef50cba1de758f99557704411a6406421fe7d25bc8dd1b5"
+  },
+  "contamination_control": {
+    "one_batched_holdout_access": true,
+    "post_holdout_refit": false,
+    "post_holdout_threshold_change": false
+  },
+  "confirmatory_gates": {
+    "OFI_INCREMENTAL": {
+      "supported": true,
+      "aggregate_full_n": 1195563,
+      "aggregate_full_baseline_logloss": 0.6706858444,
+      "aggregate_full_ofi_logloss": 0.6665204861,
+      "aggregate_full_logloss_improvement": 0.0041653583,
+      "full_positive_workers": 5,
+      "aggregate_sample_n": 46651,
+      "aggregate_sample_logloss_improvement": 0.0048546924,
+      "sample_positive_workers": 5,
+      "interpretation": "Depth-normalised BBO OFI adds a small but temporally stable increment beyond the frozen baseline. Treat as conditional state information, not standalone alpha."
+    },
+    "FIVE_MINUTE_REVERSAL": {
+      "supported": true,
+      "aggregate_sample_n": 55340,
+      "aggregate_sample_reversal_rate": 0.6726057102,
+      "worker_reversal_rates": [
+        0.6634461,
+        0.6834747,
+        0.6677215,
+        0.6687078,
+        0.6735549
+      ],
+      "min_worker_reversal_rate": 0.6634461,
+      "interpretation": "Short-horizon price moves are broadly mean-reverting rather than momentum-dominated on this surface."
+    },
+    "PRICE_DISCOVERY_TRANSITION": {
+      "supported": true,
+      "occupancy_minutes": 281619,
+      "exits": 150823,
+      "exit_hazard_per_minute": 0.5355569,
+      "exit_to_post_shock_count": 71460,
+      "exit_to_post_shock_share": 0.4738004,
+      "worker_dwell_p90_min": [
+        4,
+        4,
+        4,
+        3,
+        4
+      ],
+      "interpretation": "PRICE_DISCOVERY is a short high-volatility repricing/transition state, not a broad persistent continuation regime."
+    },
+    "LIQUIDITY_STRESS_METASTABILITY": {
+      "supported": true,
+      "occupancy_minutes": 723144,
+      "exits": 35677,
+      "exit_hazard_per_minute": 0.04933596,
+      "exit_to_replenishment_count": 8261,
+      "exit_to_replenishment_share": 0.2315497,
+      "worker_dwell_p90_min": [
+        38.1,
+        26,
+        36,
+        33,
+        27
+      ],
+      "interpretation": "LIQUIDITY_STRESS is metastable and materially more persistent than PRICE_DISCOVERY; replenishment is a meaningful exit path."
+    },
+    "RESILIENCE_AFTER_WITHDRAWAL": {
+      "supported": true,
+      "recovered_n": 321350,
+      "recovered_abs_5m_mean": 0.000841836,
+      "not_recovered_n": 533083,
+      "not_recovered_abs_5m_mean": 0.0012721377,
+      "relative_reduction": 0.3382508973,
+      "positive_workers": 5,
+      "interpretation": "Next-minute visible replenishment after a large withdrawal is associated with lower subsequent absolute five-minute movement. This is predictive association, not a causal or fill claim."
+    }
+  },
+  "all_primary_gates_supported": true,
+  "holdout_read": true,
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}

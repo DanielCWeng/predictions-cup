@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "action": "dataset_files",
+  "dataset": "polyleviathan/sig-cup-data-003-sig-actual-fills",
+  "page_size": 10000,
+  "note": "EXPERIMENT-005I independent DATA-003 fill inventory for order-flow persistence only; no fill×book strategy economics."
+}

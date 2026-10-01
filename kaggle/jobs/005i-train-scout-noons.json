@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "action": "dataset_analysis",
+  "dataset": "polyleviathan/sig-cup-data003-orderbooks",
+  "script": "scripts/kaggle/experiment_005i_v3_worker/run.py",
+  "files": [
+    "baseline_sep/date=2026-09-01/hour=12/events.parquet",
+    "baseline_sep/date=2026-09-02/hour=12/events.parquet",
+    "baseline_sep/date=2026-09-03/hour=12/events.parquet",
+    "baseline_sep/date=2026-09-04/hour=12/events.parquet",
+    "baseline_sep/date=2026-09-05/hour=12/events.parquet",
+    "baseline_sep/date=2026-09-06/hour=12/events.parquet",
+    "baseline_sep/date=2026-09-07/hour=12/events.parquet",
+    "baseline_sep/date=2026-09-08/hour=12/events.parquet",
+    "baseline_sep/date=2026-09-09/hour=12/events.parquet",
+    "baseline_sep/date=2026-09-10/hour=12/events.parquet"
+  ],
+  "worker_id": "train-scout-noons",
+  "sample_per_hour": 6000,
+  "seed": 505099,
+  "surface": "TRAIN",
+  "note": "EXPERIMENT-005I TRAIN-only scout: noon shard each Sep1-10; same frozen battery; HOLDOUT sealed."
+}

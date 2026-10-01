@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "final_holdout_artifact": {
+    "workflow_run_id": 36843502562,
+    "artifact_id": 11152905981,
+    "sha256": "06ac9c648d9caf935ef50cba1de758f99557704411a6406421fe7d25bc8dd1b5"
+  },
+  "materialized_repo_outputs": {
+    "HOLDOUT_RESULTS.json": "data/experiments/experiment_005i/HOLDOUT_RESULTS.json",
+    "HOLDOUT_RESULTS.parquet": "data/experiments/experiment_005i/HOLDOUT_RESULTS.parquet",
+    "FALSIFICATION_RESULTS.parquet": "data/experiments/experiment_005i/FALSIFICATION_RESULTS.parquet",
+    "REGIME_TRANSITIONS.parquet": "data/experiments/experiment_005i/REGIME_TRANSITIONS.parquet",
+    "REGIME_SUMMARY.json": "data/experiments/experiment_005i/REGIME_SUMMARY.json",
+    "TRADFI_SCORECARD.json": "data/experiments/experiment_005i/TRADFI_SCORECARD.json",
+    "DISCOVERY_LOG.jsonl": "data/experiments/experiment_005i/DISCOVERY_LOG.jsonl",
+    "PRE_HOLDOUT_FREEZE.json": "data/experiments/experiment_005i/PRE_HOLDOUT_FREEZE.json",
+    "FINAL_SUMMARY.json": "data/experiments/experiment_005i/FINAL_SUMMARY.json",
+    "MASTER_HANDOFF_005I.md": "docs/experiments/MASTER_HANDOFF_005I.md"
+  },
+  "evidence_backed_nonmaterialized_intermediates": {
+    "STATE_FEATURES.parquet": "Large minute-state panels were streamed worker-local and sampled/aggregated; not committed as a misleading partial state corpus.",
+    "TRANSPARENT_REGIMES.parquet": "Final state definitions are frozen in REGIME_DEFINITION_FREEZE.json; full occupancy/transition evidence is represented by final HOLDOUT regime/transition outputs.",
+    "CLUSTERING_RESULTS.parquet": "Canonical descriptive clustering result is CLUSTERING_TRAIN_RESULTS.json; no latent-state model promoted.",
+    "HMM_RESULTS.parquet": "REJECTED / NOT_JUSTIFIED; no fitted HMM emitted.",
+    "CHANGEPOINT_RESULTS.parquet": "Transparent transition analysis superseded standalone changepoint promotion; no independent changepoint object promoted.",
+    "OFI_RESULTS.parquet": "Primary OFI confirmation is carried in HOLDOUT_RESULTS.parquet/json and OFI_TRAIN_MODEL_FREEZE.json.",
+    "MICROPRICE_RESULTS.parquet": "NO_INCREMENTAL_VALUE; killed before DEV.",
+    "FLOW_PERSISTENCE.parquet": "DEV-descriptive result persisted as FLOW_PERSISTENCE_DEV_FREEZE.json; fill HOLDOUT intentionally unspent.",
+    "IMPACT_METRICS.parquet": "NOT_OBSERVABLE_RELIABLY for clean Kyle/Amihud inference on this surface.",
+    "COMPETING_EVENT_HAZARDS.parquet": "Quote/update hazard evidence remained descriptive; no separate competing-risk model earned final promotion.",
+    "HAWKES_CHALLENGERS.parquet": "REJECTED / NOT_JUSTIFIED.",
+    "RESILIENCE_REGIMES.parquet": "Final resilience confirmation carried in HOLDOUT_RESULTS and FALSIFICATION bundle.",
+    "LIQUIDITY_DROUGHTS.parquet": "LIQUIDITY_STRESS transparent regime subsumes the confirmed drought/stress state.",
+    "VOL_JUMP_REGIMES.parquet": "Movement-risk differences are summarized by transparent states; no separate jump model promoted.",
+    "PRICE_REGION_RESULTS.parquet": "Fixed HOLDOUT price-region falsification is in FALSIFICATION_RESULTS.parquet.",
+    "TICK_BOUNDARY_RESULTS.parquet": "DESCRIPTIVE_ONLY; exact tick-boundary causal attribution not established.",
+    "LOB_SHAPE_RESULTS.parquet": "NO_INCREMENTAL_VALUE.",
+    "COMMON_LIQUIDITY_RESULTS.parquet": "DESCRIPTIVE_ONLY for state context; generic direction rejected."
+  },
+  "note": "The registry distinguishes deliberately unmaterialized/rejected intermediates from completed final evidence; it does not fabricate empty scientific outputs.",
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}
