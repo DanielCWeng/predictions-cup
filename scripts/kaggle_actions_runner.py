@@ -55,6 +55,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
         "auth_check",
         "dataset_fetch",
         "dataset_probe",
+        "kernel_fetch",
         "logs",
         "output",
         "run",
@@ -217,6 +218,26 @@ def dataset_probe(data: dict[str, Any], output_dir: Path) -> None:
     )
 
 
+def kernel_fetch(data: dict[str, Any], output_dir: Path) -> None:
+    kernel = kernel_from_manifest(data)
+    dest = output_dir / "kernel"
+    dest.mkdir(parents=True, exist_ok=True)
+    run_command(
+        ["kaggle", "kernels", "pull", kernel, "-p", str(dest), "-m"]
+    )
+    metadata = dest / "kernel-metadata.json"
+    if not metadata.is_file():
+        raise FileNotFoundError("Kaggle kernel pull did not return kernel-metadata.json")
+    write_summary(
+        [
+            "## Kaggle kernel metadata fetch",
+            "",
+            f"- Kernel: {kernel}",
+            f"- Metadata: {metadata.relative_to(ROOT)}",
+        ]
+    )
+
+
 def kernel_from_manifest(data: dict[str, Any]) -> str:
     kernel = str(data.get("kernel", "")).strip()
     if not kernel:
@@ -349,6 +370,8 @@ def main() -> int:
         dataset_fetch(data, output_dir)
     elif action == "dataset_probe":
         dataset_probe(data, output_dir)
+    elif action == "kernel_fetch":
+        kernel_fetch(data, output_dir)
     elif action == "run":
         run_kernel(data, output_dir)
     elif action == "status":
