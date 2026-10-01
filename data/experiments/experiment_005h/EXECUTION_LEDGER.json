@@ -82,7 +82,16 @@
       "superseded_approximate_runs": [
         36842830140,
         36844053637
-      ]
+      ],
+      "teardown": {
+        "status": "DELETED_OBSOLETE_KERNEL",
+        "kernel": "polyleviathan/experiment-005h-source-robustness",
+        "final_logs_workflow_run_id": 36853385824,
+        "final_logs_artifact_id": 11157201009,
+        "teardown_workflow_run_id": 36853477701,
+        "teardown_artifact_id": 11157150167,
+        "reason": "No valid scientific inference remained possible because exact frozen C04/C05 feature semantics are unidentifiable in eligible pre-V3 sources; slot reclaimed for launch-critical work."
+      }
     },
     "pre_holdout_freeze": {
       "status": "COMPLETE_SUCCESS",
