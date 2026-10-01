@@ -24,7 +24,7 @@ from predictions_cup.live_learn.contracts import (
 )
 from predictions_cup.shadow.persistence import read_jsonl_records
 
-STATE_TRANSFER_VERSION = "005f-live-transfer-001-v1"
+STATE_TRANSFER_VERSION = "005f-live-transfer-001-v2"
 STANDARD_HORIZONS = (1, 5, 15, 30, 60, 300)
 
 
