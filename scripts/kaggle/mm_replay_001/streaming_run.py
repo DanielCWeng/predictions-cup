@@ -126,7 +126,7 @@ def final_report(
                 "- High-score quartile update rate: "
                 f"{summary.get('update_rate_high_score_quartile')}"
             ),
-            "- Frozen artifacts were hash-matched; no model was refit.",
+            "- Frozen artifacts were hash-matched; no model was refit. Transfer scores use strict observable grid-boundary ordering so later events in the same 5s capture bin cannot enter an earlier 15s score.",
             "",
             "## Interpretation boundary",
             "",
