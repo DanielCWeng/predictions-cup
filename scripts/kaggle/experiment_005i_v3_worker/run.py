@@ -50,6 +50,8 @@ STATE_COLUMNS = [
     "book_shape_distance",
     "wall_ratio",
     "last_book_ts",
+    "last_depth_update_ts",
+    "depth_trusted",
 ]
 
 COUNT_COLUMNS = [
@@ -63,6 +65,15 @@ COUNT_COLUMNS = [
     "trade_volume",
     "signed_trade_volume",
     "book_count",
+    "depth_update_count",
+    "level_delete_count",
+    "visible_add_size",
+    "visible_remove_size",
+    "level_flow_signed",
+    "ofi_top_event",
+    "ofi_abs_event",
+    "bbo_up_count",
+    "bbo_down_count",
     "tick_change_count",
 ]
 
@@ -179,6 +190,231 @@ def book_features(row: pd.Series) -> pd.Series:
     )
 
 
+def map_book_features(
+    bids_map: dict[float, float],
+    asks_map: dict[float, float],
+) -> dict[str, float]:
+    bids = sorted(bids_map.items(), reverse=True)[:5]
+    asks = sorted(asks_map.items())[:5]
+    if not bids or not asks:
+        return {
+            "bid_depth1": np.nan,
+            "ask_depth1": np.nan,
+            "bid_depth5": np.nan,
+            "ask_depth5": np.nan,
+            "depth_total5": np.nan,
+            "imbalance1": np.nan,
+            "imbalance5": np.nan,
+            "depth_concentration": np.nan,
+            "book_entropy": np.nan,
+            "book_shape_distance": np.nan,
+            "wall_ratio": np.nan,
+        }
+    b1 = bids[0][1]
+    a1 = asks[0][1]
+    bd = sum(size for _, size in bids)
+    ad = sum(size for _, size in asks)
+    total = bd + ad
+    denom1 = b1 + a1
+    imbalance1 = (b1 - a1) / denom1 if denom1 > 0 else np.nan
+    imbalance5 = (bd - ad) / total if total > 0 else np.nan
+    concentration = (b1 + a1) / total if total > 0 else np.nan
+    ent = entropy([size for _, size in bids] + [size for _, size in asks])
+    best_bid = bids[0][0]
+    best_ask = asks[0][0]
+    bdist = sum(size * (best_bid - price) for price, size in bids) / bd if bd > 0 else np.nan
+    adist = sum(size * (price - best_ask) for price, size in asks) / ad if ad > 0 else np.nan
+    shape = np.nanmean([bdist, adist])
+    sizes = [size for _, size in bids] + [size for _, size in asks]
+    mean_size = float(np.mean(sizes)) if sizes else np.nan
+    wall = float(max(sizes) / mean_size) if mean_size and mean_size > 0 else np.nan
+    return {
+        "bid_depth1": b1,
+        "ask_depth1": a1,
+        "bid_depth5": bd,
+        "ask_depth5": ad,
+        "depth_total5": total,
+        "imbalance1": imbalance1,
+        "imbalance5": imbalance5,
+        "depth_concentration": concentration,
+        "book_entropy": ent,
+        "book_shape_distance": shape,
+        "wall_ratio": wall,
+    }
+
+
+def _safe_float(value: Any) -> float | None:
+    if value is None or pd.isna(value):
+        return None
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    return out if math.isfinite(out) else None
+
+
+def _ofi_event(
+    old_bid: float | None,
+    old_ask: float | None,
+    old_bid_size: float,
+    old_ask_size: float,
+    new_bid: float | None,
+    new_ask: float | None,
+    new_bid_size: float,
+    new_ask_size: float,
+) -> float:
+    if old_bid is None or old_ask is None or new_bid is None or new_ask is None:
+        return 0.0
+    bid_term = (new_bid_size if new_bid >= old_bid else 0.0) - (
+        old_bid_size if new_bid <= old_bid else 0.0
+    )
+    ask_term = -(new_ask_size if new_ask <= old_ask else 0.0) + (
+        old_ask_size if new_ask >= old_ask else 0.0
+    )
+    return float(bid_term + ask_term)
+
+
+def reconstruct_visible_book(
+    df: pd.DataFrame,
+    carry: dict[Any, dict[str, Any]],
+) -> pd.DataFrame:
+    events = df[df["event_type"].isin(["book", "price_change"])].copy()
+    if events.empty:
+        return pd.DataFrame()
+    if "sequence" in events:
+        events["_seq"] = pd.to_numeric(events["sequence"], errors="coerce").fillna(-1).astype("int64")
+        events.sort_values(["timestamp_received", "_seq"], inplace=True, kind="stable")
+    else:
+        events.sort_values(["timestamp_received"], inplace=True, kind="stable")
+
+    agg: dict[tuple[Any, pd.Timestamp], dict[str, Any]] = {}
+    last_minute: dict[Any, pd.Timestamp] = {}
+
+    def rec_for(asset: Any, minute: pd.Timestamp) -> dict[str, Any]:
+        key = (asset, minute)
+        if key not in agg:
+            agg[key] = {
+                "asset_id": asset,
+                "minute": minute,
+                "book_count": 0.0,
+                "depth_update_count": 0.0,
+                "level_delete_count": 0.0,
+                "visible_add_size": 0.0,
+                "visible_remove_size": 0.0,
+                "level_flow_signed": 0.0,
+                "ofi_top_event": 0.0,
+                "ofi_abs_event": 0.0,
+                "bbo_up_count": 0.0,
+                "bbo_down_count": 0.0,
+            }
+        return agg[key]
+
+    def finalise(asset: Any, minute: pd.Timestamp) -> None:
+        state = carry.get(asset, {})
+        bids_map = state.get("_bid_book")
+        asks_map = state.get("_ask_book")
+        if not isinstance(bids_map, dict) or not isinstance(asks_map, dict) or not bids_map or not asks_map:
+            return
+        rec = rec_for(asset, minute)
+        rec.update(map_book_features(bids_map, asks_map))
+        rec["last_book_ts"] = state.get("_last_book_ts")
+        rec["last_depth_update_ts"] = state.get("_last_depth_update_ts")
+        rec["depth_trusted"] = 1.0
+
+    for row in events.itertuples(index=False):
+        asset = row.asset_id
+        minute = row.minute
+        previous_minute = last_minute.get(asset)
+        if previous_minute is not None and minute != previous_minute:
+            finalise(asset, previous_minute)
+        last_minute[asset] = minute
+        rec = rec_for(asset, minute)
+        state = carry.setdefault(asset, {})
+
+        if str(row.event_type) == "book":
+            bid_pairs = level_pairs(row.bids, descending=True)
+            ask_pairs = level_pairs(row.asks, descending=False)
+            if not bid_pairs or not ask_pairs:
+                continue
+            state["_bid_book"] = {price: size for price, size in bid_pairs if size > 0}
+            state["_ask_book"] = {price: size for price, size in ask_pairs if size > 0}
+            state["_best_bid"] = max(state["_bid_book"])
+            state["_best_ask"] = min(state["_ask_book"])
+            state["_last_book_ts"] = row.timestamp_received
+            state["_last_depth_update_ts"] = row.timestamp_received
+            rec["book_count"] += 1.0
+            continue
+
+        bids_map = state.get("_bid_book")
+        asks_map = state.get("_ask_book")
+        if not isinstance(bids_map, dict) or not isinstance(asks_map, dict) or not bids_map or not asks_map:
+            continue
+
+        price = _safe_float(row.price)
+        size = _safe_float(row.size)
+        if price is None or size is None:
+            continue
+        side = str(row.side).upper()
+        if side not in {"BUY", "SELL"}:
+            continue
+
+        old_bid = _safe_float(state.get("_best_bid"))
+        old_ask = _safe_float(state.get("_best_ask"))
+        old_bid_size = bids_map.get(old_bid, 0.0) if old_bid is not None else 0.0
+        old_ask_size = asks_map.get(old_ask, 0.0) if old_ask is not None else 0.0
+        old_mid = (old_bid + old_ask) / 2.0 if old_bid is not None and old_ask is not None else None
+
+        target = bids_map if side == "BUY" else asks_map
+        old_level_size = float(target.get(price, 0.0))
+        delta = size - old_level_size
+        if size <= 0:
+            target.pop(price, None)
+            rec["level_delete_count"] += 1.0
+        else:
+            target[price] = size
+
+        reported_bid = _safe_float(row.best_bid)
+        reported_ask = _safe_float(row.best_ask)
+        new_bid = reported_bid if reported_bid is not None else (max(bids_map) if bids_map else None)
+        new_ask = reported_ask if reported_ask is not None else (min(asks_map) if asks_map else None)
+        state["_best_bid"] = new_bid
+        state["_best_ask"] = new_ask
+        state["_last_depth_update_ts"] = row.timestamp_received
+
+        new_bid_size = bids_map.get(new_bid, 0.0) if new_bid is not None else 0.0
+        new_ask_size = asks_map.get(new_ask, 0.0) if new_ask is not None else 0.0
+        event_ofi = _ofi_event(
+            old_bid,
+            old_ask,
+            old_bid_size,
+            old_ask_size,
+            new_bid,
+            new_ask,
+            new_bid_size,
+            new_ask_size,
+        )
+        rec["depth_update_count"] += 1.0
+        rec["visible_add_size"] += max(delta, 0.0)
+        rec["visible_remove_size"] += max(-delta, 0.0)
+        rec["level_flow_signed"] += delta if side == "BUY" else -delta
+        rec["ofi_top_event"] += event_ofi
+        rec["ofi_abs_event"] += abs(event_ofi)
+
+        if old_mid is not None and new_bid is not None and new_ask is not None:
+            new_mid = (new_bid + new_ask) / 2.0
+            if new_mid > old_mid:
+                rec["bbo_up_count"] += 1.0
+            elif new_mid < old_mid:
+                rec["bbo_down_count"] += 1.0
+
+    for asset, minute in last_minute.items():
+        finalise(asset, minute)
+
+    if not agg:
+        return pd.DataFrame()
+    return pd.DataFrame(list(agg.values()))
+
+
 def aggregate_hour(path: Path, carry: dict[Any, dict[str, Any]], tail: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, dict[Any, dict[str, Any]], pd.DataFrame, dict[str, int]]:
     pf = pq.ParquetFile(path)
     missing = REQUIRED - set(pf.schema_arrow.names)
@@ -283,23 +519,7 @@ def aggregate_hour(path: Path, carry: dict[Any, dict[str, Any]], tail: pd.DataFr
         ].copy()
         hazard_trade["kind"] = "TRADE"
 
-    books = df[df["event_type"].eq("book") & df["bids"].notna() & df["asks"].notna()].copy()
-    if books.empty:
-        bagg = pd.DataFrame()
-    else:
-        books.sort_values(["asset_id", "timestamp_received"], inplace=True)
-        last_book = books.groupby(["asset_id", "minute"], sort=False).tail(1).copy()
-        bf = last_book.apply(book_features, axis=1)
-        last_book = pd.concat(
-            [
-                last_book[["asset_id", "minute", "timestamp_received"]].reset_index(drop=True),
-                bf.reset_index(drop=True),
-            ],
-            axis=1,
-        )
-        last_book.rename(columns={"timestamp_received": "last_book_ts"}, inplace=True)
-        bagg = last_book
-        bagg["book_count"] = 1
+    bagg = reconstruct_visible_book(df, carry)
 
     ticks = df[df["event_type"].eq("tick_size_change")]
     if ticks.empty:
@@ -376,6 +596,7 @@ def aggregate_hour(path: Path, carry: dict[Any, dict[str, Any]], tail: pd.DataFr
     panel["age_quote_s"] = (minute_end - panel["last_quote_ts"]).dt.total_seconds()
     panel["age_trade_s"] = (minute_end - panel["last_trade_ts"]).dt.total_seconds()
     panel["age_book_s"] = (minute_end - panel["last_book_ts"]).dt.total_seconds()
+    panel["age_depth_update_s"] = (minute_end - panel["last_depth_update_ts"]).dt.total_seconds()
 
     panel["pressure_proxy"] = (
         panel["pc_buy_size_proxy"] - panel["pc_sell_size_proxy"]
@@ -424,6 +645,14 @@ def aggregate_hour(path: Path, carry: dict[Any, dict[str, Any]], tail: pd.DataFr
     ) + np.where(calc["ask_last"] >= prev_ask, prev_asz.fillna(0), 0)
     calc["ofi_top_proxy"] = bid_term + ask_term
     calc["ofi_depth_norm"] = calc["ofi_top_proxy"] / calc["depth_total5"].replace(0, np.nan)
+    calc["ofi_top_event_norm"] = calc["ofi_top_event"] / calc["depth_total5"].replace(0, np.nan)
+    calc["level_flow_norm"] = calc["level_flow_signed"] / calc["depth_total5"].replace(0, np.nan)
+    calc["visible_turnover_norm"] = (
+        calc["visible_add_size"] + calc["visible_remove_size"]
+    ) / calc["depth_total5"].replace(0, np.nan)
+    calc["replenishment_ratio_event"] = calc["visible_add_size"] / (
+        calc["visible_remove_size"] + 1e-9
+    )
 
     current_mask = calc["minute"].between(start, end)
     panel = calc.loc[current_mask].copy()
