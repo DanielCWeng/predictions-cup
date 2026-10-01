@@ -67,5 +67,6 @@
     "replenishment_1m": 200,
     "withdrawal_1m": 200
   },
-  "note": "EXPERIMENT-005I full-minute TRAIN regime/transition pass; transparent definitions frozen before run; HOLDOUT sealed."
+  "note": "EXPERIMENT-005I full-minute TRAIN regime/transition pass; transparent definitions frozen before run; HOLDOUT sealed.",
+  "attempt": 2
 }
