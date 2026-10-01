@@ -254,6 +254,66 @@ def main() -> None:
         encoding="utf-8",
     )
 
+    side_semantics: list[dict[str, Any]] = []
+    for suffix in (sample_specs[0], sample_specs[3]):
+        matches = [p for p in files if str(p.relative_to(root)).endswith(suffix)]
+        if len(matches) != 1:
+            continue
+        path = matches[0]
+        pf = pq.ParquetFile(path)
+        names = set(pf.schema_arrow.names)
+        needed = [c for c in ["event_type","timestamp","asset_id","best_bid","best_ask","price","size","side"] if c in names]
+        last_bbo: dict[str, tuple[float,float,int]] = {}
+        counts = Counter()
+        examples_out: list[dict[str, Any]] = []
+        for batch in pf.iter_batches(batch_size=250_000, columns=needed):
+            df = batch.to_pandas()
+            if "event_type" not in df:
+                continue
+            df = df[df["event_type"].isin(["price_change","best_bid_ask","last_trade_price"])].copy()
+            if df.empty:
+                continue
+            df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+            df.sort_values("timestamp", inplace=True, kind="stable")
+            for rec in df.to_dict(orient="records"):
+                asset = rec.get("asset_id")
+                if isinstance(asset, (bytes, bytearray, memoryview)):
+                    asset_key = str(int.from_bytes(bytes(asset), "big"))
+                else:
+                    asset_key = str(asset)
+                typ = str(rec.get("event_type"))
+                ts_ns = int(pd.Timestamp(rec["timestamp"]).value)
+                if typ in {"price_change","best_bid_ask"}:
+                    try:
+                        bb=float(rec.get("best_bid")); ba=float(rec.get("best_ask"))
+                    except (TypeError,ValueError):
+                        continue
+                    if 0 < bb <= ba < 1:
+                        last_bbo[asset_key]=(bb,ba,ts_ns)
+                    continue
+                if typ != "last_trade_price" or asset_key not in last_bbo:
+                    continue
+                try:
+                    px=float(rec.get("price"))
+                except (TypeError,ValueError):
+                    continue
+                bb,ba,bbo_ts=last_bbo[asset_key]
+                side=str(rec.get("side") or "").upper()
+                if side=="SELL":
+                    relation = "AT_OR_BELOW_BID" if px <= bb + 1e-12 else ("AT_OR_ABOVE_ASK" if px >= ba - 1e-12 else "INSIDE")
+                elif side=="BUY":
+                    relation = "AT_OR_ABOVE_ASK" if px >= ba - 1e-12 else ("AT_OR_BELOW_BID" if px <= bb + 1e-12 else "INSIDE")
+                else:
+                    relation="UNKNOWN_SIDE"
+                counts[f"{side}:{relation}"] += 1
+                if len(examples_out) < 20:
+                    examples_out.append({"side":side,"price":px,"best_bid":bb,"best_ask":ba,"bbo_age_ms":(ts_ns-bbo_ts)/1e6,"relation":relation})
+        side_semantics.append({"path":str(path.relative_to(root)),"counts":dict(counts),"examples":examples_out})
+    (OUT / "TRADE_SIDE_SEMANTICS.json").write_text(
+        json.dumps(side_semantics, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
     summary = {
         "dataset_root": str(root),
         "dataset_dir_name": root.name,
