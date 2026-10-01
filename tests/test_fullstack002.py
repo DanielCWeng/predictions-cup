@@ -180,51 +180,7 @@ def test_installer_validates_before_install_and_rejects_live() -> None:
         encoding="utf-8"
     )
     assert "EXECUTION_MODE=LIVE" in source
-    verify_marker = '"    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    risk_path = tmp_path / "risk.sqlite3"
-    risk_path.touch()
-    settings = AppSettings(
-        sig_research_path=tmp_path / "sig_research",
-        risk_state_path=risk_path,
-    )
-    calls: list[tuple[str, ...]] = []
-
-    monkeypatch.setattr(
-        fullstack,
-        "_stop_maker",
-        lambda: fullstack.CommandResult(0, "", ""),
-    )
-    monkeypatch.setattr(
-        fullstack,
-        "_systemctl",
-        lambda *args: fullstack.CommandResult(3, "", "") if args[0] == "is-active"
-        else fullstack.CommandResult(0, "", ""),
-    )
-
-    def run(command: Sequence[str], *, timeout: float = 5.0) -> fullstack.CommandResult:
-        del timeout
-        calls.append(tuple(command))
-        return fullstack.CommandResult(0, "{}", "")
-
-    monkeypatch.setattr(fullstack, "_run", run)
-    result = fullstack.halt_global(settings, reason="test-halt")
-
-    assert result["state"] == "HALTED"
-    assert calls
-    assert "scripts/risk002_control.py" in calls[0]
-    assert "halt-global" in calls[0]
-    assert "--ack-service-stopped" in calls[0]
-
-
-def test_flatten_is_explicitly_not_exposed() -> None:
-    source = (
-        PROJECT_ROOT / "src" / "predictions_cup" / "fullstack" / "control.py"
-    ).read_text(encoding="utf-8")
-    assert '"state": "NOT_READY"' in source
-    assert "no accepted current-main operator flatten contract" in source
- + '{SYSTEMD_ANALYZE_BIN}" verify'
+    verify_marker = '"${SYSTEMD_ANALYZE_BIN}" verify'
     assert source.index(verify_marker) < source.index("install -m 0644")
 
 
