@@ -43,18 +43,13 @@ jobs:
           DATASET="polyleviathan/sig-live-alpha-20261001-v1"
           DIR="data/kaggle_handoff/live_alpha_001/package"
           if kaggle datasets files "$DATASET" --page-size 10 >/dev/null 2>&1; then
-            kaggle datasets version -p "$DIR" -m "refresh live alpha snapshot" --dir-mode zip
+            echo "Frozen Kaggle dataset already exists; reusing it without versioning."
           else
             kaggle datasets create -p "$DIR" --dir-mode zip
+            echo "Waiting for first private dataset version to become mountable."
+            sleep 45
           fi
-          for i in $(seq 1 30); do
-            if kaggle datasets files "$DATASET" --page-size 10 >/dev/null 2>&1; then
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "dataset did not become readable"
-          exit 1
+          kaggle datasets files "$DATASET" --page-size 20
 
       - name: Run alpha sweep
         env:
