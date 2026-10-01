@@ -53,8 +53,9 @@
   "matched_control": {
     "sampling": "first valid reconstructed state in each 5-minute token bucket",
     "exclusion": "remove controls within 60 seconds of any linked accepted fill on that token",
-    "matching": "same window and token; nearest standardized state using mid, spread, log 2c depth, and 60s book-update activity",
-    "primary_contrast": "aggressor-signed 30s and 300s mid move: fill minus matched non-fill control"
+    "matching": "same window and token; nearest standardized state using mid, spread, log 2c depth, and 60s book-update activity; each control state may be used at most once",
+    "primary_contrast": "aggressor-signed 30s and 300s mid move: fill minus matched non-fill control",
+    "reuse": "WITHOUT_REPLACEMENT"
   },
   "primary_candidates": [
     {
