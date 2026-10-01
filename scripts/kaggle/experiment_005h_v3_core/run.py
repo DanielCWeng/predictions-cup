@@ -18,8 +18,8 @@ WINDOWS = [
     ("W17", "ev17_ak_fl_wy", "TRAIN"),
     ("W18", "ev18_ok_sc_runoff_ga_runoff", "DEV"),
 ]
-CLOCK_HORIZONS = (1, 5, 30, 300)
-EVENT_HORIZONS = (1, 5, 20)
+CLOCK_HORIZONS = (1, 5, 15, 30, 60, 300)
+EVENT_HORIZONS = (1, 2, 5, 10, 25, 50)
 CONTROL_INTERVAL_NS = 300_000_000_000
 CONTROL_EXCLUSION_NS = 60_000_000_000
 HISTORY_NS = 300_000_000_000
@@ -494,7 +494,13 @@ def process_post_update(
             anchor["min_depth_fraction_5s"] = float(frac if current_min is None else min(float(current_min), frac))
         if "first_post_depth_fraction" not in anchor:
             anchor["first_post_depth_fraction"] = float(frac)
-        for threshold, label in [(0.5, "50"), (0.8, "80"), (1.0, "100")]:
+        for threshold, label in [
+            (0.25, "25"),
+            (0.5, "50"),
+            (0.8, "80"),
+            (0.9, "90"),
+            (1.0, "100"),
+        ]:
             key = f"replenish_{label}_ms"
             if key not in anchor and frac >= threshold:
                 anchor[key] = float(elapsed_ms)
@@ -787,6 +793,101 @@ def add_future_flow(fills: pd.DataFrame) -> pd.DataFrame:
     return fills
 
 
+def build_episodes(
+    fills: pd.DataFrame,
+    threshold_s: float = 10.0,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if fills.empty:
+        return fills.copy(), pd.DataFrame()
+    out = fills.copy()
+    out["episode_id"] = ""
+    out["episode_position"] = 0
+    episode_counter = 0
+    for token, group in out.groupby("token_id", sort=False):
+        ordered = list(group.sort_values("anchor_ts_ns").index)
+        previous_index: int | None = None
+        position = 0
+        current_id = ""
+        for index in ordered:
+            start_new = True
+            if previous_index is not None:
+                dt_s = (
+                    int(out.at[index, "anchor_ts_ns"])
+                    - int(out.at[previous_index, "anchor_ts_ns"])
+                ) / 1e9
+                same_side = int(out.at[index, "q"]) == int(out.at[previous_index, "q"])
+                start_new = not (same_side and dt_s <= threshold_s)
+            if start_new:
+                episode_counter += 1
+                current_id = f"E{episode_counter:07d}"
+                position = 1
+            else:
+                position += 1
+            out.at[index, "episode_id"] = current_id
+            out.at[index, "episode_position"] = position
+            previous_index = index
+
+    rows: list[dict[str, Any]] = []
+    for episode_id, group in out.groupby("episode_id", sort=False):
+        ordered = group.sort_values("anchor_ts_ns")
+        first = ordered.iloc[0]
+        last = ordered.iloc[-1]
+        record: dict[str, Any] = {
+            "episode_id": episode_id,
+            "window_id": first["window_id"],
+            "split": first["split"],
+            "token_id": first["token_id"],
+            "side": int(first["q"]),
+            "fills": int(len(ordered)),
+            "start_ts_ns": int(first["anchor_ts_ns"]),
+            "end_ts_ns": int(last["anchor_ts_ns"]),
+            "duration_s": (
+                int(last["anchor_ts_ns"]) - int(first["anchor_ts_ns"])
+            ) / 1e9,
+            "total_venue_size": float(ordered["venue_size"].sum()),
+            "total_episode_size_exact": float(
+                ordered.loc[ordered["economic_exact"].astype(bool), "episode_size"].sum()
+            ),
+            "pre_mid": float(first["mid"]),
+            "pre_spread": float(first["spread"]),
+            "pre_depth_2c": float(first["pre_consumed_depth_2c"]),
+            "first_failed_replenish_80_30s": bool(
+                first["failed_replenish_80_30s"]
+            ),
+        }
+        for horizon in CLOCK_HORIZONS:
+            column = f"signed_move_{horizon}s"
+            if column in ordered.columns:
+                values = pd.to_numeric(ordered[column], errors="coerce").dropna()
+                record[f"mean_fill_signed_move_{horizon}s"] = (
+                    float(values.mean()) if not values.empty else math.nan
+                )
+                last_value = ordered.iloc[-1].get(column)
+                record[f"last_fill_signed_move_{horizon}s"] = (
+                    float(last_value) if pd.notna(last_value) else math.nan
+                )
+        rows.append(record)
+    return out, pd.DataFrame(rows)
+
+
+def episode_sensitivity(fills: pd.DataFrame) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    for threshold in (5.0, 10.0, 30.0):
+        _, episodes = build_episodes(fills, threshold_s=threshold)
+        if episodes.empty:
+            continue
+        rows.append(
+            {
+                "threshold_s": threshold,
+                "episodes": int(len(episodes)),
+                "multi_fill_episode_share": float((episodes["fills"] > 1).mean()),
+                "mean_fills_per_episode": float(episodes["fills"].mean()),
+                "median_duration_s": float(episodes["duration_s"].median()),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def nearest_fill_distance(ts: int, sorted_times: list[int]) -> int:
     if not sorted_times:
         return 10**30
@@ -1028,6 +1129,8 @@ def main() -> None:
 
     fills = add_derived(pd.concat(fill_frames, ignore_index=True, sort=False))
     fills = add_future_flow(fills)
+    fills, episodes = build_episodes(fills, threshold_s=10.0)
+    episode_sensitivity_frame = episode_sensitivity(fills)
     controls = add_derived(pd.concat(control_frames, ignore_index=True, sort=False))
     pairs = matched_controls(fills, controls)
 
@@ -1037,7 +1140,8 @@ def main() -> None:
     fills["log_venue_size_over_touch"] = np.log1p(fills["venue_size_over_touch"].astype(float))
 
     fills.to_parquet(WORK / "FILL_EVENTS.parquet", index=False)
-    fills.to_parquet(WORK / "FILL_EPISODES.parquet", index=False)
+    episodes.to_parquet(WORK / "FILL_EPISODES.parquet", index=False)
+    episode_sensitivity_frame.to_csv(WORK / "EPISODE_SENSITIVITY.csv", index=False)
     controls.to_parquet(WORK / "NONFILL_CONTROLS.parquet", index=False)
     pairs.to_csv(WORK / "MATCHED_CONTROLS.csv", index=False)
 
@@ -1180,6 +1284,7 @@ def main() -> None:
         "exact_economics_rows": int(fills["economic_exact"].sum()),
         "control_rows": int(len(controls)),
         "matched_pairs": int(len(pairs)),
+        "fill_episodes_10s": int(len(episodes)),
         "survivors": survivors,
         "matched_control_diagnostics": matched_stats,
         "models": models,
