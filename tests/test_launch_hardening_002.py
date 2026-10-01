@@ -733,11 +733,7 @@ def test_composed_lifecycle_oracle_restart_and_reconciliation(tmp_path: Path) ->
     account.apply_authoritative(_authoritative(observed_at=BASE))
     controller = _account_controller(account, journal, clock)
     truth = SyntheticAccountTruth()
-    oracle = Oracle(
-        remaining_quantity=Decimal("20"),
-        order_identity=("101", "102"),
-        operation_identity=("lh002-placement",),
-    )
+    oracle = Oracle()
     stages: list[dict[str, object]] = []
 
     initial_risk = evaluate_risk(
@@ -764,6 +760,10 @@ def test_composed_lifecycle_oracle_restart_and_reconciliation(tmp_path: Path) ->
             pass_=True,
         )
     )
+
+    oracle.remaining_quantity = Decimal("20")
+    oracle.order_identity = ("101", "102")
+    oracle.operation_identity = ("lh002-placement",)
 
     plan = build_execution_plan(
         initial_risk,
