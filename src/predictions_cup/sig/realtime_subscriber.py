@@ -20,6 +20,8 @@ BatchHandler = Callable[[str, object, datetime], Awaitable[None]]
 MaintenanceHandler = Callable[[datetime], Awaitable[None]]
 ConnectedHandler = Callable[[], None]
 logger = logging.getLogger(__name__)
+_MAX_PENDING_BROADCASTS = 4_096
+_MAX_PENDING_STATUSES = 1_024
 
 
 class SubscriberExit(StrEnum):
@@ -98,15 +100,25 @@ class SupabaseTournamentSubscriber:
         stop_event: asyncio.Event,
         on_maintenance: MaintenanceHandler | None = None,
     ) -> SubscriberExit:
-        payload_queue: asyncio.Queue[tuple[str, object, datetime]] = asyncio.Queue()
+        payload_queue: asyncio.Queue[tuple[str, object, datetime]] = asyncio.Queue(
+            maxsize=_MAX_PENDING_BROADCASTS
+        )
         status_queue: asyncio.Queue[
             tuple[str, RealtimeSubscribeStates, Exception | None]
-        ] = asyncio.Queue()
+        ] = asyncio.Queue(
+            maxsize=min(_MAX_PENDING_STATUSES, max(32, len(self._topics) * 2))
+        )
+        queue_overflow = asyncio.Event()
         connections: list[tuple[Any, list[Any]]] = []
 
         def broadcast_handler(topic: str) -> Callable[[BroadcastPayload], None]:
             def handle_broadcast(message: BroadcastPayload) -> None:
-                payload_queue.put_nowait((topic, message.get("payload"), self._clock()))
+                try:
+                    payload_queue.put_nowait(
+                        (topic, message.get("payload"), self._clock())
+                    )
+                except asyncio.QueueFull:
+                    queue_overflow.set()
 
             return handle_broadcast
 
@@ -116,7 +128,10 @@ class SupabaseTournamentSubscriber:
             def handle_status(
                 status: RealtimeSubscribeStates, error: Exception | None
             ) -> None:
-                status_queue.put_nowait((topic, status, error))
+                try:
+                    status_queue.put_nowait((topic, status, error))
+                except asyncio.QueueFull:
+                    queue_overflow.set()
 
             return handle_status
 
@@ -144,6 +159,12 @@ class SupabaseTournamentSubscriber:
                 loop = asyncio.get_running_loop()
                 deadline = loop.time() + self._subscribe_timeout_seconds
                 while pending:
+                    if queue_overflow.is_set():
+                        logger.warning(
+                            "SIG Realtime status queue overflow; reconnecting for "
+                            "authoritative resync"
+                        )
+                        return SubscriberExit.DISCONNECTED
                     topic, status, _ = await asyncio.wait_for(
                         status_queue.get(), timeout=max(0.0, deadline - loop.time())
                     )
@@ -173,6 +194,14 @@ class SupabaseTournamentSubscriber:
             refresh_at = self._token.expires_at - self._refresh_margin
             next_maintenance_at = self._clock()
             while True:
+                if queue_overflow.is_set():
+                    logger.warning(
+                        "SIG Realtime payload/status queue overflow; reconnecting "
+                        "for authoritative resync payload_capacity=%s status_capacity=%s",
+                        payload_queue.maxsize,
+                        status_queue.maxsize,
+                    )
+                    return SubscriberExit.DISCONNECTED
                 if stop_event.is_set():
                     return SubscriberExit.STOPPED
                 now = self._clock()

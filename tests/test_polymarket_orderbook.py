@@ -83,6 +83,28 @@ def test_delta_before_snapshot_is_counted_and_not_applied() -> None:
     assert store.snapshot("missing-token", depth=10) is None
 
 
+def test_repeated_book_decimals_are_shared_across_tokens() -> None:
+    store = OrderBookStore()
+    observed = datetime(2026, 9, 25, 12, 0, tzinfo=UTC)
+    for token_id in ("token-1", "token-2"):
+        store.apply_full_snapshot(
+            {
+                "asset_id": token_id,
+                "market": "market-1",
+                "bids": [{"price": "0.45", "size": "10"}],
+                "asks": [{"price": "0.46", "size": "12"}],
+            },
+            observed,
+        )
+
+    first = store._books["token-1"]
+    second = store._books["token-2"]
+    assert next(iter(first.bids)) is next(iter(second.bids))
+    assert next(iter(first.bids.values())) is next(iter(second.bids.values()))
+    assert next(iter(first.asks)) is next(iter(second.asks))
+    assert next(iter(first.asks.values())) is next(iter(second.asks.values()))
+
+
 def test_last_trade_price_updates_current_book_state() -> None:
     store = OrderBookStore()
     observed = datetime(2026, 9, 25, tzinfo=UTC)

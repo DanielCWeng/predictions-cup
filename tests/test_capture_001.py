@@ -289,6 +289,14 @@ def test_launch_recorder_persists_replayable_evidence_and_first_hours_report(
     assert health["research_storage"]["storage_failures"] == 0
 
 
+def test_sig_capture_writer_default_queue_is_bounded(tmp_path: Path) -> None:
+    sink = ImmutableCaptureSink(tmp_path / "research")
+    try:
+        assert sink.health_snapshot()["queue_capacity"] == 16_384
+    finally:
+        sink.close()
+
+
 def test_launch_recorder_restart_never_corrupts_published_shards(tmp_path: Path) -> None:
     root = tmp_path / "sig_research"
     at = datetime(2026, 10, 1, 16, 0, tzinfo=UTC)

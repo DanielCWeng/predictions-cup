@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from functools import lru_cache
 from typing import Any
 
 from predictions_cup.external.polymarket.models import (
@@ -135,6 +136,8 @@ class OrderBookStore:
             price = parse_decimal(change.get("price"), "price")
             size = parse_decimal(change.get("size"), "size")
             assert price is not None and size is not None
+            price = _shared_price(price)
+            size = _shared_size(size)
             if price < 0 or price > 1 or size < 0:
                 raise PayloadError("price_change price/size outside valid range")
             if size == 0:
@@ -244,8 +247,28 @@ def _levels(raw: object, *, side: str) -> dict[Decimal, Decimal]:
     for item in raw:
         level = BookLevel.from_payload(item)
         if level.size > 0:
-            result[level.price] = level.size
+            result[_shared_price(level.price)] = _shared_size(level.size)
     return result
+
+
+@lru_cache(maxsize=16_384)
+def _cached_price_text(value: str) -> Decimal:
+    return Decimal(value)
+
+
+@lru_cache(maxsize=8_192)
+def _cached_size_text(value: str) -> Decimal:
+    return Decimal(value)
+
+
+def _shared_price(value: Decimal) -> Decimal:
+    """Share immutable prices across books without changing their decimal text."""
+    return _cached_price_text(str(value))
+
+
+def _shared_size(value: Decimal) -> Decimal:
+    """Share repeated immutable sizes while keeping the cache bounded."""
+    return _cached_size_text(str(value))
 
 
 def _unwrap_market_event(payload: JsonObject) -> JsonObject:

@@ -4,12 +4,17 @@ import asyncio
 from dataclasses import dataclass, field
 
 import httpx
+import pytest
 from pydantic import SecretStr
 
 from predictions_cup.config import AppSettings
 from predictions_cup.sig.client import RetryPolicy
 from predictions_cup.sig.governed_client import GovernedSigRestClient
-from predictions_cup.sig.rest_governor import RestPriority, SigRestGovernor
+from predictions_cup.sig.rest_governor import (
+    RestGovernorQueueFullError,
+    RestPriority,
+    SigRestGovernor,
+)
 
 
 @dataclass
@@ -278,5 +283,21 @@ def test_governor_shutdown_cancels_waiters_without_deadlock() -> None:
         outcome = await asyncio.gather(pending, return_exceptions=True)
 
         assert isinstance(outcome[0], asyncio.CancelledError)
+
+    asyncio.run(scenario())
+
+
+def test_governor_rejects_requests_when_bounded_queue_is_full() -> None:
+    async def scenario() -> None:
+        governor = SigRestGovernor(rate_per_second=1.0, queue_max=1)
+        queued = asyncio.get_running_loop().create_future()
+        governor._queue.put_nowait((int(RestPriority.NORMAL), 1, queued))
+
+        with pytest.raises(RestGovernorQueueFullError, match="capacity=1"):
+            await governor.acquire(RestPriority.NORMAL)
+
+        assert governor.snapshot().pending_normal_reads == 0
+        await governor.aclose()
+        assert queued.cancelled()
 
     asyncio.run(scenario())

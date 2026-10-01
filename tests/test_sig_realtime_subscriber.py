@@ -12,6 +12,7 @@ from realtime.types import RealtimeChannelOptions
 import predictions_cup.sig.realtime_subscriber as subscriber_module
 from predictions_cup.sig.realtime_models import RealtimeTokenDto
 from predictions_cup.sig.realtime_subscriber import (
+    _MAX_PENDING_BROADCASTS,
     SubscriberExit,
     SupabaseTournamentSubscriber,
 )
@@ -258,6 +259,39 @@ def test_subscriber_token_refresh_and_graceful_stop(
 
     asyncio.run(refresh_scenario())
     asyncio.run(stop_scenario())
+
+
+def test_broadcast_queue_overflow_exits_for_authoritative_resync(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        client = _install_fake_client(monkeypatch, follow_up_status=None)
+        handled: list[object] = []
+        subscriber = SupabaseTournamentSubscriber(
+            topic="tournament:cup",
+            token=_token(expires_at=datetime.now(UTC) + timedelta(hours=2)),
+        )
+
+        async def on_batch(topic: str, payload: object, observed_at: datetime) -> None:
+            del topic, observed_at
+            handled.append(payload)
+
+        def flood_broadcasts() -> None:
+            assert client.fake_channel.broadcast_callback is not None
+            for index in range(_MAX_PENDING_BROADCASTS + 1):
+                client.fake_channel.broadcast_callback({"payload": {"index": index}})
+
+        outcome = await subscriber.run(
+            on_batch=on_batch,
+            on_connected=flood_broadcasts,
+            stop_event=asyncio.Event(),
+        )
+
+        assert outcome == SubscriberExit.DISCONNECTED
+        assert handled == []
+        assert client.realtime.removed is True
+
+    asyncio.run(scenario())
 
 
 class ShardChannel:
