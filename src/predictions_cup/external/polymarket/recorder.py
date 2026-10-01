@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
 import signal
 from contextlib import suppress
@@ -18,7 +19,11 @@ from predictions_cup.external.polymarket.models import JsonObject, TradeEvent, u
 from predictions_cup.external.polymarket.orderbook import OrderBookStore, event_type
 from predictions_cup.external.polymarket.parquet_storage import PolymarketResearchStorage
 from predictions_cup.external.polymarket.storage import PolymarketStorage
-from predictions_cup.external.polymarket.universe import ElectionUniverseSelector, parse_id_csv
+from predictions_cup.external.polymarket.universe import (
+    ElectionUniverseSelector,
+    UniverseSelection,
+    parse_id_csv,
+)
 from predictions_cup.external.polymarket.websocket import MarketWebSocket
 
 _LOG = logging.getLogger(__name__)
@@ -61,6 +66,28 @@ class PolymarketRecorder:
         try:
             discovery = await self.gamma.discover_active_markets()
             selection = self.selector.select(discovery.markets)
+            if self.settings.polymarket_capture_mapping_path is not None:
+                mapping = json.loads(
+                    self.settings.polymarket_capture_mapping_path.read_text()
+                )
+                exact_tokens = {
+                    record["direct_polymarket"]["mapped_token_id"]
+                    for record in mapping["records"]
+                    if record["mapping_class"] == "EXACT"
+                    and record.get("direct_polymarket") is not None
+                }
+                subscribed_tokens = tuple(
+                    sorted(exact_tokens.intersection(selection.token_ids))
+                )
+                subscribed_markets = tuple(
+                    market
+                    for market in selection.markets
+                    if set(market.token_ids).intersection(subscribed_tokens)
+                )
+                selection = UniverseSelection(
+                    markets=subscribed_markets,
+                    explicit_token_ids=subscribed_tokens,
+                )
             if not selection.markets:
                 raise RuntimeError("Polymarket universe selector returned no markets")
         except asyncio.CancelledError:

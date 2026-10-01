@@ -9,6 +9,7 @@ in `~/.config/predictions-cup/{runtime,trade}.env` on the host.
 | `sig_polymarket_2026_band.json` | `~/fs002_stage/` | Mapping subset for the band universe, built 2026-10-01 20:00Z from Polymarket CLOB midpoints |
 | `canary.env`, `canary960.json` | `~/fs002_stage/` | Single-market LIVE canary (size 10, caps 25) |
 | `systemd/*.conf` | `/etc/systemd/system/predictions-cup-maker.service.d/` | SHADOW-only drop-ins for the installed maker unit (kill switch on) |
+| `polymarket-capture-exact.conf` | `/etc/systemd/system/predictions-cup-polymarket-capture.service.d/50-exact.conf` | Capture only the direct Polymarket token for each EXACT SIG mapping; trims the capture websocket and book cache |
 
 LIVE runs as a transient unit:
 
