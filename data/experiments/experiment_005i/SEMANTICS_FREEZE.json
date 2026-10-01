@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "source": "independent raw DATA-003 order-book probes",
+  "core_surface": "baseline_sep V3",
+  "observable_time": {
+    "V1": {
+      "field": "timestamp_received",
+      "precision": "milliseconds",
+      "same_time_policy": "batch/fail closed for sequential claims",
+      "payload": "JSON in data column"
+    },
+    "V2": {
+      "field": "timestamp_received",
+      "precision": "milliseconds",
+      "same_time_policy": "batch/fail closed for sequential claims",
+      "payload": "typed event rows; depth encoded as strings"
+    },
+    "AG6": {
+      "field": "timestamp_received",
+      "precision": "milliseconds",
+      "same_time_policy": "batch/fail closed for sequential claims",
+      "payload": "V2-like typed event rows; independent source label"
+    },
+    "V3": {
+      "field": "timestamp_received",
+      "precision": "microseconds",
+      "same_time_policy": "timestamp_received controls; sequence is provenance only until independently proven to be a global event clock",
+      "payload": "typed events with nested depth"
+    }
+  },
+  "V3_fields_verified": [
+    "event_type",
+    "timestamp_received",
+    "sequence",
+    "timestamp",
+    "market",
+    "asset_id",
+    "best_bid",
+    "best_ask",
+    "spread",
+    "bids",
+    "asks",
+    "price",
+    "size",
+    "side",
+    "fee_rate_bps",
+    "transaction_hash",
+    "old_tick_size",
+    "new_tick_size",
+    "window_id",
+    "source_version"
+  ],
+  "feature_boundaries": {
+    "pressure_proxy": "price_change side/size may describe book-side state/update pressure; do not rename it exact OFI",
+    "ofi": "derive only from defensible changes in observed BBO/depth state",
+    "trade_side": "may be used descriptively only after event-type sample confirms last_trade_price semantics",
+    "physical_file_order": "never treated as observable-time ordering",
+    "exchange_timestamp": "not used as feature-availability clock"
+  },
+  "holdout_read": false,
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}
