@@ -54,10 +54,7 @@ def equal_price(a: float | None, b: Any, tol: float = 0.000051) -> bool:
 
 
 def apply_update(book: dict[float, float], price: float, size: float, absolute: bool) -> None:
-    if absolute:
-        new_size = size
-    else:
-        new_size = book.get(price, 0.0) + size
+    new_size = size if absolute else book.get(price, 0.0) + size
     if new_size <= 0:
         book.pop(price, None)
     else:
@@ -142,7 +139,7 @@ def evaluate(path: Path) -> dict[str, Any]:
             s["ask_match"] += int(am)
             s["both_bbo_match"] += int(bm and am)
 
-    for name, s in stats.items():
+    for _name, s in stats.items():
         n = max(int(s["price_change_after_seed"]), 1)
         s["both_match_rate"] = s["both_bbo_match"] / n
         s["bid_match_rate"] = s["bid_match"] / n
