@@ -26,6 +26,10 @@ MonoClock = Callable[[], int]
 FeedTrust = Callable[[], bool]
 CycleObserver = Callable[[MakerCycleResult], Awaitable[None]]
 SnapshotObserver = Callable[[MakerStateChange, datetime, Mapping[str, MakerMarketSnapshot]], None]
+ExecutionObserver = Callable[
+    [MakerStateChange, datetime, Mapping[str, MakerMarketSnapshot]],
+    Awaitable[None],
+]
 
 
 class MakerRuntimeLoop:
@@ -40,6 +44,7 @@ class MakerRuntimeLoop:
         telemetry: HotPathTelemetry | None = None,
         cycle_observer: CycleObserver | None = None,
         snapshot_observer: SnapshotObserver | None = None,
+        execution_observer: ExecutionObserver | None = None,
         fail_closed_on_observer_error: bool = False,
         wall_clock: WallClock = lambda: datetime.now(UTC),
         mono_clock: MonoClock = monotonic_ns,
@@ -52,6 +57,7 @@ class MakerRuntimeLoop:
         self._telemetry = telemetry
         self._observer = cycle_observer
         self._snapshot_observer = snapshot_observer
+        self._execution_observer = execution_observer
         self._observer_fail_closed = fail_closed_on_observer_error
         self._wall_clock = wall_clock
         self._mono_clock = mono_clock
@@ -193,6 +199,18 @@ class MakerRuntimeLoop:
             except Exception:
                 # SHADOW/research observation must never block or kill MAKE.
                 self._increment("maker_snapshot_observer_failures")
+        if self._execution_observer is not None:
+            execution_started = self._mono_clock()
+            # This observer is an economic execution path, not analytics.
+            # Infrastructure failure propagates so the service fails closed.
+            # Individual model failures are isolated inside MODEL-RUNTIME-001.
+            await self._execution_observer(change, wall_now, snapshots)
+            execution_finished = self._mono_clock()
+            if execution_finished >= execution_started:
+                self._observe(
+                    "model_runtime_execution",
+                    execution_finished - execution_started,
+                )
         started = self._mono_clock()
         result = await self._coordinator.on_state_change(
             change,

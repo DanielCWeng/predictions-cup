@@ -459,15 +459,29 @@ def test_live_shadow_runtime_persists_one_snapshot_boundary_and_all_candidates(
         ]
         assert sum(item["event_type"] == "snapshot" for item in records) == 1
         decisions = [item for item in records if item["event_type"] == "decision"]
-        assert len(decisions) == 5
+        assert len(decisions) == 11
+        frozen_context_ids = {
+            "model:005i_recent_5m_reversal_context:paper",
+            "model:005i_price_discovery_context:paper",
+            "model:005i_liquidity_stress_context:paper",
+            "model:005i_withdrawal_replenishment_context:paper",
+            "model:005i_depth_normalised_ofi_context:paper",
+            "model:005f_renewal_state_context:paper",
+        }
         assert {item["candidate_id"] for item in decisions} == {
             "make-direct-pm",
             "direct-pm-reference",
             "pred-006",
             "experiment-005f-hazard",
             "r3-ets-structural-fv",
+            *frozen_context_ids,
         }
         research = {item["candidate_id"]: item for item in decisions}
+        for candidate_id in frozen_context_ids:
+            item = research[candidate_id]
+            assert item["decision_status"] == "NOT_READY"
+            assert item["direction"] is None
+            assert item["action_intent"] is None
         assert research["pred-006"]["abstain_reason"] == "model_artifact_missing"
         assert (
             research["experiment-005f-hazard"]["abstain_reason"]

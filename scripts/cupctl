@@ -7,4 +7,9 @@ RUNTIME_ENV="${PREDICTIONS_CUP_RUNTIME_ENV:-${HOME}/.config/predictions-cup/runt
 [[ -x "${PYTHON_BIN}" ]] || { printf 'ERROR: runtime Python missing: %s\n' "${PYTHON_BIN}" >&2; exit 1; }
 [[ -r "${RUNTIME_ENV}" ]] || { printf 'ERROR: runtime env unreadable: %s\n' "${RUNTIME_ENV}" >&2; exit 1; }
 cd "${REPO_ROOT}"
+if [[ "${1:-}" == "models" ]]; then
+  shift
+  TRADE_ENV="${PREDICTIONS_CUP_TRADE_ENV:-${HOME}/.config/predictions-cup/trade.env}"
+  exec "${PYTHON_BIN}" -m predictions_cup.models.operator "$@" --env-file "${RUNTIME_ENV}" --trade-env "${TRADE_ENV}"
+fi
 exec "${PYTHON_BIN}" -m predictions_cup.fullstack "$@" --env-file "${RUNTIME_ENV}"

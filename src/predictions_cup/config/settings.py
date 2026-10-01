@@ -123,6 +123,11 @@ class AppSettings(BaseSettings):
     live_learn_evidence_grace_seconds: float = Field(default=5.0, ge=0.0, le=300.0)
     live_learn_max_evidence_age_seconds: float = Field(default=15.0, gt=0.0, le=300.0)
 
+    # MODEL-RUNTIME-001 startup allowlists.  Values are parsed/frozen once by
+    # the model runtime; they are never read on the model evaluation hot path.
+    model_paper_ids: str = ""
+    model_live_ids: str = ""
+
     sig_realtime_storage_path: Path = Path("data/sig_realtime.sqlite3")
     sig_research_path: Path = Path("data/sig_research")
     sig_capture_queue_max: int = Field(default=200_000, ge=10_000, le=2_000_000)
@@ -290,6 +295,9 @@ class AppSettings(BaseSettings):
             raise ValueError("shadow_enabled requires maker_enabled=true")
         if self.live_learn_enabled and not self.shadow_enabled:
             raise ValueError("live_learn_enabled requires shadow_enabled=true")
+        models_configured = self.model_paper_ids.strip() or self.model_live_ids.strip()
+        if models_configured and not self.shadow_enabled:
+            raise ValueError("configured models require shadow_enabled=true")
         return self
 
     @model_validator(mode="after")
@@ -448,6 +456,12 @@ class AppSettings(BaseSettings):
             "live_learn_evidence_grace_seconds": self.live_learn_evidence_grace_seconds,
             "live_learn_max_evidence_age_seconds": (
                 self.live_learn_max_evidence_age_seconds
+            ),
+            "model_paper_id_count": len(
+                {value.strip() for value in self.model_paper_ids.split(",") if value.strip()}
+            ),
+            "model_live_id_count": len(
+                {value.strip() for value in self.model_live_ids.split(",") if value.strip()}
             ),
             "sig_read_credential_configured": self.sig_read_credential is not None,
             "sig_trade_credential_configured": self.sig_trade_credential is not None,
