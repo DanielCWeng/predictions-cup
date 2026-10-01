@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "action": "dataset_analysis",
+  "dataset": "polyleviathan/sig-cup-data-003-sig-actual-fills",
+  "script": "scripts/kaggle/experiment_005i_fill_flow/run.py",
+  "files": [
+    "fills/window_id=B0/day=2026-09-11/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-12/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-13/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-14/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-15/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-16/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-17/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-18/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-19/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-20/part-00000.parquet"
+  ],
+  "worker_id": "fill-flow-dev",
+  "sample_per_hour": 1,
+  "seed": 505020,
+  "surface": "DEV",
+  "note": "EXPERIMENT-005I DEV confirmation of TRAIN directional-run persistence/burstiness. Sep11-20 only; HOLDOUT sealed."
+}
