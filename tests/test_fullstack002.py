@@ -400,3 +400,19 @@ def test_rehearsal_evidence_never_claims_real_host_or_orders() -> None:
     assert rehearsal["real_host_evidence"] == "NOT_RUN"
     assert rehearsal["real_result"] == "NOT_RUN"
     assert all(check["state"] == "PASS" for check in rehearsal["checks"])
+
+
+def test_rehearsal_owns_only_fullstack_systemd_units() -> None:
+    expected = {
+        "predictions-cup-alert@.service",
+        "predictions-cup-sig-capture.service",
+        "predictions-cup-polymarket-capture.service",
+        "predictions-cup-maker.service",
+        "predictions-cup-status.service",
+        "predictions-cup-status.timer",
+        "predictions-cup-runtime.target",
+    }
+
+    assert set(fullstack.FULLSTACK_SYSTEMD_UNITS) == expected
+    assert "predictions-cup-supervisor.service" not in fullstack.FULLSTACK_SYSTEMD_UNITS
+    assert all((SYSTEMD / name).is_file() for name in fullstack.FULLSTACK_SYSTEMD_UNITS)
