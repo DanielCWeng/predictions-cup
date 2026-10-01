@@ -185,7 +185,7 @@
     "Mounted probe verified 2,900 total files / 2,893 parquet files / 19,119,822,430 bytes and four source-schema families.",
     "All historical OOM failures were recovered; only 30 predeclared ev17 upstream gaps and three ev11 SOURCE_MISSING hours remain.",
     "Raw corpus is landed but scientific status remains unbound until source-aware canonical compaction/audit passes.",
-    "Replay/005F compaction filters to the 693 accepted mapped outcome tokens, not both 1,386 binary complements.",
+    "Primary September compaction filters to exactly 280 tokens: 140 local execution tokens plus their 140 binary complements from execution_universe_exact.json. The broader landed corpus remains 693 conditions / 1,386 tokens.",
     "Full compaction must use source-aware timestamp/order semantics by window; one universal parser is forbidden.",
     "Kaggle authenticated probes on 2026-10-01 verified status=ready, 2900 files, 2893 parquet files, 19,119,822,430 bytes.",
     "Primary scientific replay is baseline_sep only (2026-09-01 through 2026-09-28 UTC), a V3 flat-schema PRE_ELECTION window.",
