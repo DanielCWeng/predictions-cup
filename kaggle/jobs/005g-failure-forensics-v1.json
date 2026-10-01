@@ -7,5 +7,6 @@
   "timeout_minutes": 330,
   "download_outputs": true,
   "output_file_pattern": "(FAILURE_FORENSICS_RAW\\.json)$",
-  "note": "EXPERIMENT-005G FINAL ECONOMIC FAILURE FORENSICS. POST_HOC_FAILURE_FORENSICS only. TRAIN 2026-09-06 and DEV 2026-09-07 only. No economic HOLDOUT read, no threshold tuning, no new policy, no MAKE modification, no real SIG orders."
+  "note": "EXPERIMENT-005G FINAL ECONOMIC FAILURE FORENSICS attempt 2. Same POST_HOC_FAILURE_FORENSICS design; diagnostic bookkeeping fix for WAIT weighting plus aggregate drawdown/turnover reproduction. TRAIN 2026-09-06 and DEV 2026-09-07 only. No economic HOLDOUT read, no threshold tuning, no new policy, no MAKE modification, no real SIG orders.",
+  "attempt": 2
 }
