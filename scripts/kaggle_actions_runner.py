@@ -51,7 +51,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     if data.get("schema_version") != 1:
         raise ValueError("schema_version must be 1")
     action = data.get("action")
-    if action not in {"auth_check", "dataset_probe", "run", "status", "output", "logs"}:
+    if action not in {"auth_check", "dataset_fetch", "dataset_probe", "run", "status", "output", "logs"}:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
 
@@ -96,6 +96,56 @@ def auth_check(output_dir: Path) -> None:
             "Authenticated successfully and listed owned kernels.",
         ]
     )
+
+
+def dataset_fetch(data: dict[str, Any], output_dir: Path) -> None:
+    dataset = str(data.get("dataset", "")).strip()
+    if "/" not in dataset:
+        raise ValueError("dataset_fetch manifest requires 'dataset' as owner/slug")
+    files_raw = data.get("files")
+    if not isinstance(files_raw, list) or not files_raw:
+        raise ValueError("dataset_fetch manifest requires non-empty 'files' list")
+
+    dest = output_dir / "dataset_files"
+    dest.mkdir(parents=True, exist_ok=True)
+    results: list[dict[str, object]] = []
+    for raw in files_raw:
+        file_name = str(raw).strip()
+        if not file_name:
+            raise ValueError("dataset_fetch file names must be non-empty")
+        result = run_command(
+            [
+                "kaggle",
+                "datasets",
+                "download",
+                dataset,
+                "-f",
+                file_name,
+                "-p",
+                str(dest),
+                "--force",
+            ],
+            check=False,
+        )
+        results.append(
+            {
+                "file": file_name,
+                "returncode": result.returncode,
+                "downloaded": result.returncode == 0,
+            }
+        )
+
+    (output_dir / "dataset_fetch.json").write_text(
+        json.dumps(
+            {"dataset": dataset, "files": results},
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    if not all(bool(item["downloaded"]) for item in results):
+        raise RuntimeError("One or more requested Kaggle dataset files could not be fetched")
 
 
 def dataset_probe(data: dict[str, Any], output_dir: Path) -> None:
@@ -283,6 +333,8 @@ def main() -> int:
     action = data["action"]
     if action == "auth_check":
         auth_check(output_dir)
+    elif action == "dataset_fetch":
+        dataset_fetch(data, output_dir)
     elif action == "dataset_probe":
         dataset_probe(data, output_dir)
     elif action == "run":
