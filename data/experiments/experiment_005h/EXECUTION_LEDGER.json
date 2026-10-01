@@ -21,7 +21,11 @@
     }
   ],
   "promoted_core": {
-    "status": "NOT_YET_LAUNCHED",
+    "status": "RUNNING",
+    "workflow_run_id": 36838276378,
+    "launch_head_sha": "a68b10ff34064118c33a37aba5a6ec4a426b4ee1",
+    "kernel": "polyleviathan/experiment-005h-v3-core",
+    "scientific_role": "SOLE_W17_TRAIN_W18_DEV_OUTCOME_SOURCE",
     "required_properties": [
       "explicit nanosecond receive clock",
       "transaction_hash + active_token identity",
@@ -39,8 +43,8 @@
     "scope": "identity and chronology only; no outcome inspection"
   },
   "downstream": {
-    "v3_hostile_falsification": "DEFERRED_UNTIL_PROMOTED_CORE_COMPLETE",
-    "extended_v3_analysis": "DEFERRED_UNTIL_PROMOTED_CORE_COMPLETE",
+    "v3_hostile_falsification": "DEFERRED_UNTIL_WORKFLOW_36838276378_COMPLETE",
+    "extended_v3_analysis": "DEFERRED_UNTIL_WORKFLOW_36838276378_COMPLETE",
     "source_stratified_replication": "DEFERRED_UNTIL_SOURCE_AUDIT_AND_V3_SHORTLIST",
     "pre_holdout_freeze": "FORBIDDEN_YET",
     "b0": "SEALED"
