@@ -94,6 +94,8 @@ def build_maker_components(
             max_optional_signal_age_ns=settings.maker_max_signal_age_ms * ms,
             require_trusted_depth=settings.maker_require_trusted_depth,
             max_depth_age_ns=settings.maker_max_depth_age_ms * ms,
+            min_fair_value=settings.maker_min_fair_value,
+            max_fair_value=settings.maker_max_fair_value,
         ),
         config=MakerConfig(
             strategy_id="make-direct-pm",
