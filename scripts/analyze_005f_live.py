@@ -10,7 +10,7 @@ from predictions_cup.analysis.live_005f import analyze_state_transfer_from_paths
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Replay exact observable 005F state and stratify future MAKE economics. "
+            "Analyze persisted exact decision-time 005F state against future MAKE economics. "
             "This does not score or refit the frozen 005F model."
         )
     )
