@@ -32,6 +32,7 @@ TRANSITION_SECONDS = 300
 MAX_STATE_AGE_SECONDS = 300
 MIN_SUPPORT_FILLS = 50
 SEED = 20261001005
+SKLEARN_SEED = SEED % (2**32 - 1)
 
 FEATURES = [
     "state_dwell_s",
@@ -1129,7 +1130,7 @@ class FrozenLogit:
 def fit_logit(panel: pd.DataFrame, target: str) -> FrozenLogit:
     data = panel[FEATURES + [target]].dropna().copy()
     if len(data) > 350_000:
-        data = data.sample(350_000, random_state=SEED)
+        data = data.sample(350_000, random_state=SKLEARN_SEED)
     y = data[target].astype(int).to_numpy()
     if len(np.unique(y)) < 2:
         raise RuntimeError(f"one-class TRAIN target: {target}")
@@ -1139,7 +1140,7 @@ def fit_logit(panel: pd.DataFrame, target: str) -> FrozenLogit:
     model = LogisticRegression(
         max_iter=400,
         class_weight="balanced",
-        random_state=SEED,
+        random_state=SKLEARN_SEED,
         solver="lbfgs",
     ).fit(z, y)
     return FrozenLogit(
