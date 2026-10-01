@@ -165,3 +165,55 @@ Do **not** modify MAKE directly from 005G. Promotion should require positive rep
 005G produced a credible transferred result: orderbook age, state dwell and related structural state variables contain robust information about future renewal and regime transitions in the fresh DATA-003 corpus.
 
 The next scientific question is no longer whether these features predict orderbook state. It is whether that information can be converted into better execution economics.
+
+
+## Economic conversion replay — completed
+
+The preregistered `005G_ECONOMIC_REPLAY_V1` was subsequently run on a disjoint post-experiment window:
+
+- TRAIN: 2026-09-06
+- DEV: 2026-09-07
+- economic HOLDOUT: 2026-09-08
+
+The replay completed successfully in GitHub Actions run `36859479989`. The exact artifact is preserved at:
+
+`data/experiments/experiment_005g/economic_replay/attempt5-kaggle-run-0-1.zip`
+
+Artifact SHA-256:
+
+`ecd0a08ef52c5c38bc14e408d472739fb69ef6fe869f4f04cfef685b10ac36f8`
+
+The DEV baseline produced a net 60-second markout P&L proxy of `1.6715` across 100 filled sides. None of the frozen policy families passed the preregistered DEV gate:
+
+- WIDTH_ONLY: 0/8
+- SIZE_ONLY: 0/8
+- WAIT_ONLY: 0/4
+- REFRESH_ONLY: 0/8
+
+Even the best net result in each family was below the DEV baseline. Best net deltas versus baseline were approximately:
+
+- WIDTH_ONLY: -0.7800
+- SIZE_ONLY: -0.7500
+- WAIT_ONLY: -1.5000
+- REFRESH_ONLY: -0.7650
+
+Some interventions reduced adverse-selection or drawdown proxies, but the lost fills/economic value outweighed those improvements under the frozen selection rule. Therefore no DEV champion was frozen for promotion.
+
+The economic holdout was opened only after writing `ECONOMIC_POLICY_FREEZE.json`. Because there was no DEV champion, no candidate policy was evaluated for promotion on the holdout; only baseline diagnostics were recorded. No post-holdout retuning or candidate replacement was performed.
+
+### Final 005G disposition
+
+The original predictive conclusion remains intact: the frozen 005G variables contain robust information about orderbook renewal and state-transition hazard.
+
+However, **005G_STATE_HAZARD_V1 did not convert into a promotable passive-execution policy under the preregistered V1 replay grid**.
+
+Accordingly:
+
+- do not route this replay result into live MAKE;
+- do not claim executable P&L or Sharpe from 005G;
+- do not rescue a failed policy by tuning on Sep 8;
+- retain the state-hazard result as research/shadow evidence only unless a genuinely new, prospectively preregistered economic hypothesis is developed.
+
+Machine-readable economic result:
+
+`data/experiments/experiment_005g/economic_replay/RESULT.json`
