@@ -1720,7 +1720,12 @@ def test_brief_account_resync_holds_known_resting_quotes() -> None:
     )
 
     assert result.execution_events == ()
-    assert result.lifecycle_actions == ()
+    assert len(result.lifecycle_actions) == 2
+    assert all(
+        action.kind is QuoteLifecycleActionKind.KEEP
+        and action.reason == "transient_account_hold"
+        for action in result.lifecycle_actions
+    )
     assert registry.state("36").bid is not None
     assert registry.state("36").ask is not None
 
