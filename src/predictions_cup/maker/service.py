@@ -1400,9 +1400,13 @@ def _risk_uncertain_operation_ids(
 ) -> tuple[str, ...]:
     if journal is None:
         return ()
+    # CANCEL_PENDING is deliberately absent. A cancel in flight can only
+    # remove exposure; the order stays counted as open/uncertain exposure until
+    # SIG confirms, and a fill it races appears in the authoritative positions.
+    # Blocking on it made every capital refresh fail while MAKE was cancelling
+    # (LIVE 2026-10-01: marks went stale, forcing more cancels).
     uncertain_states = {
         LifecycleState.PENDING,
-        LifecycleState.CANCEL_PENDING,
         LifecycleState.UNCERTAIN,
         LifecycleState.RECONCILING,
     }
