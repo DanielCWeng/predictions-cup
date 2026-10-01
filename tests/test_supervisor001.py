@@ -337,7 +337,7 @@ def test_fast_disk_growth_is_critical() -> None:
 def test_resource_growth_resets_memory_history_on_pid_change(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    tracker = ResourceGrowthTracker()
+    tracker = ResourceGrowthTracker(minimum_elapsed_seconds=30.0)
     times = iter((0.0, 31.0, 62.0))
     monkeypatch.setattr("predictions_cup.supervisor.runtime.time.monotonic", lambda: next(times))
     first = {"services": {"svc": {"main_pid": "1", "memory_current_bytes": 100}}}
@@ -349,3 +349,65 @@ def test_resource_growth_resets_memory_history_on_pid_change(
     assert growth1 == {}
     assert growth2["svc"] > 0
     assert growth3 == {}
+
+
+def test_resource_growth_ignores_normal_startup_ramp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tracker = ResourceGrowthTracker()
+    times = iter((0.0, 120.0))
+    monkeypatch.setattr("predictions_cup.supervisor.runtime.time.monotonic", lambda: next(times))
+    first = {"services": {"svc": {"main_pid": "1", "memory_current_bytes": 100}}}
+    ramped = {"services": {"svc": {"main_pid": "1", "memory_current_bytes": 800 * 1024**2}}}
+    growth1, _ = tracker.update(first)
+    growth2, _ = tracker.update(ramped)
+    assert growth1 == {}
+    assert growth2 == {}
+
+
+def test_level_zero_plan_emits_no_automatic_actions(tmp_path: Path) -> None:
+    config = RemediationConfig(
+        max_level=RemediationLevel.OBSERVE,
+        host_role=HostRole.WEST_EXECUTION,
+        supervisor_root=tmp_path,
+        hot_capture_roots=(),
+        hot_capture_retention_hours=24,
+        bundle_retention_hours=48,
+        safe_cache_paths=(),
+        safe_restart_services=("safe.service",),
+    )
+    finding = Finding(
+        "SERVICE_MEMORY_GROWTH",
+        Severity.CRITICAL,
+        "growing",
+        {"service": "safe.service"},
+    )
+    snapshot = SupervisorSnapshot(
+        snapshot_id="s",
+        host_id="h",
+        host_role=HostRole.WEST_EXECUTION,
+        git_head="g",
+        observed_at=NOW,
+        severity=Severity.CRITICAL,
+        launch_gate=LaunchGate.HOLD,
+        findings=(finding,),
+        sources=(),
+        sections={},
+    )
+    assert RemediationExecutor(config).plan(snapshot) == ()
+
+
+def test_sig_nested_research_storage_failure_is_critical() -> None:
+    collection = _healthy_collection()
+    sections = dict(collection.sections)
+    sections["sig_capture"] = {
+        "research_storage": {
+            "storage_failures": 1,
+            "dropped_rows": 0,
+            "writer_alive": True,
+            "queue_depth": 0,
+            "queue_capacity": 100,
+        }
+    }
+    findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
+    assert any(item.code == "CAPTURE_SIG_STORAGE_FAILURE" for item in findings)
