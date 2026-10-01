@@ -653,6 +653,12 @@ def aggregate_hour(path: Path, carry: dict[Any, dict[str, Any]], tail: pd.DataFr
     calc["replenishment_ratio_event"] = calc["visible_add_size"] / (
         calc["visible_remove_size"] + 1e-9
     )
+    calc["visible_add_share"] = calc["visible_add_size"] / (
+        calc["visible_add_size"] + calc["visible_remove_size"] + 1e-9
+    )
+    calc["visible_net_flow"] = (
+        calc["visible_add_size"] - calc["visible_remove_size"]
+    ) / (calc["visible_add_size"] + calc["visible_remove_size"] + 1e-9)
 
     current_mask = calc["minute"].between(start, end)
     panel = calc.loc[current_mask].copy()
@@ -706,14 +712,19 @@ def aggregate_hour(path: Path, carry: dict[Any, dict[str, Any]], tail: pd.DataFr
 def stratified_sample(panel: pd.DataFrame, n: int, seed: int) -> pd.DataFrame:
     if panel.empty:
         return panel
-    active = panel[(panel["quote_events"] + panel["trade_count"]) > 0]
-    n_active = min(len(active), int(n * 0.6))
-    a = active.sample(n=n_active, random_state=seed) if n_active else active.iloc[:0]
+    depth = panel[panel["depth_trusted"].fillna(0).gt(0)]
+    n_depth = min(len(depth), int(n * 0.35))
+    a = depth.sample(n=n_depth, random_state=seed) if n_depth else depth.iloc[:0]
+
     remaining = panel.drop(index=a.index, errors="ignore")
-    n_other = min(len(remaining), n - len(a))
-    b = remaining.sample(n=n_other, random_state=seed + 1) if n_other else remaining.iloc[:0]
-    out = pd.concat([a, b], ignore_index=True)
-    return out
+    active = remaining[(remaining["quote_events"] + remaining["trade_count"]) > 0]
+    n_active = min(len(active), int(n * 0.4))
+    b = active.sample(n=n_active, random_state=seed + 1) if n_active else active.iloc[:0]
+
+    remaining = remaining.drop(index=b.index, errors="ignore")
+    n_other = min(len(remaining), n - len(a) - len(b))
+    c = remaining.sample(n=n_other, random_state=seed + 2) if n_other else remaining.iloc[:0]
+    return pd.concat([a, b, c], ignore_index=True)
 
 
 def summarize_market(panel: pd.DataFrame) -> pd.DataFrame:
