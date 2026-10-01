@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005H",
+  "stage": "SOURCE_VERSION_ROBUSTNESS_PROTOCOL",
+  "status": "FROZEN_BEFORE_SOURCE_VERSION_AUDIT_OUTCOME_INSPECTION",
+  "selection_boundary": "V2/AG6 can never add candidates, tune V3 candidates, or alter B0 thresholds.",
+  "eligible_source_rule": {
+    "identity": "exact transaction_hash + active_token_id",
+    "minimum_unique_link_fraction": 0.90,
+    "pretrade_state": "recorder receive time strictly earlier than linked venue trade; equal receive time is AMBIGUOUS unless source sequence proves ordering",
+    "pooling": "forbidden; report source directory/window strata separately"
+  },
+  "candidate_rules": {
+    "005H-C01-RELATIVE-SIZE": {
+      "minimum_supported_events_per_stratum": 50,
+      "test": "same state baseline: relative episode-size/touch-depth model versus absolute episode-size model on aggressor-signed 30s movement",
+      "supported": "relative-size R2 difference > 0 in the aggregate eligible source record and positive in a majority of sufficiently supported source strata",
+      "source_specific": "aggregate or majority-stratum direction does not reproduce",
+      "untestable": "touch depth or strict 30s outcome chronology cannot be reconstructed"
+    },
+    "005H-C02-FAILED-REPLENISHMENT": {
+      "minimum_failed_and_recovered_per_stratum": 20,
+      "test": "failed 80% recovery of consumed-side 2c depth within 30s versus recovered states on aggressor-signed 30s movement",
+      "supported": "failed-minus-recovered gap > 0 in aggregate and positive in a majority of sufficiently supported source strata",
+      "source_specific": "aggregate or majority-stratum direction does not reproduce",
+      "untestable": "depth or strict post-trade chronology cannot be reconstructed"
+    },
+    "005H-C03-FILL-BEYOND-STATE": {
+      "minimum_pairs_per_stratum": 50,
+      "test": "without-replacement same-token matched non-fill controls; fill-minus-control aggressor-signed 30s movement",
+      "supported": "aggregate gap > 0 and positive in a majority of sufficiently supported source strata",
+      "source_specific": "aggregate or majority-stratum direction does not reproduce",
+      "untestable": "strict fill chronology or comparable non-fill state construction is unavailable"
+    },
+    "005H-C04-ARRIVAL-STATE": {
+      "test": "feature-parity challenge only",
+      "supported": "exact frozen feature semantics reconstructable and AUC > 0.50 in majority of supported strata",
+      "source_specific": "feature parity exists but direction fails",
+      "untestable": "any frozen feature lacks source-semantic parity"
+    },
+    "005H-C05-DIRECTION-STATE": {
+      "test": "feature-parity challenge only",
+      "supported": "exact frozen feature semantics reconstructable and AUC > 0.50 in majority of supported strata",
+      "source_specific": "feature parity exists but direction fails",
+      "untestable": "any frozen feature lacks source-semantic parity"
+    },
+    "005H-C06-BOOK-MICROSTRUCTURE-CHALLENGER": {
+      "test": "feature-parity challenge only",
+      "supported": "exact shortlisted challenger and baseline semantics reconstructable and challenger-minus-baseline R2 > 0 in majority of supported strata",
+      "source_specific": "feature parity exists but direction fails",
+      "untestable": "OFI/microprice or baseline feature parity cannot be proven"
+    }
+  },
+  "statuses": [
+    "SUPPORTED",
+    "SOURCE_SPECIFIC",
+    "UNTESTABLE_SOURCE",
+    "NOT_APPLICABLE"
+  ],
+  "b0_effect": "Source-version results never add or retune candidates. SOURCE_SPECIFIC or UNTESTABLE_SOURCE is carried into the final caveat and future-confirmation boundary; same-source V3 B0 remains a separate one-shot test.",
+  "real_sig_orders_sent": false
+}
