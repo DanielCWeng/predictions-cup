@@ -1,0 +1,27 @@
+{
+  "captured_at": "2026-10-01T19:52:00Z",
+  "positions": [
+    {
+      "exchangeId": "960", "marketId": "271", "marketTitle": "fixture", "option": "YES", "settled": false,
+      "quantity": -10, "avgCost": 0.565, "currentPrice": 0.444754, "marketValue": 5.55, "costBasis": 5.65,
+      "unrealizedPnl": -0.10, "unrealizedPnlPct": -1.73, "moneyEarned": 0,
+      "lots": [{"lotId":"2552974","side":"NO","quantity":10,"entryPrice":0.565,"openedAt":"2026-10-01T18:33:41.1765582+00:00"}]
+    },
+    {
+      "exchangeId": "1045", "marketId": "356", "marketTitle": "fixture", "option": "YES", "settled": false,
+      "quantity": -193, "avgCost": 0.677772, "currentPrice": 0.405842, "marketValue": 114.67, "costBasis": 130.81,
+      "unrealizedPnl": -16.14, "unrealizedPnlPct": -12.34, "moneyEarned": 0,
+      "lots": [
+        {"lotId":"2836740","side":"NO","quantity":100,"entryPrice":0.685,"openedAt":"2026-10-01T19:33:46.1345078+00:00"},
+        {"lotId":"2902571","side":"NO","quantity":93,"entryPrice":0.67,"openedAt":"2026-10-01T19:47:54.5909454+00:00"}
+      ]
+    },
+    {
+      "exchangeId": "1077", "marketId": "388", "marketTitle": "fixture", "option": "YES", "settled": false,
+      "quantity": -100, "avgCost": 0.98, "currentPrice": 0.310329, "marketValue": 68.97, "costBasis": 98,
+      "unrealizedPnl": -29.03, "unrealizedPnlPct": -29.63, "moneyEarned": 0,
+      "lots": [{"lotId":"2756920","side":"NO","quantity":100,"entryPrice":0.98,"openedAt":"2026-10-01T19:15:49.3455434+00:00"}]
+    }
+  ],
+  "summary": {"totalMarketValue":189.19,"totalCostBasis":234.46,"totalUnrealizedPnl":-45.27}
+}
