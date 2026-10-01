@@ -10,7 +10,8 @@ Exchange time and physical Parquet row order never control replay ordering.
 
 from __future__ import annotations
 
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -52,6 +53,109 @@ _PROVENANCE_TYPES: dict[str, pa.DataType] = {
     "witness_set": pa.string(),
     "arrival_skew_us": pa.int64(),
 }
+
+
+@dataclass(frozen=True, slots=True)
+class SourceHour:
+    """One planned acquisition hour used to define feature continuity."""
+
+    window_id: str
+    hour: datetime
+    source_generation: str
+    status: str = "DONE"
+    rows: int = 1
+
+
+@dataclass(frozen=True, slots=True)
+class ContinuityAssignment:
+    """Continuity segment for one source hour.
+
+    A null segment is an explicit barrier: no lagged feature or forward target may cross it.
+    Source-generation changes are also barriers because recorder semantics changed materially.
+    """
+
+    window_id: str
+    hour: datetime
+    source_generation: str
+    segment_id: int | None
+    valid: bool
+    reason: str
+
+
+def assign_continuity_segments(
+    hours: list[SourceHour],
+) -> tuple[ContinuityAssignment, ...]:
+    """Assign source-aware continuity segments without bridging gaps or bad hours."""
+    ordered = sorted(hours, key=lambda item: (item.window_id, item.hour))
+    output: list[ContinuityAssignment] = []
+    current_window: str | None = None
+    previous_valid: SourceHour | None = None
+    segment = 0
+    barrier_since_valid = False
+
+    for item in ordered:
+        if item.window_id != current_window:
+            current_window = item.window_id
+            previous_valid = None
+            barrier_since_valid = False
+            segment = 0
+
+        if item.status != "DONE":
+            output.append(
+                ContinuityAssignment(
+                    window_id=item.window_id,
+                    hour=item.hour,
+                    source_generation=item.source_generation,
+                    segment_id=None,
+                    valid=False,
+                    reason=f"INVALID_STATUS:{item.status}",
+                )
+            )
+            previous_valid = None
+            barrier_since_valid = True
+            continue
+
+        if item.rows <= 0:
+            output.append(
+                ContinuityAssignment(
+                    window_id=item.window_id,
+                    hour=item.hour,
+                    source_generation=item.source_generation,
+                    segment_id=None,
+                    valid=False,
+                    reason="ZERO_ROW_HOUR",
+                )
+            )
+            previous_valid = None
+            barrier_since_valid = True
+            continue
+
+        if previous_valid is None:
+            segment += 1
+            reason = "AFTER_INVALID_BARRIER" if barrier_since_valid else "INITIAL"
+        elif item.source_generation != previous_valid.source_generation:
+            segment += 1
+            reason = "SOURCE_GENERATION_BOUNDARY"
+        elif item.hour - previous_valid.hour != timedelta(hours=1):
+            segment += 1
+            reason = "TIME_GAP"
+        else:
+            reason = "CONTIGUOUS"
+
+        output.append(
+            ContinuityAssignment(
+                window_id=item.window_id,
+                hour=item.hour,
+                source_generation=item.source_generation,
+                segment_id=segment,
+                valid=True,
+                reason=reason,
+            )
+        )
+        previous_valid = item
+        barrier_since_valid = False
+
+    return tuple(output)
 
 
 def normalize_005g_extract(
