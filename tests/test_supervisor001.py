@@ -6,6 +6,8 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from predictions_cup.supervisor.bundles import BundleWriter
 from predictions_cup.supervisor.contracts import (
     ActionCode,
@@ -332,7 +334,7 @@ def test_fast_disk_growth_is_critical() -> None:
     assert any(item.code == "DISK_GROWTH_CRITICAL" for item in findings)
 
 
-def test_resource_growth_resets_memory_history_on_pid_change(monkeypatch) -> None:
+def test_resource_growth_resets_memory_history_on_pid_change(\n    monkeypatch: pytest.MonkeyPatch,\n) -> None:
     tracker = ResourceGrowthTracker()
     times = iter((0.0, 31.0, 62.0))
     monkeypatch.setattr("predictions_cup.supervisor.runtime.time.monotonic", lambda: next(times))
