@@ -1111,14 +1111,16 @@ class Frozen005FEvaluator:
             diagnostic_payload=diagnostic_payload,
         )
 
-    @staticmethod
     def _diagnostic_state_payload(
+        self,
         vector: Hazard005FFeatureVector,
         *,
         regime: str | None,
     ) -> dict[str, object]:
         return {
             "005f_state": {
+                "provider_id": self._provider.provider_id,
+                "provider_version": self._provider.version,
                 "scope_id": vector.scope_id,
                 "grid_time_ns": vector.grid_time_ns,
                 "observed_monotonic_ns": vector.observed_monotonic_ns,
