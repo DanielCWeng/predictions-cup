@@ -23,8 +23,15 @@ from predictions_cup.supervisor.sources import SourceCollection, SupervisorSourc
 
 
 class ResourceGrowthTracker:
-    def __init__(self, window_seconds: float = 300.0) -> None:
+    def __init__(
+        self,
+        window_seconds: float = 300.0,
+        minimum_elapsed_seconds: float = 180.0,
+    ) -> None:
+        if minimum_elapsed_seconds <= 0 or minimum_elapsed_seconds > window_seconds:
+            raise ValueError("minimum elapsed must be positive and within the window")
         self.window_seconds = window_seconds
+        self.minimum_elapsed_seconds = minimum_elapsed_seconds
         self._memory_history: dict[str, deque[tuple[float, int]]] = defaultdict(deque)
         self._memory_pid: dict[str, str] = {}
         self._disk_history: deque[tuple[float, int]] = deque()
@@ -55,7 +62,7 @@ class ResourceGrowthTracker:
                 if len(history) < 2:
                     continue
                 elapsed = history[-1][0] - history[0][0]
-                if elapsed < 30.0:
+                if elapsed < self.minimum_elapsed_seconds:
                     continue
                 delta_mb = (history[-1][1] - history[0][1]) / (1024**2)
                 memory_growth[service] = delta_mb / (elapsed / 60.0)
@@ -72,7 +79,7 @@ class ResourceGrowthTracker:
                     self._disk_history.popleft()
                 if len(self._disk_history) >= 2:
                     elapsed = self._disk_history[-1][0] - self._disk_history[0][0]
-                    if elapsed >= 30.0:
+                    if elapsed >= self.minimum_elapsed_seconds:
                         delta = self._disk_history[-1][1] - self._disk_history[0][1]
                         disk_growth = delta / (elapsed / 60.0)
 

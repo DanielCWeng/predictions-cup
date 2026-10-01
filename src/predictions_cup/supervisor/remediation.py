@@ -112,7 +112,12 @@ class RemediationExecutor:
             service = finding.evidence.get("service")
             if isinstance(service, str) and service in self.config.safe_restart_services:
                 planned.append((ActionCode.RESTART_SAFE_SERVICE, service))
-        return tuple(dict.fromkeys(planned))
+        unique = tuple(dict.fromkeys(planned))
+        return tuple(
+            item
+            for item in unique
+            if _ACTION_LEVEL[item[0]] <= self.config.max_level
+        )
 
     def execute(
         self,
