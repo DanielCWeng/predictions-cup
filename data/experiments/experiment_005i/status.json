@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005I",
+  "branch": "experiment/005i-regime-dynamics-tradfi",
+  "phase": "INPUT_SEMANTICS",
+  "status": "AUDIT_JOB_PREPARED",
+  "primary_dataset": "polyleviathan/sig-cup-data003-orderbooks",
+  "accepted_mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
+  "expiration_regime_research": "DEFERRED",
+  "holdout_read": false,
+  "make_modified": false,
+  "real_sig_orders_sent": false
+}
