@@ -51,7 +51,9 @@ def load_manifest(path: Path) -> dict[str, Any]:
     if data.get("schema_version") != 1:
         raise ValueError("schema_version must be 1")
     action = data.get("action")
-    if action not in {"auth_check", "run", "status", "output", "logs", "dataset_files"}:
+    if action not in {
+        "auth_check", "run", "status", "output", "logs", "dataset_files", "dataset_probe"
+    }:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
 
@@ -125,6 +127,112 @@ def dataset_files(data: dict[str, Any], output_dir: Path) -> None:
             "",
             f"- Dataset: {dataset}",
             f"- Page size: {page_size}",
+        ]
+    )
+
+
+
+def dataset_probe(data: dict[str, Any], output_dir: Path) -> None:
+    dataset = str(data.get("dataset", "")).strip()
+    file_name = str(data.get("file", "")).strip()
+    if "/" not in dataset:
+        raise ValueError("dataset_probe manifest requires 'dataset' as owner/slug")
+    if not file_name:
+        raise ValueError("dataset_probe manifest requires 'file'")
+
+    probe_root = output_dir / "probe"
+    probe_root.mkdir(parents=True, exist_ok=True)
+    run_command(
+        [
+            "kaggle",
+            "datasets",
+            "download",
+            dataset,
+            "-f",
+            file_name,
+            "-p",
+            str(probe_root),
+            "--unzip",
+        ]
+    )
+    run_command(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--quiet",
+            "pyarrow==25.0.1",
+        ]
+    )
+
+    candidates = sorted(probe_root.rglob("*.parquet"))
+    if len(candidates) != 1:
+        raise RuntimeError(
+            f"Expected one parquet for {file_name!r}; found "
+            f"{[p.relative_to(probe_root).as_posix() for p in candidates]}"
+        )
+    parquet = candidates[0]
+    probe_code = """
+import json
+import sys
+from pathlib import Path
+
+import pyarrow.parquet as pq
+
+path = Path(sys.argv[1])
+out = Path(sys.argv[2])
+pf = pq.ParquetFile(path)
+schema = pf.schema_arrow
+sample = []
+if pf.metadata.num_rows:
+    batch = next(pf.iter_batches(batch_size=5, use_threads=False), None)
+    if batch is not None:
+        sample = batch.to_pylist()[:5]
+        sample = [
+            {k: (v.isoformat() if hasattr(v, "isoformat") else str(v) if v is not None else None)
+             for k, v in row.items()}
+            for row in sample
+        ]
+time_stats = {}
+for index, field in enumerate(schema):
+    name = field.name
+    if not any(part in name.lower() for part in ("time", "timestamp", "observed", "received")):
+        continue
+    lo = None
+    hi = None
+    for rg in range(pf.metadata.num_row_groups):
+        stats = pf.metadata.row_group(rg).column(index).statistics
+        if stats is None or not stats.has_min_max:
+            continue
+        a, b = stats.min, stats.max
+        lo = a if lo is None or a < lo else lo
+        hi = b if hi is None or b > hi else hi
+    time_stats[name] = {"min": str(lo), "max": str(hi)}
+payload = {
+    "path": path.name,
+    "rows": int(pf.metadata.num_rows),
+    "row_groups": int(pf.metadata.num_row_groups),
+    "columns": [
+        {"name": f.name, "type": str(f.type), "nullable": bool(f.nullable)}
+        for f in schema
+    ],
+    "time_stats": time_stats,
+    "sample_rows": sample,
+}
+out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\\n", encoding="utf-8")
+"""
+    probe_script = output_dir / "_probe.py"
+    probe_script.write_text(probe_code, encoding="utf-8")
+    run_command([sys.executable, str(probe_script), str(parquet), str(output_dir / "probe.json")])
+    parquet.unlink()
+    probe_script.unlink()
+    write_summary(
+        [
+            "## Kaggle dataset parquet probe",
+            "",
+            f"- Dataset: {dataset}",
+            f"- File: {file_name}",
         ]
     )
 
@@ -273,6 +381,8 @@ def main() -> int:
         write_summary(["## Kaggle logs", "", f"Kernel: {kernel}"])
     elif action == "dataset_files":
         dataset_files(data, output_dir)
+    elif action == "dataset_probe":
+        dataset_probe(data, output_dir)
 
     return 0
 
