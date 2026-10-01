@@ -4,7 +4,7 @@
   "phase": "V3_SEMANTIC_PROBE",
   "holdout_read": false,
   "conclusion": "STRICT_005F_PRICE_CHANGE_BBO_SEMANTICS_AVAILABLE_IN_V3",
-  "root_cause_of_first_lane_a_failure": "V3 asset_id is binary while accepted mapping token IDs are text; string predicate matched zero rows.",
+  "root_cause_of_first_lane_a_failure": "V3 asset_id is a raw big-endian binary integer. It must be converted to Polymarket's decimal token-id string; UTF-8/string filtering matches zero rows.",
   "files": [
     {
       "remote": "ev18_ok_sc_runoff_ga_runoff/date=2026-08-25/hour=23/events.parquet",
@@ -24,7 +24,12 @@
         "size_non_null": true,
         "side_non_null": true
       },
-      "witness_columns_present": false
+      "witness_columns_present": false,
+      "distinct_assets": 1370,
+      "mapped_asset_intersection": 1370,
+      "representative_asset_intersection": 685,
+      "representative_price_change_rows": 218152,
+      "representative_valid_bbo_price_change_rows": 218152
     },
     {
       "remote": "baseline_sep/date=2026-09-01/hour=00/events.parquet",
@@ -43,10 +48,22 @@
         "size_non_null": true,
         "side_non_null": true
       },
-      "witness_columns_present": true
+      "witness_columns_present": true,
+      "distinct_assets": 1370,
+      "mapped_asset_intersection": 1370,
+      "representative_asset_intersection": 685,
+      "representative_price_change_rows": 11435,
+      "representative_valid_bbo_price_change_rows": 11295
     }
   ],
   "strict_replication_decision": "Primary Lane A remains price_change-only. best_bid_ask remains a V3 capture-quality challenger/falsification, not a substitute.",
   "source": "Authenticated Kaggle dataset API artifact from kaggle/jobs/005g-v3-semantic-probe.json",
-  "real_sig_orders_sent": false
+  "real_sig_orders_sent": false,
+  "identity_encoding": {
+    "asset_id": "raw unsigned big-endian bytes -> decimal integer string",
+    "market": "raw bytes -> 0x-prefixed condition-id hex",
+    "transaction_hash": "raw bytes -> 0x-prefixed hex"
+  },
+  "canonicalizer_identity_fix_commit": "bdaea85fae58bac3fdb29203bc205c205fb7ed9c",
+  "lane_a_identity_fix_commit": "4e5465dc2a1338b724b5704508490bd9640b4f57"
 }
