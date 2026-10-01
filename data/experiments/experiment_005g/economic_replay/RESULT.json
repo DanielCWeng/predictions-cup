@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005G",
+  "protocol_id": "005G_ECONOMIC_REPLAY_V1",
+  "status": "COMPLETE_NO_DEV_CHAMPION",
+  "workflow_run_id": 36859479989,
+  "workflow_job_id": 110359913766,
+  "artifact_id": 11161197062,
+  "artifact_sha256": "ecd0a08ef52c5c38bc14e408d472739fb69ef6fe869f4f04cfef685b10ac36f8",
+  "artifact_repo_path": "data/experiments/experiment_005g/economic_replay/attempt5-kaggle-run-0-1.zip",
+  "successful_kernel_version": 5,
+  "windows": {
+    "TRAIN": "2026-09-06",
+    "DEV": "2026-09-07",
+    "HOLDOUT": "2026-09-08"
+  },
+  "policy_freeze": {
+    "status": "FROZEN_BEFORE_HOLDOUT_READ",
+    "frozen_at": "2026-10-01T12:10:53.988162+00:00",
+    "dev_champion": null,
+    "family_winners": {},
+    "combined_policy": null,
+    "post_holdout_tuning_allowed": false
+  },
+  "dev": {
+    "baseline": {
+      "net_markout_pnl_after_fee_proxy": 1.6715000000000002,
+      "filled_sides": 100.0,
+      "adverse_selection_per_filled_side": 0.00866,
+      "max_drawdown_proxy": 0.26,
+      "turnover_proxy": 41.72800000000001
+    },
+    "family_candidate_counts": {
+      "WIDTH_ONLY": 8,
+      "SIZE_ONLY": 8,
+      "WAIT_ONLY": 4,
+      "REFRESH_ONLY": 8
+    },
+    "family_pass_counts": {
+      "WIDTH_ONLY": 0,
+      "SIZE_ONLY": 0,
+      "WAIT_ONLY": 0,
+      "REFRESH_ONLY": 0
+    },
+    "best_net_delta_vs_baseline": {
+      "WIDTH_ONLY": -0.7799999999999998,
+      "SIZE_ONLY": -0.7499999999999999,
+      "WAIT_ONLY": -1.5,
+      "REFRESH_ONLY": -0.7650000000000001
+    },
+    "conclusion": "NO_PREREGISTERED_POLICY_IMPROVED_NET_PROXY_PNL_WHILE_SATISFYING_CONSTRAINTS"
+  },
+  "holdout": {
+    "candidate_policy_evaluated": false,
+    "reason": "NO_DEV_CHAMPION",
+    "baseline_only": true,
+    "baseline": {
+      "net_markout_pnl_after_fee_proxy": 0.3810000000000004,
+      "filled_sides": 233.0,
+      "adverse_selection_per_filled_side": 0.009399141630901288,
+      "max_drawdown_proxy": 1.0425000000000002,
+      "turnover_proxy": 76.57
+    }
+  },
+  "data_audit": {
+    "frozen_token_count": 693,
+    "panel_rows": {
+      "TRAIN": 312709,
+      "DEV": 290196,
+      "HOLDOUT": 383796
+    },
+    "trade_rows": {
+      "TRAIN": 222,
+      "DEV": 236,
+      "HOLDOUT": 425
+    }
+  },
+  "output_hashes": {
+    "ECONOMIC_DEV_RESULTS.json": "133e1b8e970d255db20b2abd8e8529caf64b161fe5bea568e1b38b87725ce755",
+    "ECONOMIC_HAZARD_MODEL.json": "6689f6076e8d6fe7f6c2bf7ec17ee2ec8abda2b2fac9f3b5ee663fb339c50077",
+    "ECONOMIC_HOLDOUT_RESULTS.json": "82c2394a43457e37de1ac24f7b20f996937f9267e9abca9f139ba4630e45276b",
+    "ECONOMIC_INPUT_AUDIT.json": "578a109b7c71ae5d1be8a17e2471f2be7805ae8f2ebbf199f7ea6aa79fc5a794",
+    "ECONOMIC_POLICY_FREEZE.json": "7711a4ccc2e7e79c38af670a6348b6af8b874fe6367ed6f18ac188c8fa248926",
+    "FINAL_REPORT.md": "fcaee6f6354da5484cf3e99487c6e7afa4d9ad70b5ff32e45ae69e1912d5f874"
+  },
+  "interpretation": {
+    "005g_predictive_result_invalidated": false,
+    "economic_conversion_v1_promoted": false,
+    "live_make_change_allowed": false,
+    "economic_claim": "NOT_ESTABLISHED",
+    "recommended_action": "DO_NOT_PROMOTE_005G_STATE_HAZARD_V1_TO_LIVE_QUOTING_FROM_THIS_REPLAY"
+  },
+  "boundaries": {
+    "historical_passive_execution_proxy_only": true,
+    "post_holdout_tuning": false,
+    "make_modified": false,
+    "real_sig_orders_sent": false
+  }
+}
