@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/experiment_005h_join_probe",
+  "kernel": "polyleviathan/experiment-005h-join-probe",
+  "poll_seconds": 30,
+  "timeout_minutes": 240,
+  "download_outputs": true,
+  "output_file_pattern": "(JOIN_PROBE_SUMMARY\\.json|JOIN_PROBE\\.md)$"
+}
