@@ -107,7 +107,10 @@ def logistic_fit(
         "train_brier": float(np.mean((ytr - ptr) ** 2)),
         "dev_brier": float(np.mean((yte - pte) ** 2)),
         "dev_baseline_brier": float(np.mean((yte - baseline) ** 2)),
+        "feature_mean": [float(value) for value in mean],
+        "feature_std": [float(value) for value in std],
         "coefficients_standardized": [float(value) for value in beta],
+        "train_positive_rate": baseline,
     }
     te_out = te.copy()
     te_out["_prediction"] = pte
@@ -149,6 +152,8 @@ def fit_ols(train: pd.DataFrame, dev: pd.DataFrame, features: list[str], target:
         "dev_r2": dev_r2,
         "train_rmse": tr_rmse,
         "dev_rmse": dev_rmse,
+        "feature_mean": [float(value) for value in mean],
+        "feature_std": [float(value) for value in std],
         "coefficients_standardized": [float(value) for value in beta],
     }
 
