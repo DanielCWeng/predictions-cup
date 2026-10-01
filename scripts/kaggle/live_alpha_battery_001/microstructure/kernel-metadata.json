@@ -1,0 +1,16 @@
+{
+  "id": "polyleviathan/sig-live-alpha-battery-microstructure-001",
+  "title": "SIG Live Alpha Battery Microstructure 001",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [
+    "polyleviathan/sig-live-alpha-20261001-v1"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}
