@@ -173,6 +173,66 @@ def main() -> None:
         if "REJECTED" in row["classification"]
     ]
 
+    hostile_robust = set(
+        hostile.get("robust_v3_survivors", [])
+    )
+    hostile_provisional = set(
+        hostile.get("provisional_v3_only", [])
+    )
+    def evidence_rank(row: dict[str, Any]) -> tuple[int, str]:
+        candidate_id = str(row["candidate_id"])
+        if row["disposition"] == (
+            "HISTORICAL_B0_PASS_FUTURE_CONFIRMATION_REQUIRED"
+        ):
+            return (6, candidate_id)
+        if row.get("holdout_result") is not None:
+            return (5, candidate_id)
+        if candidate_id in frozen_candidates:
+            return (4, candidate_id)
+        if candidate_id in hostile_robust:
+            return (3, candidate_id)
+        if candidate_id in hostile_provisional:
+            return (2, candidate_id)
+        return (1, candidate_id)
+
+    ranked = sorted(
+        classifications,
+        key=lambda row: (
+            -evidence_rank(row)[0],
+            evidence_rank(row)[1],
+        ),
+    )
+    top_five: list[dict[str, Any]] = []
+    for row in ranked[:5]:
+        source = row.get("source_robustness") or {}
+        hold = row.get("holdout_result")
+        exclusion = row.get("pre_holdout_exclusion")
+        candidate_id = str(row["candidate_id"])
+        if hold is not None and hold.get("status") != "PASS":
+            falsification = "one-shot B0 gate failed"
+        elif exclusion is not None:
+            falsification = str(exclusion.get("reason") or exclusion)
+        elif source.get("status") == "SOURCE_SPECIFIC":
+            falsification = "pre-V3 source-version replication was source-specific"
+        elif source.get("status") == "UNTESTABLE_SOURCE":
+            falsification = "pre-V3 source-version challenge was chronologically untestable"
+        elif candidate_id in hostile_robust:
+            falsification = "survived preregistered hostile V3 falsification"
+        elif candidate_id in hostile_provisional:
+            falsification = "did not clear the full hostile V3 robustness bar"
+        else:
+            falsification = "did not advance beyond discovery"
+        top_five.append(
+            {
+                "candidate_id": candidate_id,
+                "mechanism": row.get("mechanism"),
+                "evidence_stage_rank": evidence_rank(row)[0],
+                "disposition": row["disposition"],
+                "classification": row["classification"],
+                "strongest_falsification_or_constraint": falsification,
+            }
+        )
+
     required_outputs = [
         "FILL_EVENTS.parquet",
         "FILL_EPISODES.parquet",
@@ -218,6 +278,7 @@ def main() -> None:
         "b0_authorized": b0_authorized,
         "b0_opened": bool((holdout or {}).get("b0_opened", False)),
         "candidate_classifications": classifications,
+        "top_five_mechanisms": top_five,
         "b0_passed": [row["candidate_id"] for row in passed],
         "rejected": [row["candidate_id"] for row in rejected],
         "source_robustness": source_robustness,
@@ -291,6 +352,24 @@ def main() -> None:
                 f"- **{row['candidate_id']}** — "
                 f"{row.get('mechanism') or 'mechanism'} — "
                 f"{row['disposition']} — {routes}"
+            )
+    else:
+        lines.append("- No mechanism reached candidate status.")
+
+    lines.extend(
+        [
+            "",
+            "## Top mechanisms",
+            "",
+        ]
+    )
+    if top_five:
+        for number, row in enumerate(top_five, start=1):
+            lines.append(
+                f"{number}. **{row['candidate_id']}** — "
+                f"{row.get('mechanism') or 'mechanism'} — "
+                f"{row['disposition']}. "
+                f"Constraint: {row['strongest_falsification_or_constraint']}."
             )
     else:
         lines.append("- No mechanism reached candidate status.")
