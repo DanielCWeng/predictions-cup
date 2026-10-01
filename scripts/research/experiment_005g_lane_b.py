@@ -72,14 +72,6 @@ FEATURES: dict[str, list[str]] = {
         "trade_count_60",
         "trade_abs_impact_60",
     ],
-    "RESILIENCE": [
-        "spread_widen_age_s",
-        "depth_shock_age_s",
-    ],
-    "STATE_TRANSITIONS": [
-        "spread_state",
-        "state_dwell_s",
-    ],
     "INTERACTIONS": [
         "freshness_x_spread",
         "imbalance_x_ofi",
@@ -117,11 +109,6 @@ TARGETS: dict[str, dict[str, Any]] = {
         "family": "RENEWAL",
         "kind": "classification",
         "baseline": ["bbo_age_s", "bbo_updates_60", "price_updates_60"],
-    },
-    "state_transition_h60": {
-        "family": "REGIME_TRANSITION",
-        "kind": "classification",
-        "baseline": ["spread_state", "state_dwell_s", "rv_60"],
     },
 }
 
@@ -663,76 +650,7 @@ def build_panel(
     if panel.empty:
         raise RuntimeError("Lane B canonical discovery panel is empty")
 
-    train = panel[panel["split"] == "TRAIN"]
-    spread_q1, spread_q2 = train["spread"].quantile([1 / 3, 2 / 3]).tolist()
-    panel["spread_state"] = np.select(
-        [
-            panel["spread"] <= spread_q1,
-            panel["spread"] <= spread_q2,
-        ],
-        [0.0, 1.0],
-        default=2.0,
-    )
-    panel.loc[~np.isfinite(panel["spread"]), "spread_state"] = np.nan
-
     panel = panel.sort_values(["token_id", "time"], kind="stable").reset_index(drop=True)
-    dwell = np.full(len(panel), np.nan, float)
-    spread_age = np.full(len(panel), np.nan, float)
-    depth_age = np.full(len(panel), np.nan, float)
-    train_spread_diff = (
-        train.sort_values(["token_id", "time"])
-        .groupby("token_id")["spread"]
-        .diff()
-    )
-    spread_shock = float(train_spread_diff[train_spread_diff > 0].quantile(0.95))
-    train_depth_diff = (
-        train.sort_values(["token_id", "time"])
-        .groupby("token_id")["depth_5c"]
-        .diff()
-        .abs()
-    )
-    depth_shock = float(train_depth_diff.quantile(0.95))
-
-    for _, indexes in panel.groupby("token_id", sort=False).groups.items():
-        idx = np.asarray(list(indexes), dtype=int)
-        sub = panel.loc[idx]
-        state_values = sub["spread_state"].to_numpy(float)
-        run = 0
-        prev = np.nan
-        for offset, value in enumerate(state_values):
-            if np.isfinite(value) and np.isfinite(prev) and value == prev:
-                run += 15
-            else:
-                run = 0
-            dwell[idx[offset]] = float(run)
-            prev = value
-
-        spread_diff = sub["spread"].diff().to_numpy(float)
-        depth_diff = sub["depth_5c"].diff().abs().to_numpy(float)
-        spread_flags = np.isfinite(spread_diff) & (spread_diff >= spread_shock)
-        depth_flags = np.isfinite(depth_diff) & (depth_diff >= depth_shock)
-        spread_age[idx] = time_since_flag(pd.DatetimeIndex(sub["time"]), spread_flags)
-        depth_age[idx] = time_since_flag(pd.DatetimeIndex(sub["time"]), depth_flags)
-
-    panel["state_dwell_s"] = dwell
-    panel["spread_widen_age_s"] = spread_age
-    panel["depth_shock_age_s"] = depth_age
-
-    future_state = (
-        panel.groupby("token_id", sort=False)["spread_state"].shift(-4)
-    )
-    future_time = panel.groupby("token_id", sort=False)["time"].shift(-4)
-    same_split = (
-        panel.groupby("token_id", sort=False)["split"].shift(-4)
-        == panel["split"]
-    )
-    exact_60 = (
-        pd.to_datetime(future_time, utc=True) - pd.to_datetime(panel["time"], utc=True)
-    ).dt.total_seconds() == 60
-    transition = (future_state != panel["spread_state"]).astype(float)
-    transition[~same_split | ~exact_60 | future_state.isna()] = np.nan
-    panel["state_transition_h60"] = transition
-
     audit = {
         "rows": len(panel),
         "tokens": int(panel["token_id"].nunique()),
@@ -740,9 +658,7 @@ def build_panel(
         "dev_rows": int((panel["split"] == "DEV").sum()),
         "sample_mod": CFG["sample_mod"],
         "depth_max_age_s": DEPTH_MAX_AGE_S,
-        "train_spread_state_cutpoints": [spread_q1, spread_q2],
-        "train_spread_widen_95pct": spread_shock,
-        "train_depth_shock_95pct": depth_shock,
+        "sequential_state_families": "SEMANTICS_BLOCKED_ON_SAMPLED_PANEL",
     }
     return panel, audit
 
@@ -1105,15 +1021,12 @@ def main() -> None:
         "ofi_60",
         "trade_count_60",
         "trade_abs_impact_60",
-        "spread_state",
-        "state_dwell_s",
         "price_h60",
         "abs_h60",
         "spread_h60",
         "depth_h60",
         "bbo_update_h60",
         "bbo_update_h300",
-        "state_transition_h60",
     ]
     panel[[col for col in compact_cols if col in panel.columns]].to_parquet(
         output / "LANE_B_CANONICAL_PANEL.parquet",
@@ -1139,10 +1052,14 @@ def main() -> None:
             "promoted_train_dev": "DISCOVERY_ONLY",
             "not_promoted": "REJECTED_DISCOVERY",
         },
+        "blocked_families": {
+            "RESILIENCE": "SEMANTICS_BLOCKED: exact shock-age/recovery clocks require an unsampled sequential panel; sampled approximations are not accepted.",
+            "STATE_TRANSITIONS": "SEMANTICS_BLOCKED: exact dwell/transition clocks require an unsampled sequential panel; sampled approximations are not accepted.",
+            "TOXICITY": "SUPPORT_BLOCKED unless sufficiently dense observable trades exist; absence is not treated as a negative result."
+        },
         "limitations": [
             "TRADE_PRESSURE may be support-limited because V3 last_trade_price rows are sparse.",
-            "TOXICITY and RESILIENCE outcome families are not promoted from this pass unless their required observable support is present; missing support is not converted into a negative scientific claim.",
-            "No HOLDOUT bytes were supplied to this job.",
+            "No HOLDOUT bytes were supplied to this job."
         ],
         "real_sig_orders_sent": False,
     }
