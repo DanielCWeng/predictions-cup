@@ -419,7 +419,15 @@ def process_source(
         frame = pf.read(columns=available).to_pandas()
         if frame.empty:
             continue
-        frame = frame[frame["asset_id"].isin(target_bytes)].copy()
+        asset_type = str(pf.schema_arrow.field("asset_id").type)
+        target_values = (
+            target_bytes
+            if "binary" in asset_type
+            else target_tokens
+        )
+        frame = frame[
+            frame["asset_id"].isin(target_values)
+        ].copy()
         if frame.empty:
             continue
         frame = frame[frame["event_type"].astype(str).isin(["book","price_change","last_trade_price"])].copy()
