@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "action": "dataset_analysis",
+  "dataset": "polyleviathan/sig-cup-data003-orderbooks",
+  "script": "scripts/kaggle/experiment_005i_level_semantics/run.py",
+  "files": [
+    "baseline_sep/date=2026-09-05/hour=12/events.parquet"
+  ],
+  "worker_id": "level-semantics-b",
+  "sample_per_hour": 1,
+  "seed": 505009,
+  "surface": "SEMANTICS",
+  "note": "EXPERIMENT-005I independent reconstruction falsification; no HOLDOUT."
+}
