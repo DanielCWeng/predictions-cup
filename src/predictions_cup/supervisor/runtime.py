@@ -312,7 +312,7 @@ def _reasons_by_action(
             result[(ActionCode.PRUNE_HOT_PARQUET, None)] = finding.code
         capture_recovery_targets = {
             "FEED_SIG_DISCONNECTED": "predictions-cup-sig-capture.service",
-            "FEED_SIG_RECONCILIATION_STALE": "predictions-cup-sig-capture.service",
+            "FEED_SIG_REST_PROGRESS_STALE": "predictions-cup-sig-capture.service",
             "SOURCE_SIG_CAPTURE_STALE": "predictions-cup-sig-capture.service",
             "CAPTURE_SIG_STORAGE_FAILURE": "predictions-cup-sig-capture.service",
             "CAPTURE_SIG_WRITER_DEAD": "predictions-cup-sig-capture.service",
