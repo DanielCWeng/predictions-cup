@@ -1139,7 +1139,6 @@ def main(argv: list[str] | None = None) -> int:
 
     use_dotenv = not getattr(args, "runtime_env_only", False) and env_file is None
     settings = load_settings(use_dotenv=use_dotenv)
-    paths = RuntimePaths.from_environment(settings)
 
     if args.command == "status":
         payload = (
