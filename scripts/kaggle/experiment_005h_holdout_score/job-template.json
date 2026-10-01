@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/experiment_005h_holdout_score",
+  "kernel": "polyleviathan/experiment-005h-holdout-score",
+  "poll_seconds": 30,
+  "timeout_minutes": 120,
+  "download_outputs": true,
+  "output_file_pattern": "(HOLDOUT_RESULTS\\.parquet|HOLDOUT_EVALUATION_SUMMARY\\.json|HOLDOUT_EVALUATION_REPORT\\.md)$",
+  "launch_gate": "ONE_SHOT_HOLDOUT_BUILD_COMPLETE_AND_B0_AUTHORIZED"
+}
