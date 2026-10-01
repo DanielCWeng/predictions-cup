@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -32,6 +32,7 @@ from predictions_cup.runtime.models import (
     RuntimeLevel,
     RuntimeMarket,
     RuntimePortfolio,
+    RuntimePosition,
     RuntimeSnapshot,
 )
 from predictions_cup.sig.errors import SigExecutionUncertainError
@@ -292,3 +293,38 @@ def test_near_certain_market_is_not_taken() -> None:
     assert harness.plans == []
     harness.run(_snapshot(bid=139, ask=140), sequence=2)
     assert len(harness.plans) == 1
+
+
+def _with_inventory(snapshot: MakerMarketSnapshot, quantity: float) -> MakerMarketSnapshot:
+    position = RuntimePosition(
+        exchange_id=EXCHANGE,
+        market_id=MARKET,
+        tournament_id=TOURNAMENT,
+        gross_exposure=abs(quantity),
+        signed_quantity=quantity,
+    )
+    portfolio = RuntimePortfolio(positions=(position,), orders=(), account_trusted=True)
+    return replace(snapshot, runtime=replace(snapshot.runtime, portfolio=portfolio))
+
+
+def test_position_cap_clips_and_blocks_only_inventory_increasing_takes() -> None:
+    clipped = _Harness()
+    clipped.coordinator._max_position = 200
+    # Short 170 YES; a 50 SELL would reach -220, so only 30 more may be sold.
+    clipped.run(_with_inventory(_snapshot(bid=160, ask=161), -170.0))
+    (intent,) = clipped.plans[0].intents
+    assert intent.action is OrderAction.SELL
+    assert intent.quantity == 30
+
+    blocked = _Harness()
+    blocked.coordinator._max_position = 200
+    blocked.run(_with_inventory(_snapshot(bid=160, ask=161), -200.0))
+    assert blocked.plans == []
+
+    reducing = _Harness()
+    reducing.coordinator._max_position = 200
+    # Short 250 YES (beyond the cap): a BUY reduces inventory and is allowed.
+    reducing.run(_with_inventory(_snapshot(ask_qty=100.0), -250.0))
+    (intent,) = reducing.plans[0].intents
+    assert intent.action is OrderAction.BUY
+    assert intent.quantity == 50

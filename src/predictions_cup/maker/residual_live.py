@@ -8,6 +8,7 @@ straight away: the strategy takes liquidity and never rests a quote.
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Awaitable, Callable, Mapping
 from contextlib import suppress
 from dataclasses import replace
@@ -70,6 +71,7 @@ class ResidualTakerLiveCoordinator:
         kill_switch: MakerKillSwitch,
         min_fair_value: float = 0.0,
         max_fair_value: float = 1.0,
+        max_position: int | None = None,
     ) -> None:
         if not tracked_exchange_ids:
             raise ValueError("LIVE residual taker requires an explicit universe")
@@ -90,6 +92,9 @@ class ResidualTakerLiveCoordinator:
         # settlement/bag-holding risk, not mean reversion.
         self._min_fair_value = min_fair_value
         self._max_fair_value = max_fair_value
+        # Per-market cap on signed YES inventory the taker may build; trades
+        # that reduce inventory are never blocked.
+        self._max_position = max_position
         # Remainder cancels that did not conclude; retried every cycle so a
         # taker order is never left resting at a stale price.
         self._pending_cancels: dict[str, ExecutionEnvelope] = {}
@@ -128,6 +133,26 @@ class ResidualTakerLiveCoordinator:
             events.extend(await self._take(change, snapshot, signal))
         return tuple(events)
 
+    def _capped_quantity(
+        self,
+        snapshot: MakerMarketSnapshot,
+        action: OrderAction,
+        quantity: int,
+    ) -> int:
+        if self._max_position is None:
+            return quantity
+        inventory = sum(
+            position.signed_quantity
+            for position in snapshot.runtime.portfolio.positions
+            if position.exchange_id == snapshot.exchange_id
+            and position.tournament_id == snapshot.tournament_id
+        )
+        if action is OrderAction.BUY:
+            room = self._max_position - inventory
+        else:
+            room = self._max_position + inventory
+        return max(0, min(quantity, math.floor(room)))
+
     async def _take(
         self,
         change: MakerStateChange,
@@ -143,6 +168,14 @@ class ResidualTakerLiveCoordinator:
             action, ticks = OrderAction.BUY, book.asks[0].price_ticks
         else:
             action, ticks = OrderAction.SELL, book.bids[0].price_ticks
+        quantity = self._capped_quantity(snapshot, action, signal.quantity)
+        if quantity < 1:
+            _LOG.info(
+                "TAKE skip exchange=%s direction=%s reason=position_cap",
+                exchange_id,
+                signal.direction,
+            )
+            return ()
         if self._crosses_own_quote(exchange_id, action, ticks):
             _LOG.info(
                 "TAKE skip exchange=%s direction=%s reason=own_quote_at_touch",
@@ -167,7 +200,7 @@ class ResidualTakerLiveCoordinator:
                     tournament_id=snapshot.tournament_id,
                     outcome_side=OutcomeSide.YES,
                     action=action,
-                    quantity=signal.quantity,
+                    quantity=quantity,
                     limit_price_ticks=ticks,
                 ),
             ),
