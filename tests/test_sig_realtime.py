@@ -1096,4 +1096,63 @@ def test_market_topic_gap_and_resync_required_recover_only_that_market(
         await engine.aclose()
         recorder.close()
 
+
+def _engine_recorder_method_names() -> set[str]:
+    import ast
+
+    import predictions_cup.sig.realtime_state as realtime_state
+
+    tree = ast.parse(Path(realtime_state.__file__).read_text(encoding="utf-8"))
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Attribute)
+            and node.value.attr == "_recorder"
+            and isinstance(node.value.value, ast.Name)
+            and node.value.value.id == "self"
+        ):
+            names.add(node.attr)
+    return names
+
+
+def test_make_noop_recorder_covers_every_engine_recorder_call() -> None:
+    from predictions_cup.maker.noop_recorder import NoopSigRealtimeRecorder
+
+    called = _engine_recorder_method_names()
+    assert {"record_health", "record_raw_batch", "record_transition"} <= called
+    noop = NoopSigRealtimeRecorder()
+    missing = sorted(name for name in called if not callable(getattr(noop, name, None)))
+    assert missing == []
+
+
+def test_make_noop_recorder_survives_connect_batches_and_disconnect() -> None:
+    from typing import cast
+
+    from predictions_cup.maker.noop_recorder import NoopSigRealtimeRecorder
+
+    async def scenario() -> None:
+        rest = FakeRest()
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=cast(SigRealtimeRecorder, NoopSigRealtimeRecorder()),
+            tournament_id="cup",
+            tracked_depth_exchange_ids={"36"},
+        )
+        await engine.initialize()
+        engine.mark_connected()
+        assert engine.health.connected is True
+        observed = datetime(2026, 9, 25, 14, 0, tzinfo=UTC)
+        await engine.handle_raw_batch(
+            engine.topic,
+            _batch(revision=5, previous=4, source_from=100, source_through=100),
+            observed,
+        )
+        assert engine.last_accepted_revision == 5
+        # Malformed payload exercises the validation-error record_raw_batch path.
+        await engine.handle_raw_batch(engine.topic, {"not": "a batch"}, observed)
+        await engine.maintenance(observed + timedelta(seconds=1))
+        engine.mark_disconnected()
+        assert engine.health.connected is False
+
     asyncio.run(scenario())
