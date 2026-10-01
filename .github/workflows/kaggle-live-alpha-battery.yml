@@ -47,17 +47,18 @@ jobs:
           KERNEL="$(python -c "import json; print(json.load(open('$DIR/kernel-metadata.json'))['id'])")"
           PUSHED=0
           for i in $(seq 1 180); do
-            OUT="$(kaggle kernels push -p "$DIR" 2>&1)" && RC=0 || RC=$?
+            OUT="$(kaggle kernels push -p "$DIR" 2>&1 || true)"
             echo "$OUT"
-            if [ "$RC" -eq 0 ]; then
-              PUSHED=1
-              break
-            fi
             if printf '%s' "$OUT" | grep -q "Maximum batch CPU session count"; then
               sleep 20
               continue
             fi
-            exit "$RC"
+            if printf '%s' "$OUT" | grep -qi "successfully pushed"; then
+              PUSHED=1
+              break
+            fi
+            echo "Unexpected Kaggle push response"
+            exit 1
           done
           test "$PUSHED" -eq 1
           for i in $(seq 1 240); do
