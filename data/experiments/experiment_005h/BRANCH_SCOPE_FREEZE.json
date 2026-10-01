@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005H",
+  "branch": "experiment/005h-fill-orderbook-interaction-atlas",
+  "scope_status": "BRANCH_FROZEN_FOR_005H_ONLY",
+  "frozen_from_head_sha": "b5df967d86f0dbf458c5742c81b16bdcb2bb6ece",
+  "base_branch": "main",
+  "base_sha_at_freeze": "0a5ba79fb54760bb236299781e694cc4b1a4b832",
+  "rules": [
+    "All further work stays on this branch until MASTER_HANDOFF_005H.md is complete.",
+    "No unrelated branch inspection, merges, rebases, cleanup, or opportunistic feature work.",
+    "No refresh from main unless 005H cannot proceed without a hard dependency; any exception must be explicitly recorded here first.",
+    "Only EXPERIMENT-005H scientific code, audits, tests, outputs, and handoff material may be added.",
+    "B0 remains untouched until PRE_HOLDOUT_FREEZE.json exists."
+  ],
+  "current_join_fact": {
+    "canonical_identity_candidate": "transaction_hash",
+    "w18_accepted_groups": 2265,
+    "w18_groups_with_venue_print": 2257,
+    "coverage_fraction": 0.9964679911699779,
+    "median_venue_print_minus_polygon_block_seconds": -2.226528
+  },
+  "known_issue_to_fix_before_modelling": "V3 streamed join used pandas astype(int64) on datetime64[us], preserving microseconds while naming the field ts_ns; ordering remained internally monotone but absolute lag/book-age scaling was wrong. Canonical conversion must use Timestamp.value nanoseconds before outcome analysis.",
+  "real_sig_orders_sent": false
+}
