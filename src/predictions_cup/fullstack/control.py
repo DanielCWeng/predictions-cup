@@ -79,6 +79,16 @@ class RuntimePaths:
         return cls(status=status, alerts=alerts)
 
 
+def _alert_path_from_environment() -> Path:
+    explicit = os.environ.get("PREDICTIONS_CUP_FULLSTACK_ALERT_PATH")
+    if explicit:
+        return Path(explicit)
+    research_root = Path(
+        os.environ.get("PREDICTIONS_CUP_SIG_RESEARCH_PATH", "data/sig_research")
+    )
+    return research_root.parent / "runtime" / "alerts" / "events.jsonl"
+
+
 def _now() -> datetime:
     return datetime.now(UTC)
 
@@ -1064,10 +1074,23 @@ def main(argv: list[str] | None = None) -> int:
     env_file = getattr(args, "env_file", None)
     if env_file is not None:
         _apply_env_file(env_file)
+    repo_root = Path(__file__).resolve().parents[3]
+
+    # Failure alerts must survive malformed runtime settings; do not require
+    # AppSettings validation just to persist the failure evidence.
+    if args.command == "alert":
+        alert_path = _alert_path_from_environment()
+        append_alert(
+            alert_path,
+            event_type="SYSTEMD_ON_FAILURE",
+            detail={"unit": args.unit},
+        )
+        _print({"state": "ALERT_RECORDED", "unit": args.unit}, compact=True)
+        return 0
+
     use_dotenv = not getattr(args, "runtime_env_only", False) and env_file is None
     settings = load_settings(use_dotenv=use_dotenv)
     paths = RuntimePaths.from_environment(settings)
-    repo_root = Path(__file__).resolve().parents[3]
 
     if args.command == "status":
         payload = (
@@ -1076,14 +1099,6 @@ def main(argv: list[str] | None = None) -> int:
             else build_status(settings, repo_root=repo_root)
         )
         _print(payload, compact=args.json)
-        return 0
-    if args.command == "alert":
-        append_alert(
-            paths.alerts,
-            event_type="SYSTEMD_ON_FAILURE",
-            detail={"unit": args.unit},
-        )
-        _print({"state": "ALERT_RECORDED", "unit": args.unit}, compact=True)
         return 0
     if args.command == "check":
         ready, reason = check_component(settings, args.component)
