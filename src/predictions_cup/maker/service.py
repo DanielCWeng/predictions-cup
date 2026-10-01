@@ -49,7 +49,7 @@ from predictions_cup.maker.factory import MakerRuntimeComponents, build_maker_co
 from predictions_cup.maker.instance_lock import MakerInstanceLock
 from predictions_cup.maker.noop_recorder import NoopSigRealtimeRecorder
 from predictions_cup.maker.recovery import reconcile_maker_quote_registry
-from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
+from predictions_cup.maker.runtime_loop import ExecutionObserver, MakerRuntimeLoop
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.mapping.models import MappingDocument
 from predictions_cup.models.registry import default_model_registry
@@ -465,7 +465,7 @@ class MakerService:
                     observation_process_instance_id=observe_recorder.session_id,
                 )
 
-            model_execution_observer = None
+            model_execution_observer: ExecutionObserver | None = None
             if (
                 self.settings.model_live_ids.strip()
                 and self.core.risk_context.mode is ExecutionMode.LIVE

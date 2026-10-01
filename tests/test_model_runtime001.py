@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -496,57 +497,59 @@ def test_paper_candidate_records_hypothetical_central_risk_disposition() -> None
     assert output.candidate_payload["risk_reason"] == "global_kill_switch"
 
 
-@pytest.mark.asyncio
-async def test_live_coordinator_reserves_before_accepted_dispatch_and_persists() -> None:
-    provider = _Provider("live", live_eligible=True)
-    runtime = ModelRuntime(
-        ModelRegistry((provider,)),
-        live_model_ids=("live",),
-        platform_live_ready=True,
-    )
-    reservations = ExecutionReservationBook()
-    dispatched: list[str] = []
-    persisted: list[str] = []
-
-    async def dispatch(plan: object, maker: object) -> ExecutionEvent:
-        from predictions_cup.execution.sinks import ExecutionPlan
-        from predictions_cup.maker.contracts import MakerMarketSnapshot
-
-        assert isinstance(plan, ExecutionPlan)
-        assert isinstance(maker, MakerMarketSnapshot)
-        dispatched.append(plan.envelope.logical_operation_id)
-        assert reservations.overlay_snapshot(maker.runtime).portfolio.orders
-        return ExecutionEvent(
-            logical_operation_id=plan.envelope.logical_operation_id,
-            state=LifecycleState.ACKED,
-            observed_monotonic_ns=1_001,
-            simulated=True,
+def test_live_coordinator_reserves_before_accepted_dispatch_and_persists() -> None:
+    async def scenario() -> None:
+        provider = _Provider("live", live_eligible=True)
+        runtime = ModelRuntime(
+            ModelRegistry((provider,)),
+            live_model_ids=("live",),
+            platform_live_ready=True,
         )
+        reservations = ExecutionReservationBook()
+        dispatched: list[str] = []
+        persisted: list[str] = []
 
-    async def persist(decision: object) -> None:
-        from predictions_cup.shadow.contracts import CandidateDecision
+        async def dispatch(plan: object, maker: object) -> ExecutionEvent:
+            from predictions_cup.execution.sinks import ExecutionPlan
+            from predictions_cup.maker.contracts import MakerMarketSnapshot
 
-        assert isinstance(decision, CandidateDecision)
-        persisted.append(decision.decision_id)
+            assert isinstance(plan, ExecutionPlan)
+            assert isinstance(maker, MakerMarketSnapshot)
+            dispatched.append(plan.envelope.logical_operation_id)
+            assert reservations.overlay_snapshot(maker.runtime).portfolio.orders
+            return ExecutionEvent(
+                logical_operation_id=plan.envelope.logical_operation_id,
+                state=LifecycleState.ACKED,
+                observed_monotonic_ns=1_001,
+                simulated=True,
+            )
 
-    coordinator = LiveModelCoordinator(
-        runtime,
-        mapping_version="test-mapping",
-        risk_context=_risk(),
-        reservations=reservations,
-        dispatch=dispatch,
-        decision_observer=persist,
-    )
-    canonical = _snapshot()
-    events = await coordinator.on_state_change(
-        MakerStateChange(
-            event_id="event-1",
-            observed_monotonic_ns=1_000,
-            exchange_ids=frozenset({"e1"}),
-        ),
-        canonical.observed_at,
-        {"e1": canonical.maker},
-    )
-    assert len(events) == 1
-    assert dispatched == ["event-1:model:live:e1"]
-    assert len(persisted) == 1
+        async def persist(decision: object) -> None:
+            from predictions_cup.shadow.contracts import CandidateDecision
+
+            assert isinstance(decision, CandidateDecision)
+            persisted.append(decision.decision_id)
+
+        coordinator = LiveModelCoordinator(
+            runtime,
+            mapping_version="test-mapping",
+            risk_context=_risk(),
+            reservations=reservations,
+            dispatch=dispatch,
+            decision_observer=persist,
+        )
+        canonical = _snapshot()
+        events = await coordinator.on_state_change(
+            MakerStateChange(
+                event_id="event-1",
+                observed_monotonic_ns=1_000,
+                exchange_ids=frozenset({"e1"}),
+            ),
+            canonical.observed_at,
+            {"e1": canonical.maker},
+        )
+        assert len(events) == 1
+        assert dispatched == ["event-1:model:live:e1"]
+        assert len(persisted) == 1
+
+    asyncio.run(scenario())
