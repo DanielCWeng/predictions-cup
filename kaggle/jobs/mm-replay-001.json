@@ -37,6 +37,7 @@
       "destination": "repo_context/execution_universe_exact.json"
     }
   ],
-  "note": "Attempt 2: optimized timestamp-collapsed September replay with Kaggle source-path fix.",
-  "attempt": 2
+  "note": "Attempt 3: bound September scientific replay with embedded staged source bundle, 140 EXACT markets, complement-book FV, frozen PRE_ELECTION 005F.",
+  "attempt": 3,
+  "embed_kernel_bundle": true
 }
