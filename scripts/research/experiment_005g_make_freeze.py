@@ -171,7 +171,7 @@ def main() -> None:
     ids = {str(row["candidate_id"]) for row in candidates}
     if ids & FORBIDDEN_LANE_A:
         raise RuntimeError("forbidden Lane A candidate entered freeze")
-    if not ALLOWED_LANE_A <= ids:
+    if not ids >= ALLOWED_LANE_A:
         raise RuntimeError("required PRE update replication candidate missing")
 
     holdout_files = [
