@@ -1,0 +1,79 @@
+
+name: Kaggle Live Alpha Battery Backfill
+
+on:
+  push:
+    branches:
+      - analysis/live-alpha-battery-001
+    paths:
+      - ".github/workflows/kaggle-live-alpha-battery-backfill.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        lane: [maker_queue, residual_taker, hazard]
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Kaggle dependencies
+        run: python -m pip install --upgrade kaggle pandas numpy scikit-learn tabulate
+      - name: Stage shared runner
+        run: |
+          DIR="scripts/kaggle/live_alpha_battery_001/${{ matrix.lane }}"
+          cp scripts/kaggle/live_alpha_battery_001/common.py "$DIR/common.py"
+      - name: Queue for Kaggle CPU slot and run
+        env:
+          KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          LANE: ${{ matrix.lane }}
+        run: |
+          set -euo pipefail
+          DIR="scripts/kaggle/live_alpha_battery_001/$LANE"
+          KERNEL="$(python -c "import json; print(json.load(open('$DIR/kernel-metadata.json'))['id'])")"
+          PUSHED=0
+          for i in $(seq 1 180); do
+            OUT="$(kaggle kernels push -p "$DIR" 2>&1)" && RC=0 || RC=$?
+            echo "$OUT"
+            if [ "$RC" -eq 0 ]; then
+              PUSHED=1
+              break
+            fi
+            if printf '%s' "$OUT" | grep -q "Maximum batch CPU session count"; then
+              sleep 20
+              continue
+            fi
+            exit "$RC"
+          done
+          test "$PUSHED" -eq 1
+          for i in $(seq 1 240); do
+            STATUS="$(kaggle kernels status "$KERNEL" 2>&1 || true)"
+            echo "$STATUS"
+            LOWER="$(printf '%s' "$STATUS" | tr '[:upper:]' '[:lower:]')"
+            if printf '%s' "$LOWER" | grep -q complete; then
+              mkdir -p "kaggle/battery/$LANE"
+              kaggle kernels output "$KERNEL" -p "kaggle/battery/$LANE" --force
+              exit 0
+            fi
+            if printf '%s' "$LOWER" | grep -Eq 'error|failed|cancel'; then
+              kaggle kernels logs "$KERNEL" || true
+              exit 1
+            fi
+            sleep 15
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-alpha-battery-backfill-${{ matrix.lane }}
+          path: kaggle/battery/${{ matrix.lane }}/
+          if-no-files-found: warn
+          retention-days: 3
