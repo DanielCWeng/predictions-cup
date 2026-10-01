@@ -120,6 +120,8 @@ Invalid or stale portfolio marks are different: they force withdrawal of existin
 | stale snapshot before in-flight ACK | same | reservation survives snapshot fence |
 | known own vs unknown external order | same | known accepted; truly unknown revokes trust |
 | fill after cancel evidence | `test_fill_before_order_update_and_cancel_evidence_keeps_original_identity` | original placement/intent retains fill |
+| authoritative snapshot before delayed fill | `test_authoritative_snapshot_before_delayed_realtime_fill_forces_reconcile` | delayed fill revokes trust, does not overwrite canonical snapshot economics, remains provisional/original-placement attributed |
+| global halt with unresolved placement | `test_uncertain_placement_retains_reservation_and_recovery_authority` | fresh Risk blocked while unresolved exposure remains reserved; recovery-only capability cannot admit fresh exposure |
 | disconnect during placement | `test_uncertain_placement_retains_reservation_and_recovery_authority` | journal/reservation stay UNCERTAIN; recovery-only permit cannot admit fresh exposure |
 | invalid/stale multi-market mark | `test_multi_market_invalid_or_stale_mark_and_global_halt_block_fresh_risk` plus MAKE coordinator regressions | fresh Risk blocked; unchanged resting quotes withdrawn |
 | transient account resync | `test_transient_account_untrust_holds_resting_quotes_without_new_io` | HOLD: no fresh placement or cancel storm |
@@ -137,6 +139,8 @@ The fixes add bounded direct-index state only:
 - no background task;
 - no execution hot-path join against external state;
 - no new event store.
+
+The stage artifact also records `build_exposure_snapshot()` output. `risk_total_gross_exposure` compares the oracle's position gross plus open-order exposure against RISK-002 gross exposure. During provisional fills, negative open/uncertain residuals are intentional conservative over-reservation and are recorded explicitly until authoritative reconciliation.
 
 The independent oracle and rich stage snapshots live only in tests/artifacts.
 

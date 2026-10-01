@@ -41,7 +41,13 @@
       },
       "risk_state": {
         "approved": true,
-        "reason": "approved"
+        "reason": "approved",
+        "exposure": {
+          "gross_exposure": 0,
+          "open_order_exposure": 0,
+          "uncertain_order_exposure": 0,
+          "trusted": true
+        }
       },
       "journal_state": {
         "event_types": [],
@@ -56,7 +62,10 @@
         "synthetic_filled_quantity": "0",
         "account_inventory": "0",
         "account_open_order_exposure": "0",
-        "account_uncertain_exposure": "0"
+        "account_uncertain_exposure": "0",
+        "risk_total_gross_exposure": "0.0",
+        "risk_open_order_exposure": "0.0",
+        "risk_uncertain_exposure": "0.0"
       },
       "pass": true,
       "failure_reason": null
@@ -107,7 +116,13 @@
       },
       "risk_state": {
         "approved": true,
-        "reason": "approved"
+        "reason": "approved",
+        "exposure": {
+          "gross_exposure": 20,
+          "open_order_exposure": 20,
+          "uncertain_order_exposure": 20,
+          "trusted": true
+        }
       },
       "journal_state": {
         "event_types": [
@@ -134,7 +149,10 @@
         "synthetic_filled_quantity": "0",
         "account_inventory": "0",
         "account_open_order_exposure": "0",
-        "account_uncertain_exposure": "0"
+        "account_uncertain_exposure": "0",
+        "risk_total_gross_exposure": "0.0",
+        "risk_open_order_exposure": "0.0",
+        "risk_uncertain_exposure": "0.0"
       },
       "pass": true,
       "failure_reason": null
@@ -187,7 +205,13 @@
       },
       "risk_state": {
         "approved": true,
-        "reason": "known_own_orders"
+        "reason": "known_own_orders",
+        "exposure": {
+          "gross_exposure": 20,
+          "open_order_exposure": 20,
+          "uncertain_order_exposure": 20,
+          "trusted": true
+        }
       },
       "journal_state": {
         "event_types": [
@@ -216,7 +240,10 @@
         "synthetic_filled_quantity": "0",
         "account_inventory": "0",
         "account_open_order_exposure": "0",
-        "account_uncertain_exposure": "0"
+        "account_uncertain_exposure": "0",
+        "risk_total_gross_exposure": "0.0",
+        "risk_open_order_exposure": "0.0",
+        "risk_uncertain_exposure": "0.0"
       },
       "pass": true,
       "failure_reason": null
@@ -269,7 +296,13 @@
       },
       "risk_state": {
         "approved": false,
-        "reason": "account_state_untrusted"
+        "reason": "account_state_untrusted",
+        "exposure": {
+          "gross_exposure": 20,
+          "open_order_exposure": 20,
+          "uncertain_order_exposure": 20,
+          "trusted": false
+        }
       },
       "journal_state": {
         "event_types": [
@@ -303,7 +336,10 @@
         "synthetic_filled_quantity": "0",
         "account_inventory": "UNTRUSTED_RECONCILE",
         "account_open_order_exposure": "UNTRUSTED_RECONCILE",
-        "account_uncertain_exposure": "UNTRUSTED_RECONCILE"
+        "account_uncertain_exposure": "UNTRUSTED_RECONCILE",
+        "risk_total_gross_exposure": "0.0",
+        "risk_open_order_exposure": "-4.0",
+        "risk_uncertain_exposure": "-4.0"
       },
       "pass": true,
       "failure_reason": null
@@ -355,7 +391,13 @@
       "risk_state": {
         "approved": false,
         "reason": "account_state_untrusted",
-        "uncertain_exposure_preserved": true
+        "uncertain_exposure_preserved": true,
+        "exposure": {
+          "gross_exposure": 20,
+          "open_order_exposure": 20,
+          "uncertain_order_exposure": 20,
+          "trusted": false
+        }
       },
       "journal_state": {
         "event_types": [
@@ -391,7 +433,10 @@
         "synthetic_filled_quantity": "0",
         "account_inventory": "UNTRUSTED_RECONCILE",
         "account_open_order_exposure": "UNTRUSTED_RECONCILE",
-        "account_uncertain_exposure": "UNTRUSTED_RECONCILE"
+        "account_uncertain_exposure": "UNTRUSTED_RECONCILE",
+        "risk_total_gross_exposure": "0.0",
+        "risk_open_order_exposure": "-4.0",
+        "risk_uncertain_exposure": "-4.0"
       },
       "pass": true,
       "failure_reason": null
@@ -446,7 +491,13 @@
       "risk_state": {
         "approved": false,
         "reason": "account_state_untrusted",
-        "uncertain_exposure_preserved": true
+        "uncertain_exposure_preserved": true,
+        "exposure": {
+          "gross_exposure": 20,
+          "open_order_exposure": 20,
+          "uncertain_order_exposure": 20,
+          "trusted": false
+        }
       },
       "journal_state": {
         "event_types": [
@@ -485,7 +536,10 @@
         "synthetic_filled_quantity": "0",
         "account_inventory": "UNTRUSTED_RECONCILE",
         "account_open_order_exposure": "UNTRUSTED_RECONCILE",
-        "account_uncertain_exposure": "UNTRUSTED_RECONCILE"
+        "account_uncertain_exposure": "UNTRUSTED_RECONCILE",
+        "risk_total_gross_exposure": "0.0",
+        "risk_open_order_exposure": "-6.0",
+        "risk_uncertain_exposure": "-6.0"
       },
       "pass": true,
       "failure_reason": null
@@ -535,7 +589,13 @@
       },
       "risk_state": {
         "approved": true,
-        "reason": "trusted_reconciled_account"
+        "reason": "trusted_reconciled_account",
+        "exposure": {
+          "gross_exposure": 16,
+          "open_order_exposure": 10,
+          "uncertain_order_exposure": 0,
+          "trusted": true
+        }
       },
       "journal_state": {
         "event_types": [
@@ -570,7 +630,10 @@
         "synthetic_filled_quantity": "0",
         "account_inventory": "0",
         "account_open_order_exposure": "0",
-        "account_uncertain_exposure": "0"
+        "account_uncertain_exposure": "0",
+        "risk_total_gross_exposure": "0.0",
+        "risk_open_order_exposure": "0.0",
+        "risk_uncertain_exposure": "0.0"
       },
       "pass": true,
       "failure_reason": null
@@ -618,7 +681,13 @@
       },
       "risk_state": {
         "safe_to_resume_live": true,
-        "unresolved_operation_ids": []
+        "unresolved_operation_ids": [],
+        "exposure": {
+          "gross_exposure": 16,
+          "open_order_exposure": 10,
+          "uncertain_order_exposure": 0,
+          "trusted": true
+        }
       },
       "journal_state": {
         "event_types": [
@@ -657,7 +726,10 @@
         "synthetic_filled_quantity": "0",
         "account_inventory": "0",
         "account_open_order_exposure": "0",
-        "account_uncertain_exposure": "0"
+        "account_uncertain_exposure": "0",
+        "risk_total_gross_exposure": "0.0",
+        "risk_open_order_exposure": "0.0",
+        "risk_uncertain_exposure": "0.0"
       },
       "pass": true,
       "failure_reason": null
@@ -706,7 +778,13 @@
       "risk_state": {
         "approved": true,
         "reason": "approved",
-        "halted_fresh_reason": "global_kill_switch"
+        "halted_fresh_reason": "global_kill_switch",
+        "exposure": {
+          "gross_exposure": 16,
+          "open_order_exposure": 10,
+          "uncertain_order_exposure": 0,
+          "trusted": true
+        }
       },
       "journal_state": {
         "event_types": [
@@ -745,7 +823,10 @@
         "synthetic_filled_quantity": "0",
         "account_inventory": "0",
         "account_open_order_exposure": "0",
-        "account_uncertain_exposure": "0"
+        "account_uncertain_exposure": "0",
+        "risk_total_gross_exposure": "0.0",
+        "risk_open_order_exposure": "0.0",
+        "risk_uncertain_exposure": "0.0"
       },
       "pass": true,
       "failure_reason": null
@@ -793,6 +874,18 @@
       "test": "test_transient_account_untrust_holds_resting_quotes_without_new_io",
       "outcome": "HOLD emits no placement/cancel I/O while valuation remains valid",
       "pass": true
+    },
+    {
+      "name": "authoritative_snapshot_before_delayed_realtime_fill",
+      "test": "test_authoritative_snapshot_before_delayed_realtime_fill_forces_reconcile",
+      "outcome": "delayed provisional fill after snapshot revokes trust, preserves canonical snapshot inventory, and remains attributable to original placement intent",
+      "pass": true
+    },
+    {
+      "name": "global_halt_with_unresolved_placement",
+      "test": "test_uncertain_placement_retains_reservation_and_recovery_authority",
+      "outcome": "global capital halt blocks fresh risk while 20 units of UNCERTAIN reservation remain risk-bearing; recovery-only authority remains non-fresh",
+      "pass": true
     }
   ],
   "limitations": [
@@ -801,5 +894,6 @@
     "An open ask leg with no terminal/authoritative fill coverage keeps learner evidence incomplete; zero observed fills is not reported as supported.",
     "Legacy journals lacking an ACK-to-placement identity can only use the conservative recovery fallback; new journal entries preserve stable placement/intent identity.",
     "No production fill fee field is available on this evidence path; the synthetic scenario explicitly fixes fees at zero."
-  ]
+  ],
+  "risk_residual_semantics": "risk_total_gross compares oracle position gross + oracle open-order exposure against RISK-002 build_exposure_snapshot. Negative uncertain/open residuals during provisional fills mean production deliberately over-reserves until authoritative reconciliation."
 }
