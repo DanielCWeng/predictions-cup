@@ -8,8 +8,6 @@ and emits append-only alert evidence.  It never grants LIVE authorization.
 from __future__ import annotations
 
 import argparse
-from collections.abc import Mapping, Sequence
-from contextlib import suppress
 import hashlib
 import json
 import os
@@ -19,6 +17,8 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
