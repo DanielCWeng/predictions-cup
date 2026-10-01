@@ -3,10 +3,12 @@
 SIG replays the stored response for a reused idempotency key with the same
 payload, so this learns the order ids without placing new orders.
 """
-import asyncio, sys
+import asyncio
+import sys
+
 from predictions_cup.config import AppSettings
-from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.interlocks import assert_live_recovery_interlocks
+from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.sig.rest_governor import SigRestGovernor
