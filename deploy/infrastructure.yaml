@@ -1,0 +1,42 @@
+schema_version: 1
+competition: sig_predictions_trading_cup_2026
+
+roles:
+  primary_execution:
+    region: us-west-1
+    instance_id: i-0271c6eee4b432df1
+    instance_type: t4g.small
+    architecture: arm64
+    os: amazon-linux-2023
+    retention_hours: 24
+    kaggle_uploads: false
+  archive_research:
+    region: us-east-1
+    instance_type: t4g.small
+    architecture: arm64
+    os: amazon-linux-2023
+    retention: durable
+    kaggle_uploads: true
+    execution_fallback: true
+
+endpoints:
+  sig:
+    public: https://www.thesuper.market/api/v1
+    api: https://sig.thesuper.market/api/v1
+  polymarket:
+    clob: https://clob.polymarket.com
+
+latency_baseline_ms:
+  measured_at: 2026-10-01
+  measured_from: ec2_us-west-1_t4g.small
+  sig_keepalive_total: {p50: 46.7, p95: 64.3, p99: 68.9}
+  polymarket_keepalive_total: {p50: 155.5, p95: 159.2, p99: 160.1}
+
+remote_admin:
+  west_systemd_service: rdc-west.service
+  west_reboot_recovery_verified: true
+
+safety:
+  live_execution_policy: single_active_host
+  public_ipv4_ephemeral_without_elastic_ip: true
+  secrets_committed: false
