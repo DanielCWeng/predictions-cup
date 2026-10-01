@@ -4,7 +4,7 @@
   "classifications": {
     "FIVE_MINUTE_MEAN_REVERSION": {
       "classification": "TRANSFERS_STRONGLY",
-      "evidence": "67.26% HOLDOUT reversal over 55,340 sampled move episodes; every temporal worker >66%; survives move-size, price-region, relative-spread and state slices.",
+      "evidence": "67.26% HOLDOUT reversal over 55,340 qualifying sampled minute-states/move observations; every temporal worker >66%; survives move-size, price-region, relative-spread and state slices. Adjacent observations overlap through the five-minute forward window and are serially dependent, so 55,340 must not be interpreted as 55,340 independent episodes.",
       "route": [
         "MM_REPLAY",
         "LIVE_DIAG",
@@ -22,7 +22,7 @@
     },
     "PRICE_DISCOVERY": {
       "classification": "TRANSFERS_CONDITIONALLY",
-      "evidence": "Short high-vol state; 47.38% of HOLDOUT exits go to POST_SHOCK, p90 dwell <=4 minutes in all workers. Still 68.08% sampled reversal.",
+      "evidence": "Short high-activity large-move state with p90 dwell <=4 minutes in all workers and 68.08% sampled reversal. 47.38% of HOLDOUT exits go to POST_SHOCK, but that path is partly mechanical because PRICE_DISCOVERY requires |ret_5m| >= 0.005 plus high quote activity while POST_SHOCK retains the move threshold without the activity requirement. Treat the transition share as descriptive, not as an independently discovered economic mechanism.",
       "route": [
         "LIVE_DIAG",
         "MM_REPLAY"
@@ -39,7 +39,7 @@
     },
     "RESILIENCE_REPLENISHMENT": {
       "classification": "TRANSFERS_CONDITIONALLY",
-      "evidence": "After large withdrawal, next-minute recovered episodes have 33.83% lower subsequent abs-5m movement on HOLDOUT, 5/5 workers same direction. Association only.",
+      "evidence": "After large withdrawal, next-minute recovered observations have 33.83% lower subsequent abs-5m movement on HOLDOUT, 5/5 workers same direction. Association only.",
       "route": [
         "MM_REPLAY",
         "LIVE_DIAG"
