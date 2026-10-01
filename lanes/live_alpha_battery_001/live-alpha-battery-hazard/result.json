@@ -1,0 +1,93 @@
+{
+  "all": [
+    {
+      "auc": 0.6911700262927256,
+      "base_brier": 0.08611554731698344,
+      "horizon_s": 60,
+      "market_positive_fraction": 0.5971223021582733,
+      "markets_evaluated": 139,
+      "model": "FULL7",
+      "model_brier": 0.08406037313216544,
+      "relative_improvement": 0.023865309445843655,
+      "train_n": 2552,
+      "val_n": 1444
+    },
+    {
+      "auc": 0.6811349693251534,
+      "base_brier": 0.08611554731698344,
+      "horizon_s": 60,
+      "market_positive_fraction": 0.5971223021582733,
+      "markets_evaluated": 139,
+      "model": "FULL15",
+      "model_brier": 0.08574807211377412,
+      "relative_improvement": 0.004267234136673067,
+      "train_n": 2552,
+      "val_n": 1444
+    },
+    {
+      "auc": 0.7008218410484699,
+      "base_brier": 0.16467658215825765,
+      "horizon_s": 300,
+      "market_positive_fraction": 0.5899280575539568,
+      "markets_evaluated": 139,
+      "model": "FULL7",
+      "model_brier": 0.15408709860984254,
+      "relative_improvement": 0.06430473240110356,
+      "train_n": 2552,
+      "val_n": 888
+    },
+    {
+      "auc": 0.710390530149737,
+      "base_brier": 0.16467658215825765,
+      "horizon_s": 300,
+      "market_positive_fraction": 0.6187050359712231,
+      "markets_evaluated": 139,
+      "model": "FULL15",
+      "model_brier": 0.15672412291288612,
+      "relative_improvement": 0.04829137902394066,
+      "train_n": 2552,
+      "val_n": 888
+    }
+  ],
+  "candidates": [
+    {
+      "auc": 0.7008218410484699,
+      "base_brier": 0.16467658215825765,
+      "horizon_s": 300,
+      "market_positive_fraction": 0.5899280575539568,
+      "markets_evaluated": 139,
+      "model": "FULL7",
+      "model_brier": 0.15408709860984254,
+      "relative_improvement": 0.06430473240110356,
+      "train_n": 2552,
+      "val_n": 888
+    },
+    {
+      "auc": 0.710390530149737,
+      "base_brier": 0.16467658215825765,
+      "horizon_s": 300,
+      "market_positive_fraction": 0.6187050359712231,
+      "markets_evaluated": 139,
+      "model": "FULL15",
+      "model_brier": 0.15672412291288612,
+      "relative_improvement": 0.04829137902394066,
+      "train_n": 2552,
+      "val_n": 888
+    },
+    {
+      "auc": 0.6911700262927256,
+      "base_brier": 0.08611554731698344,
+      "horizon_s": 60,
+      "market_positive_fraction": 0.5971223021582733,
+      "markets_evaluated": 139,
+      "model": "FULL7",
+      "model_brier": 0.08406037313216544,
+      "relative_improvement": 0.023865309445843655,
+      "train_n": 2552,
+      "val_n": 1444
+    }
+  ],
+  "cut": "2026-10-01 16:48:00+00:00",
+  "lane": "pred006_live_hazard",
+  "parity": "PRED-006-inspired only: fee features and 600/1800s horizons unavailable on this snapshot"
+}
