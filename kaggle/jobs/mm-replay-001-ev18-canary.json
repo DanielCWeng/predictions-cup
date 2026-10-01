@@ -17,5 +17,5 @@
   "timeout_minutes": 300,
   "download_outputs": true,
   "output_file_pattern": "(EV18_.*\\.(json|csv|md))$",
-  "note": "EV18 canary: V3 compaction + B0 local-mid replay + feature-level 005F transfer. No external-FV substitution."
+  "note": "EV18 canary v2: fixed Side enum + explicit compact schema; V3 compaction + B0 local-mid replay + feature-level 005F transfer."
 }
