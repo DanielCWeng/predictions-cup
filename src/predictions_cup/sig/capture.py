@@ -26,6 +26,7 @@ from predictions_cup.sig.realtime_state import SigRealtimeStateEngine, Subscript
 from predictions_cup.sig.realtime_subscriber import SubscriberExit, SupabaseTournamentSubscriber
 
 logger = logging.getLogger(__name__)
+CAPTURE_PERIODIC_BULK_REFRESH_ENABLED = True
 
 
 def parse_args() -> argparse.Namespace:
@@ -156,10 +157,12 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                 settings.sig_realtime_bulk_price_refresh_seconds
             ),
             governed_rate_per_second=settings.sig_rest_governor_rate_per_second,
-            # MAKE owns the launch-time periodic scalar refresh. CAPTURE keeps
-            # initial/reconnect authority and Realtime capture without issuing
-            # a second all-universe bulk-price sweep every interval.
-            periodic_bulk_refresh_enabled=False,
+            # CAPTURE-001 is the canonical forensic recorder, so it must keep
+            # its own periodic all-universe scalar/BBO sweep even when MAKE also
+            # maintains an in-process trading view. Duplicate governed reads are
+            # preferable to silently losing launch price history or making the
+            # supervisor treat deliberate capture idleness as a feed failure.
+            periodic_bulk_refresh_enabled=CAPTURE_PERIODIC_BULK_REFRESH_ENABLED,
             governor_snapshot=rest.governor_snapshot,
             observation_emitter=observation_emitter,
             observation_process_instance_id=recorder.session_id,
