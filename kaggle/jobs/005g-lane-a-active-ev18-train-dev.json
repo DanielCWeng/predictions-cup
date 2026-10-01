@@ -18,6 +18,6 @@
     "pandas==2.3.3",
     "scikit-learn==1.7.2"
   ],
-  "note": "EXPERIMENT-005G Lane A ACTIVE TRAIN/DEV only; retry after V3 semantic probe proved price_change BBO fields are present and binary asset_id normalization was fixed. HOLDOUT hour 03 remains absent. No orders.",
-  "attempt": 2
+  "note": "EXPERIMENT-005G Lane A ACTIVE TRAIN/DEV only; retry after semantic probe proved V3 asset_id is raw big-endian binary and canonical decimal-token decoding was fixed. HOLDOUT hour 03 remains absent. No orders.",
+  "attempt": 3
 }
