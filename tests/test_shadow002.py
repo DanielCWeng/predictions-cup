@@ -227,6 +227,40 @@ def test_same_state_delivery_and_candidate_isolation() -> None:
     asyncio.run(run())
 
 
+def test_maker_ingress_coalesces_to_latest_snapshot_per_exchange() -> None:
+    async def run() -> None:
+        candidate = _FixedCandidate("coalesced")
+        store = InMemoryEventStore()
+        interval = 0.03
+        bus = ShadowBus(
+            (candidate,),
+            store=store,
+            minimum_maker_snapshot_interval_seconds=interval,
+        )
+        await bus.start()
+        observed_at = datetime(2026, 10, 1, 16, 0, tzinfo=UTC)
+        for offset in range(3):
+            accepted = bus.submit_maker(
+                _maker_snapshot(now=NOW + offset),
+                observed_at=observed_at + timedelta(microseconds=offset),
+                mapping_version="mapping-v1",
+                source_revision=f"revision-{offset}",
+            )
+            assert accepted is True
+
+        await asyncio.sleep(interval * 1.5)
+        await bus.flush()
+        health = bus.health()
+        await bus.close()
+
+        assert len(store.snapshots) == 2
+        assert store.snapshots[-1].observed_monotonic_ns == NOW + 2
+        assert health.snapshots_dropped_or_coalesced == 1
+        assert health.maker_snapshots_coalesced == 1
+
+    asyncio.run(run())
+
+
 def test_timeout_isolation_and_invalid_output_fail_closed() -> None:
     async def run() -> None:
         good = _FixedCandidate("good")

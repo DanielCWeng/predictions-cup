@@ -140,7 +140,8 @@ async def run_soak(args: argparse.Namespace) -> dict[str, object]:
         await bus.flush()
         drained = perf_counter_ns()
         health = bus.health()
-        expected_snapshots = args.markets * args.cycles
+        submitted_snapshots = args.markets * args.cycles
+        expected_snapshots = health.snapshots_processed
         expected_decisions = expected_snapshots * args.candidates
         expected_events = expected_snapshots + expected_decisions
         await bus.close()
@@ -149,9 +150,17 @@ async def run_soak(args: argparse.Namespace) -> dict[str, object]:
 
         if health.ingress_rejected != 0:
             raise RuntimeError(f"ingress rejected {health.ingress_rejected} states")
-        if health.snapshots_dropped_or_coalesced != 0:
+        # Maker snapshot coalescing is intentional rate limiting. Keep checking
+        # the combined counter after subtracting those expected coalesces so
+        # genuine candidate queue drops/backpressure still fail the soak.
+        genuine_drops = (
+            health.snapshots_dropped_or_coalesced - health.maker_snapshots_coalesced
+        )
+        if genuine_drops != 0:
             raise RuntimeError(
-                f"candidate states coalesced/dropped: {health.snapshots_dropped_or_coalesced}"
+                f"candidate states dropped: {genuine_drops} "
+                f"(total={health.snapshots_dropped_or_coalesced}, "
+                f"maker_coalesced={health.maker_snapshots_coalesced})"
             )
         if not health.persistence.healthy:
             raise RuntimeError(f"persistence unhealthy: {health.persistence.last_error}")
@@ -168,12 +177,15 @@ async def run_soak(args: argparse.Namespace) -> dict[str, object]:
             "markets": args.markets,
             "candidates": args.candidates,
             "cycles": args.cycles,
+            "submitted_snapshots": submitted_snapshots,
             "snapshots": expected_snapshots,
             "decisions": expected_decisions,
             "persisted_events": expected_events,
             "jsonl_readback_events": lines,
             "bytes": bytes_written,
             "ingress_rejected": health.ingress_rejected,
+            "candidate_drops": genuine_drops,
+            "maker_snapshots_coalesced": health.maker_snapshots_coalesced,
             "coalesced_or_dropped": health.snapshots_dropped_or_coalesced,
             "ingress_queue_high_water": health.ingress_queue_high_water,
             "candidate_queue_high_water": max(

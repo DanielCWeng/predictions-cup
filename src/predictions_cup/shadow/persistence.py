@@ -32,6 +32,8 @@ class PersistenceHealth:
     queue_high_water: int
     write_batches: int
     write_latency_p95_ns: int | None
+    dropped_decisions: int = 0
+    retained_decisions: int = 0
 
 
 class ShadowEventStore(Protocol):
@@ -253,7 +255,7 @@ class CaptureStrategyEventStore:
         *,
         queue_capacity: int = 200_000,
         shard_seconds: int = 60,
-        max_rows_per_shard: int = 100_000,
+        max_rows_per_shard: int = 5_000,
         session_id: str | None = None,
     ) -> None:
         self._research_root = research_root
