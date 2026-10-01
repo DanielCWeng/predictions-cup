@@ -6,14 +6,36 @@
   "poll_seconds": 30,
   "timeout_minutes": 330,
   "download_outputs": true,
-  "output_file_pattern": "(INPUT_AUDIT\\.(json|md)|005F_TRANSFER_(RESULTS\\.csv|SUMMARY\\.json)|MM_POLICY_RESULTS\\.csv|MM_MARKOUTS\\.csv|MM_TOXICITY_BUCKETS\\.csv|FV_CONVERGENCE\\.csv|LATENCY_SENSITIVITY\\.csv|MARKET_BREAKDOWN\\.csv|FINAL_REPORT\\.md|MASTER_HANDOFF_MM_REPLAY_001\\.md|MM_CANDIDATE_CONFIG\\.json)$",
+  "output_file_pattern": "(INPUT_AUDIT\\.(json|md)|COMPACT_AUDIT\\.json|MARKET_INPUT_AUDIT\\.json|005F_TRANSFER_(RESULTS\\.csv|SUMMARY\\.json)|MM_POLICY_RESULTS\\.csv|MM_MARKOUTS\\.csv|MM_TOXICITY_BUCKETS\\.csv|FV_CONVERGENCE\\.csv|LATENCY_SENSITIVITY\\.csv|MARKET_BREAKDOWN\\.csv|FINAL_REPORT\\.md|MASTER_HANDOFF_MM_REPLAY_001\\.md)$",
   "stage_paths": [
-    {"source": "src/predictions_cup", "destination": "predictions_cup"},
-    {"source": "data/experiments/mm_replay_001/input_manifest.json", "destination": "input_manifest.json"},
-    {"source": "data/experiments/experiment_005f/fit_freeze_manifest.json", "destination": "repo_context/fit_freeze_manifest.json"},
-    {"source": "data/experiments/experiment_005f/holdout_evidence_manifest.json", "destination": "repo_context/holdout_evidence_manifest.json"},
-    {"source": "data/manifests/fills/data_003_manifest.json", "destination": "repo_context/data_003_manifest.json"},
-    {"source": "data/mappings/sig_polymarket_2026.json", "destination": "repo_context/sig_polymarket_2026.json"}
+    {
+      "source": "src/predictions_cup",
+      "destination": "predictions_cup"
+    },
+    {
+      "source": "data/experiments/mm_replay_001/input_manifest.json",
+      "destination": "input_manifest.json"
+    },
+    {
+      "source": "data/experiments/experiment_005f/fit_freeze_manifest.json",
+      "destination": "repo_context/fit_freeze_manifest.json"
+    },
+    {
+      "source": "data/experiments/experiment_005f/holdout_evidence_manifest.json",
+      "destination": "repo_context/holdout_evidence_manifest.json"
+    },
+    {
+      "source": "data/manifests/fills/data_003_manifest.json",
+      "destination": "repo_context/data_003_manifest.json"
+    },
+    {
+      "source": "data/mappings/sig_polymarket_2026.json",
+      "destination": "repo_context/sig_polymarket_2026.json"
+    },
+    {
+      "source": "data/experiments/mm_replay_001/execution_universe_exact.json",
+      "destination": "repo_context/execution_universe_exact.json"
+    }
   ],
-  "note": "Create kaggle/jobs/mm-replay-001.json only after the new DATA-003-linked order-book dataset is explicitly bound. Never use DATA-001/Hungary/Colombia/Peru for scientific results."
+  "note": "Run the bound September MM-REPLAY-001 primary science lane: 140 EXACT markets, complement-book FV, frozen PRE_ELECTION 005F. Never use DATA-001/Hungary/Colombia/Peru substitutes."
 }
