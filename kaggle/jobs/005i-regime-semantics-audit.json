@@ -1,11 +1,7 @@
 {
   "schema_version": 1,
-  "action": "run",
-  "kernel_dir": "scripts/kaggle/experiment_005i_semantics",
-  "kernel": "polyleviathan/005i-regime-semantics-audit",
-  "poll_seconds": 30,
-  "timeout_minutes": 180,
-  "download_outputs": true,
-  "output_file_pattern": "(INPUT_AUDIT\\.json|SCHEMA_SAMPLES\\.json|SEMANTIC_GATE\\.json|AMBIGUOUS_FILES\\.json|AUDIT_HANDOFF\\.json)$",
-  "note": "EXPERIMENT-005I input semantics/provenance gate only. No scientific modelling, HOLDOUT access, MAKE mutation, or SIG order placement."
+  "action": "dataset_files",
+  "dataset": "polyleviathan/sig-cup-data003-orderbooks",
+  "page_size": 10000,
+  "note": "EXPERIMENT-005I independent source inventory. Read-only Kaggle dataset API; no 005G artifacts, no HOLDOUT, no MAKE mutation, no SIG orders."
 }
