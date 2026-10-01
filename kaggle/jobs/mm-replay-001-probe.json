@@ -6,6 +6,6 @@
   "poll_seconds": 20,
   "timeout_minutes": 90,
   "download_outputs": true,
-  "output_file_pattern": "(PROBE_SUMMARY\\.json|PROBE_FILES\\.csv|SAMPLE_ROWS\\.json|probe_manifests/.*)$",
-  "note": "Probe landed DATA-003 order-book dataset; include representative V1/V2/V3 sample rows."
+  "output_file_pattern": "(PROBE_SUMMARY\\.json|PROBE_FILES\\.csv|SAMPLE_ROWS\\.json|EVENT_TYPE_AUDIT\\.json|probe_manifests/.*)$",
+  "note": "Probe landed DATA-003 order-book dataset; audit V1/V2/V3 event types and observed trade evidence."
 }
