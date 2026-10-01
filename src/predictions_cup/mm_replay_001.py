@@ -1164,7 +1164,13 @@ def replay_market(
             total_traded_size += fill.size
             markout_values: dict[int, float] = {}
             for horizon_s in MARKOUT_HORIZONS_S:
-                future = _future_fv(observations, timestamps, index, horizon_s)
+                future = _future_markout_reference(
+                    observations,
+                    timestamps,
+                    index,
+                    horizon_s,
+                    anchor=policy.anchor,
+                )
                 if future is not None:
                     markout_values[horizon_s] = markout(
                         fill,
@@ -1356,16 +1362,23 @@ def toxicity_bucket(score: float | None) -> str:
     return "WITHDRAW"
 
 
-def _future_fv(
+def _future_markout_reference(
     observations: Sequence[BookObservation],
     timestamps: Sequence[int],
     current_index: int,
     horizon_s: int,
+    *,
+    anchor: Literal["LOCAL_MID", "EXTERNAL_FV"],
 ) -> float | None:
     target = observations[current_index].timestamp_ns + horizon_s * 1_000_000_000
     future_index = bisect_left(timestamps, target, lo=current_index)
     while future_index < len(observations):
-        value = observations[future_index].external_fv
+        observation = observations[future_index]
+        value = (
+            observation.external_fv
+            if anchor == "EXTERNAL_FV"
+            else observation.local_mid
+        )
         if value is not None:
             return value
         future_index += 1
