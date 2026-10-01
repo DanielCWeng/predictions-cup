@@ -7,5 +7,6 @@
   "timeout_minutes": 330,
   "download_outputs": true,
   "output_file_pattern": "(ECONOMIC_INPUT_AUDIT\\.json|ECONOMIC_HAZARD_MODEL\\.json|ECONOMIC_POLICY_FREEZE\\.json|ECONOMIC_DEV_RESULTS\\.json|ECONOMIC_HOLDOUT_RESULTS\\.json|FINAL_REPORT\\.md)$",
-  "note": "EXPERIMENT-005G economic conversion V1. Frozen mapped universe and six-feature state-hazard bundle. TRAIN 2026-09-06, DEV 2026-09-07, untouched economic HOLDOUT 2026-09-08. Historical passive-execution proxy only; no MAKE modification and no real SIG orders."
+  "note": "EXPERIMENT-005G economic conversion V1 attempt 2. Same frozen design; packaging-only fix inlines the already-frozen 693-token universe. TRAIN 2026-09-06, DEV 2026-09-07, untouched economic HOLDOUT 2026-09-08. Historical passive-execution proxy only; no MAKE modification and no real SIG orders.",
+  "attempt": 2
 }
