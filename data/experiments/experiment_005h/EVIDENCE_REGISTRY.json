@@ -48,7 +48,13 @@
       "005H-C03-FILL-BEYOND-STATE": "NOT_APPLICABLE",
       "005H-C04-ARRIVAL-STATE": "UNTESTABLE_SOURCE",
       "005H-C05-DIRECTION-STATE": "UNTESTABLE_SOURCE",
-      "note": "Eligible pre-V3 V2/AG6 sources lack sequence ordering required for exact frozen C04/C05 feature parity."
+      "note": "Eligible pre-V3 V2/AG6 sources lack sequence ordering required for exact frozen C04/C05 feature parity.",
+      "teardown": {
+        "kernel_deleted": true,
+        "kernel": "polyleviathan/experiment-005h-source-robustness",
+        "teardown_workflow_run_id": 36853477701,
+        "final_logs_artifact_id": 11157201009
+      }
     },
     "pre_holdout_freeze": {
       "workflow_run_id": 36847399975,
