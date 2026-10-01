@@ -332,6 +332,30 @@ def test_005f_adapter_uses_existing_exact_state() -> None:
     assert features["genuine_age_s"] == pytest.approx(10.0)
 
 
+def test_local_mid_policy_uses_future_local_mid_for_markouts() -> None:
+    policy = default_policies()[0]
+    observations = [
+        BookObservation("m1", 0, 0.49, 0.51),
+        BookObservation(
+            "m1",
+            1_000_000_000,
+            0.49,
+            0.51,
+            trade_price=0.495,
+            trade_size=1.0,
+            aggressor_side=Side.SELL,
+        ),
+        BookObservation("m1", 301_000_000_000, 0.51, 0.53),
+    ]
+    results, summary = replay_market(
+        observations,
+        policy=policy,
+        fill_model=ConservativeTradeFillModel(),
+    )
+    assert summary.fills == 1
+    assert results[0].markouts[300] == pytest.approx(0.025)
+
+
 def test_replay_accounting_is_separate_from_markouts_and_explicit_costs() -> None:
     policy = default_policies()[1]
     observations = [
