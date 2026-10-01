@@ -349,6 +349,7 @@ def dataset_analysis(data: dict[str, Any], output_dir: Path) -> None:
 
 
 def artifact_analysis(data: dict[str, Any], output_dir: Path) -> None:
+    import urllib.parse
     import urllib.request
     import zipfile
 
@@ -388,7 +389,19 @@ def artifact_analysis(data: dict[str, Any], output_dir: Path) -> None:
                 "User-Agent": "predictions-cup-005i-artifact-analysis",
             },
         )
-        with urllib.request.urlopen(request, timeout=120) as response:
+        class _StripCrossHostAuth(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, req, fp, code, msg, headers, newurl):
+                redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+                if (
+                    redirected is not None
+                    and urllib.parse.urlparse(req.full_url).netloc
+                    != urllib.parse.urlparse(newurl).netloc
+                ):
+                    redirected.remove_header("Authorization")
+                return redirected
+
+        opener = urllib.request.build_opener(_StripCrossHostAuth())
+        with opener.open(request, timeout=120) as response:
             zip_path.write_bytes(response.read())
         dest = artifacts_root / str(artifact_id)
         dest.mkdir(parents=True, exist_ok=True)
