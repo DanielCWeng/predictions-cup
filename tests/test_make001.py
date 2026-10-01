@@ -1280,6 +1280,57 @@ def test_transient_account_untrust_holds_resting_quotes_without_new_io() -> None
     assert registry.state("36").ask is not None
 
 
+def test_persistent_account_untrust_withdraws_resting_quotes_at_freshness_deadline() -> None:
+    engine = _engine()
+    trusted = _maker_snapshot()
+    registry = QuoteRegistry()
+    _seed_exact_desired_quotes(engine, registry, trusted)
+    adapter = ShadowMakerExecutionAdapter()
+    stale_untrusted = replace(
+        trusted,
+        now_monotonic_ns=NOW + 100_000_000,
+        runtime=replace(
+            trusted.runtime,
+            observation_monotonic_ns=NOW + 100_000_000,
+            portfolio=replace(trusted.runtime.portfolio, account_trusted=False),
+        ),
+    )
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id="account-hold-expired",
+                observed_monotonic_ns=stale_untrusted.now_monotonic_ns,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": stale_untrusted},
+        )
+    )
+
+    assert result.decisions[0].gate.mode is GateMode.CANCEL
+    assert result.decisions[0].gate.reason == "account_stale"
+    assert len(result.execution_events) == 2
+    assert all(
+        action.kind is QuoteLifecycleActionKind.CANCEL
+        for action in result.lifecycle_actions
+    )
+    assert registry.state("36").bid is None
+    assert registry.state("36").ask is None
+
+
 def test_realtime_drawdown_trip_force_cancels_resting_quotes_same_cycle() -> None:
     engine = _engine()
     registry = QuoteRegistry()
