@@ -155,10 +155,27 @@ class MakerCoordinator:
                 else self._risk_context_source
             )
             capital = current_risk_context.capital_state
+            mark_state_stale = (
+                capital is not None
+                and current_risk_context.max_mark_age_ns is not None
+                and capital.oldest_mark_observed_monotonic_ns is not None
+                and (
+                    snapshot.runtime.observation_monotonic_ns
+                    - capital.oldest_mark_observed_monotonic_ns
+                )
+                > current_risk_context.max_mark_age_ns
+            )
+            # Invalid/stale portfolio valuation is different from a transient
+            # account resync. Existing resting quotes can add exposure while they
+            # remain live, so valuation failure must withdraw them even when the
+            # desired price/size is otherwise unchanged. Account reconciliation
+            # alone remains HOLD unless a halt/kill switch says otherwise.
             capital_force_cancel = (
                 capital is not None
                 and (
-                    (
+                    not capital.marks_trusted
+                    or mark_state_stale
+                    or (
                         capital.global_halt is not None
                         and capital.global_halt.active
                     )
