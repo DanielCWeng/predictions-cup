@@ -242,6 +242,51 @@ def time_half_auc(frame: pd.DataFrame, predictions: pd.Series, target: str) -> d
     return out
 
 
+def leave_one_token_out_auc(
+    train: pd.DataFrame,
+    dev: pd.DataFrame,
+    features: list[str],
+    target: str,
+    min_rows: int = 20,
+) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    for token, part in dev.groupby("token_id", sort=False):
+        if len(part) < min_rows or part[target].nunique() < 2:
+            continue
+        train_subset = train[train["token_id"].astype(str) != str(token)]
+        result, index, prediction = logistic_fit(
+            train_subset,
+            part,
+            features,
+            target,
+        )
+        if result.get("status") != "OK" or not len(index):
+            continue
+        scored = part.loc[index]
+        auc = auc_score(
+            scored[target].to_numpy(int),
+            prediction,
+        )
+        if math.isfinite(auc):
+            rows.append(
+                {
+                    "token_id": str(token),
+                    "n": int(len(scored)),
+                    "auc": float(auc),
+                }
+            )
+    aucs = np.asarray([row["auc"] for row in rows], dtype=float)
+    return {
+        "tokens": int(len(rows)),
+        "median_auc": float(np.median(aucs)) if len(aucs) else math.nan,
+        "p10_auc": float(np.quantile(aucs, 0.10)) if len(aucs) else math.nan,
+        "positive_over_half_share": (
+            float(np.mean(aucs > 0.5)) if len(aucs) else math.nan
+        ),
+        "details": rows,
+    }
+
+
 def impact_curves(fills: pd.DataFrame) -> pd.DataFrame:
     train = fills[fills["split"] == "TRAIN"]
     rows: list[dict[str, Any]] = []
@@ -600,11 +645,18 @@ def main() -> None:
     arrival_dev_scored = arrival_dev.loc[arrival_idx].copy() if len(arrival_idx) else pd.DataFrame()
     if not arrival_dev_scored.empty:
         arrival_dev_scored["_prediction"] = arrival_pred
-        arrival_result["token_leaveout"] = subgroup_auc(
+        arrival_result["token_subgroup_auc"] = subgroup_auc(
             arrival_dev_scored,
             arrival_dev_scored["_prediction"],
             "arrival",
             "token_id",
+            min_rows=20,
+        )
+        arrival_result["token_leaveout"] = leave_one_token_out_auc(
+            arrival_train,
+            arrival_dev,
+            ARRIVAL_FEATURES,
+            "arrival",
             min_rows=20,
         )
         arrival_result["time_halves"] = time_half_auc(
@@ -627,6 +679,13 @@ def main() -> None:
             direction_dev_scored,
             direction_dev_scored["_prediction"],
             "buy",
+        )
+        direction_result["token_leaveout"] = leave_one_token_out_auc(
+            direction_train,
+            direction_dev,
+            DIRECTION_FEATURES,
+            "buy",
+            min_rows=20,
         )
 
     arrival_rows = pd.DataFrame(
