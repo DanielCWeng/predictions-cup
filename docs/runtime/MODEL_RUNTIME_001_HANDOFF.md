@@ -83,21 +83,21 @@ PAPER models are SHADOW candidates. LIVE model decisions are persisted directly 
 
 ## BENCHMARK_RESULTS
 
-Validated on implementation head:
+Validated on frozen-research extension head:
 
 ```text
-ed9a078c5fec46c5835687ebc43b24e139e5b8ba
+9a34131fc01d58f9a8e1e7124564d4b80ce9d292
 ```
 
 Benchmark surface: `benchmarks/model_runtime.py --iterations 20000`.
 
 ```text
-registry/router                 median 0.140 us   p99   0.171 us
-single model evaluation         median 2.573 us   p99   4.267 us
-model -> candidate contract     median 30.276 us  p99  40.501 us
-1 PAPER model                   median 12.169 us  p99  20.301 us
-5 PAPER models                  median 57.897 us  p99  68.423 us
-10 PAPER models                 median 115.283 us p99 127.192 us
+registry/router                 median 0.100 us   p99   0.223 us
+single model evaluation         median 2.183 us   p99   2.859 us
+model -> candidate contract     median 25.088 us  p99  38.294 us
+1 PAPER model                   median 9.924 us   p99  16.765 us
+5 PAPER models                  median 47.588 us  p99  58.036 us
+10 PAPER models                 median 94.548 us  p99 150.436 us
 ```
 
 Engineering targets:
@@ -117,8 +117,8 @@ Exact implementation-head CI was green:
 ```text
 ruff:       PASS
 shell:      PASS
-mypy:       PASS — 298 source files
-pytest:     PASS — 878 passed, 3 skipped
+mypy:       PASS — 300 source files
+pytest:     PASS — 883 passed, 3 skipped
 app smoke:  PASS
 BUILD-009:  PASS
 RISK-002:   PASS
@@ -133,9 +133,51 @@ FULLSTACK:  PASS
 
 Deterministic MODEL-RUNTIME tests cover registry/config failure, PAPER isolation, the two-key truth table, central Risk denials, sizing, stale/missing state, model exception quarantine/recovery, provenance and reservation-before-dispatch.
 
+## FROZEN RESEARCH PAPER EXTENSION
+
+Validated code head:
+
+```text
+9a34131fc01d58f9a8e1e7124564d4b80ce9d292
+```
+
+The launch-time measurement extension adds six automatic SHADOW/LIVE-LEARN
+context providers. Every provider is `CONTEXT_ONLY` and
+`live_eligible=False`; none emits direction, quote intent, size, fair value or
+an execution plan.
+
+```text
+005i_recent_5m_reversal_context       OK after exact completed-minute warmup
+005i_price_discovery_context          NOT_READY: raw quote-event count + prior depth hierarchy
+005i_liquidity_stress_context         NOT_READY: PM top-5 depth unavailable
+005i_withdrawal_replenishment_context NOT_READY: PM minute depth changes unavailable
+005i_depth_normalised_ofi_context     NOT_READY: exact depth/imbalance/OFI/count inputs unavailable
+005f_renewal_state_context            OK when existing exact 005F state is ready
+```
+
+The 005I recent-five-minute provider reproduces only the parity-safe frozen
+minute definitions: midpoint, spread, relative spread, one-minute return,
+five-minute return and sample-standard-deviation `rv_5m`. It uses the existing
+pre-coalescing PM BBO observer and fails closed on ambiguous/untrusted/non-WS
+minute endings or incomplete warmup.
+
+PRICE_DISCOVERY is deliberately not approximated: the frozen hierarchy checks
+LIQUIDITY_STRESS first, and the live SHADOW BBO observer does not expose the
+research-equivalent PM top-five depth or raw-row `quote_events` count.
+LIQUIDITY_STRESS, withdrawal/replenishment and depth-normalised OFI retain the
+same fail-closed boundary. The OFI provider records the exact available input
+subset but leaves the frozen output uncomputed.
+
+005F renewal context directly reuses `Live005FStateProvider`; no second
+reconstruction was introduced. Full parity rationale is documented in
+`docs/runtime/FROZEN_RESEARCH_PAPER_CONTEXT.md`.
+
+No MAKE, sizing, RISK, execution, credential or LIVE-activation path was changed
+by this extension.
+
 ## KNOWN_LIMITATIONS
 
-- No production research model is adapted in this lane; only architecture fixtures are registered.
+- No frozen research context in this extension is promoted to a trading strategy.
 - The offline `cupctl models status` command cannot prove dynamic account/mark/reconciliation readiness and therefore refuses to display `PLATFORM_LIVE_READY=true` from env files alone.
 - Model-local sizing uses accepted runtime exposure/account state; it does not invent a separate free-capital ledger.
 - A strategy-specific position attribution is only as rich as accepted account/execution attribution. Central RISK-002 remains authoritative when attribution-dependent caps are configured.
