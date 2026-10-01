@@ -143,6 +143,17 @@ data/experiments/mm_replay_001/MASTER_HANDOFF_MM_REPLAY_001.md
 
 Historical PR descriptions/comments were used where they contained scientific evidence or later failure-forensics state not duplicated in a main-branch summary.
 
+## POST-MERGE 005H REFRESH
+
+The original synthesis was merged before EXPERIMENT-005H completed its one-shot B0. PR #94 remains unmerged, but two frozen historical B0 candidates now survive and are carried in this follow-up as **NON_CANONICAL / FUTURE_CONFIRMATION_REQUIRED** evidence:
+
+- **C04 Arrival-State:** B0 AUC **0.6882**; token-cluster bootstrap 95% **0.6777–0.7000**; chronological halves **0.6913 / 0.6852**; 14,396 fills + 14,396 matched controls; 1,101 token clusters.
+- **C05 Direction-State:** B0 AUC **0.6745**; bootstrap **0.6398–0.7192**; halves **0.6973 / 0.6547**; 12,661 scored fills; 1,074 token clusters.
+
+Interpretation boundary: C04 is market interaction/fill-arrival state, **not** queue-position-aware probability that our own quote fills. C05 predicts aggressor BUY/SELL conditional on a fill, **not** post-fill toxicity or P&L. Both route to LIVE_DIAG / PAPER context and do not authorise MAKE or LIVE execution.
+
+005H rejected C01 relative size, C02 failed replenishment and C03 fill-beyond-state before B0. Economic-positive counts remain **E4 = 0, E5 = 0**.
+
 ## SURVIVING_POSITIVE_FINDINGS
 
 ### Strongest replicated finding
