@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import random
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -25,7 +26,7 @@ from predictions_cup.sig.errors import (
     SigTemporaryServiceError,
     error_from_payload,
 )
-from predictions_cup.sig.rest_governor import RestPriority, SigRestGovernor
+from predictions_cup.sig.rest_governor import RestPriority, SigRestGovernor, parse_retry_after
 from predictions_cup.sig.trading_dto import (
     BatchOrderRequestDto,
     BatchOrderResponseDto,
@@ -39,6 +40,8 @@ from predictions_cup.sig.trading_dto import (
 ModelT = TypeVar("ModelT", bound=BaseModel)
 SleepFn = Callable[[float], Awaitable[None]]
 _BATCH_REQUEST_TIMEOUT_SECONDS = 120.0
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -318,6 +321,13 @@ class SigTradingClient:
                         timeout=request_timeout,
                     )
             except httpx.TransportError as exc:
+                logger.warning(
+                    "SIG trading transport failure: %s %s %s attempt=%d",
+                    type(exc).__name__,
+                    method,
+                    route_template,
+                    attempt,
+                )
                 if attempt < policy.max_attempts:
                     await self._sleep(self._retry_delay(attempt))
                     continue
@@ -327,7 +337,8 @@ class SigTradingClient:
                         code="TRANSPORT_OUTCOME_UNKNOWN",
                         safe_message=(
                             "SIG execution transport failed after dispatch; authoritative "
-                            "reconciliation is required"
+                            "reconciliation is required: "
+                            f"{type(exc).__name__} {method} {route_template}"
                         ),
                     ) from exc
                 raise
@@ -515,10 +526,4 @@ class SigTradingClient:
 
     @staticmethod
     def _retry_after_seconds(response: httpx.Response) -> float | None:
-        raw = response.headers.get("Retry-After")
-        if raw is None:
-            return None
-        try:
-            return max(0.0, float(raw))
-        except ValueError:
-            return None
+        return parse_retry_after(response.headers.get("Retry-After"))

@@ -94,7 +94,7 @@ from predictions_cup.sig.account_state import (
     AccountTrustTransition,
 )
 from predictions_cup.sig.errors import SigApiError, SigExecutionUncertainError
-from predictions_cup.sig.governed_client import GovernedSigRestClient
+from predictions_cup.sig.governed_client import GovernedSigRestClient, build_rest_governor
 from predictions_cup.sig.launch_storage import ObservationCaptureRecorder
 from predictions_cup.sig.realtime_models import MarketBatchDto
 from predictions_cup.sig.realtime_state import SigRealtimeStateEngine, SubscriptionReason
@@ -103,7 +103,7 @@ from predictions_cup.sig.realtime_subscriber import (
     SubscriberExit,
     SupabaseTournamentSubscriber,
 )
-from predictions_cup.sig.rest_governor import RestPriority, SigRestGovernor
+from predictions_cup.sig.rest_governor import RestPriority
 from predictions_cup.sig.trading_client import SigTradingClient
 from predictions_cup.sig.trading_dto import PortfolioPnlDto
 
@@ -163,12 +163,7 @@ class MakerService:
 
     async def run(self) -> None:
         tournament_id, tournament_slug = self._tournament_context()
-        governor = SigRestGovernor(
-            rate_per_second=self.settings.sig_rest_governor_rate_per_second,
-            max_shared_cooldown_seconds=(
-                self.settings.sig_rest_shared_cooldown_max_seconds
-            ),
-        )
+        governor = build_rest_governor(self.settings)
         rest = GovernedSigRestClient(self.settings, governor=governor)
         sig_recorder = cast(SigRealtimeRecorder, NoopSigRealtimeRecorder())
         observe_recorder = ObservationCaptureRecorder(

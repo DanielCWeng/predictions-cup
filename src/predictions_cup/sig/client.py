@@ -657,7 +657,10 @@ class SigRestClient:
                     raise SigTransportError(
                         status_code=None,
                         code=None,
-                        safe_message="SIG REST transport failed after bounded retries",
+                        safe_message=(
+                            "SIG REST transport failed after bounded retries: "
+                            f"{type(exc).__name__} GET {route_template}"
+                        ),
                     ) from exc
                 await self._sleep(self._retry_delay(attempt))
                 continue
@@ -701,7 +704,9 @@ class SigRestClient:
             response = await self._client.post(path)
         except httpx.TransportError as exc:
             logger.warning(
-                "SIG REST transport failure",
+                "SIG REST transport failure: %s POST %s",
+                type(exc).__name__,
+                route_template,
                 extra={
                     "sig_method": "POST",
                     "sig_endpoint": route_template,
@@ -714,7 +719,9 @@ class SigRestClient:
             raise SigTransportError(
                 status_code=None,
                 code=None,
-                safe_message="SIG REST transport failed",
+                safe_message=(
+                    f"SIG REST transport failed: {type(exc).__name__} POST {route_template}"
+                ),
             ) from exc
 
         logger.info(
@@ -780,7 +787,10 @@ class SigRestClient:
         error: httpx.TransportError,
     ) -> None:
         logger.warning(
-            "SIG REST transport failure",
+            "SIG REST transport failure: %s GET %s attempt=%d",
+            type(error).__name__,
+            route_template,
+            attempt,
             extra={
                 "sig_method": "GET",
                 "sig_endpoint": route_template,
