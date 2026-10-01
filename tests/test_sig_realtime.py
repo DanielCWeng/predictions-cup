@@ -330,6 +330,30 @@ def test_237_exchange_startup_uses_three_bulk_calls_and_only_tracked_books(
     asyncio.run(scenario())
 
 
+def test_maker_bulk_price_sweep_can_be_limited_to_tracked_exchanges(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        rest = FakeRest(market_count=237)
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            tracked_depth_exchange_ids={"e-0", "e-100", "e-236"},
+            bulk_prices_tracked_only=True,
+        )
+        await engine.initialize()
+
+        assert rest.bulk_calls == [("e-0", "e-100", "e-236")]
+        assert engine.states["e-0"].latest_price is not None
+        assert engine.states["e-1"].latest_price is None
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
 def test_bulk_missing_id_clears_stale_scalar_bbo_fail_closed(
     tmp_path: Path,
 ) -> None:
