@@ -1,0 +1,17 @@
+{
+  "id": "polyleviathan/experiment-005h-holdout-score",
+  "title": "EXPERIMENT-005H One-Shot B0 Score",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [
+    "polyleviathan/experiment-005h-pre-holdout-freeze",
+    "polyleviathan/experiment-005h-holdout-build"
+  ]
+}
