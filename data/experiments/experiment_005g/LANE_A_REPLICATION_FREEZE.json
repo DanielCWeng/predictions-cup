@@ -148,5 +148,27 @@
   "holdout_rule": "No HOLDOUT file may be downloaded or scanned before PRE_HOLDOUT_FREEZE hashes the selected candidates, code/config, dataset identity and dev evidence.",
   "original_005f_modified": false,
   "make_modified": false,
-  "real_sig_orders_sent": false
+  "real_sig_orders_sent": false,
+  "computational_sampling": {
+    "rule": "Sampling is applied only to completed clock rows after full raw-state, trade-feature, target, split, purge and continuity construction. Raw input/state construction is never sampled.",
+    "active_ev18": {
+      "sample_mod": 1,
+      "effect": "none; every eligible 15s clock row is retained"
+    },
+    "pre_baseline": {
+      "sample_mod": 16,
+      "method": "deterministic token/timestamp hash-modulo retention",
+      "rationale": "Bound model-frame memory on the 96-hour current-universe V3 TRAIN/DEV slice without changing raw state or target construction.",
+      "candidate_thinning_after_sampling": "The existing 005F MAX_MODEL_ROWS=250000 deterministic thinning rule remains in force candidate-by-candidate."
+    },
+    "frozen_before_fresh_dev_results": true
+  },
+  "research_environment": {
+    "python": "3.12",
+    "project_install": "editable from branch head",
+    "pandas": "2.3.3",
+    "scikit_learn": "1.7.2",
+    "pyarrow": "project dependency 25.0.1",
+    "numpy": "project dependency 2.3.3"
+  }
 }
