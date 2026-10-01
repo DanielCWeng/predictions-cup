@@ -385,6 +385,42 @@ def label_struct(events,cfg):
     return "SURVIVES_OOS" if ok else "PAPER_EXTEND"
 
 
+def paper_evidence(root, manifest, quarantine=frozenset()):
+    path=root/"paper_events.jsonl.gz"
+    if not path.exists():
+        return {"available":False}
+    start=epoch(manifest["evaluation_start"]); end=epoch(manifest["evaluation_end"])
+    base={}
+    marks=defaultdict(dict)
+    with gzip.open(path,"rt",encoding="utf-8") as fh:
+        for line in fh:
+            try:r=json.loads(line)
+            except Exception:continue
+            typ=r.get("type")
+            if typ in ("fill","execution"):
+                t=num(r.get("t")); ex=str(r.get("exchange_id"))
+                if t is None or not (start<=t<=end) or ex in quarantine:continue
+                base[(t,ex)]={"type":typ,"exchange_id":ex,"direction":str(r.get("side")),"ts":t,
+                              "edge":num(r.get("edge")),"pre5_pm_mid":num(r.get("pre5_pm_mid")),
+                              "pm_mid":num(r.get("pm_mid"))}
+            elif typ=="markout":
+                t=num(r.get("execution_t")); ex=str(r.get("exchange_id")); h=r.get("h")
+                if t is None or not (start<=t<=end) or ex in quarantine:continue
+                marks[(t,ex)][str(h)]={"pm":num(r.get("pm_mid_markout")),"sig":num(r.get("sig_mid_markout"))}
+    passive=[]; residual=[]
+    for key,e in base.items():
+        m=marks.get(key,{})
+        for h in (1,5,15,30,60,300):
+            e[f"m{h}"]=(m.get(str(h)) or {}).get("pm")
+            e[f"sig_m{h}"]=(m.get(str(h)) or {}).get("sig")
+        (passive if e["type"]=="fill" else residual).append(e)
+    def block(xs):
+        ep=decluster(xs,300)
+        return {"raw_count":len(xs),"episode_count_5m":len(ep),
+                "pm_60":summarize(ep,"m60"),"pm_300":summarize(ep,"m300"),
+                "sig_60":summarize(ep,"sig_m60"),"sig_300":summarize(ep,"sig_m300")}
+    return {"available":True,"passive_mm":block(passive),"residual_direct":block(residual)}
+
 def result_block(events,cluster="exchange_id",costs=(0,0.25,0.5,1.0)):
     episodes=decluster(events,300,cluster=(cluster,"direction"))
     return {
@@ -415,6 +451,7 @@ def main():
     residual=residual_events(states,cfg,None,quarantine)
     structural=structural_events(states,cfg,quarantine)
     reversal=reversal_score(states,cfg)
+    paper=paper_evidence(root,manifest,quarantine)
 
     result={
         "name":"LIVE-ALPHA-V6-OVERNIGHT","manifest":manifest,
@@ -424,6 +461,7 @@ def main():
             "residual_taker":result_block(residual),
             "structural_pair":result_block(structural,cluster="race"),
             "pm_5m_reversal":reversal,
+            "actual_paper":paper,
         },
         "labels":{
             "maker_touch":label_maker(decluster(maker_touch,300),cfg),
@@ -454,6 +492,13 @@ def main():
     for name,block in result["frozen_score"].items():
         if name=="pm_5m_reversal":
             lines += [f"### {name}",f"- n={block['n']}; mean={block['mean_c']}c; median={block['median_c']}c; positive={block['positive_fraction']}",""]
+            continue
+        if name=="actual_paper":
+            lines += ["### actual_paper",f"- available={block.get('available')}"]
+            if block.get("available"):
+                lines += [f"- passive MM raw/episodes={block['passive_mm']['raw_count']}/{block['passive_mm']['episode_count_5m']}; 60s PM={block['passive_mm']['pm_60']['mean_c']}c; 60s SIG={block['passive_mm']['sig_60']['mean_c']}c",
+                          f"- residual direct raw/episodes={block['residual_direct']['raw_count']}/{block['residual_direct']['episode_count_5m']}; 60s PM={block['residual_direct']['pm_60']['mean_c']}c; 60s SIG={block['residual_direct']['sig_60']['mean_c']}c"]
+            lines.append("")
             continue
         ep=block["episodes"]
         lines += [
