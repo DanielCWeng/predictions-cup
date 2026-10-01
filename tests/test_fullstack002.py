@@ -321,3 +321,43 @@ def test_alert_command_survives_invalid_runtime_settings(
     payload = json.loads(alert_path.read_text(encoding="utf-8").strip())
     assert payload["event_type"] == "SYSTEMD_ON_FAILURE"
     assert payload["detail"]["unit"] == "predictions-cup-maker.service"
+
+
+def test_alert_webhook_is_optional_and_durable_first(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    alert_path = tmp_path / "alerts.jsonl"
+    monkeypatch.setenv(
+        "PREDICTIONS_CUP_FULLSTACK_ALERT_WEBHOOK_URL",
+        "https://alerts.example.test/predictions-cup",
+    )
+    observed_durable_before_push: list[bool] = []
+
+    class _Response:
+        status = 204
+
+        def __enter__(self) -> "_Response":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+    def fake_urlopen(request: object, *, timeout: float) -> _Response:
+        del request, timeout
+        observed_durable_before_push.append(alert_path.is_file())
+        return _Response()
+
+    monkeypatch.setattr(fullstack, "urlopen", fake_urlopen)
+    fullstack.append_alert(
+        alert_path,
+        event_type="SERVICE_FAILED",
+        detail={"unit": "predictions-cup-maker.service"},
+    )
+
+    assert observed_durable_before_push == [True]
+    rows = [
+        json.loads(line)
+        for line in alert_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert [row["event_type"] for row in rows] == ["SERVICE_FAILED"]
