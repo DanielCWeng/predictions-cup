@@ -314,3 +314,18 @@ def test_hourly_bundle_shape_matches_event_bundle(tmp_path: Path) -> None:
     manifest = json.loads((path / "manifest.json").read_text())
     assert manifest["bundle_type"] == "hourly"
     assert manifest["trigger_codes"] == ["X"]
+
+
+def test_fast_disk_growth_is_critical() -> None:
+    collection = _healthy_collection()
+    sections = dict(collection.sections)
+    sections["system"] = {
+        "services": {"svc": {"active_state": "active", "memory_current_bytes": 1}},
+        "disk": {
+            "used_fraction": 0.4,
+            "free_bytes": 20 * 1024**3,
+            "growth_bytes_per_min": 600 * 1024**2,
+        },
+    }
+    findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
+    assert any(item.code == "DISK_GROWTH_CRITICAL" for item in findings)
