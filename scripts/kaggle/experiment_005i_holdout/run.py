@@ -205,6 +205,8 @@ def main() -> None:
     state_ofi_n: Counter[str] = Counter()
     state_future_abs_sum: Counter[str] = Counter()
     state_future_abs_n: Counter[str] = Counter()
+    recovery_abs_sum: Counter[str] = Counter()
+    recovery_n: Counter[str] = Counter()
 
     for i, file_name in enumerate(files):
         file_dir = temp / f"{i:04d}"
@@ -232,6 +234,25 @@ def main() -> None:
                 continue
             panel = panel.sort_values(["asset_id", "minute"]).copy()
             panel["state"] = state_labels(panel, thresholds)
+            grouped = panel.groupby("asset_id", sort=False)
+            panel["next_replenishment_1m"] = grouped["replenishment_1m"].shift(-1)
+            panel["next_future_abs_5m"] = grouped["future_abs_5m"].shift(-1)
+            recovery_rows = panel[
+                panel["withdrawal_1m"].ge(thresholds["withdrawal_1m"])
+                & panel["next_replenishment_1m"].notna()
+                & panel["next_future_abs_5m"].notna()
+            ]
+            for recovery_row in recovery_rows.itertuples(index=False):
+                recovery_class = (
+                    "RECOVERED_NEXT_MINUTE"
+                    if recovery_row.next_replenishment_1m
+                    >= thresholds["replenishment_1m"]
+                    else "NOT_RECOVERED_NEXT_MINUTE"
+                )
+                recovery_n[recovery_class] += 1
+                recovery_abs_sum[recovery_class] += float(
+                    recovery_row.next_future_abs_5m
+                )
 
             full_pred = panel[
                 panel["future_ret_1m"].notna() & panel["future_ret_1m"].ne(0)
@@ -371,6 +392,18 @@ def main() -> None:
             }
         )
 
+    resilience_rows = [
+        {
+            "recovery_class": key,
+            "n": int(recovery_n[key]),
+            "subsequent_abs_5m_mean": float(
+                recovery_abs_sum[key] / recovery_n[key]
+            ),
+        }
+        for key in sorted(recovery_n)
+        if recovery_n[key]
+    ]
+
     evidence = {
         "schema_version": 1,
         "experiment": "EXPERIMENT-005I",
@@ -412,6 +445,7 @@ def main() -> None:
     pq.write_table(pa.Table.from_pylist(reversal_rows), out / "HOLDOUT_REVERSAL.parquet")
     pq.write_table(pa.Table.from_pylist(regime_rows), out / "HOLDOUT_REGIMES.parquet")
     pq.write_table(pa.Table.from_pylist(transition_rows), out / "HOLDOUT_TRANSITIONS.parquet")
+    pq.write_table(pa.Table.from_pylist(resilience_rows), out / "HOLDOUT_RESILIENCE.parquet")
     shutil.rmtree(temp, ignore_errors=True)
 
 
