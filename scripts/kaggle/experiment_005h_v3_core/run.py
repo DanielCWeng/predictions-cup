@@ -935,9 +935,15 @@ def matched_controls(fills: pd.DataFrame, controls: pd.DataFrame) -> pd.DataFram
         key: group
         for key, group in controls.groupby(["window_id", "token_id"], sort=False)
     }
+    used_control_indices: set[int] = set()
     for fill in fills.itertuples(index=False):
         candidates = grouped_controls.get((str(fill.window_id), str(fill.token_id)))
         if candidates is None or candidates.empty:
+            continue
+        candidates = candidates[
+            ~candidates.index.isin(used_control_indices)
+        ]
+        if candidates.empty:
             continue
         f_depth = math.log1p(max(float(fill.bid_depth_2c + fill.ask_depth_2c), 0.0))
         score = (
@@ -947,6 +953,7 @@ def matched_controls(fills: pd.DataFrame, controls: pd.DataFrame) -> pd.DataFram
             + ((candidates["activity_60"] - float(fill.activity_60)) / 25.0) ** 2
         )
         control = candidates.loc[score.idxmin()]
+        used_control_indices.add(int(control.name))
         rec = {
             "window_id": fill.window_id,
             "split": fill.split,
