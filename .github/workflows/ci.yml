@@ -32,8 +32,12 @@ jobs:
       - name: Shell validation
         run: |
           bash -n scripts/install_runtime_services.sh
+          bash -n scripts/install_fullstack002.sh
+          bash -n scripts/cupctl
           if command -v shellcheck >/dev/null 2>&1; then
             shellcheck scripts/install_runtime_services.sh
+            shellcheck scripts/install_fullstack002.sh
+            shellcheck scripts/cupctl
           fi
 
       - name: Type check
