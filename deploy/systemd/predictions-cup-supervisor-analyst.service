@@ -1,0 +1,24 @@
+[Unit]
+Description=Predictions Cup SUPERVISOR-001 advisory analyst
+After=predictions-cup-supervisor.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@@RUNTIME_USER@@
+WorkingDirectory=@@REPO_ROOT@@
+EnvironmentFile=@@ANALYST_ENV@@
+Environment="PREDICTIONS_CUP_SUPERVISOR_ANALYST_COMMAND=@@PYTHON_BIN@@ @@REPO_ROOT@@/scripts/supervisor_anthropic_analyst.py"
+UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL
+ExecStart=@@PYTHON_BIN@@ @@REPO_ROOT@@/scripts/supervisor_analyst_runner.py --root @@REPO_ROOT@@/data/supervisor --poll-seconds 20 --timeout-seconds 240 --max-invocations-per-hour 4
+Restart=always
+RestartSec=10
+TimeoutStopSec=20
+Nice=15
+CPUWeight=10
+IOWeight=10
+MemoryMax=256M
+OOMScoreAdjust=700
+
+[Install]
+WantedBy=multi-user.target
