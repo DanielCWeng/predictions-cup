@@ -852,7 +852,7 @@ def load_day(date: str) -> DayData:
 
         frame = table.to_pandas()
         frame["token_id"] = _tokenize(frame["asset_id"])
-        frame["time"] = pd.to_datetime(frame["timestamp_received"], utc=True)
+        frame["time"] = pd.to_datetime(frame["timestamp_received"], utc=True).astype("datetime64[ns, UTC]")
         frame["event_type"] = frame["event_type"].astype(str)
 
         states = frame[frame["event_type"] == "price_change"].copy()
