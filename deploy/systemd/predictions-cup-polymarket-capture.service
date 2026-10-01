@@ -1,8 +1,11 @@
-# BUILD-007 systemd template. Render with scripts/install_runtime_services.sh.
+# BUILD-007 capture extended by FULLSTACK-002 failure surfacing and clean optional skip.
 [Unit]
 Description=Predictions Cup read-only Polymarket capture
 Wants=network-online.target
 After=network-online.target
+OnFailure=predictions-cup-alert@%n.service
+StartLimitIntervalSec=120
+StartLimitBurst=4
 
 [Service]
 Type=simple
@@ -11,6 +14,7 @@ WorkingDirectory=@@REPO_ROOT@@
 EnvironmentFile=@@RUNTIME_ENV@@
 Environment=PYTHONUNBUFFERED=1
 UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL
+ExecCondition=@@PYTHON_BIN@@ -m predictions_cup.fullstack check polymarket-capture --runtime-env-only
 ExecStart=@@PYTHON_BIN@@ -m predictions_cup.external.polymarket.recorder --runtime-env-only --require-explicit-universe
 Restart=on-failure
 RestartSec=30s

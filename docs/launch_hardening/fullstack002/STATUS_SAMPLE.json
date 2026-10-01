@@ -1,0 +1,137 @@
+{
+  "schema_version": "fullstack-002-status-v1",
+  "observed_at": "2026-10-01T00:00:00+00:00",
+  "starting_main_sha": "4a040a7d309df26098af5e81e96c7f1108d03117",
+  "code_sha": null,
+  "host_identity": "EXAMPLE_ONLY_NOT_RUNTIME_EVIDENCE",
+  "config_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "mapping_hash": null,
+  "mapping_version": null,
+  "risk_registry_hash": null,
+  "risk_registry_version": "risk-002-v1",
+  "session_id": null,
+  "trading_authorization": {
+    "authorized": false,
+    "state": "NOT_READY",
+    "reason": "example only; FULLSTACK-002 exposes no LIVE launch path",
+    "blockers": [
+      "intended_host_acceptance_not_run",
+      "issue_84_live_sig_sink_observation_emitter_missing",
+      "real_sig_order_rehearsal_not_run"
+    ]
+  },
+  "effective_enabled_components": [],
+  "components": {
+    "CAPTURE_SIG": {
+      "installed": true,
+      "configured": false,
+      "enabled": false,
+      "healthy": null,
+      "authorized": false,
+      "detail": null
+    },
+    "CAPTURE_POLYMARKET": {
+      "installed": true,
+      "configured": false,
+      "enabled": false,
+      "healthy": null,
+      "authorized": false,
+      "detail": null
+    },
+    "MAKE": {
+      "installed": true,
+      "configured": false,
+      "enabled": false,
+      "healthy": null,
+      "authorized": false,
+      "detail": "FULLSTACK-002 service is forced SHADOW; LIVE authorization is NOT_READY"
+    },
+    "SHADOW": {
+      "installed": true,
+      "configured": false,
+      "enabled": false,
+      "healthy": null,
+      "authorized": true,
+      "detail": "in-process with MAKE; no independent health surface"
+    },
+    "OBSERVE": {
+      "installed": true,
+      "configured": false,
+      "enabled": false,
+      "healthy": null,
+      "authorized": true,
+      "detail": "in-process with MAKE"
+    },
+    "LIVE_LEARN": {
+      "installed": true,
+      "configured": false,
+      "enabled": false,
+      "healthy": null,
+      "authorized": true,
+      "detail": "SHADOW mirror in-process with MAKE; process state only, no independent health surface"
+    },
+    "RISK": {
+      "installed": true,
+      "configured": false,
+      "enabled": false,
+      "healthy": null,
+      "authorized": false,
+      "detail": "capital-control service is in-process with MAKE when configured"
+    },
+    "BUILD_009_EXECUTION": {
+      "installed": true,
+      "configured": true,
+      "enabled": false,
+      "healthy": null,
+      "authorized": false,
+      "detail": "LIVE not exposed by FULLSTACK-002"
+    }
+  },
+  "process_health": {},
+  "capture_freshness": {
+    "sig": {"state": "NOT_RUNNING", "path": "data/sig_realtime.sqlite3", "age_seconds": null},
+    "polymarket": {"state": "NOT_RUNNING", "path": "data/polymarket_operational.sqlite3", "age_seconds": null}
+  },
+  "clock_health": {"state": "UNKNOWN", "ntp_synchronized": null, "detail": "example only"},
+  "storage_health": {"state": "HEALTHY", "filesystems": []},
+  "risk_state": {
+    "state": "DISABLED",
+    "configured": false,
+    "global_halt": null,
+    "session_id": null
+  },
+  "global_halt_state": {
+    "risk_halted": false,
+    "global_kill_switch": true,
+    "active": true
+  },
+  "unresolved_operation_count": 0,
+  "unresolved_operations": {
+    "count": 0,
+    "state": "NOT_PRESENT",
+    "path": "data/execution_journal.sqlite3"
+  },
+  "maker_state": {
+    "active": false,
+    "configured": false,
+    "mode": null,
+    "live_service_available": false
+  },
+  "observe_health": {
+    "state": "NOT_RUNNING",
+    "path": "data/runtime/status/observe.json",
+    "process_instance_id": null
+  },
+  "live_learn_health": {
+    "configured": false,
+    "state": "NOT_RUNNING",
+    "health_evidence": "PROCESS_ONLY",
+    "outcome_path": "data/live_learn/outcomes.jsonl",
+    "report_path": "data/live_learn/reports"
+  },
+  "known_blockers": [
+    "issue_84_live_sig_sink_observation_emitter_missing",
+    "intended_host_acceptance_not_run",
+    "real_sig_order_rehearsal_not_run"
+  ]
+}
