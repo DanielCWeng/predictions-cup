@@ -272,11 +272,24 @@ class PortfolioFillPageDto(TransportModel):
     coverage: CoverageDto | None = None
 
 
+class OrderFillItemDto(TransportModel):
+    """Per-order fill row; SIG puts order/exchange identity on the envelope."""
+
+    id: int
+    order_id: int | None = Field(default=None, alias="orderId")
+    exchange_id: str | None = Field(default=None, alias="exchangeId")
+    market_id: str | None = Field(default=None, alias="marketId")
+    price: WireProbability | None
+    quantity: WireDecimal
+    side: OrderOutcomeSide
+    filled_at: WireDateTime = Field(alias="filledAt")
+
+
 class OrderFillsResponseDto(TransportModel):
     order_id: int = Field(alias="orderId")
     exchange_id: str = Field(alias="exchangeId")
     tournament_id: str | None = Field(alias="tournamentId")
-    data: tuple[FillReadDto, ...]
+    data: tuple[OrderFillItemDto, ...]
     pagination: CursorPaginationDto
     coverage: CoverageDto
     total_quantity_filled: WireDecimal = Field(alias="totalQuantityFilled")

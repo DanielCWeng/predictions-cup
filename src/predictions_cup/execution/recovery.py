@@ -369,7 +369,7 @@ async def _recover_single_cancel(
             event_type="AUTHORITATIVE_FILL",
             observed_monotonic_ns=observed,
             source_timestamp=fill.filled_at.isoformat(),
-            exchange_id=fill.exchange_id,
+            exchange_id=fill.exchange_id or fills.exchange_id,
             exchange_order_id=str(order_id),
             fill_id=str(fill.id),
             quantity=str(fill.quantity),
