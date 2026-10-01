@@ -2,10 +2,10 @@
   "schema_version": 1,
   "action": "run",
   "kernel_dir": "scripts/kaggle/mm_replay_001_ev18",
-  "kernel": "polyleviathan/mm-replay-001-ev18-canary-v3",
+  "kernel": "polyleviathan/mm-replay-001-ev18-canary-v4",
   "poll_seconds": 30,
   "timeout_minutes": 300,
   "download_outputs": true,
   "output_file_pattern": "(EV18_.*\\.(json|csv|md))$",
-  "note": "EV18 canary v3: raw DATA-003 orderbooks + pinned predictions-cup-code dataset; B0 local-mid replay + feature-level 005F transfer."
+  "note": "EV18 canary v4: verified READY code dataset, unpacked package discovery, B0 local-mid replay + feature-level 005F transfer."
 }
