@@ -425,6 +425,21 @@ def replay_condition(
                         timestamp_ns,
                     )
 
+        # Frozen 005F scores are defined on 15s grid boundaries.  When
+        # the current event arrives after the boundary, score the boundary
+        # BEFORE ingesting the event so a :17 update cannot leak into the
+        # :15 feature bucket via the 5s capture-bin floor.  An observation
+        # exactly on the boundary is legitimately observable at that grid.
+        at_grid_boundary = (
+            timestamp_ns >= START_NS
+            and (timestamp_ns - START_NS) % GRID_NS == 0
+        )
+        hazard = (
+            None
+            if at_grid_boundary
+            else hazard_at(timestamp_ns)
+        )
+
         local_update = local_map.get(
             timestamp_ns
         )
@@ -437,6 +452,9 @@ def replay_condition(
                 ambiguous=local_update.ambiguous,
                 source_version="PMXT_V3",
             )
+
+        if at_grid_boundary:
+            hazard = hazard_at(timestamp_ns)
 
         complement_update = complement_map.get(
             timestamp_ns
@@ -469,8 +487,6 @@ def replay_condition(
             )
             else None
         )
-        hazard = hazard_at(timestamp_ns)
-
         observation = BookObservation(
             market_id=local_token,
             timestamp_ns=timestamp_ns,
