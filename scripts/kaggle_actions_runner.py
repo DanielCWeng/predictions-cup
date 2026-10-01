@@ -60,6 +60,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
         "kernel_fetch",
         "logs",
         "output",
+        "repo_script",
         "run",
         "status",
     }
@@ -161,6 +162,54 @@ def dataset_fetch(data: dict[str, Any], output_dir: Path) -> None:
     )
     if not all(bool(item["downloaded"]) for item in results):
         raise RuntimeError("One or more requested Kaggle dataset files could not be fetched")
+
+
+def repo_script(data: dict[str, Any], output_dir: Path) -> None:
+    """Run one repository research script without downloading external dataset bytes."""
+    script_raw = str(data.get("script", "")).strip()
+    if not script_raw:
+        raise ValueError("repo_script manifest requires 'script'")
+    script = repo_path(script_raw)
+    if not script.is_file():
+        raise FileNotFoundError(f"repo_script script not found: {script_raw}")
+    research_root = (ROOT / "scripts" / "research").resolve()
+    try:
+        script.relative_to(research_root)
+    except ValueError as exc:
+        raise ValueError("repo_script is restricted to scripts/research/") from exc
+
+    script_args_raw = data.get("script_args", [])
+    if not isinstance(script_args_raw, list):
+        raise ValueError("repo_script 'script_args' must be a list")
+    script_args = [str(value) for value in script_args_raw]
+
+    pip_packages_raw = data.get("pip_packages", [])
+    if not isinstance(pip_packages_raw, list):
+        raise ValueError("repo_script 'pip_packages' must be a list")
+    pip_packages = [str(value).strip() for value in pip_packages_raw if str(value).strip()]
+
+    if bool(data.get("install_project", False)):
+        run_command([sys.executable, "-m", "pip", "install", "-e", "."])
+    if pip_packages:
+        run_command([sys.executable, "-m", "pip", "install", *pip_packages])
+
+    result_root = output_dir / "outputs"
+    result_root.mkdir(parents=True, exist_ok=True)
+    run_command(
+        [
+            sys.executable,
+            str(script),
+            *script_args,
+        ]
+    )
+    write_summary(
+        [
+            "## Repository script",
+            "",
+            f"- Script: {script_raw}",
+            "- External dataset bytes downloaded: NO",
+        ]
+    )
 
 
 def dataset_script(data: dict[str, Any], output_dir: Path) -> None:
@@ -502,6 +551,8 @@ def main() -> int:
         kernel = kernel_from_manifest(data)
         download_outputs(data, kernel, output_dir)
         write_summary(["## Kaggle output download", "", f"Kernel: {kernel}"])
+    elif action == "repo_script":
+        repo_script(data, output_dir)
     elif action == "logs":
         kernel = kernel_from_manifest(data)
         capture_logs(kernel, output_dir)
