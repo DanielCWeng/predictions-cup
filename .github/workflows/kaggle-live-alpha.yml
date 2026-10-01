@@ -11,7 +11,7 @@ on:
       - ".github/workflows/kaggle-live-alpha.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   run:
@@ -85,3 +85,23 @@ jobs:
           path: kaggle/live-alpha-output/
           if-no-files-found: warn
           retention-days: 3
+
+      - name: Commit Kaggle outputs back to branch
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ ! -d kaggle/live-alpha-output ] || [ -z "$(find kaggle/live-alpha-output -type f -print -quit)" ]; then
+            echo "No Kaggle outputs to commit"
+            exit 0
+          fi
+          mkdir -p lanes/live_alpha_001
+          cp -f kaggle/live-alpha-output/* lanes/live_alpha_001/ || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lanes/live_alpha_001
+          if git diff --cached --quiet; then
+            echo "No result changes"
+            exit 0
+          fi
+          git commit -m "research: record live alpha Kaggle outputs"
+          git push
