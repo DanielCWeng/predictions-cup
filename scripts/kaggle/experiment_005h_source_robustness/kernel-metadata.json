@@ -8,10 +8,7 @@
   "enable_gpu": false,
   "enable_tpu": false,
   "enable_internet": false,
-  "dataset_sources": [
-    "polyleviathan/sig-cup-data-003-sig-actual-fills",
-    "polyleviathan/sig-cup-data003-orderbooks"
-  ],
+  "dataset_sources": [],
   "competition_sources": [],
   "kernel_sources": [
     "polyleviathan/experiment-005h-source-version-audit",
