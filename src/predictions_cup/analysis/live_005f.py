@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import random
 import statistics
 from collections import defaultdict
@@ -21,16 +22,25 @@ from predictions_cup.live_learn.contracts import (
     OutcomeStatus,
     outcome_from_record,
 )
-from predictions_cup.shadow.contracts import CanonicalShadowSnapshot
-from predictions_cup.shadow.frozen_runtime import (
-    Hazard005FFeatureVector,
-    Hazard005FRegimeProvider,
-)
-from predictions_cup.shadow.live_005f import Live005FStateProvider
-from predictions_cup.shadow.replay import load_persisted_snapshots
+from predictions_cup.shadow.persistence import read_jsonl_records
 
 STATE_TRANSFER_VERSION = "005f-live-transfer-001-v1"
 STANDARD_HORIZONS = (1, 5, 15, 30, 60, 300)
+
+
+@dataclass(frozen=True, slots=True)
+class Persisted005FState:
+    input_snapshot_id: str
+    state_decision_id: str
+    market_id: str
+    exchange_id: str
+    regime: str | None
+    provider_id: str
+    provider_version: str
+    source_version: str
+    grid_time_ns: int
+    observed_monotonic_ns: int
+    values: Mapping[str, float]
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,33 +127,106 @@ def _load_outcomes(path: Path) -> tuple[DecisionOutcome, ...]:
     return tuple(outcomes)
 
 
-def replay_state_features(
-    *,
-    provider: Live005FStateProvider,
-    snapshots: Sequence[CanonicalShadowSnapshot],
-) -> dict[str, Hazard005FFeatureVector]:
-    """Replay persisted observable snapshots into the exact accepted state provider."""
-    features: dict[str, Hazard005FFeatureVector] = {}
-    for snapshot in snapshots:
-        vector = provider.feature_vector(snapshot)
-        if vector is not None:
-            features[snapshot.snapshot_id] = vector
-    return features
+def load_persisted_005f_states(
+    path: Path,
+) -> dict[str, Persisted005FState]:
+    """Load exact decision-time 005F state persisted by the live SHADOW candidate."""
+    required = (
+        "genuine_age_s",
+        "genuine_15",
+        "genuine_60",
+        "abs_ret_15",
+        "rv_60",
+    )
+    states: dict[str, Persisted005FState] = {}
+    for record in read_jsonl_records(path):
+        if (
+            record.get("event_type") != "decision"
+            or record.get("candidate_id") != "experiment-005f-hazard"
+        ):
+            continue
+        payload = record.get("candidate_payload")
+        if not isinstance(payload, dict):
+            continue
+        raw_state = payload.get("005f_state")
+        if not isinstance(raw_state, dict):
+            continue
+        raw_features = raw_state.get("features")
+        if not isinstance(raw_features, dict):
+            continue
+
+        values: dict[str, float] = {}
+        valid = True
+        for name in required:
+            raw = raw_features.get(name)
+            if isinstance(raw, bool) or raw is None:
+                valid = False
+                break
+            try:
+                value = float(str(raw))
+            except (TypeError, ValueError):
+                valid = False
+                break
+            if not math.isfinite(value):
+                valid = False
+                break
+            values[name] = value
+        if not valid:
+            continue
+
+        snapshot_id = record.get("input_snapshot_id")
+        decision_id = record.get("decision_id")
+        market_id = record.get("market_id")
+        exchange_id = record.get("exchange_id")
+        provider_id = raw_state.get("provider_id")
+        provider_version = raw_state.get("provider_version")
+        source_version = raw_state.get("source_version")
+        grid_time_ns = raw_state.get("grid_time_ns")
+        observed_monotonic_ns = raw_state.get("observed_monotonic_ns")
+        if (
+            not isinstance(snapshot_id, str)
+            or not isinstance(decision_id, str)
+            or not isinstance(market_id, str)
+            or not isinstance(exchange_id, str)
+            or not isinstance(provider_id, str)
+            or not isinstance(provider_version, str)
+            or not isinstance(source_version, str)
+            or isinstance(grid_time_ns, bool)
+            or not isinstance(grid_time_ns, int)
+            or isinstance(observed_monotonic_ns, bool)
+            or not isinstance(observed_monotonic_ns, int)
+        ):
+            continue
+        raw_regime = raw_state.get("regime")
+        regime = raw_regime if isinstance(raw_regime, str) else None
+        state = Persisted005FState(
+            input_snapshot_id=snapshot_id,
+            state_decision_id=decision_id,
+            market_id=market_id,
+            exchange_id=exchange_id,
+            regime=regime,
+            provider_id=provider_id,
+            provider_version=provider_version,
+            source_version=source_version,
+            grid_time_ns=grid_time_ns,
+            observed_monotonic_ns=observed_monotonic_ns,
+            values=values,
+        )
+        previous = states.get(snapshot_id)
+        if previous is not None and previous != state:
+            raise ValueError(
+                "conflicting persisted 005F state for one SHADOW snapshot"
+            )
+        states[snapshot_id] = state
+    return states
 
 
 def build_state_transfer_samples(
     *,
-    provider: Live005FStateProvider,
-    snapshots: Sequence[CanonicalShadowSnapshot],
+    states: Mapping[str, Persisted005FState],
     outcomes: Sequence[DecisionOutcome],
-    regime_provider: Hazard005FRegimeProvider | None = None,
 ) -> tuple[StateTransferSample, ...]:
-    """Join exact 005F state to actual future MAKE economics without model scoring."""
-    snapshot_by_id = {snapshot.snapshot_id: snapshot for snapshot in snapshots}
-    feature_by_snapshot = replay_state_features(
-        provider=provider,
-        snapshots=snapshots,
-    )
+    """Join persisted exact 005F decision state to future MAKE economics."""
     samples: list[StateTransferSample] = []
     for outcome in outcomes:
         if (
@@ -152,16 +235,10 @@ def build_state_transfer_samples(
             or outcome.horizon_seconds not in STANDARD_HORIZONS
         ):
             continue
-        snapshot = snapshot_by_id.get(outcome.input_snapshot_id)
-        vector = feature_by_snapshot.get(outcome.input_snapshot_id)
-        if snapshot is None or vector is None:
+        state = states.get(outcome.input_snapshot_id)
+        if state is None:
             continue
-        age = float(vector.values["genuine_age_s"])
-        regime = outcome.dimensions.get("regime")
-        if regime_provider is not None:
-            provided = regime_provider.regime(snapshot)
-            if provided is not None:
-                regime = provided
+        age = state.values["genuine_age_s"]
         markout = _optional_metric(
             outcome.metric_values,
             "post_fill_markout",
@@ -169,17 +246,17 @@ def build_state_transfer_samples(
         samples.append(
             StateTransferSample(
                 decision_id=outcome.decision_id,
-                market_id=snapshot.market_id,
-                exchange_id=snapshot.exchange_id,
+                market_id=state.market_id,
+                exchange_id=state.exchange_id,
                 horizon_seconds=outcome.horizon_seconds,
                 state_bucket=genuine_age_bucket(age),
-                regime=regime,
+                regime=state.regime,
                 genuine_age_s=age,
-                genuine_15=float(vector.values["genuine_15"]),
-                genuine_60=float(vector.values["genuine_60"]),
-                abs_ret_15=float(vector.values["abs_ret_15"]),
-                rv_60=float(vector.values["rv_60"]),
-                state_version=provider.version,
+                genuine_15=state.values["genuine_15"],
+                genuine_60=state.values["genuine_60"],
+                abs_ret_15=state.values["abs_ret_15"],
+                rv_60=state.values["rv_60"],
+                state_version=state.provider_version,
                 fill_rate=_optional_metric(outcome.metric_values, "fill_rate"),
                 markout=markout,
                 adverse_selection=_optional_metric(
@@ -193,11 +270,13 @@ def build_state_transfer_samples(
                 realised_pnl=None,
                 net_economic_metric=markout,
                 net_economic_metric_name="diagnostic_post_fill_markout",
-                evidence_refs=outcome.evidence_source_ids,
+                evidence_refs=(
+                    *outcome.evidence_source_ids,
+                    f"shadow-decision:{state.state_decision_id}",
+                ),
             )
         )
     return tuple(samples)
-
 
 def _median(values: Sequence[float]) -> float | None:
     return None if not values else float(statistics.median(values))
@@ -334,7 +413,7 @@ def summarize_state_transfer(
 def write_state_transfer(
     *,
     output_root: Path,
-    provider: Live005FStateProvider,
+    states: Mapping[str, Persisted005FState],
     samples: Sequence[StateTransferSample],
     summaries: Sequence[Mapping[str, object]],
 ) -> dict[str, object]:
@@ -365,13 +444,27 @@ def write_state_transfer(
         "horizons_seconds": list(STANDARD_HORIZONS),
         "directional_conversion": False,
         "frozen_model_scoring": False,
+        "state_source": "persisted_shadow_candidate_decision",
     }
+    provider_versions = sorted(
+        {state.provider_version for state in states.values()}
+    )
+    source_versions = sorted(
+        {state.source_version for state in states.values()}
+    )
     current = {
         "analysis_id": "005F-LIVE-001",
         "analysis_version": STATE_TRANSFER_VERSION,
         "generated_at": datetime.now(UTC).isoformat(),
         "config_hash": canonical_config_hash(config),
-        "provider": provider.status(),
+        "state_source": {
+            "candidate_id": "experiment-005f-hazard",
+            "candidate_payload_field": "005f_state",
+            "persisted_state_count": len(states),
+            "provider_versions": provider_versions,
+            "source_versions": source_versions,
+            "reconstruction": False,
+        },
         "sample_count": len(samples),
         "independent_event_count": len(
             {sample.decision_id for sample in samples}
@@ -400,36 +493,18 @@ def write_state_transfer(
 
 def analyze_state_transfer_from_paths(
     *,
-    provider: Live005FStateProvider,
     shadow_journal_path: Path,
     live_learn_outcome_path: Path,
     output_root: Path,
-    regime_provider: Hazard005FRegimeProvider | None = None,
 ) -> dict[str, object]:
-    """Replay captured SHADOW boundaries and future outcomes into state-only 005F evidence."""
-    if provider.grid_origin_ns is None:
+    """Join persisted exact decision-time 005F state to future MAKE outcomes."""
+    if not shadow_journal_path.exists() or not live_learn_outcome_path.exists():
         current: dict[str, object] = {
             "analysis_id": "005F-LIVE-001",
             "analysis_version": STATE_TRANSFER_VERSION,
             "generated_at": datetime.now(UTC).isoformat(),
             "status": "NOT_READY",
-            "reasons": ["GRID_ORIGIN_NOT_PREDECLARED"],
-            "provider": provider.status(),
-        }
-        output_root.mkdir(parents=True, exist_ok=True)
-        (output_root / "current.json").write_text(
-            json.dumps(current, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        return current
-    if not shadow_journal_path.exists() or not live_learn_outcome_path.exists():
-        current = {
-            "analysis_id": "005F-LIVE-001",
-            "analysis_version": STATE_TRANSFER_VERSION,
-            "generated_at": datetime.now(UTC).isoformat(),
-            "status": "NOT_READY",
             "reasons": ["SHADOW_OR_LIVE_LEARN_EVIDENCE_UNAVAILABLE"],
-            "provider": provider.status(),
         }
         output_root.mkdir(parents=True, exist_ok=True)
         (output_root / "current.json").write_text(
@@ -438,18 +513,32 @@ def analyze_state_transfer_from_paths(
         )
         return current
 
-    snapshots = load_persisted_snapshots(shadow_journal_path)
+    states = load_persisted_005f_states(shadow_journal_path)
+    if not states:
+        current = {
+            "analysis_id": "005F-LIVE-001",
+            "analysis_version": STATE_TRANSFER_VERSION,
+            "generated_at": datetime.now(UTC).isoformat(),
+            "status": "NOT_READY",
+            "reasons": ["PERSISTED_EXACT_005F_STATE_UNAVAILABLE"],
+            "state_source": "experiment-005f-hazard.candidate_payload.005f_state",
+        }
+        output_root.mkdir(parents=True, exist_ok=True)
+        (output_root / "current.json").write_text(
+            json.dumps(current, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        return current
+
     outcomes = _load_outcomes(live_learn_outcome_path)
     samples = build_state_transfer_samples(
-        provider=provider,
-        snapshots=snapshots,
+        states=states,
         outcomes=outcomes,
-        regime_provider=regime_provider,
     )
     summaries = summarize_state_transfer(samples)
     return write_state_transfer(
         output_root=output_root,
-        provider=provider,
+        states=states,
         samples=samples,
         summaries=summaries,
     )
