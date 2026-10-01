@@ -44,12 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           DIR="scripts/kaggle/live_alpha_battery_001/$LANE"
-          KERNEL="$(python - <<'PY'
-import json, os
-p=f"scripts/kaggle/live_alpha_battery_001/{os.environ['LANE']}/kernel-metadata.json"
-print(json.load(open(p))["id"])
-PY
-)"
+          KERNEL="$(python -c "import json; print(json.load(open('$DIR/kernel-metadata.json'))['id'])")"
           kaggle kernels push -p "$DIR"
           for i in $(seq 1 240); do
             STATUS="$(kaggle kernels status "$KERNEL" 2>&1 || true)"
