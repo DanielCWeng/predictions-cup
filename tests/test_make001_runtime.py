@@ -51,14 +51,14 @@ from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnaps
 from predictions_cup.sig.trading_dto import OrderReadDto
 
 
-def _plan() -> ExecutionPlan:
+def _plan(action: OrderAction = OrderAction.BUY) -> ExecutionPlan:
     intent = RuntimeOrderIntent(
         intent_id="make-direct-pm:123:0",
         exchange_id="36",
         market_id="m1",
         tournament_id="t1",
         outcome_side=OutcomeSide.YES,
-        action=OrderAction.BUY,
+        action=action,
         quantity=2,
         limit_price_ticks=99,
         strategy_id="make-direct-pm",
@@ -109,9 +109,9 @@ def _authoritative(*, open_order: bool = True) -> AccountAuthoritativeSnapshot:
     )
 
 
-def _journal_with_open_maker(path: Path) -> ExecutionJournal:
+def _journal_with_open_maker(path: Path, action: OrderAction = OrderAction.BUY) -> ExecutionJournal:
     journal = ExecutionJournal(path)
-    plan = _plan()
+    plan = _plan(action)
     journal.record_before_dispatch(
         plan.envelope,
         plan.intents,
@@ -180,6 +180,65 @@ def test_restart_rebuilds_only_journal_proven_maker_quote(tmp_path: Path) -> Non
         unrelated = quotes.state("99").bid
         assert unrelated is not None
         assert unrelated.exchange_order_id == 999
+    finally:
+        journal.close()
+
+
+@pytest.mark.parametrize(
+    ("side", "action", "price", "should_raise"),
+    [
+        ("no", "buy", "0.505", False),  # SIG canonical form of sell yes 2@0.495
+        ("yes", "sell", "0.495", False),
+        ("no", "sell", "0.505", True),
+        ("yes", "buy", "0.495", True),
+    ],
+)
+def test_recovery_accepts_sig_canonical_no_buy_for_maker_ask(
+    tmp_path: Path, side: str, action: str, price: str, should_raise: bool
+) -> None:
+    journal = _journal_with_open_maker(tmp_path / "journal.sqlite3", action=OrderAction.SELL)
+    order = OrderReadDto.model_validate(
+        {
+            "id": 91,
+            "exchangeId": "36",
+            "side": side,
+            "action": action,
+            "quantity": "2",
+            "priceLimit": price,
+            "open": True,
+            "createdAt": "2026-09-29T14:00:00Z",
+            "expirationDate": None,
+        }
+    )
+    authoritative = AccountAuthoritativeSnapshot(
+        tournament_id="t1",
+        tournament_slug="cup",
+        open_orders=(order,),
+        positions=(),
+        observed_at=datetime(2026, 9, 29, 14, 0, tzinfo=UTC),
+    )
+    quotes = QuoteRegistry()
+    try:
+        if should_raise:
+            with pytest.raises(RuntimeError, match="does not match"):
+                reconcile_maker_quote_registry(
+                    journal=journal,
+                    authoritative=authoritative,
+                    quotes=quotes,
+                    observed_monotonic_ns=300,
+                )
+            return
+        reconcile_maker_quote_registry(
+            journal=journal,
+            authoritative=authoritative,
+            quotes=quotes,
+            observed_monotonic_ns=300,
+        )
+        state = quotes.state("36")
+        assert state.bid is None
+        assert state.ask is not None
+        assert state.ask.exchange_order_id == 91
+        assert state.ask.price_ticks == 99
     finally:
         journal.close()
 
@@ -303,10 +362,7 @@ class _Bridge:
         **kwargs: object,
     ) -> dict[str, MakerMarketSnapshot]:
         del kwargs
-        return {
-            exchange_id: cast(MakerMarketSnapshot, object())
-            for exchange_id in exchange_ids
-        }
+        return {exchange_id: cast(MakerMarketSnapshot, object()) for exchange_id in exchange_ids}
 
 
 def _runtime_decision(
@@ -488,10 +544,7 @@ def test_runtime_deadline_rechecks_exchange_without_new_source_event() -> None:
         frozenset({"36"}),
         frozenset({"36"}),
     ]
-    assert (
-        telemetry.snapshot().counters["maker_freshness_deadline_triggers"]
-        == 1
-    )
+    assert telemetry.snapshot().counters["maker_freshness_deadline_triggers"] == 1
 
 
 def test_runtime_kill_switch_requests_global_recheck() -> None:
@@ -510,6 +563,7 @@ def test_runtime_kill_switch_requests_global_recheck() -> None:
 
     assert coordinator.killed is True
     assert coordinator.calls == [frozenset({"36", "37"})]
+
 
 def test_runtime_session_namespace_prevents_operation_identity_reuse_after_restart() -> None:
     bridge = _Bridge()
@@ -541,6 +595,7 @@ def test_runtime_session_namespace_prevents_operation_identity_reuse_after_resta
     assert second.event_ids == ["make-runtime-session-b-1"]
     assert first.event_ids[0] != second.event_ids[0]
 
+
 def test_runtime_paces_global_work_and_requeues_remaining_exchanges() -> None:
     bridge = _Bridge()
     coordinator = _Coordinator()
@@ -566,6 +621,7 @@ def test_runtime_paces_global_work_and_requeues_remaining_exchanges() -> None:
         "make-runtime-paced-1",
         "make-runtime-paced-2",
     ]
+
 
 class _KillDrainRuntime:
     def __init__(self) -> None:
@@ -594,6 +650,7 @@ def test_service_kill_drain_continues_after_one_failed_cancel_cycle() -> None:
     )
 
     assert runtime.calls == 3
+
 
 class _PmNotifyRuntime:
     def __init__(self) -> None:
@@ -819,4 +876,3 @@ def test_maker_pm_handler_reconnects_when_required_token_is_unseeded() -> None:
                 cast(MakerRuntimeLoop, _PmNotifyRuntime()),
             )
         )
-
