@@ -8,7 +8,7 @@
   "expected_markets": 237,
   "expected_time_end": null,
   "expected_time_start": null,
-  "expected_tokens": null,
+  "expected_tokens": 1386,
   "experiment": "MM-REPLAY-001",
   "file_hashes": {},
   "forbidden_scientific_substitutes": [
@@ -30,8 +30,11 @@
     "Real execution must fail closed while status is WAITING_FOR_DATA.",
     "005F transfer requires exact per-market grid origins; do not infer them from first observed row.",
     "If original 005F joblib artifacts are scored, bind their approved Kaggle dataset and verify frozen hashes.",
-    "Kaggle dataset page reported created/uploaded on 2026-10-01; indexing/unpacking still in progress at handoff.",
-    "Uploader reports all files present, including ev18 and _manifests."
+    "Uploader reports all files present, including ev18 and _manifests.",
+    "Kaggle dataset status independently verified READY via authenticated runner on 2026-10-01.",
+    "Mounted probe verified 2,900 total files / 2,893 parquet files / 19,119,822,430 bytes and four source-schema families.",
+    "All historical OOM failures were recovered; only 30 predeclared ev17 upstream gaps and three ev11 SOURCE_MISSING hours remain.",
+    "Raw corpus is landed but scientific status remains unbound until source-aware canonical compaction/audit passes."
   ],
   "relation_to_data003": "DATA-003-linked current SIG Cup mapped universe",
   "root_hint": "/kaggle/input",
@@ -43,5 +46,47 @@
   "edge_grid_reference_latency_ms": null,
   "source_venue": "POLYMARKET",
   "maker_fee_per_share": null,
-  "terminal_unwind_cost_per_share": null
+  "terminal_unwind_cost_per_share": null,
+  "kaggle_dataset_id": 12299178,
+  "kaggle_status_verified": "ready",
+  "dataset_snapshot_created_at": "2026-09-30T23:32:33.994Z",
+  "landed_total_bytes": 19119822430,
+  "landed_parquet_files": 2893,
+  "expected_conditions": 693,
+  "source_versions": [
+    "V1",
+    "V2",
+    "V3",
+    "AG6"
+  ],
+  "landed_windows": [
+    "baseline_sep",
+    "ev01",
+    "ev02",
+    "ev03",
+    "ev04",
+    "ev05",
+    "ev06",
+    "ev07",
+    "ev08",
+    "ev09",
+    "ev10",
+    "ev11",
+    "ev12",
+    "ev13",
+    "ev14",
+    "ev15",
+    "ev16",
+    "ev17",
+    "ev18"
+  ],
+  "known_upstream_gaps": {
+    "ev17_declared_hours": 30,
+    "ev11_source_missing": [
+      "2026-06-11T04",
+      "2026-06-11T05",
+      "2026-06-11T06"
+    ],
+    "unresolved_failed_hours": 0
+  }
 }
