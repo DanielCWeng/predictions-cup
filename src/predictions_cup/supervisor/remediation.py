@@ -107,7 +107,7 @@ class RemediationExecutor:
             "predictions-cup-sig-capture.service": {
                 "SOURCE_SIG_CAPTURE_STALE",
                 "FEED_SIG_DISCONNECTED",
-                "FEED_SIG_RECONCILIATION_STALE",
+                "FEED_SIG_REST_PROGRESS_STALE",
                 "CAPTURE_SIG_STORAGE_FAILURE",
                 "CAPTURE_SIG_WRITER_DEAD",
                 "CAPTURE_SIG_DROPPED_ROWS",
