@@ -278,6 +278,7 @@ def build_state_transfer_samples(
         )
     return tuple(samples)
 
+
 def _median(values: Sequence[float]) -> float | None:
     return None if not values else float(statistics.median(values))
 
