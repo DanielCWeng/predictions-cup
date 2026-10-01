@@ -297,8 +297,10 @@ class MakerEngine:
         if book is None:
             return None, None
 
-        raw_bid = math.floor((reservation - half_spread) / _TICK)
-        raw_ask = math.ceil((reservation + half_spread) / _TICK)
+        # The epsilon keeps an exact grid price (e.g. a mirrored PM touch at
+        # 0.40) from flooring/ceiling one tick wider through float error.
+        raw_bid = math.floor((reservation - half_spread) / _TICK + 1e-9)
+        raw_ask = math.ceil((reservation + half_spread) / _TICK - 1e-9)
         bid_value = raw_bid if 1 <= raw_bid <= 199 else None
         ask_value = raw_ask if 1 <= raw_ask <= 199 else None
 

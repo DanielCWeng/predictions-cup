@@ -87,7 +87,7 @@ class AppSettings(BaseSettings):
     maker_max_abs_inventory: float = Field(default=10.0, gt=0.0)
     maker_base_size: int = Field(default=2, gt=0, le=2_147_483_647)
     maker_minimum_size: int = Field(default=1, gt=0, le=2_147_483_647)
-    maker_base_half_spread_ticks: float = Field(default=1.0, ge=0.5)
+    maker_base_half_spread_ticks: float = Field(default=1.0, ge=0.0)
     maker_inventory_risk_aversion: float = Field(default=0.02, ge=0.0)
     maker_uncertainty_multiplier: float = Field(default=1.0, ge=0.0)
     maker_volatility_multiplier: float = Field(default=0.5, ge=0.0)
