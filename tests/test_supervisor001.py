@@ -431,7 +431,7 @@ def test_sig_disconnected_is_critical() -> None:
     assert any(item.code == "FEED_SIG_DISCONNECTED" for item in findings)
 
 
-def test_sig_stale_reconciliation_is_critical() -> None:
+def test_sig_stalled_bulk_price_progress_is_critical() -> None:
     collection = _healthy_collection()
     sections = dict(collection.sections)
     sections["sig_capture"] = {
@@ -443,10 +443,11 @@ def test_sig_stale_reconciliation_is_critical() -> None:
             "queue_capacity": 100,
         },
         "connected": True,
-        "last_rest_reconciliation_age_seconds": 61.0,
+        "bulk_price_refresh_progress_age_seconds": 61.0,
+        "bulk_price_refresh_progress_max_age_seconds": 60.0,
     }
     findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
-    assert any(item.code == "FEED_SIG_RECONCILIATION_STALE" for item in findings)
+    assert any(item.code == "FEED_SIG_REST_PROGRESS_STALE" for item in findings)
 
 
 def test_remediation_plans_safe_capture_restart_for_stale_feed(tmp_path: Path) -> None:
