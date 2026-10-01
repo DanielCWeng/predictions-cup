@@ -141,6 +141,11 @@ def main() -> None:
                 "challenger_name": mechanism,
                 "baseline_model": full_models.get("baseline"),
                 "challenger_model": full_models.get(mechanism),
+                "train_activity_p90": extended.get("train_activity_p90"),
+                "stale_book_max_ms": extended.get(
+                    "stale_book_max_ms",
+                    5000.0,
+                ),
             }
         return {}
 
