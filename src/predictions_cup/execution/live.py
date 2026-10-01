@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from time import monotonic_ns
@@ -27,6 +28,8 @@ from predictions_cup.sig.trading_client import SigTradingClient
 ClockNs = Callable[[], int]
 WallClock = Callable[[], datetime]
 
+
+_LOG = logging.getLogger(__name__)
 
 class SigLiveSink:
     """No strategy reaches this class without already passing central Risk."""
@@ -60,6 +63,27 @@ class SigLiveSink:
 
     async def dispatch(self, plan: ExecutionPlan) -> ExecutionEvent:
         return await self._dispatch_placement(plan, require_reservation=True)
+
+    def _mark_uncertain_unless_resolved(
+        self, envelope: ExecutionEnvelope, observed: int
+    ) -> None:
+        """Mark UNCERTAIN unless concurrent reconciliation already resolved it.
+
+        In-session cancellation recovery can conclude an operation (e.g.
+        CANCELLED) while this dispatch is still waiting on a timed-out request;
+        that authoritative outcome must win, not crash the LIVE process.
+        """
+        try:
+            self._journal.mark_state(
+                envelope.logical_operation_id,
+                LifecycleState.UNCERTAIN,
+                observed,
+            )
+        except ValueError:
+            _LOG.warning(
+                "LIVE operation %s already resolved; keeping authoritative state",
+                envelope.logical_operation_id,
+            )
 
     async def dispatch_recovery(
         self,
@@ -249,11 +273,7 @@ class SigLiveSink:
                 event_type="NETWORK_DISPATCH",
                 observed_monotonic_ns=network_dispatch_ns,
             )
-            self._journal.mark_state(
-                envelope.logical_operation_id,
-                LifecycleState.UNCERTAIN,
-                observed,
-            )
+            self._mark_uncertain_unless_resolved(envelope, observed)
             self._journal.record_event(
                 logical_operation_id=envelope.logical_operation_id,
                 tournament_id=envelope.tournament_id,
@@ -638,11 +658,7 @@ class SigLiveSink:
                 ),
                 detail_json=envelope.payload_json,
             )
-            self._journal.mark_state(
-                envelope.logical_operation_id,
-                LifecycleState.UNCERTAIN,
-                observed,
-            )
+            self._mark_uncertain_unless_resolved(envelope, observed)
             self._journal.record_event(
                 logical_operation_id=envelope.logical_operation_id,
                 tournament_id=envelope.tournament_id,
