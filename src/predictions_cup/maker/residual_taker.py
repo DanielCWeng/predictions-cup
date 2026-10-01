@@ -11,11 +11,13 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from predictions_cup.maker.contracts import MakerMarketSnapshot
 from predictions_cup.mapping.models import (
     MappingClass,
     MappingDirection,
     MappingDocument,
     MappingStatus,
+    MarketMapping,
 )
 from predictions_cup.runtime.models import OrderAction, OutcomeSide
 
@@ -24,6 +26,7 @@ THRESHOLD = 0.02
 PM_SPREAD_CAP = 0.02
 MIN_PM_DEPTH = 50.0
 COOLDOWN_NS = 60_000_000_000
+SIG_TICK_PROBABILITY = 0.005
 
 
 def resolve_residual_universe(
@@ -150,3 +153,58 @@ class ResidualTakerSignal:
             pm_spread=pm_spread,
             observed_monotonic_ns=state.observed_monotonic_ns,
         )
+
+
+def residual_input_from_snapshot(
+    maker: MakerMarketSnapshot,
+    record: MarketMapping | None,
+    *,
+    max_pm_book_age_ns: int,
+    observed_monotonic_ns: int,
+) -> ResidualInput | None:
+    """Build the frozen signal input, or None when any input is untrusted/stale."""
+
+    if (
+        record is None
+        or record.mapping_class is not MappingClass.EXACT
+        or record.mapping_direction is not MappingDirection.SAME
+        or record.status is not MappingStatus.VERIFIED
+        or record.sig_market_id != maker.market_id
+        or record.direct_polymarket is None
+    ):
+        return None
+    quote = maker.external_quotes.get(record.direct_polymarket.mapped_token_id)
+    book = maker.runtime.book(maker.exchange_id)
+    if (
+        quote is None
+        or not quote.trusted
+        or quote.best_bid is None
+        or quote.best_ask is None
+        or quote.best_bid_size is None
+        or quote.best_ask_size is None
+        or maker.now_monotonic_ns - quote.observed_monotonic_ns > max_pm_book_age_ns
+        or not maker.sig_bbo_trusted
+        or maker.now_monotonic_ns - maker.sig_bbo_observed_ns > max_pm_book_age_ns
+        or book is None
+        or not book.bids
+        or not book.asks
+        or not maker.runtime.portfolio.account_trusted
+    ):
+        return None
+    pm_mid = (quote.best_bid + quote.best_ask) / 2.0
+    sig_ask = book.asks[0].price_ticks * SIG_TICK_PROBABILITY
+    return ResidualInput(
+        exchange_id=maker.exchange_id,
+        sig_bid=book.bids[0].price_ticks * SIG_TICK_PROBABILITY,
+        sig_ask=sig_ask,
+        pm_mid=pm_mid,
+        pm_spread=quote.best_ask - quote.best_bid,
+        pm_bid_size=quote.best_bid_size,
+        pm_ask_size=quote.best_ask_size,
+        observed_monotonic_ns=observed_monotonic_ns,
+        sig_touch_depth=(
+            book.asks[0].quantity
+            if sig_ask <= pm_mid - THRESHOLD
+            else book.bids[0].quantity
+        ),
+    )

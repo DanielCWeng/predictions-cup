@@ -189,7 +189,7 @@ def build_live_shadow_runtime(
         *frozen_research_candidates,
         *model_candidates,
     ]
-    if settings.residual_taker_enabled and settings.residual_taker_shadow_only:
+    if settings.residual_taker_enabled:
         candidates.append(
             ResidualTakerCandidate(
                 core.mapping,

@@ -28,11 +28,17 @@ from predictions_cup.execution.interlocks import (
 )
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
-from predictions_cup.execution.models import ExecutionEvent, ExecutionMode, LifecycleState
+from predictions_cup.execution.models import (
+    ExecutionEnvelope,
+    ExecutionEvent,
+    ExecutionMode,
+    LifecycleState,
+)
 from predictions_cup.execution.recovery import (
     recover_in_session_cancellations,
     recover_startup,
 )
+from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.external.polymarket.client import ClobMarketDataClient
 from predictions_cup.external.polymarket.health import IngestionHealth
@@ -49,6 +55,8 @@ from predictions_cup.maker.factory import MakerRuntimeComponents, build_maker_co
 from predictions_cup.maker.instance_lock import MakerInstanceLock
 from predictions_cup.maker.noop_recorder import NoopSigRealtimeRecorder
 from predictions_cup.maker.recovery import reconcile_maker_quote_registry
+from predictions_cup.maker.residual_live import ResidualTakerLiveCoordinator
+from predictions_cup.maker.residual_taker import resolve_residual_universe
 from predictions_cup.maker.runtime_loop import ExecutionObserver, MakerRuntimeLoop
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.mapping.models import MappingDocument
@@ -535,6 +543,59 @@ class MakerService:
 
                 model_execution_observer = observe_live_models
 
+            if (
+                self.settings.residual_taker_enabled
+                and not self.settings.residual_taker_shadow_only
+                and self.core.risk_context.mode is ExecutionMode.LIVE
+            ):
+                if risk_context_source is None or live_sink is None or journal is None:
+                    raise RuntimeError(
+                        "LIVE residual taker requires RISK-002 and BUILD-009"
+                    )
+                taker_sink = live_sink
+
+                async def dispatch_taker_plan(plan: ExecutionPlan) -> ExecutionEvent:
+                    try:
+                        return await taker_sink.dispatch(plan)
+                    except SigExecutionUncertainError:
+                        return await taker_sink.dispatch_recovery(
+                            plan.envelope,
+                            plan=plan,
+                        )
+
+                taker = ResidualTakerLiveCoordinator(
+                    mapping=self.core.mapping,
+                    tracked_exchange_ids=resolve_residual_universe(
+                        self.core.mapping,
+                        self.settings.residual_taker_exchange_ids,
+                        self.settings.sig_realtime_tracked_exchange_ids,
+                    ),
+                    size=self.settings.residual_taker_size,
+                    max_pm_book_age_ns=(
+                        self.settings.residual_taker_max_pm_book_age_ms * 1_000_000
+                    ),
+                    risk_context=risk_context,
+                    reservations=self.core.reservations,
+                    journal=journal,
+                    quotes=self.core.quotes,
+                    dispatch=dispatch_taker_plan,
+                    cancel=taker_sink.cancel,
+                    kill_switch=self.core.kill_switch,
+                )
+                _LOG.warning("RESIDUAL-TAKER-001 LIVE enabled")
+                upstream_observer = model_execution_observer
+
+                async def observe_live_taker(
+                    change: MakerStateChange,
+                    observed_at: datetime,
+                    snapshots: Mapping[str, MakerMarketSnapshot],
+                ) -> None:
+                    if upstream_observer is not None:
+                        await upstream_observer(change, observed_at, snapshots)
+                    await taker.on_state_change(change, observed_at, snapshots)
+
+                model_execution_observer = observe_live_taker
+
             coordinator = MakerCoordinator(
                 engine=self.core.engine,
                 lifecycle=self.core.lifecycle,
@@ -893,7 +954,10 @@ class MakerService:
             pnl=pnl,
             observed_monotonic_ns=observed_ns,
             net_external_cash_flow=state.net_external_cash_flow,
-            unresolved_operation_ids=_risk_uncertain_operation_ids(journal),
+            unresolved_operation_ids=_risk_uncertain_operation_ids(
+                journal,
+                self.core.reservations,
+            ),
             realised_pnl_cursor=state.realised_pnl_cursor,
             attributions=attributions,
             memberships=self.core.risk_context.exposure_groups,
@@ -1392,6 +1456,7 @@ class MakerService:
 
 def _risk_uncertain_operation_ids(
     journal: ExecutionJournal | None,
+    reservations: ExecutionReservationBook | None = None,
 ) -> tuple[str, ...]:
     if journal is None:
         return ()
@@ -1409,6 +1474,29 @@ def _risk_uncertain_operation_ids(
         envelope.logical_operation_id
         for envelope in journal.unresolved()
         if envelope.lifecycle_state in uncertain_states
+        and not _placement_in_flight(envelope, reservations)
+    )
+
+
+def _placement_in_flight(
+    envelope: ExecutionEnvelope,
+    reservations: ExecutionReservationBook | None,
+) -> bool:
+    """A PENDING placement this process is dispatching right now.
+
+    Its exposure is held in the BUILD-009 reservation book, which RISK
+    admission overlays on every limit, so capital reconciliation need not wait
+    for SIG to answer (batches can take ~90 s, longer than the mark age).
+    A timeout turns it UNCERTAIN, and a leftover from an earlier process has no
+    reservation; both still block.
+    """
+    return (
+        reservations is not None
+        and envelope.lifecycle_state is LifecycleState.PENDING
+        and reservations.contains_operation(
+            envelope.logical_operation_id,
+            envelope.intent_ids,
+        )
     )
 
 

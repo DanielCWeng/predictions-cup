@@ -9,7 +9,10 @@ from typing import Protocol
 
 from predictions_cup.maker.contracts import MakerDecision, MakerMarketSnapshot
 from predictions_cup.maker.direct_pm import DirectPolymarketFairValueProvider
-from predictions_cup.maker.residual_taker import ResidualInput, ResidualTakerSignal
+from predictions_cup.maker.residual_taker import (
+    ResidualTakerSignal,
+    residual_input_from_snapshot,
+)
 from predictions_cup.mapping.models import MappingDocument
 from predictions_cup.runtime.models import SIG_TICK
 from predictions_cup.shadow.contracts import (
@@ -144,24 +147,15 @@ class ResidualTakerCandidate:
                 quote_intent=None,
                 abstain_reason="mapping_not_exact_same_verified",
             )
-        assert record.direct_polymarket is not None
-        quote = maker.external_quotes.get(record.direct_polymarket.mapped_token_id)
-        book = maker.runtime.book(maker.exchange_id)
+        state = residual_input_from_snapshot(
+            maker,
+            record,
+            max_pm_book_age_ns=self._max_pm_book_age_ns,
+            observed_monotonic_ns=snapshot.observed_monotonic_ns,
+        )
         if (
-            quote is None
-            or not quote.trusted
-            or quote.best_bid is None
-            or quote.best_ask is None
-            or quote.best_bid_size is None
-            or quote.best_ask_size is None
-            or maker.now_monotonic_ns - quote.observed_monotonic_ns > self._max_pm_book_age_ns
-            or not maker.sig_bbo_trusted
-            or maker.now_monotonic_ns - maker.sig_bbo_observed_ns > self._max_pm_book_age_ns
+            state is None
             or maker.now_monotonic_ns - maker.account_observed_ns > self._max_account_age_ns
-            or book is None
-            or not book.bids
-            or not book.asks
-            or not maker.runtime.portfolio.account_trusted
         ):
             return CandidateOutput(
                 status=DecisionStatus.ABSTAIN,
@@ -173,28 +167,11 @@ class ResidualTakerCandidate:
                 quote_intent=None,
                 abstain_reason="untrusted_or_incomplete_state",
             )
-        signal = self._signal.on_state(
-            ResidualInput(
-                exchange_id=maker.exchange_id,
-                sig_bid=book.bids[0].price_ticks * 0.005,
-                sig_ask=book.asks[0].price_ticks * 0.005,
-                pm_mid=(quote.best_bid + quote.best_ask) / 2.0,
-                pm_spread=quote.best_ask - quote.best_bid,
-                pm_bid_size=quote.best_bid_size,
-                pm_ask_size=quote.best_ask_size,
-                observed_monotonic_ns=snapshot.observed_monotonic_ns,
-                sig_touch_depth=(
-                    book.asks[0].quantity
-                    if book.asks[0].price_ticks * 0.005
-                    <= (quote.best_bid + quote.best_ask) / 2.0 - 0.02
-                    else book.bids[0].quantity
-                ),
-            )
-        )
+        signal = self._signal.on_state(state)
         if signal is None:
             return CandidateOutput(
                 status=DecisionStatus.ABSTAIN,
-                fair_value=(quote.best_bid + quote.best_ask) / 2.0,
+                fair_value=state.pm_mid,
                 lower_bound=None,
                 upper_bound=None,
                 confidence=0.0,
