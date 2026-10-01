@@ -8,10 +8,10 @@ import socket
 import sqlite3
 import subprocess
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Mapping
 from urllib.parse import quote
 
 from predictions_cup.config import AppSettings

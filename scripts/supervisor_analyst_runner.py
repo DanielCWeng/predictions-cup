@@ -10,9 +10,9 @@ import shlex
 import subprocess
 import time
 from collections import deque
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Mapping
 
 from predictions_cup.supervisor.contracts import ActionCode
 from predictions_cup.supervisor.persistence import atomic_json

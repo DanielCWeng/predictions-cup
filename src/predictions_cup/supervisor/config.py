@@ -69,7 +69,7 @@ class SupervisorRuntimeConfig:
         role_override: HostRole | None = None,
         output_override: Path | None = None,
         remediation_level_override: RemediationLevel | None = None,
-    ) -> "SupervisorRuntimeConfig":
+    ) -> SupervisorRuntimeConfig:
         host_role = role_override or _host_role()
         output_root = output_override or _resolve(
             repo_root,

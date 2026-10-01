@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 from predictions_cup.supervisor.contracts import Finding, LaunchGate, Severity
 from predictions_cup.supervisor.sources import SourceCollection
@@ -399,7 +399,12 @@ def _risk_findings(raw: object, policy: SupervisorPolicy, findings: list[Finding
         return
     if exposure.get("trusted") is False:
         findings.append(
-            Finding("EXPOSURE_UNTRUSTED", Severity.CRITICAL, "Risk exposure snapshot is untrusted", {})
+            Finding(
+                "EXPOSURE_UNTRUSTED",
+                Severity.CRITICAL,
+                "Risk exposure snapshot is untrusted",
+                {},
+            )
         )
     gross = _number(exposure.get("gross_exposure"))
     _limit_finding(

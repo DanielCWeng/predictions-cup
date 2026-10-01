@@ -5,7 +5,6 @@ from __future__ import annotations
 import time
 from collections import defaultdict, deque
 from datetime import UTC
-from typing import Mapping
 
 from predictions_cup.config import AppSettings
 from predictions_cup.supervisor.bundles import BundleWriter

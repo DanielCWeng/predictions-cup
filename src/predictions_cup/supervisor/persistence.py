@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Mapping
 from datetime import UTC
 from pathlib import Path
-from typing import Mapping
 
 from predictions_cup.supervisor.contracts import SupervisorSnapshot
 

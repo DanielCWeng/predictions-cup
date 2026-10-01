@@ -6,16 +6,17 @@ There is deliberately no order, LIVE, capital-limit, strategy or risk-halt actio
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shutil
 import subprocess
 import time
 from collections import defaultdict, deque
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Mapping
 
 from predictions_cup.supervisor.contracts import (
     ACTION_SCHEMA_VERSION,
@@ -343,7 +344,5 @@ def _remove_empty_directories(root: Path) -> None:
         reverse=True,
     )
     for path in directories:
-        try:
+        with contextlib.suppress(OSError):
             path.rmdir()
-        except OSError:
-            pass

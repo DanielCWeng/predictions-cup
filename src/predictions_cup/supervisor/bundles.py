@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Mapping
 
 from predictions_cup.supervisor.contracts import (
     BUNDLE_SCHEMA_VERSION,
