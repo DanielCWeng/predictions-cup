@@ -190,12 +190,11 @@ def main() -> None:
         "PRE_HOLDOUT_FREEZE.json",
     ]
     output_presence = {
-        name: locate(name, required=False) is not None
+        name: bool(list(ROOT.rglob(name)))
         for name in required_outputs
     }
-    output_presence["HOLDOUT_RESULTS.parquet"] = (
-        locate("HOLDOUT_RESULTS.parquet", required=False)
-        is not None
+    output_presence["HOLDOUT_RESULTS.parquet"] = bool(
+        list(ROOT.rglob("HOLDOUT_RESULTS.parquet"))
     )
 
     summary = {
