@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "action": "dataset_analysis",
+  "dataset": "polyleviathan/sig-cup-data-003-sig-actual-fills",
+  "script": "scripts/kaggle/experiment_005i_fill_flow/run.py",
+  "files": [
+    "fills/window_id=B0/day=2026-09-01/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-02/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-03/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-04/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-05/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-06/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-07/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-08/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-09/part-00000.parquet",
+    "fills/window_id=B0/day=2026-09-10/part-00000.parquet"
+  ],
+  "worker_id": "fill-flow-train",
+  "sample_per_hour": 1,
+  "seed": 505019,
+  "surface": "TRAIN",
+  "note": "EXPERIMENT-005I TRAIN signed-flow persistence only. Individual Sep1-10 files; no DEV/HOLDOUT read."
+}
