@@ -10,9 +10,11 @@ The result is useful, but the execution boundary matters: this experiment identi
 
 ### 1. Five-minute mean reversion
 
-HOLDOUT sampled move episodes: **55,340**.
+HOLDOUT qualifying sampled minute-states / move observations: **55,340**.
 
 Reversal rate: **67.26%**. Every temporal HOLDOUT worker was above **66%**.
+
+These are **not 55,340 independent episodes**. Adjacent qualifying minute-states use overlapping five-minute forward windows and are therefore serially dependent. The forward construction itself is clean and the result remains interesting because it is directionally consistent across all temporal workers and survives the frozen falsification slices, but the raw count must not be interpreted as an independent-event sample size.
 
 The effect survives the frozen falsification slices:
 - every move-size bucket is above 63%;
@@ -37,7 +39,9 @@ HOLDOUT occupancy: **281,619 minute-states**.
 
 Exit hazard: **53.56% per minute**. Worker p90 dwell: **3-4 minutes**. **47.38%** of exits go directly to POST_SHOCK.
 
-Interpret it as a fast repricing/transition state rather than a generic continuation/momentum regime.
+The short dwell is useful descriptive evidence for a high-activity large-move state. However, the specific PRICE_DISCOVERY -> POST_SHOCK transition is **partly mechanical by taxonomy construction**: PRICE_DISCOVERY requires both `|ret_5m| >= 0.005` and high quote activity, whereas POST_SHOCK retains the `|ret_5m| >= 0.005` condition without the high-activity requirement. If quote activity falls while the rolling five-minute move remains elevated, the state naturally relabels from PRICE_DISCOVERY to POST_SHOCK. The **47.38%** transition share therefore must not be interpreted as an independently discovered economic transition mechanism.
+
+The safe interpretation is: PRICE_DISCOVERY is a short-lived, high-activity large-move state and is not a generic continuation/momentum regime.
 
 **Route:** LIVE_DIAG + MM_REPLAY. A quoting policy may eventually respond differently to this state, but only after replay.
 
@@ -53,7 +57,7 @@ This is a materially persistent stressed-liquidity state.
 
 ### 5. Resilience after withdrawal
 
-After a large visible withdrawal, episodes that visibly replenish in the next minute have mean subsequent abs-5m movement **0.000842** versus **0.001272** when they do not replenish: a **33.83% reduction** on HOLDOUT, with the same direction in **5/5** workers.
+After a large visible withdrawal, observations that visibly replenish in the next minute have mean subsequent abs-5m movement **0.000842** versus **0.001272** when they do not replenish: a **33.83% reduction** on HOLDOUT, with the same direction in **5/5** workers.
 
 This is a predictive association. It is not evidence that replenishment causally stabilises price, nor that our passive quote would fill.
 
