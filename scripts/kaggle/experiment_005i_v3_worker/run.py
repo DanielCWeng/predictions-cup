@@ -193,6 +193,12 @@ def aggregate_hour(path: Path, carry: dict[Any, dict[str, Any]], tail: pd.DataFr
     df["timestamp_received"] = pd.to_datetime(df["timestamp_received"], utc=True)
     df["minute"] = df["timestamp_received"].dt.floor("min")
     df["event_type"] = df["event_type"].astype(str)
+    asset_market = (
+        df.loc[df["asset_id"].notna() & df["market"].notna(), ["asset_id", "market"]]
+        .drop_duplicates("asset_id", keep="last")
+        .set_index("asset_id")["market"]
+        .to_dict()
+    )
     counts = {str(k): int(v) for k, v in df["event_type"].value_counts(dropna=False).items()}
 
     quote = df[df["best_bid"].notna() & df["best_ask"].notna()].copy()
@@ -350,10 +356,20 @@ def aggregate_hour(path: Path, carry: dict[Any, dict[str, Any]], tail: pd.DataFr
         lead = panel["asset_id"].map(lambda x: carry.get(x, {}).get(col))
         panel[col] = panel[col].where(panel[col].notna(), lead)
 
+    for col in numeric_state + COUNT_COLUMNS:
+        panel[col] = pd.to_numeric(panel[col], errors="coerce").astype(float)
+    for col in time_state:
+        panel[col] = pd.to_datetime(panel[col], utc=True, errors="coerce")
+
+    market_map = {token: state.get("market_id") for token, state in carry.items()}
+    market_map.update(asset_market)
+    panel["market_id"] = panel["asset_id"].map(market_map)
+
     panel["mid"] = (panel["bid_last"] + panel["ask_last"]) / 2.0
     panel["spread"] = panel["ask_last"] - panel["bid_last"]
     panel["relative_spread"] = panel["spread"] / panel["mid"].clip(lower=0.001)
-    clipped_mid = panel["mid"].clip(lower=0.001, upper=0.999)
+    panel["mid"] = pd.to_numeric(panel["mid"], errors="coerce").astype(float)
+    clipped_mid = panel["mid"].clip(lower=0.001, upper=0.999).astype(float)
     panel["logit_mid"] = np.log(clipped_mid / (1.0 - clipped_mid))
 
     minute_end = panel["minute"] + pd.Timedelta(minutes=1)
@@ -434,6 +450,8 @@ def aggregate_hour(path: Path, carry: dict[Any, dict[str, Any]], tail: pd.DataFr
 
     for token, last in panel.groupby("asset_id", sort=False).tail(1).set_index("asset_id").iterrows():
         state = carry.setdefault(token, {})
+        if token in market_map and market_map[token] is not None:
+            state["market_id"] = market_map[token]
         for col in STATE_COLUMNS:
             value = last.get(col)
             if pd.notna(value):
@@ -608,6 +626,9 @@ def main() -> None:
         if not frame.empty and "asset_id" in frame:
             frame = frame.copy()
             frame["asset_id"] = frame["asset_id"].map(token_text)
+        if not frame.empty and "market_id" in frame:
+            frame = frame.copy()
+            frame["market_id"] = frame["market_id"].map(token_text)
         return frame
 
     panel_out = stringify_token_frame(panel_out)
