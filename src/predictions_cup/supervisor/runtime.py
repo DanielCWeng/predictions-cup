@@ -22,37 +22,56 @@ from predictions_cup.supervisor.rules import evaluate, severity_and_gate
 from predictions_cup.supervisor.sources import SourceCollection, SupervisorSources
 
 
-class MemoryGrowthTracker:
+class ResourceGrowthTracker:
     def __init__(self, window_seconds: float = 300.0) -> None:
         self.window_seconds = window_seconds
-        self._history: dict[str, deque[tuple[float, int]]] = defaultdict(deque)
+        self._memory_history: dict[str, deque[tuple[float, int]]] = defaultdict(deque)
+        self._disk_history: deque[tuple[float, int]] = deque()
 
-    def update(self, system: object) -> dict[str, float]:
+    def update(self, system: object) -> tuple[dict[str, float], float | None]:
         now = time.monotonic()
-        result: dict[str, float] = {}
+        memory_growth: dict[str, float] = {}
+        disk_growth: float | None = None
         if not isinstance(system, dict):
-            return result
+            return memory_growth, disk_growth
+
         services = system.get("services")
-        if not isinstance(services, dict):
-            return result
-        for service, raw in services.items():
-            if not isinstance(service, str) or not isinstance(raw, dict):
-                continue
-            memory = raw.get("memory_current_bytes")
-            if isinstance(memory, bool) or not isinstance(memory, int):
-                continue
-            history = self._history[service]
-            history.append((now, memory))
-            while history and now - history[0][0] > self.window_seconds:
-                history.popleft()
-            if len(history) < 2:
-                continue
-            elapsed = history[-1][0] - history[0][0]
-            if elapsed < 30.0:
-                continue
-            delta_mb = (history[-1][1] - history[0][1]) / (1024**2)
-            result[service] = delta_mb / (elapsed / 60.0)
-        return result
+        if isinstance(services, dict):
+            for service, raw in services.items():
+                if not isinstance(service, str) or not isinstance(raw, dict):
+                    continue
+                memory = raw.get("memory_current_bytes")
+                if isinstance(memory, bool) or not isinstance(memory, int):
+                    continue
+                history = self._memory_history[service]
+                history.append((now, memory))
+                while history and now - history[0][0] > self.window_seconds:
+                    history.popleft()
+                if len(history) < 2:
+                    continue
+                elapsed = history[-1][0] - history[0][0]
+                if elapsed < 30.0:
+                    continue
+                delta_mb = (history[-1][1] - history[0][1]) / (1024**2)
+                memory_growth[service] = delta_mb / (elapsed / 60.0)
+
+        disk = system.get("disk")
+        if isinstance(disk, dict):
+            used = disk.get("used_bytes")
+            if not isinstance(used, bool) and isinstance(used, int):
+                self._disk_history.append((now, used))
+                while (
+                    self._disk_history
+                    and now - self._disk_history[0][0] > self.window_seconds
+                ):
+                    self._disk_history.popleft()
+                if len(self._disk_history) >= 2:
+                    elapsed = self._disk_history[-1][0] - self._disk_history[0][0]
+                    if elapsed >= 30.0:
+                        delta = self._disk_history[-1][1] - self._disk_history[0][1]
+                        disk_growth = delta / (elapsed / 60.0)
+
+        return memory_growth, disk_growth
 
 
 class SupervisorRuntime:
@@ -68,7 +87,7 @@ class SupervisorRuntime:
         self.store = SupervisorStore(config.output_root)
         self.bundle_writer = BundleWriter(config.output_root)
         self.remediator = RemediationExecutor(config.remediation)
-        self.memory_growth = MemoryGrowthTracker()
+        self.resource_growth = ResourceGrowthTracker()
         self._last_snapshot_write_at = 0.0
         self._last_event_signature: tuple[object, ...] | None = None
         self._last_event_bundle_at = 0.0
@@ -77,9 +96,23 @@ class SupervisorRuntime:
 
     def run_once(self) -> SupervisorSnapshot:
         collection = self.sources.read_all()
-        growth = self.memory_growth.update(collection.sections.get("system"))
+        growth, disk_growth = self.resource_growth.update(
+            collection.sections.get("system")
+        )
         sections = dict(collection.sections)
-        sections["derived"] = {"memory_growth_mb_per_min": growth}
+        system = sections.get("system")
+        if isinstance(system, dict):
+            system_copy = dict(system)
+            disk = system_copy.get("disk")
+            if isinstance(disk, dict):
+                disk_copy = dict(disk)
+                disk_copy["growth_bytes_per_min"] = disk_growth
+                system_copy["disk"] = disk_copy
+            sections["system"] = system_copy
+        sections["derived"] = {
+            "memory_growth_mb_per_min": growth,
+            "disk_growth_bytes_per_min": disk_growth,
+        }
         enriched = SourceCollection(collection.statuses, sections)
         findings = evaluate(
             enriched,
