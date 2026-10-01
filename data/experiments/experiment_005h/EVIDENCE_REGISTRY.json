@@ -85,7 +85,14 @@
       "status_check_artifact_id": 11154551535,
       "last_confirmed_kernel_state": "RUNNING",
       "model_scoring_performed": false,
-      "no_retune_rule_active": true
+      "no_retune_rule_active": true,
+      "final_kernel_state": "ERROR",
+      "full_state_replay_completed": true,
+      "files_completed": 504,
+      "files_total": 504,
+      "join_audit_preserved": true,
+      "result_available": false,
+      "technical_failure": "process killed after full state replay, before canonical holdout tables/summary were written"
     }
   },
   "superseded": [
