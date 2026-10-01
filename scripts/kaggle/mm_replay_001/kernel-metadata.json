@@ -1,6 +1,6 @@
 {
-  "id": "polyleviathan/mm-replay-001-strict-asof",
-  "title": "MM Replay 001 Strict As-Of",
+  "id": "polyleviathan/mm-replay-001-strict-as-of-fast",
+  "title": "MM Replay 001 Strict As-Of Fast",
   "code_file": "streaming_run.py",
   "language": "python",
   "kernel_type": "script",
