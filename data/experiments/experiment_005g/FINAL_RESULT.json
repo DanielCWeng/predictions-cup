@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005G",
+  "status": "COMPLETE",
+  "dataset": "polyleviathan/sig-cup-data003-orderbooks",
+  "dataset_version": 1,
+  "sealed_holdout": {
+    "window": [
+      "2026-09-05T00:00:00+00:00",
+      "2026-09-06T00:00:00+00:00"
+    ],
+    "pre_holdout_freeze_sha256": "887592885c02ae9219232c40a8b9ce0b263f9a62e04da62c524b16162895cc1c",
+    "selection_or_tuning_after_holdout": false,
+    "make_modified": false,
+    "real_sig_orders_sent": false,
+    "workflow_run_id": 36843408540,
+    "workflow_job_id": 110307699563,
+    "artifact_id": 11153497494,
+    "artifact_name": "kaggle-run-0-1",
+    "artifact_sha256": "2c5bb46ebcf5b8d79e7368afdb309c849e55992ad44a771ab849740a219ef4d0",
+    "holdout_results_sha256": "c0d567ace0dd9f1f801add05f69e673b9abb2689e4c9527650be49797587233f",
+    "holdout_audit_sha256": "bb93acbdbf78cbf9e4072a7c633db8c73b04a8e4736fd3d1b7badbbecd65cb33",
+    "freeze_commit": "a9219762fb49faa7c98fd8f7a3c7a888a5352243",
+    "holdout_launch_commit": "44a7cfc0120d778676a38e68a4863029078641b8"
+  },
+  "summary": {
+    "frozen_candidates": 12,
+    "fresh_replications": 1,
+    "independently_supported_discoveries": 9,
+    "discoveries_not_confirmed": 2,
+    "total_supported": 10
+  },
+  "supported_candidates": [
+    {"candidate_id":"005F_REPL_PRE_UPDATE","lane":"A_STRICT_005F_REPLICATION","target":"update_h300","feature":"genuine_age_s","disposition":"FRESH_REPLICATION","relative_mse_improvement":0.26502408945539113,"positive_blocks":48,"blocks":48,"signflip_p":0.00012205541315757354,"block_bootstrap_lower":0.02495190057095405,"leave_market_min":0.025837317715778498,"holdout_markets":658,"holdout_rows":222567},
+    {"candidate_id":"005G_DISCOVERY|abs_h60|spread_x_distance","lane":"B_OPEN_DISCOVERY","target":"abs_h60","feature":"spread_x_distance","disposition":"INDEPENDENTLY_SUPPORTED_DISCOVERY","relative_mse_improvement":0.0019287567709179838,"positive_blocks":36,"blocks":48,"signflip_p":0.0003661662394727206,"block_bootstrap_lower":2.538541216712314e-06,"leave_market_min":3.203055747179586e-06,"holdout_markets":692,"holdout_rows":246359},
+    {"candidate_id":"005G_DISCOVERY|bbo_update_h300|price_change_age_s","lane":"B_OPEN_DISCOVERY","target":"bbo_update_h300","feature":"price_change_age_s","disposition":"INDEPENDENTLY_SUPPORTED_DISCOVERY","relative_mse_improvement":0.0014772680448235686,"positive_blocks":41,"blocks":48,"signflip_p":0.00012205541315757354,"block_bootstrap_lower":7.837402770964344e-05,"leave_market_min":7.648806558231835e-05,"holdout_markets":658,"holdout_rows":222567},
+    {"candidate_id":"005G_DISCOVERY|bbo_update_h300|spread_x_distance","lane":"B_OPEN_DISCOVERY","target":"bbo_update_h300","feature":"spread_x_distance","disposition":"INDEPENDENTLY_SUPPORTED_DISCOVERY","relative_mse_improvement":0.01793336741700657,"positive_blocks":38,"blocks":48,"signflip_p":0.00012205541315757354,"block_bootstrap_lower":0.0007824793090863698,"leave_market_min":0.0012633772472412934,"holdout_markets":692,"holdout_rows":247409},
+    {"candidate_id":"005G_DISCOVERY|bbo_update_h300|volatility_x_liquidity","lane":"B_OPEN_DISCOVERY","target":"bbo_update_h300","feature":"volatility_x_liquidity","disposition":"INDEPENDENTLY_SUPPORTED_DISCOVERY","relative_mse_improvement":0.007057942664236886,"positive_blocks":48,"blocks":48,"signflip_p":0.00012205541315757354,"block_bootstrap_lower":0.0004839538638926885,"leave_market_min":0.0005113351101816219,"holdout_markets":692,"holdout_rows":247403},
+    {"candidate_id":"005G_DISCOVERY|bbo_update_h60|distance_from_0_5","lane":"B_OPEN_DISCOVERY","target":"bbo_update_h60","feature":"distance_from_0_5","disposition":"INDEPENDENTLY_SUPPORTED_DISCOVERY","relative_mse_improvement":0.012377783054846549,"positive_blocks":48,"blocks":48,"signflip_p":0.00012205541315757354,"block_bootstrap_lower":0.00047397942644749756,"leave_market_min":0.0005018940049187234,"holdout_markets":692,"holdout_rows":248080},
+    {"candidate_id":"005G_DISCOVERY|bbo_update_h60|price_change_age_s","lane":"B_OPEN_DISCOVERY","target":"bbo_update_h60","feature":"price_change_age_s","disposition":"INDEPENDENTLY_SUPPORTED_DISCOVERY","relative_mse_improvement":0.0008095379215284292,"positive_blocks":45,"blocks":48,"signflip_p":0.00012205541315757354,"block_bootstrap_lower":3.195810867045898e-05,"leave_market_min":3.2132728748123136e-05,"holdout_markets":658,"holdout_rows":223193},
+    {"candidate_id":"005G_DISCOVERY|bbo_update_h60|spread_x_distance","lane":"B_OPEN_DISCOVERY","target":"bbo_update_h60","feature":"spread_x_distance","disposition":"INDEPENDENTLY_SUPPORTED_DISCOVERY","relative_mse_improvement":0.049550241613162745,"positive_blocks":44,"blocks":48,"signflip_p":0.00012205541315757354,"block_bootstrap_lower":0.0018092722129239961,"leave_market_min":0.002004561461266169,"holdout_markets":692,"holdout_rows":248080},
+    {"candidate_id":"005G_DISCOVERY_SEQ|state_transition_h300|state_dwell_s","lane":"B_OPEN_DISCOVERY","target":"state_transition_h300","feature":"state_dwell_s","disposition":"INDEPENDENTLY_SUPPORTED_DISCOVERY","relative_mse_improvement":0.40296895731930077,"positive_blocks":48,"blocks":48,"signflip_p":0.00012205541315757354,"block_bootstrap_lower":0.08039430356154714,"leave_market_min":0.08137912034185674,"holdout_markets":295,"holdout_rows":25801},
+    {"candidate_id":"005G_DISCOVERY_SEQ|state_transition_h60|state_dwell_s","lane":"B_OPEN_DISCOVERY","target":"state_transition_h60","feature":"state_dwell_s","disposition":"INDEPENDENTLY_SUPPORTED_DISCOVERY","relative_mse_improvement":0.20762057310963486,"positive_blocks":48,"blocks":48,"signflip_p":0.00012205541315757354,"block_bootstrap_lower":0.018908190093067167,"leave_market_min":0.019697684118508085,"holdout_markets":295,"holdout_rows":25871}
+  ],
+  "not_confirmed": [
+    {"candidate_id":"005G_DISCOVERY|abs_h60|distance_from_0_5","target":"abs_h60","feature":"distance_from_0_5","relative_mse_improvement":8.4964886659649e-05,"positive_blocks":31,"blocks":48,"signflip_p":0.05724398877090199,"reason":"failed frozen holdout gate"},
+    {"candidate_id":"005G_DISCOVERY|bbo_update_h60|ofi_acceleration","target":"bbo_update_h60","feature":"ofi_acceleration","relative_mse_improvement":-0.0003514126109351585,"positive_blocks":16,"blocks":48,"signflip_p":1.0,"reason":"failed frozen holdout gate"}
+  ],
+  "interpretation": {
+    "primary_signal": "state-dependent renewal and transition hazard",
+    "strongest_candidate": "005G_DISCOVERY_SEQ|state_transition_h300|state_dwell_s",
+    "strongest_relative_mse_improvement": 0.40296895731930077,
+    "economic_claim": "NOT_ESTABLISHED",
+    "routing": "shadow/replay before any live maker policy modification"
+  },
+  "audit_summary": {
+    "panel_rows": 1215294,
+    "panel_tokens": 692,
+    "holdout_rows": 248221,
+    "state_rows_retained": 4132051,
+    "genuine_bbo_rows": 2055633,
+    "trade_rows": 954,
+    "transition_rows": 126309,
+    "transition_tokens": 317,
+    "ambiguous_groups": 0
+  }
+}
