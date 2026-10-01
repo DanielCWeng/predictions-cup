@@ -735,6 +735,7 @@ class MakerService:
             ),
             observed_monotonic_ns=monotonic_ns(),
             realised_pnl_cursor=baseline_cursor,
+            external_cash_flow_cursor=baseline_cursor,
         )
         source = RiskContextSource(
             self.core.risk_context,
@@ -776,7 +777,7 @@ class MakerService:
             scan, pnl = await self._stable_incremental_risk_reads(
                 rest=rest,
                 tournament_slug=tournament_slug,
-                prior_event_id=state.realised_pnl_cursor,
+                prior_event_id=state.external_cash_flow_cursor,
             )
         except (ReconciliationError, SigApiError) as exc:
             return self._block_risk_refresh(
@@ -792,7 +793,7 @@ class MakerService:
                 event_type="EXTERNAL_CASH_FLOW_RECONCILIATION",
                 detail=(
                     f"delta={scan.delta};events={scan.events_scanned};"
-                    f"cursor={updated.realised_pnl_cursor}"
+                    f"cursor={updated.external_cash_flow_cursor}"
                 ),
             )
         state = updated

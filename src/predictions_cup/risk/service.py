@@ -74,6 +74,7 @@ class CapitalControlService:
         profile_version: str,
         observed_monotonic_ns: int,
         realised_pnl_cursor: str | None = None,
+        external_cash_flow_cursor: str | None = None,
     ) -> CapitalRiskState:
         existing = self._store.load()
         if existing is not None:
@@ -114,6 +115,7 @@ class CapitalControlService:
             strategy_halts=(),
             limit_profile_version=profile_version,
             realised_pnl_cursor=realised_pnl_cursor,
+            external_cash_flow_cursor=external_cash_flow_cursor,
         )
         self._store.save(state, event_type="SESSION_INITIALIZED", detail=session_id)
         return state
