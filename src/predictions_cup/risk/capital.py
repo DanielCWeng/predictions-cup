@@ -594,8 +594,9 @@ def reconcile_capital_state(
     max_mark_age_ns: int,
     session_loss_limit: Decimal | None,
     drawdown_limit: Decimal | None,
-    cost_basis_tolerance: Decimal = Decimal("0.000001"),
-    pnl_tolerance: Decimal = Decimal("0.000001"),
+    cost_basis_tolerance: Decimal = Decimal("0.01"),
+    # SIG reports per-position and account PnL/value rounded to cents.
+    pnl_tolerance: Decimal = Decimal("0.01"),
 ) -> CapitalRiskState:
     """Reconcile durable state against authoritative account and explicit marks."""
     if authoritative.session_id != previous.session_id:
@@ -675,11 +676,13 @@ def reconcile_capital_state(
         item.unrealised_pnl is None for item in authoritative_positions.values()
     ):
         raise ReconciliationError("authoritative_position_pnl_incomplete")
-    if abs(authoritative_position_unrealised - unrealised) > pnl_tolerance:
+    # Each rounded SIG figure contributes up to one cent of error to sums.
+    aggregate_tolerance = pnl_tolerance * (len(authoritative_positions) + 1)
+    if abs(authoritative_position_unrealised - unrealised) > aggregate_tolerance:
         raise ReconciliationError("authoritative_unrealised_pnl_disagreement")
     if (
         reconstruction is not None
-        and abs(locally_computed_unrealised - unrealised) > pnl_tolerance
+        and abs(locally_computed_unrealised - unrealised) > aggregate_tolerance
     ):
         raise ReconciliationError("local_mark_pnl_disagreement")
 
@@ -688,7 +691,7 @@ def reconcile_capital_state(
     global_halt = previous.global_halt
     session_pnl = authoritative.equity - previous.session_start_equity
     unrealised_change = unrealised - previous.session_start_unrealised_pnl
-    if abs(realised + unrealised_change - session_pnl) > pnl_tolerance:
+    if abs(realised + unrealised_change - session_pnl) > aggregate_tolerance:
         raise ReconciliationError("authoritative_session_pnl_disagreement")
     hard_reason: str | None = None
     if session_loss_limit is not None and session_pnl <= -session_loss_limit:

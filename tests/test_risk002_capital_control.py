@@ -1600,3 +1600,60 @@ def test_realtime_drawdown_latches_and_checkpoints_once() -> None:
     third = source().capital_state
     assert third is not None and third.global_halt is not None
     assert checkpoints == ["peak_drawdown_limit"]
+
+
+@pytest.mark.parametrize(
+    ("sig_unrealised", "accepted"),
+    [(Decimal("-0.15"), True), (Decimal("-0.20"), False)],
+)
+def test_reconciliation_tolerates_sig_cent_rounding_only(
+    sig_unrealised: Decimal, accepted: bool
+) -> None:
+    # Live 2026-10-01 18:33Z: short 10 YES via NO@0.565, SIG mark 0.450297.
+    # Exact local PnL is -0.15297; SIG reports unrealizedPnl rounded to -0.15.
+    reconstruction = PnLReconstruction(
+        positions=(
+            CostBasisPosition(
+                "960", "271", Decimal("-10"), Decimal("0.435"), Decimal("5.65")
+            ),
+        ),
+        realised_pnl=Decimal("0"),
+        processed_fill_ids=("f1",),
+    )
+    authoritative = AuthoritativeRiskSnapshot(
+        session_id="session-1",
+        equity=Decimal("100") + sig_unrealised,
+        account_trusted=True,
+        observed_monotonic_ns=100,
+        positions=(
+            AuthoritativeRiskPosition(
+                "960", "271", Decimal("-10"), Decimal("5.65"), sig_unrealised
+            ),
+        ),
+        realised_pnl=Decimal("0"),
+        unrealised_pnl=sig_unrealised,
+    )
+
+    def reconcile() -> CapitalRiskState:
+        return reconcile_capital_state(
+            previous=_reconcile_previous(),
+            authoritative=authoritative,
+            reconstruction=reconstruction,
+            exposure=RiskExposureSnapshot(10, -10, 0, 0, trusted=True),
+            marks=(
+                RiskMark(
+                    "960", "271", Decimal("0.450297"), "sig", 100, True, "v1", "rest"
+                ),
+            ),
+            now_monotonic_ns=100,
+            max_account_age_ns=100,
+            max_mark_age_ns=100,
+            session_loss_limit=None,
+            drawdown_limit=None,
+        )
+
+    if accepted:
+        assert reconcile().marks_trusted
+    else:
+        with pytest.raises(ReconciliationError, match="mark_pnl_disagreement"):
+            reconcile()
