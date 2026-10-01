@@ -27,17 +27,13 @@ jobs:
         run: |
           set -euo pipefail
           kaggle kernels list --mine --page-size 100 --csv > /tmp/kernels.csv
-          cat /tmp/kernels.csv
+          echo "=== RECENT KERNELS ==="
+          head -40 /tmp/kernels.csv
           echo "=== ACTIVE / QUEUED STATUS ==="
-          python - <<'PY'
-import csv, subprocess
-rows=list(csv.DictReader(open('/tmp/kernels.csv')))
-for row in rows[:100]:
-    ref=row.get('ref') or row.get('Ref') or next(iter(row.values()))
-    if not ref: continue
-    p=subprocess.run(['kaggle','kernels','status',ref],text=True,capture_output=True)
-    s=(p.stdout+p.stderr).strip()
-    low=s.lower()
-    if 'running' in low or 'queued' in low:
-        print(ref, '=>', s)
-PY
+          tail -n +2 /tmp/kernels.csv | cut -d, -f1 | head -100 | while IFS= read -r ref; do
+            status="$(kaggle kernels status "$ref" 2>&1 || true)"
+            lower="$(printf '%s' "$status" | tr '[:upper:]' '[:lower:]')"
+            if printf '%s' "$lower" | grep -Eq 'running|queued'; then
+              echo "$ref => $status"
+            fi
+          done
