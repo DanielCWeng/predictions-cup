@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd -P)"
+TARGET_REPO_ROOT="${PREDICTIONS_CUP_SUPERVISOR_TARGET_REPO_ROOT:-${REPO_ROOT}}"
 UNIT_SOURCE="${REPO_ROOT}/deploy/systemd/predictions-cup-supervisor.service"
 SYSTEMD_DIR="${PREDICTIONS_CUP_SYSTEMD_DIR:-/etc/systemd/system}"
 SYSTEMCTL_BIN="${PREDICTIONS_CUP_SYSTEMCTL:-systemctl}"
