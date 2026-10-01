@@ -52,10 +52,6 @@ class AccountSubscriberFactory(Protocol):
     ) -> AccountSubscriber: ...
 
 
-class AccountResyncRequired(RuntimeError):
-    """Internal control-flow signal: leave the socket and restore REST truth."""
-
-
 def _default_subscriber_factory(
     *,
     topic: str,
@@ -112,10 +108,8 @@ class AccountRealtimeController:
         self._resync_generation = 0
 
     async def run(self, *, stop_event: asyncio.Event) -> None:
-        reuse_token: RealtimeTokenDto | None = None
         while not stop_event.is_set():
-            token = reuse_token or await self._mint_token()
-            reuse_token = None
+            token = await self._mint_token()
             subscriber = self._subscriber_factory(
                 topic=token.channels.user,
                 token=token,
@@ -161,12 +155,6 @@ class AccountRealtimeController:
                     outcome = subscriber_task.result()
                 else:
                     outcome = await subscriber_task
-            except AccountResyncRequired:
-                # The state engine has already revoked trust. Re-subscribe with
-                # the same token; connection setup performs the required REST
-                # reconciliation without minting a token for each fill.
-                reuse_token = token
-                continue
             except BaseException:
                 subscriber_task.cancel()
                 with suppress(asyncio.CancelledError):
@@ -235,7 +223,10 @@ class AccountRealtimeController:
             # fencing.
             self._record_execution_events(AccountBatchDto.model_validate(payload))
         if result.requires_reconciliation:
-            raise AccountResyncRequired
+            # Keep the active subscription in place while authoritative state
+            # catches up. A fill must not briefly restore trust after its socket
+            # has already closed, nor force a fresh token for the same connection.
+            await self._refresh_authoritative(observed_at)
 
     async def _refresh_authoritative(self, observed_at: datetime) -> None:
         del observed_at

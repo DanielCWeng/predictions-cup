@@ -173,14 +173,11 @@ def test_revision_gap_forces_authoritative_resync() -> None:
     asyncio.run(scenario())
 
     assert resync_count == 2
-    assert factory_calls == [
-        ("user:profile-1", "account_batch"),
-        ("user:profile-1", "account_batch"),
-    ]
+    assert factory_calls == [("user:profile-1", "account_batch")]
     assert state.trusted is True
 
 
-def test_fill_resync_reuses_token_and_socket() -> None:
+def test_fill_resync_keeps_token_and_socket() -> None:
     state = AccountRealtimeStateEngine(tournament_id="t1")
     payload = _batch(1, 0)
     payload["fills"] = [
@@ -228,7 +225,7 @@ def test_fill_resync_reuses_token_and_socket() -> None:
     asyncio.run(scenario())
 
     assert token_count == 1
-    assert subscription_count == 2
+    assert subscription_count == 1
     assert resync_count == 2
     assert state.trusted is True
 
