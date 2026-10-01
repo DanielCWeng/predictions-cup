@@ -67,5 +67,6 @@
     "replenishment_1m": 200,
     "withdrawal_1m": 200
   },
-  "note": "EXPERIMENT-005I full-minute DEV regime/transition validation; TRAIN definitions frozen; HOLDOUT sealed."
+  "note": "EXPERIMENT-005I full-minute DEV regime/transition validation; TRAIN definitions frozen; HOLDOUT sealed.",
+  "attempt": 2
 }
