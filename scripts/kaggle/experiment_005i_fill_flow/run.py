@@ -114,7 +114,14 @@ def main() -> None:
     if not parts:
         raise RuntimeError("no fill rows loaded")
     df = pd.concat(parts, ignore_index=True)
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+    raw_ts = df["timestamp"]
+    numeric_ts = pd.to_numeric(raw_ts, errors="coerce")
+    if numeric_ts.notna().mean() > 0.99:
+        median_ts = float(numeric_ts.dropna().median())
+        unit = "s" if median_ts < 10_000_000_000 else "ms"
+        df["timestamp"] = pd.to_datetime(numeric_ts, unit=unit, utc=True)
+    else:
+        df["timestamp"] = pd.to_datetime(raw_ts, utc=True)
     df["token_id"] = df["token_id"].map(token_text)
     df["condition_id"] = df["condition_id"].map(token_text)
     df["sig_market_id"] = df["sig_market_id"].map(token_text)
