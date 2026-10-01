@@ -51,7 +51,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     if data.get("schema_version") != 1:
         raise ValueError("schema_version must be 1")
     action = data.get("action")
-    if action not in {"auth_check", "run", "status", "output", "logs"}:
+    if action not in {"auth_check", "run", "status", "output", "logs", "delete"}:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
 
@@ -118,6 +118,12 @@ def status(kernel: str, output_dir: Path) -> str:
     text = (result.stdout or "") + (result.stderr or "")
     (output_dir / "status.txt").write_text(text, encoding="utf-8")
     return text
+
+
+def delete_kernel(kernel: str, output_dir: Path) -> None:
+    result = run_command(["kaggle", "kernels", "delete", kernel, "--yes"])
+    text = (result.stdout or "") + (result.stderr or "")
+    (output_dir / "delete.txt").write_text(text, encoding="utf-8")
 
 
 def download_outputs(data: dict[str, Any], kernel: str, output_dir: Path) -> None:
@@ -240,6 +246,10 @@ def main() -> int:
         kernel = kernel_from_manifest(data)
         capture_logs(kernel, output_dir)
         write_summary(["## Kaggle logs", "", f"Kernel: {kernel}"])
+    elif action == "delete":
+        kernel = kernel_from_manifest(data)
+        delete_kernel(kernel, output_dir)
+        write_summary(["## Kaggle delete", "", f"Kernel: {kernel}", "", "Deleted successfully."])
 
     return 0
 
