@@ -15,9 +15,12 @@ V3_HOSTILE_REQUIRED = {
 
 HOLDOUT_RULES = {
     "005H-C01-RELATIVE-SIZE": {
-        "metric": "B0 token-cluster bootstrap of R2(relative-size)-R2(absolute-size)",
+        "metric": "exact frozen W17 OLS relative-size versus absolute-size on B0",
         "minimum_rows": 50,
-        "pass": "point > 0 and 2.5% bootstrap bound > 0",
+        "pass": (
+            "relative B0 R2 > absolute B0 R2; relative B0 R2 > 0; "
+            "token-cluster bootstrap 2.5% bound of R2 difference > 0"
+        ),
         "economic_scope": "exact venue price+size stratum only",
     },
     "005H-C02-FAILED-REPLENISHMENT": {
@@ -26,24 +29,37 @@ HOLDOUT_RULES = {
         "pass": "point > 0 and token-cluster 2.5% bootstrap bound > 0",
     },
     "005H-C03-FILL-BEYOND-STATE": {
-        "metric": "B0 fill-minus-one-to-one-matched-nonfill aggressor-signed 30s move",
+        "metric": (
+            "B0 fill-minus-without-replacement matched-nonfill "
+            "aggressor-signed 30s move"
+        ),
         "minimum_pairs": 50,
         "pass": "point > 0 and token-cluster 2.5% bootstrap bound > 0",
     },
     "005H-C04-ARRIVAL-STATE": {
-        "metric": "frozen logistic arrival model B0 AUC",
+        "metric": "exact frozen W17 logistic arrival model B0 AUC",
         "minimum_rows": 100,
-        "pass": "AUC >= 0.60 and token-cluster bootstrap 2.5% AUC bound > 0.50",
+        "pass": (
+            "AUC >= 0.60; each chronological half AUC >= 0.55; "
+            "token-cluster bootstrap 2.5% AUC bound > 0.50"
+        ),
     },
     "005H-C05-DIRECTION-STATE": {
-        "metric": "frozen logistic BUY-vs-SELL model B0 AUC",
-        "minimum_rows_each_side": 50,
-        "pass": "AUC >= 0.58 and token-cluster bootstrap 2.5% AUC bound > 0.50",
+        "metric": "exact frozen W17 logistic BUY-vs-SELL model B0 AUC",
+        "minimum_rows_each_side": 100,
+        "pass": (
+            "AUC >= 0.58; each chronological half AUC >= 0.52; "
+            "token-cluster bootstrap 2.5% AUC bound > 0.50"
+        ),
     },
     "005H-C06-BOOK-MICROSTRUCTURE-CHALLENGER": {
-        "metric": "frozen challenger-minus-state-baseline B0 R2",
+        "metric": "exact frozen W17 challenger-minus-state-baseline B0 R2",
         "minimum_rows": 50,
-        "pass": "R2 improvement > 0 and token-cluster bootstrap 2.5% bound > 0",
+        "pass": (
+            "R2 improvement >= 0.005; token-cluster bootstrap 2.5% "
+            "bound > 0; stale-book and high-activity-excluded "
+            "improvements remain > 0"
+        ),
     },
 }
 
@@ -63,6 +79,7 @@ def main() -> None:
     extended = load_json("EXTENDED_V3_SHORTLIST.json")
     falsification = load_json("V3_FALSIFICATION_SUMMARY.json")
     source = load_json("SOURCE_VERSION_AUDIT.json")
+    source_robustness = load_json("SOURCE_ROBUSTNESS_SUMMARY.json")
 
     if extended.get("b0_opened") is not False:
         raise RuntimeError("extended source does not prove B0 stayed sealed")
@@ -70,6 +87,10 @@ def main() -> None:
         raise RuntimeError("falsification source does not prove B0 stayed sealed")
     if source.get("b0_opened") is not False:
         raise RuntimeError("source audit does not prove B0 stayed sealed")
+    if source_robustness.get("b0_opened") is not False:
+        raise RuntimeError(
+            "source robustness does not prove B0 stayed sealed"
+        )
 
     extended_candidates = {
         str(row["candidate_id"]): row
@@ -91,6 +112,18 @@ def main() -> None:
     full_models = extended.get("full_models", {})
     arrival_model = extended.get("arrival_result", {})
     direction_model = extended.get("direction_result", {})
+    source_records = {
+        str(row.get("candidate_id")): row
+        for row in source_robustness.get("candidate_records", [])
+        if row.get("candidate_id")
+    }
+    allowed_source_status = {
+        "SUPPORTED",
+        "SOURCE_SPECIFIC",
+        "UNTESTABLE_SOURCE",
+        "NOT_APPLICABLE",
+    }
+
 
     def frozen_spec(candidate_id: str, row: dict[str, Any]) -> dict[str, Any]:
         if candidate_id == "005H-C01-RELATIVE-SIZE":
@@ -114,6 +147,20 @@ def main() -> None:
     frozen: list[dict[str, Any]] = []
     excluded: list[dict[str, Any]] = []
     for candidate_id, row in sorted(extended_candidates.items()):
+        source_record = source_records.get(candidate_id)
+        if (
+            source_record is None
+            or source_record.get("status") not in allowed_source_status
+        ):
+            excluded.append(
+                {
+                    "candidate_id": candidate_id,
+                    "reason": (
+                        "missing completed source-version robustness record"
+                    ),
+                }
+            )
+            continue
         if candidate_id in V3_HOSTILE_REQUIRED and candidate_id not in robust_v3:
             excluded.append(
                 {
@@ -164,6 +211,7 @@ def main() -> None:
                 **row,
                 "holdout_rule": HOLDOUT_RULES[candidate_id],
                 "frozen_spec": spec,
+                "source_robustness": source_record,
             }
         )
 
@@ -197,6 +245,14 @@ def main() -> None:
         "excluded_before_holdout": excluded,
         "v3_hostile_required": sorted(V3_HOSTILE_REQUIRED),
         "robust_v3_survivors": sorted(robust_v3),
+        "source_robustness_summary": {
+            "completed": True,
+            "records": list(source_records.values()),
+            "interpretation": (
+                "source-stratified challenge only; never pooled into V3 "
+                "selection or B0 scoring"
+            ),
+        },
         "pre_v3_source_identity_audit": {
             "completed": True,
             "eligible_windows": [
