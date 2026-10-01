@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import zipfile
 import subprocess
 import sys
 import time
@@ -52,7 +53,15 @@ def load_manifest(path: Path) -> dict[str, Any]:
     if data.get("schema_version") != 1:
         raise ValueError("schema_version must be 1")
     action = data.get("action")
-    if action not in {"auth_check", "run", "status", "output", "logs", "dataset_probe"}:
+    if action not in {
+        "auth_check",
+        "run",
+        "status",
+        "output",
+        "logs",
+        "dataset_probe",
+        "publish_code_dataset",
+    }:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
 
@@ -323,6 +332,83 @@ def dataset_probe(data: dict[str, Any], output_dir: Path) -> None:
     )
 
 
+def publish_code_dataset(data: dict[str, Any], output_dir: Path) -> None:
+    dataset = str(data.get("dataset", "")).strip()
+    source_dir = Path(str(data.get("source_dir", "src/predictions_cup"))).resolve()
+    title = str(data.get("title", "Predictions Cup Code Snapshot")).strip()
+    if "/" not in dataset:
+        raise ValueError("publish_code_dataset requires dataset='owner/slug'")
+    if not source_dir.is_dir():
+        raise FileNotFoundError(source_dir)
+
+    commit = run_command(["git", "rev-parse", "HEAD"]).stdout.strip()
+    stage = output_dir / "code_dataset_stage"
+    if stage.exists():
+        shutil.rmtree(stage)
+    stage.mkdir(parents=True)
+
+    archive_path = stage / "predictions_cup.zip"
+    with zipfile.ZipFile(
+        archive_path,
+        "w",
+        compression=zipfile.ZIP_DEFLATED,
+        compresslevel=9,
+    ) as archive:
+        parent = source_dir.parent
+        for path in sorted(source_dir.rglob("*")):
+            if path.is_file():
+                archive.write(path, path.relative_to(parent))
+
+    (stage / "CODE_SHA.txt").write_text(commit + "\n", encoding="utf-8")
+    (stage / "dataset-metadata.json").write_text(
+        json.dumps(
+            {
+                "title": title,
+                "id": dataset,
+                "licenses": [{"name": "other"}],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exists = run_command(["kaggle", "datasets", "status", dataset], check=False)
+    if exists.returncode == 0:
+        action_result = run_command(
+            [
+                "kaggle",
+                "datasets",
+                "version",
+                "-p",
+                str(stage),
+                "-m",
+                f"predictions-cup {commit}",
+            ]
+        )
+        operation = "version"
+    else:
+        action_result = run_command(
+            ["kaggle", "datasets", "create", "-p", str(stage)]
+        )
+        operation = "create"
+
+    (output_dir / "code_dataset_publish.txt").write_text(
+        (action_result.stdout or "") + (action_result.stderr or ""),
+        encoding="utf-8",
+    )
+    write_summary(
+        [
+            "## Kaggle code dataset publish",
+            "",
+            f"- Dataset: {dataset}",
+            f"- Operation: {operation}",
+            f"- Commit: {commit}",
+            f"- Archive bytes: {archive_path.stat().st_size}",
+        ]
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", required=True)
@@ -360,6 +446,8 @@ def main() -> int:
         write_summary(["## Kaggle logs", "", f"Kernel: {kernel}"])
     elif action == "dataset_probe":
         dataset_probe(data, output_dir)
+    elif action == "publish_code_dataset":
+        publish_code_dataset(data, output_dir)
 
     return 0
 
