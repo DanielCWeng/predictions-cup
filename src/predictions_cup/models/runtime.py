@@ -572,6 +572,7 @@ def _candidate_payload(
         "risk_approved": None if risk is None else risk.approved,
         "risk_reason": None if risk is None else risk.reason,
         "execution_operation_id": logical_operation_id,
+        "model_context": dict(decision.context),
     }
 
 
@@ -586,7 +587,10 @@ def _candidate_output(
         ModelDecisionKind.EXECUTION,
         ModelDecisionKind.QUOTING,
     }
-    if decision.kind is ModelDecisionKind.NO_TRADE:
+    if decision.kind is ModelDecisionKind.NOT_READY:
+        status = DecisionStatus.NOT_READY
+        abstain = decision.reason
+    elif decision.kind is ModelDecisionKind.NO_TRADE:
         status = DecisionStatus.ABSTAIN
         abstain = decision.reason
     elif economic and sizing is not None and not sizing.tradeable:

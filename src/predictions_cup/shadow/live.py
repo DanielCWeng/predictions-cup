@@ -14,7 +14,12 @@ from predictions_cup.maker.coordinator import MakerStateChange
 from predictions_cup.maker.direct_pm import DirectPolymarketFairValueProvider
 from predictions_cup.maker.factory import MakerRuntimeComponents
 from predictions_cup.mapping.models import MappingDocument
-from predictions_cup.models.registry import default_model_registry
+from predictions_cup.models.frozen_research import (
+    FROZEN_RESEARCH_MODEL_IDS,
+    Live005IMinuteState,
+    frozen_research_paper_providers,
+)
+from predictions_cup.models.registry import ModelRegistry, default_model_registry
 from predictions_cup.models.runtime import paper_shadow_candidates
 from predictions_cup.shadow.adapters import (
     DirectPmCandidate,
@@ -46,6 +51,7 @@ class LiveShadowRuntime:
     store: ShadowEventStore
     mapping_version: str
     hazard_005f: Live005FStateProvider | None = None
+    context_005i: Live005IMinuteState | None = None
     rejected_boundaries: int = 0
 
     async def start(self) -> None:
@@ -69,18 +75,29 @@ class LiveShadowRuntime:
         source_version: str,
         trusted: bool,
     ) -> bool:
-        provider = self.hazard_005f
-        if provider is None:
-            return False
-        return provider.observe_bbo(
-            scope_id=token_id,
-            observed_at=observed_at,
-            observed_monotonic_ns=observed_monotonic_ns,
-            best_bid=best_bid,
-            best_ask=best_ask,
-            source_version=source_version,
-            trusted=trusted,
-        )
+        accepted = False
+        provider_005f = self.hazard_005f
+        if provider_005f is not None:
+            accepted = provider_005f.observe_bbo(
+                scope_id=token_id,
+                observed_at=observed_at,
+                observed_monotonic_ns=observed_monotonic_ns,
+                best_bid=best_bid,
+                best_ask=best_ask,
+                source_version=source_version,
+                trusted=trusted,
+            ) or accepted
+        provider_005i = self.context_005i
+        if provider_005i is not None:
+            accepted = provider_005i.observe_bbo(
+                scope_id=token_id,
+                observed_at=observed_at,
+                best_bid=best_bid,
+                best_ask=best_ask,
+                source_version=source_version,
+                trusted=trusted,
+            ) or accepted
+        return accepted
 
     def observe(
         self,
@@ -152,6 +169,14 @@ def build_live_shadow_runtime(
         mapping=core.mapping,
         grid_origin=settings.shadow_005f_grid_origin,
     )
+    context_005i, frozen_research_providers = frozen_research_paper_providers(
+        mapping=core.mapping,
+        hazard_005f=hazard_005f,
+    )
+    frozen_research_candidates = paper_shadow_candidates(
+        ModelRegistry(frozen_research_providers),
+        FROZEN_RESEARCH_MODEL_IDS,
+    )
     bus = ShadowBus(
         (
             MakerCandidate(core.engine),
@@ -161,6 +186,7 @@ def build_live_shadow_runtime(
                 Frozen005FEvaluator(provider=hazard_005f)
             ),
             StructuralFairValueCandidate(),
+            *frozen_research_candidates,
             *model_candidates,
         ),
         store=store,
@@ -174,6 +200,7 @@ def build_live_shadow_runtime(
         store=store,
         mapping_version=_mapping_version(core.mapping),
         hazard_005f=hazard_005f,
+        context_005i=context_005i,
     )
 
 

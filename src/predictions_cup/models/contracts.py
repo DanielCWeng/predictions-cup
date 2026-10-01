@@ -8,7 +8,8 @@ execution, account truth and central risk remain outside this package.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol
 
@@ -26,6 +27,7 @@ class ModelCapability(StrEnum):
 
 
 class ModelDecisionKind(StrEnum):
+    NOT_READY = "NOT_READY"
     NO_TRADE = "NO_TRADE"
     CONTEXT = "CONTEXT"
     DIRECTIONAL = "DIRECTIONAL"
@@ -92,6 +94,7 @@ class ModelDecision:
     direction: OrderAction | None = None
     outcome_side: OutcomeSide = OutcomeSide.YES
     reason: str = "model_decision"
+    context: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.reason.strip():
