@@ -813,8 +813,12 @@ def screen_one(
             leave.append((total_sum - float(row["sum"])) / remaining)
 
     fresh = evidence["snapshot_age_s"] <= 60
-    activity_cut = float(evidence["price_updates_60"].median())
-    active = evidence["price_updates_60"] >= activity_cut
+    activity_cut = max(
+        1.0,
+        float(train["price_updates_60"].quantile(0.90)),
+    )
+    highest_activity_tail = evidence["price_updates_60"] >= activity_cut
+    tail_removed = evidence["price_updates_60"] < activity_cut
     improvement = float(np.mean(diff))
     result.update(
         {
@@ -839,14 +843,20 @@ def screen_one(
                 if fresh.any()
                 else np.nan
             ),
-            "high_activity_mean_improvement": (
-                float(evidence.loc[active, "loss_improvement"].mean())
-                if active.any()
+            "activity_tail_cutoff_train_p90": activity_cut,
+            "highest_activity_tail_mean_improvement": (
+                float(
+                    evidence.loc[
+                        highest_activity_tail,
+                        "loss_improvement",
+                    ].mean()
+                )
+                if highest_activity_tail.any()
                 else np.nan
             ),
-            "low_activity_mean_improvement": (
-                float(evidence.loc[~active, "loss_improvement"].mean())
-                if (~active).any()
+            "activity_tail_removed_mean_improvement": (
+                float(evidence.loc[tail_removed, "loss_improvement"].mean())
+                if tail_removed.any()
                 else np.nan
             ),
         }
@@ -883,12 +893,16 @@ def apply_bh(rows: list[dict[str, Any]]) -> None:
                 and float(rows[index]["block_bootstrap_lower"]) > 0
                 and np.isfinite(rows[index]["leave_market_min"])
                 and float(rows[index]["leave_market_min"]) > 0
-                and (
-                    not np.isfinite(rows[index]["fresh_snapshot_mean_improvement"])
-                    or float(rows[index]["fresh_snapshot_mean_improvement"]) > 0
+                and np.isfinite(
+                    rows[index]["fresh_snapshot_mean_improvement"]
                 )
-                and float(rows[index]["high_activity_mean_improvement"]) > 0
-                and float(rows[index]["low_activity_mean_improvement"]) > 0
+                and float(rows[index]["fresh_snapshot_mean_improvement"]) > 0
+                and np.isfinite(
+                    rows[index]["activity_tail_removed_mean_improvement"]
+                )
+                and float(
+                    rows[index]["activity_tail_removed_mean_improvement"]
+                ) > 0
             )
 
 
