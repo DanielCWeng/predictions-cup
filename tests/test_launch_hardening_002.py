@@ -905,8 +905,12 @@ def test_composed_lifecycle_oracle_restart_and_reconciliation(tmp_path: Path) ->
     )
     with pytest.raises(SigExecutionUncertainError):
         asyncio.run(sink.cancel(cancel))
-    assert journal.get("lh002-cancel-101") is not None
-    assert journal.get("lh002-cancel-101").lifecycle_state is LifecycleState.UNCERTAIN
+    cancel_state = next(
+        item
+        for item in journal.envelopes()
+        if item.logical_operation_id == "lh002-cancel-101"
+    )
+    assert cancel_state.lifecycle_state is LifecycleState.UNCERTAIN
     oracle.operation_identity = ("lh002-placement", "lh002-cancel-101")
     stages.append(
         _stage(
@@ -1385,8 +1389,11 @@ def test_uncertain_placement_retains_reservation_and_recovery_authority(
     )
     with pytest.raises(SigExecutionUncertainError):
         asyncio.run(sink.dispatch(plan))
-    persisted = journal.get("lh002-placement")
-    assert persisted is not None
+    persisted = next(
+        item
+        for item in journal.envelopes()
+        if item.logical_operation_id == "lh002-placement"
+    )
     assert persisted.lifecycle_state is LifecycleState.UNCERTAIN
     assert reservations.contains_operation(
         "lh002-placement",

@@ -21,6 +21,7 @@ class GateMode(StrEnum):
     WIDER = "WIDER"
     BID_ONLY = "BID_ONLY"
     ASK_ONLY = "ASK_ONLY"
+    HOLD = "HOLD"
     CANCEL = "CANCEL"
     SUSPEND = "SUSPEND"
     NO_TRADE = "NO_TRADE"
