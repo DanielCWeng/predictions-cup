@@ -152,7 +152,21 @@
       ],
       "model_scoring_performed": false,
       "scientific_interpretation": "NO_HOLDOUT_RESULT; technical resource failure only",
-      "no_retune_rule_active": true
+      "no_retune_rule_active": true,
+      "technical_retry": {
+        "status": "LAUNCHED",
+        "workflow_run_id": 36863936396,
+        "github_job_id": 110374686599,
+        "kernel": "polyleviathan/experiment-005h-one-shot-b0-build",
+        "implementation": "run_memory_bounded.py",
+        "reason": "retry after resource exhaustion only; previous attempt completed full 504-file replay but was killed before output materialization",
+        "scientific_spec_changed": false,
+        "candidates_changed": false,
+        "features_changed": false,
+        "horizons_changed": false,
+        "thresholds_changed": false,
+        "scoring_performed": false
+      }
     }
   },
   "real_sig_orders_sent": false
