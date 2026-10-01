@@ -17,10 +17,13 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-_CODE_ZIPS = sorted(Path("/kaggle/input").rglob("predictions_cup.zip"))
-if len(_CODE_ZIPS) != 1:
-    raise RuntimeError(f"expected one predictions_cup.zip mount, found {_CODE_ZIPS}")
-sys.path.insert(0, str(_CODE_ZIPS[0]))
+_PACKAGE_INITS = sorted(Path("/kaggle/input").rglob("predictions_cup/__init__.py"))
+if len(_PACKAGE_INITS) != 1:
+    raise RuntimeError(
+        f"expected one unpacked predictions_cup package, found {_PACKAGE_INITS}"
+    )
+_CODE_ROOT = _PACKAGE_INITS[0].parent.parent
+sys.path.insert(0, str(_CODE_ROOT))
 
 from predictions_cup.mm_replay_001 import (
     CANCEL_LATENCIES_MS,
@@ -44,7 +47,7 @@ GRID_ORIGIN_NS = int(WINDOW_START.value)
 BUCKETS = 32
 WORK = Path("/kaggle/working")
 HERE = Path(__file__).resolve().parent
-CODE_DATASET_ROOT = _CODE_ZIPS[0].parent
+CODE_DATASET_ROOT = _CODE_ROOT.parent
 MAPPING_PATH = CODE_DATASET_ROOT / "sig_polymarket_2026.json"
 
 COMPACT_SCHEMA = pa.schema(
