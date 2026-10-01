@@ -4,11 +4,13 @@
 
 STARTING_MAIN_SHA: `611b048ce0ee4630c01a9500cb021a70afba8474`
 
-FINAL_BRANCH_SHA: `7c958695b94ad9ab40eec0681c4688a37bf36f57`
+SCIENTIFIC_EVIDENCE_FREEZE_SHA: `7c958695b94ad9ab40eec0681c4688a37bf36f57`
 
-FINAL_BRANCH_SHA semantics: this is the **final scientific/artifact freeze commit** containing all four substantive outputs. This handoff file is a metadata-only successor. A Git commit cannot truthfully contain its own final SHA without a self-reference paradox; reviewers should use the PR head as the transport/head SHA and the value above as the frozen evidence-content SHA.
+SCIENTIFIC_EVIDENCE_FREEZE_SHA semantics: this freezes the scientific conclusions/effect sizes before the later administrative canonicality refresh. PR #114 subsequently merged into `main` at `662969df4e481f1cbd9417c923ae35d3a0aa9f9f`; later synthesis commits update 005G canonicality and repository synchronization only, not the scientific conclusion.
 
 BRANCH: `research/synthesis-001-positive-evidence`
+
+CANONICALITY_REFRESH_MAIN_SHA: `662969df4e481f1cbd9417c923ae35d3a0aa9f9f`
 
 MERGE_POLICY: `DO_NOT_MERGE_FROM_THIS_LANE`
 
@@ -150,7 +152,7 @@ Historical PR descriptions/comments were used where they contained scientific ev
 - 005F sealed HOLDOUT PRE result: **+35.35% relative MSE**, 297,384 obs.
 - fresh 005G DATA-003 replication: **+26.5024%**, 222,567 rows, 658 markets, 48/48 positive blocks.
 - evidence ladder: **E2 + E3**.
-- boundary: the E3 replication lives in PR #114 and is therefore **NON_CANONICAL / UNMERGED** at this snapshot.
+- canonicality: PR #114 merged into `main` at `662969df4e481f1cbd9417c923ae35d3a0aa9f9f`; the E3 replication is canonical repository evidence.
 - economic conversion: **FAILED** as part of 005G_STATE_HAZARD_V1; predictive evidence remains intact.
 
 ### Other major surviving families
@@ -166,9 +168,9 @@ Historical PR descriptions/comments were used where they contained scientific ev
 - 005E frozen secondary signed-flow / next-change diagnostics.
 - 004C-B narrow Colombia competitive-family effect.
 - 005A narrow same-family 5s effect.
-- 005G state-dwell/renewal discoveries, all labelled NON_CANONICAL / UNMERGED.
+- 005G state-dwell/renewal discoveries, now canonical via merged PR #114.
 
-Machine-readable individual rows: **28 surviving-positive ledger records**, of which **9 are 005G unmerged discovery rows**. The combined 005F→005G replication row is retained separately from those nine because it traces a previously canonical mechanism across datasets.
+Machine-readable individual rows: **28 surviving-positive ledger records**, of which **9 are canonical 005G discovery rows**. The combined 005F→005G replication row is retained separately from those nine because it traces the same frozen mechanism across genuinely fresh datasets.
 
 ## FALSIFIED_HISTORICAL_POSITIVES
 
@@ -203,8 +205,6 @@ Canonical/merged:
 - 005F four supported coordinates.
 - PRED-006 C01/C02 one-shot FINAL.
 - 005I five supported preregistered gates/families.
-
-NON_CANONICAL / UNMERGED:
 - 005G 10/12 frozen candidates pass the complete sealed-holdout gate, including one strict fresh replication and nine new discoveries.
 
 005H is **not** in this list: its B0 process completed replay but failed before canonical holdout scoring tables were produced.
@@ -247,8 +247,8 @@ Important boundary:
 ## MOVEMENT_HAZARD_POSITIVES
 
 - 005F genuine-age update and jump hazard.
-- 005G exact fresh genuine-age replication (NON_CANONICAL / UNMERGED).
-- 005G state-dwell transition hazard and smaller renewal variables (NON_CANONICAL / UNMERGED).
+- 005G exact fresh genuine-age replication (canonical, merged PR #114).
+- 005G state-dwell transition hazard and smaller renewal variables (canonical, merged PR #114).
 - PRED-006 C01/C02 next-price-change hazard.
 - 005I PRICE_DISCOVERY state transition.
 - 005I LIQUIDITY_STRESS persistence/replenishment.
@@ -297,7 +297,7 @@ The common logic is **WHEN + DIRECTION/LEVEL**, not “more correlated hazard fe
 
 ## UNRESOLVED_AMBIGUITIES
 
-1. **005G canonicality:** scientifically complete on branch/PR #114, but still NON_CANONICAL / UNMERGED at the frozen main SHA.
+1. **005G canonicality:** resolved. PR #114 merged into `main` at `662969df4e481f1cbd9417c923ae35d3a0aa9f9f`; this changes canonicality only, not the sealed scientific result or the failed economic-conversion conclusion.
 2. **005H holdout:** B0 replay completed, scoring result unavailable after technical failure; C04/C05 cannot be counted.
 3. **MM-REPLAY-001:** no accepted economic result at snapshot.
 4. **005I serial dependence:** 55,340 mean-reversion observations are overlapping sampled states, not independent episodes.
