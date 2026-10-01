@@ -4,9 +4,9 @@
   "kernel_dir": "scripts/kaggle/experiment_005h_source_robustness",
   "kernel": "polyleviathan/experiment-005h-source-robustness",
   "poll_seconds": 30,
-  "timeout_minutes": 300,
+  "timeout_minutes": 30,
   "download_outputs": true,
   "output_file_pattern": "(SOURCE_ROBUSTNESS_SUMMARY\\.json|SOURCE_ROBUSTNESS_REPORT\\.md|SOURCE_ROBUSTNESS_RESULTS\\.parquet)$",
-  "attempt": 2,
-  "note": "Requeue after schema-aware V2/V3 asset_id filtering fix; earlier zero-row smoke is invalid."
+  "attempt": 3,
+  "note": "Canonical source robustness uses frozen semantic-parity adjudication; approximate raw replay superseded pre-outcome."
 }
