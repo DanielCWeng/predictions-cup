@@ -341,25 +341,34 @@ def test_strategy_tournament_and_group_caps() -> None:
         _context(base, capital=capital, groups=groups),
     ).approved
 
-    assert evaluate_risk(
-        _opportunity(quantity=3),
-        _snapshot(),
-        _context(base, capital=capital, groups=groups),
-    ).reason == "max_per_strategy_exposure"
+    assert (
+        evaluate_risk(
+            _opportunity(quantity=3),
+            _snapshot(),
+            _context(base, capital=capital, groups=groups),
+        ).reason
+        == "max_per_strategy_exposure"
+    )
 
     tournament_only = replace(base, max_per_strategy_exposure=100.0)
-    assert evaluate_risk(
-        _opportunity(quantity=3),
-        _snapshot(),
-        _context(tournament_only, capital=capital, groups=groups),
-    ).reason == "max_tournament_exposure"
+    assert (
+        evaluate_risk(
+            _opportunity(quantity=3),
+            _snapshot(),
+            _context(tournament_only, capital=capital, groups=groups),
+        ).reason
+        == "max_tournament_exposure"
+    )
 
     group_only = replace(tournament_only, max_tournament_exposure=100.0)
-    assert evaluate_risk(
-        _opportunity(quantity=3),
-        _snapshot(),
-        _context(group_only, capital=capital, groups=groups),
-    ).reason == "max_event_group_exposure"
+    assert (
+        evaluate_risk(
+            _opportunity(quantity=3),
+            _snapshot(),
+            _context(group_only, capital=capital, groups=groups),
+        ).reason
+        == "max_event_group_exposure"
+    )
 
 
 def test_local_pending_reservations_count_toward_advanced_caps() -> None:
@@ -388,25 +397,34 @@ def test_local_pending_reservations_count_toward_advanced_caps() -> None:
         max_tournament_exposure=10,
         max_event_group_exposure=10,
     )
-    assert evaluate_risk(
-        _opportunity(quantity=2),
-        snapshot,
-        _context(base, capital=capital, groups=groups),
-    ).reason == "max_per_strategy_exposure"
+    assert (
+        evaluate_risk(
+            _opportunity(quantity=2),
+            snapshot,
+            _context(base, capital=capital, groups=groups),
+        ).reason
+        == "max_per_strategy_exposure"
+    )
 
     tournament_only = replace(base, max_per_strategy_exposure=100.0)
-    assert evaluate_risk(
-        _opportunity(quantity=2),
-        snapshot,
-        _context(tournament_only, capital=capital, groups=groups),
-    ).reason == "max_tournament_exposure"
+    assert (
+        evaluate_risk(
+            _opportunity(quantity=2),
+            snapshot,
+            _context(tournament_only, capital=capital, groups=groups),
+        ).reason
+        == "max_tournament_exposure"
+    )
 
     group_only = replace(tournament_only, max_tournament_exposure=100.0)
-    assert evaluate_risk(
-        _opportunity(quantity=2),
-        snapshot,
-        _context(group_only, capital=capital, groups=groups),
-    ).reason == "max_event_group_exposure"
+    assert (
+        evaluate_risk(
+            _opportunity(quantity=2),
+            snapshot,
+            _context(group_only, capital=capital, groups=groups),
+        ).reason
+        == "max_event_group_exposure"
+    )
 
 
 def test_unclassified_group_fails_closed_when_group_cap_is_enabled() -> None:
@@ -460,40 +478,55 @@ def test_related_markets_can_be_individually_safe_but_group_unsafe() -> None:
 def test_stale_or_untrusted_capital_state_fails_closed() -> None:
     limits = _limits()
     stale_account = _capital(account_ns=1)
-    assert evaluate_risk(
-        _opportunity(),
-        _snapshot(observed_ns=2_000),
-        _context(limits, capital=stale_account, observed_age_ns=100),
-    ).reason == "risk_account_state_stale"
+    assert (
+        evaluate_risk(
+            _opportunity(),
+            _snapshot(observed_ns=2_000),
+            _context(limits, capital=stale_account, observed_age_ns=100),
+        ).reason
+        == "risk_account_state_stale"
+    )
 
     stale_mark = _capital(account_ns=2_000, mark_ns=1)
-    assert evaluate_risk(
-        _opportunity(),
-        _snapshot(observed_ns=2_000),
-        _context(limits, capital=stale_mark, observed_age_ns=100),
-    ).reason == "risk_mark_state_stale"
+    assert (
+        evaluate_risk(
+            _opportunity(),
+            _snapshot(observed_ns=2_000),
+            _context(limits, capital=stale_mark, observed_age_ns=100),
+        ).reason
+        == "risk_mark_state_stale"
+    )
 
-    assert evaluate_risk(
-        _opportunity(),
-        _snapshot(),
-        _context(limits, capital=_capital(trusted=False)),
-    ).reason == "risk_state_untrusted"
+    assert (
+        evaluate_risk(
+            _opportunity(),
+            _snapshot(),
+            _context(limits, capital=_capital(trusted=False)),
+        ).reason
+        == "risk_state_untrusted"
+    )
 
 
 def test_session_loss_drawdown_strategy_and_global_halts() -> None:
     loss_limits = _limits(session_loss_limit=10)
-    assert evaluate_risk(
-        _opportunity(),
-        _snapshot(),
-        _context(loss_limits, capital=_capital(equity="90")),
-    ).reason == "session_loss_limit"
+    assert (
+        evaluate_risk(
+            _opportunity(),
+            _snapshot(),
+            _context(loss_limits, capital=_capital(equity="90")),
+        ).reason
+        == "session_loss_limit"
+    )
 
     drawdown_limits = _limits(drawdown_limit=10)
-    assert evaluate_risk(
-        _opportunity(),
-        _snapshot(),
-        _context(drawdown_limits, capital=_capital(equity="100", peak="110")),
-    ).reason == "peak_drawdown_limit"
+    assert (
+        evaluate_risk(
+            _opportunity(),
+            _snapshot(),
+            _context(drawdown_limits, capital=_capital(equity="100", peak="110")),
+        ).reason
+        == "peak_drawdown_limit"
+    )
 
     strategy_halted = trip_strategy_halt(
         _capital(),
@@ -502,18 +535,24 @@ def test_session_loss_drawdown_strategy_and_global_halts() -> None:
         reason="operator",
         now_monotonic_ns=10,
     )
-    assert evaluate_risk(
-        _opportunity(),
-        _snapshot(),
-        _context(_limits(), capital=strategy_halted),
-    ).reason == "strategy_halt"
+    assert (
+        evaluate_risk(
+            _opportunity(),
+            _snapshot(),
+            _context(_limits(), capital=strategy_halted),
+        ).reason
+        == "strategy_halt"
+    )
 
     globally_halted = trip_global_halt(_capital(), reason="loss", now_monotonic_ns=10)
-    assert evaluate_risk(
-        _opportunity(),
-        _snapshot(),
-        _context(_limits(), capital=globally_halted),
-    ).reason == "global_capital_halt"
+    assert (
+        evaluate_risk(
+            _opportunity(),
+            _snapshot(),
+            _context(_limits(), capital=globally_halted),
+        ).reason
+        == "global_capital_halt"
+    )
 
 
 def test_exploratory_profile_cannot_bypass_hard_caps() -> None:
@@ -819,8 +858,7 @@ def test_settlement_realtime_event_forces_authoritative_capital_resync() -> None
     assert result.requires_reconciliation
     assert not engine.trusted
     assert (
-        result.transition
-        is AccountTrustTransition.UNTRUSTED_ECONOMIC_EVENT_REQUIRES_RECONCILIATION
+        result.transition is AccountTrustTransition.UNTRUSTED_ECONOMIC_EVENT_REQUIRES_RECONCILIATION
     )
 
 
@@ -1053,13 +1091,9 @@ def test_exposure_aggregate_invariants_seeded_fuzz() -> None:
         exposure = build_exposure_snapshot(portfolio)
 
         expected_open = sum(
-            order.reserved_exposure
-            for order in orders
-            if order.open or order.uncertain
+            order.reserved_exposure for order in orders if order.open or order.uncertain
         )
-        expected_uncertain = sum(
-            order.reserved_exposure for order in orders if order.uncertain
-        )
+        expected_uncertain = sum(order.reserved_exposure for order in orders if order.uncertain)
         expected_positions = sum(abs(item.gross_exposure) for item in positions)
         expected_net = sum(item.signed_quantity for item in positions)
 
@@ -1249,7 +1283,6 @@ def test_strategy_exposure_is_attributed_from_journal_and_authoritative_fills(
         assert result.attributions[0].exposure == 5.0
     finally:
         journal.close()
-
 
 
 def test_sig_fifo_cost_basis_reconstructs_no_position_in_yes_space() -> None:
@@ -1613,9 +1646,7 @@ def test_reconciliation_tolerates_sig_cent_rounding_only(
     # Exact local PnL is -0.15297; SIG reports unrealizedPnl rounded to -0.15.
     reconstruction = PnLReconstruction(
         positions=(
-            CostBasisPosition(
-                "960", "271", Decimal("-10"), Decimal("0.435"), Decimal("5.65")
-            ),
+            CostBasisPosition("960", "271", Decimal("-10"), Decimal("0.435"), Decimal("5.65")),
         ),
         realised_pnl=Decimal("0"),
         processed_fill_ids=("f1",),
@@ -1640,11 +1671,7 @@ def test_reconciliation_tolerates_sig_cent_rounding_only(
             authoritative=authoritative,
             reconstruction=reconstruction,
             exposure=RiskExposureSnapshot(10, -10, 0, 0, trusted=True),
-            marks=(
-                RiskMark(
-                    "960", "271", Decimal("0.450297"), "sig", 100, True, "v1", "rest"
-                ),
-            ),
+            marks=(RiskMark("960", "271", Decimal("0.450297"), "sig", 100, True, "v1", "rest"),),
             now_monotonic_ns=100,
             max_account_age_ns=100,
             max_mark_age_ns=100,
@@ -1656,4 +1683,46 @@ def test_reconciliation_tolerates_sig_cent_rounding_only(
         assert reconcile().marks_trusted
     else:
         with pytest.raises(ReconciliationError, match="mark_pnl_disagreement"):
+            reconcile()
+
+
+@pytest.mark.parametrize(
+    ("summary", "accepted"), [(Decimal("-0.55"), True), (Decimal("-3.0"), False)]
+)
+def test_reconciliation_allows_one_tick_drift_between_position_and_pnl_reads(
+    summary: Decimal, accepted: bool
+) -> None:
+    # Live 2026-10-01 19:43Z: positions read, then the PnL summary seconds later.
+    authoritative = AuthoritativeRiskSnapshot(
+        session_id="session-1",
+        equity=Decimal("100") + summary,
+        account_trusted=True,
+        observed_monotonic_ns=100,
+        positions=(
+            AuthoritativeRiskPosition(
+                "960", "271", Decimal("-100"), Decimal("56.5"), Decimal("-0.15")
+            ),
+        ),
+        realised_pnl=Decimal("0"),
+        unrealised_pnl=summary,
+    )
+
+    def reconcile() -> CapitalRiskState:
+        return reconcile_capital_state(
+            previous=_reconcile_previous(),
+            authoritative=authoritative,
+            reconstruction=None,
+            exposure=RiskExposureSnapshot(100, -100, 0, 0, trusted=True),
+            marks=(RiskMark("960", "271", Decimal("0.4365"), "sig", 100, True, "v1", "rest"),),
+            now_monotonic_ns=100,
+            max_account_age_ns=100,
+            max_mark_age_ns=100,
+            session_loss_limit=None,
+            drawdown_limit=None,
+        )
+
+    if accepted:
+        assert reconcile().reconciliation_complete
+    else:
+        with pytest.raises(ReconciliationError, match="unrealised_pnl_disagreement"):
             reconcile()
