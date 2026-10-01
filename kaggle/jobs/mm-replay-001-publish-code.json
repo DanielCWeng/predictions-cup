@@ -4,23 +4,23 @@
   "dataset": "polyleviathan/predictions-cup-code",
   "source_dir": "src/predictions_cup",
   "title": "Predictions Cup Code Snapshot",
-  "note": "Publish branch-pinned predictions_cup package plus static mapping/DATA-003/005F contracts for Kaggle research kernels.",
+  "note": "Publish branch-pinned package plus flat static mapping/DATA-003/005F contracts for direct Kaggle mounting.",
   "static_paths": [
     {
       "source": "data/mappings/sig_polymarket_2026.json",
-      "destination": "repo_context/sig_polymarket_2026.json"
+      "destination": "sig_polymarket_2026.json"
     },
     {
       "source": "data/manifests/fills/data_003_manifest.json",
-      "destination": "repo_context/data_003_manifest.json"
+      "destination": "data_003_manifest.json"
     },
     {
       "source": "data/experiments/experiment_005f/fit_freeze_manifest.json",
-      "destination": "repo_context/fit_freeze_manifest.json"
+      "destination": "fit_freeze_manifest.json"
     },
     {
       "source": "data/experiments/experiment_005f/holdout_evidence_manifest.json",
-      "destination": "repo_context/holdout_evidence_manifest.json"
+      "destination": "holdout_evidence_manifest.json"
     }
   ]
 }
