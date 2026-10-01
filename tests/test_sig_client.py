@@ -746,7 +746,9 @@ def test_malformed_error_body_fails_without_exposing_raw_payload() -> None:
 
 def test_market_context_accepts_current_settlement_fields() -> None:
     payload = _public_market()
-    context = payload["contexts"][0]
+    contexts = payload["contexts"]
+    assert isinstance(contexts, list)
+    context = contexts[0]
     assert isinstance(context, dict)
     context["status"] = "settled"
     context["settledWith"] = "YES"
