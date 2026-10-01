@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "action": "dataset_probe",
+  "dataset": "polyleviathan/sig-cup-data003-orderbooks",
+  "file": "ev18_ok_sc_runoff_ga_runoff/date=2026-08-25/hour=12/events.parquet",
+  "note": "EXPERIMENT-005I independent v3-event raw-source schema probe."
+}
