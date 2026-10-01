@@ -245,6 +245,7 @@ class Live005IMinuteState:
         ret_1m_values = [mids[index] - mids[index - 1] for index in range(1, 6)]
         rv_5m = statistics.stdev(ret_1m_values)
         mid = mids[-1]
+        assert latest.spread is not None
         spread = float(latest.spread)
         features = Frozen005IMinuteFeatures(
             scope_id=scope_id,
