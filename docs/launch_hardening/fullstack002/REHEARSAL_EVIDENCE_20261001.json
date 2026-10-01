@@ -1,0 +1,47 @@
+{
+  "evidence_type": "FULLSTACK_002_CI_SIMULATION_ONLY",
+  "source_commit_sha": "6a735d678483b18771bca02b98a75abc879ce9b9",
+  "source_ci_run_id": 36867393983,
+  "source_ci_run_number": 5704,
+  "source_ci_job_id": 110386203090,
+  "rehearsal": {
+    "checks": [
+      {
+        "detail": "",
+        "name": "component_imports",
+        "state": "PASS"
+      },
+      {
+        "detail": "data/mappings/sig_polymarket_2026.json",
+        "name": "mapping_available",
+        "state": "PASS"
+      },
+      {
+        "detail": "SHADOW",
+        "name": "safe_configuration",
+        "state": "PASS"
+      },
+      {
+        "detail": "fullstack-002-status-v1",
+        "name": "status_aggregation",
+        "state": "PASS"
+      },
+      {
+        "detail": "",
+        "name": "systemd_analyze_verify",
+        "state": "PASS"
+      },
+      {
+        "detail": "",
+        "name": "shell_syntax",
+        "state": "PASS"
+      }
+    ],
+    "economic_order_sent": false,
+    "observed_at": "2026-10-01T13:16:49.589652+00:00",
+    "real_host_evidence": "NOT_RUN",
+    "real_result": "NOT_RUN",
+    "result": "SIMULATION_PASS",
+    "schema_version": "fullstack-002-rehearsal-v1"
+  }
+}
