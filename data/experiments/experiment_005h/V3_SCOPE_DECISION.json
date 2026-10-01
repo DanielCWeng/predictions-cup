@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "experiment": "EXPERIMENT-005H",
+  "decision": "PRIMARY_CAUSAL_EVALUATION_SCOPED_TO_V3",
+  "reason": [
+    "W17, W18, and B0 share V3 recorder semantics with timestamp_received plus sequence.",
+    "V2 lacks recoverable sequence for equal receive timestamps and AG6 is a separate acquisition stratum.",
+    "Pooling source versions before proving transportability would trade sample size for chronology ambiguity."
+  ],
+  "primary_pipeline": {
+    "TRAIN": "W17 V3",
+    "DEV": "W18 V3",
+    "FINAL": "B0 V3"
+  },
+  "v2_ag6_policy": "Do not pool into candidate selection or B0 evaluation. Source-stratified replication is future confirmation for any surviving mechanism.",
+  "deployment_implication": "Every B0 survivor remains FUTURE_CONFIRMATION_REQUIRED until live/future data and, where relevant, source-version robustness are demonstrated.",
+  "v1_policy": "No sequential fill claims without an exact venue trade anchor.",
+  "b0_opened": false,
+  "real_sig_orders_sent": false
+}
