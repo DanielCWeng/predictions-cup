@@ -701,7 +701,7 @@ def test_periodic_refresh_retries_when_activity_lands_during_resync() -> None:
             state=state,
             mint_token=mint_token,
             authoritative_resync=resync,
-            subscriber_factory=lambda **_: None,
+            subscriber_factory=lambda **_: None,  # type: ignore[arg-type]
         )
         await controller._refresh_authoritative(datetime.now(UTC))
 
