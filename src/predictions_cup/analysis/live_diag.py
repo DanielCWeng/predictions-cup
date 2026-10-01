@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import bisect
 import json
+import math
 import os
 import random
 import statistics
@@ -65,6 +66,7 @@ class Quote:
     best_ask: float
     bid_depth: float | None = None
     ask_depth: float | None = None
+    depth_observed_at: datetime | None = None
     trusted: bool = True
 
     @property
@@ -152,11 +154,23 @@ def _times(quotes: Sequence[Quote]) -> list[datetime]:
     return [item.observed_at for item in quotes]
 
 
-def _asof(quotes: Sequence[Quote], at: datetime) -> Quote | None:
+def _asof(
+    quotes: Sequence[Quote],
+    at: datetime,
+    *,
+    max_age_seconds: float | None = None,
+) -> Quote | None:
     if not quotes:
         return None
     index = bisect.bisect_right(_times(quotes), at) - 1
-    return None if index < 0 else quotes[index]
+    if index < 0:
+        return None
+    quote = quotes[index]
+    if max_age_seconds is not None:
+        age = (at - quote.observed_at).total_seconds()
+        if age < 0.0 or age > max_age_seconds:
+            return None
+    return quote
 
 
 def _economic(quotes: Sequence[Quote]) -> tuple[Quote, ...]:
@@ -179,6 +193,7 @@ def construct_gap_episodes(
     external_quotes: Sequence[Quote],
     threshold_ticks: int,
     tick_size: float = SIG_TICK_SIZE,
+    max_quote_age_seconds: float = 15.0,
 ) -> tuple[GapTrigger, ...]:
     """Create independent threshold-crossing episodes using only observable-as-of state."""
     if threshold_ticks <= 0 or tick_size <= 0:
@@ -192,8 +207,12 @@ def construct_gap_episodes(
     active = False
     output: list[GapTrigger] = []
     for at in timestamps:
-        sig_quote = _asof(sig, at)
-        external_quote = _asof(external, at)
+        sig_quote = _asof(sig, at, max_age_seconds=max_quote_age_seconds)
+        external_quote = _asof(
+            external,
+            at,
+            max_age_seconds=max_quote_age_seconds,
+        )
         if sig_quote is None or external_quote is None:
             continue
         gap = external_quote.midpoint - sig_quote.midpoint
@@ -222,6 +241,7 @@ def observe_snapback(
     external_quotes: Sequence[Quote],
     horizons_seconds: Sequence[int] = DEFAULT_HORIZONS_SECONDS,
     tick_size: float = SIG_TICK_SIZE,
+    max_quote_age_seconds: float = 15.0,
 ) -> tuple[SnapbackObservation, ...]:
     """Score future residual gaps without feeding future evidence into the trigger."""
     sig = _economic(sig_quotes)
@@ -230,8 +250,16 @@ def observe_snapback(
     for trigger in triggers:
         for horizon in horizons_seconds:
             at = trigger.observed_at + timedelta(seconds=horizon)
-            future_sig = _asof(sig, at)
-            future_external = _asof(external, at)
+            future_sig = _asof(
+                sig,
+                at,
+                max_age_seconds=max_quote_age_seconds,
+            )
+            future_external = _asof(
+                external,
+                at,
+                max_age_seconds=max_quote_age_seconds,
+            )
             if future_sig is None or future_external is None:
                 continue
             residual = future_external.midpoint - future_sig.midpoint
@@ -344,13 +372,21 @@ def _first_response(
     *,
     at: datetime,
     direction: int,
+    max_quote_age_seconds: float,
+    max_response_seconds: float,
 ) -> tuple[datetime | None, bool | None]:
-    baseline = _asof(sig_quotes, at)
+    baseline = _asof(
+        sig_quotes,
+        at,
+        max_age_seconds=max_quote_age_seconds,
+    )
     if baseline is None:
         return None, None
     for quote in sig_quotes:
         if quote.observed_at < at:
             continue
+        if (quote.observed_at - at).total_seconds() > max_response_seconds:
+            break
         move = quote.midpoint - baseline.midpoint
         if move != 0.0:
             return quote.observed_at, move * direction > 0.0
@@ -364,10 +400,15 @@ def analyze_lead_lag(
     latency_ms: float,
     minimum_impulse_ticks: int = 1,
     tick_size: float = SIG_TICK_SIZE,
+    max_quote_age_seconds: float = 15.0,
+    max_depth_age_seconds: float = 60.0,
+    max_response_seconds: float = 60.0,
 ) -> tuple[LeadLagObservation, ...]:
     """Require the executable edge to survive the declared latency assumption."""
     if latency_ms < 0:
         raise ValueError("latency_ms must be non-negative")
+    if max_response_seconds <= 0:
+        raise ValueError("max_response_seconds must be positive")
     sig = _economic(sig_quotes)
     external = _economic(external_quotes)
     output: list[LeadLagObservation] = []
@@ -376,7 +417,11 @@ def analyze_lead_lag(
         move = current.midpoint - prior.midpoint
         if abs(move) < minimum_impulse_ticks * tick_size:
             continue
-        trigger = _asof(sig, current.observed_at)
+        trigger = _asof(
+            sig,
+            current.observed_at,
+            max_age_seconds=max_quote_age_seconds,
+        )
         impulse_id = f"{current.observed_at.astimezone(UTC).isoformat()}:{index}"
         if trigger is None:
             output.append(
@@ -406,27 +451,64 @@ def analyze_lead_lag(
             sig,
             at=current.observed_at,
             direction=direction,
+            max_quote_age_seconds=max_quote_age_seconds,
+            max_response_seconds=max_response_seconds,
         )
         lead_seconds = (
             None
             if response_at is None
             else (response_at - current.observed_at).total_seconds()
         )
-        gross_edge, _, depth = _active_edge(current.midpoint, trigger)
+        gross_edge, _, trigger_depth = _active_edge(current.midpoint, trigger)
+        if (
+            trigger_depth is not None
+            and (
+                trigger.depth_observed_at is None
+                or (
+                    current.observed_at - trigger.depth_observed_at
+                ).total_seconds() > max_depth_age_seconds
+            )
+        ):
+            trigger_depth = None
+        delayed_at = current.observed_at + timedelta(milliseconds=latency_ms)
         delayed = _asof(
             sig,
-            current.observed_at + timedelta(milliseconds=latency_ms),
+            delayed_at,
+            max_age_seconds=max_quote_age_seconds,
         )
         delayed_edge: float | None = None
         delayed_price: float | None = None
+        delayed_depth: float | None = None
         if delayed is not None:
-            delayed_edge, delayed_price, _ = _active_edge(current.midpoint, delayed)
+            delayed_edge, delayed_price, delayed_depth = _active_edge(
+                current.midpoint,
+                delayed,
+            )
+            if (
+                delayed_depth is not None
+                and (
+                    delayed.depth_observed_at is None
+                    or (
+                        delayed_at - delayed.depth_observed_at
+                    ).total_seconds() > max_depth_age_seconds
+                )
+            ):
+                delayed_depth = None
+        depth = (
+            min(trigger_depth, delayed_depth)
+            if trigger_depth is not None and delayed_depth is not None
+            else None
+        )
 
         half_life: float | None = None
         if gross_edge > 0:
             for quote in sig:
                 if quote.observed_at < current.observed_at:
                     continue
+                if (
+                    quote.observed_at - current.observed_at
+                ).total_seconds() > max_response_seconds:
+                    break
                 edge, _, _ = _active_edge(current.midpoint, quote)
                 if edge <= gross_edge / 2.0:
                     half_life = (
@@ -440,15 +522,18 @@ def analyze_lead_lag(
         elif gross_edge <= 0:
             status = ResearchStatus.NO_EXECUTABLE_EDGE
             reasons = ("NO_ACTIVE_EDGE_AT_TRIGGER",)
-        elif depth is None or depth <= 0:
+        elif trigger_depth is None or trigger_depth <= 0:
             status = ResearchStatus.INSUFFICIENT_DEPTH
-            reasons = ("EXECUTABLE_DEPTH_UNAVAILABLE",)
+            reasons = ("TRIGGER_EXECUTABLE_DEPTH_UNAVAILABLE",)
         elif delayed_edge is None:
             status = ResearchStatus.INSUFFICIENT_EVIDENCE
             reasons = ("NO_LATENCY_ASOF_BOOK",)
         elif delayed_edge <= 0:
             status = ResearchStatus.TOO_FAST_TO_MONETIZE
             reasons = ("EDGE_GONE_AFTER_LATENCY",)
+        elif delayed_depth is None or delayed_depth <= 0:
+            status = ResearchStatus.INSUFFICIENT_DEPTH
+            reasons = ("LATENCY_EXECUTABLE_DEPTH_UNAVAILABLE",)
         else:
             status = ResearchStatus.MONETIZABLE_CANDIDATE
             reasons = ("LATENCY_ADJUSTED_ACTIVE_EDGE_POSITIVE",)
@@ -611,7 +696,7 @@ def recommend_market(
     return MarketRecommendation.QUOTE_NORMAL, ("NO_MATERIAL_NEGATIVE_EVIDENCE",)
 
 
-def _depth_from_payload(payload_json: object) -> tuple[float, float] | None:
+def _depth_from_payload(payload_json: object) -> tuple[float | None, float | None] | None:
     if not isinstance(payload_json, str):
         return None
     try:
@@ -621,11 +706,10 @@ def _depth_from_payload(payload_json: object) -> tuple[float, float] | None:
     if not isinstance(payload, dict):
         return None
 
-    def total(name: str) -> float:
+    def top_size(name: str) -> float | None:
         raw = payload.get(name)
         if not isinstance(raw, list):
-            return 0.0
-        result = 0.0
+            return None
         for item in raw:
             if not isinstance(item, dict):
                 continue
@@ -633,11 +717,11 @@ def _depth_from_payload(payload_json: object) -> tuple[float, float] | None:
                 quantity = float(str(item.get("quantity")))
             except (TypeError, ValueError):
                 continue
-            if quantity >= 0:
-                result += quantity
-        return result
+            if math.isfinite(quantity) and quantity > 0:
+                return quantity
+        return None
 
-    return total("bids"), total("asks")
+    return top_size("bids"), top_size("asks")
 
 
 def _load_quotes(
@@ -675,7 +759,10 @@ def _load_quotes(
         batch_size=65_536,
     )
     result: dict[str, list[Quote]] = defaultdict(list)
-    depths: dict[str, list[tuple[datetime, float, float]]] = defaultdict(list)
+    depths: dict[
+        str,
+        list[tuple[datetime, float, float, float | None, float | None]],
+    ] = defaultdict(list)
     for batch in scanner.to_batches():
         for row in batch.to_pylist():
             if row.get("book_valid") is False:
@@ -690,8 +777,23 @@ def _load_quotes(
 
             if sig and row.get("event_type") == "DEPTH_SNAPSHOT":
                 parsed_depth = _depth_from_payload(row.get("payload_json"))
-                if parsed_depth is not None and trusted:
-                    depths[identity].append((observed, *parsed_depth))
+                try:
+                    depth_bid = float(str(row.get("best_bid")))
+                    depth_ask = float(str(row.get("best_ask")))
+                except (TypeError, ValueError):
+                    depth_bid = math.nan
+                    depth_ask = math.nan
+                if (
+                    parsed_depth is not None
+                    and trusted
+                    and math.isfinite(depth_bid)
+                    and math.isfinite(depth_ask)
+                    and depth_ask >= depth_bid
+                ):
+                    bid_size, ask_size = parsed_depth
+                    depths[identity].append(
+                        (observed, depth_bid, depth_ask, bid_size, ask_size)
+                    )
                 continue
             if sig and row.get("event_type") != "BBO_SNAPSHOT":
                 continue
@@ -732,10 +834,27 @@ def _load_quotes(
                 if index < 0:
                     enriched.append(quote)
                     continue
-                depth_at, bid_depth, ask_depth = series[index]
+                (
+                    depth_at,
+                    depth_bid,
+                    depth_ask,
+                    bid_depth,
+                    ask_depth,
+                ) = series[index]
                 if (
                     quote.observed_at - depth_at
                 ).total_seconds() > max_depth_age_seconds:
+                    enriched.append(quote)
+                    continue
+                if not (
+                    math.isclose(depth_bid, quote.best_bid, rel_tol=0.0, abs_tol=1e-12)
+                    and math.isclose(
+                        depth_ask,
+                        quote.best_ask,
+                        rel_tol=0.0,
+                        abs_tol=1e-12,
+                    )
+                ):
                     enriched.append(quote)
                     continue
                 enriched.append(
@@ -745,6 +864,7 @@ def _load_quotes(
                         best_ask=quote.best_ask,
                         bid_depth=bid_depth,
                         ask_depth=ask_depth,
+                        depth_observed_at=depth_at,
                         trusted=quote.trusted,
                     )
                 )
@@ -770,6 +890,7 @@ def _align_quotes(
             best_ask=1.0 - item.best_bid,
             bid_depth=item.ask_depth,
             ask_depth=item.bid_depth,
+            depth_observed_at=item.depth_observed_at,
             trusted=item.trusted,
         )
         for item in quotes
@@ -1064,19 +1185,29 @@ def analyze_live_diagnostics(
     shadow_journal: Path | None = None,
     exposure_groups_path: Path | None = None,
     inventory_limit: float | None = None,
+    max_quote_age_seconds: float = 15.0,
     max_depth_age_seconds: float = 30.0,
+    max_response_seconds: float = 60.0,
     latency_ms: float = 100.0,
     latency_assumption_source: str = "fixed_sensitivity",
     thresholds_ticks: Sequence[int] = DEFAULT_THRESHOLDS_TICKS,
     horizons_seconds: Sequence[int] = DEFAULT_HORIZONS_SECONDS,
 ) -> dict[str, object]:
     """Run the first-hours economic layer without creating a new market-data process."""
+    if (
+        max_quote_age_seconds <= 0
+        or max_depth_age_seconds <= 0
+        or max_response_seconds <= 0
+    ):
+        raise ValueError("quote/depth freshness and response window must be positive")
     generated_at = datetime.now(UTC)
     config = {
         "analysis_version": ANALYSIS_VERSION,
         "latency_ms": latency_ms,
         "latency_assumption_source": latency_assumption_source,
+        "max_quote_age_seconds": max_quote_age_seconds,
         "max_depth_age_seconds": max_depth_age_seconds,
+        "max_response_seconds": max_response_seconds,
         "thresholds_ticks": list(thresholds_ticks),
         "horizons_seconds": list(horizons_seconds),
         "tick_size": SIG_TICK_SIZE,
@@ -1197,12 +1328,14 @@ def analyze_live_diagnostics(
                 sig_quotes=sig,
                 external_quotes=pm,
                 threshold_ticks=threshold,
+                max_quote_age_seconds=max_quote_age_seconds,
             )
             observations = observe_snapback(
                 triggers=triggers,
                 sig_quotes=sig,
                 external_quotes=pm,
                 horizons_seconds=horizons_seconds,
+                max_quote_age_seconds=max_quote_age_seconds,
             )
             summary = summarize_snapback(
                 triggers=triggers,
@@ -1306,6 +1439,9 @@ def analyze_live_diagnostics(
             sig_quotes=sig,
             external_quotes=pm,
             latency_ms=latency_ms,
+            max_quote_age_seconds=max_quote_age_seconds,
+            max_depth_age_seconds=max_depth_age_seconds,
+            max_response_seconds=max_response_seconds,
         ):
             lead_lag_rows.append(
                 {
