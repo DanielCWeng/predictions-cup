@@ -28,6 +28,7 @@ MintToken = Callable[[], Awaitable[RealtimeTokenDto]]
 AuthoritativeResync = Callable[[], Awaitable[AccountAuthoritativeSnapshot]]
 ClockNs = Callable[[], int]
 logger = logging.getLogger(__name__)
+_ACTIVITY_RETRY_ATTEMPTS = 3
 
 
 class AccountSubscriber(Protocol):
@@ -251,21 +252,33 @@ class AccountRealtimeController:
         del observed_at
         async with self._refresh_lock:
             self._resyncing = True
-            generation_before = self._resync_generation
             try:
-                authoritative = await self._authoritative_resync()
-            except Exception as exc:
-                self._state.mark_untrusted(AccountTrustTransition.UNTRUSTED_REFRESH_FAILURE)
-                logger.warning("SIG account authoritative refresh failed: %s", type(exc).__name__)
-            else:
-                # REST is the authoritative source. A quiet/disconnected socket
-                # does not invalidate a successful reconciliation; activity
-                # arriving during the fetch does, and requires another refresh.
-                self._state.apply_authoritative(authoritative, mark_trusted=False)
-                await asyncio.sleep(0)
-                if self._resync_generation == generation_before:
-                    self._state.mark_trusted_after_reconciliation()
-                else:
+                # Our own placements/cancels produce account activity, so a busy
+                # LIVE account often sees a batch during the multi-request
+                # resync. Retry immediately instead of holding untrusted until
+                # the next periodic refresh.
+                for _ in range(_ACTIVITY_RETRY_ATTEMPTS):
+                    generation_before = self._resync_generation
+                    try:
+                        authoritative = await self._authoritative_resync()
+                    except Exception as exc:
+                        self._state.mark_untrusted(
+                            AccountTrustTransition.UNTRUSTED_REFRESH_FAILURE
+                        )
+                        logger.warning(
+                            "SIG account authoritative refresh failed: %s: %s",
+                            type(exc).__name__,
+                            exc,
+                        )
+                        return
+                    # REST is the authoritative source. A quiet/disconnected
+                    # socket does not invalidate a successful reconciliation;
+                    # activity arriving during the fetch does.
+                    self._state.apply_authoritative(authoritative, mark_trusted=False)
+                    await asyncio.sleep(0)
+                    if self._resync_generation == generation_before:
+                        self._state.mark_trusted_after_reconciliation()
+                        return
                     self._state.mark_untrusted(
                         AccountTrustTransition.UNTRUSTED_RESYNC_ACTIVITY
                     )

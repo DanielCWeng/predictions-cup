@@ -674,3 +674,38 @@ def test_authoritative_account_snapshot_preserves_unacknowledged_reservation() -
 
     assert reservations.intent_ids() == frozenset({"intent-unacked"})
     assert state.trusted is True
+
+
+def test_periodic_refresh_retries_when_activity_lands_during_resync() -> None:
+    state = AccountRealtimeStateEngine(tournament_id="t1")
+    resync_count = 0
+    controller: AccountRealtimeController | None = None
+
+    async def mint_token() -> RealtimeTokenDto:
+        return _token()
+
+    async def resync() -> AccountAuthoritativeSnapshot:
+        nonlocal resync_count
+        resync_count += 1
+        if resync_count == 1:
+            # Our own order ACK arrives on the socket mid-resync.
+            assert controller is not None
+            await controller._handle_batch(
+                "user:profile-1", _batch(1, 0), datetime.now(UTC)
+            )
+        return _snapshot()
+
+    async def scenario() -> None:
+        nonlocal controller
+        controller = AccountRealtimeController(
+            state=state,
+            mint_token=mint_token,
+            authoritative_resync=resync,
+            subscriber_factory=lambda **_: None,  # type: ignore[arg-type]
+        )
+        await controller._refresh_authoritative(datetime.now(UTC))
+
+    asyncio.run(scenario())
+
+    assert resync_count == 2
+    assert state.trusted is True
