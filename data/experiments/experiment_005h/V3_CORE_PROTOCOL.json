@@ -19,7 +19,14 @@
       0.02,
       0.05
     ],
-    "replenishment_definition": "recovery of fixed consumed-side 2c price band relative to its strictly pre-trade visible depth"
+    "replenishment_definition": "recovery of fixed consumed-side 2c price band relative to its strictly pre-trade visible depth",
+    "recovery_levels": [
+      0.25,
+      0.5,
+      0.8,
+      0.9,
+      1
+    ]
   },
   "splits": {
     "TRAIN": "W17 / ev17_ak_fl_wy",
@@ -30,13 +37,18 @@
   "clock_horizons_seconds": [
     1,
     5,
+    15,
     30,
+    60,
     300
   ],
   "event_horizons_book_updates": [
     1,
+    2,
     5,
-    20
+    10,
+    25,
+    50
   ],
   "matched_control": {
     "sampling": "first valid reconstructed state in each 5-minute token bucket",
@@ -73,5 +85,15 @@
   ],
   "promotion_rule": "secondary challengers are descriptive unless they show stable TRAIN-to-DEV improvement; they cannot be added to the B0 shortlist by post-DEV threshold invention",
   "b0_rule": "B0 is not read by the V3 core. V3_CORE_SHORTLIST_FREEZE.json is provisional; experiment-wide PRE_HOLDOUT_FREEZE.json is written only after extended batteries, falsifications, and source robustness.",
-  "real_sig_orders_sent": false
+  "real_sig_orders_sent": false,
+  "episode_definition": {
+    "canonical_threshold_seconds": 10,
+    "rule": "same token + same aggressor side + adjacent linked fills no more than threshold apart",
+    "sensitivity_threshold_seconds": [
+      5,
+      10,
+      30
+    ],
+    "warning": "episode threshold is descriptive; no participant/metaorder identity is inferred"
+  }
 }
