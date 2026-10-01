@@ -96,6 +96,7 @@ def apply_linear_model(
         raise RuntimeError("frozen linear scaling width mismatch")
     if len(beta) != len(features) + 1:
         raise RuntimeError("frozen linear coefficient width mismatch")
+    work["_row_id"] = work.index.astype(str)
     x = work[features].to_numpy(float)
     z = (x - mean) / std
     design = np.column_stack([np.ones(len(z)), z])
@@ -254,14 +255,20 @@ def common_linear_scores(
     if left_scored.empty or right_scored.empty:
         return pd.DataFrame()
     left_out = left_scored[
-        ["token_id", "anchor_ts_ns", target, "prediction"]
+        [
+            "_row_id",
+            "token_id",
+            "anchor_ts_ns",
+            target,
+            "prediction",
+        ]
     ].rename(columns={"prediction": "left_prediction"})
     right_out = right_scored[
-        ["token_id", "anchor_ts_ns", "prediction"]
+        ["_row_id", "prediction"]
     ].rename(columns={"prediction": "right_prediction"})
     return left_out.merge(
         right_out,
-        on=["token_id", "anchor_ts_ns"],
+        on="_row_id",
         how="inner",
         validate="one_to_one",
     )
