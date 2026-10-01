@@ -363,3 +363,20 @@ def test_alert_webhook_is_optional_and_durable_first(
         for line in alert_path.read_text(encoding="utf-8").splitlines()
     ]
     assert [row["event_type"] for row in rows] == ["SERVICE_FAILED"]
+
+
+def test_status_contract_artifacts_are_versioned_and_fail_closed() -> None:
+    root = PROJECT_ROOT / "docs" / "launch_hardening" / "fullstack002"
+    schema = json.loads(
+        (root / "STATUS_CONTRACT.schema.json").read_text(encoding="utf-8")
+    )
+    sample = json.loads(
+        (root / "STATUS_SAMPLE.json").read_text(encoding="utf-8")
+    )
+
+    assert schema["properties"]["schema_version"]["const"] == fullstack.STATUS_SCHEMA_VERSION
+    assert sample["schema_version"] == fullstack.STATUS_SCHEMA_VERSION
+    assert sample["starting_main_sha"] == fullstack.FROZEN_STARTING_MAIN_SHA
+    assert sample["trading_authorization"]["authorized"] is False
+    assert sample["trading_authorization"]["state"] == "NOT_READY"
+    assert sample["host_identity"] == "EXAMPLE_ONLY_NOT_RUNTIME_EVIDENCE"
