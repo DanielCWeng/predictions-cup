@@ -330,6 +330,8 @@ def maker_snapshot_record(snapshot: MakerMarketSnapshot) -> dict[str, object]:
                 "token_id": quote.token_id,
                 "best_bid": quote.best_bid,
                 "best_ask": quote.best_ask,
+                "best_bid_size": quote.best_bid_size,
+                "best_ask_size": quote.best_ask_size,
                 "observed_monotonic_ns": quote.observed_monotonic_ns,
                 "observed_at": (
                     None

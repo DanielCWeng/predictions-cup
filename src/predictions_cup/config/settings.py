@@ -106,6 +106,14 @@ class AppSettings(BaseSettings):
     maker_min_fair_value: float = Field(default=0.0, ge=0.0, le=1.0)
     maker_max_fair_value: float = Field(default=1.0, ge=0.0, le=1.0)
 
+    # RESIDUAL-TAKER-001 shares MAKE's process state but has separate RISK
+    # attribution. It is opt-in and constrained to the explicit live universe.
+    residual_taker_enabled: bool = False
+    residual_taker_shadow_only: bool = True
+    residual_taker_size: int = Field(default=50, gt=0, le=2_147_483_647)
+    residual_taker_exchange_ids: str = ""
+    residual_taker_max_pm_book_age_ms: int = Field(default=35_000, gt=0)
+
     # SHADOW-002 is disabled by default and has no order-write capability.
     shadow_enabled: bool = False
     shadow_journal_path: Path = Path("data/shadow_002/events.jsonl")

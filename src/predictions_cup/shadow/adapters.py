@@ -9,6 +9,10 @@ from typing import Protocol
 
 from predictions_cup.maker.contracts import MakerDecision, MakerMarketSnapshot
 from predictions_cup.maker.direct_pm import DirectPolymarketFairValueProvider
+from predictions_cup.maker.residual_taker import (
+    ResidualTakerSignal,
+    residual_input_from_snapshot,
+)
 from predictions_cup.mapping.models import MappingDocument
 from predictions_cup.runtime.models import SIG_TICK
 from predictions_cup.shadow.contracts import (
@@ -83,6 +87,117 @@ class MakerCandidate:
                 "half_spread": trace.half_spread,
                 "gate_reason": decision.gate.reason,
                 "next_recheck_monotonic_ns": decision.next_recheck_monotonic_ns,
+            },
+        )
+
+
+class ResidualTakerCandidate:
+    """SHADOW-only view of the frozen residual signal on EXACT/SAME mappings."""
+
+    candidate_id = "residual-taker-001"
+    candidate_version = "residual-taker-001-v1"
+    strategy_family = "TAKE"
+
+    def __init__(
+        self,
+        mapping: MappingDocument,
+        *,
+        size: int = 50,
+        tracked_exchange_ids: frozenset[str] = frozenset(),
+        max_pm_book_age_ns: int = 35_000_000_000,
+        max_account_age_ns: int = 15_000_000_000,
+    ) -> None:
+        self._mapping = {record.sig_exchange_id: record for record in mapping.records}
+        self._signal = ResidualTakerSignal(
+            size=size, tracked_exchange_ids=tracked_exchange_ids
+        )
+        self._max_pm_book_age_ns = max_pm_book_age_ns
+        self._max_account_age_ns = max_account_age_ns
+
+    def evaluate(self, snapshot: CanonicalShadowSnapshot) -> CandidateOutput:
+        from predictions_cup.mapping.models import MappingClass, MappingDirection, MappingStatus
+
+        maker = snapshot.maker
+        if not self._signal.tracked_exchange_ids:
+            return CandidateOutput(
+                status=DecisionStatus.ABSTAIN,
+                fair_value=None,
+                lower_bound=None,
+                upper_bound=None,
+                confidence=0.0,
+                action_intent=None,
+                quote_intent=None,
+                abstain_reason="tracked_universe_not_configured",
+            )
+        record = self._mapping.get(maker.exchange_id)
+        if (
+            record is None
+            or record.mapping_class is not MappingClass.EXACT
+            or record.mapping_direction is not MappingDirection.SAME
+            or record.status is not MappingStatus.VERIFIED
+            or record.sig_market_id != maker.market_id
+        ):
+            return CandidateOutput(
+                status=DecisionStatus.ABSTAIN,
+                fair_value=None,
+                lower_bound=None,
+                upper_bound=None,
+                confidence=0.0,
+                action_intent=None,
+                quote_intent=None,
+                abstain_reason="mapping_not_exact_same_verified",
+            )
+        state = residual_input_from_snapshot(
+            maker,
+            record,
+            max_pm_book_age_ns=self._max_pm_book_age_ns,
+            observed_monotonic_ns=snapshot.observed_monotonic_ns,
+        )
+        if (
+            state is None
+            or maker.now_monotonic_ns - maker.account_observed_ns > self._max_account_age_ns
+        ):
+            return CandidateOutput(
+                status=DecisionStatus.ABSTAIN,
+                fair_value=None,
+                lower_bound=None,
+                upper_bound=None,
+                confidence=0.0,
+                action_intent=None,
+                quote_intent=None,
+                abstain_reason="untrusted_or_incomplete_state",
+            )
+        signal = self._signal.on_state(state)
+        if signal is None:
+            return CandidateOutput(
+                status=DecisionStatus.ABSTAIN,
+                fair_value=state.pm_mid,
+                lower_bound=None,
+                upper_bound=None,
+                confidence=0.0,
+                action_intent=None,
+                quote_intent=None,
+                abstain_reason="no_residual_signal",
+            )
+        return CandidateOutput(
+            status=DecisionStatus.OK,
+            fair_value=signal.pm_mid,
+            lower_bound=None,
+            upper_bound=None,
+            confidence=1.0,
+            action_intent=f"TAKE_{signal.direction}",
+            quote_intent=None,
+            candidate_payload={
+                "strategy_id": "residual-taker-001",
+                "exchange_id": signal.exchange_id,
+                "direction": signal.direction,
+                "outcome_side": signal.outcome_side.value,
+                "action": signal.action.value,
+                "entry_price": signal.entry_price,
+                "quantity": signal.quantity,
+                "residual": signal.residual,
+                "pm_mid": signal.pm_mid,
+                "pm_spread": signal.pm_spread,
             },
         )
 
