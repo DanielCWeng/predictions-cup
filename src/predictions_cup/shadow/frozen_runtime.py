@@ -1009,8 +1009,11 @@ class Frozen005FEvaluator:
                 quality_flags=("005f:genuine_bbo_not_websocket_age",),
             )
 
-        diagnostic_payload = self._diagnostic_state_payload(vector)
         regime = self._regime_provider.regime(snapshot)
+        diagnostic_payload = self._diagnostic_state_payload(
+            vector,
+            regime=regime,
+        )
         if regime is None:
             return RuntimeEvaluatorMetadata(
                 research_id=self.research_id,
@@ -1111,6 +1114,8 @@ class Frozen005FEvaluator:
     @staticmethod
     def _diagnostic_state_payload(
         vector: Hazard005FFeatureVector,
+        *,
+        regime: str | None,
     ) -> dict[str, object]:
         return {
             "005f_state": {
@@ -1118,6 +1123,7 @@ class Frozen005FEvaluator:
                 "grid_time_ns": vector.grid_time_ns,
                 "observed_monotonic_ns": vector.observed_monotonic_ns,
                 "source_version": vector.source_version,
+                "regime": regime,
                 "features": {
                     name: (
                         float(value)
