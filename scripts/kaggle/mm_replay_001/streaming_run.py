@@ -4,9 +4,14 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
+import sys
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+
+SOURCE_ROOT = Path(__file__).resolve().parent
+if str(SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(SOURCE_ROOT))
 
 from predictions_cup.mm_replay_001 import EXPERIMENT_ID, FillAssumption
 
