@@ -5,37 +5,58 @@
   "status": "FROZEN_BEFORE_PROMOTED_W17_W18_OUTCOME_INSPECTION",
   "final_source": "B0 / baseline_sep / V3 only",
   "precondition": "Experiment-wide PRE_HOLDOUT_FREEZE.json exists and lists the candidate. B0 must not be read otherwise.",
-  "training_policy": "After candidate selection is fully frozen on W17 TRAIN and W18 DEV, deterministic parametric models may be refit on W17+W18 using exactly the frozen features, transforms, target, and hyperparameters. No candidate, feature, threshold, interaction, normalization rule, outcome, or subset may change after B0 is opened.",
+  "training_policy": "All fitted B0 models use the exact W17 TRAIN parameters (feature list, feature mean/std, coefficients, regularization) frozen in the DEV-stage artifact. W18 is used for selection/falsification only; no post-DEV parameter refit is allowed before B0.",
   "candidate_rules": {
     "005H-C01-RELATIVE-SIZE": {
-      "fit": "OLS on W17+W18 exact-economics rows; frozen state baseline plus either log absolute episode size or log episode-size/touch-depth",
-      "b0_pass": "relative-size B0 R2 > absolute-size B0 R2 and relative-size B0 R2 > 0",
-      "diagnostics": ["token MSE win fraction", "stale-book subset", "time halves"]
+      "fit": "Exact W17-trained absolute-size and relative-size OLS specifications frozen after W18 selection; no refit.",
+      "b0_pass": "relative-size B0 R2 > absolute-size B0 R2, relative-size B0 R2 > 0, and token-cluster bootstrap 2.5% bound of the R2 difference > 0",
+      "diagnostics": [
+        "token MSE win fraction",
+        "stale-book subset",
+        "time halves"
+      ]
     },
     "005H-C02-FAILED-REPLENISHMENT": {
       "fit": "no fitted model",
       "b0_pass": "failed-minus-recovered aggressor-signed 30s continuation gap > 0 and token-cluster bootstrap 2.5% bound > 0",
-      "diagnostics": ["exact-economics subset", "stale-book subset", "time halves"]
+      "diagnostics": [
+        "exact-economics subset",
+        "stale-book subset",
+        "time halves"
+      ]
     },
     "005H-C03-FILL-BEYOND-STATE": {
       "fit": "same frozen without-replacement same-token matched-control algorithm",
       "b0_pass": "at least 50 B0 pairs and token-cluster bootstrap 2.5% bound of fill-minus-control aggressor-signed 30s move > 0",
-      "diagnostics": ["best-75%-match-score subset", "strict rematch", "time halves"]
+      "diagnostics": [
+        "best-75%-match-score subset",
+        "strict rematch",
+        "time halves"
+      ]
     },
     "005H-C04-ARRIVAL-STATE": {
-      "fit": "frozen ridge logistic model refit on W17+W18 matched case/control rows",
-      "b0_pass": "B0 AUC >= 0.60, both classes present, and each chronological half AUC >= 0.55",
-      "diagnostics": ["token subgroup AUC", "true leave-one-token-out refits"]
+      "fit": "Exact W17-trained ridge logistic arrival model frozen after W18 selection; no refit.",
+      "b0_pass": "B0 AUC >= 0.60, both chronological halves AUC >= 0.55, and token-cluster bootstrap 2.5% AUC bound > 0.50",
+      "diagnostics": [
+        "token subgroup AUC",
+        "true leave-one-token-out refits"
+      ]
     },
     "005H-C05-DIRECTION-STATE": {
-      "fit": "frozen ridge logistic model refit on W17+W18 linked fills",
-      "b0_pass": "B0 AUC >= 0.58, at least 100 BUY and 100 SELL rows, and each chronological half AUC >= 0.52",
-      "diagnostics": ["token leave-one-out", "price-region strata"]
+      "fit": "Exact W17-trained ridge logistic BUY-vs-SELL model frozen after W18 selection; no refit.",
+      "b0_pass": "B0 AUC >= 0.58, at least 100 BUY and 100 SELL rows, both chronological halves AUC >= 0.52, and token-cluster bootstrap 2.5% AUC bound > 0.50",
+      "diagnostics": [
+        "token leave-one-out",
+        "price-region strata"
+      ]
     },
     "005H-C06-BOOK-MICROSTRUCTURE-CHALLENGER": {
-      "fit": "frozen OLS state baseline versus the exact shortlisted OFI-or-microprice challenger, refit on W17+W18",
-      "b0_pass": "challenger B0 R2 exceeds baseline by at least 0.005 and the improvement remains positive under frozen stale-book and high-activity exclusions",
-      "diagnostics": ["token MSE win fraction", "time halves"]
+      "fit": "Exact W17-trained state baseline and exact shortlisted OFI-or-microprice OLS challenger frozen after W18 selection; no refit.",
+      "b0_pass": "challenger B0 R2 exceeds baseline by at least 0.005, token-cluster bootstrap 2.5% bound of the improvement > 0, and the improvement remains positive under frozen stale-book and high-activity exclusions",
+      "diagnostics": [
+        "token MSE win fraction",
+        "time halves"
+      ]
     }
   },
   "multiple_testing_policy": "Each candidate is an already frozen mechanism family from DEV; B0 is one-shot confirmation, not a new search. Report all evaluated candidates, including failures. No replacement candidates are allowed.",
