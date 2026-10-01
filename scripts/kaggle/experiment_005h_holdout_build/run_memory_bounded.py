@@ -1265,7 +1265,9 @@ def main() -> None:
 
 
 # Memory-bounded B0 storage/matching override.
+import shutil
 import sys
+import pyarrow as pa
 base = sys.modules[__name__]
 
 
