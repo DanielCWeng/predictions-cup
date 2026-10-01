@@ -2,8 +2,8 @@
   "schema_version": 1,
   "experiment": "EXPERIMENT-005G",
   "branch": "experiment/005g-data003-orderbook-atlas",
-  "phase": "SEALED_HOLDOUT",
-  "status": "HOLDOUT_RUNNING_FROZEN_CANDIDATES_ONLY",
+  "phase": "COMPLETE",
+  "status": "SEALED_HOLDOUT_COMPLETE",
   "primary_dataset": "polyleviathan/sig-cup-data003-orderbooks",
   "dataset_version": 1,
   "accepted_mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
@@ -12,20 +12,22 @@
   "lane_a": {
     "active_ev18": "COMPLETE_INCONCLUSIVE_OR_BLOCKED",
     "pre_baseline": "COMPLETE",
-    "holdout_eligible": [
-      "005F_REPL_PRE_UPDATE"
-    ],
+    "holdout_eligible": ["005F_REPL_PRE_UPDATE"],
     "rejected_before_holdout": [
       "005F_REPL_PRE_LIQUIDITY",
       "005F_REPL_ACTIVE_JUMP",
       "005F_REPL_ACTIVE_PRICE_NEGATIVE"
     ],
-    "active_update": "REPLICATION_INCONCLUSIVE_DEPENDENCE_UNDERPOWERED"
+    "active_update": "REPLICATION_INCONCLUSIVE_DEPENDENCE_UNDERPOWERED",
+    "sealed_result": "005F_REPL_PRE_UPDATE_FRESH_REPLICATION"
   },
   "lane_b": {
-    "status": "TRAIN_DEV_COMPLETE",
+    "status": "SEALED_HOLDOUT_COMPLETE",
     "broad_promoted_train_dev": 9,
     "sequential_promoted_train_dev": 2,
+    "broad_confirmed_holdout": 7,
+    "sequential_confirmed_holdout": 2,
+    "discovery_not_confirmed": 2,
     "holdout_read": true
   },
   "pre_holdout_freeze": {
@@ -37,17 +39,33 @@
   },
   "holdout": {
     "workflow_run_id": 36843408540,
+    "workflow_job_id": 110307699563,
     "launch_commit": "44a7cfc0120d778676a38e68a4863029078641b8",
     "window": [
       "2026-09-05T00:00:00Z",
       "2026-09-06T00:00:00Z"
     ],
     "first_read_authorized_after_freeze": true,
-    "status": "RUNNING"
+    "status": "SUCCESS",
+    "artifact_id": 11153497494,
+    "artifact_sha256": "2c5bb46ebcf5b8d79e7368afdb309c849e55992ad44a771ab849740a219ef4d0",
+    "holdout_results_sha256": "c0d567ace0dd9f1f801add05f69e673b9abb2689e4c9527650be49797587233f",
+    "holdout_audit_sha256": "bb93acbdbf78cbf9e4072a7c633db8c73b04a8e4736fd3d1b7badbbecd65cb33",
+    "raw_artifact_repo_path": "data/experiments/experiment_005g/holdout/kaggle-run-0-1.zip"
   },
-  "scientific_result": "PENDING_SEALED_HOLDOUT",
+  "scientific_result": {
+    "frozen_candidates": 12,
+    "fresh_replications": 1,
+    "independently_supported_discoveries": 9,
+    "discoveries_not_confirmed": 2,
+    "total_supported": 10,
+    "primary_finding": "STATE_DEPENDENT_RENEWAL_AND_TRANSITION_HAZARD",
+    "economic_claim": "NOT_ESTABLISHED",
+    "next_gate": "SHADOW_REPLAY_ECONOMIC_CONVERSION"
+  },
   "holdout_allowed": false,
   "holdout_read": true,
+  "selection_or_tuning_after_holdout": false,
   "make_modified": false,
   "real_sig_orders_sent": false
 }
