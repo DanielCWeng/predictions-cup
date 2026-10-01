@@ -347,14 +347,26 @@ def _capture_findings(venue: str, raw: object, findings: list[Finding]) -> None:
                     {},
                 )
             )
-        rest_age = _number(capture.get("last_rest_reconciliation_age_seconds"))
-        if rest_age is not None and rest_age > 60.0:
+        progress_age = _number(
+            capture.get("bulk_price_refresh_progress_age_seconds")
+        )
+        progress_limit = _number(
+            capture.get("bulk_price_refresh_progress_max_age_seconds")
+        )
+        if (
+            progress_age is not None
+            and progress_limit is not None
+            and progress_age > progress_limit
+        ):
             findings.append(
                 Finding(
-                    "FEED_SIG_RECONCILIATION_STALE",
+                    "FEED_SIG_REST_PROGRESS_STALE",
                     Severity.CRITICAL,
-                    "SIG authoritative REST reconciliation is stale",
-                    {"last_rest_reconciliation_age_seconds": rest_age},
+                    "SIG successful bulk-price refresh progress is stale",
+                    {
+                        "progress_age_seconds": progress_age,
+                        "progress_limit_seconds": progress_limit,
+                    },
                 )
             )
 
