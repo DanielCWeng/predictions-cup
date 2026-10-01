@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "action": "run",
+  "kernel_dir": "scripts/kaggle/experiment_005h_extended_analysis",
+  "kernel": "polyleviathan/experiment-005h-extended-analysis",
+  "poll_seconds": 30,
+  "timeout_minutes": 180,
+  "download_outputs": true,
+  "output_file_pattern": "(EXTENDED_DISCOVERY_SUMMARY\\.json|EXTENDED_DISCOVERY_REPORT\\.md|EXTENDED_V3_SHORTLIST\\.json|FILL_ARRIVAL_RESULTS\\.parquet|FILL_DIRECTION_RESULTS\\.parquet|IMPACT_CURVES\\.parquet|REVERSAL_CONTINUATION\\.parquet|RESILIENCE_RESULTS\\.parquet|FLOW_PERSISTENCE\\.parquet|TOXICITY_RESULTS\\.parquet|SPREAD_DECOMPOSITION\\.parquet|TRADFI_CHALLENGERS\\.parquet|DISCOVERY_RESULTS\\.parquet|FALSIFICATION_RESULTS\\.parquet)$",
+  "launch_gate": "PROMOTED_HARDENED_V3_CORE_COMPLETE_WORKFLOW_36838276378",
+  "upstream_artifact_id": 11151233575
+}
