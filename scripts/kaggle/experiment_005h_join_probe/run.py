@@ -30,6 +30,17 @@ def bytes_to_token(value: Any) -> str:
     return str(value)
 
 
+def normalize_tx_hash(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return "0x" + bytes(value).hex()
+    text = str(value).strip().lower()
+    if not text or text in {"none", "nan", "<na>"}:
+        return ""
+    return text if text.startswith("0x") else "0x" + text
+
+
 def best_from_levels(levels: Any, *, bid: bool) -> float | None:
     if levels is None:
         return None
@@ -153,6 +164,7 @@ def load_ev18(
     wanted = [
         "event_type", "timestamp_received", "sequence", "asset_id",
         "best_bid", "best_ask", "bids", "asks", "price", "size", "side",
+        "transaction_hash",
     ]
     for idx, path in enumerate(files):
         pf = pq.ParquetFile(path)
@@ -188,6 +200,9 @@ def load_ev18(
                         "price": price,
                         "size": size,
                         "side": str(rec.get("side") or "").upper(),
+                        "tx_hash": normalize_tx_hash(
+                            rec.get("transaction_hash")
+                        ),
                     })
                     counts["trade_rows"] += 1
                 elif kind in {"price_change", "book"}:
@@ -254,6 +269,10 @@ def match_groups(
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     idx_plain = build_index(trades, with_side=False)
     idx_side = build_index(trades, with_side=True)
+    hash_index: defaultdict[str, list[int]] = defaultdict(list)
+    for i, tx_hash in trades["tx_hash"].items():
+        if tx_hash:
+            hash_index[str(tx_hash)].append(int(i))
     tol_ns = int(MATCH_TOLERANCE_S * 1e9)
     out: list[dict[str, Any]] = []
     for _, r in groups.iterrows():
@@ -279,25 +298,42 @@ def match_groups(
                 block_ns,
                 tol_ns,
             )
+        tx_hash = normalize_tx_hash(r["tx_hash"])
+        hash_candidates = [
+            i
+            for i in hash_index.get(tx_hash, [])
+            if str(trades.at[i, "token_id"]) == token
+        ]
         chosen = sided if len(sided) == 1 else plain
         status = "UNMATCHED"
         match = None
-        if len(chosen) == 1:
-            status = "UNIQUE"
+        if len(hash_candidates) == 1:
+            i = hash_candidates[0]
+            tr = trades.loc[i]
+            status = "HASH_UNIQUE"
+            match = (
+                int(tr["ts_ns"]),
+                int(tr["sequence"]),
+                int(i),
+            )
+        elif len(hash_candidates) > 1:
+            status = "HASH_AMBIGUOUS"
+        elif len(chosen) == 1:
+            status = "SIGNATURE_UNIQUE"
             match = chosen[0]
         elif len(chosen) > 1:
             distances = [abs(x[0] - block_ns) for x in chosen]
-            m = min(distances)
+            minimum = min(distances)
             nearest = [
                 x
-                for x, d in zip(chosen, distances, strict=True)
-                if d == m
+                for x, distance in zip(chosen, distances, strict=True)
+                if distance == minimum
             ]
             if len(nearest) == 1:
-                status = "NEAREST_UNIQUE_AMONG_MULTIPLE"
+                status = "SIGNATURE_NEAREST_DIAGNOSTIC"
                 match = nearest[0]
             else:
-                status = "AMBIGUOUS"
+                status = "SIGNATURE_AMBIGUOUS"
         rec = {
             "group_id": r["group_id"],
             "token_id": token,
@@ -305,6 +341,8 @@ def match_groups(
             "fill_price": float(r["price"]),
             "fill_size": float(r["size_shares"]),
             "fill_side": side,
+            "tx_hash": tx_hash,
+            "hash_candidates_same_token": len(hash_candidates),
             "plain_candidates_120s": len(plain),
             "side_candidates_120s": len(sided),
             "match_status": status,
@@ -344,13 +382,19 @@ def summarize_matches(m: pd.DataFrame) -> dict[str, Any]:
             str(k): int(v)
             for k, v in m["match_status"].value_counts().items()
         },
-        "unique_or_nearest": int(
-            m["match_status"]
-            .isin(["UNIQUE", "NEAREST_UNIQUE_AMONG_MULTIPLE"])
-            .sum()
+        "hash_unique": int((m["match_status"] == "HASH_UNIQUE").sum()),
+        "hash_ambiguous": int(
+            (m["match_status"] == "HASH_AMBIGUOUS").sum()
         ),
-        "strict_unique": int((m["match_status"] == "UNIQUE").sum()),
-        "ambiguous": int((m["match_status"] == "AMBIGUOUS").sum()),
+        "signature_unique": int(
+            (m["match_status"] == "SIGNATURE_UNIQUE").sum()
+        ),
+        "signature_nearest_diagnostic": int(
+            (m["match_status"] == "SIGNATURE_NEAREST_DIAGNOSTIC").sum()
+        ),
+        "signature_ambiguous": int(
+            (m["match_status"] == "SIGNATURE_AMBIGUOUS").sum()
+        ),
         "unmatched": int((m["match_status"] == "UNMATCHED").sum()),
     }
     matched = m[m["trade_ts_ns"].notna()].copy() if "trade_ts_ns" in m.columns else pd.DataFrame()
@@ -423,9 +467,14 @@ def main() -> None:
         f"- DATA-003 participant rows: {group_audit['participant_rows']}",
         f"- Accepted transaction-condition groups: {group_audit['accepted_groups']}",
         f"- Observed EV18 trade events: {ob_counts.get('trade_rows', 0)}",
-        f"- Strict unique signature matches: {match_summary['strict_unique']}",
-        f"- Unique/nearest diagnostic matches: {match_summary['unique_or_nearest']}",
-        f"- Ambiguous: {match_summary['ambiguous']}",
+        f"- Exact tx-hash + token matches: {match_summary['hash_unique']}",
+        f"- Hash ambiguous: {match_summary['hash_ambiguous']}",
+        f"- Signature unique: {match_summary['signature_unique']}",
+        (
+            "- Signature nearest diagnostics: "
+            f"{match_summary['signature_nearest_diagnostic']}"
+        ),
+        f"- Signature ambiguous: {match_summary['signature_ambiguous']}",
         f"- Unmatched: {match_summary['unmatched']}",
         "",
         (
