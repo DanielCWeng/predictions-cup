@@ -26,6 +26,7 @@ from predictions_cup.sig.realtime_state import SigRealtimeStateEngine, Subscript
 from predictions_cup.sig.realtime_subscriber import SubscriberExit, SupabaseTournamentSubscriber
 
 logger = logging.getLogger(__name__)
+CAPTURE_PERIODIC_BULK_REFRESH_ENABLED = True
 
 
 def parse_args() -> argparse.Namespace:
