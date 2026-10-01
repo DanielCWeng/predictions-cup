@@ -2345,3 +2345,20 @@ def test_fair_value_band_quotes_only_mid_range_markets() -> None:
     outside = _engine(fair_value_band=(0.2, 0.8)).quote(tail)
     assert outside.gate.reason == "fv_outside_band"
     assert outside.desired is None
+
+
+def test_zero_extra_width_mirrors_polymarket_touch_exactly() -> None:
+    engine = _engine()
+    engine._spread = ConservativeSpreadPolicy(
+        base_half_spread_ticks=0.0,
+        uncertainty_multiplier=1.0,
+        volatility_multiplier=0.0,
+        toxicity_half_spread_ticks=0.0,
+    )
+    for bid, ask in ((0.47, 0.53), (0.45, 0.55), (0.48, 0.52)):
+        decision = engine.quote(
+            _maker_snapshot(external={"token-yes": _external(bid=bid, ask=ask)})
+        )
+        assert decision.desired is not None
+        assert decision.desired.bid_ticks == round(bid / 0.005)
+        assert decision.desired.ask_ticks == round(ask / 0.005)

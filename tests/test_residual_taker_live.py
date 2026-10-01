@@ -281,3 +281,14 @@ def test_unconcluded_remainder_cancel_is_retried_next_cycle() -> None:
     assert len(harness.cancels) == 3
     harness.run(_snapshot(), sequence=3)
     assert len(harness.cancels) == 3
+
+
+def test_near_certain_market_is_not_taken() -> None:
+    harness = _Harness()
+    harness.coordinator._min_fair_value = 0.10
+    harness.coordinator._max_fair_value = 0.90
+    # PM mid 0.95: SIG ask 0.90 would otherwise be a 5c BUY residual.
+    harness.run(_snapshot(bid=179, ask=180, pm_bid=0.945, pm_ask=0.955))
+    assert harness.plans == []
+    harness.run(_snapshot(bid=139, ask=140), sequence=2)
+    assert len(harness.plans) == 1
