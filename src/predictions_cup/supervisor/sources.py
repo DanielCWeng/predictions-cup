@@ -274,7 +274,16 @@ class SupervisorSources:
         )
         status, section = primary
         if status.valid:
-            return primary
+            section = dict(section)
+            last_rest = _parse_datetime(section.get("last_rest_reconciliation"))
+            section["last_rest_reconciliation_age_seconds"] = _age(
+                status.read_at, last_rest
+            )
+            last_realtime = _parse_datetime(section.get("last_realtime_receive"))
+            section["last_realtime_receive_age_seconds"] = _age(
+                status.read_at, last_realtime
+            )
+            return status, section
         fallback_reason = str(section.get("reason", ""))
         fallback_error = str(section.get("error", ""))
         may_fallback = (
