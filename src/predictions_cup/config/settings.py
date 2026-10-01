@@ -295,7 +295,8 @@ class AppSettings(BaseSettings):
             raise ValueError("shadow_enabled requires maker_enabled=true")
         if self.live_learn_enabled and not self.shadow_enabled:
             raise ValueError("live_learn_enabled requires shadow_enabled=true")
-        if (self.model_paper_ids.strip() or self.model_live_ids.strip()) and not self.shadow_enabled:
+        models_configured = self.model_paper_ids.strip() or self.model_live_ids.strip()
+        if models_configured and not self.shadow_enabled:
             raise ValueError("configured models require shadow_enabled=true")
         return self
 

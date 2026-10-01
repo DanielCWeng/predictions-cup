@@ -9,7 +9,7 @@ import statistics
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from time import perf_counter_ns
-from typing import Callable
+from collections.abc import Callable
 
 from predictions_cup.maker.contracts import MakerMarketSnapshot
 from predictions_cup.models.contracts import (

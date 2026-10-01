@@ -28,7 +28,6 @@ from predictions_cup.models.contracts import (
 from predictions_cup.models.registry import ModelRegistry, parse_model_ids
 from predictions_cup.models.sizing import SizingResult, size_model_decision
 from predictions_cup.risk.core import RiskContext, RiskDecision, evaluate_risk
-from predictions_cup.runtime.models import RuntimeSnapshot
 from predictions_cup.shadow.contracts import (
     CandidateDecision,
     CandidateOutput,
