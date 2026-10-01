@@ -2,5 +2,5 @@
   "schema_version": 1,
   "action": "status",
   "kernel": "polyleviathan/mm-replay-001-spread-capture",
-  "note": "Read-only status probe for MM-REPLAY-001 attempt 3."
+  "note": "Read-only status probe for MM-REPLAY-001 attempt 3 (check 3)."
 }
