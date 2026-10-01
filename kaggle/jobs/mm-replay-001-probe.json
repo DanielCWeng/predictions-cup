@@ -7,5 +7,5 @@
   "timeout_minutes": 90,
   "download_outputs": true,
   "output_file_pattern": "(PROBE_SUMMARY\\.json|PROBE_FILES\\.csv|SAMPLE_ROWS\\.json|EVENT_TYPE_AUDIT\\.json|TRADE_SIDE_SEMANTICS\\.json|probe_manifests/.*)$",
-  "note": "Probe landed DATA-003 order-book dataset; validate last_trade_price side semantics against preceding BBO."
+  "note": "Probe landed DATA-003 order-book dataset; validate last_trade_price side semantics against preceding BBO (pandas import fix)."
 }
