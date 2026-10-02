@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from time import monotonic_ns
 from typing import Protocol
+from uuid import uuid4
 
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
@@ -350,6 +351,17 @@ async def _recover_single_cancel(
     if not isinstance(order_id, int) or order_id <= 0:
         raise RuntimeError("journal contains malformed single-cancel envelope")
 
+    reconciliation_attempt_id = uuid4().hex
+    journal.record_event(
+        logical_operation_id=envelope.logical_operation_id,
+        event_type="CANCEL_RECONCILIATION_STARTED",
+        observed_monotonic_ns=clock_ns(),
+        exchange_order_id=str(order_id),
+        detail_json=json.dumps(
+            {"attempt_id": reconciliation_attempt_id},
+            separators=(",", ":"),
+        ),
+    )
     order = await rest.get_order(order_id)
     if order.open:
         await live_sink.cancel(envelope)
@@ -386,6 +398,19 @@ async def _recover_single_cancel(
         observed_monotonic_ns=observed,
         exchange_order_id=str(order_id),
         terminal_status=terminal.value,
+        detail_json=json.dumps(
+            {
+                "order_open": order.open,
+                "fills_coverage_complete": fills.coverage.complete,
+                "fills_projected_through_sequence": (
+                    fills.coverage.projected_through_sequence
+                ),
+                "fill_count": len(fills.data),
+                "total_quantity_filled": str(fills.total_quantity_filled),
+                "reconciliation_attempt_id": reconciliation_attempt_id,
+            },
+            separators=(",", ":"),
+        ),
     )
     journal.mark_state(envelope.logical_operation_id, terminal, observed)
 
