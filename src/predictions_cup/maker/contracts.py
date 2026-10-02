@@ -51,12 +51,8 @@ class ExternalQuoteState:
             raise ValueError("external quote identity/version must not be blank")
         if self.observed_monotonic_ns < 0:
             raise ValueError("external quote timestamp must be non-negative")
-        if (
-            self.observed_at is not None
-            and (
-                self.observed_at.tzinfo is None
-                or self.observed_at.utcoffset() is None
-            )
+        if self.observed_at is not None and (
+            self.observed_at.tzinfo is None or self.observed_at.utcoffset() is None
         ):
             raise ValueError("external quote observed_at must be timezone-aware")
         for value in (self.best_bid, self.best_ask):
@@ -101,10 +97,7 @@ class MakerMarketSnapshot:
             raise ValueError("maker timestamps must be non-negative")
         if self.sig_depth_observed_ns is not None and self.sig_depth_observed_ns < 0:
             raise ValueError("depth timestamp must be non-negative")
-        if (
-            self.external_feed_observed_ns is not None
-            and self.external_feed_observed_ns < 0
-        ):
+        if self.external_feed_observed_ns is not None and self.external_feed_observed_ns < 0:
             raise ValueError("external feed timestamp must be non-negative")
         if self.volatility is not None and (
             not math.isfinite(self.volatility) or self.volatility < 0.0
@@ -203,6 +196,18 @@ class QuoteSizes:
 
 
 @dataclass(frozen=True, slots=True)
+class QuoteLevel:
+    price_ticks: int
+    size: int
+
+    def __post_init__(self) -> None:
+        if not 1 <= self.price_ticks <= 199:
+            raise ValueError("maker quote level price outside SIG limit range")
+        if self.size <= 0:
+            raise ValueError("maker quote level size must be positive")
+
+
+@dataclass(frozen=True, slots=True)
 class DesiredQuote:
     exchange_id: str
     market_id: str
@@ -211,6 +216,8 @@ class DesiredQuote:
     ask_ticks: int | None
     bid_size: int
     ask_size: int
+    bid_levels: tuple[QuoteLevel, ...] = ()
+    ask_levels: tuple[QuoteLevel, ...] = ()
 
     def __post_init__(self) -> None:
         if self.bid_ticks is None and self.bid_size != 0:
@@ -229,6 +236,43 @@ class DesiredQuote:
             raise ValueError("maker quote must have bid < ask")
         if self.bid_size < 0 or self.ask_size < 0:
             raise ValueError("maker sizes must be non-negative")
+        if self.bid_levels:
+            if (
+                self.bid_ticks != self.bid_levels[0].price_ticks
+                or self.bid_size != self.bid_levels[0].size
+            ):
+                raise ValueError("bid summary must match the first ladder level")
+            if any(
+                left.price_ticks <= right.price_ticks
+                for left, right in zip(self.bid_levels, self.bid_levels[1:], strict=False)
+            ):
+                raise ValueError("bid ladder levels must descend in price")
+        if self.ask_levels:
+            if (
+                self.ask_ticks != self.ask_levels[0].price_ticks
+                or self.ask_size != self.ask_levels[0].size
+            ):
+                raise ValueError("ask summary must match the first ladder level")
+            if any(
+                left.price_ticks >= right.price_ticks
+                for left, right in zip(self.ask_levels, self.ask_levels[1:], strict=False)
+            ):
+                raise ValueError("ask ladder levels must ascend in price")
+        if (
+            self.bid_levels
+            and self.ask_levels
+            and self.bid_levels[0].price_ticks >= self.ask_levels[0].price_ticks
+        ):
+            raise ValueError("maker quote ladder must not cross itself")
+
+    def levels(self, side: QuoteSide) -> tuple[QuoteLevel, ...]:
+        if side is QuoteSide.BID:
+            if self.bid_levels:
+                return self.bid_levels
+            return () if self.bid_ticks is None else (QuoteLevel(self.bid_ticks, self.bid_size),)
+        if self.ask_levels:
+            return self.ask_levels
+        return () if self.ask_ticks is None else (QuoteLevel(self.ask_ticks, self.ask_size),)
 
 
 @dataclass(frozen=True, slots=True)

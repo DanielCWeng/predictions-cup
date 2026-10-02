@@ -74,6 +74,12 @@ class AppSettings(BaseSettings):
     maker_base_size: int = Field(default=2, gt=0, le=2_147_483_647)
     maker_minimum_size: int = Field(default=1, gt=0, le=2_147_483_647)
     maker_base_half_spread_ticks: float = Field(default=1.0, ge=0.0)
+    maker_fill_seeking_enabled: bool = False
+    maker_fill_seeking_min_edge: float = Field(default=0.02, ge=0.0, le=1.0)
+    maker_deep_ladder_enabled: bool = False
+    maker_deep_ladder_level_offsets: tuple[float, ...] = (0.01, 0.02, 0.04)
+    maker_deep_ladder_level_sizes: tuple[int, ...] = (50, 100, 150)
+    maker_deep_ladder_position_cap: int = Field(default=200, gt=0, le=200)
     maker_inventory_risk_aversion: float = Field(default=0.02, ge=0.0)
     maker_uncertainty_multiplier: float = Field(default=1.0, ge=0.0)
     maker_volatility_multiplier: float = Field(default=0.5, ge=0.0)
@@ -108,6 +114,10 @@ class AppSettings(BaseSettings):
     residual_taker_exchange_ids: str = ""
     residual_taker_max_pm_book_age_ms: int = Field(default=35_000, gt=0)
     residual_taker_max_position: int | None = Field(default=None, gt=0)
+    residual_taker_threshold: float = Field(default=0.02, ge=0.0, le=1.0)
+    residual_taker_pm_spread_cap: float = Field(default=0.02, ge=0.0, le=1.0)
+    residual_taker_min_pm_depth: float = Field(default=50.0, ge=0.0)
+    residual_taker_cooldown_seconds: float = Field(default=60.0, ge=0.0, le=3_600.0)
 
     # SHADOW-002 is disabled by default and has no order-write capability.
     shadow_enabled: bool = False
@@ -232,6 +242,23 @@ class AppSettings(BaseSettings):
     def validate_maker_configuration(self) -> Self:
         if self.maker_minimum_size > self.maker_base_size:
             raise ValueError("maker_minimum_size cannot exceed maker_base_size")
+        if self.maker_fill_seeking_enabled and self.maker_deep_ladder_enabled:
+            raise ValueError("maker fill-seeking and deep ladder modes are mutually exclusive")
+        if (
+            not self.maker_deep_ladder_level_offsets
+            or len(self.maker_deep_ladder_level_offsets) != len(self.maker_deep_ladder_level_sizes)
+            or any(value <= 0.0 for value in self.maker_deep_ladder_level_offsets)
+            or any(
+                left >= right
+                for left, right in zip(
+                    self.maker_deep_ladder_level_offsets,
+                    self.maker_deep_ladder_level_offsets[1:],
+                    strict=False,
+                )
+            )
+            or any(value <= 0 for value in self.maker_deep_ladder_level_sizes)
+        ):
+            raise ValueError("deep ladder offsets/sizes must be positive matching tuples")
         if self.maker_max_bbo_age_ms < int(self.sig_realtime_bulk_price_refresh_seconds * 1_000):
             raise ValueError(
                 "maker_max_bbo_age_ms must cover the configured SIG bulk-price refresh interval"

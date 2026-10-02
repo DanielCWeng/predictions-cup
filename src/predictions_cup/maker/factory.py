@@ -24,7 +24,12 @@ from predictions_cup.maker.policies import (
 )
 from predictions_cup.maker.safety import MakerKillSwitch
 from predictions_cup.mapping.crosswalk import load_document
-from predictions_cup.mapping.models import MappingDocument
+from predictions_cup.mapping.models import (
+    MappingClass,
+    MappingDirection,
+    MappingDocument,
+    MappingStatus,
+)
 from predictions_cup.risk.capital import MarketExposureGroup
 from predictions_cup.risk.core import RiskContext, RiskLimits, RiskProfile
 from predictions_cup.risk.groups import load_exposure_group_provider
@@ -60,6 +65,15 @@ def build_maker_components(
     if settings.risk_exposure_groups_path is not None:
         group_provider = load_exposure_group_provider(settings.risk_exposure_groups_path)
         exposure_groups = group_provider.for_tournament(mapping.tournament_id)
+
+    market_token_ids = {
+        record.sig_exchange_id: record.direct_polymarket.mapped_token_id
+        for record in mapping.records
+        if record.mapping_class in {MappingClass.EXACT, MappingClass.NEAR}
+        and record.mapping_direction is MappingDirection.SAME
+        and record.status is MappingStatus.VERIFIED
+        and record.direct_polymarket is not None
+    }
 
     ms = 1_000_000
     engine = MakerEngine(
@@ -100,7 +114,14 @@ def build_maker_components(
             strategy_version="make-001-v1",
             max_abs_inventory=settings.maker_max_abs_inventory,
             account_proxy_size_factor=settings.account_proxy_size_factor,
+            fill_seeking_enabled=settings.maker_fill_seeking_enabled,
+            fill_seeking_min_edge=settings.maker_fill_seeking_min_edge,
+            deep_ladder_enabled=settings.maker_deep_ladder_enabled,
+            deep_ladder_level_offsets=settings.maker_deep_ladder_level_offsets,
+            deep_ladder_level_sizes=settings.maker_deep_ladder_level_sizes,
+            deep_ladder_position_cap=settings.maker_deep_ladder_position_cap,
         ),
+        market_token_ids=market_token_ids,
     )
     lifecycle = QuoteLifecycleManager(
         QuoteLifecycleConfig(

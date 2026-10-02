@@ -25,11 +25,15 @@ from predictions_cup.execution.models import (
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
-from predictions_cup.maker.contracts import MakerMarketSnapshot
+from predictions_cup.maker.contracts import MakerMarketSnapshot, QuoteSide
 from predictions_cup.maker.coordinator import MakerStateChange
 from predictions_cup.maker.lifecycle import QuoteRegistry
 from predictions_cup.maker.residual_taker import (
+    COOLDOWN_NS,
+    MIN_PM_DEPTH,
+    PM_SPREAD_CAP,
     STRATEGY_ID,
+    THRESHOLD,
     ResidualSignal,
     ResidualTakerSignal,
     residual_input_from_snapshot,
@@ -74,6 +78,10 @@ class ResidualTakerLiveCoordinator:
         max_position: int | None = None,
         allow_bbo_proxy: bool = False,
         max_sig_bbo_age_ns: int | None = None,
+        threshold: float = THRESHOLD,
+        pm_spread_cap: float = PM_SPREAD_CAP,
+        min_pm_depth: float = MIN_PM_DEPTH,
+        cooldown_ns: int = COOLDOWN_NS,
     ) -> None:
         if not tracked_exchange_ids:
             raise ValueError("LIVE residual taker requires an explicit universe")
@@ -81,7 +89,12 @@ class ResidualTakerLiveCoordinator:
         self._signal = ResidualTakerSignal(
             size=size,
             tracked_exchange_ids=tracked_exchange_ids,
+            threshold=threshold,
+            pm_spread_cap=pm_spread_cap,
+            min_pm_depth=min_pm_depth,
+            cooldown_ns=cooldown_ns,
         )
+        self._threshold = threshold
         self._max_pm_book_age_ns = max_pm_book_age_ns
         self._max_sig_bbo_age_ns = (
             max_pm_book_age_ns if max_sig_bbo_age_ns is None else max_sig_bbo_age_ns
@@ -135,6 +148,7 @@ class ResidualTakerLiveCoordinator:
                 max_pm_book_age_ns=self._max_pm_book_age_ns,
                 observed_monotonic_ns=snapshot.now_monotonic_ns,
                 allow_bbo_proxy=self._allow_bbo_proxy,
+                threshold=self._threshold,
             )
             if state is None or not (self._min_fair_value <= state.pm_mid <= self._max_fair_value):
                 continue
@@ -310,10 +324,14 @@ class ResidualTakerLiveCoordinator:
     def _crosses_own_quote(self, exchange_id: str, action: OrderAction, ticks: int) -> bool:
         state = self._quotes.state(exchange_id)
         if action is OrderAction.BUY:
-            own = state.ask
-            return own is not None and own.price_ticks <= ticks
-        own = state.bid
-        return own is not None and own.price_ticks >= ticks
+            return any(
+                quote.side is QuoteSide.ASK and quote.price_ticks <= ticks
+                for quote in state.all_quotes()
+            )
+        return any(
+            quote.side is QuoteSide.BID and quote.price_ticks >= ticks
+            for quote in state.all_quotes()
+        )
 
     async def _cancel_remainder(
         self,

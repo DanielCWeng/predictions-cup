@@ -115,18 +115,13 @@ def reconcile_maker_quote_registry(
     # orders. Unrelated strategy quote state is never modified here.
     for exchange_id in quotes.exchange_ids:
         state = quotes.state(exchange_id)
-        for side, active in (
-            (QuoteSide.BID, state.bid),
-            (QuoteSide.ASK, state.ask),
-        ):
-            if active is None:
-                continue
+        for active in state.all_quotes():
             if active.logical_operation_id not in maker_operation_ids:
                 continue
             if active.exchange_order_id is None or active.exchange_order_id not in maker_open_ids:
-                quotes.clear_side(
+                quotes.clear_quote(
                     exchange_id=exchange_id,
-                    side=side,
+                    slot=active.slot,
                     observed_monotonic_ns=observed_monotonic_ns,
                 )
 

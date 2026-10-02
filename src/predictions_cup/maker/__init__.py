@@ -14,6 +14,7 @@ from predictions_cup.maker.contracts import (
     MakerMarketSnapshot,
     MakerTrace,
     PredictiveAdjustment,
+    QuoteLevel,
     QuoteSide,
     ToxicityEstimate,
 )
@@ -75,6 +76,7 @@ __all__ = [
     "NullPredictiveAdjuster",
     "NullToxicityProvider",
     "PredictiveAdjustment",
+    "QuoteLevel",
     "QuoteLifecycleAction",
     "QuoteLifecycleActionKind",
     "QuoteLifecycleConfig",

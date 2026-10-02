@@ -80,25 +80,31 @@ class LiveShadowRuntime:
         accepted = False
         provider_005f = self.hazard_005f
         if provider_005f is not None:
-            accepted = provider_005f.observe_bbo(
-                scope_id=token_id,
-                observed_at=observed_at,
-                observed_monotonic_ns=observed_monotonic_ns,
-                best_bid=best_bid,
-                best_ask=best_ask,
-                source_version=source_version,
-                trusted=trusted,
-            ) or accepted
+            accepted = (
+                provider_005f.observe_bbo(
+                    scope_id=token_id,
+                    observed_at=observed_at,
+                    observed_monotonic_ns=observed_monotonic_ns,
+                    best_bid=best_bid,
+                    best_ask=best_ask,
+                    source_version=source_version,
+                    trusted=trusted,
+                )
+                or accepted
+            )
         provider_005i = self.context_005i
         if provider_005i is not None:
-            accepted = provider_005i.observe_bbo(
-                scope_id=token_id,
-                observed_at=observed_at,
-                best_bid=best_bid,
-                best_ask=best_ask,
-                source_version=source_version,
-                trusted=trusted,
-            ) or accepted
+            accepted = (
+                provider_005i.observe_bbo(
+                    scope_id=token_id,
+                    observed_at=observed_at,
+                    best_bid=best_bid,
+                    best_ask=best_ask,
+                    source_version=source_version,
+                    trusted=trusted,
+                )
+                or accepted
+            )
         return accepted
 
     def observe(
@@ -157,9 +163,7 @@ def build_live_shadow_runtime(
             )
         )
     store: ShadowEventStore = (
-        primary
-        if not mirrors
-        else CompositeShadowEventStore(primary, tuple(mirrors))
+        primary if not mirrors else CompositeShadowEventStore(primary, tuple(mirrors))
     )
 
     direct_pm = DirectPolymarketFairValueProvider(core.mapping)
@@ -199,10 +203,12 @@ def build_live_shadow_runtime(
                     settings.residual_taker_exchange_ids,
                     settings.sig_realtime_tracked_exchange_ids,
                 ),
-                max_pm_book_age_ns=(
-                    settings.residual_taker_max_pm_book_age_ms * 1_000_000
-                ),
+                max_pm_book_age_ns=(settings.residual_taker_max_pm_book_age_ms * 1_000_000),
                 max_account_age_ns=settings.maker_max_account_age_ms * 1_000_000,
+                threshold=settings.residual_taker_threshold,
+                pm_spread_cap=settings.residual_taker_pm_spread_cap,
+                min_pm_depth=settings.residual_taker_min_pm_depth,
+                cooldown_ns=int(settings.residual_taker_cooldown_seconds * 1_000_000_000),
             )
         )
     bus = ShadowBus(
@@ -211,9 +217,7 @@ def build_live_shadow_runtime(
         queue_capacity=settings.shadow_candidate_queue_capacity,
         ingress_capacity=settings.shadow_ingress_queue_capacity,
         candidate_timeout_seconds=settings.shadow_candidate_timeout_ms / 1_000.0,
-        minimum_maker_snapshot_interval_seconds=(
-            settings.shadow_snapshot_min_interval_seconds
-        ),
+        minimum_maker_snapshot_interval_seconds=(settings.shadow_snapshot_min_interval_seconds),
         trading_enabled=False,
     )
     return LiveShadowRuntime(

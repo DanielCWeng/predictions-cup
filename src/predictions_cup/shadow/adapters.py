@@ -10,6 +10,10 @@ from typing import Protocol
 from predictions_cup.maker.contracts import MakerDecision, MakerMarketSnapshot
 from predictions_cup.maker.direct_pm import DirectPolymarketFairValueProvider
 from predictions_cup.maker.residual_taker import (
+    COOLDOWN_NS,
+    MIN_PM_DEPTH,
+    PM_SPREAD_CAP,
+    THRESHOLD,
     ResidualTakerSignal,
     residual_input_from_snapshot,
 )
@@ -106,13 +110,23 @@ class ResidualTakerCandidate:
         tracked_exchange_ids: frozenset[str] = frozenset(),
         max_pm_book_age_ns: int = 35_000_000_000,
         max_account_age_ns: int = 15_000_000_000,
+        threshold: float = THRESHOLD,
+        pm_spread_cap: float = PM_SPREAD_CAP,
+        min_pm_depth: float = MIN_PM_DEPTH,
+        cooldown_ns: int = COOLDOWN_NS,
     ) -> None:
         self._mapping = {record.sig_exchange_id: record for record in mapping.records}
         self._signal = ResidualTakerSignal(
-            size=size, tracked_exchange_ids=tracked_exchange_ids
+            size=size,
+            tracked_exchange_ids=tracked_exchange_ids,
+            threshold=threshold,
+            pm_spread_cap=pm_spread_cap,
+            min_pm_depth=min_pm_depth,
+            cooldown_ns=cooldown_ns,
         )
         self._max_pm_book_age_ns = max_pm_book_age_ns
         self._max_account_age_ns = max_account_age_ns
+        self._threshold = threshold
 
     def evaluate(self, snapshot: CanonicalShadowSnapshot) -> CandidateOutput:
         from predictions_cup.mapping.models import MappingClass, MappingDirection, MappingStatus
@@ -152,6 +166,7 @@ class ResidualTakerCandidate:
             record,
             max_pm_book_age_ns=self._max_pm_book_age_ns,
             observed_monotonic_ns=snapshot.observed_monotonic_ns,
+            threshold=self._threshold,
         )
         if (
             state is None
@@ -221,11 +236,7 @@ class DirectPmCandidate:
     def evaluate(self, snapshot: CanonicalShadowSnapshot) -> CandidateOutput:
         result = self._provider.fair_value(snapshot.maker)
         sig_mid = _sig_midpoint(snapshot.maker)
-        discrepancy = (
-            None
-            if result.value is None or sig_mid is None
-            else result.value - sig_mid
-        )
+        discrepancy = None if result.value is None or sig_mid is None else result.value - sig_mid
         direction = None
         if discrepancy is not None:
             if discrepancy > 1e-12:
@@ -335,9 +346,7 @@ class Pred006Candidate:
         frozen_version: str = "frozen-spec-runtime-not-wired",
     ) -> None:
         self._evaluator = evaluator
-        self.candidate_version = (
-            frozen_version if evaluator is None else evaluator.version
-        )
+        self.candidate_version = frozen_version if evaluator is None else evaluator.version
 
     def evaluate(self, snapshot: CanonicalShadowSnapshot) -> CandidateOutput:
         if self._evaluator is None:
@@ -412,9 +421,7 @@ class Hazard005FCandidate:
         frozen_version: str = "005f-runtime-not-wired",
     ) -> None:
         self._evaluator = evaluator
-        self.candidate_version = (
-            frozen_version if evaluator is None else evaluator.version
-        )
+        self.candidate_version = frozen_version if evaluator is None else evaluator.version
 
     def evaluate(self, snapshot: CanonicalShadowSnapshot) -> CandidateOutput:
         if self._evaluator is None:
@@ -443,13 +450,10 @@ class Hazard005FCandidate:
                 candidate_payload=_runtime_metadata_payload(metadata),
             )
         hazards = tuple(
-            value
-            for value in (signal.update_hazard, signal.jump_hazard)
-            if value is not None
+            value for value in (signal.update_hazard, signal.jump_hazard) if value is not None
         )
         if not hazards or any(
-            not math.isfinite(value) or not 0.0 <= value <= 1.0
-            for value in hazards
+            not math.isfinite(value) or not 0.0 <= value <= 1.0 for value in hazards
         ):
             return CandidateOutput(
                 status=DecisionStatus.INVALID_OUTPUT,
@@ -459,9 +463,7 @@ class Hazard005FCandidate:
         return CandidateOutput(
             status=DecisionStatus.OK,
             score=(
-                signal.update_hazard
-                if signal.update_hazard is not None
-                else signal.jump_hazard
+                signal.update_hazard if signal.update_hazard is not None else signal.jump_hazard
             ),
             quality_flags=(
                 "005f:hazard_not_directional",
@@ -557,7 +559,6 @@ class StructuralFairValueCandidate:
         )
 
 
-
 def _runtime_metadata_payload(
     metadata: RuntimeEvaluatorMetadata,
 ) -> dict[str, object]:
@@ -572,6 +573,7 @@ def _runtime_metadata_payload(
         "freshness_seconds": metadata.freshness_seconds,
         **dict(metadata.diagnostic_payload),
     }
+
 
 def _sig_midpoint(snapshot: MakerMarketSnapshot) -> float | None:
     book = snapshot.runtime.book(snapshot.exchange_id)
