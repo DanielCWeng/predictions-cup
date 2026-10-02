@@ -40,10 +40,13 @@ The sentry consumes read-only:
 - RISK-002 durable `risk_state`;
 - BUILD-009 execution lifecycle rows;
 - SIG CAPTURE health;
+- current-PID MAKE outcome logs from journald;
+- SIG Realtime delivery and REST price-observation timestamps;
 - Polymarket `ingestion_health`;
 - SHADOW append-only JSONL;
 - LIVE-LEARN latest JSON report;
 - systemd service state/memory;
+- systemd restart-count and PID changes;
 - filesystem capacity;
 - host NTP synchronization.
 
@@ -132,6 +135,7 @@ Defaults:
 - core poll: 1 second;
 - systemd resource probe cache: 5 seconds;
 - NTP probe cache: 30 seconds;
+- MAKE outcome journal probe: 5 seconds;
 - append-only summary snapshot: 60 seconds;
 - hourly forensic bundle: UTC-hour rollover;
 - event bundle: reason/severity transition, debounced;
@@ -145,6 +149,9 @@ Reasons include:
 
 - required source missing/invalid/stale;
 - expected service failure;
+- MAKE outcome stale, journal evidence unavailable, or `kill=True`;
+- SIG capture stale when neither realtime delivery nor price observations are recent;
+- more than two observed service restarts within an hour;
 - high or rapidly growing service memory;
 - disk warning/critical/emergency pressure;
 - NTP synchronization not confirmed;
@@ -175,6 +182,27 @@ PREDICTIONS_CUP_SUPERVISOR_MIN_ECONOMIC_SAMPLES=20
 ```
 
 Thin evidence does not generate a confident economics alarm.
+
+## Feed liveness
+
+MAKE must emit an outcome for its current process at least every 180 seconds. The
+Supervisor reads only `MAKE outcome` journal entries for the unit's current PID.
+`kill=True` is immediately CRITICAL. A journal access or format failure is UNKNOWN;
+an active process with no outcome record in the inspected hour is CRITICAL.
+
+SIG capture is live when either a Realtime delivery is at most 900 seconds old or
+a REST price observation is at most 180 seconds old. The longer Realtime window
+allows quiet markets to have no message traffic; the regular price sweep can still
+prove capture progress. These thresholds can be changed with
+`PREDICTIONS_CUP_SUPERVISOR_SIG_REALTIME_MAX_AGE_SECONDS`,
+`PREDICTIONS_CUP_SUPERVISOR_SIG_PRICE_MAX_AGE_SECONDS`, and
+`PREDICTIONS_CUP_SUPERVISOR_MAKER_OUTCOME_MAX_AGE_SECONDS`.
+
+The restart-loop finding uses systemd `NRestarts` changes and MainPID changes seen
+by the running Supervisor. It becomes CRITICAL above the configured
+`PREDICTIONS_CUP_SUPERVISOR_MAX_RESTARTS_PER_HOUR` budget (default 2).
+If systemd reports prior restarts but the Supervisor has not observed a full hour,
+restart-window evidence is UNKNOWN until that window is complete.
 
 ## Remediation authority
 
@@ -212,6 +240,13 @@ Only an exact configured path is accepted.
 
 Only services in `PREDICTIONS_CUP_SUPERVISOR_SAFE_RESTART_SERVICES`.
 Defaults to the enabled read-only capture services. MAKE/RISK are not defaults.
+Stale SIG capture activity is recoverable under the existing capture allowlist and
+restart budget. MAKE outcome failures remain CRITICAL by default: a maker restart
+clears its process-local kill latch. Adding `predictions-cup-maker-live.service`
+to the explicit safe-restart allowlist opts into bounded recovery; `kill=True`
+recovery bypasses feed/startup grace but still obeys the restart cooldown and
+hourly limit. A service already over its observed restart budget is not restarted
+again by the Supervisor.
 
 Default cooldown: 300 seconds. Default maximum: two restarts/service/hour.
 

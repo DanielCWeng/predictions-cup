@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict, deque
+from collections.abc import Callable
 from datetime import UTC
 
 from predictions_cup.config import AppSettings
@@ -86,6 +87,67 @@ class ResourceGrowthTracker:
         return memory_growth, disk_growth
 
 
+class ServiceRestartTracker:
+    """Track systemd restart-count and PID changes over a rolling hour."""
+
+    def __init__(
+        self,
+        *,
+        window_seconds: float = 3600.0,
+        clock: Callable[[], float] = time.monotonic,
+        max_events_per_service: int = 3,
+    ) -> None:
+        self.window_seconds = window_seconds
+        self._clock = clock
+        self._max_events_per_service = max_events_per_service
+        self._last_restart_count: dict[str, int] = {}
+        self._last_pid: dict[str, str] = {}
+        self._events: dict[str, deque[float]] = defaultdict(deque)
+        self._first_seen: dict[str, float] = {}
+
+    def update(self, system: object) -> dict[str, dict[str, float | int]]:
+        now = self._clock()
+        if not isinstance(system, dict):
+            return {}
+        services = system.get("services")
+        if not isinstance(services, dict):
+            return {}
+
+        result: dict[str, dict[str, float | int]] = {}
+        for service, raw in services.items():
+            if not isinstance(service, str) or not isinstance(raw, dict):
+                continue
+            count = raw.get("restart_count")
+            if isinstance(count, bool) or not isinstance(count, int):
+                count = None
+            pid_raw = raw.get("main_pid")
+            pid = str(pid_raw) if pid_raw not in (None, "", "0", 0) else ""
+            previous_count = self._last_restart_count.get(service)
+            previous_pid = self._last_pid.get(service)
+            events = self._events[service]
+            count_delta = (
+                0
+                if count is None or previous_count is None or count < previous_count
+                else count - previous_count
+            )
+            pid_changed = bool(pid and previous_pid and pid != previous_pid)
+            event_count = max(count_delta, int(pid_changed))
+            for _ in range(min(event_count, self._max_events_per_service)):
+                events.append(now)
+            if count is not None:
+                self._last_restart_count[service] = count
+            if pid:
+                self._last_pid[service] = pid
+            self._first_seen.setdefault(service, now)
+            while events and now - events[0] >= self.window_seconds:
+                events.popleft()
+            result[service] = {
+                "restart_count_last_hour": len(events),
+                "restart_tracking_seconds": now - self._first_seen[service],
+            }
+        return result
+
+
 class SupervisorRuntime:
     def __init__(self, settings: AppSettings, config: SupervisorRuntimeConfig) -> None:
         self.settings = settings
@@ -100,6 +162,9 @@ class SupervisorRuntime:
         self.bundle_writer = BundleWriter(config.output_root)
         self.remediator = RemediationExecutor(config.remediation)
         self.resource_growth = ResourceGrowthTracker()
+        self.service_restarts = ServiceRestartTracker(
+            max_events_per_service=config.policy.service_max_restarts_per_hour + 1
+        )
         self._last_snapshot_write_at = 0.0
         self._last_event_signature: tuple[object, ...] | None = None
         self._last_event_bundle_at = 0.0
@@ -115,6 +180,19 @@ class SupervisorRuntime:
         system = sections.get("system")
         if isinstance(system, dict):
             system_copy = dict(system)
+            restart_counts = self.service_restarts.update(system)
+            services = system_copy.get("services")
+            if isinstance(services, dict):
+                service_copy = dict(services)
+                for service, status in service_copy.items():
+                    if not isinstance(status, dict):
+                        continue
+                    restart_state = restart_counts.get(service)
+                    if restart_state is not None:
+                        status_copy = dict(status)
+                        status_copy.update(restart_state)
+                        service_copy[service] = status_copy
+                system_copy["services"] = service_copy
             disk = system_copy.get("disk")
             if isinstance(disk, dict):
                 disk_copy = dict(disk)
@@ -313,6 +391,7 @@ def _reasons_by_action(
         capture_recovery_targets = {
             "FEED_SIG_DISCONNECTED": "predictions-cup-sig-capture.service",
             "FEED_SIG_REST_PROGRESS_STALE": "predictions-cup-sig-capture.service",
+            "SIG_CAPTURE_ACTIVITY_STALE": "predictions-cup-sig-capture.service",
             "SOURCE_SIG_CAPTURE_STALE": "predictions-cup-sig-capture.service",
             "CAPTURE_SIG_STORAGE_FAILURE": "predictions-cup-sig-capture.service",
             "CAPTURE_SIG_WRITER_DEAD": "predictions-cup-sig-capture.service",
@@ -323,6 +402,8 @@ def _reasons_by_action(
             "CAPTURE_POLYMARKET_STORAGE_FAILURE": "predictions-cup-polymarket-capture.service",
             "CAPTURE_POLYMARKET_WRITER_DEAD": "predictions-cup-polymarket-capture.service",
             "CAPTURE_POLYMARKET_DROPPED_ROWS": "predictions-cup-polymarket-capture.service",
+            "MAKER_OUTCOME_STALE": "predictions-cup-maker-live.service",
+            "MAKER_KILL_LATCHED": "predictions-cup-maker-live.service",
         }
         recovery_target = capture_recovery_targets.get(finding.code)
         if recovery_target is not None:

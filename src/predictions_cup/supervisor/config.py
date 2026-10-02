@@ -81,6 +81,12 @@ class SupervisorRuntimeConfig:
         expected_services = _csv("PREDICTIONS_CUP_SUPERVISOR_EXPECTED_SERVICES")
         if not expected_services:
             expected_services = tuple(defaults)
+        if host_role is HostRole.WEST_EXECUTION and settings.maker_enabled:
+            expected_services = tuple(
+                dict.fromkeys(
+                    (*expected_services, "predictions-cup-maker-live.service")
+                )
+            )
 
         safe_restart = _csv("PREDICTIONS_CUP_SUPERVISOR_SAFE_RESTART_SERVICES")
         if not safe_restart:
@@ -147,6 +153,18 @@ class SupervisorRuntimeConfig:
             ),
             service_memory_growth_critical_mb_per_min=_float(
                 "PREDICTIONS_CUP_SUPERVISOR_MEMORY_GROWTH_CRITICAL_MB_PER_MIN", 80.0
+            ),
+            service_max_restarts_per_hour=_int(
+                "PREDICTIONS_CUP_SUPERVISOR_MAX_RESTARTS_PER_HOUR", 2
+            ),
+            maker_outcome_max_age_seconds=_float(
+                "PREDICTIONS_CUP_SUPERVISOR_MAKER_OUTCOME_MAX_AGE_SECONDS", 180.0
+            ),
+            sig_realtime_delivery_max_age_seconds=_float(
+                "PREDICTIONS_CUP_SUPERVISOR_SIG_REALTIME_MAX_AGE_SECONDS", 900.0
+            ),
+            sig_price_observation_max_age_seconds=_float(
+                "PREDICTIONS_CUP_SUPERVISOR_SIG_PRICE_MAX_AGE_SECONDS", 180.0
             ),
             exposure_warn_fraction=_float(
                 "PREDICTIONS_CUP_SUPERVISOR_EXPOSURE_WARN_FRACTION", 0.80

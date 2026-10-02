@@ -10,7 +10,7 @@ import subprocess
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote
 
@@ -21,6 +21,8 @@ from predictions_cup.observe import (
     read_observation_health_status,
 )
 from predictions_cup.supervisor.contracts import HostRole, SourceStatus, utc_now
+
+_LIVE_MAKER_SERVICE = "predictions-cup-maker-live.service"
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +76,24 @@ def _last_complete_jsonl(path: Path, limit: int = 131_072) -> dict[str, object] 
     return None
 
 
+def _json_objects(raw: str) -> list[dict[str, object]]:
+    result: list[dict[str, object]] = []
+    for line in raw.splitlines():
+        try:
+            decoded = json.loads(line)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(decoded, dict):
+            result.append({str(key): value for key, value in decoded.items()})
+    return result
+
+
+def _number_or_none(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
 class SupervisorSources:
     """Cheap read-only process-boundary probes."""
 
@@ -93,7 +113,10 @@ class SupervisorSources:
         self.settings = settings
         self.repo_root = repo_root
         self.host_role = host_role
-        self.expected_services = expected_services
+        expected = list(expected_services)
+        if host_role is HostRole.WEST_EXECUTION and settings.maker_enabled:
+            expected.append(_LIVE_MAKER_SERVICE)
+        self.expected_services = tuple(dict.fromkeys(expected))
         self.observe_max_age_seconds = observe_max_age_seconds
         self.capture_max_age_seconds = capture_max_age_seconds
         self.shadow_max_age_seconds = shadow_max_age_seconds
@@ -105,6 +128,8 @@ class SupervisorSources:
         self.git_head = self._git_head()
         self._system_cache_at = 0.0
         self._system_cache: dict[str, object] = {}
+        self._maker_cache_at = 0.0
+        self._maker_cache: tuple[SourceStatus, dict[str, object]] | None = None
         self._clock_cache_at = 0.0
         self._clock_cache: dict[str, object] = {}
 
@@ -112,6 +137,8 @@ class SupervisorSources:
         statuses: list[SourceStatus] = []
         sections: dict[str, object] = {}
         for name, reader in (
+            ("system", self._read_system),
+            ("maker_liveness", self._read_maker_liveness),
             ("observe", self._read_observe),
             ("risk", self._read_risk),
             ("execution", self._read_execution),
@@ -119,13 +146,171 @@ class SupervisorSources:
             ("polymarket_capture", self._read_polymarket_capture),
             ("shadow", self._read_shadow),
             ("live_learn", self._read_live_learn),
-            ("system", self._read_system),
             ("clock", self._read_clock),
         ):
             status, section = reader()
             statuses.append(status)
             sections[name] = section
         return SourceCollection(tuple(statuses), sections)
+
+    def _read_maker_liveness(self) -> tuple[SourceStatus, dict[str, object]]:
+        now = utc_now()
+        system = self._system_cache
+        services = system.get("services")
+        service_status = (
+            services.get(_LIVE_MAKER_SERVICE) if isinstance(services, dict) else None
+        )
+        main_pid = (
+            service_status.get("main_pid") if isinstance(service_status, dict) else None
+        )
+        active_state = (
+            service_status.get("active_state")
+            if isinstance(service_status, dict)
+            else None
+        )
+        required = self.host_role is HostRole.WEST_EXECUTION and (
+            self.settings.maker_enabled
+            or active_state in {"active", "activating"}
+            or main_pid not in (None, "", "0", 0)
+        )
+        if not required:
+            section: dict[str, object] = {"enabled": False}
+            return (
+                SourceStatus(
+                    "maker_liveness",
+                    False,
+                    True,
+                    True,
+                    True,
+                    None,
+                    now,
+                    None,
+                ),
+                section,
+            )
+
+        current = time.monotonic()
+        if self._maker_cache is not None and current - self._maker_cache_at < 5.0:
+            return self._maker_cache
+        base: dict[str, object] = {
+            "enabled": True,
+            "service": _LIVE_MAKER_SERVICE,
+            "main_pid": main_pid,
+            "query_ok": False,
+            "kill_latched": None,
+            "last_outcome_at": None,
+            "last_outcome_age_seconds": None,
+        }
+        if not isinstance(main_pid, str) or main_pid in {"", "0"}:
+            base["query_error"] = "maker_main_pid_unavailable"
+            result = (
+                SourceStatus(
+                    "maker_liveness", False, False, False, False, None, now, None,
+                    "maker_main_pid_unavailable", {"service": _LIVE_MAKER_SERVICE},
+                ),
+                base,
+            )
+            self._maker_cache = result
+            self._maker_cache_at = current
+            return result
+
+        try:
+            journal = subprocess.run(
+                [
+                    "journalctl",
+                    f"--unit={_LIVE_MAKER_SERVICE}",
+                    f"--since={(now - timedelta(hours=1)).isoformat()}",
+                    "--grep=MAKE outcome",
+                    "--lines=100",
+                    "--output=json",
+                    f"_PID={main_pid}",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=3.0,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            base["query_error"] = type(exc).__name__
+            result = (
+                SourceStatus(
+                    "maker_liveness", False, False, False, False, None, now, None,
+                    f"journal_query_{type(exc).__name__}",
+                    {"service": _LIVE_MAKER_SERVICE, "main_pid": main_pid},
+                ),
+                base,
+            )
+            self._maker_cache = result
+            self._maker_cache_at = current
+            return result
+
+        if journal.returncode != 0:
+            base["query_error"] = f"journalctl_exit_{journal.returncode}"
+            result = (
+                SourceStatus(
+                    "maker_liveness", False, False, False, False, None, now, None,
+                    str(base["query_error"]),
+                    {"service": _LIVE_MAKER_SERVICE, "main_pid": main_pid},
+                ),
+                base,
+            )
+            self._maker_cache = result
+            self._maker_cache_at = current
+            return result
+
+        base["query_ok"] = True
+        events = _json_objects(journal.stdout)
+        if journal.stdout.strip() and not events:
+            base["query_ok"] = False
+            base["query_error"] = "invalid_journal_json"
+        elif events:
+            outcome_events = [
+                event
+                for event in events
+                if isinstance(event.get("MESSAGE"), str)
+                and "MAKE outcome" in str(event.get("MESSAGE"))
+            ]
+            latest = outcome_events[-1] if outcome_events else None
+            if latest is None:
+                base["query_ok"] = False
+                base["query_error"] = "journal_result_missing_make_outcome"
+            else:
+                raw_timestamp = latest.get("__REALTIME_TIMESTAMP")
+                try:
+                    observed = datetime.fromtimestamp(
+                        int(str(raw_timestamp)) / 1_000_000,
+                        tz=UTC,
+                    )
+                except (OverflowError, TypeError, ValueError):
+                    base["query_ok"] = False
+                    base["query_error"] = "invalid_journal_timestamp"
+                else:
+                    age = (now - observed).total_seconds()
+                    base["last_outcome_at"] = observed.isoformat()
+                    base["last_outcome_age_seconds"] = age
+                    base["kill_latched"] = any(
+                        "kill=True" in str(event.get("MESSAGE", ""))
+                        for event in outcome_events
+                    )
+
+        result = (
+            SourceStatus(
+                "maker_liveness",
+                False,
+                True,
+                bool(base["query_ok"]),
+                bool(base["query_ok"]),
+                _parse_datetime(base.get("last_outcome_at")),
+                now,
+                _number_or_none(base.get("last_outcome_age_seconds")),
+                None if base["query_ok"] else str(base.get("query_error")),
+                {"service": _LIVE_MAKER_SERVICE, "main_pid": main_pid},
+            ),
+            base,
+        )
+        self._maker_cache = result
+        self._maker_cache_at = current
+        return result
 
     def _read_observe(self) -> tuple[SourceStatus, dict[str, object]]:
         now = utc_now()
@@ -279,6 +464,7 @@ class SupervisorSources:
         status, section = primary
         if status.valid:
             section = dict(section)
+            section.update(self._read_sig_activity_liveness(path, status.read_at))
             last_rest = _parse_datetime(section.get("last_rest_reconciliation"))
             section["last_rest_reconciliation_age_seconds"] = _age(
                 status.read_at, last_rest
@@ -329,7 +515,47 @@ class SupervisorSources:
             fallback_section["health_surface_reason"] = (
                 section.get("error") or section.get("reason")
             )
+            fallback_section.update(
+                self._read_sig_activity_liveness(path, fallback_status.read_at)
+            )
         return fallback
+
+    def _read_sig_activity_liveness(
+        self,
+        path: Path,
+        read_at: datetime,
+    ) -> dict[str, object]:
+        activity: dict[str, object] = {
+            "realtime_delivery_at": None,
+            "realtime_delivery_age_seconds": None,
+            "realtime_delivery_table_available": False,
+            "price_observation_at": None,
+            "price_observation_age_seconds": None,
+            "price_observation_table_available": False,
+            "activity_query_error": None,
+        }
+        try:
+            with _ro_connect(path) as connection:
+                for table, column, prefix in (
+                    ("realtime_deliveries", "observed_at", "realtime_delivery"),
+                    ("price_observations", "rest_observed_at", "price_observation"),
+                ):
+                    try:
+                        row = connection.execute(
+                            f"SELECT {column} FROM {table} ORDER BY rowid DESC LIMIT 1"
+                        ).fetchone()
+                    except sqlite3.OperationalError as exc:
+                        if "no such table" not in str(exc).lower():
+                            activity["activity_query_error"] = type(exc).__name__
+                        continue
+                    activity[f"{prefix}_table_available"] = True
+                    observed = None if row is None else _parse_datetime(row[0])
+                    if observed is not None:
+                        activity[f"{prefix}_at"] = observed.isoformat()
+                        activity[f"{prefix}_age_seconds"] = _age(read_at, observed)
+        except (OSError, sqlite3.Error, ValueError, TypeError) as exc:
+            activity["activity_query_error"] = type(exc).__name__
+        return activity
 
     def _read_activity_sqlite(
         self,
@@ -584,8 +810,17 @@ class SupervisorSources:
         current = time.monotonic()
         if current - self._system_cache_at >= 5.0 or not self._system_cache:
             services: dict[str, object] = {}
-            for service in self.expected_services:
-                services[service] = self._service_status(service)
+            service_names = list(self.expected_services)
+            if (
+                self.host_role is HostRole.WEST_EXECUTION
+                and _LIVE_MAKER_SERVICE not in service_names
+            ):
+                service_names.append(_LIVE_MAKER_SERVICE)
+            for service in service_names:
+                service_status = self._service_status(service)
+                if service == _LIVE_MAKER_SERVICE and service not in self.expected_services:
+                    service_status["expected"] = False
+                services[service] = service_status
             usage = shutil.disk_usage(self.repo_root)
             self._system_cache = {
                 "services": services,
@@ -601,7 +836,10 @@ class SupervisorSources:
         all_active = True
         if isinstance(services_raw, dict):
             for value in services_raw.values():
-                if not isinstance(value, dict) or value.get("active_state") != "active":
+                if not isinstance(value, dict):
+                    all_active = False
+                    continue
+                if value.get("expected") is not False and value.get("active_state") != "active":
                     all_active = False
         return (
             SourceStatus(
