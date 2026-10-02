@@ -165,10 +165,8 @@ class ResidualTakerLiveCoordinator:
         quantity: int,
         require_reducing: bool = False,
     ) -> int:
-        portfolio = snapshot.runtime.portfolio
-        if require_reducing or portfolio.proxy_active:
-            portfolio = self._reservations.overlay_portfolio(portfolio)
-        if require_reducing:
+        portfolio = self._reservations.overlay_portfolio(snapshot.runtime.portfolio)
+        if self._max_position is None and (require_reducing or portfolio.proxy_active):
             low, high = portfolio.worst_case_inventory_bounds(
                 snapshot.exchange_id,
                 snapshot.tournament_id,
@@ -180,19 +178,19 @@ class ResidualTakerLiveCoordinator:
             return 0
         if self._max_position is None:
             return quantity
-        if portfolio.proxy_active:
-            low, high = portfolio.worst_case_inventory_bounds(
-                snapshot.exchange_id,
-                snapshot.tournament_id,
-            )
-            if action is OrderAction.BUY:
-                return max(0, min(quantity, math.floor(self._max_position - high)))
-            return max(0, min(quantity, math.floor(self._max_position + low)))
-        inventory = portfolio.signed_inventory(snapshot.exchange_id, snapshot.tournament_id)
-        if action is OrderAction.BUY:
-            room = self._max_position - inventory
-        else:
-            room = self._max_position + inventory
+
+        # Apply the configured cap in every trust mode. Directional bounds count
+        # open orders and reservations that would add to this taker direction,
+        # while known opposite-direction orders do not consume taker room.
+        low, high = portfolio.worst_case_inventory_bounds(
+            snapshot.exchange_id,
+            snapshot.tournament_id,
+        )
+        room = (
+            self._max_position - high
+            if action is OrderAction.BUY
+            else self._max_position + low
+        )
         return max(0, min(quantity, math.floor(room)))
 
     async def _take(

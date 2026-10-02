@@ -335,6 +335,79 @@ def test_position_cap_clips_and_blocks_only_inventory_increasing_takes() -> None
     assert intent.quantity == 50
 
 
+def test_position_cap_counts_same_direction_reservations_for_trusted_account() -> None:
+    harness = _Harness()
+    harness.coordinator._max_position = 200
+    snapshot = _with_inventory(_snapshot(ask_qty=100.0), 150.0)
+    reservation = RuntimeOrderIntent(
+        intent_id="reserved-maker-buy",
+        exchange_id=EXCHANGE,
+        market_id=MARKET,
+        tournament_id=TOURNAMENT,
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=30,
+        limit_price_ticks=130,
+        strategy_id="maker-ladder",
+        decision_observation_ns=NOW - 1,
+    )
+    harness.reservations.reserve("maker-ladder-op", (reservation,))
+    opposite_reservation = RuntimeOrderIntent(
+        intent_id="reserved-maker-sell",
+        exchange_id=EXCHANGE,
+        market_id=MARKET,
+        tournament_id=TOURNAMENT,
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.SELL,
+        quantity=400,
+        limit_price_ticks=150,
+        strategy_id="maker-ladder",
+        decision_observation_ns=NOW - 1,
+    )
+    harness.reservations.reserve("maker-ladder-ask-op", (opposite_reservation,))
+
+    harness.run(snapshot)
+
+    (intent,) = harness.plans[0].intents
+    assert intent.action is OrderAction.BUY
+    assert intent.quantity == 20
+
+
+def test_proxy_grade_uses_configured_position_cap_and_same_direction_reservations() -> None:
+    harness = _Harness(allow_bbo_proxy=True)
+    harness.coordinator._max_position = 200
+    snapshot = _with_inventory(_snapshot(ask_qty=100.0), 50.0)
+    portfolio = replace(
+        snapshot.runtime.portfolio,
+        account_trust_grade=AccountTrustGrade.PROXY,
+        account_proxy_age_ns=1,
+    )
+    snapshot = replace(
+        snapshot,
+        sig_bbo_trusted=False,
+        runtime=replace(snapshot.runtime, portfolio=portfolio),
+    )
+    reservation = RuntimeOrderIntent(
+        intent_id="reserved-proxy-buy",
+        exchange_id=EXCHANGE,
+        market_id=MARKET,
+        tournament_id=TOURNAMENT,
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=120,
+        limit_price_ticks=130,
+        strategy_id="maker-ladder",
+        decision_observation_ns=NOW - 1,
+    )
+    harness.reservations.reserve("proxy-maker-ladder-op", (reservation,))
+
+    harness.run(snapshot)
+
+    (intent,) = harness.plans[0].intents
+    assert intent.action is OrderAction.BUY
+    assert intent.quantity == 30
+
+
 def test_taker_accepts_proxy_for_reducing_trade_with_bbo_proxy() -> None:
     harness = _Harness(allow_bbo_proxy=True)
     snapshot = _with_inventory(_snapshot(ask_qty=30.0), -50.0)
