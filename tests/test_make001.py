@@ -1333,12 +1333,15 @@ def test_fill_seeking_inventory_skew_cuts_opening_size_above_150() -> None:
 
 
 @pytest.mark.parametrize(
-    ("fill_seeking_enabled", "deep_ladder_enabled"),
-    [(True, False), (False, True)],
+    ("fill_seeking_enabled", "deep_ladder_enabled", "max_inventory"),
+    # Fill-seeking binds on the configured maker cap; the deep ladder also
+    # binds on its own (default 200) projected-position cap.
+    [(True, False, 200.0), (False, True, 500.0)],
 )
-def test_aggressive_maker_modes_enforce_hard_projected_position_cap(
+def test_aggressive_maker_modes_enforce_configured_projected_position_cap(
     fill_seeking_enabled: bool,
     deep_ladder_enabled: bool,
+    max_inventory: float,
 ) -> None:
     snapshot = _maker_snapshot(
         signed_inventory=190.0,
@@ -1356,7 +1359,7 @@ def test_aggressive_maker_modes_enforce_hard_projected_position_cap(
     snapshot = replace(snapshot, runtime=replace(snapshot.runtime, books=(book,)))
 
     decision = _engine(
-        max_inventory=500.0,
+        max_inventory=max_inventory,
         base_size=100,
         fill_seeking_enabled=fill_seeking_enabled,
         deep_ladder_enabled=deep_ladder_enabled,

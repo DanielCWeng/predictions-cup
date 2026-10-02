@@ -79,7 +79,7 @@ class AppSettings(BaseSettings):
     maker_deep_ladder_enabled: bool = False
     maker_deep_ladder_level_offsets: tuple[float, ...] = (0.01, 0.02, 0.04)
     maker_deep_ladder_level_sizes: tuple[int, ...] = (50, 100, 150)
-    maker_deep_ladder_position_cap: int = Field(default=200, gt=0, le=200)
+    maker_deep_ladder_position_cap: int = Field(default=200, gt=0)
     maker_inventory_risk_aversion: float = Field(default=0.02, ge=0.0)
     maker_uncertainty_multiplier: float = Field(default=1.0, ge=0.0)
     maker_volatility_multiplier: float = Field(default=0.5, ge=0.0)

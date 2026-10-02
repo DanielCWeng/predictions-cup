@@ -29,8 +29,9 @@ from predictions_cup.maker.policies import with_quote_math
 from predictions_cup.runtime.models import SIG_TICK
 
 _TICK = float(SIG_TICK)
-HARD_PROJECTED_POSITION_CAP = 200.0
-FILL_SEEKING_INVENTORY_SKEW_START = 150.0
+# Fill-seeking shrinks risk-increasing size once projected inventory passes
+# this fraction of the configured maker inventory cap.
+FILL_SEEKING_INVENTORY_SKEW_FRACTION = 0.75
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,8 +78,8 @@ class MakerConfig:
             or any(size <= 0 for size in self.deep_ladder_level_sizes)
         ):
             raise ValueError("deep ladder offsets/sizes must be positive matching tuples")
-        if not 1 <= self.deep_ladder_position_cap <= HARD_PROJECTED_POSITION_CAP:
-            raise ValueError("deep ladder cap must be within the hard projected position cap")
+        if self.deep_ladder_position_cap < 1:
+            raise ValueError("deep ladder cap must be positive")
 
 
 class MakerEngine:
@@ -165,8 +166,8 @@ class MakerEngine:
             )
         )
         max_abs_inventory = self._config.max_abs_inventory
-        if self._config.fill_seeking_enabled or self._config.deep_ladder_enabled:
-            max_abs_inventory = min(max_abs_inventory, HARD_PROJECTED_POSITION_CAP)
+        if self._config.deep_ladder_enabled:
+            max_abs_inventory = min(max_abs_inventory, self._config.deep_ladder_position_cap)
         context = QuoteContext(
             snapshot=snapshot,
             raw_fair_value=fair_value,
@@ -292,8 +293,12 @@ class MakerEngine:
             snapshot.tournament_id,
         )
         if self._config.fill_seeking_enabled:
-            bid_size = self._inventory_skew_size(bid_size, direction=1, low=low, high=high)
-            ask_size = self._inventory_skew_size(ask_size, direction=-1, low=low, high=high)
+            bid_size = self._inventory_skew_size(
+                bid_size, direction=1, low=low, high=high, cap=max_abs_inventory
+            )
+            ask_size = self._inventory_skew_size(
+                ask_size, direction=-1, low=low, high=high, cap=max_abs_inventory
+            )
         if portfolio.proxy_active:
             if high < 0.0:
                 bid_size = min(bid_size, max(0, math.floor(-high)))
@@ -524,16 +529,11 @@ class MakerEngine:
                 max_abs_inventory=max_abs_inventory,
             ),
         )
-        if direction > 0 and high > FILL_SEEKING_INVENTORY_SKEW_START:
-            skew = (HARD_PROJECTED_POSITION_CAP - high) / (
-                HARD_PROJECTED_POSITION_CAP - FILL_SEEKING_INVENTORY_SKEW_START
-            )
-            room = math.floor(room * min(1.0, max(0.0, skew)) + 1e-9)
-        elif direction < 0 and low < -FILL_SEEKING_INVENTORY_SKEW_START:
-            skew = (HARD_PROJECTED_POSITION_CAP + low) / (
-                HARD_PROJECTED_POSITION_CAP - FILL_SEEKING_INVENTORY_SKEW_START
-            )
-            room = math.floor(room * min(1.0, max(0.0, skew)) + 1e-9)
+        skew = self._inventory_skew_scale(
+            direction=direction, low=low, high=high, cap=max_abs_inventory
+        )
+        if skew < 1.0:
+            room = math.floor(room * skew + 1e-9)
         room = max(0, math.floor(room * size_factor + 1e-9))
         result: list[QuoteLevel] = []
         for price, configured_size in zip(
@@ -556,18 +556,21 @@ class MakerEngine:
         direction: int,
         low: float,
         high: float,
+        cap: float,
     ) -> int:
-        """Shrink only the side that adds risk once projected inventory exceeds 150."""
+        """Shrink only the side that adds risk once projected inventory nears the cap."""
+        scale = MakerEngine._inventory_skew_scale(direction=direction, low=low, high=high, cap=cap)
+        return max(0, math.floor(quantity * scale))
+
+    @staticmethod
+    def _inventory_skew_scale(*, direction: int, low: float, high: float, cap: float) -> float:
+        start = cap * FILL_SEEKING_INVENTORY_SKEW_FRACTION
         scale = 1.0
-        if direction > 0 and high > FILL_SEEKING_INVENTORY_SKEW_START:
-            scale = (HARD_PROJECTED_POSITION_CAP - high) / (
-                HARD_PROJECTED_POSITION_CAP - FILL_SEEKING_INVENTORY_SKEW_START
-            )
-        elif direction < 0 and low < -FILL_SEEKING_INVENTORY_SKEW_START:
-            scale = (HARD_PROJECTED_POSITION_CAP + low) / (
-                HARD_PROJECTED_POSITION_CAP - FILL_SEEKING_INVENTORY_SKEW_START
-            )
-        return max(0, math.floor(quantity * min(1.0, max(0.0, scale))))
+        if direction > 0 and high > start:
+            scale = (cap - high) / (cap - start)
+        elif direction < 0 and low < -start:
+            scale = (cap + low) / (cap - start)
+        return min(1.0, max(0.0, scale))
 
     @staticmethod
     def _fill_seeking_ticks(
