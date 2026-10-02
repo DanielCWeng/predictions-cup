@@ -171,6 +171,7 @@ class AccountProxyLedger:
         }
         market_by_exchange = dict(self._exchange_market_ids)
         market_by_exchange.update({row.exchange_id: row.market_id for row in snapshot.positions})
+        prior_orders = self._orders
         self._orders = {}
         for order in snapshot.open_orders:
             market_id = market_by_exchange.get(order.exchange_id)
@@ -195,6 +196,19 @@ class AccountProxyLedger:
                 baseline_order=True,
                 individual_fill_events={},
             )
+        # The authoritative order list and position list are read separately.
+        # During a busy account they can disagree about whether a known order
+        # is still open even when the position and cash projections reconcile.
+        # Keep proxy-only orders as uncertain reservations so their remaining
+        # quantity stays in the portfolio's worst-case bounds. Orders found
+        # only by REST are already included above as authoritative reservations.
+        for order_id in diff.open_order_extra:
+            prior_order = prior_orders.get(order_id)
+            if prior_order is None or order_id in self._orders:
+                continue
+            prior_order.open = False
+            prior_order.terminal_fill_unknown = True
+            self._orders[order_id] = prior_order
         # In-flight local submissions remain risk-bearing if the account read
         # raced their response. The controller retries when the journal changes
         # during a read; this carry also covers an operation already in flight at
@@ -208,7 +222,6 @@ class AccountProxyLedger:
         self.last_authoritative_monotonic_ns = observed_monotonic_ns
         self.reconciliation_blocked = (
             diff.position_diff_exceeded
-            or bool(diff.open_order_missing or diff.open_order_extra)
             or bool(diff.open_order_mismatch)
             or (diff.cash_diff is not None and abs(diff.cash_diff) > 0.01)
             or (self.enabled and prior_cash is not None and snapshot.cash_balance is None)

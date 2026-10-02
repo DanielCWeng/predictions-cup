@@ -55,30 +55,95 @@ def _snapshot(
     *,
     quantity: str | None = None,
     cash: str = "100",
+    open_orders: tuple[OrderReadDto, ...] = (),
 ) -> AccountAuthoritativeSnapshot:
     return AccountAuthoritativeSnapshot(
         tournament_id=TOURNAMENT,
         tournament_slug="cup",
-        open_orders=(),
+        open_orders=open_orders,
         positions=() if quantity is None else (_position(quantity),),
         observed_at=datetime.now(UTC),
         cash_balance=Decimal(cash),
     )
 
 
-def _open_order() -> OrderReadDto:
+def _open_order(*, quantity: str = "10") -> OrderReadDto:
     return OrderReadDto.model_validate(
         {
             "id": 101,
             "exchangeId": EXCHANGE,
             "side": "yes",
             "action": "buy",
-            "quantity": "10",
+            "quantity": quantity,
             "priceLimit": "0.40",
             "open": True,
             "createdAt": "2026-10-02T00:00:00Z",
             "expirationDate": None,
         }
+    )
+
+
+def test_proxy_only_open_order_diff_is_retained_as_uncertain_reservation() -> None:
+    ledger = _ledger()
+    ledger.seed_authoritative(
+        _snapshot(open_orders=(_open_order(),)),
+        observed_monotonic_ns=1_000,
+    )
+
+    diff = ledger.seed_authoritative(_snapshot(), observed_monotonic_ns=2_000)
+    portfolio = ledger.runtime_portfolio(
+        account_state_trusted=False,
+        now_monotonic_ns=2_050,
+    )
+
+    assert diff.open_order_extra == ("101",)
+    assert ledger.reconciliation_blocked is False
+    assert portfolio.trust_grade is AccountTrustGrade.PROXY
+    assert len(portfolio.orders) == 1
+    assert portfolio.orders[0].open is False
+    assert portfolio.orders[0].uncertain is True
+    assert portfolio.orders[0].reserved_exposure == 10.0
+    assert portfolio.worst_case_inventory_bounds(EXCHANGE, TOURNAMENT) == (0.0, 10.0)
+
+
+def test_authoritative_only_open_order_is_reserved_without_global_hold() -> None:
+    ledger = _ledger()
+    ledger.seed_authoritative(_snapshot(), observed_monotonic_ns=1_000)
+
+    diff = ledger.seed_authoritative(
+        _snapshot(open_orders=(_open_order(),)),
+        observed_monotonic_ns=2_000,
+    )
+    portfolio = ledger.runtime_portfolio(
+        account_state_trusted=False,
+        now_monotonic_ns=2_050,
+    )
+
+    assert diff.open_order_missing == ("101",)
+    assert ledger.reconciliation_blocked is False
+    assert portfolio.trust_grade is AccountTrustGrade.PROXY
+    assert len(portfolio.orders) == 1
+    assert portfolio.orders[0].open is True
+    assert portfolio.orders[0].reserved_exposure == 10.0
+    assert portfolio.worst_case_inventory_bounds(EXCHANGE, TOURNAMENT) == (0.0, 10.0)
+
+
+def test_same_order_identity_mismatch_still_blocks_proxy() -> None:
+    ledger = _ledger()
+    ledger.seed_authoritative(
+        _snapshot(open_orders=(_open_order(),)),
+        observed_monotonic_ns=1_000,
+    )
+
+    diff = ledger.seed_authoritative(
+        _snapshot(open_orders=(_open_order(quantity="9"),)),
+        observed_monotonic_ns=2_000,
+    )
+
+    assert diff.open_order_mismatch == ("101",)
+    assert ledger.reconciliation_blocked is True
+    assert ledger.trust_grade(account_state_trusted=False, proxy_age_ns=0) is (
+        AccountTrustGrade.UNTRUSTED
     )
 
 
