@@ -72,6 +72,8 @@ class ResidualTakerLiveCoordinator:
         min_fair_value: float = 0.0,
         max_fair_value: float = 1.0,
         max_position: int | None = None,
+        allow_bbo_proxy: bool = False,
+        max_sig_bbo_age_ns: int | None = None,
     ) -> None:
         if not tracked_exchange_ids:
             raise ValueError("LIVE residual taker requires an explicit universe")
@@ -81,6 +83,9 @@ class ResidualTakerLiveCoordinator:
             tracked_exchange_ids=tracked_exchange_ids,
         )
         self._max_pm_book_age_ns = max_pm_book_age_ns
+        self._max_sig_bbo_age_ns = (
+            max_pm_book_age_ns if max_sig_bbo_age_ns is None else max_sig_bbo_age_ns
+        )
         self._risk_context_source = risk_context
         self._reservations = reservations
         self._journal = journal
@@ -95,6 +100,7 @@ class ResidualTakerLiveCoordinator:
         # Per-market cap on signed YES inventory the taker may build; trades
         # that reduce inventory are never blocked.
         self._max_position = max_position
+        self._allow_bbo_proxy = allow_bbo_proxy
         # Remainder cancels that did not conclude; retried every cycle so a
         # taker order is never left resting at a stale price.
         self._pending_cancels: dict[str, ExecutionEnvelope] = {}
@@ -117,20 +123,26 @@ class ResidualTakerLiveCoordinator:
             snapshot = snapshots[exchange_id]
             if exchange_id not in self._signal.tracked_exchange_ids:
                 continue
+            sig_bbo_age = snapshot.now_monotonic_ns - snapshot.sig_bbo_observed_ns
+            bbo_proxy = (
+                not snapshot.sig_bbo_trusted
+                or sig_bbo_age < 0
+                or sig_bbo_age >= self._max_sig_bbo_age_ns
+            )
             state = residual_input_from_snapshot(
                 snapshot,
                 self._mapping.get(exchange_id),
                 max_pm_book_age_ns=self._max_pm_book_age_ns,
                 observed_monotonic_ns=snapshot.now_monotonic_ns,
+                allow_bbo_proxy=self._allow_bbo_proxy,
+                max_sig_bbo_age_ns=self._max_sig_bbo_age_ns,
             )
-            if state is None or not (
-                self._min_fair_value <= state.pm_mid <= self._max_fair_value
-            ):
+            if state is None or not (self._min_fair_value <= state.pm_mid <= self._max_fair_value):
                 continue
             signal = self._signal.on_state(state)
             if signal is None:
                 continue
-            events.extend(await self._take(change, snapshot, signal))
+            events.extend(await self._take(change, snapshot, signal, bbo_proxy=bbo_proxy))
         return tuple(events)
 
     def _capped_quantity(
@@ -138,15 +150,30 @@ class ResidualTakerLiveCoordinator:
         snapshot: MakerMarketSnapshot,
         action: OrderAction,
         quantity: int,
+        require_reducing: bool = False,
     ) -> int:
+        portfolio = snapshot.runtime.portfolio
+        if require_reducing:
+            low, high = portfolio.worst_case_inventory_bounds(
+                snapshot.exchange_id,
+                snapshot.tournament_id,
+            )
+            if action is OrderAction.BUY and high < 0.0:
+                return max(0, min(quantity, math.floor(-high)))
+            if action is OrderAction.SELL and low > 0.0:
+                return max(0, min(quantity, math.floor(low)))
+            return 0
         if self._max_position is None:
             return quantity
-        inventory = sum(
-            position.signed_quantity
-            for position in snapshot.runtime.portfolio.positions
-            if position.exchange_id == snapshot.exchange_id
-            and position.tournament_id == snapshot.tournament_id
-        )
+        if portfolio.proxy_active:
+            low, high = portfolio.worst_case_inventory_bounds(
+                snapshot.exchange_id,
+                snapshot.tournament_id,
+            )
+            if action is OrderAction.BUY:
+                return max(0, min(quantity, math.floor(self._max_position - high)))
+            return max(0, min(quantity, math.floor(self._max_position + low)))
+        inventory = portfolio.signed_inventory(snapshot.exchange_id, snapshot.tournament_id)
         if action is OrderAction.BUY:
             room = self._max_position - inventory
         else:
@@ -158,6 +185,8 @@ class ResidualTakerLiveCoordinator:
         change: MakerStateChange,
         snapshot: MakerMarketSnapshot,
         signal: ResidualSignal,
+        *,
+        bbo_proxy: bool,
     ) -> tuple[ExecutionEvent, ...]:
         exchange_id = snapshot.exchange_id
         book = snapshot.runtime.book(exchange_id)
@@ -168,7 +197,13 @@ class ResidualTakerLiveCoordinator:
             action, ticks = OrderAction.BUY, book.asks[0].price_ticks
         else:
             action, ticks = OrderAction.SELL, book.bids[0].price_ticks
-        quantity = self._capped_quantity(snapshot, action, signal.quantity)
+        reduce_only = bbo_proxy or snapshot.runtime.portfolio.proxy_active
+        quantity = self._capped_quantity(
+            snapshot,
+            action,
+            signal.quantity,
+            require_reducing=reduce_only,
+        )
         if quantity < 1:
             _LOG.info(
                 "TAKE skip exchange=%s direction=%s reason=position_cap",

@@ -74,6 +74,7 @@ from predictions_cup.risk import (
 )
 from predictions_cup.risk.core import RiskContext, RiskLimits
 from predictions_cup.runtime.models import (
+    AccountTrustGrade,
     RuntimeBook,
     RuntimeLevel,
     RuntimeMarket,
@@ -106,9 +107,7 @@ def _mapping(
     direction: MappingDirection = MappingDirection.SAME,
 ) -> MappingDocument:
     direct = (
-        _identity("token-yes")
-        if mapping_class in {MappingClass.EXACT, MappingClass.NEAR}
-        else None
+        _identity("token-yes") if mapping_class in {MappingClass.EXACT, MappingClass.NEAR} else None
     )
     components: tuple[PolymarketContractIdentity, ...] = ()
     semantic_notes: str | None = "reviewed direct mapping"
@@ -151,6 +150,7 @@ def _runtime(
     signed_inventory: float = 0.0,
     account_trusted: bool = True,
     status: str = "open",
+    book_observed_ns: int = NOW,
 ) -> RuntimeSnapshot:
     positions: tuple[RuntimePosition, ...] = ()
     if signed_inventory != 0.0:
@@ -182,7 +182,7 @@ def _runtime(
                 bids=(RuntimeLevel(price_ticks=98, quantity=20.0),),
                 asks=(RuntimeLevel(price_ticks=102, quantity=20.0),),
                 trusted_depth=True,
-                observed_monotonic_ns=NOW,
+                observed_monotonic_ns=book_observed_ns,
             ),
         ),
         portfolio=RuntimePortfolio(
@@ -243,6 +243,7 @@ def _maker_snapshot(
         runtime=_runtime(
             signed_inventory=signed_inventory,
             account_trusted=account_trusted,
+            book_observed_ns=bbo_observed_ns,
         ),
         exchange_id="36",
         market_id="m1",
@@ -266,6 +267,8 @@ def _engine(
     max_inventory: float = 10.0,
     max_age_ns: int = 100_000_000,
     fair_value_band: tuple[float, float] = (0.0, 1.0),
+    account_proxy_enabled: bool = False,
+    base_size: int = 4,
 ) -> MakerEngine:
     provider = DirectPolymarketFairValueProvider(
         _mapping(
@@ -279,7 +282,7 @@ def _engine(
         toxicity=NullToxicityProvider(),
         inventory=BinaryCaraInventoryModel(),
         spread=ConservativeSpreadPolicy(base_half_spread_ticks=1.0),
-        size=InventoryConfidenceSizePolicy(base_size=4),
+        size=InventoryConfidenceSizePolicy(base_size=base_size),
         eligibility=ConservativeEligibilityPolicy(
             max_bbo_age_ns=max_age_ns,
             max_fv_age_ns=max_age_ns,
@@ -288,6 +291,7 @@ def _engine(
             max_optional_signal_age_ns=max_age_ns,
             min_fair_value=fair_value_band[0],
             max_fair_value=fair_value_band[1],
+            account_proxy_enabled=account_proxy_enabled,
         ),
         config=MakerConfig(max_abs_inventory=max_inventory),
     )
@@ -347,7 +351,6 @@ def _seed_resting_quotes(registry: QuoteRegistry) -> None:
         lifecycle_state=LifecycleState.OPEN,
         observed_monotonic_ns=NOW - 1,
     )
-
 
 
 class _PerIntentBatchLiveSink:
@@ -580,9 +583,7 @@ def test_live_two_sided_batch_two_acks_publish_two_authoritative_quotes(
         tmp_path,
         acked_intent_indices=frozenset({0, 1}),
     )
-    published = tuple(
-        item for item in observations if item.kind is ObservationKind.QUOTE_PUBLISHED
-    )
+    published = tuple(item for item in observations if item.kind is ObservationKind.QUOTE_PUBLISHED)
     assert len(published) == 2
     assert {item.logical_intent_id for item in published} == {
         "make-direct-pm:1000000000:36:0",
@@ -606,9 +607,7 @@ def test_live_two_sided_batch_ack_plus_reject_publishes_only_acknowledged_quote(
         tmp_path,
         acked_intent_indices=frozenset({0}),
     )
-    published = tuple(
-        item for item in observations if item.kind is ObservationKind.QUOTE_PUBLISHED
-    )
+    published = tuple(item for item in observations if item.kind is ObservationKind.QUOTE_PUBLISHED)
     assert len(published) == 1
     assert published[0].exchange_order_id == "91"
     assert dict(published[0].detail)["side"] == "BID"
@@ -625,9 +624,7 @@ def test_live_two_sided_batch_ack_without_order_identity_is_not_published(
         acked_intent_indices=frozenset({0, 1}),
         omit_order_id_indices=frozenset({1}),
     )
-    published = tuple(
-        item for item in observations if item.kind is ObservationKind.QUOTE_PUBLISHED
-    )
+    published = tuple(item for item in observations if item.kind is ObservationKind.QUOTE_PUBLISHED)
     assert len(published) == 1
     assert published[0].exchange_order_id == "91"
     state = quotes.state("36")
@@ -767,17 +764,13 @@ def test_direct_pm_preserves_value_orientation_and_source_observation_age() -> N
     complement = DirectPolymarketFairValueProvider(_mapping(direction=MappingDirection.COMPLEMENT))
     snapshot = replace(
         snapshot,
-        external_quotes={
-            "token-yes": _external(bid=0.29, ask=0.31, observed_ns=950)
-        },
+        external_quotes={"token-yes": _external(bid=0.29, ask=0.31, observed_ns=950)},
     )
     assert complement.fair_value(snapshot).value == pytest.approx(0.7)
 
     stale = replace(
         snapshot,
-        external_quotes={
-            "token-yes": _external(bid=0.29, ask=0.31, observed_ns=899)
-        },
+        external_quotes={"token-yes": _external(bid=0.29, ask=0.31, observed_ns=899)},
     )
     stale_result = complement.fair_value(stale)
     assert stale_result.usable is True
@@ -794,9 +787,7 @@ def test_direct_pm_fv_freshness_uses_live_feed_without_rewriting_provenance() ->
         stale_snapshot,
         external_feed_observed_ns=NOW,
     )
-    provider_result = DirectPolymarketFairValueProvider(_mapping()).fair_value(
-        live_snapshot
-    )
+    provider_result = DirectPolymarketFairValueProvider(_mapping()).fair_value(live_snapshot)
     assert provider_result.observed_monotonic_ns == NOW - 101
 
     live = _engine(max_age_ns=100).quote(live_snapshot)
@@ -806,9 +797,7 @@ def test_direct_pm_fv_freshness_uses_live_feed_without_rewriting_provenance() ->
 
 def test_derived_partition_sum_and_no_trade_are_explicit() -> None:
     provider = DirectPolymarketFairValueProvider(_mapping(mapping_class=MappingClass.DERIVED))
-    result = provider.fair_value(
-        _maker_snapshot(mapping_class=MappingClass.DERIVED)
-    )
+    result = provider.fair_value(_maker_snapshot(mapping_class=MappingClass.DERIVED))
     assert result.usable
     assert result.value == pytest.approx(0.5)
     assert result.mapping_class == "DERIVED"
@@ -822,9 +811,7 @@ def test_derived_partition_sum_and_no_trade_are_explicit() -> None:
 def test_inventory_skews_reservation_price_and_hard_boundary_is_one_sided() -> None:
     flat = _engine().quote(_maker_snapshot())
     long = _engine().quote(_maker_snapshot(signed_inventory=8.0))
-    boundary = _engine(max_inventory=10.0).quote(
-        _maker_snapshot(signed_inventory=10.0)
-    )
+    boundary = _engine(max_inventory=10.0).quote(_maker_snapshot(signed_inventory=10.0))
 
     assert flat.desired is not None
     assert long.desired is not None
@@ -838,12 +825,8 @@ def test_inventory_skews_reservation_price_and_hard_boundary_is_one_sided() -> N
 
 
 def test_fractional_inventory_headroom_never_rounds_up_past_hard_boundary() -> None:
-    long = _engine(max_inventory=10.0).quote(
-        _maker_snapshot(signed_inventory=9.5)
-    )
-    short = _engine(max_inventory=10.0).quote(
-        _maker_snapshot(signed_inventory=-9.5)
-    )
+    long = _engine(max_inventory=10.0).quote(_maker_snapshot(signed_inventory=9.5))
+    short = _engine(max_inventory=10.0).quote(_maker_snapshot(signed_inventory=-9.5))
 
     assert long.desired is not None
     assert long.desired.bid_ticks is None
@@ -865,11 +848,7 @@ def test_quote_ticks_are_passive_valid_and_never_cross() -> None:
         (0.80, 0.82),
         (0.93, 0.95),
     ):
-        snapshot = _maker_snapshot(
-            external={
-                "token-yes": _external(bid=bid, ask=ask)
-            }
-        )
+        snapshot = _maker_snapshot(external={"token-yes": _external(bid=bid, ask=ask)})
         decision = engine.quote(snapshot)
         assert decision.desired is not None
         quote = decision.desired
@@ -884,16 +863,8 @@ def test_quote_ticks_are_passive_valid_and_never_cross() -> None:
 
 
 def test_probability_boundary_drops_side_instead_of_narrowing_required_spread() -> None:
-    high = _engine().quote(
-        _maker_snapshot(
-            external={"token-yes": _external(bid=0.97, ask=0.99)}
-        )
-    )
-    low = _engine().quote(
-        _maker_snapshot(
-            external={"token-yes": _external(bid=0.01, ask=0.03)}
-        )
-    )
+    high = _engine().quote(_maker_snapshot(external={"token-yes": _external(bid=0.97, ask=0.99)}))
+    low = _engine().quote(_maker_snapshot(external={"token-yes": _external(bid=0.01, ask=0.03)}))
 
     assert high.desired is not None
     assert high.desired.ask_ticks is None
@@ -1049,13 +1020,103 @@ def test_untrusted_account_and_lost_pm_feed_fail_closed() -> None:
     assert untrusted.desired is None
     assert untrusted.gate.reason == "account_untrusted"
 
-    lost = _engine().quote(
-        _maker_snapshot(
-            external={"token-yes": _external(trusted=False)}
-        )
-    )
+    lost = _engine().quote(_maker_snapshot(external={"token-yes": _external(trusted=False)}))
     assert lost.desired is None
     assert "fair_value_unusable" in lost.gate.reason
+
+
+@pytest.mark.parametrize(
+    ("inventory", "expected_mode", "expected_side"),
+    (
+        (5.0, GateMode.ASK_ONLY, "ask"),
+        (-5.0, GateMode.BID_ONLY, "bid"),
+    ),
+)
+def test_bbo_proxy_allows_only_inventory_reducing_quotes(
+    inventory: float,
+    expected_mode: GateMode,
+    expected_side: str,
+) -> None:
+    snapshot = _maker_snapshot(
+        signed_inventory=inventory,
+        bbo_observed_ns=NOW - 100_000_001,
+        bbo_trusted=False,
+    )
+    portfolio = replace(
+        snapshot.runtime.portfolio,
+        account_trust_grade=AccountTrustGrade.PROXY,
+        account_proxy_age_ns=1,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, portfolio=portfolio))
+
+    decision = _engine(account_proxy_enabled=True).quote(snapshot)
+
+    assert decision.gate.mode is expected_mode
+    assert decision.desired is not None
+    if expected_side == "ask":
+        assert decision.desired.ask_ticks is not None
+        assert decision.desired.bid_ticks is None
+        assert decision.desired.bid_size == 0
+    else:
+        assert decision.desired.bid_ticks is not None
+        assert decision.desired.ask_ticks is None
+        assert decision.desired.ask_size == 0
+
+
+def test_bbo_proxy_cancels_when_flat_inventory_has_no_reducing_side() -> None:
+    snapshot = _maker_snapshot(
+        bbo_observed_ns=NOW - 100_000_001,
+        bbo_trusted=False,
+    )
+    portfolio = replace(
+        snapshot.runtime.portfolio,
+        account_trust_grade=AccountTrustGrade.PROXY,
+        account_proxy_age_ns=1,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, portfolio=portfolio))
+
+    decision = _engine(account_proxy_enabled=True).quote(snapshot)
+
+    assert decision.desired is None
+    assert decision.gate.mode is GateMode.CANCEL
+    assert decision.gate.reason == "bbo_proxy_no_reducing_side"
+
+
+def test_proxy_inventory_increasing_quotes_use_reduced_size() -> None:
+    snapshot = _maker_snapshot()
+    normal = _engine(base_size=10).quote(snapshot)
+    portfolio = replace(
+        snapshot.runtime.portfolio,
+        account_trust_grade=AccountTrustGrade.PROXY,
+        account_proxy_age_ns=1,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, portfolio=portfolio))
+
+    decision = _engine(base_size=10).quote(snapshot)
+
+    assert decision.gate.mode is GateMode.NORMAL
+    assert decision.desired is not None
+    assert normal.desired is not None
+    assert decision.desired.bid_size == math.floor(normal.desired.bid_size * 0.25)
+    assert decision.desired.ask_size == math.floor(normal.desired.ask_size * 0.25)
+
+
+def test_proxy_soft_unwind_only_quotes_the_reducing_side() -> None:
+    snapshot = _maker_snapshot(signed_inventory=-160.0)
+    portfolio = replace(
+        snapshot.runtime.portfolio,
+        account_trust_grade=AccountTrustGrade.PROXY,
+        account_proxy_age_ns=1,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, portfolio=portfolio))
+
+    decision = _engine(max_inventory=200.0).quote(snapshot)
+
+    assert decision.gate.reason == "proxy_soft_unwind"
+    assert decision.gate.mode is GateMode.BID_ONLY
+    assert decision.desired is not None
+    assert decision.desired.bid_ticks is not None
+    assert decision.desired.ask_ticks is None
 
 
 class _BrokenFairValue:
@@ -1242,10 +1303,7 @@ def test_shadow_coordinator_uses_central_risk_and_does_not_duplicate_quote() -> 
     )
     assert second.risk_decisions == ()
     assert second.execution_events == ()
-    assert all(
-        action.kind is QuoteLifecycleActionKind.KEEP
-        for action in second.lifecycle_actions
-    )
+    assert all(action.kind is QuoteLifecycleActionKind.KEEP for action in second.lifecycle_actions)
 
 
 class _DeadlineBridge:
@@ -1332,7 +1390,8 @@ def test_freshness_deadline_cancels_resting_quote_without_feed_event() -> None:
     expired = asyncio.run(runtime.drain_once())
     assert expired is not None
     assert any(
-        decision.gate.reason in {
+        decision.gate.reason
+        in {
             "sig_bbo_stale",
             "account_stale",
             "inventory_stale",
@@ -1437,8 +1496,7 @@ def test_untrusted_portfolio_marks_withdraw_unchanged_resting_quotes() -> None:
 
     assert len(result.execution_events) == 2
     assert all(
-        action.kind is QuoteLifecycleActionKind.CANCEL
-        for action in result.lifecycle_actions
+        action.kind is QuoteLifecycleActionKind.CANCEL for action in result.lifecycle_actions
     )
     assert registry.state("36").bid is None
     assert registry.state("36").ask is None
@@ -1544,10 +1602,7 @@ def test_transient_account_untrust_holds_resting_quotes_without_new_io() -> None
 
     assert result.decisions[0].gate.mode is GateMode.HOLD
     assert result.execution_events == ()
-    assert all(
-        action.kind is QuoteLifecycleActionKind.KEEP
-        for action in result.lifecycle_actions
-    )
+    assert all(action.kind is QuoteLifecycleActionKind.KEEP for action in result.lifecycle_actions)
     assert registry.state("36").bid is not None
     assert registry.state("36").ask is not None
 
@@ -1596,8 +1651,7 @@ def test_persistent_account_untrust_withdraws_resting_quotes_at_freshness_deadli
     assert result.decisions[0].gate.reason == "account_stale"
     assert len(result.execution_events) == 2
     assert all(
-        action.kind is QuoteLifecycleActionKind.CANCEL
-        for action in result.lifecycle_actions
+        action.kind is QuoteLifecycleActionKind.CANCEL for action in result.lifecycle_actions
     )
     assert registry.state("36").bid is None
     assert registry.state("36").ask is None
@@ -1667,11 +1721,11 @@ def test_realtime_drawdown_trip_force_cancels_resting_quotes_same_cycle() -> Non
     assert checkpoints == ["peak_drawdown_limit"]
     assert len(result.execution_events) == 2
     assert all(
-        action.kind is QuoteLifecycleActionKind.CANCEL
-        for action in result.lifecycle_actions
+        action.kind is QuoteLifecycleActionKind.CANCEL for action in result.lifecycle_actions
     )
     assert registry.state("36").bid is None
     assert registry.state("36").ask is None
+
 
 def test_untrusted_capital_marks_force_cancel_unchanged_resting_quotes() -> None:
     engine = _engine()
@@ -1743,8 +1797,7 @@ def test_untrusted_capital_marks_force_cancel_unchanged_resting_quotes() -> None
 
     assert len(result.execution_events) == 2
     assert all(
-        action.kind is QuoteLifecycleActionKind.CANCEL
-        for action in result.lifecycle_actions
+        action.kind is QuoteLifecycleActionKind.CANCEL for action in result.lifecycle_actions
     )
     assert registry.state("36").bid is None
     assert registry.state("36").ask is None
@@ -1783,8 +1836,7 @@ def test_brief_account_resync_holds_known_resting_quotes() -> None:
     assert result.execution_events == ()
     assert len(result.lifecycle_actions) == 2
     assert all(
-        action.kind is QuoteLifecycleActionKind.KEEP
-        and action.reason == "transient_account_hold"
+        action.kind is QuoteLifecycleActionKind.KEEP and action.reason == "transient_account_hold"
         for action in result.lifecycle_actions
     )
     assert registry.state("36").bid is not None
@@ -1830,8 +1882,7 @@ def test_capital_global_halt_force_cancels_resting_make_quotes() -> None:
 
     assert len(result.execution_events) == 2
     assert all(
-        action.kind is QuoteLifecycleActionKind.CANCEL
-        for action in result.lifecycle_actions
+        action.kind is QuoteLifecycleActionKind.CANCEL for action in result.lifecycle_actions
     )
     assert registry.state("36").bid is None
     assert registry.state("36").ask is None
@@ -1955,10 +2006,7 @@ def test_unrelated_strategy_halt_does_not_cancel_make_quotes() -> None:
     assert result.execution_events == ()
     assert registry.state("36").bid is not None
     assert registry.state("36").ask is not None
-    assert all(
-        action.kind is QuoteLifecycleActionKind.KEEP
-        for action in result.lifecycle_actions
-    )
+    assert all(action.kind is QuoteLifecycleActionKind.KEEP for action in result.lifecycle_actions)
 
 
 def test_uncertain_capital_halt_cancel_keeps_quote_risk_bearing() -> None:
@@ -2092,6 +2140,7 @@ def test_signed_inventory_is_additive_to_existing_gross_risk_state() -> None:
     portfolio = RuntimePortfolio(positions=(position,), account_trusted=True)
     assert portfolio.gross_exposure == pytest.approx(7.0)
     assert position.signed_quantity == pytest.approx(-7.0)
+
 
 def test_binary_cara_reservation_matches_math_ledger_formula() -> None:
     engine = _engine(max_inventory=10.0)
@@ -2238,6 +2287,7 @@ def test_quote_invariants_over_probability_inventory_grid() -> None:
             if inventory <= -10.0:
                 assert quote.ask_ticks is None
 
+
 def test_placement_uncertainty_retains_reservation_and_blocks_duplicate_exposure() -> None:
     registry = QuoteRegistry()
     reservations = ExecutionReservationBook()
@@ -2363,9 +2413,7 @@ def test_cancel_uncertainty_blocks_replacement_until_reconciliation() -> None:
         placement_dispatch=unused_place,
         cancel_dispatch=uncertain_cancel,
     )
-    snapshot = _maker_snapshot(
-        external={"token-yes": _external(bid=0.59, ask=0.61)}
-    )
+    snapshot = _maker_snapshot(external={"token-yes": _external(bid=0.59, ask=0.61)})
 
     with pytest.raises(RuntimeError, match="cancel uncertainty"):
         asyncio.run(
@@ -2390,7 +2438,6 @@ def test_cancel_uncertainty_blocks_replacement_until_reconciliation() -> None:
     )
     bid = next(action for action in actions if action.side is QuoteSide.BID)
     assert bid.kind is QuoteLifecycleActionKind.WAIT_RECONCILIATION
-
 
 
 def test_fair_value_band_quotes_only_mid_range_markets() -> None:

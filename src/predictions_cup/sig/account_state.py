@@ -2,17 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
+from time import monotonic_ns
 
 from pydantic import ValidationError
 
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.runtime.models import RuntimeOrderState, RuntimePortfolio, RuntimePosition
+from predictions_cup.sig.account_proxy import AccountProxyLedger
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
 from predictions_cup.sig.realtime_models import AccountBatchDto
+
+
+def _signed_order_quantity(side: str, action: str, quantity: Decimal) -> float:
+    amount = float(abs(quantity))
+    return amount if (side == "yes") == (action == "buy") else -amount
 
 
 class AccountTrustTransition(StrEnum):
@@ -48,11 +56,15 @@ class AccountRealtimeStateEngine:
         *,
         tournament_id: str,
         reservations: ExecutionReservationBook | None = None,
+        account_proxy: AccountProxyLedger | None = None,
+        clock_ns: Callable[[], int] = monotonic_ns,
     ) -> None:
         if not tournament_id.strip():
             raise ValueError("tournament_id must not be blank")
         self.tournament_id = tournament_id
         self._reservations = reservations
+        self.account_proxy = account_proxy
+        self._clock_ns = clock_ns
         self.trusted = False
         self.transition = AccountTrustTransition.INITIAL
         self.last_accepted_revision: int | None = None
@@ -73,6 +85,7 @@ class AccountRealtimeStateEngine:
         snapshot: AccountAuthoritativeSnapshot,
         *,
         mark_trusted: bool = True,
+        observed_monotonic_ns: int | None = None,
     ) -> None:
         if snapshot.tournament_id != self.tournament_id:
             raise ValueError("authoritative snapshot tournament mismatch")
@@ -95,14 +108,35 @@ class AccountRealtimeStateEngine:
                 reserved_exposure=float(abs(order.quantity)),
                 open=order.open,
                 uncertain=False,
+                signed_quantity=_signed_order_quantity(
+                    order.side,
+                    order.action,
+                    order.quantity,
+                ),
             )
             for order in snapshot.open_orders
         }
         # Only reservations ACKed before this snapshot's conservative read-start
         # fence are superseded. Newer/un-ACKed operations remain risk-bearing.
         if self._reservations is not None:
-            self._reservations.reconcile_authoritative(
-                observed_at=snapshot.observed_at
+            self._reservations.reconcile_authoritative(observed_at=snapshot.observed_at)
+        if self.account_proxy is not None:
+            observed_ns = (
+                self._clock_ns() if observed_monotonic_ns is None else observed_monotonic_ns
+            )
+            read_age_ns = max(
+                0,
+                int(
+                    max(
+                        0.0,
+                        (datetime.now(UTC) - snapshot.observed_at).total_seconds(),
+                    )
+                    * 1_000_000_000
+                ),
+            )
+            self.account_proxy.seed_authoritative(
+                snapshot,
+                observed_monotonic_ns=max(0, observed_ns - read_age_ns),
             )
         self.trusted = False
         self.last_accepted_revision = None
@@ -159,9 +193,7 @@ class AccountRealtimeStateEngine:
         # can double-apply fills already present in the last REST snapshot. A valid
         # fill therefore invalidates local exposure and forces authoritative truth.
         if batch.fills:
-            self.mark_untrusted(
-                AccountTrustTransition.UNTRUSTED_FILL_REQUIRES_RECONCILIATION
-            )
+            self.mark_untrusted(AccountTrustTransition.UNTRUSTED_FILL_REQUIRES_RECONCILIATION)
             return AccountBatchApplyResult(
                 accepted=False,
                 duplicate=False,
@@ -203,9 +235,7 @@ class AccountRealtimeStateEngine:
                         )
                     )
                     if local is None:
-                        self.mark_untrusted(
-                            AccountTrustTransition.UNTRUSTED_UNKNOWN_OPEN_ORDER
-                        )
+                        self.mark_untrusted(AccountTrustTransition.UNTRUSTED_UNKNOWN_OPEN_ORDER)
                         return AccountBatchApplyResult(
                             accepted=False,
                             duplicate=False,
@@ -221,6 +251,7 @@ class AccountRealtimeStateEngine:
                         open=True,
                         uncertain=True,
                         strategy_id=local.order.strategy_id,
+                        signed_quantity=local.order.signed_quantity,
                     )
             else:
                 self._orders.pop(update.order_id, None)
@@ -244,6 +275,11 @@ class AccountRealtimeStateEngine:
         )
 
     def runtime_portfolio(self) -> RuntimePortfolio:
+        if self.account_proxy is not None and self.account_proxy.enabled:
+            return self.account_proxy.runtime_portfolio(
+                account_state_trusted=self.trusted,
+                now_monotonic_ns=self._clock_ns(),
+            )
         return RuntimePortfolio(
             positions=tuple(
                 RuntimePosition(

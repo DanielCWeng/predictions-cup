@@ -55,7 +55,6 @@ class PolymarketBookSource(Protocol):
     def snapshot(self, token_id: str, depth: int) -> BookSnapshot | None: ...
 
 
-
 class MakerSourceBridge:
     """Indexed bounded bridge from accepted live state into maker snapshots."""
 
@@ -83,12 +82,9 @@ class MakerSourceBridge:
         records = tuple(
             record
             for record in mapping.records
-            if allowed_exchange_ids is None
-            or record.sig_exchange_id in allowed_exchange_ids
+            if allowed_exchange_ids is None or record.sig_exchange_id in allowed_exchange_ids
         )
-        self._records = {
-            record.sig_exchange_id: record for record in records
-        }
+        self._records = {record.sig_exchange_id: record for record in records}
         if len(self._records) != len(records):
             raise ValueError("mapping contains duplicate SIG exchanges")
         if allowed_exchange_ids is not None:
@@ -172,10 +168,7 @@ class MakerSourceBridge:
         if record is None:
             return None
         sig_exchange = self._sig.states.get(exchange_id)
-        if (
-            sig_exchange is not None
-            and record.sig_market_id != sig_exchange.market_id
-        ):
+        if sig_exchange is not None and record.sig_market_id != sig_exchange.market_id:
             raise ValueError("mapping/SIG market identity mismatch")
 
         sig_market = self._sig.market_states.get(record.sig_market_id)
@@ -195,12 +188,10 @@ class MakerSourceBridge:
         depth_observed_ns: int | None = None
         if sig_exchange is not None:
             try:
-                runtime_book, bbo_observed_ns, bbo_trusted, depth_observed_ns = (
-                    self._runtime_book(
-                        sig_exchange,
-                        wall_now=wall_now,
-                        monotonic_now_ns=monotonic_now_ns,
-                    )
+                runtime_book, bbo_observed_ns, bbo_trusted, depth_observed_ns = self._runtime_book(
+                    sig_exchange,
+                    wall_now=wall_now,
+                    monotonic_now_ns=monotonic_now_ns,
                 )
             except ValueError:
                 runtime_book = None
@@ -222,8 +213,7 @@ class MakerSourceBridge:
 
         portfolio = self._canonical_portfolio()
         account_observed = (
-            self._account.last_accepted_observed_at
-            or self._account.last_authoritative_observed_at
+            self._account.last_accepted_observed_at or self._account.last_authoritative_observed_at
         )
         account_observed_ns = self._to_monotonic(
             account_observed,
@@ -238,18 +228,10 @@ class MakerSourceBridge:
                 continue
             external_quotes[token_id] = ExternalQuoteState(
                 token_id=token_id,
-                best_bid=(
-                    None if book.best_bid is None else float(book.best_bid)
-                ),
-                best_ask=(
-                    None if book.best_ask is None else float(book.best_ask)
-                ),
-                best_bid_size=(
-                    None if not book.bids else float(book.bids[0].size)
-                ),
-                best_ask_size=(
-                    None if not book.asks else float(book.asks[0].size)
-                ),
+                best_bid=(None if book.best_bid is None else float(book.best_bid)),
+                best_ask=(None if book.best_ask is None else float(book.best_ask)),
+                best_bid_size=(None if not book.bids else float(book.bids[0].size)),
+                best_ask_size=(None if not book.asks else float(book.asks[0].size)),
                 observed_monotonic_ns=self._to_monotonic(
                     book.observed_at,
                     wall_now=wall_now,
@@ -276,18 +258,12 @@ class MakerSourceBridge:
             sig_bbo_observed_ns=bbo_observed_ns,
             sig_bbo_trusted=bbo_trusted and sig_connected,
             sig_depth_observed_ns=depth_observed_ns,
-            sig_depth_trusted=(
-                sig_exchange is not None
-                and sig_exchange.trusted
-                and sig_connected
-            ),
+            sig_depth_trusted=(sig_exchange is not None and sig_exchange.trusted and sig_connected),
             account_observed_ns=account_observed_ns,
             inventory_observed_ns=account_observed_ns,
             external_quotes=external_quotes,
             volatility=volatility,
-            external_feed_observed_ns=(
-                monotonic_now_ns if polymarket_feed_trusted else None
-            ),
+            external_feed_observed_ns=(monotonic_now_ns if polymarket_feed_trusted else None),
         )
 
     def _canonical_portfolio(self) -> RuntimePortfolio:
@@ -295,10 +271,7 @@ class MakerSourceBridge:
         orders: list[RuntimeOrderState] = []
         for order in portfolio.orders:
             record = self._records.get(order.exchange_id)
-            if (
-                record is None
-                or order.tournament_id != self._mapping.tournament_id
-            ):
+            if record is None or order.tournament_id != self._mapping.tournament_id:
                 orders.append(order)
                 continue
             if order.market_id not in {"UNKNOWN", record.sig_market_id}:
@@ -314,12 +287,18 @@ class MakerSourceBridge:
                     reserved_exposure=order.reserved_exposure,
                     open=order.open,
                     uncertain=order.uncertain,
+                    strategy_id=order.strategy_id,
+                    signed_quantity=order.signed_quantity,
                 )
             )
         return RuntimePortfolio(
             positions=portfolio.positions,
             orders=tuple(orders),
             account_trusted=portfolio.account_trusted,
+            account_trust_grade=portfolio.account_trust_grade,
+            account_proxy_age_ns=portfolio.account_proxy_age_ns,
+            account_proxy_uncertainty=portfolio.account_proxy_uncertainty,
+            account_proxy_cash_balance=portfolio.account_proxy_cash_balance,
         )
 
     def _runtime_book(
@@ -410,30 +389,22 @@ class MakerSourceBridge:
                 observed_monotonic_ns=observed_ns,
             ),
             observed_ns,
-            (
-                self._sig.health.connected
-                and best_bid is not None
-                and best_ask is not None
-            ),
+            (self._sig.health.connected and best_bid is not None and best_ask is not None),
             None,
         )
 
     @staticmethod
     def _record_tradeable(record: MarketMapping) -> bool:
-        return (
-            record.status is MappingStatus.VERIFIED
-            and record.mapping_class
-            not in {MappingClass.NO_TRADE, MappingClass.MODEL_ONLY}
-        )
+        return record.status is MappingStatus.VERIFIED and record.mapping_class not in {
+            MappingClass.NO_TRADE,
+            MappingClass.MODEL_ONLY,
+        }
 
     @staticmethod
     def _token_ids(record: MarketMapping) -> tuple[str, ...]:
         if record.direct_polymarket is not None:
             return (record.direct_polymarket.mapped_token_id,)
-        return tuple(
-            component.mapped_token_id
-            for component in record.polymarket_components
-        )
+        return tuple(component.mapped_token_id for component in record.polymarket_components)
 
     @staticmethod
     def _to_monotonic(
@@ -446,9 +417,7 @@ class MakerSourceBridge:
             return 0
         if observed_at.tzinfo is None or observed_at.utcoffset() is None:
             raise ValueError("source observation timestamp must be timezone-aware")
-        age_seconds = (
-            wall_now.astimezone(UTC) - observed_at.astimezone(UTC)
-        ).total_seconds()
+        age_seconds = (wall_now.astimezone(UTC) - observed_at.astimezone(UTC)).total_seconds()
         # A future wall-clock observation maps past monotonic_now_ns so the
         # eligibility policy sees a negative age and fails closed. Very old
         # observations clamp to zero and therefore remain stale.

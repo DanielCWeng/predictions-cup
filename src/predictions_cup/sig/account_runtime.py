@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 from contextlib import suppress
@@ -139,6 +140,38 @@ class AccountRealtimeController:
         self._resyncing = False
         self._resync_generation = 0
         self._refresh_lock = asyncio.Lock()
+        if (
+            self._state.account_proxy is not None
+            and self._state.account_proxy.enabled
+            and self._execution_journal is not None
+        ):
+            self._state.account_proxy.initialize_journal_cursor(self._execution_journal)
+            self._execution_journal.add_operation_listener(self._on_execution_journal_operation)
+
+    def _on_execution_journal_operation(self, logical_operation_id: str) -> None:
+        proxy = self._state.account_proxy
+        journal = self._execution_journal
+        if proxy is None or journal is None or not proxy.enabled:
+            return
+        try:
+            proxy.apply_journal_operation(journal, logical_operation_id)
+        except Exception:
+            proxy.mark_discrepancy("execution_journal_projection_failure")
+            logger.exception(
+                "SIG account proxy journal projection failed op=%s",
+                logical_operation_id,
+            )
+        if self._resyncing:
+            # A local venue operation can land in either side of an account
+            # snapshot. Force another bounded read before calling that snapshot
+            # authoritative; the proxy still retains the local event meanwhile.
+            self._resync_generation += 1
+
+    def _refresh_account_proxy_journal_blockers(self) -> None:
+        proxy = self._state.account_proxy
+        journal = self._execution_journal
+        if proxy is not None and proxy.enabled and journal is not None:
+            proxy.refresh_journal_blockers(journal)
 
     async def run(self, *, stop_event: asyncio.Event) -> None:
         refresh_task = asyncio.create_task(self._refresh_periodically(stop_event))
@@ -206,13 +239,9 @@ class AccountRealtimeController:
     async def _refresh_periodically(self, stop_event: asyncio.Event) -> None:
         while not stop_event.is_set():
             try:
-                await asyncio.wait_for(
-                    stop_event.wait(), timeout=self._refresh_interval_seconds
-                )
+                await asyncio.wait_for(stop_event.wait(), timeout=self._refresh_interval_seconds)
             except TimeoutError:
-                await self._refresh_authoritative(
-                    datetime.now(UTC), trigger_reason="periodic"
-                )
+                await self._refresh_authoritative(datetime.now(UTC), trigger_reason="periodic")
 
     async def _restore_trust_while_subscribed(self) -> None:
         async with self._refresh_lock:
@@ -230,7 +259,9 @@ class AccountRealtimeController:
             self._state.apply_authoritative(
                 authoritative,
                 mark_trusted=False,
+                observed_monotonic_ns=self._clock_ns(),
             )
+            self._refresh_account_proxy_journal_blockers()
             # Drain callbacks already queued by the subscribed socket while trust
             # is still false. A batch seen here makes the REST snapshot ambiguous.
             await asyncio.sleep(0)
@@ -242,9 +273,7 @@ class AccountRealtimeController:
                 )
                 self._resyncing = False
                 return
-            self._state.mark_untrusted(
-                AccountTrustTransition.UNTRUSTED_RESYNC_ACTIVITY
-            )
+            self._state.mark_untrusted(AccountTrustTransition.UNTRUSTED_RESYNC_ACTIVITY)
 
     def _mark_exit_untrusted(self, outcome: SubscriberExit) -> None:
         if outcome is SubscriberExit.TOKEN_REFRESH:
@@ -264,8 +293,11 @@ class AccountRealtimeController:
         del topic
         if self._resyncing:
             self._resync_generation += 1
-            order_updates, fills, settlements, refunds, collateral = (
-                _account_batch_category_counts(payload)
+            proxy = self._state.account_proxy
+            if proxy is not None and proxy.enabled:
+                proxy.mark_discrepancy("realtime_batch_discarded_during_resync")
+            order_updates, fills, settlements, refunds, collateral = _account_batch_category_counts(
+                payload
             )
             logger.info(
                 "SIG account resync batch discarded: order_updates=%d fills=%d "
@@ -278,10 +310,12 @@ class AccountRealtimeController:
             )
             return
         result = self._state.handle_raw_batch(payload, observed_at=observed_at)
+        proxy = self._state.account_proxy
+        if proxy is not None and proxy.enabled:
+            proxy.apply_realtime_batch(payload)
         if self._execution_journal is not None and (
             result.accepted
-            or result.transition
-            is AccountTrustTransition.UNTRUSTED_FILL_REQUIRES_RECONCILIATION
+            or result.transition is AccountTrustTransition.UNTRUSTED_FILL_REQUIRES_RECONCILIATION
         ):
             # Valid fill payloads remain useful audit evidence even though they
             # are not safe to mutate exposure from without direction/recovery
@@ -318,9 +352,7 @@ class AccountRealtimeController:
                         authoritative = await self._authoritative_resync()
                     except Exception as exc:
                         outcome = f"exception:{type(exc).__name__}"
-                        self._state.mark_untrusted(
-                            AccountTrustTransition.UNTRUSTED_REFRESH_FAILURE
-                        )
+                        self._state.mark_untrusted(AccountTrustTransition.UNTRUSTED_REFRESH_FAILURE)
                         logger.warning(
                             "SIG account authoritative refresh failed: %s: %s",
                             type(exc).__name__,
@@ -330,15 +362,18 @@ class AccountRealtimeController:
                     # REST is the authoritative source. A quiet/disconnected
                     # socket does not invalidate a successful reconciliation;
                     # activity arriving during the fetch does.
-                    self._state.apply_authoritative(authoritative, mark_trusted=False)
+                    self._state.apply_authoritative(
+                        authoritative,
+                        mark_trusted=False,
+                        observed_monotonic_ns=self._clock_ns(),
+                    )
+                    self._refresh_account_proxy_journal_blockers()
                     await asyncio.sleep(0)
                     if self._resync_generation == generation_before:
                         self._state.mark_trusted_after_reconciliation()
                         outcome = "trusted"
                         return
-                    self._state.mark_untrusted(
-                        AccountTrustTransition.UNTRUSTED_RESYNC_ACTIVITY
-                    )
+                    self._state.mark_untrusted(AccountTrustTransition.UNTRUSTED_RESYNC_ACTIVITY)
             except BaseException as exc:
                 outcome = f"exception:{type(exc).__name__}"
                 raise
@@ -447,9 +482,11 @@ class AccountRealtimeController:
                 exchange_order_id=order_id,
                 quantity=str(update.quantity_traded),
                 price=(
-                    None
-                    if update.latest_trade_price is None
-                    else str(update.latest_trade_price)
+                    None if update.latest_trade_price is None else str(update.latest_trade_price)
                 ),
                 terminal_status="OPEN" if update.open else "CLOSED",
+                detail_json=json.dumps(
+                    {"totalCost": str(update.total_cost)},
+                    separators=(",", ":"),
+                ),
             )

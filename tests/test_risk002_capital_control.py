@@ -64,6 +64,7 @@ from predictions_cup.runtime import (
     RuntimePosition,
     RuntimeSnapshot,
 )
+from predictions_cup.runtime.models import AccountTrustGrade
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
 from predictions_cup.sig.account_state import (
     AccountRealtimeStateEngine,
@@ -266,6 +267,32 @@ def test_exact_gross_boundary_and_one_unit_beyond() -> None:
         evaluate_risk(_opportunity(quantity=3), snapshot, _context(limits)).reason
         == "max_gross_exposure"
     )
+
+
+def test_proxy_worst_case_respects_global_and_market_caps() -> None:
+    position = RuntimePosition("1", "m1", "t1", gross_exposure=175.0, signed_quantity=-175.0)
+    open_order = RuntimeOrderState("old", "1", "m1", "t1", 15.0, True, False, signed_quantity=15.0)
+    snapshot = _snapshot(positions=(position,), orders=(open_order,))
+    portfolio = replace(
+        snapshot.portfolio,
+        account_trust_grade=AccountTrustGrade.PROXY,
+        account_proxy_uncertainty=10.0,
+    )
+    snapshot = replace(snapshot, portfolio=portfolio)
+
+    market_limited = evaluate_risk(
+        _opportunity(quantity=1),
+        snapshot,
+        _context(_limits(max_gross_exposure=250.0, max_per_market_exposure=200.0)),
+    )
+    global_limited = evaluate_risk(
+        _opportunity(quantity=1),
+        snapshot,
+        _context(_limits(max_gross_exposure=200.0, max_per_market_exposure=250.0)),
+    )
+
+    assert market_limited.reason == "max_per_market_exposure"
+    assert global_limited.reason == "max_gross_exposure"
 
 
 def test_exact_market_open_and_order_count_boundaries() -> None:
@@ -1335,9 +1362,7 @@ def test_sig_fifo_cost_basis_reconstructs_no_position_in_yes_space() -> None:
 def test_live_audit_fixture_reconstructs_real_no_lots() -> None:
     fixture_path = Path(__file__).parent / "fixtures/live_audit/no_side_positions.json"
     payload = json.loads(fixture_path.read_text())
-    positions = tuple(
-        PositionReadDto.model_validate(item) for item in payload["positions"]
-    )
+    positions = tuple(PositionReadDto.model_validate(item) for item in payload["positions"])
     account = AccountAuthoritativeSnapshot(
         tournament_id="fixture-tournament",
         tournament_slug="fixture-cup",

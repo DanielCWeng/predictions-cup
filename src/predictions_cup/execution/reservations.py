@@ -55,6 +55,11 @@ class ExecutionReservationBook:
                     open=False,
                     uncertain=True,
                     strategy_id=intent.strategy_id,
+                    signed_quantity=(
+                        (1.0 if intent.outcome_side.value == "yes" else -1.0)
+                        * (1.0 if intent.action.value == "buy" else -1.0)
+                        * float(intent.quantity)
+                    ),
                 ),
             )
             if existing is not None:
@@ -132,9 +137,7 @@ class ExecutionReservationBook:
         if not intent_ids:
             return False
         return all(
-            (
-                reservation := self._by_intent.get(intent_id)
-            ) is not None
+            (reservation := self._by_intent.get(intent_id)) is not None
             and reservation.logical_operation_id == logical_operation_id
             for intent_id in intent_ids
         )
@@ -168,14 +171,9 @@ class ExecutionReservationBook:
         self._intent_by_exchange_order.clear()
 
     def overlay_snapshot(self, snapshot: RuntimeSnapshot) -> RuntimeSnapshot:
-        existing_ids = {
-            order.logical_intent_id
-            for order in snapshot.portfolio.orders
-        }
+        existing_ids = {order.logical_intent_id for order in snapshot.portfolio.orders}
         reservations = tuple(
-            order
-            for order in self.reserved_orders()
-            if order.logical_intent_id not in existing_ids
+            order for order in self.reserved_orders() if order.logical_intent_id not in existing_ids
         )
         if not reservations:
             return snapshot
@@ -183,6 +181,10 @@ class ExecutionReservationBook:
             positions=snapshot.portfolio.positions,
             orders=snapshot.portfolio.orders + reservations,
             account_trusted=snapshot.portfolio.account_trusted,
+            account_trust_grade=snapshot.portfolio.account_trust_grade,
+            account_proxy_age_ns=snapshot.portfolio.account_proxy_age_ns,
+            account_proxy_uncertainty=snapshot.portfolio.account_proxy_uncertainty,
+            account_proxy_cash_balance=snapshot.portfolio.account_proxy_cash_balance,
         )
         return RuntimeSnapshot(
             markets=snapshot.markets,

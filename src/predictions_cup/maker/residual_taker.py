@@ -161,9 +161,15 @@ def residual_input_from_snapshot(
     *,
     max_pm_book_age_ns: int,
     observed_monotonic_ns: int,
+    allow_bbo_proxy: bool = False,
+    max_sig_bbo_age_ns: int | None = None,
 ) -> ResidualInput | None:
     """Build the frozen signal input, or None when any input is untrusted/stale."""
 
+    sig_bbo_age_ns = maker.now_monotonic_ns - maker.sig_bbo_observed_ns
+    sig_bbo_fresh = maker.sig_bbo_trusted and 0 <= sig_bbo_age_ns <= (
+        max_pm_book_age_ns if max_sig_bbo_age_ns is None else max_sig_bbo_age_ns
+    )
     if (
         record is None
         or record.mapping_class is not MappingClass.EXACT
@@ -182,10 +188,12 @@ def residual_input_from_snapshot(
         or quote.best_ask is None
         or quote.best_bid_size is None
         or quote.best_ask_size is None
-        or maker.now_monotonic_ns - quote.observed_monotonic_ns > max_pm_book_age_ns
-        or not maker.sig_bbo_trusted
-        or maker.now_monotonic_ns - maker.sig_bbo_observed_ns > max_pm_book_age_ns
+        or not 0 <= maker.now_monotonic_ns - quote.observed_monotonic_ns <= max_pm_book_age_ns
+        or (not sig_bbo_fresh and not allow_bbo_proxy)
         or book is None
+        or book.market_id != maker.market_id
+        or book.tournament_id != maker.tournament_id
+        or book.observed_monotonic_ns != maker.sig_bbo_observed_ns
         or not book.bids
         or not book.asks
         or not maker.runtime.portfolio.account_trusted
@@ -203,8 +211,6 @@ def residual_input_from_snapshot(
         pm_ask_size=quote.best_ask_size,
         observed_monotonic_ns=observed_monotonic_ns,
         sig_touch_depth=(
-            book.asks[0].quantity
-            if sig_ask <= pm_mid - THRESHOLD
-            else book.bids[0].quantity
+            book.asks[0].quantity if sig_ask <= pm_mid - THRESHOLD else book.bids[0].quantity
         ),
     )

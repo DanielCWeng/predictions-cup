@@ -92,6 +92,7 @@ from predictions_cup.risk import (
 )
 from predictions_cup.runtime.telemetry import HotPathTelemetry
 from predictions_cup.shadow.live import LiveShadowRuntime, build_live_shadow_runtime
+from predictions_cup.sig.account_proxy import AccountProxyLedger
 from predictions_cup.sig.account_reconciliation import (
     AccountAuthoritativeSnapshot,
     reconcile_account,
@@ -275,9 +276,7 @@ class MakerService:
                 risk_store = SqliteRiskStateStore(self.settings.risk_state_path)
                 risk_service = CapitalControlService(
                     store=risk_store,
-                    max_account_age_ns=(
-                        self.settings.risk_max_account_age_ms * 1_000_000
-                    ),
+                    max_account_age_ns=(self.settings.risk_max_account_age_ms * 1_000_000),
                     max_mark_age_ns=self.settings.risk_max_mark_age_ms * 1_000_000,
                     session_loss_limit=(
                         None
@@ -299,21 +298,43 @@ class MakerService:
                     risk_store.load(),
                     session_id=tournament_id,
                     profile_version=expected_profile_version,
-                    live_recovery=(
-                        self.core.risk_context.mode is ExecutionMode.LIVE
-                    ),
+                    live_recovery=(self.core.risk_context.mode is ExecutionMode.LIVE),
                 )
 
             account_state = AccountRealtimeStateEngine(
                 tournament_id=tournament_id,
                 reservations=self.core.reservations,
+                account_proxy=AccountProxyLedger(
+                    tournament_id=tournament_id,
+                    enabled=self.settings.account_proxy_enabled,
+                    max_age_ns=int(
+                        self.settings.account_proxy_max_age_minutes * 60 * 1_000_000_000
+                    ),
+                    position_diff_threshold=(self.settings.account_proxy_position_diff_threshold),
+                    exchange_market_ids={
+                        record.sig_exchange_id: record.sig_market_id
+                        for record in self.core.mapping.records
+                    },
+                ),
             )
+            initial_cash_balance = None
+            if self.settings.account_proxy_enabled:
+                try:
+                    async with rest.priority(RestPriority.NORMAL):
+                        initial_cash_balance = (await rest.get_account()).balance
+                except Exception as exc:
+                    _LOG.warning(
+                        "SIG account proxy cash baseline unavailable type=%s; "
+                        "proxy trust will wait for a clean account resync",
+                        type(exc).__name__,
+                    )
             initial_account = await _retry_startup_sig_operation(
                 "initial_account_reconciliation",
                 lambda: reconcile_account(
                     rest,
                     tournament_id=tournament_id,
                     tournament_slug=tournament_slug,
+                    cash_balance=initial_cash_balance,
                 ),
             )
             account_state.apply_authoritative(initial_account)
@@ -346,12 +367,8 @@ class MakerService:
                 open_book_max_trusted_age_seconds=(
                     self.settings.sig_realtime_open_book_refresh_seconds
                 ),
-                bulk_price_refresh_seconds=(
-                    self.settings.sig_realtime_bulk_price_refresh_seconds
-                ),
-                governed_rate_per_second=(
-                    self.settings.sig_rest_governor_rate_per_second
-                ),
+                bulk_price_refresh_seconds=(self.settings.sig_realtime_bulk_price_refresh_seconds),
+                governed_rate_per_second=(self.settings.sig_rest_governor_rate_per_second),
                 governor_snapshot=rest.governor_snapshot,
                 bulk_prices_tracked_only=True,
                 extra_bulk_price_exchange_ids=tuple(
@@ -494,9 +511,7 @@ class MakerService:
                 held_exchange_ids = {
                     position.exchange_id
                     for position in (
-                        authoritative_account.positions
-                        if authoritative_account is not None
-                        else ()
+                        authoritative_account.positions if authoritative_account is not None else ()
                     )
                 }.intersection(sig_state.states)
                 if held_exchange_ids:
@@ -528,14 +543,10 @@ class MakerService:
 
                 assert capital is not None
                 capital_halts_make = (
-                    (
-                        capital.global_halt is not None
-                        and capital.global_halt.active
-                    )
-                    or capital.strategy_halted(
-                        self.core.engine.strategy_id,
-                        "MAKE",
-                    )
+                    capital.global_halt is not None and capital.global_halt.active
+                ) or capital.strategy_halted(
+                    self.core.engine.strategy_id,
+                    "MAKE",
                 )
                 if not capital_halts_make:
                     permit = assert_live_interlocks(
@@ -566,14 +577,8 @@ class MakerService:
                 self.settings.model_live_ids.strip()
                 and self.core.risk_context.mode is ExecutionMode.LIVE
             ):
-                if (
-                    risk_context_source is None
-                    or live_sink is None
-                    or shadow_runtime is None
-                ):
-                    raise RuntimeError(
-                        "LIVE model runtime requires RISK-002, BUILD-009 and SHADOW"
-                    )
+                if risk_context_source is None or live_sink is None or shadow_runtime is None:
+                    raise RuntimeError("LIVE model runtime requires RISK-002, BUILD-009 and SHADOW")
                 self._model_runtime = ModelRuntime.from_allowlists(
                     default_model_registry(),
                     paper_model_ids=self.settings.model_paper_ids,
@@ -603,6 +608,7 @@ class MakerService:
                     dispatch=dispatch_model_plan,
                     decision_observer=shadow_runtime.persist_model_decision,
                 )
+
                 async def observe_live_models(
                     change: MakerStateChange,
                     observed_at: datetime,
@@ -622,9 +628,7 @@ class MakerService:
                 and self.core.risk_context.mode is ExecutionMode.LIVE
             ):
                 if risk_context_source is None or live_sink is None or journal is None:
-                    raise RuntimeError(
-                        "LIVE residual taker requires RISK-002 and BUILD-009"
-                    )
+                    raise RuntimeError("LIVE residual taker requires RISK-002 and BUILD-009")
                 taker_sink = live_sink
 
                 async def dispatch_taker_plan(plan: ExecutionPlan) -> ExecutionEvent:
@@ -657,6 +661,8 @@ class MakerService:
                     min_fair_value=self.settings.maker_min_fair_value,
                     max_fair_value=self.settings.maker_max_fair_value,
                     max_position=self.settings.residual_taker_max_position,
+                    allow_bbo_proxy=self.settings.account_proxy_enabled,
+                    max_sig_bbo_age_ns=(self.settings.maker_max_bbo_age_ms * 1_000_000),
                 )
                 _LOG.warning("RESIDUAL-TAKER-001 LIVE enabled")
                 upstream_observer = model_execution_observer
@@ -693,17 +699,13 @@ class MakerService:
                 coordinator=coordinator,
                 polymarket_feed_trusted=self._polymarket_feed_trusted,
                 telemetry=self.telemetry,
-                snapshot_observer=(
-                    None if shadow_runtime is None else shadow_runtime.observe
-                ),
+                snapshot_observer=(None if shadow_runtime is None else shadow_runtime.observe),
                 execution_observer=model_execution_observer,
                 # LIVE writes are paced one exchange at a time so the asyncio
                 # shell regains control between governed REST operations and
                 # snapshots the next market from current state.
                 max_exchanges_per_cycle=(
-                    1
-                    if self.core.risk_context.mode is ExecutionMode.LIVE
-                    else None
+                    1 if self.core.risk_context.mode is ExecutionMode.LIVE else None
                 ),
             )
 
@@ -722,11 +724,12 @@ class MakerService:
             async def account_resync() -> AccountAuthoritativeSnapshot:
                 nonlocal capital_refresh_task
                 async with rest.priority(RestPriority.NORMAL):
-                    await rest.get_account()
+                    account = await rest.get_account()
                     authoritative = await reconcile_account(
                         rest,
                         tournament_id=tournament_id,
                         tournament_slug=tournament_slug,
+                        cash_balance=account.balance,
                     )
                 if journal is not None and live_sink is not None:
                     resolved_cancels = await recover_in_session_cancellations(
@@ -740,6 +743,7 @@ class MakerService:
                             rest,
                             tournament_id=tournament_id,
                             tournament_slug=tournament_slug,
+                            cash_balance=account.balance,
                         )
                 if journal is not None:
                     reconcile_maker_quote_registry(
@@ -771,6 +775,7 @@ class MakerService:
                 return authoritative
 
             if isinstance(adapter, LiveMakerExecutionAdapter):
+
                 async def reconcile_uncertain_cancels() -> None:
                     assert journal is not None and live_sink is not None
                     # A closed-order 409 needs one order/fill check. A full
@@ -789,9 +794,7 @@ class MakerService:
                 state=account_state,
                 mint_token=rest.mint_realtime_token,
                 authoritative_resync=account_resync,
-                refresh_interval_seconds=(
-                    self.settings.maker_account_refresh_interval_seconds
-                ),
+                refresh_interval_seconds=(self.settings.maker_account_refresh_interval_seconds),
                 execution_journal=journal,
                 observation_emitter=observation_emitter,
                 observation_process_instance_id=observe_recorder.session_id,
@@ -861,9 +864,7 @@ class MakerService:
                 None,
             )
             if failure is not None:
-                runtime.activate_kill_switch(
-                    f"service_task_failure:{failure.get_name()}"
-                )
+                runtime.activate_kill_switch(f"service_task_failure:{failure.get_name()}")
                 await self._best_effort_kill_drain(runtime)
                 failure_exc = failure.exception()
                 if failure_exc is None:
@@ -1148,15 +1149,11 @@ class MakerService:
                 tournament_slug=tournament_slug,
             )
             observed_newest = (
-                scan.newest_event_id
-                if scan.newest_event_id is not None
-                else prior_event_id
+                scan.newest_event_id if scan.newest_event_id is not None else prior_event_id
             )
             if after == observed_newest:
                 return scan, pnl
-        raise ReconciliationError(
-            "RISK-002 authoritative reads did not reach a stable fence"
-        )
+        raise ReconciliationError("RISK-002 authoritative reads did not reach a stable fence")
 
     async def _checkpoint_realtime_risk_transition(
         self,
@@ -1174,10 +1171,7 @@ class MakerService:
         new_halt = (
             after.global_halt is not None
             and after.global_halt.active
-            and (
-                before.global_halt is None
-                or not before.global_halt.active
-            )
+            and (before.global_halt is None or not before.global_halt.active)
         )
         if not new_peak and not new_halt:
             return
@@ -1241,26 +1235,18 @@ class MakerService:
                     try:
                         await sig_state.handle_raw_batch(topic, payload, observed_at)
                         if parsed is None:
-                            runtime.notify_global(
-                                observed_monotonic_ns=monotonic_ns()
-                            )
+                            runtime.notify_global(observed_monotonic_ns=monotonic_ns())
                             return
-                        dirty = {
-                            item.exchange_id for item in parsed.book_dirty
-                        }
+                        dirty = {item.exchange_id for item in parsed.book_dirty}
                         if dirty:
                             await sig_state.refresh_exchange_prices(
                                 dirty,
                                 reason="maker_book_dirty",
                                 priority=RestPriority.HIGH,
                             )
-                        affected = dirty | {
-                            trade.exchange_id for trade in parsed.trades
-                        }
+                        affected = dirty | {trade.exchange_id for trade in parsed.trades}
                         if parsed.market_settled:
-                            settled = {
-                                item.market_id for item in parsed.market_settled
-                            }
+                            settled = {item.market_id for item in parsed.market_settled}
                             affected.update(
                                 state.exchange_id
                                 for state in sig_state.states.values()
@@ -1364,9 +1350,7 @@ class MakerService:
                 self.pm_books.apply_full_snapshot(payload, batch.observed_at)
         missing = set(self._pm_token_ids).difference(self.pm_books.initialized_tokens)
         if missing:
-            raise RuntimeError(
-                f"Polymarket CLOB seed missing {len(missing)} mapped tokens"
-            )
+            raise RuntimeError(f"Polymarket CLOB seed missing {len(missing)} mapped tokens")
 
     def _observe_005f_books(
         self,
@@ -1466,12 +1450,8 @@ class MakerService:
                             source_version="clob-market-ws-v1",
                             trusted=trusted,
                         )
-                self.pm_health.book_uninitialized_delta_count += (
-                    result.uninitialized_deltas
-                )
-                missing_required = result.uninitialized_token_ids.intersection(
-                    self._pm_token_ids
-                )
+                self.pm_health.book_uninitialized_delta_count += result.uninitialized_deltas
+                missing_required = result.uninitialized_token_ids.intersection(self._pm_token_ids)
                 if missing_required:
                     raise RuntimeError(
                         "Polymarket delta arrived before authoritative seed "
@@ -1529,10 +1509,7 @@ class MakerService:
         if observed_at is None:
             return False
         age_seconds = (datetime.now(UTC) - observed_at).total_seconds()
-        return (
-            0.0 <= age_seconds
-            <= self.pm_ws.receive_liveness_timeout_seconds
-        )
+        return 0.0 <= age_seconds <= self.pm_ws.receive_liveness_timeout_seconds
 
     def _publish_observation_health(self, *, force: bool = False) -> None:
         provider = self._observation_health_provider
@@ -1681,10 +1658,7 @@ def _mapped_sig_exchange_ids(
         record.sig_exchange_id
         for record in mapping.normalized().records
         if record.mapping_class.value not in {"NO_TRADE", "MODEL_ONLY"}
-        and (
-            allowed_exchange_ids is None
-            or record.sig_exchange_id in allowed_exchange_ids
-        )
+        and (allowed_exchange_ids is None or record.sig_exchange_id in allowed_exchange_ids)
     )
 
 

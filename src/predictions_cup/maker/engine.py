@@ -33,12 +33,15 @@ class MakerConfig:
     strategy_id: str = "make-direct-pm"
     strategy_version: str = "make-001-v1"
     max_abs_inventory: float = 10.0
+    account_proxy_size_factor: float = 0.25
 
     def __post_init__(self) -> None:
         if not self.strategy_id.strip() or not self.strategy_version.strip():
             raise ValueError("maker strategy identity/version must not be blank")
         if not math.isfinite(self.max_abs_inventory) or self.max_abs_inventory <= 0.0:
             raise ValueError("max_abs_inventory must be finite and positive")
+        if not 0.0 < self.account_proxy_size_factor <= 1.0:
+            raise ValueError("account proxy size factor must be within (0, 1]")
 
 
 class MakerEngine:
@@ -226,6 +229,24 @@ class MakerEngine:
 
         bid_size = int(math.floor(sizes.bid * gate.size_multiplier))
         ask_size = int(math.floor(sizes.ask * gate.size_multiplier))
+        portfolio = snapshot.runtime.portfolio
+        if portfolio.proxy_active:
+            low, high = portfolio.worst_case_inventory_bounds(
+                snapshot.exchange_id,
+                snapshot.tournament_id,
+            )
+            if high < 0.0:
+                bid_size = min(bid_size, max(0, math.floor(-high)))
+            elif bid_size > 0:
+                bid_size = int(math.floor(bid_size * self._config.account_proxy_size_factor))
+            if low > 0.0:
+                ask_size = min(ask_size, max(0, math.floor(low)))
+            elif ask_size > 0:
+                ask_size = int(math.floor(ask_size * self._config.account_proxy_size_factor))
+            bid_room = max(0, math.floor(self._config.max_abs_inventory - high))
+            ask_room = max(0, math.floor(self._config.max_abs_inventory + low))
+            bid_size = min(bid_size, bid_room)
+            ask_size = min(ask_size, ask_room)
         if bid_ticks is None:
             bid_size = 0
         if ask_ticks is None:
@@ -281,9 +302,7 @@ class MakerEngine:
                 ask_size=ask_size,
                 gate=gate,
             ),
-            next_recheck_monotonic_ns=(
-                next_recheck_ns if desired is not None else None
-            ),
+            next_recheck_monotonic_ns=(next_recheck_ns if desired is not None else None),
         )
 
     @staticmethod
@@ -314,11 +333,7 @@ class MakerEngine:
             ask_value = max(ask_value, best_bid + 1)
             if ask_value > 199:
                 ask_value = None
-        if (
-            bid_value is not None
-            and ask_value is not None
-            and bid_value >= ask_value
-        ):
+        if bid_value is not None and ask_value is not None and bid_value >= ask_value:
             return None, None
         return bid_value, ask_value
 
