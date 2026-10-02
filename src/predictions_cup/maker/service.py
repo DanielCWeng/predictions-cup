@@ -11,7 +11,7 @@ import argparse
 import asyncio
 import logging
 import signal
-from collections.abc import Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from contextlib import suppress
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -101,7 +101,13 @@ from predictions_cup.sig.account_state import (
     AccountRealtimeStateEngine,
     AccountTrustTransition,
 )
-from predictions_cup.sig.errors import SigApiError, SigExecutionUncertainError
+from predictions_cup.sig.errors import (
+    SigApiError,
+    SigExecutionUncertainError,
+    SigRateLimitError,
+    SigTemporaryServiceError,
+    SigTransportError,
+)
 from predictions_cup.sig.governed_client import GovernedSigRestClient, build_rest_governor
 from predictions_cup.sig.launch_storage import ObservationCaptureRecorder
 from predictions_cup.sig.realtime_models import MarketBatchDto
@@ -117,6 +123,53 @@ from predictions_cup.sig.trading_dto import PortfolioPnlDto
 
 _LOG = logging.getLogger(__name__)
 _LIVE_MAX_EXCHANGES = 160
+_SIG_RETRY_MAX_SECONDS = 60.0
+_SIG_RETRY_DELAYS_SECONDS = (1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0)
+
+
+def _is_transient_sig_error(error: SigApiError) -> bool:
+    return (
+        isinstance(
+            error,
+            (SigRateLimitError, SigTemporaryServiceError, SigTransportError),
+        )
+        or error.status_code == 408
+        or (error.status_code is not None and error.status_code >= 500)
+    )
+
+
+def _sig_retry_delay(attempt: int) -> float:
+    """Return 1, 2, 4, ... seconds, capped at one minute."""
+    if attempt <= 0:
+        raise ValueError("SIG retry attempt must be positive")
+    index = min(attempt - 1, len(_SIG_RETRY_DELAYS_SECONDS) - 1)
+    return min(_SIG_RETRY_MAX_SECONDS, _SIG_RETRY_DELAYS_SECONDS[index])
+
+
+async def _retry_startup_sig_operation[T](
+    operation: str,
+    read: Callable[[], Awaitable[T]],
+) -> T:
+    """Keep startup fail-closed while retrying transient authoritative reads."""
+    attempt = 0
+    while True:
+        try:
+            return await read()
+        except SigApiError as exc:
+            if not _is_transient_sig_error(exc):
+                raise
+            attempt += 1
+            delay = _sig_retry_delay(attempt)
+            _LOG.warning(
+                "MAKE startup SIG operation failed operation=%s error=%s "
+                "status=%s retry=%d delay_seconds=%.1f",
+                operation,
+                type(exc).__name__,
+                exc.status_code,
+                attempt,
+                delay,
+            )
+            await asyncio.sleep(delay)
 
 
 class MakerService:
@@ -255,10 +308,13 @@ class MakerService:
                 tournament_id=tournament_id,
                 reservations=self.core.reservations,
             )
-            initial_account = await reconcile_account(
-                rest,
-                tournament_id=tournament_id,
-                tournament_slug=tournament_slug,
+            initial_account = await _retry_startup_sig_operation(
+                "initial_account_reconciliation",
+                lambda: reconcile_account(
+                    rest,
+                    tournament_id=tournament_id,
+                    tournament_slug=tournament_slug,
+                ),
             )
             account_state.apply_authoritative(initial_account)
             authoritative_account = initial_account
@@ -306,7 +362,10 @@ class MakerService:
                 observation_emitter=observation_emitter,
                 observation_process_instance_id=observe_recorder.session_id,
             )
-            await sig_state.initialize()
+            await _retry_startup_sig_operation(
+                "initial_sig_market_state",
+                sig_state.initialize,
+            )
             context_sampler.maybe_schedule(datetime.now(UTC), force=True)
             await self._seed_polymarket_books()
             await self.pm_ws.set_tokens(self._pm_token_ids)
@@ -350,28 +409,36 @@ class MakerService:
                     observation_emitter=observation_emitter,
                     observation_process_instance_id=observe_recorder.session_id,
                 )
-                recovery = await recover_startup(
-                    journal=journal,
-                    rest=rest,
-                    live_sink=live_sink,
-                    tournament_id=tournament_id,
-                    tournament_slug=tournament_slug,
-                    observation_emitter=observation_emitter,
-                    observation_process_instance_id=observe_recorder.session_id,
-                    # The production service does not replay fresh economic
-                    # placements until current risk/market eligibility has been
-                    # independently proven. Cancellation recovery still runs.
-                    placement_replay_allowed=lambda _envelope: False,
+                assert live_sink is not None
+                startup_live_sink = live_sink
+                recovery = await _retry_startup_sig_operation(
+                    "execution_recovery",
+                    lambda: recover_startup(
+                        journal=journal,
+                        rest=rest,
+                        live_sink=startup_live_sink,
+                        tournament_id=tournament_id,
+                        tournament_slug=tournament_slug,
+                        observation_emitter=observation_emitter,
+                        observation_process_instance_id=observe_recorder.session_id,
+                        # The production service does not replay fresh economic
+                        # placements until current risk/market eligibility has been
+                        # independently proven. Cancellation recovery still runs.
+                        placement_replay_allowed=lambda _envelope: False,
+                    ),
                 )
                 if not recovery.safe_to_resume_live:
                     raise RuntimeError(
                         "LIVE startup blocked by unresolved execution operations: "
                         + ",".join(recovery.unresolved_operation_ids)
                     )
-                authoritative = await reconcile_account(
-                    rest,
-                    tournament_id=tournament_id,
-                    tournament_slug=tournament_slug,
+                authoritative = await _retry_startup_sig_operation(
+                    "post_recovery_account_reconciliation",
+                    lambda: reconcile_account(
+                        rest,
+                        tournament_id=tournament_id,
+                        tournament_slug=tournament_slug,
+                    ),
                 )
                 account_state.apply_authoritative(authoritative)
                 authoritative_account = authoritative
@@ -394,14 +461,17 @@ class MakerService:
                     raise RuntimeError("RISK-002 missing authoritative account state")
                 if risk_store is None or risk_service is None:
                     raise RuntimeError("RISK-002 durable service was not initialized")
-                risk_context_source = await self._initialize_capital_control(
-                    rest=rest,
-                    account=authoritative_account,
-                    journal=journal,
-                    service=risk_service,
-                    sig_state=sig_state,
-                    tournament_id=tournament_id,
-                    tournament_slug=tournament_slug,
+                risk_context_source = await _retry_startup_sig_operation(
+                    "risk_capital_initialization",
+                    lambda: self._initialize_capital_control(
+                        rest=rest,
+                        account=authoritative_account,
+                        journal=journal,
+                        service=risk_service,
+                        sig_state=sig_state,
+                        tournament_id=tournament_id,
+                        tournament_slug=tournament_slug,
+                    ),
                 )
                 await self._checkpoint_realtime_risk_transition(
                     source=risk_context_source,
@@ -430,8 +500,11 @@ class MakerService:
                     )
                 }.intersection(sig_state.states)
                 if held_exchange_ids:
-                    await sig_state.refresh_exchange_prices(
-                        held_exchange_ids, reason="live_startup_risk_marks"
+                    await _retry_startup_sig_operation(
+                        "held_position_mark_refresh",
+                        lambda: sig_state.refresh_exchange_prices(
+                            held_exchange_ids, reason="live_startup_risk_marks"
+                        ),
                     )
                 capital = risk_context_source().capital_state
                 capital_ready = (
@@ -759,7 +832,11 @@ class MakerService:
                     name="make-sig-market",
                 ),
                 asyncio.create_task(
-                    account_controller.run(stop_event=self.stop_event),
+                    self._run_account_controller(
+                        account_controller,
+                        account_state,
+                        runtime,
+                    ),
                     name="make-account",
                 ),
                 asyncio.create_task(
@@ -869,6 +946,7 @@ class MakerService:
             source=source,
             tournament_id=tournament_id,
             tournament_slug=tournament_slug,
+            retry_transient_sig_errors=True,
         )
         return source
 
@@ -882,6 +960,7 @@ class MakerService:
         source: RiskContextSource,
         tournament_id: str,
         tournament_slug: str,
+        retry_transient_sig_errors: bool = False,
     ) -> CapitalRiskState:
         state = source.state
         if state is None:
@@ -894,6 +973,12 @@ class MakerService:
                 prior_event_id=state.external_cash_flow_cursor,
             )
         except (ReconciliationError, SigApiError) as exc:
+            if (
+                retry_transient_sig_errors
+                and isinstance(exc, SigApiError)
+                and _is_transient_sig_error(exc)
+            ):
+                raise
             return self._block_risk_refresh(
                 state=state,
                 service=service,
@@ -924,6 +1009,11 @@ class MakerService:
                         tournament_id=tournament_id,
                     )
                 except SigApiError as exc:
+                    if (
+                        retry_transient_sig_errors
+                        and _is_transient_sig_error(exc)
+                    ):
+                        raise
                     return self._block_risk_refresh(
                         state=state,
                         service=service,
@@ -1115,6 +1205,7 @@ class MakerService:
         risk_service: CapitalControlService | None = None,
     ) -> None:
         reason = SubscriptionReason.INITIAL_SUBSCRIBE
+        rest_failure_attempt = 0
         while not self.stop_event.is_set():
             try:
                 token = await rest.mint_realtime_token()
@@ -1183,19 +1274,14 @@ class MakerService:
                             affected,
                             observed_monotonic_ns=monotonic_ns(),
                         )
-                    except Exception as exc:
+                    except SigApiError:
+                        sig_state.mark_disconnected()
+                        runtime.notify_global(observed_monotonic_ns=monotonic_ns())
+                        raise
+                    except Exception:
                         runtime.activate_kill_switch("sig_market_state_failure")
                         with suppress(Exception):
                             await runtime.drain_once()
-                        # The outer feed loop retries SigApiError from token,
-                        # universe, and socket setup. A SigApiError raised by a
-                        # market-state callback is different: that callback has
-                        # already latched kill and attempted a cancel drain, so
-                        # let service.run fail and terminate this process.
-                        if isinstance(exc, SigApiError):
-                            raise RuntimeError(
-                                "SIG market state callback failed"
-                            ) from exc
                         raise
 
                 async def maintenance(observed_at: datetime) -> None:
@@ -1212,16 +1298,27 @@ class MakerService:
                     stop_event=self.stop_event,
                     on_maintenance=maintenance,
                 )
-            except SigApiError:
+            except SigApiError as exc:
                 sig_state.mark_disconnected()
                 runtime.notify_global(observed_monotonic_ns=monotonic_ns())
-                await asyncio.sleep(1.0)
+                rest_failure_attempt += 1
+                delay = _sig_retry_delay(rest_failure_attempt)
+                _LOG.warning(
+                    "MAKE SIG market feed REST failure error=%s status=%s "
+                    "retry=%d delay_seconds=%.1f",
+                    type(exc).__name__,
+                    exc.status_code,
+                    rest_failure_attempt,
+                    delay,
+                )
+                await asyncio.sleep(delay)
                 continue
 
             sig_state.mark_disconnected()
             runtime.notify_global(observed_monotonic_ns=monotonic_ns())
             if outcome is SubscriberExit.STOPPED:
                 return
+            rest_failure_attempt = 0
             if outcome is SubscriberExit.TOKEN_REFRESH:
                 reason = SubscriptionReason.TOKEN_REFRESH
             elif outcome is SubscriberExit.SOCKET_ERROR:
@@ -1229,6 +1326,35 @@ class MakerService:
             else:
                 reason = SubscriptionReason.RECONNECT
             await asyncio.sleep(1.0)
+
+    async def _run_account_controller(
+        self,
+        controller: AccountRealtimeController,
+        account_state: AccountRealtimeStateEngine,
+        runtime: MakerRuntimeLoop,
+    ) -> None:
+        """Retry SIG account token/resync failures while keeping account state untrusted."""
+        attempt = 0
+        while not self.stop_event.is_set():
+            try:
+                await controller.run(stop_event=self.stop_event)
+                return
+            except SigApiError as exc:
+                account_state.mark_untrusted(
+                    AccountTrustTransition.UNTRUSTED_REFRESH_FAILURE
+                )
+                runtime.notify_global(observed_monotonic_ns=monotonic_ns())
+                attempt += 1
+                delay = _sig_retry_delay(attempt)
+                _LOG.warning(
+                    "MAKE SIG account controller REST failure error=%s status=%s "
+                    "retry=%d delay_seconds=%.1f",
+                    type(exc).__name__,
+                    exc.status_code,
+                    attempt,
+                    delay,
+                )
+                await asyncio.sleep(delay)
 
     async def _seed_polymarket_books(self) -> None:
         self.pm_books.invalidate_all()

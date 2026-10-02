@@ -51,7 +51,15 @@ from predictions_cup.runtime.models import OrderAction, OutcomeSide
 from predictions_cup.runtime.telemetry import HotPathTelemetry
 from predictions_cup.shadow.live import LiveShadowRuntime
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
-from predictions_cup.sig.errors import SigTemporaryServiceError
+from predictions_cup.sig.account_state import AccountTrustTransition
+from predictions_cup.sig.errors import (
+    SigApiError,
+    SigAuthorizationError,
+    SigTemporaryServiceError,
+    SigTransportError,
+    SigUnexpectedServerError,
+)
+from predictions_cup.sig.realtime_subscriber import SubscriberExit
 from predictions_cup.sig.trading_dto import OrderReadDto
 
 
@@ -588,7 +596,87 @@ def test_kill_switch_logs_each_reason_and_latch_transition_once(
     assert kill_switch.reason == "sig_market_state_failure"
 
 
-def test_sig_market_callback_rest_failure_exits_feed_after_kill_drain(
+def test_startup_sig_reads_retry_transient_errors_with_capped_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    errors: list[SigApiError] = [
+        SigTransportError(
+            status_code=None,
+            code=None,
+            safe_message="read timeout",
+        ),
+        SigUnexpectedServerError(
+            status_code=500,
+            code="SERVER_ERROR",
+            safe_message="temporary service failure",
+        ),
+        SigUnexpectedServerError(
+            status_code=503,
+            code="SERVICE_UNAVAILABLE",
+            safe_message="temporary service failure",
+        ),
+    ]
+    delays: list[float] = []
+    calls = 0
+
+    async def no_sleep(delay: float) -> None:
+        delays.append(delay)
+
+    async def read() -> str:
+        nonlocal calls
+        calls += 1
+        if errors:
+            raise errors.pop(0)
+        return "ready"
+
+    monkeypatch.setattr(asyncio, "sleep", no_sleep)
+    result = asyncio.run(
+        maker_service_module._retry_startup_sig_operation(
+            "fixture_read",
+            read,
+        )
+    )
+
+    assert result == "ready"
+    assert calls == 4
+    assert delays == [1.0, 2.0, 4.0]
+    assert [maker_service_module._sig_retry_delay(i) for i in range(1, 10)] == [
+        1.0,
+        2.0,
+        4.0,
+        8.0,
+        16.0,
+        32.0,
+        60.0,
+        60.0,
+        60.0,
+    ]
+
+
+def test_startup_sig_reads_do_not_retry_non_transient_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def unexpected_sleep(delay: float) -> None:
+        raise AssertionError(f"unexpected retry delay: {delay}")
+
+    async def read() -> str:
+        raise SigAuthorizationError(
+            status_code=403,
+            code="FORBIDDEN",
+            safe_message="request not authorized",
+        )
+
+    monkeypatch.setattr(asyncio, "sleep", unexpected_sleep)
+    with pytest.raises(SigAuthorizationError):
+        asyncio.run(
+            maker_service_module._retry_startup_sig_operation(
+                "fixture_read",
+                read,
+            )
+        )
+
+
+def test_sig_market_callback_rest_failure_retries_without_kill_or_drain(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class _Rest:
@@ -597,8 +685,6 @@ def test_sig_market_callback_rest_failure_exits_feed_after_kill_drain(
 
         async def mint_realtime_token(self) -> object:
             self.mint_calls += 1
-            if self.mint_calls > 1:
-                raise RuntimeError("feed retried after callback failure")
             return object()
 
     class _SigState:
@@ -642,6 +728,8 @@ def test_sig_market_callback_rest_failure_exits_feed_after_kill_drain(
             del observed_monotonic_ns
 
     class _Subscriber:
+        calls = 0
+
         def __init__(self, **kwargs: object) -> None:
             del kwargs
 
@@ -652,12 +740,16 @@ def test_sig_market_callback_rest_failure_exits_feed_after_kill_drain(
             **kwargs: object,
         ) -> object:
             del kwargs
-            await on_batch(
-                "market-topic",
-                {},
-                datetime(2026, 9, 29, 14, 0, tzinfo=UTC),
-            )
-            raise AssertionError("callback failure should escape subscriber.run")
+            _Subscriber.calls += 1
+            if _Subscriber.calls == 1:
+                await on_batch(
+                    "market-topic",
+                    {},
+                    datetime(2026, 9, 29, 14, 0, tzinfo=UTC),
+                )
+                raise AssertionError("callback API failure should retry the feed")
+            service.stop_event.set()
+            return SubscriberExit.STOPPED
 
     service = MakerService(
         AppSettings(maker_enabled=True),
@@ -673,23 +765,179 @@ def test_sig_market_callback_rest_failure_exits_feed_after_kill_drain(
         lambda mapping, *, allowed_exchange_ids: (),
     )
 
+    delays: list[float] = []
+
+    async def no_sleep(delay: float) -> None:
+        delays.append(delay)
+
+    monkeypatch.setattr(asyncio, "sleep", no_sleep)
+    asyncio.run(
+        service._run_sig_market_feed(
+            cast(Any, sig_state),
+            cast(Any, rest),
+            cast(Any, runtime),
+            cast(Any, object()),
+        )
+    )
+
+    assert rest.mint_calls == 2
+    assert runtime.kill_reasons == []
+    assert runtime.drain_calls == 0
+    assert sig_state.disconnected is True
+    assert delays == [1.0]
+
+
+def test_sig_account_rest_failure_retries_with_account_untrusted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _AccountController:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def run(self, *, stop_event: asyncio.Event) -> None:
+            self.calls += 1
+            if self.calls == 1:
+                raise SigTemporaryServiceError(
+                    status_code=503,
+                    code="SERVICE_UNAVAILABLE",
+                    safe_message="temporary service failure",
+                )
+            stop_event.set()
+
+    class _AccountState:
+        def __init__(self) -> None:
+            self.transitions: list[object] = []
+
+        def mark_untrusted(self, transition: object) -> None:
+            self.transitions.append(transition)
+
+    class _Runtime:
+        def __init__(self) -> None:
+            self.global_notifications = 0
+
+        def notify_global(self, *, observed_monotonic_ns: int | None = None) -> None:
+            del observed_monotonic_ns
+            self.global_notifications += 1
+
+    service = MakerService(
+        AppSettings(maker_enabled=True),
+        explicit_live_invocation=False,
+    )
+    controller = _AccountController()
+    account_state = _AccountState()
+    runtime = _Runtime()
+    delays: list[float] = []
+
+    async def no_sleep(delay: float) -> None:
+        delays.append(delay)
+
+    monkeypatch.setattr(asyncio, "sleep", no_sleep)
+    asyncio.run(
+        service._run_account_controller(
+            cast(Any, controller),
+            cast(Any, account_state),
+            cast(Any, runtime),
+        )
+    )
+
+    assert controller.calls == 2
+    assert account_state.transitions == [
+        AccountTrustTransition.UNTRUSTED_REFRESH_FAILURE
+    ]
+    assert runtime.global_notifications == 1
+    assert delays == [1.0]
+
+
+def test_sig_market_callback_internal_failure_still_kills_and_exits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    internal_error = RuntimeError("callback invariant failed")
+
+    class _Rest:
+        async def mint_realtime_token(self) -> object:
+            return object()
+
+    class _SigState:
+        states: dict[str, object] = {}
+
+        def __init__(self) -> None:
+            self.disconnected = False
+
+        def subscription_topics(self, *, exchange_ids: object) -> tuple[str, ...]:
+            del exchange_ids
+            return ("market-topic",)
+
+        async def handle_raw_batch(
+            self,
+            topic: str,
+            payload: object,
+            observed_at: datetime,
+        ) -> None:
+            del topic, payload, observed_at
+            raise internal_error
+
+        def mark_disconnected(self) -> None:
+            self.disconnected = True
+
+    class _Runtime:
+        def __init__(self) -> None:
+            self.kill_reasons: list[str] = []
+            self.drain_calls = 0
+
+        def activate_kill_switch(self, reason: str) -> None:
+            self.kill_reasons.append(reason)
+
+        async def drain_once(self) -> None:
+            self.drain_calls += 1
+
+        def notify_global(self, *, observed_monotonic_ns: int | None = None) -> None:
+            del observed_monotonic_ns
+
+    class _Subscriber:
+        def __init__(self, **kwargs: object) -> None:
+            del kwargs
+
+        async def run(
+            self,
+            *,
+            on_batch: Callable[[str, object, datetime], Awaitable[None]],
+            **kwargs: object,
+        ) -> object:
+            del kwargs
+            await on_batch(
+                "market-topic",
+                {},
+                datetime(2026, 9, 29, 14, 0, tzinfo=UTC),
+            )
+            raise AssertionError("internal callback failure should escape")
+
+    service = MakerService(
+        AppSettings(maker_enabled=True),
+        explicit_live_invocation=False,
+    )
+    sig_state = _SigState()
+    runtime = _Runtime()
+    monkeypatch.setattr(maker_service_module, "SupabaseTournamentSubscriber", _Subscriber)
+    monkeypatch.setattr(
+        maker_service_module,
+        "_mapped_sig_exchange_ids",
+        lambda mapping, *, allowed_exchange_ids: (),
+    )
+
     async def no_sleep(delay: float) -> None:
         del delay
 
     monkeypatch.setattr(asyncio, "sleep", no_sleep)
-
-    with pytest.raises(RuntimeError, match="SIG market state callback failed") as raised:
+    with pytest.raises(RuntimeError, match="callback invariant failed"):
         asyncio.run(
             service._run_sig_market_feed(
                 cast(Any, sig_state),
-                cast(Any, rest),
+                cast(Any, _Rest()),
                 cast(Any, runtime),
                 cast(Any, object()),
             )
         )
 
-    assert isinstance(raised.value.__cause__, SigTemporaryServiceError)
-    assert rest.mint_calls == 1
     assert runtime.kill_reasons == ["sig_market_state_failure"]
     assert runtime.drain_calls == 1
     assert sig_state.disconnected is False
