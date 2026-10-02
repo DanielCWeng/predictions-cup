@@ -510,10 +510,21 @@ def _record_no_fill_cancel_reconciliation(
     logical_operation_id: str,
     *,
     details: dict[str, object] | None = None,
+    observed_monotonic_ns: int = 200,
 ) -> None:
+    attempt_id = f"reconcile-{logical_operation_id}"
+    journal.record_event(
+        logical_operation_id=logical_operation_id,
+        event_type="CANCEL_RECONCILIATION_STARTED",
+        observed_monotonic_ns=observed_monotonic_ns - 1,
+        exchange_order_id="91",
+        detail_json=json.dumps({"attempt_id": attempt_id}),
+    )
     evidence: dict[str, object] = {
+        "reconciliation_attempt_id": attempt_id,
         "order_open": False,
         "fills_coverage_complete": True,
+        "fills_projected_through_sequence": 1,
         "fill_count": 0,
         "total_quantity_filled": "0",
     }
@@ -522,7 +533,7 @@ def _record_no_fill_cancel_reconciliation(
     journal.record_event(
         logical_operation_id=logical_operation_id,
         event_type="RECONCILED_TERMINAL",
-        observed_monotonic_ns=200,
+        observed_monotonic_ns=observed_monotonic_ns,
         exchange_order_id="91",
         terminal_status=LifecycleState.CANCELLED.value,
         detail_json=json.dumps(evidence),
@@ -580,6 +591,7 @@ def test_authoritative_no_fill_cancel_conflict_keeps_first_terminal(
     [
         ("order_open", True),
         ("fills_coverage_complete", False),
+        ("fills_projected_through_sequence", None),
         ("fill_count", 1),
         ("total_quantity_filled", "1"),
     ],
@@ -649,6 +661,150 @@ def test_cancel_terminal_conflict_is_not_suppressed_with_recorded_fill(
                 cancel.logical_operation_id,
                 LifecycleState.CANCELLED,
                 203,
+            )
+    finally:
+        journal.close()
+
+
+@pytest.mark.parametrize("proof_first", [False, True])
+def test_realtime_partial_fill_racing_cancel_blocks_zero_fill_proof(
+    tmp_path: Path,
+    proof_first: bool,
+) -> None:
+    journal = ExecutionJournal(tmp_path / f"realtime-fill-proof-{proof_first}.sqlite3")
+    cancel = ExecutionEnvelope.cancellation(
+        logical_operation_id="cancel-realtime-fill-91",
+        operation_kind=OperationKind.SINGLE_CANCELLATION,
+        sink_mode=ExecutionMode.LIVE,
+        created_monotonic_ns=100,
+        order_id=91,
+        tournament_id="t1",
+    )
+    placement_intent = RuntimeOrderIntent(
+        intent_id="placement-intent-realtime-fill-91",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=2,
+        limit_price_ticks=100,
+        strategy_id="fixture",
+        decision_observation_ns=100,
+    )
+    placement = ExecutionEnvelope.placement(
+        logical_operation_id="placement-realtime-fill-91",
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        sink_mode=ExecutionMode.LIVE,
+        idempotency_key="placement-realtime-fill-key",
+        intents=(placement_intent,),
+        created_monotonic_ns=100,
+    )
+    journal.record_before_dispatch(placement, (placement_intent,))
+    journal.record_event(
+        logical_operation_id=placement.logical_operation_id,
+        logical_intent_id=placement_intent.intent_id,
+        event_type="ACK",
+        observed_monotonic_ns=101,
+        exchange_order_id="91",
+    )
+    journal.record_before_dispatch(cancel)
+    journal.mark_state(cancel.logical_operation_id, LifecycleState.RECONCILING, 102)
+    journal.mark_state(cancel.logical_operation_id, LifecycleState.REJECTED, 103)
+
+    def record_realtime_fill() -> None:
+        journal.record_event(
+            logical_operation_id=placement.logical_operation_id,
+            logical_intent_id=placement_intent.intent_id,
+            event_type="REALTIME_FILL",
+            observed_monotonic_ns=201,
+            exchange_id="36",
+            exchange_order_id="91",
+            quantity="1",
+            price="0.50",
+        )
+
+    try:
+        if not proof_first:
+            record_realtime_fill()
+        _record_no_fill_cancel_reconciliation(
+            journal,
+            cancel.logical_operation_id,
+        )
+        if proof_first:
+            record_realtime_fill()
+
+        with pytest.raises(ValueError, match="REJECTED -> CANCELLED"):
+            journal.mark_state(
+                cancel.logical_operation_id,
+                LifecycleState.CANCELLED,
+                202,
+            )
+    finally:
+        journal.close()
+
+
+def test_cancel_terminal_conflict_rejects_proof_older_than_order_update(
+    tmp_path: Path,
+) -> None:
+    journal = ExecutionJournal(tmp_path / "stale-cancel-proof.sqlite3")
+    cancel = ExecutionEnvelope.cancellation(
+        logical_operation_id="cancel-stale-proof-91",
+        operation_kind=OperationKind.SINGLE_CANCELLATION,
+        sink_mode=ExecutionMode.LIVE,
+        created_monotonic_ns=100,
+        order_id=91,
+        tournament_id="t1",
+    )
+    placement_intent = RuntimeOrderIntent(
+        intent_id="placement-intent-stale-proof-91",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=2,
+        limit_price_ticks=100,
+        strategy_id="fixture",
+        decision_observation_ns=100,
+    )
+    placement = ExecutionEnvelope.placement(
+        logical_operation_id="placement-stale-proof-91",
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        sink_mode=ExecutionMode.LIVE,
+        idempotency_key="placement-stale-proof-key",
+        intents=(placement_intent,),
+        created_monotonic_ns=100,
+    )
+    journal.record_before_dispatch(placement, (placement_intent,))
+    journal.record_event(
+        logical_operation_id=placement.logical_operation_id,
+        logical_intent_id=placement_intent.intent_id,
+        event_type="ACK",
+        observed_monotonic_ns=101,
+        exchange_order_id="91",
+    )
+    journal.record_before_dispatch(cancel)
+    journal.mark_state(cancel.logical_operation_id, LifecycleState.RECONCILING, 102)
+    journal.mark_state(cancel.logical_operation_id, LifecycleState.REJECTED, 103)
+    _record_no_fill_cancel_reconciliation(journal, cancel.logical_operation_id)
+    journal.record_event(
+        logical_operation_id=placement.logical_operation_id,
+        logical_intent_id=placement_intent.intent_id,
+        event_type="REALTIME_ORDER_UPDATE",
+        observed_monotonic_ns=201,
+        exchange_id="36",
+        exchange_order_id="91",
+        quantity="0",
+        terminal_status="CLOSED",
+    )
+
+    try:
+        with pytest.raises(ValueError, match="REJECTED -> CANCELLED"):
+            journal.mark_state(
+                cancel.logical_operation_id,
+                LifecycleState.CANCELLED,
+                202,
             )
     finally:
         journal.close()
@@ -781,12 +937,16 @@ def test_stale_cancel_rejection_keeps_authoritatively_cancelled_state(
     )
     journal.record_before_dispatch(cancel)
     journal.mark_state(cancel.logical_operation_id, LifecycleState.RECONCILING, 101)
-    _record_no_fill_cancel_reconciliation(journal, cancel.logical_operation_id)
     journal.mark_state(cancel.logical_operation_id, LifecycleState.CANCELLED, 201)
 
     class RejectingCancelClient:
         async def cancel_order(self, order_id: int) -> object:
             assert order_id == 91
+            _record_no_fill_cancel_reconciliation(
+                journal,
+                cancel.logical_operation_id,
+                observed_monotonic_ns=350,
+            )
             raise SigClientRequestError(
                 status_code=400,
                 code="CANCEL_REJECTED",
@@ -822,6 +982,53 @@ def test_stale_cancel_rejection_keeps_authoritatively_cancelled_state(
         assert reservations.contains_operation(
             "placement-op-retained", (reserved_intent.intent_id,)
         )
+    finally:
+        journal.close()
+
+
+def test_duplicate_cancel_reject_does_not_reuse_prior_zero_fill_proof(
+    tmp_path: Path,
+) -> None:
+    journal = ExecutionJournal(tmp_path / "duplicate-cancel-stale-proof.sqlite3")
+    cancel = ExecutionEnvelope.cancellation(
+        logical_operation_id="cancel-duplicate-stale-proof-91",
+        operation_kind=OperationKind.SINGLE_CANCELLATION,
+        sink_mode=ExecutionMode.LIVE,
+        created_monotonic_ns=100,
+        order_id=91,
+        tournament_id="t1",
+    )
+    journal.record_before_dispatch(cancel)
+    journal.mark_state(cancel.logical_operation_id, LifecycleState.RECONCILING, 101)
+    _record_no_fill_cancel_reconciliation(journal, cancel.logical_operation_id)
+    journal.mark_state(cancel.logical_operation_id, LifecycleState.CANCELLED, 201)
+
+    class RejectingCancelClient:
+        async def cancel_order(self, order_id: int) -> object:
+            assert order_id == 91
+            raise SigClientRequestError(
+                status_code=400,
+                code="CANCEL_REJECTED",
+                safe_message="fixture rejection",
+            )
+
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, RejectingCancelClient()),
+        journal=journal,
+        permit=_recovery_permit(),
+        reservations=ExecutionReservationBook(),
+        clock_ns=iter(range(300, 500)).__next__,
+    )
+
+    try:
+        with pytest.raises(ValueError, match="CANCELLED -> REJECTED"):
+            asyncio.run(sink.cancel(cancel))
+        durable = next(
+            item
+            for item in journal.envelopes()
+            if item.logical_operation_id == cancel.logical_operation_id
+        )
+        assert durable.lifecycle_state is LifecycleState.CANCELLED
     finally:
         journal.close()
 

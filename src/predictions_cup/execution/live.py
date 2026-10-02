@@ -606,6 +606,17 @@ class SigLiveSink:
                 order_id = raw.get("orderId")
                 if not isinstance(order_id, int):
                     raise ValueError("single cancellation envelope is malformed")
+                cancel_attempt_id = uuid4().hex
+                self._journal.record_event(
+                    logical_operation_id=envelope.logical_operation_id,
+                    event_type="CANCEL_DISPATCHED",
+                    observed_monotonic_ns=network_dispatch_ns,
+                    exchange_order_id=str(order_id),
+                    detail_json=json.dumps(
+                        {"attempt_id": cancel_attempt_id},
+                        separators=(",", ":"),
+                    ),
+                )
                 response = await self._client.cancel_order(order_id)
                 response_json = json.dumps(
                     response,
