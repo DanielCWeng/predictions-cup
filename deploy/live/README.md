@@ -30,5 +30,8 @@ kill switch is never cleared in the failing process, and startup recovery/interl
 
 Stop it with `sudo -n systemctl stop predictions-cup-maker-live`. A SIGTERM during an order batch can
 leave an unresolved journal operation that blocks the next start. Resolve it with
-`scripts/ops/recover_one_operation.py <logical_operation_id>`. It replays the same idempotency key, so
-SIG returns the stored response and no new order is placed.
+`scripts/ops/recover_one_operation.py <logical_operation_id>`. For unresolved placements, it replays the
+stored payload with the same idempotency key, so SIG returns the stored response without creating a
+second order. For cancellation operations, it reads authoritative order and fill evidence only; it does
+not send a placement or cancellation request. If an order is still open or the evidence is incomplete,
+the operation stays unresolved.
