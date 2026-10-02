@@ -764,6 +764,49 @@ def test_periodic_bulk_refresh_can_be_disabled_for_capture(tmp_path: Path) -> No
     asyncio.run(scenario())
 
 
+def test_periodic_bulk_refresh_uses_configured_priority(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        rest = FakeRest()
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            periodic_bulk_price_priority=RestPriority.NORMAL,
+        )
+        await engine.initialize()
+        rest.bulk_priorities.clear()
+
+        await engine.maintenance(datetime.now(UTC) + timedelta(seconds=60))
+        await asyncio.sleep(0)
+
+        assert rest.bulk_priorities == [RestPriority.NORMAL]
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_bulk_price_response_started_before_realtime_touch_is_ignored(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        rest = FakeRest()
+        engine, recorder = _engine(tmp_path, rest)
+        await engine.initialize()
+        state = engine.states["36"]
+        previous_scalar_observed = state.last_scalar_observed_at
+        state.last_realtime_observed_at = datetime.now(UTC) + timedelta(seconds=1)
+
+        await engine.refresh_bulk_prices(reason="test_overlapping_touch")
+
+        assert state.last_scalar_observed_at == previous_scalar_observed
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
 def test_capacity_check_rejects_impossible_tracked_freshness(tmp_path: Path) -> None:
     async def scenario() -> None:
         rest = FakeRest(market_count=10)

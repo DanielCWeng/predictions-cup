@@ -20,6 +20,7 @@ from predictions_cup.mapping.models import (
     MappingStatus,
     MarketMapping,
 )
+from predictions_cup.models import OrderBook
 from predictions_cup.runtime.models import (
     RuntimeBook,
     RuntimeLevel,
@@ -186,12 +187,17 @@ class MakerSourceBridge:
         bbo_observed_ns = 0
         bbo_trusted = False
         depth_observed_ns: int | None = None
+        depth_trusted = False
         if sig_exchange is not None:
             try:
-                runtime_book, bbo_observed_ns, bbo_trusted, depth_observed_ns = self._runtime_book(
-                    sig_exchange,
-                    wall_now=wall_now,
-                    monotonic_now_ns=monotonic_now_ns,
+                (
+                    runtime_book,
+                    bbo_observed_ns,
+                    bbo_trusted,
+                    depth_observed_ns,
+                    depth_trusted,
+                ) = self._runtime_book(
+                    sig_exchange, wall_now=wall_now, monotonic_now_ns=monotonic_now_ns
                 )
             except ValueError:
                 runtime_book = None
@@ -258,7 +264,7 @@ class MakerSourceBridge:
             sig_bbo_observed_ns=bbo_observed_ns,
             sig_bbo_trusted=bbo_trusted and sig_connected,
             sig_depth_observed_ns=depth_observed_ns,
-            sig_depth_trusted=(sig_exchange is not None and sig_exchange.trusted and sig_connected),
+            sig_depth_trusted=depth_trusted and sig_connected,
             account_observed_ns=account_observed_ns,
             inventory_observed_ns=account_observed_ns,
             external_quotes=external_quotes,
@@ -307,7 +313,7 @@ class MakerSourceBridge:
         *,
         wall_now: datetime,
         monotonic_now_ns: int,
-    ) -> tuple[RuntimeBook | None, int, bool, int | None]:
+    ) -> tuple[RuntimeBook | None, int, bool, int | None, bool]:
         exchange_id = state.exchange_id
         market_id = state.market_id
         tournament_id = state.tournament_id
@@ -315,27 +321,88 @@ class MakerSourceBridge:
         orderbook = state.orderbook
         last_rest = state.last_rest_observed_at
         last_scalar = state.last_scalar_observed_at
+        last_realtime = state.last_realtime_observed_at
+        depth_observed_ns = self._to_monotonic(
+            last_rest,
+            wall_now=wall_now,
+            monotonic_now_ns=monotonic_now_ns,
+        )
+        scalar_observed_ns = self._to_monotonic(
+            last_scalar,
+            wall_now=wall_now,
+            monotonic_now_ns=monotonic_now_ns,
+        )
+        depth_trusted_now = (
+            trusted_depth
+            and orderbook is not None
+        )
+        depth_current = depth_trusted_now and last_rest is not None and (
+            last_realtime is None or last_rest >= last_realtime
+        )
+        scalar_current = last_scalar is not None and (
+            last_realtime is None or last_scalar >= last_realtime
+        )
 
-        if trusted_depth and orderbook is not None:
-            bids = tuple(
-                RuntimeLevel(
-                    price_ticks=limit_price_to_ticks(level.price),
-                    quantity=float(level.quantity),
+        # The periodic scalar BBO sweep is more frequent than tracked full-depth
+        # refreshes. Prefer it for the maker's quote BBO when it is newer, while
+        # retaining depth only if its top prices still agree. A trade/bookDirty
+        # after either REST snapshot invalidates that source until a later REST
+        # observation; the event alone never grants freshness.
+        use_scalar = scalar_current and (
+            not depth_current
+            or last_rest is None
+            or last_scalar is not None and last_scalar > last_rest
+        )
+        if use_scalar:
+            best_bid = state.scalar_best_bid
+            best_ask = state.scalar_best_ask
+            scalar_bids = self._scalar_levels(best_bid)
+            scalar_asks = self._scalar_levels(best_ask)
+            scalar_matches_depth = (
+                depth_trusted_now
+                and orderbook is not None
+                and bool(orderbook.bids)
+                and bool(orderbook.asks)
+                and best_bid == orderbook.bids[0].price
+                and best_ask == orderbook.asks[0].price
+            )
+            if scalar_matches_depth:
+                assert orderbook is not None
+                bids, asks = self._depth_levels(orderbook)
+                return (
+                    RuntimeBook(
+                        exchange_id=exchange_id,
+                        market_id=market_id,
+                        tournament_id=tournament_id,
+                        bids=bids,
+                        asks=asks,
+                        trusted_depth=True,
+                        observed_monotonic_ns=scalar_observed_ns,
+                    ),
+                    scalar_observed_ns,
+                    bool(best_bid is not None and best_ask is not None),
+                    depth_observed_ns,
+                    True,
                 )
-                for level in orderbook.bids
+            return (
+                RuntimeBook(
+                    exchange_id=exchange_id,
+                    market_id=market_id,
+                    tournament_id=tournament_id,
+                    bids=scalar_bids,
+                    asks=scalar_asks,
+                    trusted_depth=False,
+                    observed_monotonic_ns=scalar_observed_ns,
+                ),
+                scalar_observed_ns,
+                bool(best_bid is not None and best_ask is not None),
+                depth_observed_ns,
+                False,
             )
-            asks = tuple(
-                RuntimeLevel(
-                    price_ticks=limit_price_to_ticks(level.price),
-                    quantity=float(level.quantity),
-                )
-                for level in orderbook.asks
-            )
-            observed_ns = self._to_monotonic(
-                last_rest,
-                wall_now=wall_now,
-                monotonic_now_ns=monotonic_now_ns,
-            )
+
+        if orderbook is not None:
+            bids, asks = self._depth_levels(orderbook)
+            observed_ns = depth_observed_ns
             return (
                 RuntimeBook(
                     exchange_id=exchange_id,
@@ -343,54 +410,66 @@ class MakerSourceBridge:
                     tournament_id=tournament_id,
                     bids=bids,
                     asks=asks,
-                    trusted_depth=True,
+                    trusted_depth=depth_trusted_now,
                     observed_monotonic_ns=observed_ns,
                 ),
                 observed_ns,
-                self._sig.health.connected and bool(bids) and bool(asks),
+                depth_current and bool(bids) and bool(asks),
                 observed_ns,
+                depth_trusted_now,
             )
 
-        best_bid: Decimal | None = state.scalar_best_bid
-        best_ask: Decimal | None = state.scalar_best_ask
-        observed_ns = self._to_monotonic(
-            last_scalar,
-            wall_now=wall_now,
-            monotonic_now_ns=monotonic_now_ns,
-        )
-        bids = (
-            ()
-            if best_bid is None
-            else (
-                RuntimeLevel(
-                    price_ticks=limit_price_to_ticks(best_bid),
-                    quantity=0.0,
-                ),
-            )
-        )
-        asks = (
-            ()
-            if best_ask is None
-            else (
-                RuntimeLevel(
-                    price_ticks=limit_price_to_ticks(best_ask),
-                    quantity=0.0,
-                ),
-            )
-        )
+        fallback_best_bid: Decimal | None = state.scalar_best_bid
+        fallback_best_ask: Decimal | None = state.scalar_best_ask
+        observed_ns = scalar_observed_ns
+        fallback_bids = self._scalar_levels(fallback_best_bid)
+        fallback_asks = self._scalar_levels(fallback_best_ask)
         return (
             RuntimeBook(
                 exchange_id=exchange_id,
                 market_id=market_id,
                 tournament_id=tournament_id,
-                bids=bids,
-                asks=asks,
+                bids=fallback_bids,
+                asks=fallback_asks,
                 trusted_depth=False,
                 observed_monotonic_ns=observed_ns,
             ),
             observed_ns,
-            (self._sig.health.connected and best_bid is not None and best_ask is not None),
+            scalar_current
+            and bool(fallback_best_bid is not None and fallback_best_ask is not None),
             None,
+            False,
+        )
+
+    @staticmethod
+    def _depth_levels(
+        orderbook: OrderBook,
+    ) -> tuple[tuple[RuntimeLevel, ...], tuple[RuntimeLevel, ...]]:
+        bids = tuple(
+            RuntimeLevel(
+                price_ticks=limit_price_to_ticks(level.price),
+                quantity=float(level.quantity),
+            )
+            for level in orderbook.bids
+        )
+        asks = tuple(
+            RuntimeLevel(
+                price_ticks=limit_price_to_ticks(level.price),
+                quantity=float(level.quantity),
+            )
+            for level in orderbook.asks
+        )
+        return bids, asks
+
+    @staticmethod
+    def _scalar_levels(price: Decimal | None) -> tuple[RuntimeLevel, ...]:
+        if price is None:
+            return ()
+        return (
+            RuntimeLevel(
+                price_ticks=limit_price_to_ticks(price),
+                quantity=0.0,
+            ),
         )
 
     @staticmethod
