@@ -356,6 +356,14 @@ async def _recover_single_cancel(
         return
 
     fills = await rest.get_order_fills(order_id, limit=200)
+    if not fills.coverage.complete:
+        raise SigExecutionUncertainError(
+            status_code=None,
+            code="FILL_COVERAGE_INCOMPLETE",
+            safe_message=(
+                "SIG fill coverage is incomplete during cancellation recovery"
+            ),
+        )
     observed = clock_ns()
     placement = journal.placement_identity_for_exchange_order_id(str(order_id))
     fill_operation_id = (

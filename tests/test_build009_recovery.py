@@ -18,7 +18,12 @@ from predictions_cup.execution.interlocks import (
 )
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
-from predictions_cup.execution.models import ExecutionMode, LifecycleState, OperationKind
+from predictions_cup.execution.models import (
+    ExecutionEnvelope,
+    ExecutionMode,
+    LifecycleState,
+    OperationKind,
+)
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.recovery import (
     RecoveryRest,
@@ -455,11 +460,97 @@ class _OpenOrderRecoveryRest(_RecoveryRestFixture):
         )
 
 
+class _ClosedOrderIncompleteFillRest(_RecoveryRestFixture):
+    async def get_order(self, order_id: int) -> OrderReadDto:
+        assert order_id == 91
+        return OrderReadDto.model_validate(
+            {
+                "id": 91,
+                "exchangeId": "36",
+                "side": "yes",
+                "action": "buy",
+                "quantity": "2",
+                "priceLimit": "0.495",
+                "open": False,
+                "createdAt": "2026-09-29T14:00:00Z",
+                "expirationDate": None,
+            }
+        )
+
+    async def get_order_fills(
+        self,
+        order_id: int,
+        *,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> OrderFillsResponseDto:
+        assert order_id == 91
+        assert limit == 200
+        assert cursor is None
+        return OrderFillsResponseDto.model_validate(
+            {
+                "orderId": 91,
+                "exchangeId": "36",
+                "tournamentId": "t1",
+                "data": [],
+                "pagination": {
+                    "limit": 200,
+                    "hasMore": False,
+                    "nextCursor": None,
+                },
+                "coverage": {
+                    "complete": False,
+                    "projectedThroughSequence": 0,
+                },
+                "totalQuantityFilled": "0",
+                "avgFillPrice": None,
+            }
+        )
+
+
+class _ClosedOrderCompleteFillRest(_ClosedOrderIncompleteFillRest):
+    async def get_order_fills(
+        self,
+        order_id: int,
+        *,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> OrderFillsResponseDto:
+        assert order_id == 91
+        assert limit == 200
+        assert cursor is None
+        return OrderFillsResponseDto.model_validate(
+            {
+                "orderId": 91,
+                "exchangeId": "36",
+                "tournamentId": "t1",
+                "data": [
+                    {
+                        "id": 501,
+                        "price": "0.4",
+                        "quantity": "2",
+                        "side": "yes",
+                        "filledAt": "2026-10-02T09:00:01Z",
+                    }
+                ],
+                "pagination": {
+                    "limit": 200,
+                    "hasMore": False,
+                    "nextCursor": None,
+                },
+                "coverage": {
+                    "complete": True,
+                    "projectedThroughSequence": 501,
+                },
+                "totalQuantityFilled": "2",
+                "avgFillPrice": "0.4",
+            }
+        )
+
+
 def test_in_session_recovery_resolves_uncertain_cancel_without_restart(
     tmp_path: Path,
 ) -> None:
-    from predictions_cup.execution.models import ExecutionEnvelope
-
     journal = ExecutionJournal(tmp_path / "in-session-cancel.sqlite3")
     cancel = ExecutionEnvelope.cancellation(
         logical_operation_id="cancel-in-session-91",
@@ -493,6 +584,98 @@ def test_in_session_recovery_resolves_uncertain_cancel_without_restart(
         assert resolved == ("cancel-in-session-91",)
         assert trading.cancelled_order_ids == [91]
         assert journal.unresolved() == ()
+    finally:
+        journal.close()
+
+
+def test_cancel_recovery_keeps_operation_unresolved_on_incomplete_fill_coverage(
+    tmp_path: Path,
+) -> None:
+    cancel = ExecutionEnvelope.cancellation(
+        logical_operation_id="cancel-incomplete-fill-91",
+        operation_kind=OperationKind.SINGLE_CANCELLATION,
+        sink_mode=ExecutionMode.LIVE,
+        created_monotonic_ns=100,
+        order_id=91,
+        tournament_id="t1",
+    )
+    journal = ExecutionJournal(tmp_path / "incomplete-cancel-fill.sqlite3")
+    journal.record_before_dispatch(cancel, submitted_monotonic_ns=101)
+    journal.mark_state(cancel.logical_operation_id, LifecycleState.UNCERTAIN, 102)
+    trading = _RecoveryTradingFixture()
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, trading),
+        journal=journal,
+        permit=_recovery_permit(),
+        reservations=ExecutionReservationBook(),
+        clock_ns=iter(range(200, 500)).__next__,
+    )
+    try:
+        resolved = asyncio.run(
+            recover_in_session_cancellations(
+                journal=journal,
+                rest=cast(RecoveryRest, _ClosedOrderIncompleteFillRest()),
+                live_sink=sink,
+                tournament_id="t1",
+                clock_ns=iter(range(500, 800)).__next__,
+            )
+        )
+
+        assert resolved == ()
+        assert [item.logical_operation_id for item in journal.unresolved()] == [
+            "cancel-incomplete-fill-91"
+        ]
+        assert all(
+            event.event_type != "RECONCILED_TERMINAL"
+            for event in journal.events("cancel-incomplete-fill-91")
+        )
+        assert trading.cancelled_order_ids == []
+    finally:
+        journal.close()
+
+
+def test_cancel_recovery_records_fills_before_resolving_with_complete_coverage(
+    tmp_path: Path,
+) -> None:
+    cancel = ExecutionEnvelope.cancellation(
+        logical_operation_id="cancel-complete-fill-91",
+        operation_kind=OperationKind.SINGLE_CANCELLATION,
+        sink_mode=ExecutionMode.LIVE,
+        created_monotonic_ns=100,
+        order_id=91,
+        tournament_id="t1",
+    )
+    journal = ExecutionJournal(tmp_path / "complete-cancel-fill.sqlite3")
+    journal.record_before_dispatch(cancel, submitted_monotonic_ns=101)
+    journal.mark_state(cancel.logical_operation_id, LifecycleState.UNCERTAIN, 102)
+    trading = _RecoveryTradingFixture()
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, trading),
+        journal=journal,
+        permit=_recovery_permit(),
+        reservations=ExecutionReservationBook(),
+        clock_ns=iter(range(200, 500)).__next__,
+    )
+    try:
+        resolved = asyncio.run(
+            recover_in_session_cancellations(
+                journal=journal,
+                rest=cast(RecoveryRest, _ClosedOrderCompleteFillRest()),
+                live_sink=sink,
+                tournament_id="t1",
+                clock_ns=iter(range(500, 800)).__next__,
+            )
+        )
+
+        assert resolved == ("cancel-complete-fill-91",)
+        assert journal.unresolved() == ()
+        events = journal.events("cancel-complete-fill-91")
+        assert any(event.event_type == "AUTHORITATIVE_FILL" for event in events)
+        terminal = next(
+            event for event in events if event.event_type == "RECONCILED_TERMINAL"
+        )
+        assert terminal.terminal_status == LifecycleState.FILLED.value
+        assert trading.cancelled_order_ids == []
     finally:
         journal.close()
 

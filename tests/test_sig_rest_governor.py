@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -168,6 +169,68 @@ def test_429_applies_shared_cooldown_to_next_caller() -> None:
         assert snapshot.shared_cooldown_count == 1
         assert snapshot.requests_total == 2
         await governor.aclose()
+
+    asyncio.run(scenario())
+
+
+def test_scoped_request_policy_shortens_get_timeout_and_retry(monkeypatch: Any) -> None:
+    async def scenario() -> None:
+        clock = FakeClock()
+        governor = SigRestGovernor(
+            rate_per_second=2.0,
+            sleep=clock.sleep,
+            monotonic=clock.monotonic,
+            random_fn=lambda: 0.0,
+        )
+        attempts = 0
+        timeouts: list[float | None] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal attempts
+            del request
+            attempts += 1
+            if attempts == 1:
+                raise httpx.ReadTimeout("synthetic timeout")
+            return httpx.Response(200, json=_account_payload())
+
+        async with GovernedSigRestClient(
+            AppSettings(
+                sig_read_credential=SecretStr("read-secret"),
+                sig_rest_governor_rate_per_second=2.0,
+            ),
+            transport=httpx.MockTransport(handler),
+            sleep=clock.sleep,
+            governor=governor,
+        ) as client:
+            original_get = client._client.get
+
+            async def recording_get(url: str, **kwargs: Any) -> httpx.Response:
+                timeout = kwargs.get("timeout")
+                timeouts.append(timeout)
+                return await original_get(url, **kwargs)
+
+            monkeypatch.setattr(client._client, "get", recording_get)
+            async with client.request_policy(
+                timeout_seconds=4.0,
+                retry_policy=RetryPolicy(
+                    max_attempts=2,
+                    base_delay_seconds=0.01,
+                    max_delay_seconds=0.02,
+                    jitter_ratio=0,
+                ),
+            ):
+                await client.get_account()
+
+            # The context override is task-local and does not alter later reads.
+            await client.get_account()
+            snapshot = client.governor_snapshot()
+
+        assert attempts == 3
+        assert timeouts == [4.0, 4.0, None]
+        assert 0.01 in clock.sleeps
+        assert clock.now >= 1.0
+        assert snapshot.rate_per_second == 2.0
+        assert snapshot.requests_total == 3
 
     asyncio.run(scenario())
 

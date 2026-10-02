@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+import asyncio
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -13,6 +14,7 @@ from predictions_cup.runtime.models import (
     RuntimePortfolio,
     RuntimePosition,
 )
+from predictions_cup.sig.dto import AccountDto
 from predictions_cup.sig.trading_dto import (
     OrderReadDto,
     OrderStatusFilter,
@@ -100,24 +102,61 @@ async def reconcile_account(
     tournament_id: str,
     tournament_slug: str,
     cash_balance: Decimal | None = None,
+    cash_balance_reader: Callable[[], Awaitable[AccountDto]] | None = None,
 ) -> AccountAuthoritativeSnapshot:
     if not tournament_id.strip() or not tournament_slug.strip():
         raise ValueError("explicit tournament id and slug are required for reconciliation")
-    # A snapshot can only supersede local in-flight reservations that were
-    # acknowledged before the authoritative read began. Using the read-start
-    # fence prevents a placement racing the REST calls from being erased.
+    if cash_balance is not None and cash_balance_reader is not None:
+        raise ValueError("provide a cash balance or reader, not both")
+    # Keep a shared read-start fence. The account runtime also invalidates the
+    # whole snapshot if realtime activity arrives while any read is in flight.
     observed_at = datetime.now(UTC)
-    open_orders = tuple(
-        [
-            order
-            async for order in rest.iter_orders(
-                status="open",
-                tournament_id=tournament_id,
-                limit=200,
-            )
-        ]
+    open_orders_task = asyncio.create_task(
+        _collect_open_orders(rest, tournament_id=tournament_id)
     )
-    positions_response = await rest.get_tournament_positions(tournament_slug)
+    positions_task = asyncio.create_task(
+        rest.get_tournament_positions(tournament_slug)
+    )
+    cash_balance_task: asyncio.Task[AccountDto] | None = None
+    if cash_balance_reader is not None:
+        cash_balance_task = asyncio.create_task(
+            _read_cash_balance(cash_balance_reader)
+        )
+    try:
+        # Independent endpoint reads can overlap; each HTTP attempt still passes
+        # through the shared SIG governor and no partial result is trusted alone.
+        if cash_balance_task is None:
+            open_orders, positions_response = await asyncio.gather(
+                open_orders_task,
+                positions_task,
+            )
+        else:
+            open_orders, positions_response, account = await asyncio.gather(
+                open_orders_task,
+                positions_task,
+                cash_balance_task,
+            )
+            cash_balance = account.balance
+    except BaseException:
+        for task in (open_orders_task, positions_task):
+            if not task.done():
+                task.cancel()
+        if cash_balance_task is not None and not cash_balance_task.done():
+            cash_balance_task.cancel()
+        if cash_balance_task is None:
+            await asyncio.gather(
+                open_orders_task,
+                positions_task,
+                return_exceptions=True,
+            )
+        else:
+            await asyncio.gather(
+                open_orders_task,
+                positions_task,
+                cash_balance_task,
+                return_exceptions=True,
+            )
+        raise
     return AccountAuthoritativeSnapshot(
         tournament_id=tournament_id,
         tournament_slug=tournament_slug,
@@ -126,3 +165,25 @@ async def reconcile_account(
         observed_at=observed_at,
         cash_balance=cash_balance,
     )
+
+
+async def _collect_open_orders(
+    rest: AccountReconciliationRest,
+    *,
+    tournament_id: str,
+) -> tuple[OrderReadDto, ...]:
+    orders = [
+        order
+        async for order in rest.iter_orders(
+            status="open",
+            tournament_id=tournament_id,
+            limit=200,
+        )
+    ]
+    return tuple(orders)
+
+
+async def _read_cash_balance(
+    reader: Callable[[], Awaitable[AccountDto]],
+) -> AccountDto:
+    return await reader()

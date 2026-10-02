@@ -102,6 +102,7 @@ from predictions_cup.sig.account_state import (
     AccountRealtimeStateEngine,
     AccountTrustTransition,
 )
+from predictions_cup.sig.client import RetryPolicy
 from predictions_cup.sig.errors import (
     SigApiError,
     SigExecutionUncertainError,
@@ -126,6 +127,15 @@ _LOG = logging.getLogger(__name__)
 _LIVE_MAX_EXCHANGES = 160
 _SIG_RETRY_MAX_SECONDS = 60.0
 _SIG_RETRY_DELAYS_SECONDS = (1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0)
+# Resync is fail-closed on read errors; bound each attempt while retaining the
+# client's normal retry count and the shared governor's pacing/cooldown rules.
+_ACCOUNT_RESYNC_TIMEOUT_SECONDS = 10.0
+_ACCOUNT_RESYNC_RETRY_POLICY = RetryPolicy(
+    max_attempts=3,
+    base_delay_seconds=0.05,
+    max_delay_seconds=0.25,
+    jitter_ratio=0.2,
+)
 
 
 def _is_transient_sig_error(error: SigApiError) -> bool:
@@ -723,28 +733,34 @@ class MakerService:
 
             async def account_resync() -> AccountAuthoritativeSnapshot:
                 nonlocal capital_refresh_task
-                async with rest.priority(RestPriority.NORMAL):
-                    account = await rest.get_account()
+                async with rest.priority(
+                    RestPriority.NORMAL
+                ), rest.request_policy(
+                    timeout_seconds=_ACCOUNT_RESYNC_TIMEOUT_SECONDS,
+                    retry_policy=_ACCOUNT_RESYNC_RETRY_POLICY,
+                ):
+                    # Cash balance, open orders, and positions share a read-start
+                    # fence while each GET remains paced by the shared governor.
                     authoritative = await reconcile_account(
                         rest,
                         tournament_id=tournament_id,
                         tournament_slug=tournament_slug,
-                        cash_balance=account.balance,
+                        cash_balance_reader=rest.get_account,
                     )
-                if journal is not None and live_sink is not None:
-                    resolved_cancels = await recover_in_session_cancellations(
-                        journal=journal,
-                        rest=rest,
-                        live_sink=live_sink,
-                        tournament_id=tournament_id,
-                    )
-                    if resolved_cancels:
-                        authoritative = await reconcile_account(
-                            rest,
+                    if journal is not None and live_sink is not None:
+                        resolved_cancels = await recover_in_session_cancellations(
+                            journal=journal,
+                            rest=rest,
+                            live_sink=live_sink,
                             tournament_id=tournament_id,
-                            tournament_slug=tournament_slug,
-                            cash_balance=account.balance,
                         )
+                        if resolved_cancels:
+                            authoritative = await reconcile_account(
+                                rest,
+                                tournament_id=tournament_id,
+                                tournament_slug=tournament_slug,
+                                cash_balance_reader=rest.get_account,
+                            )
                 if journal is not None:
                     reconcile_maker_quote_registry(
                         journal=journal,

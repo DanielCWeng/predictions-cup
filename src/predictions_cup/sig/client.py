@@ -8,6 +8,8 @@ import logging
 import random
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -100,6 +102,9 @@ class SigRestClient:
             raise ValueError("timeout_seconds must be positive")
 
         self._retry_policy = retry_policy or RetryPolicy()
+        self._request_options: ContextVar[tuple[float, RetryPolicy] | None] = (
+            ContextVar(f"sig_rest_request_options_{id(self)}", default=None)
+        )
         self._sleep = sleep
         self._client = httpx.AsyncClient(
             base_url=str(settings.sig_api_base_url).rstrip("/") + "/",
@@ -125,6 +130,29 @@ class SigRestClient:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+    @asynccontextmanager
+    async def request_policy(
+        self,
+        *,
+        timeout_seconds: float,
+        retry_policy: RetryPolicy,
+    ) -> AsyncIterator[None]:
+        """Apply read timeout/retry overrides to requests in this async context."""
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        token = self._request_options.set((timeout_seconds, retry_policy))
+        try:
+            yield
+        finally:
+            self._request_options.reset(token)
+
+    def _active_request_options(self) -> tuple[float | None, RetryPolicy]:
+        options = self._request_options.get()
+        if options is None:
+            return None, self._retry_policy
+        timeout_seconds, retry_policy = options
+        return timeout_seconds, retry_policy
 
     async def get_account(self) -> AccountDto:
         account, _ = await self.get_account_with_raw()
@@ -646,11 +674,18 @@ class SigRestClient:
         route_template: str,
         params: dict[str, str | int] | None = None,
     ) -> object:
-        policy = self._retry_policy
+        timeout_seconds, policy = self._active_request_options()
         for attempt in range(1, policy.max_attempts + 1):
             started = time.monotonic()
             try:
-                response = await self._client.get(path, params=params)
+                if timeout_seconds is None:
+                    response = await self._client.get(path, params=params)
+                else:
+                    response = await self._client.get(
+                        path,
+                        params=params,
+                        timeout=timeout_seconds,
+                    )
             except httpx.TransportError as exc:
                 self._log_transport_failure(route_template, attempt, started, exc)
                 if attempt >= policy.max_attempts:
@@ -662,7 +697,7 @@ class SigRestClient:
                             f"{type(exc).__name__} GET {route_template}"
                         ),
                     ) from exc
-                await self._sleep(self._retry_delay(attempt))
+                await self._sleep(self._retry_delay(attempt, policy=policy))
                 continue
 
             latency_ms = round((time.monotonic() - started) * 1000, 3)
@@ -692,7 +727,7 @@ class SigRestClient:
                         "sig_retry_reason": error.code or type(error).__name__,
                     },
                 )
-                await self._sleep(self._retry_delay(attempt))
+                await self._sleep(self._retry_delay(attempt, policy=policy))
                 continue
             raise error
 
@@ -762,14 +797,21 @@ class SigRestClient:
                 safe_message=f"SIG success payload failed schema validation for {route_template}",
             ) from exc
 
-    def _retry_delay(self, failed_attempt: int) -> float:
-        policy = self._retry_policy
-        exponential: float = policy.base_delay_seconds * (2.0 ** (failed_attempt - 1))
-        base: float = min(policy.max_delay_seconds, exponential)
-        if base == 0 or policy.jitter_ratio == 0:
+    def _retry_delay(
+        self,
+        failed_attempt: int,
+        *,
+        policy: RetryPolicy | None = None,
+    ) -> float:
+        active_policy = self._retry_policy if policy is None else policy
+        exponential: float = active_policy.base_delay_seconds * (
+            2.0 ** (failed_attempt - 1)
+        )
+        base: float = min(active_policy.max_delay_seconds, exponential)
+        if base == 0 or active_policy.jitter_ratio == 0:
             return base
-        jitter: float = base * policy.jitter_ratio * random.random()
-        return min(policy.max_delay_seconds, base + jitter)
+        jitter: float = base * active_policy.jitter_ratio * random.random()
+        return min(active_policy.max_delay_seconds, base + jitter)
 
     @staticmethod
     def _is_retryable(error: SigApiError) -> bool:
