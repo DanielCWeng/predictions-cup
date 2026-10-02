@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.models import (
@@ -709,3 +712,97 @@ def test_periodic_refresh_retries_when_activity_lands_during_resync() -> None:
 
     assert resync_count == 2
     assert state.trusted is True
+
+
+@pytest.mark.parametrize(
+    ("scenario", "expected_outcome", "expected_resync_calls", "expected_batches"),
+    [
+        ("success", "trusted", 1, 0),
+        ("retry", "trusted", 2, 1),
+        ("exhausted", "activity_exhausted", 3, 3),
+        ("exception", "exception:RuntimeError", 1, 0),
+    ],
+)
+def test_refresh_cycle_telemetry_is_correlated_and_payload_free(
+    caplog: pytest.LogCaptureFixture,
+    scenario: str,
+    expected_outcome: str,
+    expected_resync_calls: int,
+    expected_batches: int,
+) -> None:
+    state = AccountRealtimeStateEngine(tournament_id="t1")
+    controller: AccountRealtimeController | None = None
+    resync_count = 0
+    payload_marker = "private-payload-marker"
+    discarded_payload: dict[str, object] = {
+        "orderUpdates": [payload_marker, payload_marker],
+        "fills": [payload_marker],
+        "settlements": [payload_marker, payload_marker, payload_marker],
+        "refunds": [payload_marker],
+        "collateralChanges": [payload_marker, payload_marker],
+    }
+
+    async def mint_token() -> RealtimeTokenDto:
+        return _token()
+
+    async def resync() -> AccountAuthoritativeSnapshot:
+        nonlocal resync_count
+        resync_count += 1
+        if scenario == "exception":
+            raise RuntimeError
+        if scenario == "retry" and resync_count == 1:
+            assert controller is not None
+            await controller._handle_batch(
+                "user:profile-1", discarded_payload, datetime.now(UTC)
+            )
+        if scenario == "exhausted":
+            assert controller is not None
+            await controller._handle_batch(
+                "user:profile-1", discarded_payload, datetime.now(UTC)
+            )
+        return _snapshot()
+
+    async def scenario_run() -> None:
+        nonlocal controller
+        controller = AccountRealtimeController(
+            state=state,
+            mint_token=mint_token,
+            authoritative_resync=resync,
+            subscriber_factory=lambda **_: None,  # type: ignore[arg-type]
+        )
+        await controller._refresh_authoritative(
+            datetime.now(UTC), trigger_reason="test_refresh"
+        )
+
+    with caplog.at_level(logging.INFO, logger="predictions_cup.sig.account_runtime"):
+        asyncio.run(scenario_run())
+
+    cycle_logs = [
+        record.getMessage()
+        for record in caplog.records
+        if "SIG account refresh cycle refresh_id=" in record.getMessage()
+    ]
+    assert len(cycle_logs) == 1
+    cycle_log = cycle_logs[0]
+    assert "refresh_id=" in cycle_log
+    assert "trigger_reason=test_refresh" in cycle_log
+    assert "duration_ms=" in cycle_log
+    duration_ms = float(cycle_log.split("duration_ms=", maxsplit=1)[1].split()[0])
+    assert duration_ms >= 0
+    assert f"resync_calls={expected_resync_calls}" in cycle_log
+    assert "generation_before=" in cycle_log
+    assert "generation_after=" in cycle_log
+    assert f"outcome={expected_outcome}" in cycle_log
+    assert resync_count == expected_resync_calls
+
+    batch_logs = [
+        record.getMessage()
+        for record in caplog.records
+        if "SIG account resync batch discarded:" in record.getMessage()
+    ]
+    assert len(batch_logs) == expected_batches
+    assert all(
+        "order_updates=2 fills=1 settlements=3 refunds=1 collateral=2" in message
+        for message in batch_logs
+    )
+    assert all(payload_marker not in record.getMessage() for record in caplog.records)
