@@ -386,6 +386,15 @@ async def _recover_single_cancel(
         observed_monotonic_ns=observed,
         exchange_order_id=str(order_id),
         terminal_status=terminal.value,
+        detail_json=json.dumps(
+            {
+                "order_open": order.open,
+                "fills_coverage_complete": fills.coverage.complete,
+                "fill_count": len(fills.data),
+                "total_quantity_filled": str(fills.total_quantity_filled),
+            },
+            separators=(",", ":"),
+        ),
     )
     journal.mark_state(envelope.logical_operation_id, terminal, observed)
 
