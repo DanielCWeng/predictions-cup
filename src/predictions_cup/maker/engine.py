@@ -26,6 +26,7 @@ from predictions_cup.maker.policies import with_quote_math
 from predictions_cup.runtime.models import SIG_TICK
 
 _TICK = float(SIG_TICK)
+_HARD_MAX_PROJECTED_INVENTORY = 200.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +126,10 @@ class MakerEngine:
                 and position.tournament_id == snapshot.tournament_id
             )
         )
+        max_abs_inventory = min(
+            self._config.max_abs_inventory,
+            _HARD_MAX_PROJECTED_INVENTORY,
+        )
         context = QuoteContext(
             snapshot=snapshot,
             raw_fair_value=fair_value,
@@ -132,7 +137,7 @@ class MakerEngine:
             prediction=prediction,
             toxicity=toxicity,
             signed_inventory=signed_inventory,
-            max_abs_inventory=self._config.max_abs_inventory,
+            max_abs_inventory=max_abs_inventory,
         )
 
         try:
@@ -243,8 +248,8 @@ class MakerEngine:
                 ask_size = min(ask_size, max(0, math.floor(low)))
             elif ask_size > 0:
                 ask_size = int(math.floor(ask_size * self._config.account_proxy_size_factor))
-            bid_room = max(0, math.floor(self._config.max_abs_inventory - high))
-            ask_room = max(0, math.floor(self._config.max_abs_inventory + low))
+            bid_room = max(0, math.floor(max_abs_inventory - high))
+            ask_room = max(0, math.floor(max_abs_inventory + low))
             bid_size = min(bid_size, bid_room)
             ask_size = min(ask_size, ask_room)
         elif gate.reason == "bbo_proxy_inventory_reducing":
@@ -256,6 +261,23 @@ class MakerEngine:
                 ask_size = min(ask_size, max(0, math.floor(low)))
             elif gate.mode is GateMode.BID_ONLY:
                 bid_size = min(bid_size, max(0, math.floor(-high)))
+
+        # The projected interval includes every open and unresolved order,
+        # regardless of account trust grade. At or beyond a boundary, quote
+        # only a side that reduces every represented position without crossing
+        # through zero. This also lets an over-cap position unwind safely.
+        low, high = portfolio.worst_case_inventory_bounds(
+            snapshot.exchange_id,
+            snapshot.tournament_id,
+        )
+        if high >= max_abs_inventory or low <= -max_abs_inventory:
+            bid_size = min(bid_size, max(0, math.floor(-high))) if high < 0.0 else 0
+            ask_size = min(ask_size, max(0, math.floor(low))) if low > 0.0 else 0
+        else:
+            bid_room = max(0, math.floor(max_abs_inventory - high))
+            ask_room = max(0, math.floor(max_abs_inventory + low))
+            bid_size = min(bid_size, bid_room)
+            ask_size = min(ask_size, ask_room)
         if bid_ticks is None:
             bid_size = 0
         if ask_ticks is None:
