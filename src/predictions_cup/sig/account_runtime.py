@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from contextlib import suppress
 from datetime import UTC, datetime
 from time import monotonic_ns
@@ -29,6 +29,37 @@ AuthoritativeResync = Callable[[], Awaitable[AccountAuthoritativeSnapshot]]
 ClockNs = Callable[[], int]
 logger = logging.getLogger(__name__)
 _ACTIVITY_RETRY_ATTEMPTS = 3
+
+
+def _account_batch_category_counts(payload: object) -> tuple[int, int, int, int, int]:
+    if isinstance(payload, AccountBatchDto):
+        return (
+            len(payload.order_updates),
+            len(payload.fills),
+            len(payload.settlements),
+            len(payload.refunds),
+            len(payload.collateral_changes),
+        )
+    if not isinstance(payload, Mapping):
+        return (0, 0, 0, 0, 0)
+
+    def count(*keys: str) -> int:
+        for key in keys:
+            try:
+                values = payload.get(key)
+            except Exception:
+                return 0
+            if isinstance(values, (list, tuple)):
+                return len(values)
+        return 0
+
+    return (
+        count("orderUpdates", "order_updates"),
+        count("fills"),
+        count("settlements"),
+        count("refunds"),
+        count("collateralChanges", "collateral_changes"),
+    )
 
 
 class AccountSubscriber(Protocol):
@@ -179,7 +210,9 @@ class AccountRealtimeController:
                     stop_event.wait(), timeout=self._refresh_interval_seconds
                 )
             except TimeoutError:
-                await self._refresh_authoritative(datetime.now(UTC))
+                await self._refresh_authoritative(
+                    datetime.now(UTC), trigger_reason="periodic"
+                )
 
     async def _restore_trust_while_subscribed(self) -> None:
         async with self._refresh_lock:
@@ -231,6 +264,18 @@ class AccountRealtimeController:
         del topic
         if self._resyncing:
             self._resync_generation += 1
+            order_updates, fills, settlements, refunds, collateral = (
+                _account_batch_category_counts(payload)
+            )
+            logger.info(
+                "SIG account resync batch discarded: order_updates=%d fills=%d "
+                "settlements=%d refunds=%d collateral=%d",
+                order_updates,
+                fills,
+                settlements,
+                refunds,
+                collateral,
+            )
             return
         result = self._state.handle_raw_batch(payload, observed_at=observed_at)
         if self._execution_journal is not None and (
@@ -246,11 +291,20 @@ class AccountRealtimeController:
             # Keep the active subscription in place while authoritative state
             # catches up. A fill must not briefly restore trust after its socket
             # has already closed, nor force a fresh token for the same connection.
-            await self._refresh_authoritative(observed_at)
+            await self._refresh_authoritative(
+                observed_at, trigger_reason="account_batch_reconciliation"
+            )
 
-    async def _refresh_authoritative(self, observed_at: datetime) -> None:
+    async def _refresh_authoritative(
+        self, observed_at: datetime, *, trigger_reason: str | None = None
+    ) -> None:
         del observed_at
         async with self._refresh_lock:
+            refresh_id = uuid4().hex
+            started_ns = self._clock_ns()
+            generation_at_start = self._resync_generation
+            resync_calls = 0
+            outcome = "activity_exhausted"
             self._resyncing = True
             try:
                 # Our own placements/cancels produce account activity, so a busy
@@ -260,8 +314,10 @@ class AccountRealtimeController:
                 for _ in range(_ACTIVITY_RETRY_ATTEMPTS):
                     generation_before = self._resync_generation
                     try:
+                        resync_calls += 1
                         authoritative = await self._authoritative_resync()
                     except Exception as exc:
+                        outcome = f"exception:{type(exc).__name__}"
                         self._state.mark_untrusted(
                             AccountTrustTransition.UNTRUSTED_REFRESH_FAILURE
                         )
@@ -278,12 +334,29 @@ class AccountRealtimeController:
                     await asyncio.sleep(0)
                     if self._resync_generation == generation_before:
                         self._state.mark_trusted_after_reconciliation()
+                        outcome = "trusted"
                         return
                     self._state.mark_untrusted(
                         AccountTrustTransition.UNTRUSTED_RESYNC_ACTIVITY
                     )
+            except BaseException as exc:
+                outcome = f"exception:{type(exc).__name__}"
+                raise
             finally:
                 self._resyncing = False
+                duration_ms = (self._clock_ns() - started_ns) / 1_000_000
+                logger.info(
+                    "SIG account refresh cycle refresh_id=%s trigger_reason=%s "
+                    "duration_ms=%.3f resync_calls=%d generation_before=%d "
+                    "generation_after=%d outcome=%s",
+                    refresh_id,
+                    trigger_reason or "unknown",
+                    duration_ms,
+                    resync_calls,
+                    generation_at_start,
+                    self._resync_generation,
+                    outcome,
+                )
 
     def _observe(
         self,
