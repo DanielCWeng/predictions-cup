@@ -5,7 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Literal, Self
 
-from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
+from pydantic import AliasChoices, AnyHttpUrl, Field, SecretStr, field_validator, model_validator
 
 from predictions_cup.sig.dto import (
     TransportModel,
@@ -205,6 +205,10 @@ class MarketBatchDto(TransportModel):
 
 
 class AccountFillDto(TransportModel):
+    fill_id: str | int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("id", "fillId"),
+    )
     order_id: int | None = Field(alias="orderId")
     exchange_id: str = Field(alias="exchangeId")
     market_id: str = Field(alias="marketId")

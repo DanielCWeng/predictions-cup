@@ -12,7 +12,9 @@ from time import monotonic_ns
 from typing import Protocol, cast
 from uuid import uuid4
 
-from predictions_cup.execution.journal import ExecutionJournal
+from pydantic import ValidationError
+
+from predictions_cup.execution.journal import ExecutionJournal, classify_fill_source
 from predictions_cup.observe.contracts import ObservationEmitter, ObservationKind, VenueObservation
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
 from predictions_cup.sig.account_state import (
@@ -293,6 +295,9 @@ class AccountRealtimeController:
         del topic
         if self._resyncing:
             self._resync_generation += 1
+            # The batch is unsafe to apply to account state during a REST read,
+            # but its independently identified fills still belong in the audit.
+            self._record_batch_fills(payload, include_order_updates=False)
             proxy = self._state.account_proxy
             if proxy is not None and proxy.enabled:
                 # The REST snapshot may have been read before or after this
@@ -318,14 +323,7 @@ class AccountRealtimeController:
         proxy = self._state.account_proxy
         if proxy is not None and proxy.enabled:
             proxy.apply_realtime_batch(payload)
-        if self._execution_journal is not None and (
-            result.accepted
-            or result.transition is AccountTrustTransition.UNTRUSTED_FILL_REQUIRES_RECONCILIATION
-        ):
-            # Valid fill payloads remain useful audit evidence even though they
-            # are not safe to mutate exposure from without direction/recovery
-            # fencing.
-            self._record_execution_events(AccountBatchDto.model_validate(payload))
+        self._record_batch_fills(payload)
         if result.requires_reconciliation:
             # Keep the active subscription in place while authoritative state
             # catches up. A fill must not briefly restore trust after its socket
@@ -435,7 +433,30 @@ class AccountRealtimeController:
         except Exception:
             return
 
-    def _record_execution_events(self, batch: AccountBatchDto) -> None:
+    def _record_batch_fills(
+        self,
+        payload: object,
+        *,
+        include_order_updates: bool = True,
+    ) -> None:
+        journal = self._execution_journal
+        if journal is None:
+            return
+        try:
+            batch = AccountBatchDto.model_validate(payload)
+        except ValidationError:
+            return
+        self._record_execution_events(
+            batch,
+            include_order_updates=include_order_updates,
+        )
+
+    def _record_execution_events(
+        self,
+        batch: AccountBatchDto,
+        *,
+        include_order_updates: bool = True,
+    ) -> None:
         journal = self._execution_journal
         if journal is None:
             return
@@ -443,12 +464,27 @@ class AccountRealtimeController:
         for fill in batch.fills:
             if fill.order_id is None:
                 continue
-            order_id = str(fill.order_id)
-            placement = journal.placement_identity_for_exchange_order_id(order_id)
-            if placement is None:
+            if (
+                fill.tournament_id is not None
+                and fill.tournament_id != self._state.tournament_id
+            ):
                 continue
-            logical_operation_id, logical_intent_id = placement
-            journal.record_event(
+            order_id = str(fill.order_id)
+            attribution = journal.placement_attribution_for_exchange_order_id(order_id)
+            if attribution is None:
+                continue
+            (
+                logical_operation_id,
+                logical_intent_id,
+                strategy_family,
+                strategy_id,
+            ) = attribution
+            source = classify_fill_source(
+                logical_operation_id=logical_operation_id,
+                strategy_family=strategy_family,
+                strategy_id=strategy_id,
+            )
+            recorded = journal.record_fill_event_once(
                 logical_operation_id=logical_operation_id,
                 logical_intent_id=logical_intent_id,
                 event_type="REALTIME_FILL",
@@ -456,9 +492,21 @@ class AccountRealtimeController:
                 source_timestamp=fill.executed_at.isoformat(),
                 exchange_id=fill.exchange_id,
                 exchange_order_id=order_id,
+                fill_id=None if fill.fill_id is None else str(fill.fill_id),
                 quantity=str(fill.quantity),
                 price=None if fill.price is None else str(fill.price),
+                strategy_family=source,
+                strategy_id=strategy_id,
+                detail_json=json.dumps(
+                    {
+                        "fill_source": source,
+                        "origin_strategy_family": strategy_family,
+                    },
+                    separators=(",", ":"),
+                ),
             )
+            if not recorded:
+                continue
             self._observe(
                 ObservationKind.PARTIAL_FILL,
                 monotonic_ns=observed_ns,
@@ -469,6 +517,8 @@ class AccountRealtimeController:
                 source_timestamp=fill.executed_at,
                 detail=(("quantity", str(fill.quantity)), ("price", str(fill.price))),
             )
+        if not include_order_updates:
+            return
         for update in batch.order_updates:
             if update.order_id is None:
                 continue
