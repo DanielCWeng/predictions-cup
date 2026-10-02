@@ -82,6 +82,9 @@ class RuntimeOrderState:
     # Signed YES inventory change if this order fills (NO BUY and YES SELL are
     # negative). Zero means direction is unknown and must be bounded both ways.
     signed_quantity: float = 0.0
+    # SIG order identity when an authoritative journal ACK ties this intent to
+    # an exchange order.
+    exchange_order_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

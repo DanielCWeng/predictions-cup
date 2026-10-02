@@ -68,6 +68,7 @@ class MakerRuntimeLoop:
         if max_exchanges_per_cycle is not None and max_exchanges_per_cycle <= 0:
             raise ValueError("max_exchanges_per_cycle must be positive")
         self._max_exchanges_per_cycle = max_exchanges_per_cycle
+        self._blocked_exchange_ids: frozenset[str] = frozenset()
         self._wake = asyncio.Event()
         self._pending_exchanges: set[str] = set()
         self._global_recheck = False
@@ -109,6 +110,13 @@ class MakerRuntimeLoop:
         observed_monotonic_ns: int | None = None,
     ) -> None:
         self._notify_global(observed_monotonic_ns)
+
+    def set_blocked_exchange_ids(self, exchange_ids: Iterable[str]) -> None:
+        """Fail closed on exchanges with unresolved execution ownership."""
+        normalized = frozenset(value.strip() for value in exchange_ids if value.strip())
+        if normalized != self._blocked_exchange_ids:
+            self._blocked_exchange_ids = normalized
+            self._notify_global(self._mono_clock())
 
     def activate_kill_switch(self, reason: str) -> None:
         self._coordinator.activate_kill_switch(reason)
@@ -158,6 +166,9 @@ class MakerRuntimeLoop:
 
         if global_recheck:
             exchange_ids = self._bridge.tradeable_exchange_ids
+        if "*" in self._blocked_exchange_ids:
+            return None
+        exchange_ids = frozenset(exchange_ids).difference(self._blocked_exchange_ids)
         if not exchange_ids:
             return None
 

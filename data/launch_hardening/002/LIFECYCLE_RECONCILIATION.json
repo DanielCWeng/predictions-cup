@@ -643,13 +643,13 @@
       "inputs": {
         "process_objects_recreated": true,
         "recovery_passes": 2,
-        "fill_queries": 1
+        "fill_queries": 3
       },
       "expected_oracle": {
         "cash": "97.6",
         "signed_inventory": "6",
         "gross_exposure": "6",
-        "open_order_exposure": "10",
+        "open_order_exposure": "0",
         "uncertain_exposure": "0",
         "filled_quantity": "6",
         "remaining_quantity": "10",
@@ -667,11 +667,9 @@
         "trusted": true,
         "signed_inventory": 6,
         "gross_exposure": 6,
-        "open_order_exposure": 10,
+        "open_order_exposure": 0,
         "uncertain_exposure": 0,
-        "open_orders": [
-          "sig-order-102"
-        ],
+        "open_orders": [],
         "cash": "NOT_EXPOSED_BY_RUNTIME_ACCOUNT_CONTRACT",
         "synthetic_authoritative_cash": "97.6"
       },
@@ -683,22 +681,26 @@
         "safe_to_resume_live": true,
         "unresolved_operation_ids": [],
         "exposure": {
-          "gross_exposure": 16,
-          "open_order_exposure": 10,
-          "uncertain_order_exposure": 0,
+          "gross_exposure": 6.0,
+          "open_order_exposure": 0.0,
+          "uncertain_order_exposure": 0.0,
           "trusted": true
         }
       },
       "journal_state": {
         "event_types": [
           "SUBMISSION",
+          "SUBMISSION",
           "NETWORK_DISPATCH",
           "ACK",
           "ACK",
+          "REALTIME_ORDER_UPDATE",
+          "REALTIME_ORDER_UPDATE",
           "REALTIME_FILL",
           "REALTIME_FILL",
           "AUTHORITATIVE_FILL",
           "AUTHORITATIVE_FILL",
+          "RECONCILED_TERMINAL",
           "SUBMISSION",
           "CANCEL_SUBMITTED",
           "CANCEL_UNCERTAIN",
@@ -745,7 +747,7 @@
         "cash": "97.6",
         "signed_inventory": "6",
         "gross_exposure": "6",
-        "open_order_exposure": "10",
+        "open_order_exposure": "0",
         "uncertain_exposure": "0",
         "filled_quantity": "6",
         "remaining_quantity": "10",
@@ -763,11 +765,9 @@
         "trusted": true,
         "signed_inventory": 6,
         "gross_exposure": 6,
-        "open_order_exposure": 10,
+        "open_order_exposure": 0,
         "uncertain_exposure": 0,
-        "open_orders": [
-          "sig-order-102"
-        ],
+        "open_orders": [],
         "cash": "NOT_EXPOSED_BY_RUNTIME_ACCOUNT_CONTRACT",
         "synthetic_authoritative_cash": "97.6"
       },
@@ -780,22 +780,26 @@
         "reason": "approved",
         "halted_fresh_reason": "global_kill_switch",
         "exposure": {
-          "gross_exposure": 16,
-          "open_order_exposure": 10,
-          "uncertain_order_exposure": 0,
+          "gross_exposure": 6.0,
+          "open_order_exposure": 0.0,
+          "uncertain_order_exposure": 0.0,
           "trusted": true
         }
       },
       "journal_state": {
         "event_types": [
           "SUBMISSION",
+          "SUBMISSION",
           "NETWORK_DISPATCH",
           "ACK",
           "ACK",
+          "REALTIME_ORDER_UPDATE",
+          "REALTIME_ORDER_UPDATE",
           "REALTIME_FILL",
           "REALTIME_FILL",
           "AUTHORITATIVE_FILL",
           "AUTHORITATIVE_FILL",
+          "RECONCILED_TERMINAL",
           "SUBMISSION",
           "CANCEL_SUBMITTED",
           "CANCEL_UNCERTAIN",

@@ -22,10 +22,15 @@ from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import (
     ExecutionEnvelope,
+    ExecutionEvent,
     LifecycleState,
     OperationKind,
 )
-from predictions_cup.execution.recovery import RecoveryRest
+from predictions_cup.execution.recovery import (
+    RecoveryRest,
+    read_complete_fills_with_fallback,
+    read_order_with_fallback,
+)
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.sig.governed_client import GovernedSigRestClient
 from predictions_cup.sig.rest_governor import SigRestGovernor
@@ -93,6 +98,14 @@ async def recover_operation(
 
     if envelope.operation_kind not in _PLACEMENT_KINDS:
         raise ValueError(f"unsupported operation kind: {envelope.operation_kind.value}")
+    acknowledgements = _acknowledged_orders(envelope, journal)
+    if acknowledgements:
+        return await _recover_acknowledged_placement(
+            envelope,
+            journal,
+            rest,
+            acknowledgements,
+        )
     if envelope.lifecycle_state not in _REPLAYABLE_PLACEMENT_STATES:
         return RecoveryResult(
             resolved=False,
@@ -127,14 +140,28 @@ async def _recover_single_cancel(
         raise RuntimeError("journal contains malformed single-cancel envelope")
 
     _mark_reconciling(envelope, journal)
-    order = await rest.get_order(order_id)
+    order = await read_order_with_fallback(
+        rest,
+        order_id,
+        tournament_id=envelope.tournament_id,
+    )
+    if order is None:
+        return RecoveryResult(
+            resolved=False,
+            detail=f"order {order_id} is absent from direct and list order reads",
+        )
     if order.open:
         return RecoveryResult(
             resolved=False,
             detail=f"authoritative order {order_id} is still open; cancellation unresolved",
         )
 
-    fills = await _read_complete_fills(rest, order_id)
+    fills = await read_complete_fills_with_fallback(
+        rest,
+        order_id,
+        tournament_id=envelope.tournament_id,
+        exchange_id=order.exchange_id,
+    )
     if fills is None:
         return RecoveryResult(
             resolved=False,
@@ -224,7 +251,22 @@ async def _recover_cancel_pending_batch(
     _mark_reconciling(envelope, journal)
     all_filled = True
     for order_id in order_ids:
-        order = await rest.get_order(order_id)
+        acknowledgement = next(
+            event
+            for event in acknowledgements
+            if event.exchange_order_id == str(order_id)
+        )
+        order = await read_order_with_fallback(
+            rest,
+            order_id,
+            tournament_id=envelope.tournament_id,
+            exchange_id=acknowledgement.exchange_id,
+        )
+        if order is None:
+            return RecoveryResult(
+                resolved=False,
+                detail=f"order {order_id} is absent from direct and list order reads",
+            )
         if order.open:
             return RecoveryResult(
                 resolved=False,
@@ -232,7 +274,12 @@ async def _recover_cancel_pending_batch(
                     f"authoritative batch order {order_id} is still open; cancellation unresolved"
                 ),
             )
-        fills = await _read_complete_fills(rest, order_id)
+        fills = await read_complete_fills_with_fallback(
+            rest,
+            order_id,
+            tournament_id=envelope.tournament_id,
+            exchange_id=order.exchange_id,
+        )
         if fills is None:
             return RecoveryResult(
                 resolved=False,
@@ -257,6 +304,86 @@ async def _recover_cancel_pending_batch(
     return RecoveryResult(
         resolved=True,
         detail=f"all {len(order_ids)} acknowledged batch orders authoritatively {terminal.value}",
+    )
+
+
+def _acknowledged_orders(
+    envelope: ExecutionEnvelope,
+    journal: ExecutionJournal,
+) -> tuple[ExecutionEvent, ...]:
+    return tuple(
+        event
+        for event in journal.events(envelope.logical_operation_id)
+        if event.event_type == "ACK"
+        and event.exchange_order_id is not None
+        and event.exchange_order_id.isdigit()
+        and int(event.exchange_order_id) > 0
+    )
+
+
+async def _recover_acknowledged_placement(
+    envelope: ExecutionEnvelope,
+    journal: ExecutionJournal,
+    rest: RecoveryRest,
+    acknowledgements: tuple[ExecutionEvent, ...],
+) -> RecoveryResult:
+    """Never replay an acknowledged placement; reconcile its durable order IDs."""
+    _mark_reconciling(envelope, journal)
+    unique = {
+        int(event.exchange_order_id): event
+        for event in acknowledgements
+        if event.exchange_order_id is not None
+    }
+    if not unique:
+        return RecoveryResult(resolved=False, detail="placement has no usable ACK order IDs")
+    all_filled = True
+    for order_id, acknowledgement in sorted(unique.items()):
+        order = await read_order_with_fallback(
+            rest,
+            order_id,
+            tournament_id=envelope.tournament_id,
+            exchange_id=acknowledgement.exchange_id,
+        )
+        if order is None:
+            return RecoveryResult(
+                resolved=False,
+                detail=f"order {order_id} is absent from direct and list order reads",
+            )
+        if order.open:
+            return RecoveryResult(
+                resolved=False,
+                detail=(
+                    f"authoritative order {order_id} is still open; "
+                    "placement remains unresolved"
+                ),
+            )
+        fills = await read_complete_fills_with_fallback(
+            rest,
+            order_id,
+            tournament_id=envelope.tournament_id,
+            exchange_id=order.exchange_id,
+        )
+        if fills is None:
+            return RecoveryResult(
+                resolved=False,
+                detail=f"authoritative fill evidence for order {order_id} is incomplete",
+            )
+        fill_rows, total_quantity_filled = fills
+        _record_authoritative_fills(
+            journal,
+            operation_id=envelope.logical_operation_id,
+            intent_id=acknowledgement.logical_intent_id,
+            order_id=order_id,
+            exchange_id=order.exchange_id,
+            fills=fill_rows,
+        )
+        all_filled = all_filled and abs(total_quantity_filled) >= abs(order.quantity)
+
+    terminal = LifecycleState.FILLED if all_filled else LifecycleState.CANCELLED
+    _record_terminal(journal, envelope, None, terminal)
+    return RecoveryResult(
+        resolved=True,
+        detail=f"all {len(unique)} acknowledged placement orders authoritatively {terminal.value}",
     )
 
 

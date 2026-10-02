@@ -33,6 +33,7 @@ from predictions_cup.execution.models import (
     ExecutionEvent,
     ExecutionMode,
     LifecycleState,
+    OperationKind,
 )
 from predictions_cup.execution.recovery import (
     recover_in_session_cancellations,
@@ -125,6 +126,7 @@ from predictions_cup.sig.trading_dto import PortfolioPnlDto
 
 _LOG = logging.getLogger(__name__)
 _LIVE_MAX_EXCHANGES = 160
+_MAKER_SIGTERM_DRAIN_SECONDS = 15.0
 _SIG_RETRY_MAX_SECONDS = 60.0
 _SIG_RETRY_DELAYS_SECONDS = (1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0)
 # Resync is fail-closed on read errors; bound each attempt while retaining the
@@ -196,6 +198,9 @@ class MakerService:
         self.explicit_live_invocation = explicit_live_invocation
         self.core: MakerRuntimeComponents = build_maker_components(settings)
         self.stop_event = asyncio.Event()
+        self._startup_blocked_exchange_ids: frozenset[str] = frozenset()
+        self._startup_blocked_operation_ids: frozenset[str] = frozenset()
+        self._startup_recovery_retry_after_ns = 0
         self.telemetry = HotPathTelemetry()
         self.pm_health = IngestionHealth()
         self.pm_books = OrderBookStore()
@@ -446,18 +451,30 @@ class MakerService:
                         live_sink=startup_live_sink,
                         tournament_id=tournament_id,
                         tournament_slug=tournament_slug,
+                        authoritative_snapshot=initial_account,
                         observation_emitter=observation_emitter,
                         observation_process_instance_id=observe_recorder.session_id,
-                        # The production service does not replay fresh economic
-                        # placements until current risk/market eligibility has been
-                        # independently proven. Cancellation recovery still runs.
-                        placement_replay_allowed=lambda _envelope: False,
+                        exchange_ids_by_market=_exchange_ids_by_market(self.core.mapping),
+                        market_by_exchange=_market_by_exchange(self.core.mapping),
+                        reservations=self.core.reservations,
                     ),
                 )
+                self._startup_blocked_operation_ids = frozenset(
+                    recovery.unresolved_operation_ids
+                )
+                self._startup_blocked_exchange_ids = frozenset(
+                    recovery.unresolved_exchange_ids
+                )
+                if self._startup_blocked_operation_ids:
+                    self._startup_recovery_retry_after_ns = (
+                        monotonic_ns() + 30_000_000_000
+                    )
                 if not recovery.safe_to_resume_live:
-                    raise RuntimeError(
-                        "LIVE startup blocked by unresolved execution operations: "
-                        + ",".join(recovery.unresolved_operation_ids)
+                    _LOG.error(
+                        "LIVE startup recovery left unresolved operations; "
+                        "blocking exchanges=%s operations=%s while other markets continue",
+                        sorted(recovery.unresolved_exchange_ids),
+                        sorted(recovery.unresolved_operation_ids),
                     )
                 authoritative = await _retry_startup_sig_operation(
                     "post_recovery_account_reconciliation",
@@ -540,24 +557,31 @@ class MakerService:
                     and capital.marks_trusted
                 )
                 if not capital_ready:
-                    # Raise the canonical interlock error and identify the exact
-                    # missing admission gate. Recovery/cancel work has already
-                    # been allowed above, but fresh economic exposure is not.
-                    assert_live_interlocks(
-                        self.settings,
-                        explicit_live_invocation=self.explicit_live_invocation,
-                        account_trusted=account_state.trusted,
-                        capital_state_ready=False,
+                    if not self._startup_blocked_operation_ids:
+                        # Retain the canonical startup interlock when the risk
+                        # state is incomplete for a reason unrelated to an
+                        # exchange-scoped recovery blocker.
+                        assert_live_interlocks(
+                            self.settings,
+                            explicit_live_invocation=self.explicit_live_invocation,
+                            account_trusted=account_state.trusted,
+                            capital_state_ready=False,
+                        )
+                        raise AssertionError("unreachable")
+                    _LOG.error(
+                        "RISK-002 startup state remains fail-closed while unresolved "
+                        "journal economics are represented conservatively"
                     )
-                    raise AssertionError("unreachable")
 
-                assert capital is not None
-                capital_halts_make = (
-                    capital.global_halt is not None and capital.global_halt.active
-                ) or capital.strategy_halted(
-                    self.core.engine.strategy_id,
-                    "MAKE",
-                )
+                capital_halts_make = not capital_ready
+                if capital_ready:
+                    assert capital is not None
+                    capital_halts_make = (
+                        capital.global_halt is not None and capital.global_halt.active
+                    ) or capital.strategy_halted(
+                        self.core.engine.strategy_id,
+                        "MAKE",
+                    )
                 if not capital_halts_make:
                     permit = assert_live_interlocks(
                         self.settings,
@@ -722,6 +746,7 @@ class MakerService:
                     1 if self.core.risk_context.mode is ExecutionMode.LIVE else None
                 ),
             )
+            runtime.set_blocked_exchange_ids(self._startup_blocked_exchange_ids)
 
             capital_refresh_task: asyncio.Task[object] | None = None
 
@@ -752,6 +777,46 @@ class MakerService:
                         tournament_slug=tournament_slug,
                         cash_balance_reader=rest.get_account,
                     )
+                    if (
+                        journal is not None
+                        and live_sink is not None
+                        and self._startup_blocked_operation_ids
+                        and monotonic_ns() >= self._startup_recovery_retry_after_ns
+                    ):
+                        # Retry only operations that were unresolved at startup;
+                        # ordinary live OPEN maker quotes are never treated as
+                        # startup blockers or cancelled by this path.
+                        self._startup_recovery_retry_after_ns = (
+                            monotonic_ns() + 30_000_000_000
+                        )
+                        retry_result = await recover_startup(
+                            journal=journal,
+                            rest=rest,
+                            live_sink=live_sink,
+                            tournament_id=tournament_id,
+                            tournament_slug=tournament_slug,
+                            operation_ids=self._startup_blocked_operation_ids,
+                            authoritative_snapshot=authoritative,
+                            exchange_ids_by_market=_exchange_ids_by_market(self.core.mapping),
+                            market_by_exchange=_market_by_exchange(self.core.mapping),
+                            reservations=self.core.reservations,
+                        )
+                        self._startup_blocked_operation_ids = frozenset(
+                            retry_result.unresolved_operation_ids
+                        )
+                        self._startup_blocked_exchange_ids = frozenset(
+                            retry_result.unresolved_exchange_ids
+                        )
+                        runtime.set_blocked_exchange_ids(
+                            self._startup_blocked_exchange_ids
+                        )
+                        if not self._startup_blocked_operation_ids:
+                            authoritative = await reconcile_account(
+                                rest,
+                                tournament_id=tournament_id,
+                                tournament_slug=tournament_slug,
+                                cash_balance_reader=rest.get_account,
+                            )
                     if journal is not None and live_sink is not None:
                         resolved_cancels = await recover_in_session_cancellations(
                             journal=journal,
@@ -886,7 +951,9 @@ class MakerService:
             )
             if failure is not None:
                 runtime.activate_kill_switch(f"service_task_failure:{failure.get_name()}")
-                await self._best_effort_kill_drain(runtime)
+                self.stop_event.set()
+                runtime_task = next(task for task in tasks if task.get_name() == "make-runtime")
+                await self._graceful_shutdown(runtime, runtime_task)
                 failure_exc = failure.exception()
                 if failure_exc is None:
                     raise RuntimeError("MAKE service task failed without exception")
@@ -894,7 +961,8 @@ class MakerService:
 
             if stop_waiter in done:
                 runtime.activate_kill_switch("operator_shutdown")
-                await self._best_effort_kill_drain(runtime)
+                runtime_task = next(task for task in tasks if task.get_name() == "make-runtime")
+                await self._graceful_shutdown(runtime, runtime_task)
 
             for task in tasks:
                 task.cancel()
@@ -1048,8 +1116,36 @@ class MakerService:
                         for record in self.core.mapping.records
                     },
                 )
-                attributions = attribution.attributions
-                attribution_complete = attribution.complete
+                account_order_ids = {str(order.id) for order in account.open_orders}
+                recovery_attributions: list[ExposureAttribution] = []
+                recovery_attribution_complete = True
+                for order in self.core.reservations.reserved_orders():
+                    if (
+                        order.exchange_order_id is not None
+                        and order.exchange_order_id in account_order_ids
+                    ):
+                        continue
+                    if (
+                        order.strategy_id is None
+                        or not order.strategy_id.strip()
+                        or order.market_id == "UNKNOWN"
+                    ):
+                        recovery_attribution_complete = False
+                        continue
+                    recovery_attributions.append(
+                        ExposureAttribution(
+                            market_id=order.market_id,
+                            tournament_id=order.tournament_id,
+                            strategy_id=order.strategy_id,
+                            strategy_family="journal",
+                            exposure=order.reserved_exposure,
+                            source="build009:unresolved_reservation",
+                        )
+                    )
+                attributions = attribution.attributions + tuple(recovery_attributions)
+                attribution_complete = (
+                    attribution.complete and recovery_attribution_complete
+                )
                 if not attribution.complete:
                     _LOG.error(
                         "RISK-002 strategy exposure attribution incomplete; "
@@ -1074,6 +1170,7 @@ class MakerService:
             attributions=attributions,
             memberships=self.core.risk_context.exposure_groups,
             strategy_attribution_complete=attribution_complete,
+            additional_orders=self.core.reservations.reserved_orders(),
         )
         if (
             self.settings.risk_max_event_group_exposure is not None
@@ -1540,6 +1637,42 @@ class MakerService:
                 type(exc).__name__,
             )
 
+    async def _graceful_shutdown(
+        self,
+        runtime: MakerRuntimeLoop,
+        runtime_task: asyncio.Task[None],
+    ) -> None:
+        """Finish the active one-exchange batch, then bound the cancel drain."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + _MAKER_SIGTERM_DRAIN_SECONDS
+        try:
+            await asyncio.wait_for(
+                asyncio.shield(runtime_task),
+                timeout=_MAKER_SIGTERM_DRAIN_SECONDS,
+            )
+        except TimeoutError:
+            _LOG.error(
+                "MAKE shutdown exceeded %.1fs while finishing the in-flight batch; "
+                "cancelling the worker with journal state left recoverable",
+                _MAKER_SIGTERM_DRAIN_SECONDS,
+            )
+            runtime_task.cancel()
+            await asyncio.gather(runtime_task, return_exceptions=True)
+            return
+
+        remaining = deadline - loop.time()
+        if remaining <= 0.0:
+            _LOG.warning("MAKE shutdown used its %.1fs drain budget", _MAKER_SIGTERM_DRAIN_SECONDS)
+            return
+        try:
+            await asyncio.wait_for(self._best_effort_kill_drain(runtime), timeout=remaining)
+        except TimeoutError:
+            _LOG.error(
+                "MAKE shutdown cancel drain exceeded its %.1fs total budget; "
+                "remaining operations require authoritative recovery",
+                _MAKER_SIGTERM_DRAIN_SECONDS,
+            )
+
     async def _best_effort_kill_drain(
         self,
         runtime: MakerRuntimeLoop,
@@ -1605,6 +1738,11 @@ def _risk_uncertain_operation_ids(
         envelope.logical_operation_id
         for envelope in journal.unresolved()
         if envelope.lifecycle_state in uncertain_states
+        and envelope.operation_kind
+        not in {
+            OperationKind.SINGLE_CANCELLATION,
+            OperationKind.CANCEL_ALL,
+        }
         and not _placement_in_flight(envelope, reservations)
     )
 
@@ -1613,17 +1751,15 @@ def _placement_in_flight(
     envelope: ExecutionEnvelope,
     reservations: ExecutionReservationBook | None,
 ) -> bool:
-    """A PENDING placement this process is dispatching right now.
-
-    Its exposure is held in the BUILD-009 reservation book, which RISK
-    admission overlays on every limit, so capital reconciliation need not wait
-    for SIG to answer (batches can take ~90 s, longer than the mark age).
-    A timeout turns it UNCERTAIN, and a leftover from an earlier process has no
-    reservation; both still block.
-    """
+    """A placement whose conservative exposure is represented by reservations."""
     return (
         reservations is not None
-        and envelope.lifecycle_state is LifecycleState.PENDING
+        and envelope.operation_kind
+        in {
+            OperationKind.SINGLE_PLACEMENT,
+            OperationKind.BEST_EFFORT_BATCH,
+            OperationKind.ATOMIC_MULTI_LEG,
+        }
         and reservations.contains_operation(
             envelope.logical_operation_id,
             envelope.intent_ids,
@@ -1654,6 +1790,23 @@ def _mapped_token_ids(
         for token_id in identity.token_ids
     }
     return tuple(sorted(token_ids))
+
+
+def _market_by_exchange(mapping: MappingDocument) -> dict[str, str]:
+    return {
+        record.sig_exchange_id: record.sig_market_id
+        for record in mapping.records
+    }
+
+
+def _exchange_ids_by_market(mapping: MappingDocument) -> dict[str, tuple[str, ...]]:
+    grouped: dict[str, set[str]] = {}
+    for record in mapping.records:
+        grouped.setdefault(record.sig_market_id, set()).add(record.sig_exchange_id)
+    return {
+        market_id: tuple(sorted(exchange_ids))
+        for market_id, exchange_ids in grouped.items()
+    }
 
 
 def _configured_tracked_exchanges(settings: AppSettings) -> tuple[str, ...]:

@@ -19,10 +19,12 @@ from predictions_cup.execution.models import (
 )
 from predictions_cup.execution.recovery import RecoveryRest
 from predictions_cup.runtime import OrderAction, OutcomeSide
+from predictions_cup.sig.errors import SigUnexpectedServerError
 from predictions_cup.sig.trading_dto import (
     OrderFillsResponseDto,
     OrderReadDto,
     OrderStatusFilter,
+    PortfolioFillPageDto,
     PositionsResponseDto,
 )
 
@@ -112,6 +114,96 @@ class _RecordingPlacementSink:
     async def dispatch_recovery(self, envelope: ExecutionEnvelope) -> object:
         self.envelopes.append(envelope)
         return object()
+
+
+class _ProjectionFallbackRest(_ReadOnlyRest):
+    def __init__(self) -> None:
+        super().__init__()
+        self.order_list_statuses: list[OrderStatusFilter] = []
+        self.portfolio_fill_calls = 0
+
+    async def get_order(self, order_id: int) -> OrderReadDto:
+        self.get_order_calls.append(order_id)
+        raise SigUnexpectedServerError(
+            status_code=503,
+            code="SERVICE_UNAVAILABLE",
+            safe_message="order projection temporarily unavailable",
+        )
+
+    def iter_orders(
+        self,
+        *,
+        status: OrderStatusFilter = "open",
+        exchange_id: str | None = None,
+        market_id: str | None = None,
+        tournament_id: str | None = None,
+        limit: int = 200,
+    ) -> AsyncIterator[OrderReadDto]:
+        del exchange_id, market_id, tournament_id, limit
+        self.order_list_statuses.append(status)
+
+        async def rows() -> AsyncIterator[OrderReadDto]:
+            if status == "all":
+                yield OrderReadDto.model_validate(
+                    {
+                        "id": 914,
+                        "exchangeId": "36",
+                        "side": "yes",
+                        "action": "buy",
+                        "quantity": "1",
+                        "priceLimit": "0.5",
+                        "open": False,
+                        "createdAt": "2026-10-02T00:00:00Z",
+                        "expirationDate": None,
+                    }
+                )
+
+        return rows()
+
+    async def get_order_fills(
+        self,
+        order_id: int,
+        *,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> OrderFillsResponseDto:
+        del limit, cursor
+        self.get_order_fills_calls.append(order_id)
+        raise SigUnexpectedServerError(
+            status_code=503,
+            code="SERVICE_UNAVAILABLE",
+            safe_message="order fills projection temporarily unavailable",
+        )
+
+    async def list_portfolio_fills(
+        self,
+        *,
+        exchange_id: str | None = None,
+        market_id: str | None = None,
+        tournament_id: str | None = None,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> PortfolioFillPageDto:
+        del exchange_id, market_id, tournament_id, limit, cursor
+        self.portfolio_fill_calls += 1
+        return PortfolioFillPageDto.model_validate(
+            {
+                "data": [
+                    {
+                        "id": 601,
+                        "orderId": 914,
+                        "exchangeId": "36",
+                        "marketId": "market-1",
+                        "price": "0.4",
+                        "quantity": "1",
+                        "side": "yes",
+                        "filledAt": "2026-10-02T00:00:01Z",
+                    }
+                ],
+                "pagination": {"limit": 200, "hasMore": False, "nextCursor": None},
+                "coverage": {"complete": True, "projectedThroughSequence": 1},
+            }
+        )
 
 
 def _batch_envelope() -> ExecutionEnvelope:
@@ -308,5 +400,52 @@ def test_cancel_recovery_resolves_only_after_closed_order_and_complete_fill_evid
         terminal = journal.events(envelope.logical_operation_id)[-1]
         assert terminal.event_type == "RECONCILED_TERMINAL"
         assert terminal.terminal_status == LifecycleState.CANCELLED.value
+    finally:
+        journal.close()
+
+
+def test_acknowledged_open_placement_uses_all_orders_and_portfolio_fills_on_503(
+    tmp_path: Path,
+) -> None:
+    envelope = _batch_envelope()
+    journal = ExecutionJournal(tmp_path / "placement-projection-fallback.sqlite3")
+    journal.record_before_dispatch(envelope, submitted_monotonic_ns=101)
+    journal.record_event(
+        logical_operation_id=envelope.logical_operation_id,
+        tournament_id=envelope.tournament_id,
+        logical_intent_id="intent-1",
+        event_type="ACK",
+        observed_monotonic_ns=102,
+        exchange_id="36",
+        exchange_order_id="914",
+        terminal_status=LifecycleState.OPEN.value,
+    )
+    journal.mark_state(envelope.logical_operation_id, LifecycleState.OPEN, 102)
+    rest = _ProjectionFallbackRest()
+    try:
+        result = asyncio.run(
+            recover_operation(
+                envelope=journal.unresolved()[0],
+                journal=journal,
+                rest=cast(RecoveryRest, rest),
+            )
+        )
+
+        assert result.resolved is True
+        assert "authoritatively FILLED" in result.detail
+        assert rest.get_order_calls == [914]
+        assert rest.order_list_statuses == ["all"]
+        assert rest.get_order_fills_calls == [914]
+        assert rest.portfolio_fill_calls == 1
+        assert journal.unresolved() == ()
+        assert any(
+            event.event_type == "AUTHORITATIVE_FILL" and event.fill_id == "601"
+            for event in journal.events(envelope.logical_operation_id)
+        )
+        assert any(
+            event.event_type == "RECONCILED_TERMINAL"
+            and event.terminal_status == LifecycleState.FILLED.value
+            for event in journal.events(envelope.logical_operation_id)
+        )
     finally:
         journal.close()

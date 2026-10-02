@@ -2,14 +2,18 @@ from types import SimpleNamespace
 from typing import cast
 
 from predictions_cup.execution.journal import ExecutionJournal
-from predictions_cup.execution.models import LifecycleState
+from predictions_cup.execution.models import LifecycleState, OperationKind
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.maker.service import _risk_uncertain_operation_ids
 
 
 def test_cancel_in_flight_does_not_block_capital_reconciliation() -> None:
     envelopes = tuple(
-        SimpleNamespace(logical_operation_id=state.value, lifecycle_state=state)
+        SimpleNamespace(
+            logical_operation_id=state.value,
+            lifecycle_state=state,
+            operation_kind=OperationKind.SINGLE_PLACEMENT,
+        )
         for state in (
             LifecycleState.PENDING,
             LifecycleState.CANCEL_PENDING,
@@ -32,16 +36,19 @@ def test_reserved_in_flight_placement_does_not_block_but_orphan_does() -> None:
     in_flight = SimpleNamespace(
         logical_operation_id="in-flight",
         lifecycle_state=LifecycleState.PENDING,
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
         intent_ids=("i1",),
     )
     orphan = SimpleNamespace(
         logical_operation_id="orphan",
         lifecycle_state=LifecycleState.PENDING,
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
         intent_ids=("i2",),
     )
     timed_out = SimpleNamespace(
         logical_operation_id="timed-out",
         lifecycle_state=LifecycleState.UNCERTAIN,
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
         intent_ids=("i3",),
     )
     journal = cast(
@@ -58,7 +65,6 @@ def test_reserved_in_flight_placement_does_not_block_but_orphan_does() -> None:
 
     assert set(_risk_uncertain_operation_ids(journal, reservations)) == {
         "orphan",
-        "timed-out",
     }
     assert set(_risk_uncertain_operation_ids(journal)) == {
         "in-flight",
