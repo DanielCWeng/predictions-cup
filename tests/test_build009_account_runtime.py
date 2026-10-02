@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
@@ -603,6 +604,103 @@ def test_accepted_realtime_fill_is_linked_to_execution_journal(tmp_path: Path) -
         assert fills[0].price == "0.42"
     finally:
         journal.close()
+
+
+def test_fill_during_resync_is_journaled_once_with_take_source(tmp_path: Path) -> None:
+    journal = ExecutionJournal(tmp_path / "execution.sqlite3")
+    intent = RuntimeOrderIntent(
+        intent_id="residual-taker-001:decision:36",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=2,
+        limit_price_ticks=None,
+        strategy_id="residual-taker-001",
+        decision_observation_ns=111,
+    )
+    envelope = ExecutionEnvelope.placement(
+        logical_operation_id="op-92:take:36",
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        sink_mode=ExecutionMode.LIVE,
+        idempotency_key="key-92",
+        intents=(intent,),
+        created_monotonic_ns=112,
+    )
+    journal.record_before_dispatch(envelope, (intent,))
+    journal.record_event(
+        logical_operation_id=envelope.logical_operation_id,
+        logical_intent_id=intent.intent_id,
+        event_type="ACK",
+        observed_monotonic_ns=113,
+        exchange_id="36",
+        exchange_order_id="92",
+    )
+
+    payload = _batch(1, 0)
+    payload["fills"] = [
+        {
+            "orderId": 92,
+            "exchangeId": "36",
+            "marketId": "m1",
+            "price": "0.42",
+            "quantity": "2",
+            "executedAt": "2026-10-02T13:00:00.000710Z",
+            "tournamentId": "t1",
+        }
+    ]
+    controller = AccountRealtimeController(
+        state=AccountRealtimeStateEngine(tournament_id="t1"),
+        mint_token=lambda: _unused_token(),
+        authoritative_resync=lambda: _unused_snapshot(),
+        execution_journal=journal,
+        clock_ns=lambda: 999,
+    )
+    controller._resyncing = True
+
+    async def scenario() -> None:
+        await controller._handle_batch("user:profile-1", payload, datetime.now(UTC))
+        await controller._handle_batch("user:profile-1", payload, datetime.now(UTC))
+
+    try:
+        asyncio.run(scenario())
+        assert not journal.record_fill_event_once(
+            logical_operation_id=envelope.logical_operation_id,
+            logical_intent_id=intent.intent_id,
+            event_type="AUTHORITATIVE_FILL",
+            observed_monotonic_ns=1_000,
+            source_timestamp="2026-10-02T13:00:00.000000+00:00",
+            exchange_id="36",
+            exchange_order_id="92",
+            fill_id="sig-fill-92",
+            quantity="-2.0",
+            price="0.580",
+            strategy_family="TAKE",
+            strategy_id="residual-taker-001",
+            detail_json='{"fill_source":"TAKE"}',
+        )
+        fills = [
+            event
+            for event in journal.events(envelope.logical_operation_id)
+            if event.event_type == "REALTIME_FILL"
+        ]
+        assert len(fills) == 1
+        assert fills[0].exchange_order_id == "92"
+        assert fills[0].logical_intent_id == intent.intent_id
+        assert fills[0].strategy_family == "TAKE"
+        assert fills[0].strategy_id == "residual-taker-001"
+        assert json.loads(fills[0].detail_json or "{}")["fill_source"] == "TAKE"
+    finally:
+        journal.close()
+
+
+async def _unused_token() -> RealtimeTokenDto:
+    raise AssertionError("token minting is not used by this test")
+
+
+async def _unused_snapshot() -> AccountAuthoritativeSnapshot:
+    raise AssertionError("authoritative resync is not used by this test")
 
 def test_authoritative_account_snapshot_clears_only_covered_reservations() -> None:
     reservations = ExecutionReservationBook()
