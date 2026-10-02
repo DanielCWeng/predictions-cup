@@ -35,6 +35,8 @@ class SubscriberExit(StrEnum):
 # ("ChannelRateLimitReached: Too many channels", observed live 2026-10-01), so
 # per-market topics are sharded across sockets with headroom below that cap.
 DEFAULT_MAX_CHANNELS_PER_CONNECTION = 90
+# Bound joins to ten per socket in each wave, then wait for their acknowledgements.
+DEFAULT_JOIN_BATCH_SIZE = 10
 
 
 class SupabaseTournamentSubscriber:
@@ -137,7 +139,8 @@ class SupabaseTournamentSubscriber:
 
         try:
             try:
-                for shard in self._shards():
+                shards = self._shards()
+                for _ in shards:
                     client = await acreate_client(
                         str(self._token.supabase_url),
                         self._token.anon_key.get_secret_value(),
@@ -145,39 +148,68 @@ class SupabaseTournamentSubscriber:
                     shard_channels: list[Any] = []
                     connections.append((client, shard_channels))
                     await client.realtime.set_auth(self._token.token.get_secret_value())
-                    for topic in shard:
-                        channel_options: RealtimeChannelOptions = {
-                            "config": {"broadcast": None, "presence": None, "private": True}
-                        }
-                        channel = client.channel(topic, channel_options)
-                        shard_channels.append(channel)
-                        await channel.on_broadcast(
-                            self._event_name, broadcast_handler(topic)
-                        ).subscribe(status_handler(topic))
 
                 pending = set(self._topics)
                 loop = asyncio.get_running_loop()
-                deadline = loop.time() + self._subscribe_timeout_seconds
-                while pending:
+                batch_count = max(
+                    (
+                        (len(shard) + DEFAULT_JOIN_BATCH_SIZE - 1)
+                        // DEFAULT_JOIN_BATCH_SIZE
+                        for shard in shards
+                    ),
+                    default=0,
+                )
+                for batch_index in range(batch_count):
                     if queue_overflow.is_set():
                         logger.warning(
-                            "SIG Realtime status queue overflow; reconnecting for "
-                            "authoritative resync"
+                            "SIG Realtime status queue overflow; reconnecting "
+                            "for authoritative resync"
                         )
                         return SubscriberExit.DISCONNECTED
-                    topic, status, _ = await asyncio.wait_for(
-                        status_queue.get(), timeout=max(0.0, deadline - loop.time())
-                    )
-                    if status != RealtimeSubscribeStates.SUBSCRIBED:
-                        logger.warning(
-                            "SIG Realtime subscription rejected status=%s "
-                            "pending_topics=%s total_topics=%s",
-                            status,
-                            len(pending),
-                            len(self._topics),
+                    batch_pending: set[str] = set()
+                    for shard, (client, shard_channels) in zip(
+                        shards, connections, strict=True
+                    ):
+                        start = batch_index * DEFAULT_JOIN_BATCH_SIZE
+                        topics = shard[start : start + DEFAULT_JOIN_BATCH_SIZE]
+                        for topic in topics:
+                            channel_options: RealtimeChannelOptions = {
+                                "config": {
+                                    "broadcast": None,
+                                    "presence": None,
+                                    "private": True,
+                                }
+                            }
+                            channel = client.channel(topic, channel_options)
+                            shard_channels.append(channel)
+                            batch_pending.add(topic)
+                            await channel.on_broadcast(
+                                self._event_name, broadcast_handler(topic)
+                            ).subscribe(status_handler(topic))
+
+                    deadline = loop.time() + self._subscribe_timeout_seconds
+                    while batch_pending:
+                        if queue_overflow.is_set():
+                            logger.warning(
+                                "SIG Realtime status queue overflow; reconnecting "
+                                "for authoritative resync"
+                            )
+                            return SubscriberExit.DISCONNECTED
+                        topic, status, _ = await asyncio.wait_for(
+                            status_queue.get(),
+                            timeout=max(0.0, deadline - loop.time()),
                         )
-                        return SubscriberExit.SOCKET_ERROR
-                    pending.discard(topic)
+                        if status != RealtimeSubscribeStates.SUBSCRIBED:
+                            logger.warning(
+                                "SIG Realtime subscription rejected status=%s "
+                                "pending_topics=%s total_topics=%s",
+                                status,
+                                len(pending),
+                                len(self._topics),
+                            )
+                            return SubscriberExit.SOCKET_ERROR
+                        pending.discard(topic)
+                        batch_pending.discard(topic)
             except Exception as exc:
                 logger.warning(
                     "SIG Realtime subscription setup failed error=%s",
