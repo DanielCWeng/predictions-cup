@@ -17,6 +17,7 @@ from predictions_cup.execution.models import (
     ExecutionEvent,
     ExecutionMode,
     LifecycleState,
+    RuntimeOrderIntent,
 )
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
@@ -75,6 +76,8 @@ from predictions_cup.risk import (
 from predictions_cup.risk.core import RiskContext, RiskLimits
 from predictions_cup.runtime.models import (
     AccountTrustGrade,
+    OrderAction,
+    OutcomeSide,
     RuntimeBook,
     RuntimeLevel,
     RuntimeMarket,
@@ -270,6 +273,10 @@ def _engine(
     fair_value_band: tuple[float, float] = (0.0, 1.0),
     account_proxy_enabled: bool = False,
     base_size: int = 4,
+    fill_seeking_enabled: bool = False,
+    fill_seeking_min_edge: float = 0.02,
+    deep_ladder_enabled: bool = False,
+    deep_ladder_position_cap: int = 200,
 ) -> MakerEngine:
     provider = DirectPolymarketFairValueProvider(
         _mapping(
@@ -294,7 +301,14 @@ def _engine(
             max_fair_value=fair_value_band[1],
             account_proxy_enabled=account_proxy_enabled,
         ),
-        config=MakerConfig(max_abs_inventory=max_inventory),
+        config=MakerConfig(
+            max_abs_inventory=max_inventory,
+            fill_seeking_enabled=fill_seeking_enabled,
+            fill_seeking_min_edge=fill_seeking_min_edge,
+            deep_ladder_enabled=deep_ladder_enabled,
+            deep_ladder_position_cap=deep_ladder_position_cap,
+        ),
+        market_token_ids={"36": "token-yes"},
     )
 
 
@@ -950,8 +964,7 @@ def test_untrusted_or_stale_sig_bbo_cancels_without_placing(
     assert result.decisions[0].gate.reason == reason
     assert len(result.execution_events) == 2
     assert all(
-        action.kind is QuoteLifecycleActionKind.CANCEL
-        for action in result.lifecycle_actions
+        action.kind is QuoteLifecycleActionKind.CANCEL for action in result.lifecycle_actions
     )
     assert registry.state("36").bid is None
     assert registry.state("36").ask is None
@@ -1218,6 +1231,250 @@ def test_over_cap_filled_position_keeps_only_the_inventory_reducing_quote() -> N
     assert decision.desired.ask_size <= 250
     assert decision.desired.bid_ticks is None
     assert decision.desired.bid_size == 0
+
+
+def test_projected_position_cap_counts_several_unresolved_reservations() -> None:
+    snapshot = _maker_snapshot(signed_inventory=100.0)
+    reservations = ExecutionReservationBook()
+    reservations.reserve(
+        "uncertain-multi-order",
+        (
+            RuntimeOrderIntent(
+                "uncertain-buy-1",
+                "36",
+                "m1",
+                TOURNAMENT,
+                OutcomeSide.YES,
+                OrderAction.BUY,
+                60,
+                98,
+                "make-direct-pm",
+                NOW,
+            ),
+            RuntimeOrderIntent(
+                "uncertain-buy-2",
+                "36",
+                "m1",
+                TOURNAMENT,
+                OutcomeSide.YES,
+                OrderAction.BUY,
+                60,
+                98,
+                "make-direct-pm",
+                NOW,
+            ),
+        ),
+    )
+    runtime = reservations.overlay_snapshot(snapshot.runtime)
+    snapshot = replace(snapshot, runtime=runtime)
+
+    decision = _engine(max_inventory=200.0, base_size=100).quote(snapshot)
+
+    assert decision.desired is not None
+    assert decision.desired.bid_ticks is None
+    assert decision.desired.bid_size == 0
+
+
+def test_fill_seeking_mode_improves_quotes_within_pm_exit_edge() -> None:
+    snapshot = _maker_snapshot(
+        external={"token-yes": _external(bid=0.48, ask=0.52)},
+    )
+    book = RuntimeBook(
+        exchange_id="36",
+        market_id="m1",
+        tournament_id=TOURNAMENT,
+        bids=(RuntimeLevel(price_ticks=90, quantity=20.0),),
+        asks=(RuntimeLevel(price_ticks=110, quantity=20.0),),
+        trusted_depth=True,
+        observed_monotonic_ns=NOW,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, books=(book,)))
+
+    decision = _engine(
+        fill_seeking_enabled=True,
+        fill_seeking_min_edge=0.02,
+        base_size=10,
+    ).quote(snapshot)
+
+    assert decision.desired is not None
+    assert decision.desired.bid_ticks == 91
+    assert decision.desired.ask_ticks == 109
+    assert decision.desired.bid_ticks < decision.desired.ask_ticks
+    assert decision.desired.bid_ticks * 0.005 <= 0.48 - 0.02
+    assert decision.desired.ask_ticks * 0.005 >= 0.52 + 0.02
+
+
+def test_fill_seeking_inventory_skew_cuts_opening_size_above_150() -> None:
+    snapshot = _maker_snapshot(
+        signed_inventory=175.0,
+        external={"token-yes": _external(bid=0.48, ask=0.52)},
+    )
+    book = RuntimeBook(
+        exchange_id="36",
+        market_id="m1",
+        tournament_id=TOURNAMENT,
+        bids=(RuntimeLevel(price_ticks=90, quantity=20.0),),
+        asks=(RuntimeLevel(price_ticks=110, quantity=20.0),),
+        trusted_depth=True,
+        observed_monotonic_ns=NOW,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, books=(book,)))
+
+    decision = _engine(
+        max_inventory=200.0,
+        base_size=100,
+        fill_seeking_enabled=True,
+        fill_seeking_min_edge=0.02,
+    ).quote(snapshot)
+
+    assert decision.desired is not None
+    assert decision.desired.bid_size <= 25
+    assert 0 < decision.desired.ask_size <= 100
+
+
+@pytest.mark.parametrize(
+    ("fill_seeking_enabled", "deep_ladder_enabled", "max_inventory"),
+    # Fill-seeking binds on the configured maker cap; the deep ladder also
+    # binds on its own (default 200) projected-position cap.
+    [(True, False, 200.0), (False, True, 500.0)],
+)
+def test_aggressive_maker_modes_enforce_configured_projected_position_cap(
+    fill_seeking_enabled: bool,
+    deep_ladder_enabled: bool,
+    max_inventory: float,
+) -> None:
+    snapshot = _maker_snapshot(
+        signed_inventory=190.0,
+        external={"token-yes": _external(bid=0.48, ask=0.52)},
+    )
+    book = RuntimeBook(
+        exchange_id="36",
+        market_id="m1",
+        tournament_id=TOURNAMENT,
+        bids=(RuntimeLevel(price_ticks=90, quantity=20.0),),
+        asks=(RuntimeLevel(price_ticks=110, quantity=20.0),),
+        trusted_depth=True,
+        observed_monotonic_ns=NOW,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, books=(book,)))
+
+    decision = _engine(
+        max_inventory=max_inventory,
+        base_size=100,
+        fill_seeking_enabled=fill_seeking_enabled,
+        deep_ladder_enabled=deep_ladder_enabled,
+    ).quote(snapshot)
+
+    assert decision.desired is not None
+    bid_size = (
+        sum(level.size for level in decision.desired.bid_levels)
+        if deep_ladder_enabled
+        else decision.desired.bid_size
+    )
+    assert 190 + bid_size <= 200
+
+
+def test_deep_ladder_joins_sig_touch_and_caps_all_resting_levels() -> None:
+    snapshot = _maker_snapshot(
+        external={"token-yes": _external(bid=0.48, ask=0.52)},
+    )
+    book = RuntimeBook(
+        exchange_id="36",
+        market_id="m1",
+        tournament_id=TOURNAMENT,
+        bids=(RuntimeLevel(price_ticks=90, quantity=20.0),),
+        asks=(RuntimeLevel(price_ticks=110, quantity=20.0),),
+        trusted_depth=True,
+        observed_monotonic_ns=NOW,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, books=(book,)))
+
+    decision = _engine(max_inventory=200.0, deep_ladder_enabled=True).quote(snapshot)
+
+    assert decision.desired is not None
+    assert [level.price_ticks for level in decision.desired.bid_levels] == [90, 89, 88]
+    assert [level.price_ticks for level in decision.desired.ask_levels] == [110, 111, 112]
+    assert [level.size for level in decision.desired.bid_levels] == [50, 100, 50]
+    assert [level.size for level in decision.desired.ask_levels] == [50, 100, 50]
+    assert sum(level.size for level in decision.desired.bid_levels) == 200
+    assert sum(level.size for level in decision.desired.ask_levels) == 200
+    assert all(
+        level.price_ticks * 0.005 <= 0.48 - edge
+        for level, edge in zip(decision.desired.bid_levels, (0.01, 0.02, 0.04), strict=True)
+    )
+    assert all(
+        level.price_ticks * 0.005 >= 0.52 + edge
+        for level, edge in zip(decision.desired.ask_levels, (0.01, 0.02, 0.04), strict=True)
+    )
+
+    manager = QuoteLifecycleManager()
+    registry = QuoteRegistry()
+    initial_actions = manager.decide(
+        desired=decision.desired,
+        current=registry.state("36"),
+        now_monotonic_ns=NOW,
+    )
+    places = [action for action in initial_actions if action.kind is QuoteLifecycleActionKind.PLACE]
+    assert len(places) == 6
+    for order_id, action in enumerate(places, start=100):
+        assert action.desired_ticks is not None
+        registry.apply_authoritative(
+            exchange_id="36",
+            side=action.side,
+            price_ticks=action.desired_ticks,
+            size=action.desired_size,
+            remaining_size=action.desired_size,
+            logical_operation_id=f"ladder-{order_id}",
+            exchange_order_id=order_id,
+            lifecycle_state=LifecycleState.OPEN,
+            observed_monotonic_ns=NOW,
+            slot=action.slot,
+        )
+    assert len(registry.state("36").all_quotes()) == 6
+
+    moved_snapshot = replace(
+        snapshot,
+        external_quotes={"token-yes": _external(bid=0.42, ask=0.46)},
+    )
+    moved = _engine(max_inventory=200.0, deep_ladder_enabled=True).quote(moved_snapshot).desired
+    assert moved is not None
+    replace_actions = manager.decide(
+        desired=moved,
+        current=registry.state("36"),
+        now_monotonic_ns=NOW + 1,
+    )
+    assert any(action.kind is QuoteLifecycleActionKind.CANCEL for action in replace_actions)
+    assert not any(action.kind is QuoteLifecycleActionKind.PLACE for action in replace_actions)
+
+    stale_snapshot = replace(
+        snapshot,
+        external_quotes={
+            "token-yes": replace(
+                _external(bid=0.48, ask=0.52),
+                observed_monotonic_ns=NOW - 200_000_000,
+            )
+        },
+    )
+    stale = _engine(max_inventory=200.0, deep_ladder_enabled=True).quote(stale_snapshot)
+    assert stale.desired is None
+    stale_actions = manager.decide(
+        desired=stale.desired,
+        current=registry.state("36"),
+        now_monotonic_ns=NOW + 2,
+    )
+    assert sum(action.kind is QuoteLifecycleActionKind.CANCEL for action in stale_actions) == 6
+
+    skewed_snapshot = _maker_snapshot(
+        signed_inventory=175.0,
+        external={"token-yes": _external(bid=0.48, ask=0.52)},
+    )
+    skewed_snapshot = replace(
+        skewed_snapshot,
+        runtime=replace(skewed_snapshot.runtime, books=(book,)),
+    )
+    skewed = _engine(max_inventory=200.0, deep_ladder_enabled=True).quote(skewed_snapshot).desired
+    assert skewed is not None
+    assert sum(level.size for level in skewed.bid_levels) <= 12
 
 
 def test_bbo_proxy_reducing_quote_cannot_cross_zero_inventory_band() -> None:

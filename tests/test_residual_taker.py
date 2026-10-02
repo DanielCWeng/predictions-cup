@@ -51,8 +51,7 @@ def test_frozen_validation_replay_matches_battery_trade_list() -> None:
                     pm_spread=float(row["pm_spread"]),
                     pm_bid_size=_optional(row, "pm_bid1_size"),
                     pm_ask_size=_optional(row, "pm_ask1_size"),
-                    observed_monotonic_ns=int(at.replace(tzinfo=UTC).timestamp())
-                    * 1_000_000_000,
+                    observed_monotonic_ns=int(at.replace(tzinfo=UTC).timestamp()) * 1_000_000_000,
                 )
             )
             if signal is not None:
@@ -71,7 +70,10 @@ def test_frozen_validation_replay_matches_battery_trade_list() -> None:
     exact = 0
     for actual, reference in zip(matched, expected, strict=True):
         assert (actual["at"], actual["split"], actual["exchange_id"], actual["direction"]) == (
-            reference["at"], reference["split"], reference["exchange_id"], reference["direction"]
+            reference["at"],
+            reference["split"],
+            reference["exchange_id"],
+            reference["direction"],
         )
         assert abs(actual["entry_price"] - reference["entry_price"]) <= 1e-12
         exact += 1
@@ -91,6 +93,29 @@ def test_cooldown_is_per_market_and_direction() -> None:
     signal = engine.on_state(opposite)
     assert signal is not None
     assert signal.direction == "SELL"
+
+
+def test_spread_depth_and_cooldown_are_configurable() -> None:
+    engine = ResidualTakerSignal(
+        threshold=0.005,
+        pm_spread_cap=0.03,
+        min_pm_depth=25.0,
+        cooldown_ns=15_000_000_000,
+    )
+
+    def state(second: int) -> ResidualInput:
+        return _state(
+            second,
+            sig_ask=0.7425,
+            pm_mid=0.75,
+            pm_spread=0.025,
+            pm_bid_size=30.0,
+            pm_ask_size=35.0,
+        )
+
+    assert engine.on_state(state(0)) is not None
+    assert engine.on_state(state(14)) is None
+    assert engine.on_state(state(15)) is not None
 
 
 def test_touch_depth_caps_size_and_flat_yes_sell_canonicalizes_to_no_buy() -> None:

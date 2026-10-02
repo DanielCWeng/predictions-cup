@@ -86,11 +86,27 @@ class ResidualTakerSignal:
         *,
         size: int = 50,
         tracked_exchange_ids: frozenset[str] = frozenset(),
+        threshold: float = THRESHOLD,
+        pm_spread_cap: float = PM_SPREAD_CAP,
+        min_pm_depth: float = MIN_PM_DEPTH,
+        cooldown_ns: int = COOLDOWN_NS,
     ) -> None:
         if size <= 0:
             raise ValueError("residual-taker size must be positive")
+        if not math.isfinite(threshold) or not 0.0 <= threshold <= 1.0:
+            raise ValueError("residual-taker threshold must be finite within [0, 1]")
+        if not math.isfinite(pm_spread_cap) or not 0.0 <= pm_spread_cap <= 1.0:
+            raise ValueError("residual-taker PM spread cap must be finite within [0, 1]")
+        if not math.isfinite(min_pm_depth) or min_pm_depth < 0.0:
+            raise ValueError("residual-taker PM depth must be finite and non-negative")
+        if cooldown_ns < 0:
+            raise ValueError("residual-taker cooldown must be non-negative")
         self.size = size
         self.tracked_exchange_ids = tracked_exchange_ids
+        self.threshold = threshold
+        self.pm_spread_cap = pm_spread_cap
+        self.min_pm_depth = min_pm_depth
+        self.cooldown_ns = cooldown_ns
         self._last_signal: dict[tuple[str, str], int] = {}
 
     def on_state(self, state: ResidualInput) -> ResidualSignal | None:
@@ -117,17 +133,17 @@ class ResidualTakerSignal:
         direction: str | None = None
         entry: float
         residual: float
-        if state.sig_ask <= pm_mid - THRESHOLD:
+        if state.sig_ask <= pm_mid - self.threshold:
             direction, entry, residual = "BUY", state.sig_ask, pm_mid - state.sig_ask
             side, action = OutcomeSide.YES, OrderAction.BUY
-        elif state.sig_bid >= pm_mid + THRESHOLD:
+        elif state.sig_bid >= pm_mid + self.threshold:
             direction, entry, residual = "SELL", state.sig_bid, state.sig_bid - pm_mid
             # SIG accepts flat YES sells but canonicalizes them to a NO buy.
             side, action = OutcomeSide.NO, OrderAction.BUY
         else:
             return None
         depth = min(state.pm_bid_size, state.pm_ask_size)
-        if pm_spread > PM_SPREAD_CAP or depth < MIN_PM_DEPTH:
+        if pm_spread > self.pm_spread_cap or depth < self.min_pm_depth:
             return None
         quantity = (
             self.size
@@ -138,7 +154,7 @@ class ResidualTakerSignal:
             return None
         key = (state.exchange_id, direction)
         last = self._last_signal.get(key)
-        if last is not None and state.observed_monotonic_ns - last < COOLDOWN_NS:
+        if last is not None and state.observed_monotonic_ns - last < self.cooldown_ns:
             return None
         self._last_signal[key] = state.observed_monotonic_ns
         return ResidualSignal(
@@ -162,6 +178,7 @@ def residual_input_from_snapshot(
     max_pm_book_age_ns: int,
     observed_monotonic_ns: int,
     allow_bbo_proxy: bool = False,
+    threshold: float = THRESHOLD,
 ) -> ResidualInput | None:
     """Build the frozen signal input, or None when any input is untrusted/stale."""
 
@@ -177,9 +194,7 @@ def residual_input_from_snapshot(
         return None
     quote = maker.external_quotes.get(record.direct_polymarket.mapped_token_id)
     book = maker.runtime.book(maker.exchange_id)
-    quote_age_ns = (
-        None if quote is None else maker.now_monotonic_ns - quote.observed_monotonic_ns
-    )
+    quote_age_ns = None if quote is None else maker.now_monotonic_ns - quote.observed_monotonic_ns
     if allow_bbo_proxy:
         quote_age_invalid = quote_age_ns is None or not 0 <= quote_age_ns <= max_pm_book_age_ns
         bbo_invalid = sig_bbo_age_ns < 0
@@ -223,6 +238,6 @@ def residual_input_from_snapshot(
         pm_ask_size=quote.best_ask_size,
         observed_monotonic_ns=observed_monotonic_ns,
         sig_touch_depth=(
-            book.asks[0].quantity if sig_ask <= pm_mid - THRESHOLD else book.bids[0].quantity
+            book.asks[0].quantity if sig_ask <= pm_mid - threshold else book.bids[0].quantity
         ),
     )

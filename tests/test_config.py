@@ -26,6 +26,16 @@ def clean_config_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "SIG_REALTIME_TRACKED_EXCHANGE_IDS",
         "POLYMARKET_SUPERVISED_IDS",
         "POLYMARKET_RESEARCH_PATH",
+        "MAKER_FILL_SEEKING_ENABLED",
+        "MAKER_FILL_SEEKING_MIN_EDGE",
+        "MAKER_DEEP_LADDER_ENABLED",
+        "MAKER_DEEP_LADDER_LEVEL_OFFSETS",
+        "MAKER_DEEP_LADDER_LEVEL_SIZES",
+        "MAKER_DEEP_LADDER_POSITION_CAP",
+        "RESIDUAL_TAKER_THRESHOLD",
+        "RESIDUAL_TAKER_PM_SPREAD_CAP",
+        "RESIDUAL_TAKER_MIN_PM_DEPTH",
+        "RESIDUAL_TAKER_COOLDOWN_SECONDS",
     )
     for name in names:
         monkeypatch.delenv(f"PREDICTIONS_CUP_{name}", raising=False)
@@ -54,6 +64,58 @@ def test_defaults_load_without_credentials(
     assert settings.live_learn_max_retained_decisions == 20_000
     assert settings.shadow_snapshot_min_interval_seconds == 1.0
     assert settings.sig_capture_parquet_max_rows_per_shard == 5_000
+    assert settings.maker_fill_seeking_enabled is False
+    assert settings.maker_fill_seeking_min_edge == 0.02
+    assert settings.maker_deep_ladder_enabled is False
+    assert settings.maker_deep_ladder_level_offsets == (0.01, 0.02, 0.04)
+    assert settings.maker_deep_ladder_level_sizes == (50, 100, 150)
+    assert settings.maker_deep_ladder_position_cap == 200
+    assert settings.residual_taker_threshold == 0.02
+    assert settings.residual_taker_pm_spread_cap == 0.02
+    assert settings.residual_taker_min_pm_depth == 50.0
+    assert settings.residual_taker_cooldown_seconds == 60.0
+
+
+def test_fill_hunt_settings_load_from_environment(
+    clean_config_env: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    del clean_config_env
+    monkeypatch.setenv("PREDICTIONS_CUP_MAKER_FILL_SEEKING_ENABLED", "true")
+    monkeypatch.setenv("PREDICTIONS_CUP_MAKER_FILL_SEEKING_MIN_EDGE", "0.015")
+    monkeypatch.setenv("PREDICTIONS_CUP_RESIDUAL_TAKER_THRESHOLD", "0.01")
+    monkeypatch.setenv("PREDICTIONS_CUP_RESIDUAL_TAKER_PM_SPREAD_CAP", "0.03")
+    monkeypatch.setenv("PREDICTIONS_CUP_RESIDUAL_TAKER_MIN_PM_DEPTH", "75")
+    monkeypatch.setenv("PREDICTIONS_CUP_RESIDUAL_TAKER_COOLDOWN_SECONDS", "15")
+
+    settings = AppSettings()
+
+    assert settings.maker_fill_seeking_enabled is True
+    assert settings.maker_fill_seeking_min_edge == 0.015
+    assert settings.maker_deep_ladder_enabled is False
+    assert settings.maker_deep_ladder_position_cap == 200
+    assert settings.residual_taker_threshold == 0.01
+    assert settings.residual_taker_pm_spread_cap == 0.03
+    assert settings.residual_taker_min_pm_depth == 75.0
+    assert settings.residual_taker_cooldown_seconds == 15.0
+
+
+def test_deep_ladder_configuration_loads(
+    clean_config_env: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    del clean_config_env
+    monkeypatch.setenv("PREDICTIONS_CUP_MAKER_DEEP_LADDER_ENABLED", "true")
+    monkeypatch.setenv("PREDICTIONS_CUP_MAKER_DEEP_LADDER_LEVEL_OFFSETS", "[0.01,0.02,0.04]")
+    monkeypatch.setenv("PREDICTIONS_CUP_MAKER_DEEP_LADDER_LEVEL_SIZES", "[25,50,100]")
+    monkeypatch.setenv("PREDICTIONS_CUP_MAKER_DEEP_LADDER_POSITION_CAP", "175")
+
+    settings = AppSettings()
+
+    assert settings.maker_deep_ladder_enabled is True
+    assert settings.maker_deep_ladder_level_offsets == (0.01, 0.02, 0.04)
+    assert settings.maker_deep_ladder_level_sizes == (25, 50, 100)
+    assert settings.maker_deep_ladder_position_cap == 175
 
 
 def test_maker_freshness_defaults_cover_sig_refresh_intervals(

@@ -168,11 +168,7 @@ class LiveMakerExecutionAdapter:
     ) -> None:
         journal_events = self._journal.events(plan.envelope.logical_operation_id)
         for intent in plan.intents:
-            side = (
-                QuoteSide.BID
-                if intent.action is OrderAction.BUY
-                else QuoteSide.ASK
-            )
+            side = QuoteSide.BID if intent.action is OrderAction.BUY else QuoteSide.ASK
             related = tuple(
                 item
                 for item in journal_events
@@ -185,11 +181,7 @@ class LiveMakerExecutionAdapter:
                 continue
             latest = related[-1]
             if latest.event_type == "REJECTED":
-                self._quotes.clear_side(
-                    exchange_id=intent.exchange_id,
-                    side=side,
-                    observed_monotonic_ns=event.observed_monotonic_ns,
-                )
+                self._clear_intent_quote(intent, side, event.observed_monotonic_ns)
                 continue
             order_id = self._positive_int(latest.exchange_order_id)
             if order_id is None:
@@ -200,11 +192,7 @@ class LiveMakerExecutionAdapter:
                 LifecycleState.REJECTED,
                 LifecycleState.CANCELLED,
             }:
-                self._quotes.clear_side(
-                    exchange_id=intent.exchange_id,
-                    side=side,
-                    observed_monotonic_ns=event.observed_monotonic_ns,
-                )
+                self._clear_intent_quote(intent, side, event.observed_monotonic_ns)
                 continue
             if intent.limit_price_ticks is None:
                 # MAKE only emits passive limit quotes. A market sentinel here is
@@ -228,6 +216,7 @@ class LiveMakerExecutionAdapter:
                 exchange_order_id=order_id,
                 lifecycle_state=state,
                 observed_monotonic_ns=event.observed_monotonic_ns,
+                slot=f"{side.value}:{intent.limit_price_ticks}",
             )
             self._observe_published_quote(
                 plan=plan,
@@ -237,6 +226,25 @@ class LiveMakerExecutionAdapter:
                 state=state,
                 observed_monotonic_ns=event.observed_monotonic_ns,
             )
+
+    def _clear_intent_quote(
+        self,
+        intent: RuntimeOrderIntent,
+        side: QuoteSide,
+        observed_monotonic_ns: int,
+    ) -> None:
+        if intent.limit_price_ticks is None:
+            self._quotes.clear_side(
+                exchange_id=intent.exchange_id,
+                side=side,
+                observed_monotonic_ns=observed_monotonic_ns,
+            )
+            return
+        self._quotes.clear_quote(
+            exchange_id=intent.exchange_id,
+            slot=f"{side.value}:{intent.limit_price_ticks}",
+            observed_monotonic_ns=observed_monotonic_ns,
+        )
 
     def _observe_published_quote(
         self,
@@ -275,7 +283,8 @@ class LiveMakerExecutionAdapter:
                             "quote_key",
                             (
                                 f"{plan.envelope.logical_operation_id}|"
-                                f"{intent.exchange_id}|{side.value}"
+                                f"{intent.exchange_id}|{side.value}|"
+                                f"{intent.limit_price_ticks}"
                             ),
                         ),
                         ("side", side.value),

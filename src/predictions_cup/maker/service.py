@@ -671,6 +671,10 @@ class MakerService:
                     min_fair_value=self.settings.maker_min_fair_value,
                     max_fair_value=self.settings.maker_max_fair_value,
                     max_position=self.settings.residual_taker_max_position,
+                    threshold=self.settings.residual_taker_threshold,
+                    pm_spread_cap=self.settings.residual_taker_pm_spread_cap,
+                    min_pm_depth=self.settings.residual_taker_min_pm_depth,
+                    cooldown_ns=int(self.settings.residual_taker_cooldown_seconds * 1_000_000_000),
                     allow_bbo_proxy=self.settings.account_proxy_enabled,
                     max_sig_bbo_age_ns=(self.settings.maker_max_bbo_age_ms * 1_000_000),
                 )
@@ -733,11 +737,12 @@ class MakerService:
 
             async def account_resync() -> AccountAuthoritativeSnapshot:
                 nonlocal capital_refresh_task
-                async with rest.priority(
-                    RestPriority.NORMAL
-                ), rest.request_policy(
-                    timeout_seconds=_ACCOUNT_RESYNC_TIMEOUT_SECONDS,
-                    retry_policy=_ACCOUNT_RESYNC_RETRY_POLICY,
+                async with (
+                    rest.priority(RestPriority.NORMAL),
+                    rest.request_policy(
+                        timeout_seconds=_ACCOUNT_RESYNC_TIMEOUT_SECONDS,
+                        retry_policy=_ACCOUNT_RESYNC_RETRY_POLICY,
+                    ),
                 ):
                     # Cash balance, open orders, and positions share a read-start
                     # fence while each GET remains paced by the shared governor.
@@ -1026,10 +1031,7 @@ class MakerService:
                         tournament_id=tournament_id,
                     )
                 except SigApiError as exc:
-                    if (
-                        retry_transient_sig_errors
-                        and _is_transient_sig_error(exc)
-                    ):
+                    if retry_transient_sig_errors and _is_transient_sig_error(exc):
                         raise
                     return self._block_risk_refresh(
                         state=state,
@@ -1342,9 +1344,7 @@ class MakerService:
                 await controller.run(stop_event=self.stop_event)
                 return
             except SigApiError as exc:
-                account_state.mark_untrusted(
-                    AccountTrustTransition.UNTRUSTED_REFRESH_FAILURE
-                )
+                account_state.mark_untrusted(AccountTrustTransition.UNTRUSTED_REFRESH_FAILURE)
                 runtime.notify_global(observed_monotonic_ns=monotonic_ns())
                 attempt += 1
                 delay = _sig_retry_delay(attempt)

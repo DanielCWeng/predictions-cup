@@ -169,6 +169,10 @@ class MakerCoordinator:
             snapshot = snapshots.get(exchange_id)
             if snapshot is None:
                 continue
+            if self._reservations is not None:
+                runtime = self._reservations.overlay_snapshot(snapshot.runtime)
+                if runtime is not snapshot.runtime:
+                    snapshot = replace(snapshot, runtime=runtime)
             decision = self._engine.quote(snapshot)
             decisions.append(decision)
             current = self._registry.state(exchange_id)
@@ -263,6 +267,7 @@ class MakerCoordinator:
                         side=action.side,
                         lifecycle_state=LifecycleState.UNCERTAIN,
                         observed_monotonic_ns=change.observed_monotonic_ns,
+                        slot=action.slot,
                     )
                     cancelled_side = True
                     continue
@@ -271,8 +276,9 @@ class MakerCoordinator:
                     side=action.side,
                     lifecycle_state=LifecycleState.CANCEL_PENDING,
                     observed_monotonic_ns=change.observed_monotonic_ns,
+                    slot=action.slot,
                 )
-                logical_id = f"{change.event_id}:make-cancel:{exchange_id}:{action.side.value}"
+                logical_id = f"{change.event_id}:make-cancel:{exchange_id}:{action.slot}"
                 try:
                     event = await self._cancel_dispatch(
                         active,
@@ -288,6 +294,7 @@ class MakerCoordinator:
                         side=action.side,
                         lifecycle_state=LifecycleState.UNCERTAIN,
                         observed_monotonic_ns=change.observed_monotonic_ns,
+                        slot=action.slot,
                     )
                     events.append(
                         ExecutionEvent(
@@ -306,6 +313,7 @@ class MakerCoordinator:
                         side=action.side,
                         lifecycle_state=LifecycleState.UNCERTAIN,
                         observed_monotonic_ns=change.observed_monotonic_ns,
+                        slot=action.slot,
                     )
                     raise
                 events.append(event)
@@ -319,9 +327,9 @@ class MakerCoordinator:
                         exchange_order_id=active.exchange_order_id,
                         detail=(("reason", action.reason),),
                     )
-                    self._registry.clear_side(
+                    self._registry.clear_quote(
                         exchange_id=exchange_id,
-                        side=action.side,
+                        slot=action.slot,
                         observed_monotonic_ns=event.observed_monotonic_ns,
                     )
                 else:
@@ -330,6 +338,7 @@ class MakerCoordinator:
                         side=action.side,
                         lifecycle_state=event.state,
                         observed_monotonic_ns=event.observed_monotonic_ns,
+                        slot=action.slot,
                     )
                 cancelled_side = True
 
@@ -393,6 +402,7 @@ class MakerCoordinator:
                     size=action.desired_size,
                     logical_operation_id=logical_operation_id,
                     observed_monotonic_ns=change.observed_monotonic_ns,
+                    slot=action.slot,
                 )
 
             try:
@@ -406,6 +416,7 @@ class MakerCoordinator:
                         side=action.side,
                         lifecycle_state=LifecycleState.UNCERTAIN,
                         observed_monotonic_ns=change.observed_monotonic_ns,
+                        slot=action.slot,
                     )
                 events.append(
                     ExecutionEvent(
@@ -431,13 +442,14 @@ class MakerCoordinator:
                             side=action.side,
                             lifecycle_state=LifecycleState.UNCERTAIN,
                             observed_monotonic_ns=change.observed_monotonic_ns,
+                            slot=action.slot,
                         )
                     terminal = LifecycleState.UNCERTAIN
                 else:
                     for action in place_actions:
-                        self._registry.clear_side(
+                        self._registry.clear_quote(
                             exchange_id=exchange_id,
-                            side=action.side,
+                            slot=action.slot,
                             observed_monotonic_ns=change.observed_monotonic_ns,
                         )
                     terminal = LifecycleState.REJECTED
@@ -458,9 +470,9 @@ class MakerCoordinator:
                 )
                 if not retained:
                     for action in place_actions:
-                        self._registry.clear_side(
+                        self._registry.clear_quote(
                             exchange_id=exchange_id,
-                            side=action.side,
+                            slot=action.slot,
                             observed_monotonic_ns=change.observed_monotonic_ns,
                         )
                 raise
@@ -513,7 +525,10 @@ class MakerCoordinator:
                 for action, intent in zip(place_actions, plan.intents, strict=True):
                     if action.reason != "terminal_quote_refill":
                         continue
-                    active = state.bid if action.side is QuoteSide.BID else state.ask
+                    active = next(
+                        (quote for quote in state.all_quotes() if quote.slot == action.slot),
+                        None,
+                    )
                     if (
                         active is None
                         or active.logical_operation_id != logical_operation_id
@@ -651,9 +666,9 @@ class MakerCoordinator:
     ) -> None:
         if event.state is LifecycleState.FILLED:
             for action in actions:
-                self._registry.clear_side(
+                self._registry.clear_quote(
                     exchange_id=exchange_id,
-                    side=action.side,
+                    slot=action.slot,
                     observed_monotonic_ns=event.observed_monotonic_ns,
                 )
             return
@@ -673,4 +688,5 @@ class MakerCoordinator:
                 exchange_order_id=0,
                 lifecycle_state=event.state,
                 observed_monotonic_ns=event.observed_monotonic_ns,
+                slot=action.slot,
             )

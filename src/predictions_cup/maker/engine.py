@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 from time import monotonic_ns
 
 from predictions_cup.maker.contracts import (
     DesiredQuote,
     EligibilityPolicy,
+    ExternalQuoteState,
     FairValueProvider,
     GateDecision,
     GateMode,
@@ -18,6 +20,7 @@ from predictions_cup.maker.contracts import (
     MakerTrace,
     PredictiveAdjuster,
     QuoteContext,
+    QuoteLevel,
     SizePolicy,
     SpreadPolicy,
     ToxicityProvider,
@@ -26,6 +29,9 @@ from predictions_cup.maker.policies import with_quote_math
 from predictions_cup.runtime.models import SIG_TICK
 
 _TICK = float(SIG_TICK)
+# Fill-seeking shrinks risk-increasing size once projected inventory passes
+# this fraction of the configured maker inventory cap.
+FILL_SEEKING_INVENTORY_SKEW_FRACTION = 0.75
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +40,12 @@ class MakerConfig:
     strategy_version: str = "make-001-v1"
     max_abs_inventory: float = 10.0
     account_proxy_size_factor: float = 0.25
+    fill_seeking_enabled: bool = False
+    fill_seeking_min_edge: float = 0.02
+    deep_ladder_enabled: bool = False
+    deep_ladder_level_offsets: tuple[float, ...] = (0.01, 0.02, 0.04)
+    deep_ladder_level_sizes: tuple[int, ...] = (50, 100, 150)
+    deep_ladder_position_cap: int = 200
 
     def __post_init__(self) -> None:
         if not self.strategy_id.strip() or not self.strategy_version.strip():
@@ -42,6 +54,32 @@ class MakerConfig:
             raise ValueError("max_abs_inventory must be finite and positive")
         if not 0.0 < self.account_proxy_size_factor <= 1.0:
             raise ValueError("account proxy size factor must be within (0, 1]")
+        if (
+            not math.isfinite(self.fill_seeking_min_edge)
+            or not 0.0 <= self.fill_seeking_min_edge <= 1.0
+        ):
+            raise ValueError("fill-seeking minimum edge must be finite within [0, 1]")
+        if self.fill_seeking_enabled and self.deep_ladder_enabled:
+            raise ValueError("fill-seeking and deep ladder modes are mutually exclusive")
+        if (
+            not self.deep_ladder_level_offsets
+            or len(self.deep_ladder_level_offsets) != len(self.deep_ladder_level_sizes)
+            or any(
+                not math.isfinite(edge) or edge <= 0.0 for edge in self.deep_ladder_level_offsets
+            )
+            or any(
+                left >= right
+                for left, right in zip(
+                    self.deep_ladder_level_offsets,
+                    self.deep_ladder_level_offsets[1:],
+                    strict=False,
+                )
+            )
+            or any(size <= 0 for size in self.deep_ladder_level_sizes)
+        ):
+            raise ValueError("deep ladder offsets/sizes must be positive matching tuples")
+        if self.deep_ladder_position_cap < 1:
+            raise ValueError("deep ladder cap must be positive")
 
 
 class MakerEngine:
@@ -58,6 +96,7 @@ class MakerEngine:
         size: SizePolicy,
         eligibility: EligibilityPolicy,
         config: MakerConfig | None = None,
+        market_token_ids: Mapping[str, str] | None = None,
     ) -> None:
         self._fair_value = fair_value
         self._predictive = predictive
@@ -67,6 +106,7 @@ class MakerEngine:
         self._size = size
         self._eligibility = eligibility
         self._config = config or MakerConfig()
+        self._market_token_ids = dict(market_token_ids or {})
 
     @property
     def strategy_id(self) -> str:
@@ -126,6 +166,8 @@ class MakerEngine:
             )
         )
         max_abs_inventory = self._config.max_abs_inventory
+        if self._config.deep_ladder_enabled:
+            max_abs_inventory = min(max_abs_inventory, self._config.deep_ladder_position_cap)
         context = QuoteContext(
             snapshot=snapshot,
             raw_fair_value=fair_value,
@@ -211,11 +253,26 @@ class MakerEngine:
                 predictive_shift=prediction.probability_shift,
             )
 
-        bid_ticks, ask_ticks = self._passive_ticks(
-            snapshot,
-            reservation=reservation,
-            half_spread=half_spread,
-        )
+        bid_levels: tuple[int, ...] = ()
+        ask_levels: tuple[int, ...] = ()
+        if self._config.fill_seeking_enabled:
+            token_id = self._market_token_ids.get(snapshot.exchange_id)
+            external_quote = None if token_id is None else snapshot.external_quotes.get(token_id)
+            bid_ticks, ask_ticks = self._fill_seeking_ticks(
+                snapshot,
+                external_quote=external_quote,
+                min_edge=self._config.fill_seeking_min_edge,
+            )
+        elif self._config.deep_ladder_enabled:
+            bid_levels, ask_levels = self._deep_ladder_ticks(snapshot)
+            bid_ticks = None if not bid_levels else bid_levels[0]
+            ask_ticks = None if not ask_levels else ask_levels[0]
+        else:
+            bid_ticks, ask_ticks = self._passive_ticks(
+                snapshot,
+                reservation=reservation,
+                half_spread=half_spread,
+            )
         if bid_ticks is None and ask_ticks is None:
             return self._failed(
                 snapshot,
@@ -231,11 +288,18 @@ class MakerEngine:
         bid_size = int(math.floor(sizes.bid * gate.size_multiplier))
         ask_size = int(math.floor(sizes.ask * gate.size_multiplier))
         portfolio = snapshot.runtime.portfolio
-        if portfolio.proxy_active:
-            low, high = portfolio.worst_case_inventory_bounds(
-                snapshot.exchange_id,
-                snapshot.tournament_id,
+        low, high = portfolio.worst_case_inventory_bounds(
+            snapshot.exchange_id,
+            snapshot.tournament_id,
+        )
+        if self._config.fill_seeking_enabled:
+            bid_size = self._inventory_skew_size(
+                bid_size, direction=1, low=low, high=high, cap=max_abs_inventory
             )
+            ask_size = self._inventory_skew_size(
+                ask_size, direction=-1, low=low, high=high, cap=max_abs_inventory
+            )
+        if portfolio.proxy_active:
             if high < 0.0:
                 bid_size = min(bid_size, max(0, math.floor(-high)))
             elif bid_size > 0:
@@ -244,28 +308,16 @@ class MakerEngine:
                 ask_size = min(ask_size, max(0, math.floor(low)))
             elif ask_size > 0:
                 ask_size = int(math.floor(ask_size * self._config.account_proxy_size_factor))
-            bid_room = max(0, math.floor(max_abs_inventory - high))
-            ask_room = max(0, math.floor(max_abs_inventory + low))
-            bid_size = min(bid_size, bid_room)
-            ask_size = min(ask_size, ask_room)
         elif gate.reason == "bbo_proxy_inventory_reducing":
-            low, high = portfolio.worst_case_inventory_bounds(
-                snapshot.exchange_id,
-                snapshot.tournament_id,
-            )
             if gate.mode is GateMode.ASK_ONLY:
                 ask_size = min(ask_size, max(0, math.floor(low)))
             elif gate.mode is GateMode.BID_ONLY:
                 bid_size = min(bid_size, max(0, math.floor(-high)))
 
-        # The projected interval includes every open and unresolved order,
-        # regardless of account trust grade. At or beyond a boundary, quote
-        # only a side that reduces every represented position without crossing
-        # through zero. This also lets an over-cap position unwind safely.
-        low, high = portfolio.worst_case_inventory_bounds(
-            snapshot.exchange_id,
-            snapshot.tournament_id,
-        )
+        # Bound every new quote using the interval that includes positions,
+        # open orders, and unresolved reservations. At the boundary, only
+        # allow a side that reduces the represented exposure without crossing
+        # through zero.
         if high >= max_abs_inventory or low <= -max_abs_inventory:
             bid_size = min(bid_size, max(0, math.floor(-high))) if high < 0.0 else 0
             ask_size = min(ask_size, max(0, math.floor(low))) if low > 0.0 else 0
@@ -284,6 +336,39 @@ class MakerEngine:
         elif gate.mode is GateMode.ASK_ONLY:
             bid_ticks = None
             bid_size = 0
+
+        desired_bid_levels: tuple[QuoteLevel, ...] = ()
+        desired_ask_levels: tuple[QuoteLevel, ...] = ()
+        if self._config.deep_ladder_enabled:
+            proxy_factor = self._config.account_proxy_size_factor if portfolio.proxy_active else 1.0
+            desired_bid_levels = (
+                self._bounded_ladder_levels(
+                    bid_levels,
+                    direction=1,
+                    low=low,
+                    high=high,
+                    max_abs_inventory=max_abs_inventory,
+                    size_factor=proxy_factor * gate.size_multiplier,
+                )
+                if gate.mode is not GateMode.ASK_ONLY
+                else ()
+            )
+            desired_ask_levels = (
+                self._bounded_ladder_levels(
+                    ask_levels,
+                    direction=-1,
+                    low=low,
+                    high=high,
+                    max_abs_inventory=max_abs_inventory,
+                    size_factor=proxy_factor * gate.size_multiplier,
+                )
+                if gate.mode is not GateMode.BID_ONLY
+                else ()
+            )
+            bid_ticks = None if not desired_bid_levels else desired_bid_levels[0].price_ticks
+            ask_ticks = None if not desired_ask_levels else desired_ask_levels[0].price_ticks
+            bid_size = 0 if not desired_bid_levels else desired_bid_levels[0].size
+            ask_size = 0 if not desired_ask_levels else desired_ask_levels[0].size
 
         if bid_size <= 0:
             bid_ticks = None
@@ -304,6 +389,8 @@ class MakerEngine:
                 ask_ticks=ask_ticks,
                 bid_size=bid_size,
                 ask_size=ask_size,
+                bid_levels=desired_bid_levels,
+                ask_levels=desired_ask_levels,
             )
 
         return MakerDecision(
@@ -363,6 +450,171 @@ class MakerEngine:
         if bid_value is not None and ask_value is not None and bid_value >= ask_value:
             return None, None
         return bid_value, ask_value
+
+    @staticmethod
+    def _projected_side_room(
+        *, direction: int, low: float, high: float, max_abs_inventory: float
+    ) -> int:
+        """Bound a new side against inventory plus every open or unresolved order."""
+        if high >= max_abs_inventory or low <= -max_abs_inventory:
+            room = (-high if high < 0.0 else 0.0) if direction > 0 else low if low > 0.0 else 0.0
+            return max(0, math.floor(room + 1e-9))
+        room = max_abs_inventory - high if direction > 0 else max_abs_inventory + low
+        return max(0, math.floor(room + 1e-9))
+
+    def _deep_ladder_ticks(
+        self,
+        snapshot: MakerMarketSnapshot,
+    ) -> tuple[tuple[int, ...], tuple[int, ...]]:
+        book = snapshot.runtime.book(snapshot.exchange_id)
+        token_id = self._market_token_ids.get(snapshot.exchange_id)
+        external_quote = None if token_id is None else snapshot.external_quotes.get(token_id)
+        if (
+            book is None
+            or not book.bids
+            or not book.asks
+            or external_quote is None
+            or not external_quote.trusted
+            or external_quote.best_bid is None
+            or external_quote.best_ask is None
+            or not math.isfinite(external_quote.best_bid)
+            or not math.isfinite(external_quote.best_ask)
+            or not 0.0 <= external_quote.best_bid <= external_quote.best_ask <= 1.0
+        ):
+            return (), ()
+
+        best_bid = max(level.price_ticks for level in book.bids)
+        best_ask = min(level.price_ticks for level in book.asks)
+        if not 1 <= best_bid < best_ask <= 199:
+            return (), ()
+
+        bid_ticks: list[int] = []
+        ask_ticks: list[int] = []
+        previous_bid = min(best_bid, best_ask - 1, 199)
+        previous_ask = max(best_ask, best_bid + 1, 1)
+        for offset in self._config.deep_ladder_level_offsets:
+            bid_ceiling = math.floor((external_quote.best_bid - offset) / _TICK + 1e-9)
+            bid = min(bid_ceiling, previous_bid)
+            if 1 <= bid < best_ask:
+                bid_ticks.append(bid)
+                previous_bid = bid - 1
+
+            ask_floor = math.ceil((external_quote.best_ask + offset) / _TICK - 1e-9)
+            ask = max(ask_floor, previous_ask)
+            if best_bid < ask <= 199:
+                ask_ticks.append(ask)
+                previous_ask = ask + 1
+
+        if bid_ticks and ask_ticks and bid_ticks[0] >= ask_ticks[0]:
+            return (), ()
+        return tuple(bid_ticks), tuple(ask_ticks)
+
+    def _bounded_ladder_levels(
+        self,
+        prices: tuple[int, ...],
+        *,
+        direction: int,
+        low: float,
+        high: float,
+        max_abs_inventory: float,
+        size_factor: float,
+    ) -> tuple[QuoteLevel, ...]:
+        room = min(
+            self._config.deep_ladder_position_cap,
+            max_abs_inventory,
+            self._projected_side_room(
+                direction=direction,
+                low=low,
+                high=high,
+                max_abs_inventory=max_abs_inventory,
+            ),
+        )
+        skew = self._inventory_skew_scale(
+            direction=direction, low=low, high=high, cap=max_abs_inventory
+        )
+        if skew < 1.0:
+            room = math.floor(room * skew + 1e-9)
+        room = max(0, math.floor(room * size_factor + 1e-9))
+        result: list[QuoteLevel] = []
+        for price, configured_size in zip(
+            prices,
+            self._config.deep_ladder_level_sizes,
+            strict=False,
+        ):
+            if room <= 0:
+                break
+            quantity = min(configured_size, room)
+            if quantity > 0:
+                result.append(QuoteLevel(price_ticks=price, size=quantity))
+                room -= quantity
+        return tuple(result)
+
+    @staticmethod
+    def _inventory_skew_size(
+        quantity: int,
+        *,
+        direction: int,
+        low: float,
+        high: float,
+        cap: float,
+    ) -> int:
+        """Shrink only the side that adds risk once projected inventory nears the cap."""
+        scale = MakerEngine._inventory_skew_scale(direction=direction, low=low, high=high, cap=cap)
+        return max(0, math.floor(quantity * scale))
+
+    @staticmethod
+    def _inventory_skew_scale(*, direction: int, low: float, high: float, cap: float) -> float:
+        start = cap * FILL_SEEKING_INVENTORY_SKEW_FRACTION
+        scale = 1.0
+        if direction > 0 and high > start:
+            scale = (cap - high) / (cap - start)
+        elif direction < 0 and low < -start:
+            scale = (cap + low) / (cap - start)
+        return min(1.0, max(0.0, scale))
+
+    @staticmethod
+    def _fill_seeking_ticks(
+        snapshot: MakerMarketSnapshot,
+        *,
+        external_quote: ExternalQuoteState | None,
+        min_edge: float,
+    ) -> tuple[int | None, int | None]:
+        book = snapshot.runtime.book(snapshot.exchange_id)
+        if book is None or not book.bids or not book.asks or external_quote is None:
+            return None, None
+        if (
+            not external_quote.trusted
+            or external_quote.best_bid is None
+            or external_quote.best_ask is None
+            or not math.isfinite(external_quote.best_bid)
+            or not math.isfinite(external_quote.best_ask)
+            or not 0.0 <= external_quote.best_bid <= external_quote.best_ask <= 1.0
+        ):
+            return None, None
+
+        pm_bid = external_quote.best_bid
+        pm_ask = external_quote.best_ask
+
+        best_bid = max(level.price_ticks for level in book.bids)
+        best_ask = min(level.price_ticks for level in book.asks)
+        max_bid = math.floor((pm_bid - min_edge) / _TICK + 1e-9)
+        min_ask = math.ceil((pm_ask + min_edge) / _TICK - 1e-9)
+
+        bid = None
+        if 1 <= best_bid <= 199 and max_bid >= best_bid:
+            candidate = min(best_bid + 1, max_bid, best_ask - 1, 199)
+            if candidate >= best_bid:
+                bid = candidate
+
+        ask = None
+        if 1 <= best_ask <= 199 and min_ask <= best_ask:
+            candidate = max(best_ask - 1, min_ask, best_bid + 1, 1)
+            if candidate <= best_ask and candidate <= 199:
+                ask = candidate
+
+        if bid is not None and ask is not None and bid >= ask:
+            return None, None
+        return bid, ask
 
     def _failed(
         self,
