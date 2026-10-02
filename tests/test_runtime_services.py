@@ -14,6 +14,7 @@ SYSTEMD_DIR = PROJECT_ROOT / "deploy" / "systemd"
 INSTALLER = PROJECT_ROOT / "scripts" / "install_runtime_services.sh"
 SIG_UNIT = SYSTEMD_DIR / "predictions-cup-sig-capture.service"
 POLY_UNIT = SYSTEMD_DIR / "predictions-cup-polymarket-capture.service"
+LIVE_README = PROJECT_ROOT / "deploy" / "live" / "README.md"
 
 
 def test_tracked_depth_defaults_empty_and_can_be_supplied_externally() -> None:
@@ -59,6 +60,12 @@ def test_systemd_units_are_read_only_and_supervised() -> None:
         "--require-explicit-universe"
         in poly
     )
+
+
+def test_live_maker_transient_unit_restarts_after_process_failure() -> None:
+    live_readme = LIVE_README.read_text(encoding="utf-8")
+    assert "-p Restart=on-failure -p RestartSec=5s" in live_readme
+    assert "best-effort cancel drain" in live_readme
 
 
 def _write_runtime_env(

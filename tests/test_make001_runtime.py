@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Mapping
+import logging
+from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -20,6 +21,7 @@ from predictions_cup.execution.models import (
 )
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.sinks import ExecutionPlan
+from predictions_cup.maker import service as maker_service_module
 from predictions_cup.maker.adapters import LiveMakerExecutionAdapter
 from predictions_cup.maker.contracts import (
     DesiredQuote,
@@ -41,6 +43,7 @@ from predictions_cup.maker.recovery import (
     reconcile_maker_quote_registry,
 )
 from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
+from predictions_cup.maker.safety import MakerKillSwitch
 from predictions_cup.maker.service import MakerService
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.risk.core import RiskDecision
@@ -48,6 +51,7 @@ from predictions_cup.runtime.models import OrderAction, OutcomeSide
 from predictions_cup.runtime.telemetry import HotPathTelemetry
 from predictions_cup.shadow.live import LiveShadowRuntime
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
+from predictions_cup.sig.errors import SigTemporaryServiceError
 from predictions_cup.sig.trading_dto import OrderReadDto
 
 
@@ -563,6 +567,132 @@ def test_runtime_kill_switch_requests_global_recheck() -> None:
 
     assert coordinator.killed is True
     assert coordinator.calls == [frozenset({"36", "37"})]
+
+
+def test_kill_switch_logs_each_reason_and_latch_transition_once(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    kill_switch = MakerKillSwitch()
+
+    with caplog.at_level(logging.WARNING, logger="predictions_cup.maker.safety"):
+        kill_switch.activate("sig_market_state_failure")
+        kill_switch.activate("service_task_failure:make-sig-market")
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert messages == [
+        "MAKE kill switch activation requested reason=sig_market_state_failure",
+        "MAKE kill=True latch transition reason=sig_market_state_failure",
+        "MAKE kill switch activation requested reason=service_task_failure:make-sig-market",
+    ]
+    assert kill_switch.active is True
+    assert kill_switch.reason == "sig_market_state_failure"
+
+
+def test_sig_market_callback_rest_failure_exits_feed_after_kill_drain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Rest:
+        def __init__(self) -> None:
+            self.mint_calls = 0
+
+        async def mint_realtime_token(self) -> object:
+            self.mint_calls += 1
+            if self.mint_calls > 1:
+                raise RuntimeError("feed retried after callback failure")
+            return object()
+
+    class _SigState:
+        states: dict[str, object] = {}
+
+        def __init__(self) -> None:
+            self.disconnected = False
+
+        def subscription_topics(self, *, exchange_ids: object) -> tuple[str, ...]:
+            del exchange_ids
+            return ("market-topic",)
+
+        async def handle_raw_batch(
+            self,
+            topic: str,
+            payload: object,
+            observed_at: datetime,
+        ) -> None:
+            del topic, payload, observed_at
+            raise SigTemporaryServiceError(
+                status_code=None,
+                code=None,
+                safe_message="read timeout after retry exhaustion",
+            )
+
+        def mark_disconnected(self) -> None:
+            self.disconnected = True
+
+    class _Runtime:
+        def __init__(self) -> None:
+            self.kill_reasons: list[str] = []
+            self.drain_calls = 0
+
+        def activate_kill_switch(self, reason: str) -> None:
+            self.kill_reasons.append(reason)
+
+        async def drain_once(self) -> None:
+            self.drain_calls += 1
+
+        def notify_global(self, *, observed_monotonic_ns: int | None = None) -> None:
+            del observed_monotonic_ns
+
+    class _Subscriber:
+        def __init__(self, **kwargs: object) -> None:
+            del kwargs
+
+        async def run(
+            self,
+            *,
+            on_batch: Callable[[str, object, datetime], Awaitable[None]],
+            **kwargs: object,
+        ) -> object:
+            del kwargs
+            await on_batch(
+                "market-topic",
+                {},
+                datetime(2026, 9, 29, 14, 0, tzinfo=UTC),
+            )
+            raise AssertionError("callback failure should escape subscriber.run")
+
+    service = MakerService(
+        AppSettings(maker_enabled=True),
+        explicit_live_invocation=False,
+    )
+    rest = _Rest()
+    sig_state = _SigState()
+    runtime = _Runtime()
+    monkeypatch.setattr(maker_service_module, "SupabaseTournamentSubscriber", _Subscriber)
+    monkeypatch.setattr(
+        maker_service_module,
+        "_mapped_sig_exchange_ids",
+        lambda mapping, *, allowed_exchange_ids: (),
+    )
+
+    async def no_sleep(delay: float) -> None:
+        del delay
+
+    monkeypatch.setattr(asyncio, "sleep", no_sleep)
+
+    with pytest.raises(RuntimeError, match="SIG market state callback failed") as raised:
+        asyncio.run(
+            service._run_sig_market_feed(
+                cast(Any, sig_state),
+                cast(Any, rest),
+                cast(Any, runtime),
+                cast(Any, object()),
+            )
+        )
+
+    assert isinstance(raised.value.__cause__, SigTemporaryServiceError)
+    assert rest.mint_calls == 1
+    assert runtime.kill_reasons == ["sig_market_state_failure"]
+    assert runtime.drain_calls == 1
+    assert sig_state.disconnected is False
 
 
 def test_runtime_session_namespace_prevents_operation_identity_reuse_after_restart() -> None:
