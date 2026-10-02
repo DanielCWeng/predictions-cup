@@ -135,7 +135,6 @@ class ResidualTakerLiveCoordinator:
                 max_pm_book_age_ns=self._max_pm_book_age_ns,
                 observed_monotonic_ns=snapshot.now_monotonic_ns,
                 allow_bbo_proxy=self._allow_bbo_proxy,
-                max_sig_bbo_age_ns=self._max_sig_bbo_age_ns,
             )
             if state is None or not (self._min_fair_value <= state.pm_mid <= self._max_fair_value):
                 continue
@@ -153,6 +152,8 @@ class ResidualTakerLiveCoordinator:
         require_reducing: bool = False,
     ) -> int:
         portfolio = snapshot.runtime.portfolio
+        if require_reducing or portfolio.proxy_active:
+            portfolio = self._reservations.overlay_portfolio(portfolio)
         if require_reducing:
             low, high = portfolio.worst_case_inventory_bounds(
                 snapshot.exchange_id,

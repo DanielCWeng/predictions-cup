@@ -78,6 +78,7 @@ from predictions_cup.runtime.models import (
     RuntimeBook,
     RuntimeLevel,
     RuntimeMarket,
+    RuntimeOrderState,
     RuntimePortfolio,
     RuntimePosition,
     RuntimeSnapshot,
@@ -1117,6 +1118,85 @@ def test_proxy_soft_unwind_only_quotes_the_reducing_side() -> None:
     assert decision.desired is not None
     assert decision.desired.bid_ticks is not None
     assert decision.desired.ask_ticks is None
+
+
+def test_proxy_200_share_cap_counts_several_open_orders() -> None:
+    snapshot = _maker_snapshot(signed_inventory=100.0)
+    orders = (
+        RuntimeOrderState("buy-1", "36", "m1", TOURNAMENT, 60.0, True, False, signed_quantity=60.0),
+        RuntimeOrderState("buy-2", "36", "m1", TOURNAMENT, 60.0, True, False, signed_quantity=60.0),
+    )
+    portfolio = replace(
+        snapshot.runtime.portfolio,
+        orders=orders,
+        account_trust_grade=AccountTrustGrade.PROXY,
+        account_proxy_age_ns=1,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, portfolio=portfolio))
+
+    decision = _engine(
+        max_inventory=200.0,
+        account_proxy_enabled=True,
+        base_size=100,
+    ).quote(snapshot)
+
+    assert decision.gate.mode is GateMode.ASK_ONLY
+    assert decision.desired is not None
+    assert decision.desired.bid_ticks is None
+    assert decision.desired.bid_size == 0
+    assert decision.desired.ask_size <= 100
+
+
+def test_bbo_proxy_reducing_quote_cannot_cross_zero_inventory_band() -> None:
+    snapshot = _maker_snapshot(
+        signed_inventory=100.0,
+        bbo_observed_ns=NOW - 100_000_001,
+        bbo_trusted=False,
+    )
+    existing_ask = RuntimeOrderState(
+        "existing-ask",
+        "36",
+        "m1",
+        TOURNAMENT,
+        95.0,
+        True,
+        False,
+        signed_quantity=-95.0,
+    )
+    portfolio = replace(
+        snapshot.runtime.portfolio,
+        orders=(existing_ask,),
+        account_trust_grade=AccountTrustGrade.TRUSTED,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, portfolio=portfolio))
+
+    decision = _engine(
+        max_inventory=200.0,
+        account_proxy_enabled=True,
+        base_size=100,
+    ).quote(snapshot)
+
+    assert decision.gate.reason == "bbo_proxy_inventory_reducing"
+    assert decision.gate.mode is GateMode.ASK_ONLY
+    assert decision.desired is not None
+    assert decision.desired.ask_ticks is not None
+    assert decision.desired.ask_size <= 5
+    book = snapshot.runtime.book("36")
+    assert book is not None
+    assert 1 <= decision.desired.ask_ticks <= 199
+    assert decision.desired.ask_ticks > max(level.price_ticks for level in book.bids)
+
+
+def test_flag_off_bbo_gate_precedes_stale_fair_value_as_on_main() -> None:
+    snapshot = _maker_snapshot(
+        bbo_observed_ns=NOW - 100_000_001,
+        external={"token-yes": _external(observed_ns=NOW - 100_000_001)},
+    )
+
+    decision = _engine().quote(snapshot)
+
+    assert decision.gate.mode is GateMode.CANCEL
+    assert decision.gate.reason == "sig_bbo_stale"
 
 
 class _BrokenFairValue:

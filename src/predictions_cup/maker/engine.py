@@ -247,6 +247,15 @@ class MakerEngine:
             ask_room = max(0, math.floor(self._config.max_abs_inventory + low))
             bid_size = min(bid_size, bid_room)
             ask_size = min(ask_size, ask_room)
+        elif gate.reason == "bbo_proxy_inventory_reducing":
+            low, high = portfolio.worst_case_inventory_bounds(
+                snapshot.exchange_id,
+                snapshot.tournament_id,
+            )
+            if gate.mode is GateMode.ASK_ONLY:
+                ask_size = min(ask_size, max(0, math.floor(low)))
+            elif gate.mode is GateMode.BID_ONLY:
+                bid_size = min(bid_size, max(0, math.floor(-high)))
         if bid_ticks is None:
             bid_size = 0
         if ask_ticks is None:

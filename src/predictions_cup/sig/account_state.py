@@ -120,7 +120,7 @@ class AccountRealtimeStateEngine:
         # fence are superseded. Newer/un-ACKed operations remain risk-bearing.
         if self._reservations is not None:
             self._reservations.reconcile_authoritative(observed_at=snapshot.observed_at)
-        if self.account_proxy is not None:
+        if self.account_proxy is not None and self.account_proxy.enabled:
             observed_ns = (
                 self._clock_ns() if observed_monotonic_ns is None else observed_monotonic_ns
             )
@@ -276,9 +276,14 @@ class AccountRealtimeStateEngine:
 
     def runtime_portfolio(self) -> RuntimePortfolio:
         if self.account_proxy is not None and self.account_proxy.enabled:
-            return self.account_proxy.runtime_portfolio(
+            portfolio = self.account_proxy.runtime_portfolio(
                 account_state_trusted=self.trusted,
                 now_monotonic_ns=self._clock_ns(),
+            )
+            return (
+                portfolio
+                if self._reservations is None
+                else self._reservations.overlay_portfolio(portfolio)
             )
         return RuntimePortfolio(
             positions=tuple(

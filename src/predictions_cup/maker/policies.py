@@ -333,6 +333,11 @@ class ConservativeEligibilityPolicy:
             snapshot.sig_bbo_observed_ns,
             self._max_bbo_age_ns,
         )
+        if not self._account_proxy_enabled:
+            if not snapshot.sig_bbo_trusted:
+                return GateDecision(GateMode.CANCEL, "sig_bbo_untrusted")
+            if sig_bbo_stale:
+                return GateDecision(GateMode.CANCEL, "sig_bbo_stale")
         bbo_proxy = not snapshot.sig_bbo_trusted or sig_bbo_stale
         if not portfolio.proxy_active and self._stale(
             snapshot.now_monotonic_ns,

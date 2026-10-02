@@ -295,6 +295,28 @@ def test_proxy_worst_case_respects_global_and_market_caps() -> None:
     assert global_limited.reason == "max_gross_exposure"
 
 
+def test_proxy_global_cap_aggregates_exposure_across_markets() -> None:
+    position = RuntimePosition("2", "m2", "t1", gross_exposure=175.0, signed_quantity=175.0)
+    order = RuntimeOrderState("open-m3", "3", "m3", "t1", 15.0, True, False)
+    portfolio = RuntimePortfolio(
+        positions=(position,),
+        orders=(order,),
+        account_trusted=True,
+        account_trust_grade=AccountTrustGrade.PROXY,
+        account_proxy_age_ns=1,
+        account_proxy_uncertainty=10.0,
+    )
+    snapshot = replace(_snapshot(), portfolio=portfolio)
+
+    decision = evaluate_risk(
+        _opportunity(quantity=1, market_id="m1", exchange_id="1"),
+        snapshot,
+        _context(_limits(max_gross_exposure=200.0, max_per_market_exposure=250.0)),
+    )
+
+    assert decision.reason == "max_gross_exposure"
+
+
 def test_exact_market_open_and_order_count_boundaries() -> None:
     open_order = RuntimeOrderState("old", "1", "m1", "t1", 8.0, True, False)
     snapshot = _snapshot(orders=(open_order,))

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -15,9 +15,11 @@ from predictions_cup.execution.models import (
     OperationKind,
     RuntimeOrderIntent,
 )
+from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.runtime.models import AccountTrustGrade, OrderAction, OutcomeSide
 from predictions_cup.sig.account_proxy import AccountProxyLedger
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
+from predictions_cup.sig.account_state import AccountRealtimeStateEngine, AccountTrustTransition
 from predictions_cup.sig.trading_dto import OrderReadDto, PositionReadDto
 
 TOURNAMENT = "t1"
@@ -336,3 +338,99 @@ def test_unmatched_baseline_order_update_fails_closed() -> None:
     )
     assert portfolio.trust_grade is AccountTrustGrade.UNTRUSTED
     assert ledger.discrepancy_reason == "baseline_order_fill_delta_unknown"
+
+
+def test_proxy_to_trusted_resync_applies_position_diff() -> None:
+    ledger = _ledger()
+    initial = AccountAuthoritativeSnapshot(
+        tournament_id=TOURNAMENT,
+        tournament_slug="cup",
+        open_orders=(_open_order(),),
+        positions=(_position("-5"),),
+        observed_at=datetime.now(UTC),
+        cash_balance=Decimal("100"),
+    )
+    ledger.seed_authoritative(initial, observed_monotonic_ns=1_000)
+    ledger.apply_realtime_batch(_batch(revision=1, quantity="2", total_cost="0.80"))
+    proxy = ledger.runtime_portfolio(
+        account_state_trusted=False,
+        now_monotonic_ns=1_050,
+    )
+    assert proxy.trust_grade is AccountTrustGrade.PROXY
+
+    reconciled_snapshot = AccountAuthoritativeSnapshot(
+        tournament_id=TOURNAMENT,
+        tournament_slug="cup",
+        open_orders=(_open_order(),),
+        positions=(_position("-2.5"),),
+        observed_at=datetime.now(UTC),
+        cash_balance=Decimal("99.20"),
+    )
+    diff = ledger.seed_authoritative(
+        reconciled_snapshot,
+        observed_monotonic_ns=2_000,
+    )
+    trusted = ledger.runtime_portfolio(
+        account_state_trusted=True,
+        now_monotonic_ns=2_000,
+    )
+
+    assert diff.position_diffs == ((EXCHANGE, MARKET, -0.5),)
+    assert diff.has_diff
+    assert trusted.trust_grade is AccountTrustGrade.TRUSTED
+    assert trusted.signed_inventory(EXCHANGE, TOURNAMENT) == -2.5
+
+
+def test_ack_after_snapshot_cutoff_remains_risk_bearing_when_absent() -> None:
+    observed_at = datetime.now(UTC)
+    snapshot = AccountAuthoritativeSnapshot(
+        tournament_id=TOURNAMENT,
+        tournament_slug="cup",
+        open_orders=(),
+        positions=(),
+        observed_at=observed_at,
+        cash_balance=Decimal("100"),
+    )
+    reservations = ExecutionReservationBook()
+    ledger = _ledger(max_age_ns=10_000_000_000)
+    state = AccountRealtimeStateEngine(
+        tournament_id=TOURNAMENT,
+        reservations=reservations,
+        account_proxy=ledger,
+        clock_ns=lambda: 1_000_000_000,
+    )
+    state.apply_authoritative(snapshot, observed_monotonic_ns=1_000_000_000)
+
+    intent = RuntimeOrderIntent(
+        intent_id="late-ack-intent",
+        exchange_id=EXCHANGE,
+        market_id=MARKET,
+        tournament_id=TOURNAMENT,
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=10,
+        limit_price_ticks=80,
+        strategy_id="test",
+        decision_observation_ns=1_000_000_001,
+    )
+    reservations.reserve("late-ack-op", (intent,))
+    reservations.bind_exchange_order(
+        intent.intent_id,
+        "202",
+        acknowledged_at=observed_at + timedelta(seconds=1),
+    )
+
+    # This read began before the ACK and has no row for it. A later callback
+    # invalidates trust while the local reservation remains the exposure floor.
+    state.apply_authoritative(
+        snapshot,
+        mark_trusted=False,
+        observed_monotonic_ns=1_000_000_001,
+    )
+    state.mark_untrusted(AccountTrustTransition.UNTRUSTED_RESYNC_ACTIVITY)
+    portfolio = state.runtime_portfolio()
+
+    assert portfolio.trust_grade is AccountTrustGrade.PROXY
+    assert len(portfolio.orders) == 1
+    assert portfolio.orders[0].reserved_exposure == 10
+    assert portfolio.worst_case_inventory_bounds(EXCHANGE, TOURNAMENT) == (0.0, 10.0)

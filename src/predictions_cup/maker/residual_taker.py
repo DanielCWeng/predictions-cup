@@ -162,14 +162,10 @@ def residual_input_from_snapshot(
     max_pm_book_age_ns: int,
     observed_monotonic_ns: int,
     allow_bbo_proxy: bool = False,
-    max_sig_bbo_age_ns: int | None = None,
 ) -> ResidualInput | None:
     """Build the frozen signal input, or None when any input is untrusted/stale."""
 
     sig_bbo_age_ns = maker.now_monotonic_ns - maker.sig_bbo_observed_ns
-    sig_bbo_fresh = maker.sig_bbo_trusted and 0 <= sig_bbo_age_ns <= (
-        max_pm_book_age_ns if max_sig_bbo_age_ns is None else max_sig_bbo_age_ns
-    )
     if (
         record is None
         or record.mapping_class is not MappingClass.EXACT
@@ -181,6 +177,24 @@ def residual_input_from_snapshot(
         return None
     quote = maker.external_quotes.get(record.direct_polymarket.mapped_token_id)
     book = maker.runtime.book(maker.exchange_id)
+    quote_age_ns = (
+        None if quote is None else maker.now_monotonic_ns - quote.observed_monotonic_ns
+    )
+    if allow_bbo_proxy:
+        quote_age_invalid = quote_age_ns is None or not 0 <= quote_age_ns <= max_pm_book_age_ns
+        bbo_invalid = sig_bbo_age_ns < 0
+        book_identity_invalid = (
+            book is None
+            or book.market_id != maker.market_id
+            or book.tournament_id != maker.tournament_id
+            or book.observed_monotonic_ns != maker.sig_bbo_observed_ns
+        )
+    else:
+        # Preserve the pre-proxy flag-off behavior exactly; the stricter
+        # non-negative timestamp and book-identity checks apply only to proxy use.
+        quote_age_invalid = quote_age_ns is None or quote_age_ns > max_pm_book_age_ns
+        bbo_invalid = not maker.sig_bbo_trusted or sig_bbo_age_ns > max_pm_book_age_ns
+        book_identity_invalid = False
     if (
         quote is None
         or not quote.trusted
@@ -188,12 +202,10 @@ def residual_input_from_snapshot(
         or quote.best_ask is None
         or quote.best_bid_size is None
         or quote.best_ask_size is None
-        or not 0 <= maker.now_monotonic_ns - quote.observed_monotonic_ns <= max_pm_book_age_ns
-        or (not sig_bbo_fresh and not allow_bbo_proxy)
+        or quote_age_invalid
+        or bbo_invalid
         or book is None
-        or book.market_id != maker.market_id
-        or book.tournament_id != maker.tournament_id
-        or book.observed_monotonic_ns != maker.sig_bbo_observed_ns
+        or book_identity_invalid
         or not book.bids
         or not book.asks
         or not maker.runtime.portfolio.account_trusted
