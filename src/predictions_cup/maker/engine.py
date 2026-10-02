@@ -26,7 +26,6 @@ from predictions_cup.maker.policies import with_quote_math
 from predictions_cup.runtime.models import SIG_TICK
 
 _TICK = float(SIG_TICK)
-_HARD_MAX_PROJECTED_INVENTORY = 200.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,10 +125,7 @@ class MakerEngine:
                 and position.tournament_id == snapshot.tournament_id
             )
         )
-        max_abs_inventory = min(
-            self._config.max_abs_inventory,
-            _HARD_MAX_PROJECTED_INVENTORY,
-        )
+        max_abs_inventory = self._config.max_abs_inventory
         context = QuoteContext(
             snapshot=snapshot,
             raw_fair_value=fair_value,

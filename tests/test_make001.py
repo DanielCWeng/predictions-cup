@@ -1156,7 +1156,7 @@ def test_trusted_projected_cap_counts_several_same_side_resting_orders() -> None
     portfolio = replace(snapshot.runtime.portfolio, orders=orders)
     snapshot = replace(snapshot, runtime=replace(snapshot.runtime, portfolio=portfolio))
 
-    decision = _engine(max_inventory=500.0, base_size=100).quote(snapshot)
+    decision = _engine(max_inventory=200.0, base_size=100).quote(snapshot)
 
     assert decision.gate.mode is GateMode.ASK_ONLY
     assert decision.gate.reason == "positive_inventory_boundary"
@@ -1209,7 +1209,7 @@ def test_unknown_unresolved_order_directions_count_against_both_sides() -> None:
 def test_over_cap_filled_position_keeps_only_the_inventory_reducing_quote() -> None:
     snapshot = _maker_snapshot(signed_inventory=250.0)
 
-    decision = _engine(max_inventory=1_500.0, base_size=100).quote(snapshot)
+    decision = _engine(max_inventory=200.0, base_size=100).quote(snapshot)
 
     assert decision.gate.mode is GateMode.ASK_ONLY
     assert decision.desired is not None
