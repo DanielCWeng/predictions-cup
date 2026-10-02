@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -19,7 +20,9 @@ from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.runtime.models import AccountTrustGrade, OrderAction, OutcomeSide
 from predictions_cup.sig.account_proxy import AccountProxyLedger
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
+from predictions_cup.sig.account_runtime import AccountRealtimeController
 from predictions_cup.sig.account_state import AccountRealtimeStateEngine, AccountTrustTransition
+from predictions_cup.sig.realtime_models import RealtimeTokenDto
 from predictions_cup.sig.trading_dto import OrderReadDto, PositionReadDto
 
 TOURNAMENT = "t1"
@@ -314,6 +317,65 @@ def test_realtime_batch_applies_fill_and_order_update_once() -> None:
     assert portfolio.signed_inventory(EXCHANGE, TOURNAMENT) == -3.0
     assert portfolio.account_proxy_cash_balance == Decimal("99.20")
     assert portfolio.worst_case_inventory_bounds(EXCHANGE, TOURNAMENT) == (-3.0, 5.0)
+
+
+@pytest.mark.parametrize(
+    ("order_id", "expected_grade", "expected_inventory"),
+    [
+        (101, AccountTrustGrade.PROXY, -4.0),
+        (999, AccountTrustGrade.UNTRUSTED, -5.0),
+    ],
+)
+def test_resync_batch_keeps_known_proxy_activity_and_rejects_unknown_identity(
+    order_id: int,
+    expected_grade: AccountTrustGrade,
+    expected_inventory: float,
+) -> None:
+    ledger = _ledger(max_age_ns=10_000)
+    state = AccountRealtimeStateEngine(
+        tournament_id=TOURNAMENT,
+        account_proxy=ledger,
+        clock_ns=lambda: 1_050,
+    )
+    snapshot = AccountAuthoritativeSnapshot(
+        tournament_id=TOURNAMENT,
+        tournament_slug="cup",
+        open_orders=(_open_order(),),
+        positions=(_position("-5"),),
+        observed_at=datetime.now(UTC),
+        cash_balance=Decimal("100"),
+    )
+    state.apply_authoritative(snapshot, observed_monotonic_ns=1_000)
+
+    async def unused_mint_token() -> RealtimeTokenDto:
+        raise AssertionError("resync callback must not mint a token")
+
+    async def unused_authoritative_resync() -> AccountAuthoritativeSnapshot:
+        raise AssertionError("resync callback must not run")
+
+    controller = AccountRealtimeController(
+        state=state,
+        mint_token=unused_mint_token,
+        authoritative_resync=unused_authoritative_resync,
+    )
+    controller._resyncing = True
+    payload = _batch(revision=1, quantity="1", total_cost="0.40")
+    for field in ("fills", "orderUpdates"):
+        events = payload[field]
+        assert isinstance(events, list)
+        assert isinstance(events[0], dict)
+        events[0]["orderId"] = order_id
+
+    asyncio.run(controller._handle_batch("account", payload, datetime.now(UTC)))
+    state.mark_untrusted(AccountTrustTransition.UNTRUSTED_RESYNC_ACTIVITY)
+
+    portfolio = state.runtime_portfolio()
+    assert portfolio.account_trust_grade is expected_grade
+    assert portfolio.signed_inventory(EXCHANGE, TOURNAMENT) == expected_inventory
+    if expected_grade is AccountTrustGrade.PROXY:
+        assert ledger.discrepancy_reason is None
+    else:
+        assert ledger.discrepancy_reason == "fill_for_unknown_order"
 
 
 def test_unmatched_baseline_order_update_fails_closed() -> None:
