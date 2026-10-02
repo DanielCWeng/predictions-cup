@@ -59,6 +59,7 @@ def reconcile_maker_quote_registry(
     observed_monotonic_ns: int,
     envelopes: Iterable[ExecutionEnvelope] | None = None,
     strategy_id: str = "make-direct-pm",
+    exchange_ids: Iterable[str] | None = None,
 ) -> None:
     """Rebuild/clear maker quote state using authoritative open orders.
 
@@ -108,12 +109,19 @@ def reconcile_maker_quote_registry(
             if order_id > 0:
                 acked[order_id] = (envelope, leg)
 
-    authoritative_open = {order.id: order for order in authoritative.open_orders if order.open}
+    exchange_filter = None if exchange_ids is None else frozenset(exchange_ids)
+    authoritative_open = {
+        order.id: order
+        for order in authoritative.open_orders
+        if order.open and (exchange_filter is None or order.exchange_id in exchange_filter)
+    }
     maker_open_ids = set(acked).intersection(authoritative_open)
 
     # Clear only locally known MAKE quotes proven absent from authoritative open
     # orders. Unrelated strategy quote state is never modified here.
     for exchange_id in quotes.exchange_ids:
+        if exchange_filter is not None and exchange_id not in exchange_filter:
+            continue
         state = quotes.state(exchange_id)
         for active in state.all_quotes():
             if active.logical_operation_id not in maker_operation_ids:

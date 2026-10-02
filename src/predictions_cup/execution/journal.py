@@ -790,6 +790,17 @@ class ExecutionJournal:
             )
         self._notify_operation_listeners(logical_operation_id)
 
+    def lifecycle_state(self, logical_operation_id: str) -> LifecycleState:
+        """Return the current lifecycle state for one durable operation."""
+        row = self._connection.execute(
+            "SELECT lifecycle_state FROM execution_envelopes "
+            "WHERE logical_operation_id = ?",
+            (logical_operation_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"unknown logical operation: {logical_operation_id}")
+        return LifecycleState(str(row[0]))
+
     def placement_identity_for_exchange_order_id(
         self,
         exchange_order_id: str,
@@ -844,6 +855,44 @@ class ExecutionJournal:
         if len(identities) != 1:
             raise RuntimeError("venue order identity maps to multiple placement operations")
         return identities[0]
+
+    def confirmed_cancelled_order_ids(self) -> frozenset[str]:
+        """Return orders with a durable, terminal cancellation acknowledgement."""
+        rows = self._connection.execute(
+            """
+            SELECT DISTINCT event.exchange_order_id
+            FROM execution_events AS event
+            JOIN execution_envelopes AS envelope
+              ON envelope.logical_operation_id = event.logical_operation_id
+            WHERE envelope.operation_kind = ?
+              AND envelope.lifecycle_state IN (?, ?, ?)
+              AND event.event_type IN ('CANCEL_ACK', 'RECONCILED_TERMINAL')
+              AND event.exchange_order_id IS NOT NULL
+            """,
+            (
+                OperationKind.SINGLE_CANCELLATION.value,
+                LifecycleState.CANCELLED.value,
+                LifecycleState.FILLED.value,
+                LifecycleState.RECONCILED.value,
+            ),
+        ).fetchall()
+        return frozenset(str(row[0]) for row in rows)
+
+    def exchange_id_for_order_id(self, exchange_order_id: str) -> str | None:
+        """Return the latest durable placement exchange for one venue order."""
+        row = self._connection.execute(
+            """
+            SELECT exchange_id
+            FROM execution_events
+            WHERE event_type = 'ACK'
+              AND exchange_order_id = ?
+              AND exchange_id IS NOT NULL
+            ORDER BY event_id DESC
+            LIMIT 1
+            """,
+            (exchange_order_id,),
+        ).fetchone()
+        return None if row is None else str(row[0])
 
     def logical_operation_for_exchange_order_id(
         self,

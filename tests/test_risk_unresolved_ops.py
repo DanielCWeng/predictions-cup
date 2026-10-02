@@ -53,13 +53,22 @@ def test_reserved_in_flight_placement_does_not_block_but_orphan_does() -> None:
     )
     journal = cast(
         ExecutionJournal,
-        SimpleNamespace(unresolved=lambda: (in_flight, orphan, timed_out)),
+        SimpleNamespace(
+            unresolved=lambda: (in_flight, orphan, timed_out),
+            confirmed_cancelled_order_ids=lambda: frozenset(),
+            events=lambda _operation_id: (),
+        ),
     )
     reserved = {("in-flight", ("i1",)), ("timed-out", ("i3",))}
     reservations = cast(
         ExecutionReservationBook,
         SimpleNamespace(
-            contains_operation=lambda op, intents: (op, tuple(intents)) in reserved
+            contains_operation=lambda op, intents: (op, tuple(intents)) in reserved,
+            contains_operation_intents=lambda op, intents: (
+                op,
+                tuple(intents),
+            )
+            in reserved
         ),
     )
 

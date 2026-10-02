@@ -173,6 +173,18 @@ class ExecutionReservationBook:
             for intent_id in intent_ids
         )
 
+    def contains_operation_intents(
+        self,
+        logical_operation_id: str,
+        intent_ids: tuple[str, ...],
+    ) -> bool:
+        """Prove that every supplied unresolved intent is conservatively reserved."""
+        return all(
+            (reservation := self._by_intent.get(intent_id)) is not None
+            and reservation.logical_operation_id == logical_operation_id
+            for intent_id in intent_ids
+        )
+
     def release_operation(self, logical_operation_id: str) -> int:
         """Release only reservations owned by one conclusively dead operation."""
         if not logical_operation_id.strip():

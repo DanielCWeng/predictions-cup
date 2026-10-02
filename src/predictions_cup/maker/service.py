@@ -36,8 +36,12 @@ from predictions_cup.execution.models import (
     OperationKind,
 )
 from predictions_cup.execution.recovery import (
+    StartupRecoveryResult,
     recover_in_session_cancellations,
     recover_startup,
+    reserve_unresolved_placements,
+    unresolved_placement_intent_ids,
+    unresolved_startup_exchange_ids,
 )
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
@@ -288,6 +292,18 @@ class MakerService:
         authoritative_account: AccountAuthoritativeSnapshot | None = None
         live_sink: SigLiveSink | None = None
         instance_lock: MakerInstanceLock | None = None
+        startup_recovery_task: asyncio.Task[None] | None = None
+        startup_recovery_scheduler: (
+            Callable[[AccountAuthoritativeSnapshot, frozenset[str] | None], None] | None
+        ) = None
+
+        async def stop_startup_recovery() -> None:
+            task = startup_recovery_task
+            if task is None or task.done():
+                return
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
         if self.core.risk_context.mode is ExecutionMode.LIVE:
             lock_path = self.settings.execution_journal_path.with_name(
                 self.settings.execution_journal_path.name + ".make.lock"
@@ -453,52 +469,139 @@ class MakerService:
                 )
                 assert live_sink is not None
                 startup_live_sink = live_sink
-                recovery = await _retry_startup_sig_operation(
-                    "execution_recovery",
-                    lambda: recover_startup(
-                        journal=journal,
-                        rest=rest,
-                        live_sink=startup_live_sink,
-                        tournament_id=tournament_id,
-                        tournament_slug=tournament_slug,
-                        authoritative_snapshot=initial_account,
-                        observation_emitter=observation_emitter,
-                        observation_process_instance_id=observe_recorder.session_id,
-                        exchange_ids_by_market=_exchange_ids_by_market(self.core.mapping),
-                        market_by_exchange=_market_by_exchange(self.core.mapping),
-                        reservations=self.core.reservations,
-                    ),
+                exchange_ids_by_market = _exchange_ids_by_market(self.core.mapping)
+                market_by_exchange = _market_by_exchange(self.core.mapping)
+                startup_candidates = tuple(
+                    envelope
+                    for envelope in journal.unresolved()
+                    if envelope.tournament_id == tournament_id
+                )
+                initial_open_order_ids = frozenset(
+                    order.id for order in initial_account.open_orders if order.open
+                )
+                reserve_unresolved_placements(
+                    journal,
+                    startup_candidates,
+                    reservations=self.core.reservations,
+                    market_by_exchange=market_by_exchange,
+                    open_order_ids=initial_open_order_ids,
                 )
                 self._startup_blocked_operation_ids = frozenset(
-                    recovery.unresolved_operation_ids
+                    envelope.logical_operation_id for envelope in startup_candidates
                 )
                 self._startup_blocked_exchange_ids = frozenset(
-                    recovery.unresolved_exchange_ids
+                    unresolved_startup_exchange_ids(
+                        journal,
+                        startup_candidates,
+                        exchange_ids_by_market=exchange_ids_by_market,
+                        open_order_ids=initial_open_order_ids,
+                    )
                 )
-                if self._startup_blocked_operation_ids:
+                if startup_candidates:
                     self._startup_recovery_retry_after_ns = (
                         monotonic_ns() + 30_000_000_000
                     )
-                if not recovery.safe_to_resume_live:
-                    _LOG.error(
-                        "LIVE startup recovery left unresolved operations; "
-                        "blocking exchanges=%s operations=%s while other markets continue",
-                        sorted(recovery.unresolved_exchange_ids),
-                        sorted(recovery.unresolved_operation_ids),
-                    )
-                authoritative = await _retry_startup_sig_operation(
-                    "post_recovery_account_reconciliation",
-                    lambda: reconcile_account(
-                        rest,
-                        tournament_id=tournament_id,
-                        tournament_slug=tournament_slug,
-                    ),
-                )
-                account_state.apply_authoritative(authoritative)
-                authoritative_account = authoritative
                 reconcile_maker_quote_registry(
                     journal=journal,
-                    authoritative=authoritative,
+                    authoritative=initial_account,
+                    quotes=self.core.quotes,
+                    observed_monotonic_ns=monotonic_ns(),
+                )
+
+                def schedule_startup_recovery(
+                    snapshot: AccountAuthoritativeSnapshot,
+                    operation_ids: frozenset[str] | None,
+                ) -> None:
+                    nonlocal startup_recovery_task
+                    if (
+                        startup_recovery_task is not None
+                        and not startup_recovery_task.done()
+                    ):
+                        return
+
+                    async def run_recovery() -> None:
+                        nonlocal authoritative_account
+                        previously_blocked_exchange_ids = (
+                            self._startup_blocked_exchange_ids
+                        )
+                        try:
+                            recovery: StartupRecoveryResult = await recover_startup(
+                                journal=journal,
+                                rest=rest,
+                                live_sink=startup_live_sink,
+                                tournament_id=tournament_id,
+                                tournament_slug=tournament_slug,
+                                operation_ids=operation_ids,
+                                authoritative_snapshot=snapshot,
+                                observation_emitter=observation_emitter,
+                                observation_process_instance_id=observe_recorder.session_id,
+                                exchange_ids_by_market=exchange_ids_by_market,
+                                market_by_exchange=market_by_exchange,
+                                reservations=self.core.reservations,
+                            )
+                        except Exception as exc:
+                            _LOG.error(
+                                "MAKE background startup recovery failed closed: %s",
+                                type(exc).__name__,
+                            )
+                            return
+                        self._startup_blocked_operation_ids = frozenset(
+                            recovery.unresolved_operation_ids
+                        )
+                        self._startup_blocked_exchange_ids = frozenset(
+                            recovery.unresolved_exchange_ids
+                        )
+                        resolved_exchange_ids = set(
+                            previously_blocked_exchange_ids
+                        ).difference(self._startup_blocked_exchange_ids)
+                        if (
+                            "*" in previously_blocked_exchange_ids
+                            and "*" not in self._startup_blocked_exchange_ids
+                        ):
+                            resolved_exchange_ids = {
+                                exchange_id
+                                for exchange_ids in exchange_ids_by_market.values()
+                                for exchange_id in exchange_ids
+                            }
+                        if self._startup_blocked_operation_ids:
+                            self._startup_recovery_retry_after_ns = (
+                                monotonic_ns() + 30_000_000_000
+                            )
+                        if runtime is not None:
+                            runtime.set_blocked_exchange_ids(
+                                self._startup_blocked_exchange_ids
+                            )
+                        if recovery.authoritative_snapshot is not None:
+                            if resolved_exchange_ids:
+                                reconcile_maker_quote_registry(
+                                    journal=journal,
+                                    authoritative=recovery.authoritative_snapshot,
+                                    quotes=self.core.quotes,
+                                    observed_monotonic_ns=monotonic_ns(),
+                                    exchange_ids=resolved_exchange_ids,
+                                )
+                            if runtime is None:
+                                authoritative_account = recovery.authoritative_snapshot
+                                account_state.apply_authoritative(authoritative_account)
+                        if recovery.unresolved_operation_ids:
+                            _LOG.error(
+                                "LIVE background startup recovery left unresolved operations; "
+                                "blocking exchanges=%s operations=%s while other markets continue",
+                                sorted(recovery.unresolved_exchange_ids),
+                                sorted(recovery.unresolved_operation_ids),
+                            )
+
+                    startup_recovery_task = asyncio.create_task(
+                        run_recovery(),
+                        name="make-startup-recovery",
+                    )
+
+                startup_recovery_scheduler = schedule_startup_recovery
+                if startup_candidates:
+                    schedule_startup_recovery(initial_account, None)
+                reconcile_maker_quote_registry(
+                    journal=journal,
+                    authoritative=initial_account,
                     quotes=self.core.quotes,
                     observed_monotonic_ns=monotonic_ns(),
                 )
@@ -790,8 +893,13 @@ class MakerService:
                     if (
                         journal is not None
                         and live_sink is not None
+                        and startup_recovery_scheduler is not None
                         and self._startup_blocked_operation_ids
                         and monotonic_ns() >= self._startup_recovery_retry_after_ns
+                        and (
+                            startup_recovery_task is None
+                            or startup_recovery_task.done()
+                        )
                     ):
                         # Retry only operations that were unresolved at startup;
                         # ordinary live OPEN maker quotes are never treated as
@@ -799,34 +907,10 @@ class MakerService:
                         self._startup_recovery_retry_after_ns = (
                             monotonic_ns() + 30_000_000_000
                         )
-                        retry_result = await recover_startup(
-                            journal=journal,
-                            rest=rest,
-                            live_sink=live_sink,
-                            tournament_id=tournament_id,
-                            tournament_slug=tournament_slug,
-                            operation_ids=self._startup_blocked_operation_ids,
-                            authoritative_snapshot=authoritative,
-                            exchange_ids_by_market=_exchange_ids_by_market(self.core.mapping),
-                            market_by_exchange=_market_by_exchange(self.core.mapping),
-                            reservations=self.core.reservations,
+                        startup_recovery_scheduler(
+                            authoritative,
+                            self._startup_blocked_operation_ids,
                         )
-                        self._startup_blocked_operation_ids = frozenset(
-                            retry_result.unresolved_operation_ids
-                        )
-                        self._startup_blocked_exchange_ids = frozenset(
-                            retry_result.unresolved_exchange_ids
-                        )
-                        runtime.set_blocked_exchange_ids(
-                            self._startup_blocked_exchange_ids
-                        )
-                        if not self._startup_blocked_operation_ids:
-                            authoritative = await reconcile_account(
-                                rest,
-                                tournament_id=tournament_id,
-                                tournament_slug=tournament_slug,
-                                cash_balance_reader=rest.get_account,
-                            )
                     if journal is not None and live_sink is not None:
                         resolved_cancels = await recover_in_session_cancellations(
                             journal=journal,
@@ -963,7 +1047,13 @@ class MakerService:
                 runtime.activate_kill_switch(f"service_task_failure:{failure.get_name()}")
                 self.stop_event.set()
                 runtime_task = next(task for task in tasks if task.get_name() == "make-runtime")
-                await self._graceful_shutdown(runtime, runtime_task)
+                await stop_startup_recovery()
+                await self._graceful_shutdown(
+                    runtime,
+                    runtime_task,
+                    live_sink=live_sink,
+                    tournament_id=tournament_id,
+                )
                 failure_exc = failure.exception()
                 if failure_exc is None:
                     raise RuntimeError("MAKE service task failed without exception")
@@ -972,7 +1062,13 @@ class MakerService:
             if stop_waiter in done:
                 runtime.activate_kill_switch("operator_shutdown")
                 runtime_task = next(task for task in tasks if task.get_name() == "make-runtime")
-                await self._graceful_shutdown(runtime, runtime_task)
+                await stop_startup_recovery()
+                await self._graceful_shutdown(
+                    runtime,
+                    runtime_task,
+                    live_sink=live_sink,
+                    tournament_id=tournament_id,
+                )
 
             for task in tasks:
                 task.cancel()
@@ -980,6 +1076,7 @@ class MakerService:
             stop_waiter.cancel()
             await asyncio.gather(stop_waiter, return_exceptions=True)
         finally:
+            await stop_startup_recovery()
             if instance_lock is not None:
                 instance_lock.close()
             self.pm_ws.stop()
@@ -1654,8 +1751,11 @@ class MakerService:
         self,
         runtime: MakerRuntimeLoop,
         runtime_task: asyncio.Task[None],
+        *,
+        live_sink: SigLiveSink | None = None,
+        tournament_id: str | None = None,
     ) -> None:
-        """Finish the active one-exchange batch, then bound the cancel drain."""
+        """Finish the active batch, then cancel the tournament within the drain budget."""
         loop = asyncio.get_running_loop()
         deadline = loop.time() + _MAKER_SIGTERM_DRAIN_SECONDS
         try:
@@ -1677,6 +1777,29 @@ class MakerService:
         if remaining <= 0.0:
             _LOG.warning("MAKE shutdown used its %.1fs drain budget", _MAKER_SIGTERM_DRAIN_SECONDS)
             return
+        if live_sink is not None and tournament_id is not None:
+            try:
+                cancel_all_complete = await asyncio.wait_for(
+                    self._best_effort_tournament_cancel_all(
+                        live_sink,
+                        tournament_id=tournament_id,
+                    ),
+                    timeout=remaining,
+                )
+            except TimeoutError:
+                _LOG.error(
+                    "MAKE shutdown tournament cancel-all exceeded its remaining drain budget"
+                )
+                return
+            if cancel_all_complete:
+                return
+            remaining = deadline - loop.time()
+            if remaining <= 0.0:
+                _LOG.warning(
+                    "MAKE shutdown used its %.1fs drain budget",
+                    _MAKER_SIGTERM_DRAIN_SECONDS,
+                )
+                return
         try:
             await asyncio.wait_for(self._best_effort_kill_drain(runtime), timeout=remaining)
         except TimeoutError:
@@ -1685,6 +1808,40 @@ class MakerService:
                 "remaining operations require authoritative recovery",
                 _MAKER_SIGTERM_DRAIN_SECONDS,
             )
+
+    async def _best_effort_tournament_cancel_all(
+        self,
+        live_sink: SigLiveSink,
+        *,
+        tournament_id: str,
+    ) -> bool:
+        envelope = ExecutionEnvelope.cancellation(
+            logical_operation_id=f"make-shutdown-cancel-all-{monotonic_ns()}",
+            operation_kind=OperationKind.CANCEL_ALL,
+            sink_mode=ExecutionMode.LIVE,
+            created_monotonic_ns=monotonic_ns(),
+            tournament_id=tournament_id,
+        )
+        try:
+            result = await live_sink.cancel(envelope)
+        except Exception as exc:
+            _LOG.error(
+                "MAKE shutdown tournament cancel-all outcome is uncertain: %s",
+                type(exc).__name__,
+            )
+            return False
+        if result.state is LifecycleState.CANCELLED:
+            _LOG.info(
+                "MAKE shutdown tournament cancel-all acknowledged tournament=%s",
+                tournament_id,
+            )
+            return True
+        _LOG.error(
+            "MAKE shutdown tournament cancel-all returned unresolved state=%s; "
+            "falling back to the bounded per-order drain",
+            result.state.value,
+        )
+        return False
 
     async def _best_effort_kill_drain(
         self,
@@ -1756,27 +1913,39 @@ def _risk_uncertain_operation_ids(
             OperationKind.SINGLE_CANCELLATION,
             OperationKind.CANCEL_ALL,
         }
-        and not _placement_in_flight(envelope, reservations)
+        and not _placement_in_flight(envelope, journal, reservations)
     )
 
 
 def _placement_in_flight(
     envelope: ExecutionEnvelope,
+    journal: ExecutionJournal,
     reservations: ExecutionReservationBook | None,
 ) -> bool:
-    """A placement whose conservative exposure is represented by reservations."""
-    return (
-        reservations is not None
-        and envelope.operation_kind
-        in {
-            OperationKind.SINGLE_PLACEMENT,
-            OperationKind.BEST_EFFORT_BATCH,
-            OperationKind.ATOMIC_MULTI_LEG,
-        }
-        and reservations.contains_operation(
-            envelope.logical_operation_id,
-            envelope.intent_ids,
-        )
+    """Prove every still-risky placement leg is represented by reservations."""
+    if reservations is None or envelope.operation_kind not in {
+        OperationKind.SINGLE_PLACEMENT,
+        OperationKind.BEST_EFFORT_BATCH,
+        OperationKind.ATOMIC_MULTI_LEG,
+    }:
+        return False
+    confirmed_closed = journal.confirmed_cancelled_order_ids()
+    for event in journal.events(envelope.logical_operation_id):
+        if (
+            event.event_type == "ACK"
+            and event.exchange_order_id is not None
+            and event.exchange_order_id not in confirmed_closed
+            and event.logical_intent_id is None
+        ):
+            return False
+    intent_ids = unresolved_placement_intent_ids(
+        journal,
+        envelope,
+        confirmed_closed=confirmed_closed,
+    )
+    return reservations.contains_operation_intents(
+        envelope.logical_operation_id,
+        tuple(sorted(intent_ids)),
     )
 
 
