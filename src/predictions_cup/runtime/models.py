@@ -129,8 +129,9 @@ class RuntimePortfolio:
         """Return signed inventory bounds if all risk-bearing orders fill.
 
         Orders with a known signed direction extend only that side of the range;
-        orders without direction are counted against both sides. This is used as
-        a stricter admission bound while an account proxy is active.
+        orders without direction are counted against both sides. The maker uses
+        these bounds for projected-position admission with both trusted and
+        proxy account state.
         """
         position = self.signed_inventory(exchange_id, tournament_id)
         positive = 0.0

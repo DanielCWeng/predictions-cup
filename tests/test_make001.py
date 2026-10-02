@@ -1147,6 +1147,79 @@ def test_proxy_200_share_cap_counts_several_open_orders() -> None:
     assert decision.desired.ask_size <= 100
 
 
+def test_trusted_projected_cap_counts_several_same_side_resting_orders() -> None:
+    snapshot = _maker_snapshot(signed_inventory=100.0)
+    orders = (
+        RuntimeOrderState("buy-1", "36", "m1", TOURNAMENT, 60.0, True, False, signed_quantity=60.0),
+        RuntimeOrderState("buy-2", "36", "m1", TOURNAMENT, 60.0, True, False, signed_quantity=60.0),
+    )
+    portfolio = replace(snapshot.runtime.portfolio, orders=orders)
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, portfolio=portfolio))
+
+    decision = _engine(max_inventory=200.0, base_size=100).quote(snapshot)
+
+    assert decision.gate.mode is GateMode.ASK_ONLY
+    assert decision.gate.reason == "positive_inventory_boundary"
+    assert decision.desired is not None
+    assert decision.desired.bid_ticks is None
+    assert decision.desired.bid_size == 0
+    assert decision.desired.ask_size <= 100
+
+
+def test_unresolved_orders_count_in_projected_cap_and_keep_reducing_side() -> None:
+    snapshot = _maker_snapshot(signed_inventory=-130.0)
+    orders = (
+        RuntimeOrderState(
+            "sell-1", "36", "m1", TOURNAMENT, 40.0, False, True, signed_quantity=-40.0
+        ),
+        RuntimeOrderState(
+            "sell-2", "36", "m1", TOURNAMENT, 40.0, False, True, signed_quantity=-40.0
+        ),
+    )
+    portfolio = replace(snapshot.runtime.portfolio, orders=orders)
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, portfolio=portfolio))
+
+    decision = _engine(max_inventory=200.0, base_size=100).quote(snapshot)
+
+    assert decision.gate.mode is GateMode.BID_ONLY
+    assert decision.gate.reason == "negative_inventory_boundary"
+    assert decision.desired is not None
+    assert decision.desired.bid_ticks is not None
+    assert decision.desired.bid_size <= 130
+    assert decision.desired.ask_ticks is None
+    assert decision.desired.ask_size == 0
+
+
+def test_unknown_unresolved_order_directions_count_against_both_sides() -> None:
+    snapshot = _maker_snapshot()
+    orders = (
+        RuntimeOrderState("unknown-1", "36", "m1", TOURNAMENT, 100.0, False, True),
+        RuntimeOrderState("unknown-2", "36", "m1", TOURNAMENT, 100.0, False, True),
+    )
+    portfolio = replace(snapshot.runtime.portfolio, orders=orders)
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, portfolio=portfolio))
+
+    decision = _engine(max_inventory=200.0, base_size=100).quote(snapshot)
+
+    assert decision.desired is None
+    assert decision.gate.mode is GateMode.SUSPEND
+    assert decision.gate.reason == "size_policy_zero"
+
+
+def test_over_cap_filled_position_keeps_only_the_inventory_reducing_quote() -> None:
+    snapshot = _maker_snapshot(signed_inventory=250.0)
+
+    decision = _engine(max_inventory=200.0, base_size=100).quote(snapshot)
+
+    assert decision.gate.mode is GateMode.ASK_ONLY
+    assert decision.desired is not None
+    assert decision.desired.ask_ticks is not None
+    assert decision.desired.ask_size > 0
+    assert decision.desired.ask_size <= 250
+    assert decision.desired.bid_ticks is None
+    assert decision.desired.bid_size == 0
+
+
 def test_bbo_proxy_reducing_quote_cannot_cross_zero_inventory_band() -> None:
     snapshot = _maker_snapshot(
         signed_inventory=100.0,

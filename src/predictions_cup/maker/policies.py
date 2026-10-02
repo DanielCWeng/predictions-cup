@@ -440,21 +440,15 @@ class ConservativeEligibilityPolicy:
         return GateDecision(GateMode.NORMAL, "ok")
 
     @staticmethod
-    def _inventory_bounds(
-        context: QuoteContext,
-        *,
-        include_orders: bool = False,
-    ) -> tuple[float, float]:
+    def _inventory_bounds(context: QuoteContext) -> tuple[float, float]:
         portfolio = context.snapshot.runtime.portfolio
-        if not portfolio.proxy_active and not include_orders:
-            return context.signed_inventory, context.signed_inventory
         return portfolio.worst_case_inventory_bounds(
             context.snapshot.exchange_id,
             context.snapshot.tournament_id,
         )
 
     def _inventory_reducing_mode(self, context: QuoteContext) -> GateMode | None:
-        low, high = self._inventory_bounds(context, include_orders=True)
+        low, high = self._inventory_bounds(context)
         if low > 0.0:
             return GateMode.ASK_ONLY
         if high < 0.0:
