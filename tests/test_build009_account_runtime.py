@@ -734,7 +734,7 @@ def test_refresh_cycle_telemetry_is_correlated_and_payload_free(
     controller: AccountRealtimeController | None = None
     resync_count = 0
     payload_marker = "private-payload-marker"
-    discarded_payload: dict[str, object] = {
+    resync_payload: dict[str, object] = {
         "orderUpdates": [payload_marker, payload_marker],
         "fills": [payload_marker],
         "settlements": [payload_marker, payload_marker, payload_marker],
@@ -753,12 +753,12 @@ def test_refresh_cycle_telemetry_is_correlated_and_payload_free(
         if scenario == "retry" and resync_count == 1:
             assert controller is not None
             await controller._handle_batch(
-                "user:profile-1", discarded_payload, datetime.now(UTC)
+                "user:profile-1", resync_payload, datetime.now(UTC)
             )
         if scenario == "exhausted":
             assert controller is not None
             await controller._handle_batch(
-                "user:profile-1", discarded_payload, datetime.now(UTC)
+                "user:profile-1", resync_payload, datetime.now(UTC)
             )
         return _snapshot()
 
@@ -798,7 +798,7 @@ def test_refresh_cycle_telemetry_is_correlated_and_payload_free(
     batch_logs = [
         record.getMessage()
         for record in caplog.records
-        if "SIG account resync batch discarded:" in record.getMessage()
+        if "SIG account resync batch observed:" in record.getMessage()
     ]
     assert len(batch_logs) == expected_batches
     assert all(

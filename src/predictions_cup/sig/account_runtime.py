@@ -295,12 +295,17 @@ class AccountRealtimeController:
             self._resync_generation += 1
             proxy = self._state.account_proxy
             if proxy is not None and proxy.enabled:
-                proxy.mark_discrepancy("realtime_batch_discarded_during_resync")
+                # The REST snapshot may have been read before or after this
+                # event. Keep the authoritative retry, but preserve supported
+                # account activity in the proxy while it runs. The proxy marks
+                # unknown identities and malformed events discrepant, which
+                # keeps genuinely unknown exposure fail-closed.
+                proxy.apply_realtime_batch(payload)
             order_updates, fills, settlements, refunds, collateral = _account_batch_category_counts(
                 payload
             )
             logger.info(
-                "SIG account resync batch discarded: order_updates=%d fills=%d "
+                "SIG account resync batch observed: order_updates=%d fills=%d "
                 "settlements=%d refunds=%d collateral=%d",
                 order_updates,
                 fills,
