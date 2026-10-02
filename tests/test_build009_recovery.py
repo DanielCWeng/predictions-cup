@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -50,6 +50,7 @@ from predictions_cup.sig.account_state import (
     AccountRealtimeStateEngine,
     AccountTrustTransition,
 )
+from predictions_cup.sig.errors import SigRateLimitError, SigUnexpectedServerError
 from predictions_cup.sig.trading_client import SigTradingClient
 from predictions_cup.sig.trading_dto import (
     OrderFillsResponseDto,
@@ -384,10 +385,56 @@ class _RecoveryRestFixture:
         )
 
 
+class _Order503ProjectionLagRest(_RecoveryRestFixture):
+    def __init__(self) -> None:
+        self.get_order_calls: list[int] = []
+        self.order_list_statuses: list[OrderStatusFilter] = []
+
+    async def get_order(self, order_id: int) -> OrderReadDto:
+        self.get_order_calls.append(order_id)
+        raise SigUnexpectedServerError(
+            status_code=503,
+            code="SERVICE_UNAVAILABLE",
+            safe_message="order projection temporarily unavailable",
+        )
+
+    def iter_orders(
+        self,
+        *,
+        status: OrderStatusFilter = "open",
+        exchange_id: str | None = None,
+        market_id: str | None = None,
+        tournament_id: str | None = None,
+        limit: int = 200,
+    ) -> AsyncIterator[OrderReadDto]:
+        del exchange_id, market_id, tournament_id, limit
+        self.order_list_statuses.append(status)
+
+        async def empty() -> AsyncIterator[OrderReadDto]:
+            if False:
+                yield OrderReadDto.model_validate({})
+
+        return empty()
+
+
+class _OrderRateLimitRest(_RecoveryRestFixture):
+    def __init__(self) -> None:
+        self.get_order_calls: list[int] = []
+
+    async def get_order(self, order_id: int) -> OrderReadDto:
+        self.get_order_calls.append(order_id)
+        raise SigRateLimitError(
+            status_code=429,
+            code="RATE_LIMITED",
+            safe_message="temporary rate limit",
+        )
+
+
 class _RecoveryTradingFixture:
     def __init__(self) -> None:
         self.payloads: list[str] = []
         self.cancelled_order_ids: list[int] = []
+        self.on_cancel: Callable[[int], None] | None = None
 
     async def place_order_payload(
         self,
@@ -414,6 +461,8 @@ class _RecoveryTradingFixture:
 
     async def cancel_order(self, order_id: int) -> object:
         self.cancelled_order_ids.append(order_id)
+        if self.on_cancel is not None:
+            self.on_cancel(order_id)
         return {"cancelled": True}
 
 
@@ -443,8 +492,14 @@ def _recovery_permit() -> LiveExecutionPermit:
 
 
 class _OpenOrderRecoveryRest(_RecoveryRestFixture):
+    def __init__(self) -> None:
+        self.order_open = True
+        self.get_order_calls: list[int] = []
+        self.order_list_statuses: list[OrderStatusFilter] = []
+
     async def get_order(self, order_id: int) -> OrderReadDto:
         assert order_id == 91
+        self.get_order_calls.append(order_id)
         return OrderReadDto.model_validate(
             {
                 "id": 91,
@@ -453,9 +508,50 @@ class _OpenOrderRecoveryRest(_RecoveryRestFixture):
                 "action": "buy",
                 "quantity": "2",
                 "priceLimit": "0.495",
-                "open": True,
+                "open": self.order_open,
                 "createdAt": "2026-09-29T14:00:00Z",
                 "expirationDate": None,
+            }
+        )
+
+    def iter_orders(
+        self,
+        *,
+        status: OrderStatusFilter = "open",
+        exchange_id: str | None = None,
+        market_id: str | None = None,
+        tournament_id: str | None = None,
+        limit: int = 200,
+    ) -> AsyncIterator[OrderReadDto]:
+        del exchange_id, market_id, tournament_id, limit
+        self.order_list_statuses.append(status)
+
+        async def rows() -> AsyncIterator[OrderReadDto]:
+            if self.order_open or status == "all":
+                yield await self.get_order(91)
+
+        return rows()
+
+    async def get_order_fills(
+        self,
+        order_id: int,
+        *,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> OrderFillsResponseDto:
+        assert order_id == 91
+        assert limit == 200
+        assert cursor is None
+        return OrderFillsResponseDto.model_validate(
+            {
+                "orderId": 91,
+                "exchangeId": "36",
+                "tournamentId": "t1",
+                "data": [],
+                "pagination": {"limit": 200, "hasMore": False, "nextCursor": None},
+                "coverage": {"complete": True, "projectedThroughSequence": 1},
+                "totalQuantityFilled": "0",
+                "avgFillPrice": None,
             }
         )
 
@@ -564,6 +660,8 @@ def test_in_session_recovery_resolves_uncertain_cancel_without_restart(
     journal.mark_state(cancel.logical_operation_id, LifecycleState.UNCERTAIN, 102)
 
     trading = _RecoveryTradingFixture()
+    rest = _OpenOrderRecoveryRest()
+    trading.on_cancel = lambda order_id: setattr(rest, "order_open", False)
     sink = SigLiveSink(
         client=cast(SigTradingClient, trading),
         journal=journal,
@@ -575,7 +673,7 @@ def test_in_session_recovery_resolves_uncertain_cancel_without_restart(
         resolved = asyncio.run(
             recover_in_session_cancellations(
                 journal=journal,
-                rest=cast(RecoveryRest, _OpenOrderRecoveryRest()),
+                rest=cast(RecoveryRest, rest),
                 live_sink=sink,
                 tournament_id="t1",
                 clock_ns=iter(range(500, 800)).__next__,
@@ -603,6 +701,8 @@ def test_cancel_recovery_keeps_operation_unresolved_on_incomplete_fill_coverage(
     journal.record_before_dispatch(cancel, submitted_monotonic_ns=101)
     journal.mark_state(cancel.logical_operation_id, LifecycleState.UNCERTAIN, 102)
     trading = _RecoveryTradingFixture()
+    rest = _OpenOrderRecoveryRest()
+    trading.on_cancel = lambda order_id: setattr(rest, "order_open", False)
     sink = SigLiveSink(
         client=cast(SigTradingClient, trading),
         journal=journal,
@@ -702,6 +802,8 @@ def test_recovery_only_authority_cancels_unresolved_open_order_but_cannot_place(
     )
 
     trading = _RecoveryTradingFixture()
+    rest = _OpenOrderRecoveryRest()
+    trading.on_cancel = lambda order_id: setattr(rest, "order_open", False)
     sink = SigLiveSink(
         client=cast(SigTradingClient, trading),
         journal=journal,
@@ -713,7 +815,7 @@ def test_recovery_only_authority_cancels_unresolved_open_order_but_cannot_place(
         recovered = asyncio.run(
             recover_startup(
                 journal=journal,
-                rest=cast(RecoveryRest, _OpenOrderRecoveryRest()),
+                rest=cast(RecoveryRest, rest),
                 live_sink=sink,
                 tournament_id="t1",
                 tournament_slug="cup",
@@ -756,6 +858,259 @@ def test_recovery_only_authority_cancels_unresolved_open_order_but_cannot_place(
         with pytest.raises(ValueError, match="recovery-only LIVE permit"):
             asyncio.run(sink.dispatch(fresh_plan))
         assert trading.payloads == []
+    finally:
+        journal.close()
+
+
+def test_restart_auto_cancels_unresolved_open_placement_and_reconciles(
+    tmp_path: Path,
+) -> None:
+    from predictions_cup.execution.models import RuntimeOrderIntent
+
+    intent = RuntimeOrderIntent(
+        intent_id="restart-open-intent",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=2,
+        limit_price_ticks=99,
+        strategy_id="make-direct-pm",
+        decision_observation_ns=123,
+    )
+    envelope = ExecutionEnvelope.placement(
+        logical_operation_id="restart-open-placement",
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        sink_mode=ExecutionMode.LIVE,
+        idempotency_key="restart-open-original-key",
+        intents=(intent,),
+        created_monotonic_ns=100,
+    )
+    journal = ExecutionJournal(tmp_path / "restart-open.sqlite3")
+    journal.record_before_dispatch(envelope, (intent,), submitted_monotonic_ns=101)
+    journal.record_event(
+        logical_operation_id=envelope.logical_operation_id,
+        tournament_id="t1",
+        logical_intent_id=intent.intent_id,
+        event_type="ACK",
+        observed_monotonic_ns=102,
+        exchange_id="36",
+        exchange_order_id="91",
+        terminal_status=LifecycleState.OPEN.value,
+    )
+    journal.mark_state(envelope.logical_operation_id, LifecycleState.OPEN, 102)
+
+    rest = _OpenOrderRecoveryRest()
+    trading = _RecoveryTradingFixture()
+    trading.on_cancel = lambda order_id: setattr(rest, "order_open", False)
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, trading),
+        journal=journal,
+        permit=_recovery_permit(),
+        reservations=ExecutionReservationBook(),
+        clock_ns=iter(range(200, 600)).__next__,
+    )
+    try:
+        result = asyncio.run(
+            recover_startup(
+                journal=journal,
+                rest=cast(RecoveryRest, rest),
+                live_sink=sink,
+                tournament_id="t1",
+                tournament_slug="cup",
+                clock_ns=iter(range(600, 900)).__next__,
+                market_by_exchange={"36": "m1"},
+                exchange_ids_by_market={"m1": ("36",)},
+                reservations=ExecutionReservationBook(),
+            )
+        )
+
+        assert result.safe_to_resume_live
+        assert result.unresolved_operation_ids == ()
+        assert result.unresolved_exchange_ids == ()
+        assert trading.payloads == []
+        assert trading.cancelled_order_ids == [91]
+        assert rest.get_order_calls == [91, 91, 91]
+        assert journal.unresolved() == ()
+        terminal = next(
+            event
+            for event in journal.events(envelope.logical_operation_id)
+            if event.event_type == "RECONCILED_TERMINAL"
+        )
+        assert terminal.terminal_status == LifecycleState.CANCELLED.value
+    finally:
+        journal.close()
+
+
+def test_order_503_fallback_keeps_exchange_blocked_when_list_projection_lags(
+    tmp_path: Path,
+) -> None:
+    from predictions_cup.execution.models import RuntimeOrderIntent
+
+    intent = RuntimeOrderIntent(
+        intent_id="projection-lag-intent",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=2,
+        limit_price_ticks=99,
+        strategy_id="make-direct-pm",
+        decision_observation_ns=123,
+    )
+    envelope = ExecutionEnvelope.placement(
+        logical_operation_id="projection-lag-placement",
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        sink_mode=ExecutionMode.LIVE,
+        idempotency_key="projection-lag-original-key",
+        intents=(intent,),
+        created_monotonic_ns=100,
+    )
+    journal = ExecutionJournal(tmp_path / "projection-lag.sqlite3")
+    journal.record_before_dispatch(envelope, (intent,), submitted_monotonic_ns=101)
+    journal.record_event(
+        logical_operation_id=envelope.logical_operation_id,
+        tournament_id="t1",
+        logical_intent_id=intent.intent_id,
+        event_type="ACK",
+        observed_monotonic_ns=102,
+        exchange_id="36",
+        exchange_order_id="91",
+        terminal_status=LifecycleState.OPEN.value,
+    )
+    journal.mark_state(envelope.logical_operation_id, LifecycleState.OPEN, 102)
+    reservations = ExecutionReservationBook()
+    rest = _Order503ProjectionLagRest()
+    trading = _RecoveryTradingFixture()
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, trading),
+        journal=journal,
+        permit=_recovery_permit(),
+        reservations=reservations,
+        clock_ns=iter(range(200, 500)).__next__,
+    )
+    account = AccountAuthoritativeSnapshot(
+        tournament_id="t1",
+        tournament_slug="cup",
+        open_orders=(),
+        positions=(),
+        observed_at=datetime(2026, 10, 2, tzinfo=UTC),
+    )
+    try:
+        result = asyncio.run(
+            recover_startup(
+                journal=journal,
+                rest=cast(RecoveryRest, rest),
+                live_sink=sink,
+                tournament_id="t1",
+                tournament_slug="cup",
+                authoritative_snapshot=account,
+                market_by_exchange={"36": "m1"},
+                exchange_ids_by_market={"m1": ("36",)},
+                reservations=reservations,
+                clock_ns=iter(range(500, 800)).__next__,
+            )
+        )
+
+        assert result.safe_to_resume_live is False
+        assert result.unresolved_operation_ids == (envelope.logical_operation_id,)
+        assert result.unresolved_exchange_ids == ("36",)
+        assert rest.get_order_calls == [91]
+        assert rest.order_list_statuses == ["all", "open"]
+        assert trading.cancelled_order_ids == []
+        assert reservations.contains_operation(
+            envelope.logical_operation_id,
+            envelope.intent_ids,
+        )
+    finally:
+        journal.close()
+
+
+def test_startup_recovery_backs_off_boundedly_on_429_and_keeps_blocker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from predictions_cup.execution.models import RuntimeOrderIntent
+
+    intent = RuntimeOrderIntent(
+        intent_id="rate-limit-intent",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=1,
+        limit_price_ticks=99,
+        strategy_id="make-direct-pm",
+        decision_observation_ns=123,
+    )
+    envelope = ExecutionEnvelope.placement(
+        logical_operation_id="rate-limit-placement",
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        sink_mode=ExecutionMode.LIVE,
+        idempotency_key="rate-limit-original-key",
+        intents=(intent,),
+        created_monotonic_ns=100,
+    )
+    journal = ExecutionJournal(tmp_path / "rate-limit-recovery.sqlite3")
+    journal.record_before_dispatch(envelope, (intent,), submitted_monotonic_ns=101)
+    journal.record_event(
+        logical_operation_id=envelope.logical_operation_id,
+        tournament_id="t1",
+        logical_intent_id=intent.intent_id,
+        event_type="ACK",
+        observed_monotonic_ns=102,
+        exchange_id="36",
+        exchange_order_id="91",
+        terminal_status=LifecycleState.OPEN.value,
+    )
+    journal.mark_state(envelope.logical_operation_id, LifecycleState.OPEN, 102)
+    rest = _OrderRateLimitRest()
+    trading = _RecoveryTradingFixture()
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, trading),
+        journal=journal,
+        permit=_recovery_permit(),
+        reservations=ExecutionReservationBook(),
+        clock_ns=iter(range(200, 500)).__next__,
+    )
+    delays: list[float] = []
+
+    async def no_sleep(delay: float) -> None:
+        delays.append(delay)
+
+    monkeypatch.setattr("predictions_cup.execution.recovery.asyncio.sleep", no_sleep)
+    account = AccountAuthoritativeSnapshot(
+        tournament_id="t1",
+        tournament_slug="cup",
+        open_orders=(),
+        positions=(),
+        observed_at=datetime(2026, 10, 2, tzinfo=UTC),
+    )
+    try:
+        result = asyncio.run(
+            recover_startup(
+                journal=journal,
+                rest=cast(RecoveryRest, rest),
+                live_sink=sink,
+                tournament_id="t1",
+                tournament_slug="cup",
+                authoritative_snapshot=account,
+                market_by_exchange={"36": "m1"},
+                exchange_ids_by_market={"m1": ("36",)},
+                reservations=ExecutionReservationBook(),
+                clock_ns=iter(range(500, 800)).__next__,
+            )
+        )
+
+        assert rest.get_order_calls == [91, 91, 91]
+        assert delays == [1.0, 2.0]
+        assert result.safe_to_resume_live is False
+        assert result.unresolved_exchange_ids == ("36",)
+        assert result.unresolved_operation_ids == (envelope.logical_operation_id,)
+        assert trading.cancelled_order_ids == []
     finally:
         journal.close()
 
@@ -809,6 +1164,8 @@ def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
     journal = ExecutionJournal(path)
     reservations = ExecutionReservationBook()
     trading = _RecoveryTradingFixture()
+    rest = _OpenOrderRecoveryRest()
+    trading.on_cancel = lambda order_id: setattr(rest, "order_open", False)
     observation_sink = InMemoryObservationSink()
     emitter = BoundedObservationEmitter(observation_sink, queue_max=100)
     sink = SigLiveSink(
@@ -827,14 +1184,13 @@ def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
         result = asyncio.run(
             recover_startup(
                 journal=journal,
-                rest=cast(RecoveryRest, _RecoveryRestFixture()),
+                rest=cast(RecoveryRest, rest),
                 live_sink=sink,
                 tournament_id="t1",
                 tournament_slug="cup",
                 clock_ns=iter(range(900, 1200)).__next__,
                 observation_emitter=emitter,
                 observation_process_instance_id="recovery-test-process",
-                placement_replay_allowed=lambda _envelope: True,
             )
         )
         emitter.close()

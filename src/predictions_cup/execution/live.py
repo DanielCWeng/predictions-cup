@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -257,6 +258,24 @@ class SigLiveSink:
                 )
                 response_json = multi_response.model_dump_json(by_alias=True)
                 response_status = 200
+        except asyncio.CancelledError:
+            observed = self._clock_ns()
+            self._journal.record_event(
+                logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
+                event_type="NETWORK_DISPATCH",
+                observed_monotonic_ns=network_dispatch_ns,
+            )
+            self._journal.record_event(
+                logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
+                event_type="UNCERTAIN",
+                observed_monotonic_ns=observed,
+                terminal_status=LifecycleState.UNCERTAIN.value,
+                detail_json=json.dumps({"reason": "task_cancelled_during_dispatch"}),
+            )
+            self._mark_uncertain_unless_resolved(envelope, observed)
+            raise
         except SigExecutionUncertainError as exc:
             observed = self._clock_ns()
             self._observe_error(exc, envelope, observed, plan=plan)
@@ -632,6 +651,35 @@ class SigLiveSink:
                     else LifecycleState.CANCEL_PENDING
                 )
                 response_status = None
+        except asyncio.CancelledError:
+            observed = self._clock_ns()
+            self._journal.record_event(
+                logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
+                event_type="CANCEL_SUBMITTED",
+                observed_monotonic_ns=network_dispatch_ns,
+                exchange_order_id=(
+                    str(raw["orderId"])
+                    if isinstance(raw.get("orderId"), (int, str))
+                    else None
+                ),
+                detail_json=envelope.payload_json,
+            )
+            self._mark_uncertain_unless_resolved(envelope, observed)
+            self._journal.record_event(
+                logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
+                event_type="CANCEL_UNCERTAIN",
+                observed_monotonic_ns=observed,
+                exchange_order_id=(
+                    str(raw["orderId"])
+                    if isinstance(raw.get("orderId"), (int, str))
+                    else None
+                ),
+                terminal_status=LifecycleState.UNCERTAIN.value,
+                detail_json=json.dumps({"reason": "task_cancelled_during_cancel"}),
+            )
+            raise
         except SigExecutionUncertainError as exc:
             observed = self._clock_ns()
             self._observe_error(exc, envelope, observed)

@@ -82,6 +82,7 @@ class AccountAuthoritativeSnapshot:
                         order.action,
                         order.quantity,
                     ),
+                    exchange_order_id=str(order.id),
                 )
             )
         return RuntimePortfolio(

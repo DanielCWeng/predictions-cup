@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -143,6 +143,7 @@ class SyntheticVenue:
         self.durable_before_dispatch = False
         self.cancel_uncertain = True
         self.placement_uncertain = False
+        self.on_cancel: Callable[[int], None] | None = None
 
     async def place_batch_payload(self, payload_json: str) -> BatchOrderResponseDto:
         BatchOrderRequestDto.model_validate(json.loads(payload_json))
@@ -177,7 +178,7 @@ class SyntheticVenue:
         )
 
     async def cancel_order(self, order_id: int) -> dict[str, object]:
-        assert order_id == 101
+        assert order_id in {101, 102}
         self.cancel_calls += 1
         if self.cancel_uncertain:
             raise SigExecutionUncertainError(
@@ -185,15 +186,23 @@ class SyntheticVenue:
                 code="TRANSPORT_OUTCOME_UNKNOWN",
                 safe_message="synthetic cancel disconnect",
             )
+        if self.on_cancel is not None:
+            self.on_cancel(order_id)
         return {"cancelled": True, "orderId": order_id}
 
 
 class SyntheticRecoveryRest:
     def __init__(self) -> None:
-        self.open_orders = (_order(102, open_=True, action="sell", price="0.6"),)
+        self.open_sell = _order(102, open_=True, action="sell", price="0.6")
+        self.closed_sell = _order(102, open_=False, action="sell", price="0.6")
+        self.open_orders: tuple[OrderReadDto, ...] = (self.open_sell,)
         self.closed_buy = _order(101, open_=False, action="buy", price="0.4")
         self.positions = _positions_response(quantity="6")
         self.fill_queries = 0
+
+    def mark_cancelled(self, order_id: int) -> None:
+        assert order_id == 102
+        self.open_orders = ()
 
     async def iter_orders(
         self,
@@ -211,8 +220,10 @@ class SyntheticRecoveryRest:
             yield order
 
     async def get_order(self, order_id: int) -> OrderReadDto:
-        assert order_id == 101
-        return self.closed_buy
+        if order_id == 101:
+            return self.closed_buy
+        assert order_id == 102
+        return self.closed_sell if not self.open_orders else self.open_sell
 
     async def get_order_fills(
         self,
@@ -222,9 +233,29 @@ class SyntheticRecoveryRest:
         cursor: str | None = None,
     ) -> OrderFillsResponseDto:
         del cursor
-        assert order_id == 101
         assert limit == 200
         self.fill_queries += 1
+        if order_id == 102:
+            return OrderFillsResponseDto.model_validate(
+                {
+                    "orderId": 102,
+                    "exchangeId": "36",
+                    "tournamentId": "t1",
+                    "data": [],
+                    "pagination": {
+                        "limit": 200,
+                        "hasMore": False,
+                        "nextCursor": None,
+                    },
+                    "coverage": {
+                        "complete": True,
+                        "projectedThroughSequence": 12,
+                    },
+                    "totalQuantityFilled": "0",
+                    "avgFillPrice": None,
+                }
+            )
+        assert order_id == 101
         return OrderFillsResponseDto.model_validate(
             {
                 "orderId": 101,
@@ -1062,6 +1093,8 @@ def test_composed_lifecycle_oracle_restart_and_reconciliation(tmp_path: Path) ->
     # Process objects are destroyed and reconstructed solely from durable state.
     journal = ExecutionJournal(journal_path)
     recovery_rest = SyntheticRecoveryRest()
+    venue.cancel_uncertain = False
+    venue.on_cancel = recovery_rest.mark_cancelled
     recovery_sink = SigLiveSink(
         client=cast(SigTradingClient, venue),
         journal=journal,
@@ -1085,8 +1118,10 @@ def test_composed_lifecycle_oracle_restart_and_reconciliation(tmp_path: Path) ->
     assert recovery.safe_to_resume_live
     assert recovery.unresolved_operation_ids == ()
     assert venue.placement_calls == 1
-    assert venue.cancel_calls == 1
-    assert recovery_rest.fill_queries == 1
+    assert venue.cancel_calls == 2
+    assert recovery_rest.fill_queries == 3
+    oracle.open_order_exposure = Decimal("0")
+    oracle.uncertain_exposure = Decimal("0")
 
     placement_events = journal.events("lh002-placement")
     authoritative = [
@@ -1120,9 +1155,9 @@ def test_composed_lifecycle_oracle_restart_and_reconciliation(tmp_path: Path) ->
         )
     )
     assert second_recovery.safe_to_resume_live
-    assert recovery_rest.fill_queries == 1
+    assert recovery_rest.fill_queries == 3
     assert venue.placement_calls == 1
-    assert venue.cancel_calls == 1
+    assert venue.cancel_calls == 2
     assert len(
         [
             event
@@ -1195,7 +1230,7 @@ def test_composed_lifecycle_oracle_restart_and_reconciliation(tmp_path: Path) ->
     assert truth.signed_inventory == oracle.signed_inventory == Decimal("6")
     assert truth.fills == oracle.filled_quantity == Decimal("6")
     assert recovery.portfolio.gross_exposure == pytest.approx(6.0)
-    assert recovery.portfolio.open_order_exposure == pytest.approx(10.0)
+    assert recovery.portfolio.open_order_exposure == pytest.approx(0.0)
     assert all(stage["pass"] is True for stage in stages)
 
     committed = json.loads(ARTIFACT.read_text(encoding="utf-8"))

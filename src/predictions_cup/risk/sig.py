@@ -20,6 +20,7 @@ from predictions_cup.risk.capital import (
     RiskValuationPosition,
     build_exposure_snapshot,
 )
+from predictions_cup.runtime.models import RuntimeOrderState
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
 from predictions_cup.sig.realtime_state import SigRealtimeStateEngine
 from predictions_cup.sig.trading_dto import (
@@ -170,6 +171,7 @@ def normalize_sig_risk_inputs(
     attributions: tuple[ExposureAttribution, ...] = (),
     memberships: tuple[MarketExposureGroup, ...] = (),
     strategy_attribution_complete: bool | None = None,
+    additional_orders: tuple[RuntimeOrderState, ...] = (),
 ) -> SigRiskInputs:
     """Normalize authoritative SIG reads without guessing missing economics.
 
@@ -240,8 +242,23 @@ def normalize_sig_risk_inputs(
         unrealised_pnl=pnl.unrealized_pnl,
         realised_pnl_cursor=realised_pnl_cursor,
     )
+    portfolio = account.to_runtime_portfolio()
+    existing_intents = {item.logical_intent_id for item in portfolio.orders}
+    existing_order_ids = {
+        item.exchange_order_id
+        for item in portfolio.orders
+        if item.exchange_order_id is not None
+    }
+    extra_orders = tuple(
+        item
+        for item in additional_orders
+        if item.logical_intent_id not in existing_intents
+        and (item.exchange_order_id is None or item.exchange_order_id not in existing_order_ids)
+    )
+    if extra_orders:
+        portfolio = replace(portfolio, orders=portfolio.orders + extra_orders)
     exposure = build_exposure_snapshot(
-        account.to_runtime_portfolio(),
+        portfolio,
         attributions=attributions,
         memberships=memberships,
         strategy_attribution_complete=strategy_attribution_complete,

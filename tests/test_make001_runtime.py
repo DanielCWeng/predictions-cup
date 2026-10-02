@@ -486,6 +486,56 @@ def test_runtime_loop_coalesces_exchange_and_token_updates() -> None:
     assert coordinator.calls[-1] == frozenset({"36", "37"})
 
 
+def test_startup_recovery_block_filters_only_affected_exchange() -> None:
+    bridge = _Bridge()
+    coordinator = _Coordinator()
+    runtime = MakerRuntimeLoop(
+        bridge=cast(MakerSourceBridge, bridge),
+        coordinator=cast(MakerCoordinator, coordinator),
+        polymarket_feed_trusted=lambda: True,
+        wall_clock=lambda: datetime(2026, 9, 29, 14, 0, tzinfo=UTC),
+        mono_clock=lambda: 100,
+    )
+
+    runtime.set_blocked_exchange_ids({"36"})
+    asyncio.run(runtime.drain_once())
+    assert coordinator.calls == [frozenset({"37"})]
+
+    runtime.set_blocked_exchange_ids(())
+    asyncio.run(runtime.drain_once())
+    assert coordinator.calls[-1] == frozenset({"36", "37"})
+
+
+def test_graceful_shutdown_finishes_inflight_exchange_before_cancel_drain() -> None:
+    service = MakerService(
+        AppSettings(maker_enabled=True),
+        explicit_live_invocation=False,
+    )
+    events: list[str] = []
+
+    async def inflight_batch() -> None:
+        await asyncio.sleep(0)
+        events.append("batch_acknowledged")
+
+    async def cancel_drain(runtime: MakerRuntimeLoop) -> None:
+        del runtime
+        events.append("cancel_drain")
+        assert "batch_acknowledged" in events
+
+    service._best_effort_kill_drain = cancel_drain  # type: ignore[method-assign]
+
+    async def run() -> None:
+        runtime_task = asyncio.create_task(inflight_batch())
+        await service._graceful_shutdown(
+            cast(MakerRuntimeLoop, object()),
+            runtime_task,
+        )
+
+    asyncio.run(run())
+
+    assert events == ["batch_acknowledged", "cancel_drain"]
+
+
 def test_runtime_snapshot_observer_receives_exact_decision_boundary() -> None:
     bridge = _Bridge()
     coordinator = _Coordinator()

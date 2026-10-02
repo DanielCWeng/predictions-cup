@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 from predictions_cup.execution.models import RuntimeOrderIntent
@@ -63,7 +63,11 @@ class ExecutionReservationBook:
                 ),
             )
             if existing is not None:
-                if existing != candidate:
+                existing_order = replace(existing.order, exchange_order_id=None)
+                if (
+                    existing.logical_operation_id != candidate.logical_operation_id
+                    or existing_order != candidate.order
+                ):
                     raise ValueError(
                         f"conflicting reservation for logical intent {intent.intent_id}"
                     )
@@ -97,9 +101,36 @@ class ExecutionReservationBook:
             raise ValueError("logical intent cannot bind to multiple exchange orders")
         self._by_intent[intent_id] = ExecutionReservation(
             logical_operation_id=reservation.logical_operation_id,
-            order=reservation.order,
+            order=replace(reservation.order, exchange_order_id=exchange_order_id),
             exchange_order_id=exchange_order_id,
             acknowledged_at=acknowledged_at,
+        )
+        self._intent_by_exchange_order[exchange_order_id] = intent_id
+
+    def bind_recovered_exchange_order(
+        self,
+        intent_id: str,
+        exchange_order_id: str,
+    ) -> None:
+        """Attach durable ACK identity without aging out the recovery reserve."""
+        if not exchange_order_id.strip():
+            raise ValueError("exchange_order_id must not be blank")
+        reservation = self._by_intent.get(intent_id)
+        if reservation is None:
+            raise KeyError(f"unknown logical intent reservation: {intent_id}")
+        prior_intent = self._intent_by_exchange_order.get(exchange_order_id)
+        if prior_intent is not None and prior_intent != intent_id:
+            raise ValueError("exchange order identity cannot bind to multiple intents")
+        if (
+            reservation.exchange_order_id is not None
+            and reservation.exchange_order_id != exchange_order_id
+        ):
+            raise ValueError("logical intent cannot bind to multiple exchange orders")
+        self._by_intent[intent_id] = replace(
+            reservation,
+            order=replace(reservation.order, exchange_order_id=exchange_order_id),
+            exchange_order_id=exchange_order_id,
+            acknowledged_at=None,
         )
         self._intent_by_exchange_order[exchange_order_id] = intent_id
 
@@ -172,8 +203,19 @@ class ExecutionReservationBook:
 
     def overlay_portfolio(self, portfolio: RuntimePortfolio) -> RuntimePortfolio:
         existing_ids = {order.logical_intent_id for order in portfolio.orders}
+        existing_order_ids = {
+            order.exchange_order_id
+            for order in portfolio.orders
+            if order.exchange_order_id is not None
+        }
         reservations = tuple(
-            order for order in self.reserved_orders() if order.logical_intent_id not in existing_ids
+            order
+            for order in self.reserved_orders()
+            if order.logical_intent_id not in existing_ids
+            and (
+                order.exchange_order_id is None
+                or order.exchange_order_id not in existing_order_ids
+            )
         )
         if not reservations:
             return portfolio
