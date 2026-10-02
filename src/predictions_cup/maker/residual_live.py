@@ -7,6 +7,7 @@ straight away: the strategy takes liquidity and never rests a quote.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 from collections.abc import Awaitable, Callable, Mapping
@@ -46,6 +47,7 @@ from predictions_cup.sig.errors import SigApiError, SigExecutionUncertainError
 from predictions_cup.strategy.core import CandidateLeg, Opportunity, StrategyFamily
 
 _LOG = logging.getLogger(__name__)
+_LIVENESS_INTERVAL_SECONDS = 60.0
 
 PlanDispatcher = Callable[[ExecutionPlan], Awaitable[ExecutionEvent]]
 CancelDispatcher = Callable[[ExecutionEnvelope], Awaitable[ExecutionEvent]]
@@ -117,6 +119,71 @@ class ResidualTakerLiveCoordinator:
         # Remainder cancels that did not conclude; retried every cycle so a
         # taker order is never left resting at a stale price.
         self._pending_cancels: dict[str, ExecutionEnvelope] = {}
+        self._evaluation_cycles = 0
+        self._evaluated_markets = 0
+        self._input_ready_markets = 0
+        self._signals = 0
+        self._evaluation_changed = asyncio.Event()
+
+    @property
+    def tracked_exchange_ids(self) -> frozenset[str]:
+        return self._signal.tracked_exchange_ids
+
+    @property
+    def evaluation_cycles(self) -> int:
+        return self._evaluation_cycles
+
+    async def wait_for_evaluation_after(self, evaluation_cycles: int) -> None:
+        """Wait for a completed coordinator pass after ``evaluation_cycles``."""
+        while self._evaluation_cycles <= evaluation_cycles:
+            self._evaluation_changed.clear()
+            if self._evaluation_cycles > evaluation_cycles:
+                return
+            await self._evaluation_changed.wait()
+
+    def log_heartbeat(self) -> None:
+        _LOG.info(
+            "TAKE heartbeat evaluated=%d input_ready=%d signals=%d cycles=%d",
+            self._evaluated_markets,
+            self._input_ready_markets,
+            self._signals,
+            self._evaluation_cycles,
+        )
+
+    async def run_liveness(
+        self,
+        *,
+        stop_event: asyncio.Event,
+        recheck: Callable[[], None],
+    ) -> None:
+        """Periodically recheck the tracked universe and fail if evaluation stalls."""
+        while not stop_event.is_set():
+            try:
+                await asyncio.wait_for(
+                    stop_event.wait(),
+                    timeout=_LIVENESS_INTERVAL_SECONDS,
+                )
+                return
+            except TimeoutError:
+                pass
+
+            previous_cycles = self._evaluation_cycles
+            self.log_heartbeat()
+            recheck()
+            try:
+                await asyncio.wait_for(
+                    self.wait_for_evaluation_after(previous_cycles),
+                    timeout=_LIVENESS_INTERVAL_SECONDS,
+                )
+            except TimeoutError as exc:
+                _LOG.critical(
+                    "TAKE liveness stalled evaluated=%d input_ready=%d signals=%d cycles=%d",
+                    self._evaluated_markets,
+                    self._input_ready_markets,
+                    self._signals,
+                    self._evaluation_cycles,
+                )
+                raise RuntimeError("residual taker coordinator stopped evaluating") from exc
 
     async def on_state_change(
         self,
@@ -133,9 +200,10 @@ class ResidualTakerLiveCoordinator:
         for exchange_id in sorted(snapshots):
             if self._kill_switch.active:
                 break
-            snapshot = snapshots[exchange_id]
             if exchange_id not in self._signal.tracked_exchange_ids:
                 continue
+            self._evaluated_markets += 1
+            snapshot = snapshots[exchange_id]
             sig_bbo_age = snapshot.now_monotonic_ns - snapshot.sig_bbo_observed_ns
             bbo_proxy = (
                 not snapshot.sig_bbo_trusted
@@ -152,10 +220,14 @@ class ResidualTakerLiveCoordinator:
             )
             if state is None or not (self._min_fair_value <= state.pm_mid <= self._max_fair_value):
                 continue
+            self._input_ready_markets += 1
             signal = self._signal.on_state(state)
             if signal is None:
                 continue
+            self._signals += 1
             events.extend(await self._take(change, snapshot, signal, bbo_proxy=bbo_proxy))
+        self._evaluation_cycles += 1
+        self._evaluation_changed.set()
         return tuple(events)
 
     def _capped_quantity(

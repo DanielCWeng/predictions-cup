@@ -720,6 +720,7 @@ class MakerService:
                 )
 
             model_execution_observer: ExecutionObserver | None = None
+            taker: ResidualTakerLiveCoordinator | None = None
             if (
                 self.settings.model_live_ids.strip()
                 and self.core.risk_context.mode is ExecutionMode.LIVE
@@ -986,7 +987,7 @@ class MakerService:
 
             self._install_signal_handlers()
             runtime.notify_global(observed_monotonic_ns=monotonic_ns())
-            tasks = (
+            tasks = [
                 asyncio.create_task(
                     runtime.run(stop_event=self.stop_event),
                     name="make-runtime",
@@ -1026,7 +1027,17 @@ class MakerService:
                     self._health_watchdog(sig_state, account_state, runtime),
                     name="make-health-watchdog",
                 ),
-            )
+            ]
+            if taker is not None:
+                tasks.append(
+                    asyncio.create_task(
+                        taker.run_liveness(
+                            stop_event=self.stop_event,
+                            recheck=lambda: runtime.notify_sig(taker.tracked_exchange_ids),
+                        ),
+                        name="make-residual-taker-liveness",
+                    )
+                )
             stop_waiter = asyncio.create_task(
                 self.stop_event.wait(),
                 name="make-stop-waiter",
@@ -1035,16 +1046,23 @@ class MakerService:
                 {*tasks, stop_waiter},
                 return_when=asyncio.FIRST_COMPLETED,
             )
-            failure = next(
+            unexpected_task = next(
                 (
                     task
                     for task in tasks
-                    if task in done and not task.cancelled() and task.exception() is not None
+                    if task in done and not self.stop_event.is_set()
                 ),
                 None,
             )
-            if failure is not None:
-                runtime.activate_kill_switch(f"service_task_failure:{failure.get_name()}")
+            if unexpected_task is not None:
+                _LOG.critical(
+                    "MAKE service task ended unexpectedly task=%s cancelled=%s",
+                    unexpected_task.get_name(),
+                    unexpected_task.cancelled(),
+                )
+                runtime.activate_kill_switch(
+                    f"service_task_failure:{unexpected_task.get_name()}"
+                )
                 self.stop_event.set()
                 runtime_task = next(task for task in tasks if task.get_name() == "make-runtime")
                 await stop_startup_recovery()
@@ -1054,9 +1072,13 @@ class MakerService:
                     live_sink=live_sink,
                     tournament_id=tournament_id,
                 )
-                failure_exc = failure.exception()
+                failure_exc = (
+                    None if unexpected_task.cancelled() else unexpected_task.exception()
+                )
                 if failure_exc is None:
-                    raise RuntimeError("MAKE service task failed without exception")
+                    raise RuntimeError(
+                        f"MAKE service task {unexpected_task.get_name()} ended unexpectedly"
+                    )
                 raise failure_exc
 
             if stop_waiter in done:

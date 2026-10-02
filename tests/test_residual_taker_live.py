@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
+
+import pytest
 
 from predictions_cup.execution.models import (
     ExecutionEnvelope,
@@ -14,6 +17,7 @@ from predictions_cup.execution.models import (
 )
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
+from predictions_cup.maker import residual_live as residual_live_module
 from predictions_cup.maker.contracts import (
     ExternalQuoteState,
     MakerMarketSnapshot,
@@ -482,3 +486,47 @@ def test_taker_bbo_proxy_caps_reduction_against_local_reservations() -> None:
     (intent,) = harness.plans[0].intents
     assert intent.action is OrderAction.BUY
     assert intent.quantity == 10
+
+
+def test_taker_liveness_recheck_logs_completed_evaluation(monkeypatch, caplog) -> None:
+    monkeypatch.setattr(residual_live_module, "_LIVENESS_INTERVAL_SECONDS", 0.001)
+    caplog.set_level(logging.INFO)
+    harness = _Harness()
+    harness.run(_snapshot())
+    stop_event = asyncio.Event()
+    change = MakerStateChange(
+        event_id="liveness-event",
+        observed_monotonic_ns=NOW,
+        exchange_ids=frozenset({EXCHANGE}),
+    )
+
+    async def evaluate() -> None:
+        await harness.coordinator.on_state_change(
+            change,
+            datetime(2026, 10, 1, tzinfo=UTC),
+            {EXCHANGE: _snapshot()},
+        )
+        stop_event.set()
+
+    def recheck() -> None:
+        asyncio.create_task(evaluate())
+
+    asyncio.run(harness.coordinator.run_liveness(stop_event=stop_event, recheck=recheck))
+
+    assert harness.coordinator.evaluation_cycles == 2
+    assert "TAKE heartbeat evaluated=1 input_ready=1 signals=1 cycles=1" in caplog.text
+
+
+def test_taker_liveness_fails_loudly_when_recheck_never_evaluates(monkeypatch, caplog) -> None:
+    monkeypatch.setattr(residual_live_module, "_LIVENESS_INTERVAL_SECONDS", 0.001)
+    harness = _Harness()
+
+    with pytest.raises(RuntimeError, match="stopped evaluating"):
+        asyncio.run(
+            harness.coordinator.run_liveness(
+                stop_event=asyncio.Event(),
+                recheck=lambda: None,
+            )
+        )
+
+    assert "TAKE liveness stalled evaluated=0 input_ready=0 signals=0 cycles=0" in caplog.text
