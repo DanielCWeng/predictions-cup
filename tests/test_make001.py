@@ -927,6 +927,64 @@ def test_stale_internal_sources_cancel_quotes(field: str, reason: str) -> None:
     assert decision.gate.reason == reason
 
 
+@pytest.mark.parametrize(
+    ("bbo_trusted", "bbo_observed_ns", "reason"),
+    (
+        (False, NOW, "sig_bbo_untrusted"),
+        (True, NOW - 100_000_001, "sig_bbo_stale"),
+    ),
+)
+def test_untrusted_or_stale_sig_bbo_cancels_without_placing(
+    bbo_trusted: bool,
+    bbo_observed_ns: int,
+    reason: str,
+) -> None:
+    engine = _engine()
+    trusted = _maker_snapshot()
+    registry = QuoteRegistry()
+    _seed_exact_desired_quotes(engine, registry, trusted)
+    adapter = ShadowMakerExecutionAdapter()
+    degraded = _maker_snapshot(
+        bbo_trusted=bbo_trusted,
+        bbo_observed_ns=bbo_observed_ns,
+    )
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=registry,
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id=f"sig-bbo-{reason}",
+                observed_monotonic_ns=NOW,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": degraded},
+        )
+    )
+
+    assert result.decisions[0].desired is None
+    assert result.decisions[0].gate.mode is GateMode.CANCEL
+    assert result.decisions[0].gate.reason == reason
+    assert len(result.execution_events) == 2
+    assert all(
+        action.kind is QuoteLifecycleActionKind.CANCEL
+        for action in result.lifecycle_actions
+    )
+    assert registry.state("36").bid is None
+    assert registry.state("36").ask is None
+
+
 def test_trusted_but_stale_sources_fail_closed_at_exact_deadline() -> None:
     max_age_ns = 100_000_000
     engine = _engine(max_age_ns=max_age_ns)
