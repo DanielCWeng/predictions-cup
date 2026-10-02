@@ -91,6 +91,7 @@ from predictions_cup.risk import (
     scan_external_cash_flows,
     validate_restart_preflight,
 )
+from predictions_cup.risk.swing import PolymarketOrderBookSwingMarkProvider
 from predictions_cup.runtime.telemetry import HotPathTelemetry
 from predictions_cup.shadow.live import LiveShadowRuntime, build_live_shadow_runtime
 from predictions_cup.sig.account_proxy import AccountProxyLedger
@@ -196,14 +197,22 @@ class MakerService:
             raise ValueError("MAKE service requires PREDICTIONS_CUP_MAKER_ENABLED=true")
         self.settings = settings
         self.explicit_live_invocation = explicit_live_invocation
-        self.core: MakerRuntimeComponents = build_maker_components(settings)
+        self.pm_books = OrderBookStore()
+        swing_mark_provider = (
+            PolymarketOrderBookSwingMarkProvider(self.pm_books)
+            if settings.risk_swing_cap_enabled
+            else None
+        )
+        self.core: MakerRuntimeComponents = build_maker_components(
+            settings,
+            swing_mark_provider=swing_mark_provider,
+        )
         self.stop_event = asyncio.Event()
         self._startup_blocked_exchange_ids: frozenset[str] = frozenset()
         self._startup_blocked_operation_ids: frozenset[str] = frozenset()
         self._startup_recovery_retry_after_ns = 0
         self.telemetry = HotPathTelemetry()
         self.pm_health = IngestionHealth()
-        self.pm_books = OrderBookStore()
         self.pm_clob = ClobMarketDataClient(str(settings.polymarket_clob_base_url))
         self.pm_ws = MarketWebSocket(str(settings.polymarket_ws_url), self.pm_health)
         self._live_exchange_ids: frozenset[str] | None = None

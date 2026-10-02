@@ -52,6 +52,10 @@ class AppSettings(BaseSettings):
     risk_max_account_age_ms: int = Field(default=2_000, gt=0)
     risk_max_mark_age_ms: int = Field(default=12_000, gt=0)
     risk_capital_control_enabled: bool = False
+    risk_swing_cap_enabled: bool = False
+    risk_swing_shock_points: float = Field(default=5.0, gt=0.0)
+    risk_swing_max_loss: float = Field(default=2_000.0, gt=0.0)
+    risk_swing_max_pm_mark_age_ms: int = Field(default=35_000, gt=0)
     risk_state_path: Path = Path("data/risk_002.sqlite3")
     risk_exposure_groups_path: Path | None = None
     risk_profile_name: str = "competition"
@@ -384,7 +388,7 @@ class AppSettings(BaseSettings):
 
     def diagnostic_fields(self) -> dict[str, str | bool | int | float | None]:
         """Return deliberately non-secret diagnostics suitable for logs."""
-        return {
+        result: dict[str, str | bool | int | float | None] = {
             "environment": self.environment,
             "log_level": self.log_level,
             "sig_api_base_url": str(self.sig_api_base_url),
@@ -531,6 +535,19 @@ class AppSettings(BaseSettings):
                 else None
             ),
         }
+        # Keep disabled diagnostics byte-compatible with earlier releases.
+        if self.risk_swing_cap_enabled:
+            result.update(
+                {
+                    "risk_swing_cap_enabled": True,
+                    "risk_swing_shock_points": self.risk_swing_shock_points,
+                    "risk_swing_max_loss": self.risk_swing_max_loss,
+                    "risk_swing_max_pm_mark_age_ms": (
+                        self.risk_swing_max_pm_mark_age_ms
+                    ),
+                }
+            )
+        return result
 
 
 class _RuntimeAppSettings(AppSettings):

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from predictions_cup.execution.models import (
     ExecutionMode,
@@ -10,6 +10,11 @@ from predictions_cup.execution.models import (
     RuntimeOrderIntent,
 )
 from predictions_cup.risk.capital import CapitalRiskState, MarketExposureGroup
+from predictions_cup.risk.swing import (
+    SwingRiskControl,
+    SwingRiskDiagnostics,
+    evaluate_swing_cap,
+)
 from predictions_cup.runtime.models import RuntimeSnapshot
 from predictions_cup.strategy.core import NoTrade, Opportunity, StrategyResult
 
@@ -82,6 +87,7 @@ class RiskContext:
     max_account_age_ns: int | None = None
     max_mark_age_ns: int | None = None
     require_capital_state: bool = False
+    swing_control: SwingRiskControl | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +103,11 @@ class RiskDecision:
     signal_value: float | None = None
     fair_value: float | None = None
     decision_observation_ns: int | None = None
+    swing_diagnostics: SwingRiskDiagnostics | None = field(
+        default=None,
+        compare=False,
+        repr=False,
+    )
 
 
 def _deny(reason: str) -> RiskDecision:
@@ -279,6 +290,20 @@ def evaluate_risk(
         if denial is not None:
             return _deny(denial)
 
+    swing_diagnostics: SwingRiskDiagnostics | None = None
+    if context.swing_control is not None:
+        denial, swing_diagnostics = evaluate_swing_cap(
+            context.swing_control,
+            snapshot,
+            tuple(intents),
+        )
+        if denial is not None:
+            return RiskDecision(
+                approved=False,
+                reason=denial,
+                swing_diagnostics=swing_diagnostics,
+            )
+
     return RiskDecision(
         approved=True,
         reason="approved",
@@ -291,6 +316,7 @@ def evaluate_risk(
         signal_value=opportunity.gross_edge,
         fair_value=opportunity.fair_value,
         decision_observation_ns=opportunity.decision_observation_ns,
+        swing_diagnostics=swing_diagnostics,
     )
 
 
