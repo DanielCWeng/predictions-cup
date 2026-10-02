@@ -195,7 +195,7 @@ class SyntheticRecoveryRest:
     def __init__(self) -> None:
         self.open_sell = _order(102, open_=True, action="sell", price="0.6")
         self.closed_sell = _order(102, open_=False, action="sell", price="0.6")
-        self.open_orders = (self.open_sell,)
+        self.open_orders: tuple[OrderReadDto, ...] = (self.open_sell,)
         self.closed_buy = _order(101, open_=False, action="buy", price="0.4")
         self.positions = _positions_response(quantity="6")
         self.fill_queries = 0
