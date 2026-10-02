@@ -488,7 +488,10 @@ def test_taker_bbo_proxy_caps_reduction_against_local_reservations() -> None:
     assert intent.quantity == 10
 
 
-def test_taker_liveness_recheck_logs_completed_evaluation(monkeypatch, caplog) -> None:
+def test_taker_liveness_recheck_logs_completed_evaluation(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     monkeypatch.setattr(residual_live_module, "_LIVENESS_INTERVAL_SECONDS", 0.001)
     caplog.set_level(logging.INFO)
     harness = _Harness()
@@ -517,7 +520,10 @@ def test_taker_liveness_recheck_logs_completed_evaluation(monkeypatch, caplog) -
     assert "TAKE heartbeat evaluated=1 input_ready=1 signals=1 cycles=1" in caplog.text
 
 
-def test_taker_liveness_fails_loudly_when_recheck_never_evaluates(monkeypatch, caplog) -> None:
+def test_taker_liveness_fails_loudly_when_recheck_never_evaluates(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     monkeypatch.setattr(residual_live_module, "_LIVENESS_INTERVAL_SECONDS", 0.001)
     harness = _Harness()
 
