@@ -29,7 +29,6 @@ AuthoritativeResync = Callable[[], Awaitable[AccountAuthoritativeSnapshot]]
 ClockNs = Callable[[], int]
 logger = logging.getLogger(__name__)
 _ACTIVITY_RETRY_ATTEMPTS = 3
-_FAILED_REFRESH_RETRY_SECONDS = 5.0
 
 
 def _account_batch_category_counts(payload: object) -> tuple[int, int, int, int, int]:
@@ -214,19 +213,6 @@ class AccountRealtimeController:
                 await self._refresh_authoritative(
                     datetime.now(UTC), trigger_reason="periodic"
                 )
-                if self._state.trusted or stop_event.is_set():
-                    continue
-                try:
-                    await asyncio.wait_for(
-                        stop_event.wait(), timeout=_FAILED_REFRESH_RETRY_SECONDS
-                    )
-                except TimeoutError:
-                    if not stop_event.is_set() and not self._state.trusted:
-                        # This is one bounded retry through the same governed
-                        # callback; it does not bypass the SIG REST rate limiter.
-                        await self._refresh_authoritative(
-                            datetime.now(UTC), trigger_reason="bounded_retry"
-                        )
 
     async def _restore_trust_while_subscribed(self) -> None:
         async with self._refresh_lock:

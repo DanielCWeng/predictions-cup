@@ -714,57 +714,6 @@ def test_periodic_refresh_retries_when_activity_lands_during_resync() -> None:
     assert state.trusted is True
 
 
-@pytest.mark.parametrize("retry_succeeds", [True, False])
-def test_failed_periodic_refresh_gets_only_one_bounded_retry(
-    caplog: pytest.LogCaptureFixture,
-    monkeypatch: pytest.MonkeyPatch,
-    retry_succeeds: bool,
-) -> None:
-    from predictions_cup.sig import account_runtime
-
-    monkeypatch.setattr(account_runtime, "_FAILED_REFRESH_RETRY_SECONDS", 0.0)
-    state = AccountRealtimeStateEngine(tournament_id="t1")
-    stop_event = asyncio.Event()
-    resync_count = 0
-
-    async def mint_token() -> RealtimeTokenDto:
-        return _token()
-
-    async def resync() -> AccountAuthoritativeSnapshot:
-        nonlocal resync_count
-        resync_count += 1
-        if resync_count == 1 or not retry_succeeds:
-            if resync_count == 2:
-                stop_event.set()
-            raise RuntimeError("fixture refresh failure")
-        stop_event.set()
-        return _snapshot()
-
-    async def scenario() -> None:
-        controller = AccountRealtimeController(
-            state=state,
-            mint_token=mint_token,
-            authoritative_resync=resync,
-            refresh_interval_seconds=0.001,
-            subscriber_factory=lambda **_: None,  # type: ignore[arg-type]
-        )
-        await controller._refresh_periodically(stop_event)
-
-    with caplog.at_level(logging.INFO, logger="predictions_cup.sig.account_runtime"):
-        asyncio.run(scenario())
-
-    assert resync_count == 2
-    assert state.trusted is retry_succeeds
-    cycle_logs = [
-        record.getMessage()
-        for record in caplog.records
-        if "SIG account refresh cycle refresh_id=" in record.getMessage()
-    ]
-    assert len(cycle_logs) == 2
-    assert "trigger_reason=periodic" in cycle_logs[0]
-    assert "trigger_reason=bounded_retry" in cycle_logs[1]
-
-
 @pytest.mark.parametrize(
     ("scenario", "expected_outcome", "expected_resync_calls", "expected_batches"),
     [
