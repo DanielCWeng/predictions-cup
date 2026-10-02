@@ -26,6 +26,10 @@ class SupervisorPolicy:
     service_memory_critical_bytes: int = 900 * _MIB
     service_memory_growth_warn_mb_per_min: float = 35.0
     service_memory_growth_critical_mb_per_min: float = 80.0
+    service_max_restarts_per_hour: int = 2
+    maker_outcome_max_age_seconds: float = 180.0
+    sig_realtime_delivery_max_age_seconds: float = 900.0
+    sig_price_observation_max_age_seconds: float = 180.0
     exposure_warn_fraction: float = 0.80
     concentration_warn_fraction: float = 0.50
     max_gross_exposure: float | None = None
@@ -82,6 +86,10 @@ def evaluate(
     _clock_findings(collection.sections.get("clock"), findings)
     _capture_findings("SIG", collection.sections.get("sig_capture"), findings)
     _capture_findings("POLYMARKET", collection.sections.get("polymarket_capture"), findings)
+    _maker_findings(
+        collection.sections.get("maker_liveness"), policy, findings
+    )
+    _sig_activity_findings(collection.sections.get("sig_capture"), policy, findings)
     _observe_findings(collection.sections.get("observe"), findings)
     _risk_findings(collection.sections.get("risk"), policy, findings)
     _execution_findings(collection.sections.get("execution"), findings)
@@ -144,7 +152,10 @@ def _system_findings(
             status = _as_dict(raw_status)
             if status is None:
                 continue
-            if status.get("active_state") != "active":
+            if (
+                status.get("expected") is not False
+                and status.get("active_state") != "active"
+            ):
                 findings.append(
                     Finding(
                         "SERVICE_FAILURE",
@@ -153,6 +164,47 @@ def _system_findings(
                         {"service": service, "state": status.get("active_state")},
                     )
                 )
+            restarts_last_hour = _integer(status.get("restart_count_last_hour"))
+            if (
+                restarts_last_hour is not None
+                and restarts_last_hour > policy.service_max_restarts_per_hour
+            ):
+                findings.append(
+                    Finding(
+                        "SERVICE_RESTART_LOOP",
+                        Severity.CRITICAL,
+                        f"Service exceeded the restart budget in the last hour: {service}",
+                        {
+                            "service": service,
+                            "restarts_last_hour": restarts_last_hour,
+                            "restart_budget_per_hour": (
+                                policy.service_max_restarts_per_hour
+                            ),
+                        },
+                    )
+                )
+            else:
+                restart_count = _integer(status.get("restart_count"))
+                tracking_seconds = _number(status.get("restart_tracking_seconds"))
+                if (
+                    restart_count is None
+                    or restart_count > 0
+                ) and (
+                    tracking_seconds is None or tracking_seconds < 3600.0
+                ):
+                    findings.append(
+                        Finding(
+                            "SERVICE_RESTART_HISTORY_UNKNOWN",
+                            Severity.UNKNOWN,
+                            f"Restart history is not proven for the full hour: {service}",
+                            {
+                                "service": service,
+                                "systemd_restart_count": restart_count,
+                                "restart_tracking_seconds": tracking_seconds,
+                                "required_tracking_seconds": 3600.0,
+                            },
+                        )
+                    )
             memory = _integer(status.get("memory_current_bytes"))
             if memory is not None and memory >= policy.service_memory_critical_bytes:
                 findings.append(
@@ -400,6 +452,147 @@ def _capture_findings(venue: str, raw: object, findings: list[Finding]) -> None:
                 {"health_surface_reason": capture.get("health_surface_reason")},
             )
         )
+
+
+def _maker_findings(
+    raw: object,
+    policy: SupervisorPolicy,
+    findings: list[Finding],
+) -> None:
+    maker = _as_dict(raw)
+    if maker is None or maker.get("enabled") is not True:
+        return
+
+    if maker.get("query_ok") is not True:
+        findings.append(
+            Finding(
+                "MAKER_OUTCOME_UNKNOWN",
+                Severity.UNKNOWN,
+                "MAKE outcome liveness could not be read",
+                {
+                    "service": maker.get("service"),
+                    "reason": maker.get("query_error"),
+                },
+            )
+        )
+        return
+
+    age = _number(maker.get("last_outcome_age_seconds"))
+    if age is None:
+        findings.append(
+            Finding(
+                "MAKER_OUTCOME_STALE",
+                Severity.CRITICAL,
+                "Active MAKE process has produced no outcome for the current PID",
+                {
+                    "service": maker.get("service"),
+                    "main_pid": maker.get("main_pid"),
+                    "max_age_seconds": policy.maker_outcome_max_age_seconds,
+                },
+            )
+        )
+    elif age > policy.maker_outcome_max_age_seconds:
+        findings.append(
+            Finding(
+                "MAKER_OUTCOME_STALE",
+                Severity.CRITICAL,
+                "MAKE outcomes are stale",
+                {
+                    "service": maker.get("service"),
+                    "main_pid": maker.get("main_pid"),
+                    "age_seconds": age,
+                    "max_age_seconds": policy.maker_outcome_max_age_seconds,
+                },
+            )
+        )
+
+    if maker.get("kill_latched") is True:
+        findings.append(
+            Finding(
+                "MAKER_KILL_LATCHED",
+                Severity.CRITICAL,
+                "MAKE reported kill=True while its process was running",
+                {
+                    "service": maker.get("service"),
+                    "main_pid": maker.get("main_pid"),
+                    "last_outcome_at": maker.get("last_outcome_at"),
+                },
+            )
+        )
+
+
+def _sig_activity_findings(
+    raw: object,
+    policy: SupervisorPolicy,
+    findings: list[Finding],
+) -> None:
+    capture = _as_dict(raw)
+    if capture is None:
+        return
+
+    realtime_age = _number(capture.get("realtime_delivery_age_seconds"))
+    price_age = _number(capture.get("price_observation_age_seconds"))
+    realtime_recent = (
+        realtime_age is not None
+        and -1.0 <= realtime_age <= policy.sig_realtime_delivery_max_age_seconds
+    )
+    price_recent = (
+        price_age is not None
+        and -1.0 <= price_age <= policy.sig_price_observation_max_age_seconds
+    )
+    if realtime_recent or price_recent:
+        return
+
+    realtime_available = capture.get("realtime_delivery_table_available") is True
+    price_available = capture.get("price_observation_table_available") is True
+    if realtime_age is None and price_age is None and not (
+        realtime_available or price_available
+    ):
+        findings.append(
+            Finding(
+                "SIG_CAPTURE_ACTIVITY_UNKNOWN",
+                Severity.UNKNOWN,
+                "SIG capture activity could not be read",
+                {
+                    "reason": capture.get("activity_query_error"),
+                    "realtime_delivery_table_available": realtime_available,
+                    "price_observation_table_available": price_available,
+                },
+            )
+        )
+        return
+
+    if realtime_age is None and price_age is None:
+        findings.append(
+            Finding(
+                "SIG_CAPTURE_ACTIVITY_UNKNOWN",
+                Severity.UNKNOWN,
+                "SIG capture has no recorded realtime delivery or price observation",
+                {
+                    "realtime_delivery_table_available": realtime_available,
+                    "price_observation_table_available": price_available,
+                },
+            )
+        )
+        return
+
+    findings.append(
+        Finding(
+            "SIG_CAPTURE_ACTIVITY_STALE",
+            Severity.CRITICAL,
+            "SIG capture has no recent realtime delivery or price observation",
+            {
+                "realtime_delivery_age_seconds": realtime_age,
+                "realtime_delivery_max_age_seconds": (
+                    policy.sig_realtime_delivery_max_age_seconds
+                ),
+                "price_observation_age_seconds": price_age,
+                "price_observation_max_age_seconds": (
+                    policy.sig_price_observation_max_age_seconds
+                ),
+            },
+        )
+    )
 
 
 def _observe_findings(raw: object, findings: list[Finding]) -> None:

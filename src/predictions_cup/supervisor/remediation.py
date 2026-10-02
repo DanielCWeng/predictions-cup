@@ -1,6 +1,6 @@
 """Bounded remediation executor for SUPERVISOR-001.
 
-Only allowlisted housekeeping and read-only-service recovery actions exist here.
+Only allowlisted housekeeping and service recovery actions exist here.
 There is deliberately no order, LIVE, capital-limit, strategy or risk-halt action.
 """
 
@@ -160,6 +160,7 @@ class RemediationExecutor:
                 "SOURCE_SIG_CAPTURE_STALE",
                 "FEED_SIG_DISCONNECTED",
                 "FEED_SIG_REST_PROGRESS_STALE",
+                "SIG_CAPTURE_ACTIVITY_STALE",
                 "CAPTURE_SIG_STORAGE_FAILURE",
                 "CAPTURE_SIG_WRITER_DEAD",
                 "CAPTURE_SIG_DROPPED_ROWS",
@@ -172,14 +173,36 @@ class RemediationExecutor:
                 "CAPTURE_POLYMARKET_WRITER_DEAD",
                 "CAPTURE_POLYMARKET_DROPPED_ROWS",
             },
+            "predictions-cup-maker-live.service": {
+                "MAKER_OUTCOME_STALE",
+                "MAKER_KILL_LATCHED",
+            },
+        }
+        restart_loop_services = {
+            str(finding.evidence["service"])
+            for finding in snapshot.findings
+            if finding.code == "SERVICE_RESTART_LOOP"
+            and isinstance(finding.evidence.get("service"), str)
         }
         for service, reasons in recovery_reasons.items():
             if service not in self.config.safe_restart_services:
                 continue
+            if service in restart_loop_services:
+                self._condition_since.pop(service, None)
+                continue
             if not codes & reasons:
                 self._condition_since.pop(service, None)
                 continue
-            if self._recovery_due(service, now):
+            if (
+                service == "predictions-cup-maker-live.service"
+                and "MAKER_KILL_LATCHED" in codes
+            ):
+                # A kill latch is immediate evidence of a failed maker process;
+                # an explicit service allowlist authorizes recovery without the
+                # normal stale-feed/startup grace. The action limiter still
+                # enforces its cooldown and hourly budget.
+                planned.append((ActionCode.RESTART_SAFE_SERVICE, service))
+            elif self._recovery_due(service, now):
                 planned.append((ActionCode.RESTART_SAFE_SERVICE, service))
 
         for finding in snapshot.findings:
@@ -195,6 +218,7 @@ class RemediationExecutor:
             if (
                 isinstance(finding_service, str)
                 and finding_service in self.config.safe_restart_services
+                and finding_service not in restart_loop_services
             ):
                 if finding.code == "SERVICE_MEMORY_GROWTH" and self._service_in_startup(
                     finding_service, now

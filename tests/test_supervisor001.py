@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
+import subprocess
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
+from predictions_cup.config import AppSettings
 from predictions_cup.supervisor.bundles import BundleWriter
 from predictions_cup.supervisor.contracts import (
     ActionCode,
@@ -21,10 +24,14 @@ from predictions_cup.supervisor.contracts import (
     deterministic_id,
 )
 from predictions_cup.supervisor.persistence import SupervisorStore
-from predictions_cup.supervisor.remediation import RemediationConfig, RemediationExecutor
+from predictions_cup.supervisor.remediation import (
+    ActionLimiter,
+    RemediationConfig,
+    RemediationExecutor,
+)
 from predictions_cup.supervisor.rules import SupervisorPolicy, evaluate, severity_and_gate
-from predictions_cup.supervisor.runtime import ResourceGrowthTracker
-from predictions_cup.supervisor.sources import SourceCollection
+from predictions_cup.supervisor.runtime import ResourceGrowthTracker, ServiceRestartTracker
+from predictions_cup.supervisor.sources import SourceCollection, SupervisorSources
 
 NOW = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
 
@@ -67,6 +74,9 @@ def _healthy_collection() -> SourceCollection:
                 "svc": {
                     "active_state": "active",
                     "memory_current_bytes": 100 * 1024**2,
+                    "restart_count": 0,
+                    "restart_count_last_hour": 0,
+                    "restart_tracking_seconds": 3600.0,
                 }
             },
             "disk": {"used_fraction": 0.4, "free_bytes": 20 * 1024**3},
@@ -78,6 +88,10 @@ def _healthy_collection() -> SourceCollection:
             "writer_alive": True,
             "queue_depth": 0,
             "queue_capacity": 100,
+            "realtime_delivery_age_seconds": 30.0,
+            "realtime_delivery_table_available": True,
+            "price_observation_age_seconds": 30.0,
+            "price_observation_table_available": True,
         },
         "polymarket_capture": {"storage_failures": 0},
         "observe": {"state": "HEALTHY"},
@@ -448,6 +462,354 @@ def test_sig_stalled_bulk_price_progress_is_critical() -> None:
     }
     findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
     assert any(item.code == "FEED_SIG_REST_PROGRESS_STALE" for item in findings)
+
+
+def test_maker_stale_outcome_and_kill_latch_are_critical() -> None:
+    collection = _healthy_collection()
+    sections = dict(collection.sections)
+    sections["maker_liveness"] = {
+        "enabled": True,
+        "service": "predictions-cup-maker-live.service",
+        "main_pid": "123",
+        "query_ok": True,
+        "last_outcome_at": None,
+        "last_outcome_age_seconds": None,
+        "kill_latched": True,
+    }
+    findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
+    by_code = {item.code: item for item in findings}
+    assert by_code["MAKER_OUTCOME_STALE"].severity is Severity.CRITICAL
+    assert by_code["MAKER_KILL_LATCHED"].severity is Severity.CRITICAL
+
+
+def test_maker_outcome_probe_failure_is_unknown() -> None:
+    collection = _healthy_collection()
+    sections = dict(collection.sections)
+    sections["maker_liveness"] = {
+        "enabled": True,
+        "service": "predictions-cup-maker-live.service",
+        "main_pid": "123",
+        "query_ok": False,
+        "query_error": "PermissionError",
+    }
+    findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
+    maker_finding = next(item for item in findings if item.code == "MAKER_OUTCOME_UNKNOWN")
+    assert maker_finding.severity is Severity.UNKNOWN
+
+
+@pytest.mark.parametrize(
+    ("realtime_age", "price_age", "expected_code"),
+    (
+        (600.0, None, None),
+        (None, 120.0, None),
+        (901.0, 181.0, "SIG_CAPTURE_ACTIVITY_STALE"),
+        (None, None, "SIG_CAPTURE_ACTIVITY_UNKNOWN"),
+    ),
+)
+def test_sig_capture_liveness_accepts_either_recent_signal(
+    realtime_age: float | None,
+    price_age: float | None,
+    expected_code: str | None,
+) -> None:
+    collection = _healthy_collection()
+    sections = dict(collection.sections)
+    raw_capture = sections["sig_capture"]
+    assert isinstance(raw_capture, dict)
+    capture = dict(raw_capture)
+    capture["realtime_delivery_age_seconds"] = realtime_age
+    capture["price_observation_age_seconds"] = price_age
+    capture["realtime_delivery_table_available"] = realtime_age is not None
+    capture["price_observation_table_available"] = price_age is not None
+    sections["sig_capture"] = capture
+    findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
+    liveness_findings = {
+        item.code
+        for item in findings
+        if item.code.startswith("SIG_CAPTURE_ACTIVITY_")
+    }
+    assert liveness_findings == (set() if expected_code is None else {expected_code})
+
+
+def test_restart_budget_excess_is_critical() -> None:
+    collection = _healthy_collection()
+    sections = dict(collection.sections)
+    raw_system = sections["system"]
+    assert isinstance(raw_system, dict)
+    system = dict(raw_system)
+    system["services"] = {
+        "predictions-cup-sig-capture.service": {
+            "active_state": "active",
+            "restart_count": 4,
+            "restart_count_last_hour": 3,
+            "memory_current_bytes": 100,
+        }
+    }
+    sections["system"] = system
+    findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
+    restart_loop = next(item for item in findings if item.code == "SERVICE_RESTART_LOOP")
+    assert restart_loop.severity is Severity.CRITICAL
+    assert restart_loop.evidence["restarts_last_hour"] == 3
+
+
+def test_incomplete_restart_history_is_unknown() -> None:
+    collection = _healthy_collection()
+    sections = dict(collection.sections)
+    raw_system = sections["system"]
+    assert isinstance(raw_system, dict)
+    system = dict(raw_system)
+    system["services"] = {
+        "predictions-cup-sig-capture.service": {
+            "active_state": "active",
+            "restart_count": 1,
+            "restart_count_last_hour": 0,
+            "restart_tracking_seconds": 15.0,
+            "memory_current_bytes": 100,
+        }
+    }
+    sections["system"] = system
+    findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
+    history = next(
+        item for item in findings if item.code == "SERVICE_RESTART_HISTORY_UNKNOWN"
+    )
+    assert history.severity is Severity.UNKNOWN
+
+
+def test_restart_tracker_counts_pid_and_systemd_restarts_within_hour() -> None:
+    now = [0.0]
+    tracker = ServiceRestartTracker(clock=lambda: now[0])
+    service = "predictions-cup-sig-capture.service"
+    first = {"services": {service: {"restart_count": 0, "main_pid": "10"}}}
+    second = {"services": {service: {"restart_count": 1, "main_pid": "11"}}}
+    third = {"services": {service: {"restart_count": 3, "main_pid": "12"}}}
+    assert tracker.update(first)[service]["restart_count_last_hour"] == 0
+    now[0] += 5.0
+    assert tracker.update(second)[service]["restart_count_last_hour"] == 1
+    now[0] += 5.0
+    assert tracker.update(third)[service]["restart_count_last_hour"] == 3
+    now[0] += 3601.0
+    assert tracker.update(third)[service]["restart_count_last_hour"] == 0
+
+
+def test_restart_tracker_keeps_window_when_systemd_counter_resets() -> None:
+    now = [0.0]
+    tracker = ServiceRestartTracker(clock=lambda: now[0])
+    service = "predictions-cup-sig-capture.service"
+    first = {"services": {service: {"restart_count": 4, "main_pid": "10"}}}
+    restarted = {"services": {service: {"restart_count": 5, "main_pid": "11"}}}
+    counter_reset = {"services": {service: {"restart_count": 0, "main_pid": "12"}}}
+    assert tracker.update(first)[service]["restart_count_last_hour"] == 0
+    now[0] += 5.0
+    assert tracker.update(restarted)[service]["restart_count_last_hour"] == 1
+    now[0] += 5.0
+    assert tracker.update(counter_reset)[service]["restart_count_last_hour"] == 2
+
+
+def test_restart_action_limiter_allows_at_most_two_per_service_per_hour(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    times = iter((0.0, 301.0, 602.0, 3601.0))
+    monkeypatch.setattr(
+        "predictions_cup.supervisor.remediation.time.monotonic",
+        lambda: next(times),
+    )
+    limiter = ActionLimiter()
+    service = "predictions-cup-sig-capture.service"
+    decisions = tuple(
+        limiter.allow(
+            f"restart:{service}",
+            cooldown_seconds=300.0,
+            restart_service=service,
+            max_restarts_per_hour=2,
+        )
+        for _ in range(4)
+    )
+    assert decisions == (True, True, False, True)
+
+
+def test_maker_journal_probe_is_scoped_to_current_pid(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed = datetime.now(UTC)
+    kill_event = {
+        "MESSAGE": "MAKE outcome exchange=960 force_cancel kill=True marks_trusted=True",
+        "__REALTIME_TIMESTAMP": str(
+            int((observed - timedelta(seconds=1)).timestamp() * 1_000_000)
+        ),
+    }
+    event = {
+        "MESSAGE": "MAKE outcome exchange=961 no_place gate=HOLD",
+        "__REALTIME_TIMESTAMP": str(int(observed.timestamp() * 1_000_000)),
+    }
+    calls: list[list[str]] = []
+
+    def fake_run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        del kwargs
+        calls.append(args)
+        return subprocess.CompletedProcess(
+            args,
+            0,
+            f"{json.dumps(kill_event)}\n{json.dumps(event)}\n",
+            "",
+        )
+
+    monkeypatch.setattr("predictions_cup.supervisor.sources.subprocess.run", fake_run)
+    sources = SupervisorSources(
+        AppSettings(maker_enabled=False),
+        repo_root=tmp_path,
+        host_role=HostRole.WEST_EXECUTION,
+        expected_services=(),
+    )
+    assert "predictions-cup-maker-live.service" not in sources.expected_services
+    sources._system_cache = {
+        "services": {
+            "predictions-cup-maker-live.service": {
+                "active_state": "active",
+                "main_pid": "123",
+            }
+        }
+    }
+    status, section = sources._read_maker_liveness()
+    assert status.valid is True
+    assert section["kill_latched"] is True
+    assert section["enabled"] is True
+    assert section["main_pid"] == "123"
+    journal_calls = [args for args in calls if args and args[0] == "journalctl"]
+    assert journal_calls[0][-1] == "_PID=123"
+
+
+def test_enabled_maker_is_added_to_expected_services(tmp_path: Path) -> None:
+    sources = SupervisorSources(
+        AppSettings(maker_enabled=True),
+        repo_root=tmp_path,
+        host_role=HostRole.WEST_EXECUTION,
+        expected_services=(),
+    )
+    assert "predictions-cup-maker-live.service" in sources.expected_services
+
+
+def test_sig_activity_reads_last_delivery_and_price_observation(tmp_path: Path) -> None:
+    database = tmp_path / "sig.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "CREATE TABLE realtime_deliveries (id INTEGER PRIMARY KEY, observed_at TEXT)"
+        )
+        connection.execute(
+            "CREATE TABLE price_observations "
+            "(id INTEGER PRIMARY KEY, rest_observed_at TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO realtime_deliveries(observed_at) VALUES (?)",
+            ((NOW - timedelta(seconds=15)).isoformat(),),
+        )
+        connection.execute(
+            "INSERT INTO price_observations(rest_observed_at) VALUES (?)",
+            ((NOW - timedelta(seconds=45)).isoformat(),),
+        )
+    sources = SupervisorSources(
+        AppSettings(),
+        repo_root=tmp_path,
+        host_role=HostRole.WEST_EXECUTION,
+        expected_services=(),
+    )
+    activity = sources._read_sig_activity_liveness(database, NOW)
+    assert activity["realtime_delivery_age_seconds"] == 15.0
+    assert activity["price_observation_age_seconds"] == 45.0
+    assert activity["realtime_delivery_table_available"] is True
+    assert activity["price_observation_table_available"] is True
+
+
+def test_stale_sig_activity_restarts_only_allowlisted_non_loop_service(
+    tmp_path: Path,
+) -> None:
+    service = "predictions-cup-sig-capture.service"
+    config = RemediationConfig(
+        max_level=RemediationLevel.SERVICE_RECOVERY,
+        host_role=HostRole.WEST_EXECUTION,
+        supervisor_root=tmp_path,
+        hot_capture_roots=(),
+        hot_capture_retention_hours=24,
+        bundle_retention_hours=48,
+        safe_cache_paths=(),
+        safe_restart_services=(service,),
+    )
+    executor = RemediationExecutor(config)
+    stale = Finding(
+        "SIG_CAPTURE_ACTIVITY_STALE",
+        Severity.CRITICAL,
+        "capture stalled",
+    )
+    snapshot = SupervisorSnapshot(
+        snapshot_id="stale-capture",
+        host_id="host",
+        host_role=HostRole.WEST_EXECUTION,
+        git_head="deadbeef",
+        observed_at=NOW,
+        severity=Severity.CRITICAL,
+        launch_gate=LaunchGate.HOLD,
+        findings=(stale,),
+        sources=(),
+        sections={"system": {"services": {service: {"main_pid": "5"}}}},
+    )
+    assert executor.plan(snapshot) == ((ActionCode.RESTART_SAFE_SERVICE, service),)
+
+    loop = Finding(
+        "SERVICE_RESTART_LOOP",
+        Severity.CRITICAL,
+        "restart budget exceeded",
+        {"service": service},
+    )
+    loop_snapshot = SupervisorSnapshot(
+        snapshot_id="looping-capture",
+        host_id="host",
+        host_role=HostRole.WEST_EXECUTION,
+        git_head="deadbeef",
+        observed_at=NOW,
+        severity=Severity.CRITICAL,
+        launch_gate=LaunchGate.HOLD,
+        findings=(stale, loop),
+        sources=(),
+        sections={"system": {"services": {service: {"main_pid": "5"}}}},
+    )
+    assert executor.plan(loop_snapshot) == ()
+
+
+def test_maker_kill_restart_requires_explicit_allowlist(tmp_path: Path) -> None:
+    service = "predictions-cup-maker-live.service"
+    finding = Finding("MAKER_KILL_LATCHED", Severity.CRITICAL, "kill=True")
+    snapshot = SupervisorSnapshot(
+        snapshot_id="maker-kill",
+        host_id="host",
+        host_role=HostRole.WEST_EXECUTION,
+        git_head="deadbeef",
+        observed_at=NOW,
+        severity=Severity.CRITICAL,
+        launch_gate=LaunchGate.HOLD,
+        findings=(finding,),
+        sources=(),
+        sections={"system": {"services": {service: {"main_pid": "5"}}}},
+    )
+
+    def executor(allowed: tuple[str, ...]) -> RemediationExecutor:
+        return RemediationExecutor(
+            RemediationConfig(
+                max_level=RemediationLevel.SERVICE_RECOVERY,
+                host_role=HostRole.WEST_EXECUTION,
+                supervisor_root=tmp_path,
+                hot_capture_roots=(),
+                hot_capture_retention_hours=24,
+                bundle_retention_hours=48,
+                safe_cache_paths=(),
+                safe_restart_services=allowed,
+                restart_grace_seconds=3600,
+                startup_grace_seconds=3600,
+            )
+        )
+
+    assert executor(("predictions-cup-sig-capture.service",)).plan(snapshot) == ()
+    assert executor((service,)).plan(snapshot) == (
+        (ActionCode.RESTART_SAFE_SERVICE, service),
+    )
 
 
 def test_remediation_plans_safe_capture_restart_for_stale_feed(tmp_path: Path) -> None:
