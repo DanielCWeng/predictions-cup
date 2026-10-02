@@ -10,6 +10,7 @@ from predictions_cup.execution.models import (
     ExecutionEvent,
     ExecutionMode,
     LifecycleState,
+    RuntimeOrderIntent,
 )
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
@@ -26,6 +27,7 @@ from predictions_cup.maker.safety import MakerKillSwitch
 from predictions_cup.mapping.crosswalk import load_document
 from predictions_cup.risk.core import RiskContext, RiskLimits
 from predictions_cup.runtime.models import (
+    AccountTrustGrade,
     OrderAction,
     OutcomeSide,
     RuntimeBook,
@@ -148,6 +150,7 @@ class _Harness:
         risk: RiskContext | None = None,
         resting: bool = True,
         cancel_failures: int = 0,
+        allow_bbo_proxy: bool = False,
     ) -> None:
         self.journal = _Journal()
         self.quotes = QuoteRegistry()
@@ -169,6 +172,8 @@ class _Harness:
             dispatch=self._dispatch,
             cancel=self._cancel,
             kill_switch=self.kill_switch,
+            allow_bbo_proxy=allow_bbo_proxy,
+            max_sig_bbo_age_ns=1_000_000_000,
         )
 
     async def _dispatch(self, plan: ExecutionPlan) -> ExecutionEvent:
@@ -328,3 +333,79 @@ def test_position_cap_clips_and_blocks_only_inventory_increasing_takes() -> None
     (intent,) = reducing.plans[0].intents
     assert intent.action is OrderAction.BUY
     assert intent.quantity == 50
+
+
+def test_taker_accepts_proxy_for_reducing_trade_with_bbo_proxy() -> None:
+    harness = _Harness(allow_bbo_proxy=True)
+    snapshot = _with_inventory(_snapshot(ask_qty=30.0), -50.0)
+    portfolio = replace(
+        snapshot.runtime.portfolio,
+        account_trust_grade=AccountTrustGrade.PROXY,
+        account_proxy_age_ns=1,
+    )
+    snapshot = replace(
+        snapshot,
+        sig_bbo_trusted=False,
+        runtime=replace(snapshot.runtime, portfolio=portfolio),
+    )
+
+    harness.run(snapshot)
+
+    assert len(harness.plans) == 1
+    (intent,) = harness.plans[0].intents
+    assert intent.action is OrderAction.BUY
+    assert intent.quantity == 30
+
+
+def test_taker_bbo_proxy_does_not_trade_when_flat() -> None:
+    harness = _Harness(allow_bbo_proxy=True)
+    snapshot = _snapshot(ask_qty=30.0)
+    portfolio = replace(
+        snapshot.runtime.portfolio,
+        account_trust_grade=AccountTrustGrade.PROXY,
+        account_proxy_age_ns=1,
+    )
+    snapshot = replace(
+        snapshot,
+        sig_bbo_trusted=False,
+        runtime=replace(snapshot.runtime, portfolio=portfolio),
+    )
+
+    harness.run(snapshot)
+
+    assert harness.plans == []
+
+
+def test_taker_bbo_proxy_caps_reduction_against_local_reservations() -> None:
+    harness = _Harness(allow_bbo_proxy=True)
+    snapshot = _with_inventory(_snapshot(ask_qty=30.0), -100.0)
+    portfolio = replace(
+        snapshot.runtime.portfolio,
+        account_trust_grade=AccountTrustGrade.PROXY,
+        account_proxy_age_ns=1,
+    )
+    snapshot = replace(
+        snapshot,
+        sig_bbo_trusted=False,
+        runtime=replace(snapshot.runtime, portfolio=portfolio),
+    )
+    reservation = RuntimeOrderIntent(
+        intent_id="reserved-reducing-buy",
+        exchange_id=EXCHANGE,
+        market_id=MARKET,
+        tournament_id=TOURNAMENT,
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=90,
+        limit_price_ticks=140,
+        strategy_id="prior-taker",
+        decision_observation_ns=NOW - 1,
+    )
+    harness.reservations.reserve("prior-taker-op", (reservation,))
+
+    harness.run(snapshot)
+
+    assert len(harness.plans) == 1
+    (intent,) = harness.plans[0].intents
+    assert intent.action is OrderAction.BUY
+    assert intent.quantity == 10

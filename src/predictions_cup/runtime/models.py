@@ -21,6 +21,12 @@ class OrderAction(StrEnum):
     SELL = "sell"
 
 
+class AccountTrustGrade(StrEnum):
+    TRUSTED = "TRUSTED"
+    PROXY = "PROXY"
+    UNTRUSTED = "UNTRUSTED"
+
+
 @dataclass(frozen=True, slots=True)
 class RuntimeLevel:
     price_ticks: int
@@ -73,6 +79,9 @@ class RuntimeOrderState:
     # reconciliation. Authoritative SIG rows intentionally leave this unset;
     # RISK-002 obtains their strategy attribution from journal + fills.
     strategy_id: str | None = None
+    # Signed YES inventory change if this order fills (NO BUY and YES SELL are
+    # negative). Zero means direction is unknown and must be bounded both ways.
+    signed_quantity: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +89,20 @@ class RuntimePortfolio:
     positions: tuple[RuntimePosition, ...] = ()
     orders: tuple[RuntimeOrderState, ...] = ()
     account_trusted: bool = False
+    account_trust_grade: AccountTrustGrade | None = None
+    account_proxy_age_ns: int | None = None
+    account_proxy_uncertainty: float = 0.0
+    account_proxy_cash_balance: Decimal | None = None
+
+    @property
+    def trust_grade(self) -> AccountTrustGrade:
+        if self.account_trust_grade is not None:
+            return self.account_trust_grade
+        return AccountTrustGrade.TRUSTED if self.account_trusted else AccountTrustGrade.UNTRUSTED
+
+    @property
+    def proxy_active(self) -> bool:
+        return self.trust_grade is AccountTrustGrade.PROXY
 
     @property
     def gross_exposure(self) -> float:
@@ -88,10 +111,60 @@ class RuntimePortfolio:
     @property
     def open_order_exposure(self) -> float:
         return sum(
-            order.reserved_exposure
-            for order in self.orders
-            if order.open or order.uncertain
+            order.reserved_exposure for order in self.orders if order.open or order.uncertain
         )
+
+    def signed_inventory(self, exchange_id: str, tournament_id: str) -> float:
+        return sum(
+            position.signed_quantity
+            for position in self.positions
+            if position.exchange_id == exchange_id and position.tournament_id == tournament_id
+        )
+
+    def worst_case_inventory_bounds(
+        self,
+        exchange_id: str,
+        tournament_id: str,
+    ) -> tuple[float, float]:
+        """Return signed inventory bounds if all risk-bearing orders fill.
+
+        Orders with a known signed direction extend only that side of the range;
+        orders without direction are counted against both sides. This is used as
+        a stricter admission bound while an account proxy is active.
+        """
+        position = self.signed_inventory(exchange_id, tournament_id)
+        positive = 0.0
+        negative = 0.0
+        unknown = 0.0
+        for order in self.orders:
+            if not (order.open or order.uncertain):
+                continue
+            if order.exchange_id != exchange_id or order.tournament_id != tournament_id:
+                continue
+            signed = order.signed_quantity
+            if signed > 0.0:
+                positive += signed
+            elif signed < 0.0:
+                negative += signed
+            else:
+                unknown += order.reserved_exposure
+        return position + negative - unknown, position + positive + unknown
+
+    def is_inventory_reducing(
+        self,
+        *,
+        exchange_id: str,
+        tournament_id: str,
+        signed_delta: float,
+    ) -> bool:
+        if signed_delta == 0.0:
+            return False
+        low, high = self.worst_case_inventory_bounds(exchange_id, tournament_id)
+        # The action must reduce absolute exposure under every exposure state
+        # represented by the proxy's worst-case interval.
+        if signed_delta > 0.0:
+            return high < 0.0 and signed_delta <= -high
+        return low > 0.0 and -signed_delta <= low
 
 
 @dataclass(frozen=True, slots=True)

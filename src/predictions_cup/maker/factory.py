@@ -48,24 +48,17 @@ def build_maker_components(
 ) -> MakerRuntimeComponents:
     """Build immutable/pure maker components once at process startup."""
     mapping = mapping or load_document(settings.maker_mapping_path)
-    if (
-        settings.tournament_id is not None
-        and mapping.tournament_id != settings.tournament_id
-    ):
+    if settings.tournament_id is not None and mapping.tournament_id != settings.tournament_id:
         raise ValueError("maker mapping tournament does not match configured tournament")
 
     if (
         settings.risk_max_event_group_exposure is not None
         and settings.risk_exposure_groups_path is None
     ):
-        raise ValueError(
-            "event-group risk cap requires risk_exposure_groups_path"
-        )
+        raise ValueError("event-group risk cap requires risk_exposure_groups_path")
     exposure_groups: tuple[MarketExposureGroup, ...] = ()
     if settings.risk_exposure_groups_path is not None:
-        group_provider = load_exposure_group_provider(
-            settings.risk_exposure_groups_path
-        )
+        group_provider = load_exposure_group_provider(settings.risk_exposure_groups_path)
         exposure_groups = group_provider.for_tournament(mapping.tournament_id)
 
     ms = 1_000_000
@@ -96,11 +89,17 @@ def build_maker_components(
             max_depth_age_ns=settings.maker_max_depth_age_ms * ms,
             min_fair_value=settings.maker_min_fair_value,
             max_fair_value=settings.maker_max_fair_value,
+            account_proxy_enabled=settings.account_proxy_enabled,
+            max_account_proxy_age_ns=int(
+                settings.account_proxy_max_age_minutes * 60 * 1_000_000_000
+            ),
+            proxy_soft_unwind_limit=settings.account_proxy_soft_unwind_limit,
         ),
         config=MakerConfig(
             strategy_id="make-direct-pm",
             strategy_version="make-001-v1",
             max_abs_inventory=settings.maker_max_abs_inventory,
+            account_proxy_size_factor=settings.account_proxy_size_factor,
         ),
     )
     lifecycle = QuoteLifecycleManager(
@@ -199,18 +198,10 @@ def _risk_profile(settings: AppSettings) -> RiskProfile | None:
         max_gross_exposure=settings.risk_exploratory_max_gross_exposure,
         max_per_market_exposure=settings.risk_exploratory_max_per_market_exposure,
         max_open_order_exposure=settings.risk_exploratory_max_open_order_exposure,
-        max_concurrent_open_orders=(
-            settings.risk_exploratory_max_concurrent_open_orders
-        ),
-        max_per_strategy_exposure=(
-            settings.risk_exploratory_max_per_strategy_exposure
-        ),
-        max_event_group_exposure=(
-            settings.risk_exploratory_max_event_group_exposure
-        ),
-        max_tournament_exposure=(
-            settings.risk_exploratory_max_tournament_exposure
-        ),
+        max_concurrent_open_orders=(settings.risk_exploratory_max_concurrent_open_orders),
+        max_per_strategy_exposure=(settings.risk_exploratory_max_per_strategy_exposure),
+        max_event_group_exposure=(settings.risk_exploratory_max_event_group_exposure),
+        max_tournament_exposure=(settings.risk_exploratory_max_tournament_exposure),
         session_loss_limit=settings.risk_session_loss_limit,
         drawdown_limit=settings.risk_drawdown_limit,
     )

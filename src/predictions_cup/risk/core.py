@@ -32,11 +32,14 @@ class RiskLimits:
     def __post_init__(self) -> None:
         if self.max_order_size <= 0:
             raise ValueError("max_order_size must be positive")
-        if min(
-            self.max_gross_exposure,
-            self.max_per_market_exposure,
-            self.max_open_order_exposure,
-        ) <= 0.0:
+        if (
+            min(
+                self.max_gross_exposure,
+                self.max_per_market_exposure,
+                self.max_open_order_exposure,
+            )
+            <= 0.0
+        ):
             raise ValueError("exposure limits must be positive")
         if self.max_concurrent_open_orders <= 0:
             raise ValueError("max_concurrent_open_orders must be positive")
@@ -113,10 +116,7 @@ def _limit_sets(context: RiskContext) -> tuple[RiskLimits, ...]:
 def _group_lookup(
     memberships: tuple[MarketExposureGroup, ...],
 ) -> dict[tuple[str, str], tuple[str, ...]]:
-    return {
-        (item.market_id, item.tournament_id): item.group_ids
-        for item in memberships
-    }
+    return {(item.market_id, item.tournament_id): item.group_ids for item in memberships}
 
 
 def evaluate_risk(
@@ -128,10 +128,7 @@ def evaluate_risk(
         return _deny(proposal.reason)
     opportunity: Opportunity = proposal
     execution_tournament_id = opportunity.legs[0].tournament_id
-    if any(
-        leg.tournament_id != execution_tournament_id
-        for leg in opportunity.legs
-    ):
+    if any(leg.tournament_id != execution_tournament_id for leg in opportunity.legs):
         return _deny("mixed_tournament_operation")
 
     limit_sets = _limit_sets(context)
@@ -169,10 +166,7 @@ def evaluate_risk(
         if capital.strategy_halted(opportunity.strategy_id, opportunity.family.value):
             return _deny("strategy_halt")
         if context.max_account_age_ns is not None:
-            account_age = (
-                snapshot.observation_monotonic_ns
-                - capital.account_observed_monotonic_ns
-            )
+            account_age = snapshot.observation_monotonic_ns - capital.account_observed_monotonic_ns
             if account_age > context.max_account_age_ns:
                 return _deny("risk_account_state_stale")
         if not capital.marks_trusted:
@@ -181,10 +175,7 @@ def evaluate_risk(
             context.max_mark_age_ns is not None
             and capital.oldest_mark_observed_monotonic_ns is not None
         ):
-            mark_age = (
-                snapshot.observation_monotonic_ns
-                - capital.oldest_mark_observed_monotonic_ns
-            )
+            mark_age = snapshot.observation_monotonic_ns - capital.oldest_mark_observed_monotonic_ns
             if mark_age > context.max_mark_age_ns:
                 return _deny("risk_mark_state_stale")
         for limits in limit_sets:
@@ -238,9 +229,7 @@ def evaluate_risk(
             book = snapshot.book(leg.exchange_id)
             if book is None or not book.trusted_depth:
                 return _deny("trusted_depth_required")
-            state_age_ns = (
-                snapshot.observation_monotonic_ns - book.observed_monotonic_ns
-            )
+            state_age_ns = snapshot.observation_monotonic_ns - book.observed_monotonic_ns
             if state_age_ns > context.max_state_age_ns:
                 return _deny("depth_state_stale")
 
@@ -270,9 +259,9 @@ def evaluate_risk(
         )
         # A SELL can be canonicalised into a complement BUY by SIG. Reserving one
         # full currency unit per share is deliberately conservative.
-        new_exposure_by_market[leg.market_id] = (
-            new_exposure_by_market.get(leg.market_id, 0.0) + float(leg.quantity)
-        )
+        new_exposure_by_market[leg.market_id] = new_exposure_by_market.get(
+            leg.market_id, 0.0
+        ) + float(leg.quantity)
 
     new_gross = sum(new_exposure_by_market.values())
     for limits in limit_sets:
@@ -325,31 +314,41 @@ def _evaluate_limit_set(
     current_gross = (
         snapshot.portfolio.gross_exposure
         + snapshot.portfolio.open_order_exposure
+        + snapshot.portfolio.account_proxy_uncertainty
     )
     if current_gross + new_gross > limits.max_gross_exposure:
         return "max_gross_exposure"
 
     for market_id, additional in new_exposure_by_market.items():
-        current_market = sum(
-            abs(position.gross_exposure)
-            for position in snapshot.portfolio.positions
-            if (
-                position.market_id == market_id
-                and position.tournament_id == execution_tournament_id
+        current_market = (
+            sum(
+                abs(position.gross_exposure)
+                for position in snapshot.portfolio.positions
+                if (
+                    position.market_id == market_id
+                    and position.tournament_id == execution_tournament_id
+                )
             )
-        ) + sum(
-            order.reserved_exposure
-            for order in snapshot.portfolio.orders
-            if (
-                order.market_id == market_id
-                and order.tournament_id == execution_tournament_id
-                and (order.open or order.uncertain)
+            + sum(
+                order.reserved_exposure
+                for order in snapshot.portfolio.orders
+                if (
+                    order.market_id == market_id
+                    and order.tournament_id == execution_tournament_id
+                    and (order.open or order.uncertain)
+                )
             )
+            + snapshot.portfolio.account_proxy_uncertainty
         )
         if current_market + additional > limits.max_per_market_exposure:
             return "max_per_market_exposure"
 
-    if snapshot.portfolio.open_order_exposure + new_gross > limits.max_open_order_exposure:
+    if (
+        snapshot.portfolio.open_order_exposure
+        + snapshot.portfolio.account_proxy_uncertainty
+        + new_gross
+        > limits.max_open_order_exposure
+    ):
         return "max_open_order_exposure"
 
     current_open_orders = sum(
@@ -386,9 +385,7 @@ def _evaluate_limit_set(
             if order.strategy_id == opportunity.strategy_id
         )
         if (
-            exposure.strategy(opportunity.strategy_id)
-            + pending_strategy
-            + new_gross
+            exposure.strategy(opportunity.strategy_id) + pending_strategy + new_gross
             > limits.max_per_strategy_exposure
         ):
             return "max_per_strategy_exposure"
@@ -400,9 +397,7 @@ def _evaluate_limit_set(
             if order.tournament_id == execution_tournament_id
         )
         if (
-            exposure.tournament(execution_tournament_id)
-            + pending_tournament
-            + new_gross
+            exposure.tournament(execution_tournament_id) + pending_tournament + new_gross
             > limits.max_tournament_exposure
         ):
             return "max_tournament_exposure"
@@ -428,14 +423,10 @@ def _evaluate_limit_set(
             if groups is None:
                 return "exposure_group_unclassified"
             for group_id in groups:
-                additional_by_group[group_id] = (
-                    additional_by_group.get(group_id, 0.0) + additional
-                )
+                additional_by_group[group_id] = additional_by_group.get(group_id, 0.0) + additional
         for group_id, additional in additional_by_group.items():
             if (
-                exposure.group(group_id)
-                + pending_by_group.get(group_id, 0.0)
-                + additional
+                exposure.group(group_id) + pending_by_group.get(group_id, 0.0) + additional
                 > limits.max_event_group_exposure
             ):
                 return "max_event_group_exposure"

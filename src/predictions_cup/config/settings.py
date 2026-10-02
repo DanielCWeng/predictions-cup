@@ -57,28 +57,14 @@ class AppSettings(BaseSettings):
     risk_profile_name: str = "competition"
     risk_profile_version: str = "risk-002-v1"
     risk_profile_mode: RiskProfileMode = "STANDARD"
-    risk_exploratory_max_order_size: int | None = Field(
-        default=None, gt=0, le=2_147_483_647
-    )
+    risk_exploratory_max_order_size: int | None = Field(default=None, gt=0, le=2_147_483_647)
     risk_exploratory_max_gross_exposure: float | None = Field(default=None, gt=0.0)
-    risk_exploratory_max_per_market_exposure: float | None = Field(
-        default=None, gt=0.0
-    )
-    risk_exploratory_max_open_order_exposure: float | None = Field(
-        default=None, gt=0.0
-    )
-    risk_exploratory_max_concurrent_open_orders: int | None = Field(
-        default=None, gt=0
-    )
-    risk_exploratory_max_per_strategy_exposure: float | None = Field(
-        default=None, gt=0.0
-    )
-    risk_exploratory_max_event_group_exposure: float | None = Field(
-        default=None, gt=0.0
-    )
-    risk_exploratory_max_tournament_exposure: float | None = Field(
-        default=None, gt=0.0
-    )
+    risk_exploratory_max_per_market_exposure: float | None = Field(default=None, gt=0.0)
+    risk_exploratory_max_open_order_exposure: float | None = Field(default=None, gt=0.0)
+    risk_exploratory_max_concurrent_open_orders: int | None = Field(default=None, gt=0)
+    risk_exploratory_max_per_strategy_exposure: float | None = Field(default=None, gt=0.0)
+    risk_exploratory_max_event_group_exposure: float | None = Field(default=None, gt=0.0)
+    risk_exploratory_max_tournament_exposure: float | None = Field(default=None, gt=0.0)
 
     # MAKE-001 is disabled by default. These are calculation/runtime parameters,
     # not substitutes for BUILD-009 central risk limits.
@@ -105,6 +91,14 @@ class AppSettings(BaseSettings):
     maker_min_requote_interval_ms: int = Field(default=0, ge=0)
     maker_min_fair_value: float = Field(default=0.0, ge=0.0, le=1.0)
     maker_max_fair_value: float = Field(default=1.0, ge=0.0, le=1.0)
+
+    # SIG account shadow projection is deliberately opt-in. PROXY only follows a
+    # recent clean REST snapshot and identified local execution/realtime events.
+    account_proxy_enabled: bool = False
+    account_proxy_max_age_minutes: float = Field(default=10.0, gt=0.0)
+    account_proxy_size_factor: float = Field(default=0.25, gt=0.0, le=1.0)
+    account_proxy_soft_unwind_limit: float = Field(default=150.0, gt=0.0)
+    account_proxy_position_diff_threshold: float = Field(default=1.0, ge=0.0)
 
     # RESIDUAL-TAKER-001 shares MAKE's process state but has separate RISK
     # attribution. It is opt-in and constrained to the explicit live universe.
@@ -133,9 +127,7 @@ class AppSettings(BaseSettings):
     live_learn_outcome_path: Path = Path("data/live_learn/outcomes.jsonl")
     live_learn_report_path: Path = Path("data/live_learn/reports")
     live_learn_queue_capacity: int = Field(default=200_000, ge=1_000, le=2_000_000)
-    live_learn_max_retained_decisions: int = Field(
-        default=20_000, ge=1, le=500_000
-    )
+    live_learn_max_retained_decisions: int = Field(default=20_000, ge=1, le=500_000)
     live_learn_evidence_grace_seconds: float = Field(default=5.0, ge=0.0, le=300.0)
     live_learn_max_evidence_age_seconds: float = Field(default=15.0, gt=0.0, le=300.0)
 
@@ -148,9 +140,7 @@ class AppSettings(BaseSettings):
     sig_research_path: Path = Path("data/sig_research")
     sig_capture_queue_max: int = Field(default=16_384, ge=10_000, le=65_536)
     sig_capture_parquet_shard_seconds: int = Field(default=60, ge=10, le=300)
-    sig_capture_parquet_max_rows_per_shard: int = Field(
-        default=5_000, ge=1_000, le=1_000_000
-    )
+    sig_capture_parquet_max_rows_per_shard: int = Field(default=5_000, ge=1_000, le=1_000_000)
     sig_realtime_book_depth: int = Field(default=20, ge=1, le=200)
     sig_realtime_tracked_exchange_ids: str = ""
     # Exchanges MAKE keeps fresh SIG marks for (held inventory) without quoting.
@@ -170,9 +160,7 @@ class AppSettings(BaseSettings):
     polymarket_capture_enabled: bool = False
     polymarket_gamma_base_url: AnyHttpUrl = AnyHttpUrl("https://gamma-api.polymarket.com")
     polymarket_clob_base_url: AnyHttpUrl = AnyHttpUrl("https://clob.polymarket.com")
-    polymarket_ws_url: AnyUrl = AnyUrl(
-        "wss://ws-subscriptions-clob.polymarket.com/ws/market"
-    )
+    polymarket_ws_url: AnyUrl = AnyUrl("wss://ws-subscriptions-clob.polymarket.com/ws/market")
     polymarket_snapshot_interval_seconds: float = Field(default=1.0, gt=0)
     polymarket_book_depth: int = Field(default=20, ge=1, le=200)
     polymarket_depth_snapshot_interval_seconds: float = Field(default=60.0, ge=1)
@@ -244,21 +232,15 @@ class AppSettings(BaseSettings):
     def validate_maker_configuration(self) -> Self:
         if self.maker_minimum_size > self.maker_base_size:
             raise ValueError("maker_minimum_size cannot exceed maker_base_size")
-        if self.maker_max_bbo_age_ms < int(
-            self.sig_realtime_bulk_price_refresh_seconds * 1_000
-        ):
+        if self.maker_max_bbo_age_ms < int(self.sig_realtime_bulk_price_refresh_seconds * 1_000):
             raise ValueError(
-                "maker_max_bbo_age_ms must cover the configured SIG bulk-price "
-                "refresh interval"
+                "maker_max_bbo_age_ms must cover the configured SIG bulk-price refresh interval"
             )
-        if (
-            self.maker_require_trusted_depth
-            and self.maker_max_depth_age_ms
-            < int(self.sig_realtime_open_book_refresh_seconds * 1_000)
+        if self.maker_require_trusted_depth and self.maker_max_depth_age_ms < int(
+            self.sig_realtime_open_book_refresh_seconds * 1_000
         ):
             raise ValueError(
-                "maker_max_depth_age_ms must cover the configured trusted-depth "
-                "refresh interval"
+                "maker_max_depth_age_ms must cover the configured trusted-depth refresh interval"
             )
         return self
 
@@ -276,17 +258,12 @@ class AppSettings(BaseSettings):
             and not self.risk_capital_control_enabled
         ):
             raise ValueError(
-                "RISK-002 state-dependent caps require "
-                "risk_capital_control_enabled=true"
+                "RISK-002 state-dependent caps require risk_capital_control_enabled=true"
             )
-        if (
-            self.risk_capital_control_enabled
-            and self.risk_max_mark_age_ms
-            < int(self.sig_realtime_bulk_price_refresh_seconds * 1_000)
+        if self.risk_capital_control_enabled and self.risk_max_mark_age_ms < int(
+            self.sig_realtime_bulk_price_refresh_seconds * 1_000
         ):
-            raise ValueError(
-                "risk_max_mark_age_ms must cover SIG bulk-price refresh interval"
-            )
+            raise ValueError("risk_max_mark_age_ms must cover SIG bulk-price refresh interval")
         return self
 
     @model_validator(mode="after")
@@ -338,17 +315,11 @@ class AppSettings(BaseSettings):
                     "LIVE execution requires explicit tournament_id and tournament_slug"
                 )
             if not self.risk_capital_control_enabled:
-                raise ValueError(
-                    "LIVE execution requires risk_capital_control_enabled=true"
-                )
+                raise ValueError("LIVE execution requires risk_capital_control_enabled=true")
             if self.risk_session_loss_limit is None:
-                raise ValueError(
-                    "LIVE execution requires explicit risk_session_loss_limit"
-                )
+                raise ValueError("LIVE execution requires explicit risk_session_loss_limit")
             if self.risk_drawdown_limit is None:
-                raise ValueError(
-                    "LIVE execution requires explicit risk_drawdown_limit"
-                )
+                raise ValueError("LIVE execution requires explicit risk_drawdown_limit")
             limits = (
                 self.risk_max_order_size,
                 self.risk_max_gross_exposure,
@@ -359,17 +330,13 @@ class AppSettings(BaseSettings):
             if any(value is None for value in limits):
                 raise ValueError("LIVE execution requires every central risk cap")
             if self.risk_max_tournament_exposure is None:
-                raise ValueError(
-                    "LIVE execution requires explicit risk_max_tournament_exposure"
-                )
+                raise ValueError("LIVE execution requires explicit risk_max_tournament_exposure")
             if (
                 self.risk_max_gross_exposure is not None
-                and self.risk_max_tournament_exposure
-                > self.risk_max_gross_exposure
+                and self.risk_max_tournament_exposure > self.risk_max_gross_exposure
             ):
                 raise ValueError(
-                    "LIVE risk_max_tournament_exposure cannot exceed "
-                    "risk_max_gross_exposure"
+                    "LIVE risk_max_tournament_exposure cannot exceed risk_max_gross_exposure"
                 )
             if self.risk_profile_mode == "EXPLORATORY":
                 if self.risk_exploratory_max_tournament_exposure is None:
@@ -424,9 +391,7 @@ class AppSettings(BaseSettings):
             "risk_profile_version": self.risk_profile_version,
             "risk_profile_mode": self.risk_profile_mode,
             "risk_exploratory_max_order_size": self.risk_exploratory_max_order_size,
-            "risk_exploratory_max_gross_exposure": (
-                self.risk_exploratory_max_gross_exposure
-            ),
+            "risk_exploratory_max_gross_exposure": (self.risk_exploratory_max_gross_exposure),
             "risk_exploratory_max_per_market_exposure": (
                 self.risk_exploratory_max_per_market_exposure
             ),
@@ -458,6 +423,11 @@ class AppSettings(BaseSettings):
             "maker_max_bbo_age_ms": self.maker_max_bbo_age_ms,
             "maker_max_fv_age_ms": self.maker_max_fv_age_ms,
             "maker_max_account_age_ms": self.maker_max_account_age_ms,
+            "account_proxy_enabled": self.account_proxy_enabled,
+            "account_proxy_max_age_minutes": self.account_proxy_max_age_minutes,
+            "account_proxy_size_factor": self.account_proxy_size_factor,
+            "account_proxy_soft_unwind_limit": self.account_proxy_soft_unwind_limit,
+            "account_proxy_position_diff_threshold": (self.account_proxy_position_diff_threshold),
             "maker_max_inventory_age_ms": self.maker_max_inventory_age_ms,
             "maker_max_signal_age_ms": self.maker_max_signal_age_ms,
             "maker_require_trusted_depth": self.maker_require_trusted_depth,
@@ -473,20 +443,14 @@ class AppSettings(BaseSettings):
             "shadow_persistence_batch_size": self.shadow_persistence_batch_size,
             "shadow_candidate_timeout_ms": self.shadow_candidate_timeout_ms,
             "shadow_capture_mirror_enabled": self.shadow_capture_mirror_enabled,
-            "shadow_snapshot_min_interval_seconds": (
-                self.shadow_snapshot_min_interval_seconds
-            ),
+            "shadow_snapshot_min_interval_seconds": (self.shadow_snapshot_min_interval_seconds),
             "live_learn_enabled": self.live_learn_enabled,
             "live_learn_outcome_path": str(self.live_learn_outcome_path),
             "live_learn_report_path": str(self.live_learn_report_path),
             "live_learn_queue_capacity": self.live_learn_queue_capacity,
-            "live_learn_max_retained_decisions": (
-                self.live_learn_max_retained_decisions
-            ),
+            "live_learn_max_retained_decisions": (self.live_learn_max_retained_decisions),
             "live_learn_evidence_grace_seconds": self.live_learn_evidence_grace_seconds,
-            "live_learn_max_evidence_age_seconds": (
-                self.live_learn_max_evidence_age_seconds
-            ),
+            "live_learn_max_evidence_age_seconds": (self.live_learn_max_evidence_age_seconds),
             "model_paper_id_count": len(
                 {value.strip() for value in self.model_paper_ids.split(",") if value.strip()}
             ),
@@ -499,9 +463,7 @@ class AppSettings(BaseSettings):
             "sig_research_path": str(self.sig_research_path),
             "sig_capture_queue_max": self.sig_capture_queue_max,
             "sig_capture_parquet_shard_seconds": self.sig_capture_parquet_shard_seconds,
-            "sig_capture_parquet_max_rows_per_shard": (
-                self.sig_capture_parquet_max_rows_per_shard
-            ),
+            "sig_capture_parquet_max_rows_per_shard": (self.sig_capture_parquet_max_rows_per_shard),
             "sig_realtime_book_depth": self.sig_realtime_book_depth,
             "sig_realtime_tracked_exchange_count": len(
                 {
@@ -511,12 +473,8 @@ class AppSettings(BaseSettings):
                 }
             ),
             "sig_rest_governor_rate_per_second": self.sig_rest_governor_rate_per_second,
-            "sig_rest_shared_cooldown_max_seconds": (
-                self.sig_rest_shared_cooldown_max_seconds
-            ),
-            "sig_realtime_open_book_refresh_seconds": (
-                self.sig_realtime_open_book_refresh_seconds
-            ),
+            "sig_rest_shared_cooldown_max_seconds": (self.sig_rest_shared_cooldown_max_seconds),
+            "sig_realtime_open_book_refresh_seconds": (self.sig_realtime_open_book_refresh_seconds),
             "sig_realtime_bulk_price_refresh_seconds": (
                 self.sig_realtime_bulk_price_refresh_seconds
             ),

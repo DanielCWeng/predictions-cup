@@ -172,16 +172,14 @@ class InventoryConfidenceSizePolicy:
             0.0,
             min(
                 1.0,
-                (context.max_abs_inventory - context.signed_inventory)
-                / context.max_abs_inventory,
+                (context.max_abs_inventory - context.signed_inventory) / context.max_abs_inventory,
             ),
         )
         ask_headroom = max(
             0.0,
             min(
                 1.0,
-                (context.max_abs_inventory + context.signed_inventory)
-                / context.max_abs_inventory,
+                (context.max_abs_inventory + context.signed_inventory) / context.max_abs_inventory,
             ),
         )
         bid_capacity = max(
@@ -230,6 +228,9 @@ class ConservativeEligibilityPolicy:
         suspend_toxicity_at: float = 0.80,
         min_fair_value: float = 0.0,
         max_fair_value: float = 1.0,
+        account_proxy_enabled: bool = False,
+        max_account_proxy_age_ns: int = 600_000_000_000,
+        proxy_soft_unwind_limit: float = 150.0,
     ) -> None:
         ages = (
             max_bbo_age_ns,
@@ -240,16 +241,19 @@ class ConservativeEligibilityPolicy:
         )
         if min(ages) <= 0:
             raise ValueError("freshness limits must be positive")
-        if require_trusted_depth and (
-            max_depth_age_ns is None or max_depth_age_ns <= 0
-        ):
+        if require_trusted_depth and (max_depth_age_ns is None or max_depth_age_ns <= 0):
             raise ValueError("trusted-depth policy requires positive max_depth_age_ns")
         if not 0.0 <= widen_toxicity_at <= suspend_toxicity_at <= 1.0:
             raise ValueError("invalid toxicity thresholds")
         if not 0.0 <= min_fair_value < max_fair_value <= 1.0:
             raise ValueError("invalid fair-value band")
+        if max_account_proxy_age_ns <= 0 or proxy_soft_unwind_limit <= 0.0:
+            raise ValueError("invalid account-proxy policy limits")
         self._min_fair_value = min_fair_value
         self._max_fair_value = max_fair_value
+        self._account_proxy_enabled = account_proxy_enabled
+        self._max_account_proxy_age_ns = max_account_proxy_age_ns
+        self._proxy_soft_unwind_limit = proxy_soft_unwind_limit
         self._max_bbo_age_ns = max_bbo_age_ns
         self._max_fv_age_ns = max_fv_age_ns
         self._max_account_age_ns = max_account_age_ns
@@ -267,21 +271,30 @@ class ConservativeEligibilityPolicy:
         snapshot = context.snapshot
         deadlines = [
             snapshot.sig_bbo_observed_ns + self._max_bbo_age_ns,
-            snapshot.account_observed_ns + self._max_account_age_ns,
-            snapshot.inventory_observed_ns + self._max_inventory_age_ns,
             self._fair_value_observed_ns(context) + self._max_fv_age_ns,
             context.prediction.observed_monotonic_ns + self._max_signal_age_ns,
             context.toxicity.observed_monotonic_ns + self._max_signal_age_ns,
         ]
-        if self._require_depth:
-            if (
-                snapshot.sig_depth_observed_ns is None
-                or self._max_depth_age_ns is None
-            ):
-                return snapshot.now_monotonic_ns
+        portfolio = snapshot.runtime.portfolio
+        if portfolio.proxy_active and portfolio.account_proxy_age_ns is not None:
             deadlines.append(
-                snapshot.sig_depth_observed_ns + self._max_depth_age_ns
+                snapshot.now_monotonic_ns
+                + max(
+                    0,
+                    self._max_account_proxy_age_ns - portfolio.account_proxy_age_ns,
+                )
             )
+        else:
+            deadlines.extend(
+                (
+                    snapshot.account_observed_ns + self._max_account_age_ns,
+                    snapshot.inventory_observed_ns + self._max_inventory_age_ns,
+                )
+            )
+        if self._require_depth:
+            if snapshot.sig_depth_observed_ns is None or self._max_depth_age_ns is None:
+                return snapshot.now_monotonic_ns
+            deadlines.append(snapshot.sig_depth_observed_ns + self._max_depth_age_ns)
         return min(deadlines)
 
     def gate(self, context: QuoteContext) -> GateDecision:
@@ -300,7 +313,14 @@ class ConservativeEligibilityPolicy:
         # Account reconciliation is a bounded HOLD, not permission to retain
         # resting exposure indefinitely. Once the last accepted/authoritative
         # account observation ages out, stale capital truth forces withdrawal.
-        if self._stale(
+        portfolio = snapshot.runtime.portfolio
+        if portfolio.proxy_active:
+            if (
+                portfolio.account_proxy_age_ns is None
+                or portfolio.account_proxy_age_ns > self._max_account_proxy_age_ns
+            ):
+                return GateDecision(GateMode.CANCEL, "account_proxy_stale")
+        elif self._stale(
             snapshot.now_monotonic_ns,
             snapshot.account_observed_ns,
             self._max_account_age_ns,
@@ -308,15 +328,18 @@ class ConservativeEligibilityPolicy:
             return GateDecision(GateMode.CANCEL, "account_stale")
         if not snapshot.runtime.portfolio.account_trusted:
             return GateDecision(GateMode.HOLD, "account_untrusted")
-        if not snapshot.sig_bbo_trusted:
-            return GateDecision(GateMode.CANCEL, "sig_bbo_untrusted")
-        if self._stale(
+        sig_bbo_stale = self._stale(
             snapshot.now_monotonic_ns,
             snapshot.sig_bbo_observed_ns,
             self._max_bbo_age_ns,
-        ):
-            return GateDecision(GateMode.CANCEL, "sig_bbo_stale")
-        if self._stale(
+        )
+        if not self._account_proxy_enabled:
+            if not snapshot.sig_bbo_trusted:
+                return GateDecision(GateMode.CANCEL, "sig_bbo_untrusted")
+            if sig_bbo_stale:
+                return GateDecision(GateMode.CANCEL, "sig_bbo_stale")
+        bbo_proxy = not snapshot.sig_bbo_trusted or sig_bbo_stale
+        if not portfolio.proxy_active and self._stale(
             snapshot.now_monotonic_ns,
             snapshot.inventory_observed_ns,
             self._max_inventory_age_ns,
@@ -331,9 +354,7 @@ class ConservativeEligibilityPolicy:
         ):
             return GateDecision(GateMode.CANCEL, "fv_stale")
         fair = context.raw_fair_value.value
-        if fair is not None and not (
-            self._min_fair_value <= fair <= self._max_fair_value
-        ):
+        if fair is not None and not (self._min_fair_value <= fair <= self._max_fair_value):
             # Quote only mid-range markets; held inventory is kept, not dumped.
             return GateDecision(GateMode.CANCEL, "fv_outside_band")
         if not context.prediction.trusted or self._stale(
@@ -366,10 +387,49 @@ class ConservativeEligibilityPolicy:
         )
         if toxic >= self._suspend_toxicity_at:
             return GateDecision(GateMode.SUSPEND, "toxicity_suspend")
-        if context.signed_inventory >= context.max_abs_inventory:
+
+        if bbo_proxy:
+            book = snapshot.runtime.book(snapshot.exchange_id)
+            if (
+                not self._account_proxy_enabled
+                or book is None
+                or book.market_id != snapshot.market_id
+                or book.tournament_id != snapshot.tournament_id
+                or book.observed_monotonic_ns != snapshot.sig_bbo_observed_ns
+                or not book.bids
+                or not book.asks
+                or context.raw_fair_value.source_id != "direct-polymarket"
+                or self._stale(
+                    snapshot.now_monotonic_ns,
+                    context.raw_fair_value.observed_monotonic_ns,
+                    self._max_fv_age_ns,
+                )
+            ):
+                return GateDecision(
+                    GateMode.CANCEL,
+                    "sig_bbo_untrusted" if not snapshot.sig_bbo_trusted else "sig_bbo_stale",
+                )
+            reducing_mode = self._inventory_reducing_mode(context)
+            if reducing_mode is None:
+                return GateDecision(GateMode.CANCEL, "bbo_proxy_no_reducing_side")
+            widened = toxic >= self._widen_toxicity_at
+            return GateDecision(
+                reducing_mode,
+                "bbo_proxy_inventory_reducing",
+                spread_multiplier=1.0 + toxic if widened else 1.0,
+                size_multiplier=max(0.1, 1.0 - toxic) if widened else 1.0,
+            )
+
+        low, high = self._inventory_bounds(context)
+        if high >= context.max_abs_inventory:
             return GateDecision(GateMode.ASK_ONLY, "positive_inventory_boundary")
-        if context.signed_inventory <= -context.max_abs_inventory:
+        if low <= -context.max_abs_inventory:
             return GateDecision(GateMode.BID_ONLY, "negative_inventory_boundary")
+        if portfolio.proxy_active and max(abs(low), abs(high)) > self._proxy_soft_unwind_limit:
+            reducing_mode = self._inventory_reducing_mode(context)
+            if reducing_mode is None:
+                return GateDecision(GateMode.CANCEL, "proxy_unwind_side_unknown")
+            return GateDecision(reducing_mode, "proxy_soft_unwind")
         if toxic >= self._widen_toxicity_at:
             return GateDecision(
                 GateMode.WIDER,
@@ -380,13 +440,32 @@ class ConservativeEligibilityPolicy:
         return GateDecision(GateMode.NORMAL, "ok")
 
     @staticmethod
+    def _inventory_bounds(
+        context: QuoteContext,
+        *,
+        include_orders: bool = False,
+    ) -> tuple[float, float]:
+        portfolio = context.snapshot.runtime.portfolio
+        if not portfolio.proxy_active and not include_orders:
+            return context.signed_inventory, context.signed_inventory
+        return portfolio.worst_case_inventory_bounds(
+            context.snapshot.exchange_id,
+            context.snapshot.tournament_id,
+        )
+
+    def _inventory_reducing_mode(self, context: QuoteContext) -> GateMode | None:
+        low, high = self._inventory_bounds(context, include_orders=True)
+        if low > 0.0:
+            return GateMode.ASK_ONLY
+        if high < 0.0:
+            return GateMode.BID_ONLY
+        return None
+
+    @staticmethod
     def _fair_value_observed_ns(context: QuoteContext) -> int:
         observed = context.raw_fair_value.observed_monotonic_ns
         feed_observed = context.snapshot.external_feed_observed_ns
-        if (
-            context.raw_fair_value.source_id == "direct-polymarket"
-            and feed_observed is not None
-        ):
+        if context.raw_fair_value.source_id == "direct-polymarket" and feed_observed is not None:
             return max(observed, feed_observed)
         return observed
 

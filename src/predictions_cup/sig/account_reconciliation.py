@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Protocol
 
 from predictions_cup.runtime.models import (
@@ -44,6 +45,7 @@ class AccountAuthoritativeSnapshot:
     open_orders: tuple[OrderReadDto, ...]
     positions: tuple[PositionReadDto, ...]
     observed_at: datetime
+    cash_balance: Decimal | None = None
 
     def to_runtime_portfolio(self) -> RuntimePortfolio:
         market_by_exchange = {
@@ -73,6 +75,11 @@ class AccountAuthoritativeSnapshot:
                     reserved_exposure=float(abs(order.quantity)),
                     open=order.open,
                     uncertain=False,
+                    signed_quantity=_signed_order_quantity(
+                        order.side,
+                        order.action,
+                        order.quantity,
+                    ),
                 )
             )
         return RuntimePortfolio(
@@ -82,11 +89,17 @@ class AccountAuthoritativeSnapshot:
         )
 
 
+def _signed_order_quantity(side: str, action: str, quantity: Decimal) -> float:
+    amount = float(abs(quantity))
+    return amount if (side == "yes") == (action == "buy") else -amount
+
+
 async def reconcile_account(
     rest: AccountReconciliationRest,
     *,
     tournament_id: str,
     tournament_slug: str,
+    cash_balance: Decimal | None = None,
 ) -> AccountAuthoritativeSnapshot:
     if not tournament_id.strip() or not tournament_slug.strip():
         raise ValueError("explicit tournament id and slug are required for reconciliation")
@@ -111,4 +124,5 @@ async def reconcile_account(
         open_orders=open_orders,
         positions=positions_response.positions,
         observed_at=observed_at,
+        cash_balance=cash_balance,
     )

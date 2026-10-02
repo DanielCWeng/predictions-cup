@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,6 +19,8 @@ from predictions_cup.execution.models import (
     RuntimeOrderIntent,
     lifecycle_transition_allowed,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +52,7 @@ class ExecutionJournal:
 
     def __init__(self, path: Path) -> None:
         self.path = path
+        self._operation_listeners: list[Callable[[str], None]] = []
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._connection = sqlite3.connect(path)
         self._connection.execute("PRAGMA journal_mode=WAL")
@@ -126,9 +131,7 @@ class ExecutionJournal:
     def _ensure_execution_envelope_columns(self) -> None:
         existing = {
             str(row[1])
-            for row in self._connection.execute(
-                "PRAGMA table_info(execution_envelopes)"
-            ).fetchall()
+            for row in self._connection.execute("PRAGMA table_info(execution_envelopes)").fetchall()
         }
         if "tournament_id" not in existing:
             self._connection.execute(
@@ -142,9 +145,7 @@ class ExecutionJournal:
     def _ensure_execution_event_columns(self) -> None:
         existing = {
             str(row[1])
-            for row in self._connection.execute(
-                "PRAGMA table_info(execution_events)"
-            ).fetchall()
+            for row in self._connection.execute("PRAGMA table_info(execution_events)").fetchall()
         }
         additions = (
             ("tournament_id", "TEXT"),
@@ -228,6 +229,29 @@ class ExecutionJournal:
     def close(self) -> None:
         self._connection.close()
 
+    def add_operation_listener(self, listener: Callable[[str], None]) -> None:
+        """Subscribe to committed journal updates without affecting dispatch."""
+        self._operation_listeners.append(listener)
+
+    def latest_event_id(self) -> int:
+        row = self._connection.execute(
+            "SELECT COALESCE(MAX(event_id), 0) FROM execution_events"
+        ).fetchone()
+        return 0 if row is None else int(row[0])
+
+    def _notify_operation_listeners(self, logical_operation_id: str) -> None:
+        for listener in tuple(self._operation_listeners):
+            try:
+                listener(logical_operation_id)
+            except Exception:
+                # A projection is never allowed to turn an accepted venue order
+                # into an execution exception. It records its own fail-closed
+                # discrepancy and the ordinary journal remains authoritative.
+                logger.exception(
+                    "execution journal projection listener failed op=%s",
+                    logical_operation_id,
+                )
+
     def record_before_dispatch(
         self,
         envelope: ExecutionEnvelope,
@@ -279,13 +303,9 @@ class ExecutionJournal:
                             decision_monotonic_ns=(
                                 None if audit is None else audit.decision_monotonic_ns
                             ),
-                            strategy_family=(
-                                None if audit is None else audit.strategy_family
-                            ),
+                            strategy_family=(None if audit is None else audit.strategy_family),
                             strategy_id=(
-                                intent.strategy_id
-                                if audit is None
-                                else audit.strategy_id
+                                intent.strategy_id if audit is None else audit.strategy_id
                             ),
                             signal_value=None if audit is None else audit.signal_value,
                             fair_value=None if audit is None else audit.fair_value,
@@ -295,6 +315,7 @@ class ExecutionJournal:
                                 {
                                     "action": intent.action.value,
                                     "outcome_side": intent.outcome_side.value,
+                                    "market_id": intent.market_id,
                                 },
                                 separators=(",", ":"),
                             ),
@@ -312,13 +333,12 @@ class ExecutionJournal:
                         decision_monotonic_ns=(
                             None if audit is None else audit.decision_monotonic_ns
                         ),
-                        strategy_family=(
-                            None if audit is None else audit.strategy_family
-                        ),
+                        strategy_family=(None if audit is None else audit.strategy_family),
                         strategy_id=None if audit is None else audit.strategy_id,
                         signal_value=None if audit is None else audit.signal_value,
                         fair_value=None if audit is None else audit.fair_value,
                     )
+            self._notify_operation_listeners(envelope.logical_operation_id)
             return
         except sqlite3.IntegrityError:
             # The hot path optimistically INSERTs. Only an idempotent retry pays
@@ -343,9 +363,7 @@ class ExecutionJournal:
             envelope.payload_json,
         )
         if tuple(existing) != expected:
-            raise ValueError(
-                "logical operation identity cannot be reused with changed payload"
-            )
+            raise ValueError("logical operation identity cannot be reused with changed payload")
         if submitted_monotonic_ns is not None:
             self.record_event(
                 logical_operation_id=envelope.logical_operation_id,
@@ -421,6 +439,7 @@ class ExecutionJournal:
                 terminal_status=terminal_status,
                 detail_json=detail_json,
             )
+        self._notify_operation_listeners(logical_operation_id)
 
     def _insert_event(
         self,
@@ -454,9 +473,7 @@ class ExecutionJournal:
                 """,
                 (logical_operation_id,),
             ).fetchone()
-            tournament_id = (
-                None if row is None else self._required_tournament_id(row[0])
-            )
+            tournament_id = None if row is None else self._required_tournament_id(row[0])
         tournament_id = self._required_tournament_id(tournament_id)
         self._connection.execute(
             """
@@ -515,12 +532,8 @@ class ExecutionJournal:
                 event_type=str(row[4]),
                 observed_monotonic_ns=int(row[5]),
                 source_timestamp=None if row[6] is None else str(row[6]),
-                decision_observation_ns=(
-                    None if row[7] is None else int(row[7])
-                ),
-                decision_monotonic_ns=(
-                    None if row[8] is None else int(row[8])
-                ),
+                decision_observation_ns=(None if row[7] is None else int(row[7])),
+                decision_monotonic_ns=(None if row[8] is None else int(row[8])),
                 strategy_family=None if row[9] is None else str(row[9]),
                 strategy_id=None if row[10] is None else str(row[10]),
                 signal_value=None if row[11] is None else float(row[11]),
@@ -555,9 +568,7 @@ class ExecutionJournal:
             raise KeyError(f"unknown logical operation: {logical_operation_id}")
         current = LifecycleState(str(row[0]))
         if not lifecycle_transition_allowed(current, state):
-            raise ValueError(
-                f"invalid lifecycle transition {current.value} -> {state.value}"
-            )
+            raise ValueError(f"invalid lifecycle transition {current.value} -> {state.value}")
         with self._connection:
             self._connection.execute(
                 """
@@ -573,6 +584,7 @@ class ExecutionJournal:
                     logical_operation_id,
                 ),
             )
+        self._notify_operation_listeners(logical_operation_id)
 
     def placement_identity_for_exchange_order_id(
         self,
@@ -611,18 +623,14 @@ class ExecutionJournal:
         if not identities:
             return None
         if len(identities) != 1:
-            raise RuntimeError(
-                "venue order identity maps to multiple placement operations"
-            )
+            raise RuntimeError("venue order identity maps to multiple placement operations")
         return identities[0]
 
     def logical_operation_for_exchange_order_id(
         self,
         exchange_order_id: str,
     ) -> str | None:
-        placement = self.placement_identity_for_exchange_order_id(
-            exchange_order_id
-        )
+        placement = self.placement_identity_for_exchange_order_id(exchange_order_id)
         if placement is not None:
             return placement[0]
         row = self._connection.execute(
@@ -728,9 +736,7 @@ class ExecutionJournal:
                     intent_ids=tuple(intent_ids_raw),
                     lifecycle_state=LifecycleState(str(row[8])),
                     created_monotonic_ns=int(str(row[9])),
-                    relationship_constraint=(
-                        None if row[10] is None else str(row[10])
-                    ),
+                    relationship_constraint=(None if row[10] is None else str(row[10])),
                 )
             )
         return tuple(result)
