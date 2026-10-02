@@ -359,7 +359,7 @@ class MakerSourceBridge:
             scalar_bids = self._scalar_levels(best_bid)
             scalar_asks = self._scalar_levels(best_ask)
             scalar_matches_depth = (
-                depth_trusted_now
+                depth_current
                 and orderbook is not None
                 and bool(orderbook.bids)
                 and bool(orderbook.asks)
