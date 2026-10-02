@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import sqlite3
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -18,7 +19,13 @@ from predictions_cup.execution.interlocks import (
 )
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
-from predictions_cup.execution.models import ExecutionMode, LifecycleState, OperationKind
+from predictions_cup.execution.models import (
+    ExecutionEnvelope,
+    ExecutionMode,
+    LifecycleState,
+    OperationKind,
+    RuntimeOrderIntent,
+)
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.recovery import (
     RecoveryRest,
@@ -45,6 +52,7 @@ from predictions_cup.sig.account_state import (
     AccountRealtimeStateEngine,
     AccountTrustTransition,
 )
+from predictions_cup.sig.errors import SigClientRequestError
 from predictions_cup.sig.trading_client import SigTradingClient
 from predictions_cup.sig.trading_dto import (
     OrderFillsResponseDto,
@@ -493,6 +501,327 @@ def test_in_session_recovery_resolves_uncertain_cancel_without_restart(
         assert resolved == ("cancel-in-session-91",)
         assert trading.cancelled_order_ids == [91]
         assert journal.unresolved() == ()
+    finally:
+        journal.close()
+
+
+def _record_no_fill_cancel_reconciliation(
+    journal: ExecutionJournal,
+    logical_operation_id: str,
+    *,
+    details: dict[str, object] | None = None,
+) -> None:
+    evidence: dict[str, object] = {
+        "order_open": False,
+        "fills_coverage_complete": True,
+        "fill_count": 0,
+        "total_quantity_filled": "0",
+    }
+    if details is not None:
+        evidence.update(details)
+    journal.record_event(
+        logical_operation_id=logical_operation_id,
+        event_type="RECONCILED_TERMINAL",
+        observed_monotonic_ns=200,
+        exchange_order_id="91",
+        terminal_status=LifecycleState.CANCELLED.value,
+        detail_json=json.dumps(evidence),
+    )
+
+
+@pytest.mark.parametrize(
+    ("first_state", "incoming_state"),
+    [
+        (LifecycleState.CANCELLED, LifecycleState.REJECTED),
+        (LifecycleState.REJECTED, LifecycleState.CANCELLED),
+    ],
+)
+def test_authoritative_no_fill_cancel_conflict_keeps_first_terminal(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+    first_state: LifecycleState,
+    incoming_state: LifecycleState,
+) -> None:
+    journal = ExecutionJournal(tmp_path / "terminal-cancel-conflict.sqlite3")
+    cancel = ExecutionEnvelope.cancellation(
+        logical_operation_id="cancel-terminal-conflict-91",
+        operation_kind=OperationKind.SINGLE_CANCELLATION,
+        sink_mode=ExecutionMode.LIVE,
+        created_monotonic_ns=100,
+        order_id=91,
+        tournament_id="t1",
+    )
+    journal.record_before_dispatch(cancel)
+    journal.mark_state(cancel.logical_operation_id, LifecycleState.RECONCILING, 101)
+    journal.mark_state(cancel.logical_operation_id, first_state, 102)
+    _record_no_fill_cancel_reconciliation(journal, cancel.logical_operation_id)
+
+    try:
+        with caplog.at_level(logging.WARNING, logger="predictions_cup.execution.journal"):
+            retained = journal.mark_state(
+                cancel.logical_operation_id,
+                incoming_state,
+                201,
+            )
+        durable = next(
+            item
+            for item in journal.envelopes()
+            if item.logical_operation_id == cancel.logical_operation_id
+        )
+        assert retained is first_state
+        assert durable.lifecycle_state is first_state
+        assert "keeping first terminal" in caplog.text
+    finally:
+        journal.close()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("order_open", True),
+        ("fills_coverage_complete", False),
+        ("fill_count", 1),
+        ("total_quantity_filled", "1"),
+    ],
+)
+def test_cancel_terminal_conflict_requires_closed_zero_fill_evidence(
+    tmp_path: Path,
+    field: str,
+    value: object,
+) -> None:
+    journal = ExecutionJournal(tmp_path / "unsafe-terminal-cancel.sqlite3")
+    cancel = ExecutionEnvelope.cancellation(
+        logical_operation_id="cancel-unsafe-terminal-91",
+        operation_kind=OperationKind.SINGLE_CANCELLATION,
+        sink_mode=ExecutionMode.LIVE,
+        created_monotonic_ns=100,
+        order_id=91,
+        tournament_id="t1",
+    )
+    journal.record_before_dispatch(cancel)
+    journal.mark_state(cancel.logical_operation_id, LifecycleState.RECONCILING, 101)
+    journal.mark_state(cancel.logical_operation_id, LifecycleState.REJECTED, 102)
+    _record_no_fill_cancel_reconciliation(
+        journal,
+        cancel.logical_operation_id,
+        details={field: value},
+    )
+
+    try:
+        with pytest.raises(ValueError, match="REJECTED -> CANCELLED"):
+            journal.mark_state(
+                cancel.logical_operation_id,
+                LifecycleState.CANCELLED,
+                201,
+            )
+    finally:
+        journal.close()
+
+
+def test_cancel_terminal_conflict_is_not_suppressed_with_recorded_fill(
+    tmp_path: Path,
+) -> None:
+    journal = ExecutionJournal(tmp_path / "filled-terminal-cancel.sqlite3")
+    cancel = ExecutionEnvelope.cancellation(
+        logical_operation_id="cancel-filled-terminal-91",
+        operation_kind=OperationKind.SINGLE_CANCELLATION,
+        sink_mode=ExecutionMode.LIVE,
+        created_monotonic_ns=100,
+        order_id=91,
+        tournament_id="t1",
+    )
+    journal.record_before_dispatch(cancel)
+    journal.mark_state(cancel.logical_operation_id, LifecycleState.RECONCILING, 101)
+    journal.mark_state(cancel.logical_operation_id, LifecycleState.REJECTED, 102)
+    _record_no_fill_cancel_reconciliation(journal, cancel.logical_operation_id)
+    journal.record_event(
+        logical_operation_id=cancel.logical_operation_id,
+        event_type="AUTHORITATIVE_FILL",
+        observed_monotonic_ns=202,
+        exchange_order_id="91",
+        fill_id="fill-1",
+        quantity="1",
+    )
+
+    try:
+        with pytest.raises(ValueError, match="REJECTED -> CANCELLED"):
+            journal.mark_state(
+                cancel.logical_operation_id,
+                LifecycleState.CANCELLED,
+                203,
+            )
+    finally:
+        journal.close()
+
+
+def test_in_session_cancel_recovery_keeps_rejected_state_after_no_fill_proof(
+    tmp_path: Path,
+) -> None:
+    journal = ExecutionJournal(tmp_path / "rejected-cancel-recovery.sqlite3")
+    cancel = ExecutionEnvelope.cancellation(
+        logical_operation_id="cancel-recovery-race-91",
+        operation_kind=OperationKind.SINGLE_CANCELLATION,
+        sink_mode=ExecutionMode.LIVE,
+        created_monotonic_ns=100,
+        order_id=91,
+        tournament_id="t1",
+    )
+    journal.record_before_dispatch(cancel)
+    journal.mark_state(cancel.logical_operation_id, LifecycleState.UNCERTAIN, 102)
+    reservations = ExecutionReservationBook()
+    reserved_intent = RuntimeOrderIntent(
+        intent_id="placement-intent-91",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=2,
+        limit_price_ticks=100,
+        strategy_id="fixture",
+        decision_observation_ns=100,
+    )
+    reservations.reserve("placement-op-91", (reserved_intent,))
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, _RecoveryTradingFixture()),
+        journal=journal,
+        permit=_recovery_permit(),
+        reservations=reservations,
+        clock_ns=iter(range(200, 500)).__next__,
+    )
+
+    class ClosedNoFillRest(_RecoveryRestFixture):
+        async def get_order(self, order_id: int) -> OrderReadDto:
+            assert order_id == 91
+            # Model the late rejection racing the already-started REST recovery.
+            journal.mark_state(
+                cancel.logical_operation_id,
+                LifecycleState.REJECTED,
+                210,
+            )
+            return OrderReadDto.model_validate(
+                {
+                    "id": 91,
+                    "exchangeId": "36",
+                    "side": "yes",
+                    "action": "buy",
+                    "quantity": "2",
+                    "priceLimit": "0.495",
+                    "open": False,
+                    "createdAt": "2026-09-29T14:00:00Z",
+                    "expirationDate": None,
+                }
+            )
+
+        async def get_order_fills(
+            self,
+            order_id: int,
+            *,
+            limit: int = 50,
+            cursor: str | None = None,
+        ) -> OrderFillsResponseDto:
+            assert order_id == 91
+            assert limit == 200
+            assert cursor is None
+            return OrderFillsResponseDto.model_validate(
+                {
+                    "orderId": 91,
+                    "exchangeId": "36",
+                    "tournamentId": "t1",
+                    "data": [],
+                    "pagination": {
+                        "limit": 200,
+                        "hasMore": False,
+                        "nextCursor": None,
+                    },
+                    "coverage": {
+                        "complete": True,
+                        "projectedThroughSequence": 1,
+                    },
+                    "totalQuantityFilled": "0",
+                    "avgFillPrice": None,
+                }
+            )
+
+    try:
+        resolved = asyncio.run(
+            recover_in_session_cancellations(
+                journal=journal,
+                rest=cast(RecoveryRest, ClosedNoFillRest()),
+                live_sink=sink,
+                tournament_id="t1",
+                clock_ns=iter(range(500, 800)).__next__,
+            )
+        )
+        durable = next(
+            item
+            for item in journal.envelopes()
+            if item.logical_operation_id == cancel.logical_operation_id
+        )
+        assert resolved == (cancel.logical_operation_id,)
+        assert durable.lifecycle_state is LifecycleState.REJECTED
+        assert reservations.contains_operation(
+            "placement-op-91", (reserved_intent.intent_id,)
+        )
+    finally:
+        journal.close()
+
+
+def test_stale_cancel_rejection_keeps_authoritatively_cancelled_state(
+    tmp_path: Path,
+) -> None:
+    journal = ExecutionJournal(tmp_path / "cancelled-then-rejected.sqlite3")
+    cancel = ExecutionEnvelope.cancellation(
+        logical_operation_id="cancel-rejection-race-91",
+        operation_kind=OperationKind.SINGLE_CANCELLATION,
+        sink_mode=ExecutionMode.LIVE,
+        created_monotonic_ns=100,
+        order_id=91,
+        tournament_id="t1",
+    )
+    journal.record_before_dispatch(cancel)
+    journal.mark_state(cancel.logical_operation_id, LifecycleState.RECONCILING, 101)
+    _record_no_fill_cancel_reconciliation(journal, cancel.logical_operation_id)
+    journal.mark_state(cancel.logical_operation_id, LifecycleState.CANCELLED, 201)
+
+    class RejectingCancelClient:
+        async def cancel_order(self, order_id: int) -> object:
+            assert order_id == 91
+            raise SigClientRequestError(
+                status_code=400,
+                code="CANCEL_REJECTED",
+                safe_message="fixture rejection",
+            )
+
+    reservations = ExecutionReservationBook()
+    reserved_intent = RuntimeOrderIntent(
+        intent_id="retained-placement-intent",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=2,
+        limit_price_ticks=100,
+        strategy_id="fixture",
+        decision_observation_ns=100,
+    )
+    reservations.reserve("placement-op-retained", (reserved_intent,))
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, RejectingCancelClient()),
+        journal=journal,
+        permit=_recovery_permit(),
+        reservations=reservations,
+        clock_ns=iter(range(300, 500)).__next__,
+    )
+
+    try:
+        event = asyncio.run(sink.cancel(cancel))
+        assert event.state is LifecycleState.CANCELLED
+        assert event.detail == "authoritative_terminal_cancel_conflict"
+        assert reservations.contains_operation(
+            "placement-op-retained", (reserved_intent.intent_id,)
+        )
     finally:
         journal.close()
 

@@ -698,7 +698,7 @@ class SigLiveSink:
                 ),
                 detail_json=envelope.payload_json,
             )
-            self._journal.mark_state(
+            resolved_state = self._journal.mark_state(
                 envelope.logical_operation_id,
                 LifecycleState.REJECTED,
                 observed,
@@ -715,6 +715,14 @@ class SigLiveSink:
                 ),
                 terminal_status=LifecycleState.REJECTED.value,
             )
+            if resolved_state is not LifecycleState.REJECTED:
+                return ExecutionEvent(
+                    logical_operation_id=envelope.logical_operation_id,
+                    state=resolved_state,
+                    observed_monotonic_ns=observed,
+                    simulated=False,
+                    detail="authoritative_terminal_cancel_conflict",
+                )
             raise
 
         observed = self._clock_ns()
