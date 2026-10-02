@@ -87,6 +87,25 @@ PREDICTIONS_CUP_RISK_MAX_ACCOUNT_AGE_MS=2000
 MAKE composition currently uses account-stream trust/reconciliation boundaries for account
 continuity and uses the explicit mark-age contract for hot-path revaluation.
 
+## Optional national-swing stress cap
+
+The election-factor cap is separately disabled by default. It uses the accepted MAPPING-001
+crosswalk and in-memory Polymarket YES-token midpoints. Each active exchange must have a supported
+verified party/race/chamber identity and a midpoint within the configured age; missing, stale, or
+unmapped exposure blocks risk-increasing orders. Fully reducing orders bypass this check.
+
+```text
+PREDICTIONS_CUP_RISK_SWING_CAP_ENABLED=false
+PREDICTIONS_CUP_RISK_SWING_SHOCK_POINTS=5
+PREDICTIONS_CUP_RISK_SWING_MAX_LOSS=2000
+PREDICTIONS_CUP_RISK_SWING_MAX_PM_MARK_AGE_MS=35000
+```
+
+The factor moves each supported Democratic probability by `+0.10` log-odds per positive swing
+point and each Republican probability by `-0.10`; the opposite scenario reverses those signs. The
+diagnostic reports both shock losses and net, House, Senate, and Governor derivatives in dollars
+per point. Keep the feature off until replay coverage and the full gate pass.
+
 ## Correlated event groups
 
 If `RISK_MAX_EVENT_GROUP_EXPOSURE` is set, also configure:

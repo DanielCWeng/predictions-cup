@@ -33,6 +33,11 @@ from predictions_cup.mapping.models import (
 from predictions_cup.risk.capital import MarketExposureGroup
 from predictions_cup.risk.core import RiskContext, RiskLimits, RiskProfile
 from predictions_cup.risk.groups import load_exposure_group_provider
+from predictions_cup.risk.swing import (
+    SwingPmMarkProvider,
+    SwingRiskControl,
+    load_swing_crosswalk,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +55,7 @@ def build_maker_components(
     settings: AppSettings,
     *,
     mapping: MappingDocument | None = None,
+    swing_mark_provider: SwingPmMarkProvider | None = None,
 ) -> MakerRuntimeComponents:
     """Build immutable/pure maker components once at process startup."""
     mapping = mapping or load_document(settings.maker_mapping_path)
@@ -65,6 +71,19 @@ def build_maker_components(
     if settings.risk_exposure_groups_path is not None:
         group_provider = load_exposure_group_provider(settings.risk_exposure_groups_path)
         exposure_groups = group_provider.for_tournament(mapping.tournament_id)
+
+    swing_control: SwingRiskControl | None = None
+    if settings.risk_swing_cap_enabled:
+        swing_control = SwingRiskControl(
+            shock_points=settings.risk_swing_shock_points,
+            max_loss=settings.risk_swing_max_loss,
+            max_pm_mark_age_ns=settings.risk_swing_max_pm_mark_age_ms * 1_000_000,
+            crosswalk=load_swing_crosswalk(
+                mapping,
+                mapping_path=settings.maker_mapping_path,
+            ),
+            mark_provider=swing_mark_provider,
+        )
 
     market_token_ids = {
         record.sig_exchange_id: record.direct_polymarket.mapped_token_id
@@ -151,6 +170,7 @@ def build_maker_components(
             max_mark_age_ns=settings.risk_max_mark_age_ms * ms,
             require_capital_state=settings.risk_capital_control_enabled,
             exposure_groups=exposure_groups,
+            swing_control=swing_control,
         ),
         reservations=ExecutionReservationBook(),
         kill_switch=kill_switch,

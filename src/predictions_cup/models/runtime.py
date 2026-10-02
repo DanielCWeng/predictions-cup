@@ -558,7 +558,7 @@ def _candidate_payload(
     risk: RiskDecision | None,
     logical_operation_id: str | None,
 ) -> dict[str, object]:
-    return {
+    payload: dict[str, object] = {
         "model_id": spec.model_id,
         "model_version": spec.model_version,
         "model_source_hash": spec.source_hash,
@@ -574,6 +574,17 @@ def _candidate_payload(
         "execution_operation_id": logical_operation_id,
         "model_context": dict(decision.context),
     }
+    if risk is not None and risk.swing_diagnostics is not None:
+        diagnostics = risk.swing_diagnostics
+        payload["risk_swing"] = {
+            "positive_swing_loss": diagnostics.positive_swing_loss,
+            "negative_swing_loss": diagnostics.negative_swing_loss,
+            "net_derivative_per_point": diagnostics.net_derivative_per_point,
+            "house_derivative_per_point": diagnostics.house_derivative_per_point,
+            "senate_derivative_per_point": diagnostics.senate_derivative_per_point,
+            "governor_derivative_per_point": diagnostics.governor_derivative_per_point,
+        }
+    return payload
 
 
 def _candidate_output(
