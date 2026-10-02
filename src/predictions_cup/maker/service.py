@@ -1183,10 +1183,19 @@ class MakerService:
                             affected,
                             observed_monotonic_ns=monotonic_ns(),
                         )
-                    except BaseException:
+                    except Exception as exc:
                         runtime.activate_kill_switch("sig_market_state_failure")
                         with suppress(Exception):
                             await runtime.drain_once()
+                        # The outer feed loop retries SigApiError from token,
+                        # universe, and socket setup. A SigApiError raised by a
+                        # market-state callback is different: that callback has
+                        # already latched kill and attempted a cancel drain, so
+                        # let service.run fail and terminate this process.
+                        if isinstance(exc, SigApiError):
+                            raise RuntimeError(
+                                "SIG market state callback failed"
+                            ) from exc
                         raise
 
                 async def maintenance(observed_at: datetime) -> None:

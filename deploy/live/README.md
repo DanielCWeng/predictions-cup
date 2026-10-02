@@ -20,8 +20,13 @@ sudo -n systemd-run --unit=predictions-cup-maker-live --uid=ec2-user --gid=ec2-u
   -p EnvironmentFile=/home/ec2-user/.config/predictions-cup/trade.env \
   -p EnvironmentFile=/home/ec2-user/fs002_stage/live_band.env \
   -p MemoryMax=320M -p OOMScoreAdjust=800 -p KillSignal=SIGTERM -p TimeoutStopSec=60 \
+  -p Restart=on-failure -p RestartSec=5s \
   /home/ec2-user/predictions-cup/.venv/bin/python -m predictions_cup.maker --runtime-env-only --live
 ```
+
+An internal MAKE state failure first latches the process kill switch and attempts a bounded
+best-effort cancel drain, then exits non-zero. `Restart=on-failure` starts a new process; the
+kill switch is never cleared in the failing process, and startup recovery/interlocks still apply.
 
 Stop it with `sudo -n systemctl stop predictions-cup-maker-live`. A SIGTERM during an order batch can
 leave an unresolved journal operation that blocks the next start. Resolve it with
