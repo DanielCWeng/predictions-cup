@@ -22,6 +22,7 @@ from predictions_cup.sig.account_proxy import AccountProxyLedger
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
 from predictions_cup.sig.account_runtime import AccountRealtimeController
 from predictions_cup.sig.account_state import AccountRealtimeStateEngine, AccountTrustTransition
+from predictions_cup.sig.realtime_models import RealtimeTokenDto
 from predictions_cup.sig.trading_dto import OrderReadDto, PositionReadDto
 
 TOURNAMENT = "t1"
@@ -346,10 +347,10 @@ def test_resync_batch_keeps_known_proxy_activity_and_rejects_unknown_identity(
     )
     state.apply_authoritative(snapshot, observed_monotonic_ns=1_000)
 
-    async def unused_mint_token():
+    async def unused_mint_token() -> RealtimeTokenDto:
         raise AssertionError("resync callback must not mint a token")
 
-    async def unused_authoritative_resync():
+    async def unused_authoritative_resync() -> AccountAuthoritativeSnapshot:
         raise AssertionError("resync callback must not run")
 
     controller = AccountRealtimeController(
