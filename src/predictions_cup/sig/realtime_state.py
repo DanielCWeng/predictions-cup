@@ -180,6 +180,7 @@ class SigRealtimeStateEngine:
         book_depth: int = 20,
         open_book_max_trusted_age_seconds: float = 30.0,
         bulk_price_refresh_seconds: float = 10.0,
+        periodic_bulk_price_priority: RestPriority = RestPriority.BACKGROUND,
         governed_rate_per_second: float = 2.0,
         periodic_bulk_refresh_enabled: bool = True,
         bulk_prices_tracked_only: bool = False,
@@ -223,6 +224,7 @@ class SigRealtimeStateEngine:
             seconds=open_book_max_trusted_age_seconds
         )
         self._bulk_price_refresh_interval = timedelta(seconds=bulk_price_refresh_seconds)
+        self._periodic_bulk_price_priority = periodic_bulk_price_priority
         self._governed_rate_per_second = governed_rate_per_second
         self._periodic_bulk_refresh_enabled = periodic_bulk_refresh_enabled
         self._governor_snapshot = governor_snapshot
@@ -441,7 +443,7 @@ class SigRealtimeStateEngine:
             task = asyncio.create_task(
                 self.refresh_bulk_prices(
                     reason="periodic_bulk_prices",
-                    priority=RestPriority.BACKGROUND,
+                    priority=self._periodic_bulk_price_priority,
                 ),
                 name="sig-bulk-price-refresh",
             )
@@ -557,6 +559,7 @@ class SigRealtimeStateEngine:
 
         for index in range(0, len(exchange_ids), 100):
             requested = tuple(exchange_ids[index : index + 100])
+            request_started_at = self._clock()
             async with self._rest.priority(priority):
                 response = await self._rest.get_bulk_prices(
                     requested,
@@ -567,6 +570,7 @@ class SigRealtimeStateEngine:
             self._apply_bulk_prices(
                 response,
                 requested=requested,
+                request_started_at=request_started_at,
                 observed_at=observed_at,
                 reason=reason,
             )
@@ -591,6 +595,7 @@ class SigRealtimeStateEngine:
 
         for index in range(0, len(requested_ids), 100):
             requested = requested_ids[index : index + 100]
+            request_started_at = self._clock()
             async with self._rest.priority(priority):
                 response = await self._rest.get_bulk_prices(
                     requested,
@@ -601,6 +606,7 @@ class SigRealtimeStateEngine:
             self._apply_bulk_prices(
                 response,
                 requested=requested,
+                request_started_at=request_started_at,
                 observed_at=observed_at,
                 reason=reason,
             )
@@ -1125,6 +1131,7 @@ class SigRealtimeStateEngine:
         response: BulkPricesDto,
         *,
         requested: tuple[str, ...],
+        request_started_at: datetime,
         observed_at: datetime,
         reason: str,
     ) -> None:
@@ -1151,6 +1158,13 @@ class SigRealtimeStateEngine:
                 raise ValueError("bulk price response referenced unknown exchange")
             if state.market_id != item.market_id:
                 raise ValueError("bulk price response changed exchange market identity")
+            # A periodic poll already in flight when a realtime touch arrived
+            # cannot prove a post-touch BBO, even if its response arrived later.
+            if (
+                state.last_realtime_observed_at is not None
+                and state.last_realtime_observed_at > request_started_at
+            ):
+                continue
             state.latest_price = item.latest_price
             state.scalar_best_bid = item.best_bid
             state.scalar_best_ask = item.best_ask
@@ -1162,6 +1176,11 @@ class SigRealtimeStateEngine:
             missing_exchanges: list[tuple[str, str]] = []
             for exchange_id in response.missing_ids:
                 state = self.states[exchange_id]
+                if (
+                    state.last_realtime_observed_at is not None
+                    and state.last_realtime_observed_at > request_started_at
+                ):
+                    continue
                 state.latest_price = None
                 state.scalar_best_bid = None
                 state.scalar_best_ask = None

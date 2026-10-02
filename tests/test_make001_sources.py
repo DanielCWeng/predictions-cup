@@ -189,6 +189,9 @@ def test_bridge_preserves_trusted_sig_depth_and_quantity() -> None:
                 depth_state=DepthState.TRACKED_TRUSTED,
                 orderbook=orderbook,
                 last_rest_observed_at=observed,
+                scalar_best_bid=Decimal("0.49"),
+                scalar_best_ask=Decimal("0.51"),
+                last_scalar_observed_at=observed + timedelta(milliseconds=1),
             )
         },
         market_states={
@@ -224,8 +227,10 @@ def test_bridge_preserves_trusted_sig_depth_and_quantity() -> None:
     assert snapshot is not None
     assert snapshot.sig_depth_trusted is True
     assert snapshot.sig_depth_observed_ns == 1_995_000_000
+    assert snapshot.sig_bbo_observed_ns == 1_996_000_000
     book = snapshot.runtime.book("36")
     assert book is not None
+    assert book.observed_monotonic_ns == snapshot.sig_bbo_observed_ns
     assert book.trusted_depth
     assert tuple((level.price_ticks, level.quantity) for level in book.bids) == (
         (98, 7.0),
@@ -234,6 +239,212 @@ def test_bridge_preserves_trusted_sig_depth_and_quantity() -> None:
     assert tuple((level.price_ticks, level.quantity) for level in book.asks) == (
         (102, 8.0),
     )
+
+
+def test_bridge_uses_newer_scalar_bbo_and_distrusts_mismatched_depth() -> None:
+    wall_now = datetime(2026, 9, 29, 14, 0, tzinfo=UTC)
+    depth_observed = wall_now - timedelta(seconds=2)
+    scalar_observed = wall_now - timedelta(milliseconds=100)
+    orderbook = OrderBook(
+        exchange_id="36",
+        bids=(OrderBookLevel(price=Decimal("0.49"), quantity=Decimal("7")),),
+        asks=(OrderBookLevel(price=Decimal("0.51"), quantity=Decimal("8")),),
+        timestamp=depth_observed,
+        source="sig-rest",
+    )
+    sig = _SigState(
+        tournament_id="t1",
+        states={
+            "36": ExchangeRuntimeState(
+                exchange_id="36",
+                market_id="m1",
+                tournament_id="t1",
+                depth_state=DepthState.TRACKED_TRUSTED,
+                orderbook=orderbook,
+                last_rest_observed_at=depth_observed,
+                scalar_best_bid=Decimal("0.48"),
+                scalar_best_ask=Decimal("0.51"),
+                last_scalar_observed_at=scalar_observed,
+                last_realtime_observed_at=depth_observed + timedelta(milliseconds=500),
+            )
+        },
+        market_states={
+            "m1": MarketRuntimeState(
+                market_id="m1",
+                title="fixture",
+                status="open",
+                settled_with=None,
+                last_rest_observed_at=depth_observed,
+            )
+        },
+        health=RuntimeHealth(connected=True),
+    )
+    bridge = MakerSourceBridge(
+        mapping=_mapping(),
+        sig_state=sig,
+        account_state=_AccountState(
+            tournament_id="t1",
+            last_accepted_observed_at=scalar_observed,
+            portfolio=RuntimePortfolio(account_trusted=True),
+        ),
+        polymarket_books=_PmBooks({"yes-token": _pm_snapshot(scalar_observed)}),
+    )
+
+    snapshot = bridge.build(
+        "36",
+        wall_now=wall_now,
+        monotonic_now_ns=2_000_000_000,
+        polymarket_feed_trusted=True,
+    )
+
+    assert snapshot is not None
+    assert snapshot.sig_bbo_trusted is True
+    assert snapshot.sig_bbo_observed_ns == 1_900_000_000
+    assert snapshot.sig_depth_trusted is False
+    assert snapshot.sig_depth_observed_ns == 0
+    book = snapshot.runtime.book("36")
+    assert book is not None
+    assert book.observed_monotonic_ns == snapshot.sig_bbo_observed_ns
+    assert book.trusted_depth is False
+    assert book.bids[0].price_ticks == 96
+    assert book.bids[0].quantity == 0.0
+
+
+def test_bridge_does_not_trust_depth_when_matching_scalar_follows_realtime_touch() -> None:
+    wall_now = datetime(2026, 9, 29, 14, 0, tzinfo=UTC)
+    depth_observed = wall_now - timedelta(seconds=2)
+    realtime_touch = wall_now - timedelta(seconds=1)
+    scalar_observed = wall_now - timedelta(milliseconds=100)
+    orderbook = OrderBook(
+        exchange_id="36",
+        bids=(
+            OrderBookLevel(price=Decimal("0.49"), quantity=Decimal("7")),
+            OrderBookLevel(price=Decimal("0.48"), quantity=Decimal("4")),
+        ),
+        asks=(
+            OrderBookLevel(price=Decimal("0.51"), quantity=Decimal("8")),
+            OrderBookLevel(price=Decimal("0.52"), quantity=Decimal("3")),
+        ),
+        timestamp=depth_observed,
+        source="sig-rest",
+    )
+    sig = _SigState(
+        tournament_id="t1",
+        states={
+            "36": ExchangeRuntimeState(
+                exchange_id="36",
+                market_id="m1",
+                tournament_id="t1",
+                depth_state=DepthState.TRACKED_TRUSTED,
+                orderbook=orderbook,
+                last_rest_observed_at=depth_observed,
+                scalar_best_bid=Decimal("0.49"),
+                scalar_best_ask=Decimal("0.51"),
+                last_scalar_observed_at=scalar_observed,
+                last_realtime_observed_at=realtime_touch,
+            )
+        },
+        market_states={
+            "m1": MarketRuntimeState(
+                market_id="m1",
+                title="fixture",
+                status="open",
+                settled_with=None,
+                last_rest_observed_at=depth_observed,
+            )
+        },
+        health=RuntimeHealth(connected=True),
+    )
+    bridge = MakerSourceBridge(
+        mapping=_mapping(),
+        sig_state=sig,
+        account_state=_AccountState(
+            tournament_id="t1",
+            last_accepted_observed_at=scalar_observed,
+            portfolio=RuntimePortfolio(account_trusted=True),
+        ),
+        polymarket_books=_PmBooks({"yes-token": _pm_snapshot(scalar_observed)}),
+    )
+
+    snapshot = bridge.build(
+        "36",
+        wall_now=wall_now,
+        monotonic_now_ns=2_000_000_000,
+        polymarket_feed_trusted=True,
+    )
+
+    assert snapshot is not None
+    assert snapshot.sig_bbo_trusted is True
+    assert snapshot.sig_bbo_observed_ns == 1_900_000_000
+    assert snapshot.sig_depth_trusted is False
+    assert snapshot.sig_depth_observed_ns == 0
+    book = snapshot.runtime.book("36")
+    assert book is not None
+    assert book.trusted_depth is False
+    assert tuple((level.price_ticks, level.quantity) for level in book.bids) == ((98, 0.0),)
+    assert tuple((level.price_ticks, level.quantity) for level in book.asks) == ((102, 0.0),)
+
+
+def test_bridge_rejects_bbo_older_than_latest_realtime_touch() -> None:
+    wall_now = datetime(2026, 9, 29, 14, 0, tzinfo=UTC)
+    depth_observed = wall_now - timedelta(seconds=1)
+    scalar_observed = wall_now - timedelta(seconds=2)
+    touched_at = wall_now - timedelta(milliseconds=100)
+    orderbook = OrderBook(
+        exchange_id="36",
+        bids=(OrderBookLevel(price=Decimal("0.49"), quantity=Decimal("7")),),
+        asks=(OrderBookLevel(price=Decimal("0.51"), quantity=Decimal("8")),),
+        timestamp=depth_observed,
+        source="sig-rest",
+    )
+    sig = _SigState(
+        tournament_id="t1",
+        states={
+            "36": ExchangeRuntimeState(
+                exchange_id="36",
+                market_id="m1",
+                tournament_id="t1",
+                depth_state=DepthState.TRACKED_TRUSTED,
+                orderbook=orderbook,
+                last_rest_observed_at=depth_observed,
+                scalar_best_bid=Decimal("0.49"),
+                scalar_best_ask=Decimal("0.51"),
+                last_scalar_observed_at=scalar_observed,
+                last_realtime_observed_at=touched_at,
+            )
+        },
+        market_states={
+            "m1": MarketRuntimeState(
+                market_id="m1",
+                title="fixture",
+                status="open",
+                settled_with=None,
+                last_rest_observed_at=depth_observed,
+            )
+        },
+        health=RuntimeHealth(connected=True),
+    )
+    bridge = MakerSourceBridge(
+        mapping=_mapping(),
+        sig_state=sig,
+        account_state=_AccountState(
+            tournament_id="t1",
+            last_accepted_observed_at=touched_at,
+            portfolio=RuntimePortfolio(account_trusted=True),
+        ),
+        polymarket_books=_PmBooks({"yes-token": _pm_snapshot(touched_at)}),
+    )
+
+    snapshot = bridge.build(
+        "36",
+        wall_now=wall_now,
+        monotonic_now_ns=2_000_000_000,
+        polymarket_feed_trusted=True,
+    )
+
+    assert snapshot is not None
+    assert snapshot.sig_bbo_trusted is False
+    assert snapshot.sig_depth_trusted is True
 
 
 def test_bridge_indexes_polymarket_token_to_affected_sig_exchange() -> None:
@@ -532,4 +743,3 @@ def test_trusted_sources_preserve_actual_old_observation_age() -> None:
 def test_polymarket_service_seeds_all_outcome_tokens_not_only_aligned_fv_token() -> None:
     tokens = _mapped_token_ids(_mapping())
     assert tokens == ("no-token", "yes-token")
-

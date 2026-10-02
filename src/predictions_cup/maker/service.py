@@ -383,6 +383,7 @@ class MakerService:
                     self.settings.sig_realtime_open_book_refresh_seconds
                 ),
                 bulk_price_refresh_seconds=(self.settings.sig_realtime_bulk_price_refresh_seconds),
+                periodic_bulk_price_priority=RestPriority.NORMAL,
                 governed_rate_per_second=(self.settings.sig_rest_governor_rate_per_second),
                 governor_snapshot=rest.governor_snapshot,
                 bulk_prices_tracked_only=True,
@@ -1353,13 +1354,16 @@ class MakerService:
                             runtime.notify_global(observed_monotonic_ns=monotonic_ns())
                             return
                         dirty = {item.exchange_id for item in parsed.book_dirty}
-                        if dirty:
+                        realtime_touches = dirty | {
+                            trade.exchange_id for trade in parsed.trades
+                        }
+                        if realtime_touches:
                             await sig_state.refresh_exchange_prices(
-                                dirty,
-                                reason="maker_book_dirty",
+                                realtime_touches,
+                                reason="maker_realtime_touch",
                                 priority=RestPriority.HIGH,
                             )
-                        affected = dirty | {trade.exchange_id for trade in parsed.trades}
+                        affected = realtime_touches
                         if parsed.market_settled:
                             settled = {item.market_id for item in parsed.market_settled}
                             affected.update(
