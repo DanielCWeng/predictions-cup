@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from predictions_cup.execution.models import (
@@ -17,6 +19,8 @@ from predictions_cup.execution.models import (
     RuntimeOrderIntent,
     lifecycle_transition_allowed,
 )
+
+_LOG = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -543,10 +547,11 @@ class ExecutionJournal:
         observed_monotonic_ns: int,
         *,
         response_json: str | None = None,
-    ) -> None:
+    ) -> LifecycleState:
         row = self._connection.execute(
             """
-            SELECT lifecycle_state FROM execution_envelopes
+            SELECT lifecycle_state, operation_kind, payload_json
+            FROM execution_envelopes
             WHERE logical_operation_id = ?
             """,
             (logical_operation_id,),
@@ -555,6 +560,26 @@ class ExecutionJournal:
             raise KeyError(f"unknown logical operation: {logical_operation_id}")
         current = LifecycleState(str(row[0]))
         if not lifecycle_transition_allowed(current, state):
+            terminal_cancel_states = frozenset(
+                {LifecycleState.CANCELLED, LifecycleState.REJECTED}
+            )
+            if (
+                frozenset({current, state}) == terminal_cancel_states
+                and self._has_authoritative_no_fill_cancel_evidence(
+                    logical_operation_id=logical_operation_id,
+                    operation_kind=str(row[1]),
+                    payload_json=str(row[2]),
+                )
+            ):
+                _LOG.warning(
+                    "execution journal terminal cancel conflict op=%s "
+                    "first_state=%s incoming_state=%s; keeping first terminal "
+                    "after authoritative closed-order no-fill reconciliation",
+                    logical_operation_id,
+                    current.value,
+                    state.value,
+                )
+                return current
             raise ValueError(
                 f"invalid lifecycle transition {current.value} -> {state.value}"
             )
@@ -573,6 +598,76 @@ class ExecutionJournal:
                     logical_operation_id,
                 ),
             )
+        return state
+
+    def _has_authoritative_no_fill_cancel_evidence(
+        self,
+        *,
+        logical_operation_id: str,
+        operation_kind: str,
+        payload_json: str,
+    ) -> bool:
+        """Prove the exact single-cancel order is closed and has no fills."""
+        if operation_kind != OperationKind.SINGLE_CANCELLATION.value:
+            return False
+        try:
+            payload = json.loads(payload_json)
+        except json.JSONDecodeError:
+            return False
+        if not isinstance(payload, dict):
+            return False
+        order_id = payload.get("orderId")
+        if type(order_id) is not int or order_id <= 0:
+            return False
+        order_id_text = str(order_id)
+
+        reconciliations = tuple(
+            event
+            for event in self.events(logical_operation_id)
+            if event.event_type == "RECONCILED_TERMINAL"
+            and event.exchange_order_id == order_id_text
+            and event.terminal_status == LifecycleState.CANCELLED.value
+        )
+        if not reconciliations:
+            return False
+        proof = reconciliations[-1]
+        try:
+            details = json.loads(proof.detail_json or "")
+        except json.JSONDecodeError:
+            return False
+        if not isinstance(details, dict):
+            return False
+        if (
+            details.get("order_open") is not False
+            or details.get("fills_coverage_complete") is not True
+            or type(details.get("fill_count")) is not int
+            or details["fill_count"] != 0
+        ):
+            return False
+        try:
+            filled_quantity = Decimal(str(details.get("total_quantity_filled")))
+        except (InvalidOperation, ValueError):
+            return False
+        if not filled_quantity.is_finite() or filled_quantity != 0:
+            return False
+
+        # A linked placement or account event may already have recorded a fill
+        # outside the cancellation envelope. Treat ambiguous order identity as
+        # evidence against suppressing the conflict.
+        placement = self.placement_identity_for_exchange_order_id(order_id_text)
+        related_operations = {logical_operation_id}
+        if placement is not None:
+            related_operations.add(placement[0])
+        for related_operation in related_operations:
+            for event in self.events(related_operation):
+                if event.fill_id is None and event.event_type not in {
+                    "FILL",
+                    "AUTHORITATIVE_FILL",
+                }:
+                    continue
+                if event.exchange_order_id in {None, order_id_text}:
+                    return False
+        return True
 
     def placement_identity_for_exchange_order_id(
         self,
