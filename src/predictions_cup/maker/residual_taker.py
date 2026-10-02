@@ -85,11 +85,15 @@ class ResidualTakerSignal:
         self,
         *,
         size: int = 50,
+        threshold: float = THRESHOLD,
         tracked_exchange_ids: frozenset[str] = frozenset(),
     ) -> None:
         if size <= 0:
             raise ValueError("residual-taker size must be positive")
+        if not math.isfinite(threshold) or threshold <= 0.0:
+            raise ValueError("residual-taker threshold must be finite and positive")
         self.size = size
+        self.threshold = threshold
         self.tracked_exchange_ids = tracked_exchange_ids
         self._last_signal: dict[tuple[str, str], int] = {}
 
@@ -117,10 +121,10 @@ class ResidualTakerSignal:
         direction: str | None = None
         entry: float
         residual: float
-        if state.sig_ask <= pm_mid - THRESHOLD:
+        if state.sig_ask <= pm_mid - self.threshold:
             direction, entry, residual = "BUY", state.sig_ask, pm_mid - state.sig_ask
             side, action = OutcomeSide.YES, OrderAction.BUY
-        elif state.sig_bid >= pm_mid + THRESHOLD:
+        elif state.sig_bid >= pm_mid + self.threshold:
             direction, entry, residual = "SELL", state.sig_bid, state.sig_bid - pm_mid
             # SIG accepts flat YES sells but canonicalizes them to a NO buy.
             side, action = OutcomeSide.NO, OrderAction.BUY
@@ -203,8 +207,6 @@ def residual_input_from_snapshot(
         pm_ask_size=quote.best_ask_size,
         observed_monotonic_ns=observed_monotonic_ns,
         sig_touch_depth=(
-            book.asks[0].quantity
-            if sig_ask <= pm_mid - THRESHOLD
-            else book.bids[0].quantity
+            book.asks[0].quantity if sig_ask <= pm_mid - THRESHOLD else book.bids[0].quantity
         ),
     )

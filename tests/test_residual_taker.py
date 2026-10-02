@@ -51,8 +51,7 @@ def test_frozen_validation_replay_matches_battery_trade_list() -> None:
                     pm_spread=float(row["pm_spread"]),
                     pm_bid_size=_optional(row, "pm_bid1_size"),
                     pm_ask_size=_optional(row, "pm_ask1_size"),
-                    observed_monotonic_ns=int(at.replace(tzinfo=UTC).timestamp())
-                    * 1_000_000_000,
+                    observed_monotonic_ns=int(at.replace(tzinfo=UTC).timestamp()) * 1_000_000_000,
                 )
             )
             if signal is not None:
@@ -71,7 +70,10 @@ def test_frozen_validation_replay_matches_battery_trade_list() -> None:
     exact = 0
     for actual, reference in zip(matched, expected, strict=True):
         assert (actual["at"], actual["split"], actual["exchange_id"], actual["direction"]) == (
-            reference["at"], reference["split"], reference["exchange_id"], reference["direction"]
+            reference["at"],
+            reference["split"],
+            reference["exchange_id"],
+            reference["direction"],
         )
         assert abs(actual["entry_price"] - reference["entry_price"]) <= 1e-12
         exact += 1
@@ -91,6 +93,23 @@ def test_cooldown_is_per_market_and_direction() -> None:
     signal = engine.on_state(opposite)
     assert signal is not None
     assert signal.direction == "SELL"
+
+
+def test_custom_threshold_can_lower_entry_gate_without_changing_default() -> None:
+    state = _state(0, sig_bid=0.74, sig_ask=0.7425, pm_mid=0.75)
+
+    assert ResidualTakerSignal().on_state(state) is None
+    signal = ResidualTakerSignal(threshold=0.005).on_state(state)
+
+    assert signal is not None
+    assert signal.direction == "BUY"
+    assert signal.residual == pytest.approx(0.0075)
+
+
+@pytest.mark.parametrize("threshold", (0.0, -0.01, float("inf"), float("nan")))
+def test_custom_threshold_must_be_finite_and_positive(threshold: float) -> None:
+    with pytest.raises(ValueError, match="threshold"):
+        ResidualTakerSignal(threshold=threshold)
 
 
 def test_touch_depth_caps_size_and_flat_yes_sell_canonicalizes_to_no_buy() -> None:
