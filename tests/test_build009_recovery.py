@@ -1322,7 +1322,10 @@ def test_startup_recovery_blocks_only_unresolved_batch_exchange_and_skips_cancel
         positions=(),
         observed_at=datetime(2026, 10, 2, tzinfo=UTC),
     )
-    exchange_ids_by_market = {"m1": ("36",), "m2": ("37",)}
+    exchange_ids_by_market: dict[str, tuple[str, ...]] = {
+        "m1": ("36",),
+        "m2": ("37",),
+    }
     try:
         initial_blockers = unresolved_startup_exchange_ids(
             journal,
