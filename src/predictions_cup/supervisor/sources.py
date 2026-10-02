@@ -10,7 +10,7 @@ import subprocess
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote
 
@@ -219,7 +219,7 @@ class SupervisorSources:
                 [
                     "journalctl",
                     f"--unit={_LIVE_MAKER_SERVICE}",
-                    f"--since={(now - timedelta(hours=1)).isoformat()}",
+                    "--since=-1h",
                     "--grep=MAKE outcome",
                     "--lines=100",
                     "--output=json",
