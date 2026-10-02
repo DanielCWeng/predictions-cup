@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
@@ -13,6 +14,7 @@ from predictions_cup.config import AppSettings
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import (
+    ExecutionEnvelope,
     ExecutionEvent,
     ExecutionMode,
     LifecycleState,
@@ -20,6 +22,7 @@ from predictions_cup.execution.models import (
     RuntimeOrderIntent,
 )
 from predictions_cup.execution.planner import build_execution_plan
+from predictions_cup.execution.recovery import recover_startup
 from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.maker import service as maker_service_module
 from predictions_cup.maker.adapters import LiveMakerExecutionAdapter
@@ -60,7 +63,7 @@ from predictions_cup.sig.errors import (
     SigUnexpectedServerError,
 )
 from predictions_cup.sig.realtime_subscriber import SubscriberExit
-from predictions_cup.sig.trading_dto import OrderReadDto
+from predictions_cup.sig.trading_dto import OrderReadDto, PortfolioFillPageDto
 
 
 def _plan(action: OrderAction = OrderAction.BUY) -> ExecutionPlan:
@@ -506,6 +509,120 @@ def test_startup_recovery_block_filters_only_affected_exchange() -> None:
     assert coordinator.calls[-1] == frozenset({"36", "37"})
 
 
+def test_bulk_startup_recovery_runs_in_background_while_other_market_quotes(
+    tmp_path: Path,
+) -> None:
+    intent = RuntimeOrderIntent(
+        intent_id="background-recovery-intent",
+        exchange_id="36",
+        market_id="m1",
+        tournament_id="t1",
+        outcome_side=OutcomeSide.YES,
+        action=OrderAction.BUY,
+        quantity=1,
+        limit_price_ticks=99,
+        strategy_id="make-direct-pm",
+        decision_observation_ns=123,
+    )
+    envelope = ExecutionEnvelope.placement(
+        logical_operation_id="background-recovery-placement",
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        sink_mode=ExecutionMode.LIVE,
+        idempotency_key="background-recovery-key",
+        intents=(intent,),
+        created_monotonic_ns=100,
+    )
+    journal = ExecutionJournal(tmp_path / "background-recovery.sqlite3")
+    journal.record_before_dispatch(envelope, (intent,), submitted_monotonic_ns=101)
+    journal.record_event(
+        logical_operation_id=envelope.logical_operation_id,
+        tournament_id="t1",
+        logical_intent_id=intent.intent_id,
+        event_type="ACK",
+        observed_monotonic_ns=102,
+        exchange_id="36",
+        exchange_order_id="91",
+        quantity="1",
+        terminal_status=LifecycleState.OPEN.value,
+    )
+    journal.mark_state(envelope.logical_operation_id, LifecycleState.OPEN, 102)
+
+    bridge = _Bridge()
+    coordinator = _Coordinator()
+    runtime = MakerRuntimeLoop(
+        bridge=cast(MakerSourceBridge, bridge),
+        coordinator=cast(MakerCoordinator, coordinator),
+        polymarket_feed_trusted=lambda: True,
+    )
+    runtime.set_blocked_exchange_ids({"36"})
+
+    async def run() -> None:
+        recovery_started = asyncio.Event()
+        finish_recovery = asyncio.Event()
+
+        class BlockingFillRest:
+            async def list_portfolio_fills(
+                self,
+                *,
+                exchange_id: str | None = None,
+                market_id: str | None = None,
+                tournament_id: str | None = None,
+                limit: int = 50,
+                cursor: str | None = None,
+            ) -> PortfolioFillPageDto:
+                assert exchange_id is None and market_id is None
+                assert tournament_id == "t1" and limit == 200 and cursor is None
+                recovery_started.set()
+                await finish_recovery.wait()
+                return PortfolioFillPageDto.model_validate(
+                    {
+                        "data": [],
+                        "pagination": {
+                            "limit": 200,
+                            "hasMore": False,
+                            "nextCursor": None,
+                        },
+                        "coverage": {
+                            "complete": True,
+                            "projectedThroughSequence": 0,
+                        },
+                    }
+                )
+
+        rest = BlockingFillRest()
+        snapshot = AccountAuthoritativeSnapshot(
+            tournament_id="t1",
+            tournament_slug="cup",
+            open_orders=(),
+            positions=(),
+            observed_at=datetime(2026, 10, 2, tzinfo=UTC),
+        )
+        runtime.notify_global()
+        task = asyncio.create_task(
+            recover_startup(
+                journal=journal,
+                rest=cast(Any, rest),
+                live_sink=cast(SigLiveSink, object()),
+                tournament_id="t1",
+                tournament_slug="cup",
+                authoritative_snapshot=snapshot,
+            )
+        )
+        await recovery_started.wait()
+        await runtime.drain_once()
+        assert task.done() is False
+        assert coordinator.calls == [frozenset({"37"})]
+        finish_recovery.set()
+        result = await task
+        assert result.unresolved_exchange_ids == ()
+
+    try:
+        asyncio.run(run())
+        assert journal.unresolved() == ()
+    finally:
+        journal.close()
+
+
 def test_graceful_shutdown_finishes_inflight_exchange_before_cancel_drain() -> None:
     service = MakerService(
         AppSettings(maker_enabled=True),
@@ -534,6 +651,65 @@ def test_graceful_shutdown_finishes_inflight_exchange_before_cancel_drain() -> N
     asyncio.run(run())
 
     assert events == ["batch_acknowledged", "cancel_drain"]
+
+
+@pytest.mark.parametrize(
+    ("cancel_state", "expected_events"),
+    (
+        (LifecycleState.CANCELLED, ["batch_acknowledged", "cancel_all"]),
+        (
+            LifecycleState.CANCEL_PENDING,
+            ["batch_acknowledged", "cancel_all", "cancel_drain"],
+        ),
+    ),
+)
+def test_graceful_shutdown_posts_tournament_cancel_all_before_fallback_drain(
+    cancel_state: LifecycleState,
+    expected_events: list[str],
+) -> None:
+    service = MakerService(
+        AppSettings(maker_enabled=True),
+        explicit_live_invocation=False,
+    )
+    events: list[str] = []
+    envelopes: list[ExecutionEnvelope] = []
+
+    async def inflight_batch() -> None:
+        await asyncio.sleep(0)
+        events.append("batch_acknowledged")
+
+    class RecordingSink:
+        async def cancel(self, envelope: ExecutionEnvelope) -> ExecutionEvent:
+            envelopes.append(envelope)
+            events.append("cancel_all")
+            return ExecutionEvent(
+                logical_operation_id=envelope.logical_operation_id,
+                state=cancel_state,
+                observed_monotonic_ns=10,
+                simulated=False,
+            )
+
+    async def cancel_drain(runtime: MakerRuntimeLoop) -> None:
+        del runtime
+        events.append("cancel_drain")
+
+    service._best_effort_kill_drain = cancel_drain  # type: ignore[method-assign]
+
+    async def run() -> None:
+        runtime_task = asyncio.create_task(inflight_batch())
+        await service._graceful_shutdown(
+            cast(MakerRuntimeLoop, object()),
+            runtime_task,
+            live_sink=cast(SigLiveSink, RecordingSink()),
+            tournament_id="t1",
+        )
+
+    asyncio.run(run())
+
+    assert events == expected_events
+    assert len(envelopes) == 1
+    assert envelopes[0].operation_kind is OperationKind.CANCEL_ALL
+    assert json.loads(envelopes[0].payload_json) == {"tournamentId": "t1"}
 
 
 def test_runtime_snapshot_observer_receives_exact_decision_boundary() -> None:

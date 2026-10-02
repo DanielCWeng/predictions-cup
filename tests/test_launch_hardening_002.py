@@ -66,6 +66,7 @@ from predictions_cup.sig.trading_dto import (
     OrderFillsResponseDto,
     OrderReadDto,
     OrderStatusFilter,
+    PortfolioFillPageDto,
     PositionsResponseDto,
 )
 from predictions_cup.strategy.core import CandidateLeg, Opportunity, StrategyFamily
@@ -199,6 +200,7 @@ class SyntheticRecoveryRest:
         self.closed_buy = _order(101, open_=False, action="buy", price="0.4")
         self.positions = _positions_response(quantity="6")
         self.fill_queries = 0
+        self.portfolio_fill_queries = 0
 
     def mark_cancelled(self, order_id: int) -> None:
         assert order_id == 102
@@ -294,6 +296,49 @@ class SyntheticRecoveryRest:
                 },
                 "totalQuantityFilled": "6",
                 "avgFillPrice": "0.4",
+            }
+        )
+
+    async def list_portfolio_fills(
+        self,
+        *,
+        exchange_id: str | None = None,
+        market_id: str | None = None,
+        tournament_id: str | None = None,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> PortfolioFillPageDto:
+        del exchange_id, market_id
+        assert tournament_id == "t1"
+        assert limit == 200
+        assert cursor is None
+        self.portfolio_fill_queries += 1
+        return PortfolioFillPageDto.model_validate(
+            {
+                "data": [
+                    {
+                        "id": 5001,
+                        "orderId": 101,
+                        "exchangeId": "36",
+                        "marketId": "m1",
+                        "price": "0.4",
+                        "quantity": "4",
+                        "side": "yes",
+                        "filledAt": (BASE + timedelta(seconds=3)).isoformat(),
+                    },
+                    {
+                        "id": 5002,
+                        "orderId": 101,
+                        "exchangeId": "36",
+                        "marketId": "m1",
+                        "price": "0.4",
+                        "quantity": "2",
+                        "side": "yes",
+                        "filledAt": (BASE + timedelta(seconds=6)).isoformat(),
+                    },
+                ],
+                "pagination": {"limit": 200, "hasMore": False, "nextCursor": None},
+                "coverage": {"complete": True, "projectedThroughSequence": 12},
             }
         )
 
@@ -1119,7 +1164,8 @@ def test_composed_lifecycle_oracle_restart_and_reconciliation(tmp_path: Path) ->
     assert recovery.unresolved_operation_ids == ()
     assert venue.placement_calls == 1
     assert venue.cancel_calls == 2
-    assert recovery_rest.fill_queries == 3
+    assert recovery_rest.fill_queries == 0
+    assert recovery_rest.portfolio_fill_queries == 1
     oracle.open_order_exposure = Decimal("0")
     oracle.uncertain_exposure = Decimal("0")
 
@@ -1155,7 +1201,8 @@ def test_composed_lifecycle_oracle_restart_and_reconciliation(tmp_path: Path) ->
         )
     )
     assert second_recovery.safe_to_resume_live
-    assert recovery_rest.fill_queries == 3
+    assert recovery_rest.fill_queries == 0
+    assert recovery_rest.portfolio_fill_queries == 1
     assert venue.placement_calls == 1
     assert venue.cancel_calls == 2
     assert len(
@@ -1172,7 +1219,7 @@ def test_composed_lifecycle_oracle_restart_and_reconciliation(tmp_path: Path) ->
             inputs={
                 "process_objects_recreated": True,
                 "recovery_passes": 2,
-                "fill_queries": recovery_rest.fill_queries,
+                "portfolio_fill_queries": recovery_rest.portfolio_fill_queries,
             },
             oracle=oracle,
             truth=truth,

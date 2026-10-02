@@ -12,14 +12,14 @@ from decimal import Decimal
 from time import monotonic_ns
 from typing import Protocol
 
-from predictions_cup.execution.journal import ExecutionJournal, ExecutionJournalEvent
+from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import (
     ExecutionEnvelope,
-    ExecutionEvent,
     LifecycleState,
     OperationKind,
     RuntimeOrderIntent,
+    lifecycle_transition_allowed,
 )
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.observe.contracts import ObservationEmitter, ObservationKind, VenueObservation
@@ -92,6 +92,7 @@ class StartupRecoveryResult:
     safe_to_resume_live: bool
     unresolved_operation_ids: tuple[str, ...]
     unresolved_exchange_ids: tuple[str, ...] = ()
+    authoritative_snapshot: AccountAuthoritativeSnapshot | None = None
 
 
 _RECOVERY_MAX_ATTEMPTS = 3
@@ -115,11 +116,12 @@ async def recover_startup(
     reservations: ExecutionReservationBook | None = None,
     market_by_exchange: dict[str, str] | None = None,
 ) -> StartupRecoveryResult:
-    """Recover journal-owned order state without taking down unrelated markets.
+    """Reconcile unresolved operations from paginated tournament snapshots.
 
-    SIG reads/writes that fail transiently are retried a bounded number of times.
-    Any operation still unresolved is returned with the exchanges whose new
-    exposure must remain blocked by the caller.
+    Order and fill projections are read in bulk. Only acknowledged orders still
+    open in the authoritative snapshot are cancelled individually. Callers may
+    run this coroutine in the background and keep only returned exchange IDs
+    blocked while reconciliation is in flight.
     """
     if authoritative_snapshot is None:
         try:
@@ -136,15 +138,32 @@ async def recover_startup(
             # perform its own account reconciliation before admission.
             authoritative_snapshot = None
 
-    candidates = journal.unresolved()
+    candidates = tuple(
+        envelope
+        for envelope in journal.unresolved()
+        if envelope.tournament_id == tournament_id
+    )
     if operation_ids is not None:
         candidates = tuple(
             envelope
             for envelope in candidates
             if envelope.logical_operation_id in operation_ids
         )
+    open_order_ids = (
+        frozenset(order.id for order in authoritative_snapshot.open_orders if order.open)
+        if authoritative_snapshot is not None
+        else frozenset()
+    )
+    if reservations is not None:
+        reserve_unresolved_placements(
+            journal,
+            candidates,
+            reservations=reservations,
+            market_by_exchange=market_by_exchange or {},
+            open_order_ids=open_order_ids,
+        )
+
     for envelope in candidates:
-        original_state = envelope.lifecycle_state
         _emit_recovery_observation(
             observation_emitter,
             observation_process_instance_id,
@@ -152,104 +171,265 @@ async def recover_startup(
             ObservationKind.RECONCILIATION_STARTED,
             envelope,
             clock_ns(),
-            detail=(("original_state", original_state.value),),
+            detail=(("original_state", envelope.lifecycle_state.value),),
         )
-        placement_kind = envelope.operation_kind in {
+
+    # Preserve same-key recovery for an interrupted dispatch that never reached
+    # a durable ACK. Its exchange scope stays blocked until this task resolves.
+    replayed = False
+    for envelope in candidates:
+        placement = envelope.operation_kind in {
             OperationKind.SINGLE_PLACEMENT,
             OperationKind.BEST_EFFORT_BATCH,
             OperationKind.ATOMIC_MULTI_LEG,
         }
-        replayable_state = original_state in {
+        replayable_state = envelope.lifecycle_state in {
             LifecycleState.PENDING,
             LifecycleState.UNCERTAIN,
             LifecycleState.RECONCILING,
         }
+        if not placement or _acknowledged_order_ids(journal, envelope.logical_operation_id):
+            continue
+        if not replayable_state:
+            continue
         try:
-            if placement_kind:
-                async def recover_placement(
-                    current_envelope: ExecutionEnvelope = envelope,
-                    current_replayable_state: bool = replayable_state,
-                ) -> bool:
-                    return await _recover_startup_placement(
-                        journal=journal,
-                        rest=rest,
-                        live_sink=live_sink,
-                        envelope=current_envelope,
-                        replayable_state=current_replayable_state,
-                        clock_ns=clock_ns,
-                        wall_clock=wall_clock,
+            current = _unresolved_envelope(journal, envelope.logical_operation_id)
+            if current is None:
+                continue
+            if current.lifecycle_state is not LifecycleState.RECONCILING:
+                journal.mark_state(
+                    current.logical_operation_id,
+                    LifecycleState.RECONCILING,
+                    clock_ns(),
+                )
+                current = _unresolved_envelope(journal, envelope.logical_operation_id)
+            if current is None:
+                continue
+            replay_envelope = current
+            async def recover_placement(
+                current_envelope: ExecutionEnvelope = replay_envelope,
+            ) -> object:
+                return await live_sink.dispatch_recovery(current_envelope)
+
+            await _retry_recovery_sig_operation(
+                f"placement_recovery:{envelope.logical_operation_id}",
+                recover_placement,
+            )
+            replayed = True
+        except SigApiError:
+            continue
+
+    if replayed:
+        try:
+            authoritative_snapshot = await _retry_recovery_sig_operation(
+                "post_replay_account_reconciliation",
+                lambda: reconcile_account(
+                    rest,
+                    tournament_id=tournament_id,
+                    tournament_slug=tournament_slug,
+                ),
+            )
+        except SigApiError:
+            # The pre-replay snapshot cannot prove the state of a new ACK.
+            authoritative_snapshot = None
+
+    open_orders = (
+        {
+            order.id: order
+            for order in authoritative_snapshot.open_orders
+            if order.open
+        }
+        if authoritative_snapshot is not None
+        else {}
+    )
+    order_quantities: dict[int, Decimal] = {
+        order.id: abs(order.quantity)
+        for order in (() if authoritative_snapshot is None else authoritative_snapshot.open_orders)
+    }
+    order_exchange_ids: dict[int, str] = {
+        order.id: order.exchange_id
+        for order in (() if authoritative_snapshot is None else authoritative_snapshot.open_orders)
+    }
+    wrote_cancellation = False
+    for envelope in candidates:
+        if envelope.operation_kind in {
+            OperationKind.SINGLE_PLACEMENT,
+            OperationKind.BEST_EFFORT_BATCH,
+            OperationKind.ATOMIC_MULTI_LEG,
+        }:
+            order_ids = _acknowledged_order_ids(journal, envelope.logical_operation_id)
+            for order_id in order_ids:
+                if order_id not in open_orders:
+                    continue
+                try:
+                    cancel_envelope = ExecutionEnvelope.cancellation(
+                        logical_operation_id=(
+                            f"{envelope.logical_operation_id}:startup-cancel:{order_id}:"
+                            f"{clock_ns()}"
+                        ),
+                        operation_kind=OperationKind.SINGLE_CANCELLATION,
+                        sink_mode=envelope.sink_mode,
+                        created_monotonic_ns=clock_ns(),
+                        order_id=order_id,
+                        tournament_id=envelope.tournament_id,
                     )
 
-                await _retry_recovery_sig_operation(
-                    f"placement_recovery:{envelope.logical_operation_id}",
-                    recover_placement,
-                )
-            elif envelope.operation_kind is OperationKind.SINGLE_CANCELLATION:
-                async def recover_cancellation(
-                    current_envelope: ExecutionEnvelope = envelope,
-                ) -> None:
-                    await _recover_single_cancel(
-                        journal=journal,
-                        rest=rest,
-                        live_sink=live_sink,
-                        envelope=current_envelope,
-                        clock_ns=clock_ns,
+                    async def cancel_owned_order(
+                        current_envelope: ExecutionEnvelope = cancel_envelope,
+                    ) -> object:
+                        return await live_sink.cancel(current_envelope)
+
+                    await _retry_recovery_sig_operation(
+                        f"cancel_owned_order:{order_id}",
+                        cancel_owned_order,
                     )
+                    wrote_cancellation = True
+                except SigApiError:
+                    continue
+        elif envelope.operation_kind is OperationKind.SINGLE_CANCELLATION:
+            cancel_order_id = _single_cancel_order_id(envelope)
+            if cancel_order_id is None or cancel_order_id not in open_orders:
+                continue
+            retry_envelope = ExecutionEnvelope.cancellation(
+                logical_operation_id=(
+                    f"{envelope.logical_operation_id}:startup-retry:{clock_ns()}"
+                ),
+                operation_kind=OperationKind.SINGLE_CANCELLATION,
+                sink_mode=envelope.sink_mode,
+                created_monotonic_ns=clock_ns(),
+                order_id=cancel_order_id,
+                tournament_id=envelope.tournament_id,
+            )
+            try:
+                async def retry_single_cancel(
+                    current_envelope: ExecutionEnvelope = retry_envelope,
+                ) -> object:
+                    return await live_sink.cancel(current_envelope)
 
                 await _retry_recovery_sig_operation(
                     f"cancellation_reconciliation:{envelope.logical_operation_id}",
-                    recover_cancellation,
+                    retry_single_cancel,
                 )
-            elif envelope.operation_kind is OperationKind.CANCEL_ALL:
-                async def recover_cancel_all(
-                    current_envelope: ExecutionEnvelope = envelope,
-                ) -> None:
-                    await _recover_startup_cancel_all(
-                        journal=journal,
-                        rest=rest,
-                        live_sink=live_sink,
-                        envelope=current_envelope,
-                        tournament_id=tournament_id,
-                        clock_ns=clock_ns,
+                wrote_cancellation = True
+            except SigApiError:
+                continue
+        elif envelope.operation_kind is OperationKind.CANCEL_ALL:
+            if _cancel_all_scope_has_open_orders_in_snapshot(
+                envelope.payload_json,
+                tournament_id=tournament_id,
+                open_orders=tuple(open_orders.values()),
+                market_by_exchange=market_by_exchange or {},
+            ):
+                try:
+                    async def retry_cancel_all(
+                        current_envelope: ExecutionEnvelope = envelope,
+                    ) -> object:
+                        return await live_sink.cancel(current_envelope)
+
+                    await _retry_recovery_sig_operation(
+                        f"cancel_all_reconciliation:{envelope.logical_operation_id}",
+                        retry_cancel_all,
                     )
+                    wrote_cancellation = True
+                except SigApiError:
+                    continue
 
-                await _retry_recovery_sig_operation(
-                    f"cancel_all_reconciliation:{envelope.logical_operation_id}",
-                    recover_cancel_all,
-                )
-        except SigExecutionUncertainError:
-            continue
+    if wrote_cancellation:
+        with suppress(SigApiError):
+            authoritative_snapshot = await _retry_recovery_sig_operation(
+                "post_recovery_account_reconciliation",
+                lambda: reconcile_account(
+                    rest,
+                    tournament_id=tournament_id,
+                    tournament_slug=tournament_slug,
+                ),
+            )
+
+    fill_projection: _PortfolioFillProjection | None = None
+    if any(_candidate_has_order_identity(journal, envelope) for envelope in candidates):
+        try:
+            fill_projection = await _retry_recovery_sig_operation(
+                "startup_portfolio_fill_reconciliation",
+                lambda: _read_tournament_fills(rest, tournament_id=tournament_id),
+            )
         except SigApiError:
-            # Exhausted bounded transient retries or a non-transient venue
-            # error. Keep this operation unresolved and let its exchange stay
-            # fail-closed while the rest of MAKE starts.
-            continue
+            fill_projection = None
 
-        if envelope.logical_operation_id not in {
-            item.logical_operation_id for item in journal.unresolved()
+    final_open_orders = (
+        {
+            order.id: order
+            for order in authoritative_snapshot.open_orders
+            if order.open
+        }
+        if authoritative_snapshot is not None
+        else {}
+    )
+    if authoritative_snapshot is not None:
+        order_quantities.update(
+            {
+                order.id: abs(order.quantity)
+                for order in authoritative_snapshot.open_orders
+            }
+        )
+        order_exchange_ids.update(
+            {order.id: order.exchange_id for order in authoritative_snapshot.open_orders}
+        )
+    successful_cancels = journal.confirmed_cancelled_order_ids()
+    envelopes_by_id = {item.logical_operation_id: item for item in journal.envelopes()}
+    for envelope in candidates:
+        if envelope.operation_kind in {
+            OperationKind.SINGLE_PLACEMENT,
+            OperationKind.BEST_EFFORT_BATCH,
+            OperationKind.ATOMIC_MULTI_LEG,
         }:
-            _emit_recovery_observation(
-                observation_emitter,
-                observation_process_instance_id,
-                wall_clock,
-                ObservationKind.RECONCILIATION_RESOLVED,
-                envelope,
+            _reconcile_bulk_placement(
+                journal=journal,
+                envelope=envelope,
+                open_orders=final_open_orders,
+                successful_cancels=successful_cancels,
+                fills=fill_projection,
+                order_quantities=order_quantities,
+                order_exchange_ids=order_exchange_ids,
+                envelopes_by_id=envelopes_by_id,
+                snapshot_available=authoritative_snapshot is not None,
+                clock_ns=clock_ns,
+            )
+        elif envelope.operation_kind is OperationKind.SINGLE_CANCELLATION:
+            _reconcile_bulk_single_cancel(
+                journal=journal,
+                envelope=envelope,
+                open_orders=final_open_orders,
+                fills=fill_projection,
+                order_quantities=order_quantities,
+                order_exchange_ids=order_exchange_ids,
+                envelopes_by_id=envelopes_by_id,
+                snapshot_available=authoritative_snapshot is not None,
+                successful_cancels=successful_cancels,
+                clock_ns=clock_ns,
+            )
+        elif (
+            envelope.operation_kind is OperationKind.CANCEL_ALL
+            and authoritative_snapshot is not None
+            and not _cancel_all_scope_has_open_orders_in_snapshot(
+                envelope.payload_json,
+                tournament_id=tournament_id,
+                open_orders=tuple(final_open_orders.values()),
+                market_by_exchange=market_by_exchange or {},
+            )
+            and journal.lifecycle_state(envelope.logical_operation_id)
+            is not LifecycleState.CANCELLED
+        ):
+            journal.mark_state(
+                envelope.logical_operation_id,
+                LifecycleState.CANCELLED,
                 clock_ns(),
             )
 
-    with suppress(SigApiError):
-        authoritative_snapshot = await _retry_recovery_sig_operation(
-            "post_recovery_account_reconciliation",
-            lambda: reconcile_account(
-                rest,
-                tournament_id=tournament_id,
-                tournament_slug=tournament_slug,
-            ),
-        )
-    # Preserve the first complete snapshot if the follow-up read is temporarily
-    # unavailable; the caller still receives unresolved exchange IDs.
-
-    unresolved = journal.unresolved()
+    unresolved = tuple(
+        envelope
+        for envelope in journal.unresolved()
+        if envelope.tournament_id == tournament_id
+    )
     scoped_unresolved = (
         unresolved
         if operation_ids is None
@@ -264,37 +444,53 @@ async def recover_startup(
         for envelope in candidates:
             if envelope.logical_operation_id not in unresolved_ids:
                 reservations.release_operation(envelope.logical_operation_id)
-        _reserve_unresolved_placements(
+        reserve_unresolved_placements(
             journal,
             scoped_unresolved,
             reservations=reservations,
             market_by_exchange=market_by_exchange or {},
+            open_order_ids=frozenset(final_open_orders),
         )
     if authoritative_snapshot is None:
         portfolio = RuntimePortfolio(account_trusted=False)
     else:
         portfolio = authoritative_snapshot.to_runtime_portfolio()
+    unresolved_operation_ids = tuple(
+        envelope.logical_operation_id for envelope in scoped_unresolved
+    )
+    unresolved_ids = set(unresolved_operation_ids)
+    for envelope in candidates:
+        if envelope.logical_operation_id in unresolved_ids:
+            continue
+        _emit_recovery_observation(
+            observation_emitter,
+            observation_process_instance_id,
+            wall_clock,
+            ObservationKind.RECONCILIATION_RESOLVED,
+            envelope,
+            clock_ns(),
+        )
     return StartupRecoveryResult(
         portfolio=portfolio,
         safe_to_resume_live=not scoped_unresolved,
-        unresolved_operation_ids=tuple(
-            envelope.logical_operation_id for envelope in scoped_unresolved
-        ),
+        unresolved_operation_ids=unresolved_operation_ids,
         unresolved_exchange_ids=_unresolved_exchange_ids(
             journal,
             scoped_unresolved,
             exchange_ids_by_market=exchange_ids_by_market or {},
+            open_order_ids=frozenset(final_open_orders),
         ),
+        authoritative_snapshot=authoritative_snapshot,
     )
-
-
-def _reserve_unresolved_placements(
+def reserve_unresolved_placements(
     journal: ExecutionJournal,
     unresolved: tuple[ExecutionEnvelope, ...],
     *,
     reservations: ExecutionReservationBook,
     market_by_exchange: dict[str, str],
+    open_order_ids: frozenset[int] = frozenset(),
 ) -> None:
+    confirmed_closed = journal.confirmed_cancelled_order_ids()
     for envelope in unresolved:
         if envelope.operation_kind not in {
             OperationKind.SINGLE_PLACEMENT,
@@ -314,8 +510,16 @@ def _reserve_unresolved_placements(
                 for event in journal.events(envelope.logical_operation_id)
                 if event.event_type == "SUBMISSION" and event.logical_intent_id is not None
             }
+            unresolved_intent_ids = unresolved_placement_intent_ids(
+                journal,
+                envelope,
+                open_order_ids=open_order_ids,
+                confirmed_closed=confirmed_closed,
+            )
             intents: list[RuntimeOrderIntent] = []
             for intent_id, leg in zip(envelope.intent_ids, raw_legs, strict=True):
+                if intent_id not in unresolved_intent_ids:
+                    continue
                 if not isinstance(leg, dict):
                     raise ValueError("placement leg is not an object")
                 exchange_id = leg.get("exchangeId")
@@ -354,7 +558,8 @@ def _reserve_unresolved_placements(
                         decision_observation_ns=decision_observation_ns,
                     )
                 )
-            reservations.reserve(envelope.logical_operation_id, tuple(intents))
+            if intents:
+                reservations.reserve(envelope.logical_operation_id, tuple(intents))
             intent_by_id = {item.intent_id: item for item in intents}
             for event in journal.events(envelope.logical_operation_id):
                 if (
@@ -368,9 +573,24 @@ def _reserve_unresolved_placements(
                         event.exchange_order_id,
                     )
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
-            # The unresolved operation remains an all-scope blocker when its
-            # durable economics cannot be reconstructed exactly.
+            # The operation remains a blocker when its durable economics cannot
+            # be reconstructed exactly.
             continue
+
+
+def unresolved_startup_exchange_ids(
+    journal: ExecutionJournal,
+    unresolved: tuple[ExecutionEnvelope, ...],
+    *,
+    exchange_ids_by_market: dict[str, tuple[str, ...]],
+    open_order_ids: frozenset[int] = frozenset(),
+) -> tuple[str, ...]:
+    return _unresolved_exchange_ids(
+        journal,
+        unresolved,
+        exchange_ids_by_market=exchange_ids_by_market,
+        open_order_ids=open_order_ids,
+    )
 
 
 async def _retry_recovery_sig_operation[T](
@@ -396,154 +616,20 @@ async def _retry_recovery_sig_operation[T](
     raise AssertionError(f"unreachable retry loop for {operation}")
 
 
-async def _recover_startup_placement(
-    *,
+def _acknowledged_order_ids(
     journal: ExecutionJournal,
-    rest: RecoveryRest,
-    live_sink: SigLiveSink,
-    envelope: ExecutionEnvelope,
-    replayable_state: bool,
-    clock_ns: ClockNs,
-    wall_clock: WallClock,
-) -> bool:
-    """Reconcile a placement by its acknowledged order IDs, cancelling rests."""
-    operation_id = envelope.logical_operation_id
-    current = _unresolved_envelope(journal, operation_id)
-    if current is None:
-        return True
-    if current.lifecycle_state is not LifecycleState.RECONCILING:
-        journal.mark_state(operation_id, LifecycleState.RECONCILING, clock_ns())
-        current = _unresolved_envelope(journal, operation_id)
-        if current is None:
-            return True
-
-    order_ids = _acknowledged_order_ids(journal, operation_id)
-    if not order_ids and replayable_state:
-        # This is the only permitted placement retry. SigLiveSink validates the
-        # durable payload and sends its existing idempotency key unchanged.
-        await live_sink.dispatch_recovery(current)
-        current = _unresolved_envelope(journal, operation_id)
-        if current is None:
-            return True
-        order_ids = _acknowledged_order_ids(journal, operation_id)
-
-    if not order_ids:
-        return False
-
-    fills_complete = True
-    every_order_filled = True
-    for order_id in order_ids:
-        acknowledged = next(
-            event
+    operation_id: str,
+) -> tuple[int, ...]:
+    return tuple(
+        dict.fromkeys(
+            int(event.exchange_order_id)
             for event in journal.events(operation_id)
-            if event.event_type == "ACK" and event.exchange_order_id == str(order_id)
+            if event.event_type == "ACK"
+            and event.exchange_order_id is not None
+            and event.exchange_order_id.isdigit()
+            and int(event.exchange_order_id) > 0
         )
-        order = await read_order_with_fallback(
-            rest,
-            order_id,
-            tournament_id=envelope.tournament_id,
-            exchange_id=acknowledged.exchange_id,
-        )
-        if order is None:
-            return False
-
-        # A resting placement from a previous process is owned by this durable
-        # ACK. Cancel it under the recovery permit, then verify closure before
-        # resolving the placement envelope.
-        for _cancel_attempt in range(_RECOVERY_MAX_ATTEMPTS):
-            if not order.open:
-                break
-
-            async def cancel_owned_order(
-                current_order_id: int = order_id,
-                current_envelope: ExecutionEnvelope = envelope,
-            ) -> ExecutionEvent:
-                cancel_envelope = ExecutionEnvelope.cancellation(
-                    logical_operation_id=(
-                        f"{operation_id}:startup-cancel:{current_order_id}:"
-                        f"{clock_ns()}"
-                    ),
-                    operation_kind=OperationKind.SINGLE_CANCELLATION,
-                    sink_mode=current_envelope.sink_mode,
-                    created_monotonic_ns=clock_ns(),
-                    order_id=current_order_id,
-                    tournament_id=current_envelope.tournament_id,
-                )
-                return await live_sink.cancel(cancel_envelope)
-
-            await _retry_recovery_sig_operation(
-                f"cancel_owned_order:{order_id}",
-                cancel_owned_order,
-            )
-
-            async def verify_cancelled_order(
-                current_order_id: int = order_id,
-                current_envelope: ExecutionEnvelope = envelope,
-                current_acknowledged: ExecutionJournalEvent = acknowledged,
-            ) -> OrderReadDto | None:
-                return await read_order_with_fallback(
-                    rest,
-                    current_order_id,
-                    tournament_id=current_envelope.tournament_id,
-                    exchange_id=current_acknowledged.exchange_id,
-                )
-
-            order = await _retry_recovery_sig_operation(
-                f"verify_cancelled_order:{order_id}",
-                verify_cancelled_order,
-            )
-            if order is None:
-                return False
-        if order is None:
-            return False
-        if order.open:
-            return False
-        closed_order = order
-
-        async def read_order_fills(
-            current_order_id: int = order_id,
-            current_envelope: ExecutionEnvelope = envelope,
-            current_order: OrderReadDto = closed_order,
-        ) -> tuple[tuple[OrderFillItemDto, ...], Decimal] | None:
-            return await read_complete_fills_with_fallback(
-                rest,
-                current_order_id,
-                tournament_id=current_envelope.tournament_id,
-                exchange_id=current_order.exchange_id,
-            )
-
-        fills = await _retry_recovery_sig_operation(
-            f"read_order_fills:{order_id}",
-            read_order_fills,
-        )
-        if fills is None:
-            fills_complete = False
-            break
-        fill_rows, filled_quantity = fills
-        placement = journal.placement_identity_for_exchange_order_id(str(order_id))
-        fill_operation_id = operation_id if placement is None else placement[0]
-        fill_intent_id = None if placement is None else placement[1]
-        _record_authoritative_fills(
-            journal,
-            operation_id=fill_operation_id,
-            intent_id=fill_intent_id,
-            order_id=order_id,
-            exchange_id=order.exchange_id,
-            fills=fill_rows,
-        )
-        every_order_filled = every_order_filled and (
-            abs(filled_quantity) >= abs(order.quantity)
-        )
-
-    if not fills_complete:
-        return False
-    _record_terminal(
-        journal,
-        envelope,
-        None,
-        LifecycleState.FILLED if every_order_filled else LifecycleState.CANCELLED,
     )
-    return True
 
 
 def _unresolved_envelope(
@@ -560,20 +646,338 @@ def _unresolved_envelope(
     )
 
 
-def _acknowledged_order_ids(
+@dataclass(frozen=True, slots=True)
+class _PortfolioFillProjection:
+    by_order_id: dict[int, tuple[FillReadDto, ...]]
+    incomplete_exchange_ids: frozenset[str]
+
+
+def _candidate_has_order_identity(
     journal: ExecutionJournal,
-    operation_id: str,
-) -> tuple[int, ...]:
-    return tuple(
-        dict.fromkeys(
-            int(event.exchange_order_id)
+    envelope: ExecutionEnvelope,
+) -> bool:
+    if envelope.operation_kind in {
+        OperationKind.SINGLE_PLACEMENT,
+        OperationKind.BEST_EFFORT_BATCH,
+        OperationKind.ATOMIC_MULTI_LEG,
+    }:
+        return bool(_acknowledged_order_ids(journal, envelope.logical_operation_id))
+    return (
+        envelope.operation_kind is OperationKind.SINGLE_CANCELLATION
+        and _single_cancel_order_id(envelope) is not None
+    )
+
+
+def _single_cancel_order_id(envelope: ExecutionEnvelope) -> int | None:
+    try:
+        payload = json.loads(envelope.payload_json)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    order_id = payload.get("orderId")
+    return order_id if isinstance(order_id, int) and order_id > 0 else None
+
+
+async def _read_tournament_fills(
+    rest: RecoveryRest,
+    *,
+    tournament_id: str,
+) -> _PortfolioFillProjection | None:
+    """Read one complete, paginated tournament fill projection."""
+    fills: dict[int, FillReadDto] = {}
+    incomplete_exchange_ids: set[str] = set()
+    cursor: str | None = None
+    while True:
+        page = await rest.list_portfolio_fills(
+            tournament_id=tournament_id,
+            limit=200,
+            cursor=cursor,
+        )
+        if page.coverage is None or not page.coverage.complete:
+            return None
+        for fill in page.data:
+            if fill.order_id is None:
+                incomplete_exchange_ids.add(fill.exchange_id)
+                continue
+            existing = fills.get(fill.id)
+            if existing is not None and existing != fill:
+                return None
+            fills[fill.id] = fill
+        if not page.pagination.has_more:
+            by_order: dict[int, list[FillReadDto]] = {}
+            for fill in fills.values():
+                assert fill.order_id is not None
+                by_order.setdefault(fill.order_id, []).append(fill)
+            return _PortfolioFillProjection(
+                by_order_id={
+                    order_id: tuple(sorted(rows, key=lambda row: row.id))
+                    for order_id, rows in by_order.items()
+                },
+                incomplete_exchange_ids=frozenset(incomplete_exchange_ids),
+            )
+        next_cursor = page.pagination.next_cursor
+        if next_cursor is None or not next_cursor.strip() or next_cursor == cursor:
+            return None
+        cursor = next_cursor
+
+
+def unresolved_placement_intent_ids(
+    journal: ExecutionJournal,
+    envelope: ExecutionEnvelope,
+    *,
+    open_order_ids: frozenset[int] = frozenset(),
+    confirmed_closed: frozenset[str] | None = None,
+) -> frozenset[str]:
+    confirmed = (
+        journal.confirmed_cancelled_order_ids()
+        if confirmed_closed is None
+        else confirmed_closed
+    )
+    events = journal.events(envelope.logical_operation_id)
+    rejected_intents = {
+        event.logical_intent_id
+        for event in events
+        if event.event_type == "REJECTED" and event.logical_intent_id is not None
+    }
+    unresolved: set[str] = set()
+    acknowledged_intents: set[str] = set()
+    for event in events:
+        if (
+            event.event_type != "ACK"
+            or event.logical_intent_id is None
+            or event.exchange_order_id is None
+            or not event.exchange_order_id.isdigit()
+        ):
+            continue
+        acknowledged_intents.add(event.logical_intent_id)
+        if (
+            event.exchange_order_id not in confirmed
+            or int(event.exchange_order_id) in open_order_ids
+        ):
+            unresolved.add(event.logical_intent_id)
+    if envelope.lifecycle_state in {
+        LifecycleState.PENDING,
+        LifecycleState.ACKED,
+        LifecycleState.UNCERTAIN,
+        LifecycleState.RECONCILING,
+        LifecycleState.OPEN,
+        LifecycleState.PARTIALLY_FILLED,
+        LifecycleState.CANCEL_PENDING,
+    }:
+        unresolved.update(
+            set(envelope.intent_ids) - acknowledged_intents - rejected_intents
+        )
+    return frozenset(unresolved)
+
+
+def _quantity_for_order_id(
+    journal: ExecutionJournal,
+    order_id: int,
+    *,
+    envelopes_by_id: dict[str, ExecutionEnvelope],
+) -> Decimal | None:
+    placement = journal.placement_identity_for_exchange_order_id(str(order_id))
+    if placement is None:
+        return None
+    operation_id, intent_id = placement
+    if intent_id is None:
+        return None
+    envelope = envelopes_by_id.get(operation_id)
+    if envelope is None:
+        return None
+    ack = next(
+        (
+            event
             for event in journal.events(operation_id)
             if event.event_type == "ACK"
-            and event.exchange_order_id is not None
-            and event.exchange_order_id.isdigit()
-            and int(event.exchange_order_id) > 0
+            and event.exchange_order_id == str(order_id)
+        ),
+        None,
+    )
+    if ack is not None and ack.quantity is not None:
+        try:
+            return abs(Decimal(ack.quantity))
+        except Exception:
+            return None
+    try:
+        payload = json.loads(envelope.payload_json)
+        if not isinstance(payload, dict):
+            return None
+        raw_legs = payload.get("orders", payload.get("legs", [payload]))
+        if not isinstance(raw_legs, list):
+            return None
+        by_intent = dict(zip(envelope.intent_ids, raw_legs, strict=True))
+        leg = by_intent.get(intent_id)
+        if not isinstance(leg, dict):
+            return None
+        quantity = leg.get("quantity")
+        if not isinstance(quantity, (int, float, str, Decimal)):
+            return None
+        return abs(Decimal(str(quantity)))
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+
+
+def _portfolio_fill_rows(
+    fills: _PortfolioFillProjection,
+    order_id: int,
+) -> tuple[OrderFillItemDto, ...]:
+    return tuple(
+        OrderFillItemDto.model_validate(
+            {
+                "id": item.id,
+                "orderId": item.order_id,
+                "exchangeId": item.exchange_id,
+                "marketId": item.market_id,
+                "price": None if item.price is None else str(item.price),
+                "quantity": str(item.quantity),
+                "side": item.side,
+                "filledAt": item.filled_at.isoformat(),
+            }
+        )
+        for item in fills.by_order_id.get(order_id, ())
+    )
+
+
+def _reconcile_bulk_placement(
+    *,
+    journal: ExecutionJournal,
+    envelope: ExecutionEnvelope,
+    open_orders: dict[int, OrderReadDto],
+    successful_cancels: frozenset[str],
+    fills: _PortfolioFillProjection | None,
+    order_quantities: dict[int, Decimal],
+    order_exchange_ids: dict[int, str],
+    envelopes_by_id: dict[str, ExecutionEnvelope],
+    snapshot_available: bool,
+    clock_ns: ClockNs,
+) -> None:
+    order_ids = _acknowledged_order_ids(journal, envelope.logical_operation_id)
+    if not order_ids or fills is None:
+        return
+    events = journal.events(envelope.logical_operation_id)
+    ack_by_id = {
+        int(event.exchange_order_id): event
+        for event in events
+        if event.event_type == "ACK"
+        and event.exchange_order_id is not None
+        and event.exchange_order_id.isdigit()
+    }
+    every_order_filled = True
+    for order_id in order_ids:
+        if order_id in open_orders:
+            return
+        acknowledged = ack_by_id.get(order_id)
+        if acknowledged is None:
+            return
+        exchange_id = acknowledged.exchange_id or order_exchange_ids.get(order_id)
+        if exchange_id is None or exchange_id in fills.incomplete_exchange_ids:
+            return
+        if not snapshot_available and str(order_id) not in successful_cancels:
+            return
+        fill_rows = _portfolio_fill_rows(fills, order_id)
+        placement = journal.placement_identity_for_exchange_order_id(str(order_id))
+        fill_operation_id = envelope.logical_operation_id if placement is None else placement[0]
+        fill_intent_id = None if placement is None else placement[1]
+        _record_authoritative_fills(
+            journal,
+            operation_id=fill_operation_id,
+            intent_id=fill_intent_id,
+            order_id=order_id,
+            exchange_id=exchange_id,
+            fills=fill_rows,
+        )
+        quantity = order_quantities.get(order_id) or _quantity_for_order_id(
+            journal,
+            order_id,
+            envelopes_by_id=envelopes_by_id,
+        )
+        if quantity is None:
+            return
+        filled_quantity = sum((abs(fill.quantity) for fill in fill_rows), Decimal("0"))
+        every_order_filled = every_order_filled and filled_quantity >= quantity
+    _record_terminal(
+        journal,
+        envelope,
+        None,
+        LifecycleState.FILLED if every_order_filled else LifecycleState.CANCELLED,
+    )
+
+
+def _reconcile_bulk_single_cancel(
+    *,
+    journal: ExecutionJournal,
+    envelope: ExecutionEnvelope,
+    open_orders: dict[int, OrderReadDto],
+    fills: _PortfolioFillProjection | None,
+    order_quantities: dict[int, Decimal],
+    order_exchange_ids: dict[int, str],
+    envelopes_by_id: dict[str, ExecutionEnvelope],
+    snapshot_available: bool,
+    successful_cancels: frozenset[str],
+    clock_ns: ClockNs,
+) -> None:
+    order_id = _single_cancel_order_id(envelope)
+    if order_id is None or order_id in open_orders or fills is None:
+        return
+    if not snapshot_available and str(order_id) not in successful_cancels:
+        return
+    placement = journal.placement_identity_for_exchange_order_id(str(order_id))
+    exchange_id = (
+        None
+        if placement is None
+        else next(
+            (
+                event.exchange_id
+                for event in journal.events(placement[0])
+                if event.event_type == "ACK"
+                and event.exchange_order_id == str(order_id)
+            ),
+            None,
         )
     )
+    exchange_id = (
+        exchange_id
+        or order_exchange_ids.get(order_id)
+        or journal.exchange_id_for_order_id(str(order_id))
+    )
+    if exchange_id is None or exchange_id in fills.incomplete_exchange_ids:
+        return
+    fill_rows = _portfolio_fill_rows(fills, order_id)
+    fill_operation_id = envelope.logical_operation_id if placement is None else placement[0]
+    fill_intent_id = None if placement is None else placement[1]
+    _record_authoritative_fills(
+        journal,
+        operation_id=fill_operation_id,
+        intent_id=fill_intent_id,
+        order_id=order_id,
+        exchange_id=exchange_id,
+        fills=fill_rows,
+    )
+    quantity = order_quantities.get(order_id) or _quantity_for_order_id(
+        journal,
+        order_id,
+        envelopes_by_id=envelopes_by_id,
+    )
+    filled_quantity = sum((abs(fill.quantity) for fill in fill_rows), Decimal("0"))
+    terminal = (
+        LifecycleState.RECONCILED
+        if quantity is None
+        else (
+            LifecycleState.FILLED
+            if filled_quantity >= quantity
+            else LifecycleState.CANCELLED
+        )
+    )
+    journal.record_event(
+        logical_operation_id=envelope.logical_operation_id,
+        event_type="RECONCILED_TERMINAL",
+        observed_monotonic_ns=clock_ns(),
+        exchange_order_id=str(order_id),
+        terminal_status=terminal.value,
+    )
+    journal.mark_state(envelope.logical_operation_id, terminal, clock_ns())
 
 
 async def read_order_with_fallback(
@@ -727,6 +1131,20 @@ def _record_terminal(
     terminal: LifecycleState,
 ) -> None:
     observed = monotonic_ns()
+    current = journal.lifecycle_state(envelope.logical_operation_id)
+    if current in {
+        LifecycleState.FILLED,
+        LifecycleState.CANCELLED,
+        LifecycleState.RECONCILED,
+        LifecycleState.REJECTED,
+    }:
+        return
+    if not lifecycle_transition_allowed(current, terminal):
+        journal.mark_state(
+            envelope.logical_operation_id,
+            LifecycleState.RECONCILING,
+            observed,
+        )
     journal.record_event(
         logical_operation_id=envelope.logical_operation_id,
         event_type="RECONCILED_TERMINAL",
@@ -737,85 +1155,25 @@ def _record_terminal(
     journal.mark_state(envelope.logical_operation_id, terminal, observed)
 
 
-async def _recover_startup_cancel_all(
-    *,
-    journal: ExecutionJournal,
-    rest: RecoveryRest,
-    live_sink: SigLiveSink,
-    envelope: ExecutionEnvelope,
-    tournament_id: str,
-    clock_ns: ClockNs,
-) -> None:
-    raw = json.loads(envelope.payload_json)
-    explicit_tournament = raw.get("tournamentId")
-    if explicit_tournament is not None and explicit_tournament != tournament_id:
-        raise RuntimeError("cancel-all journal entry targets a different tournament")
-    exchange_id = raw.get("exchangeId")
-    market_id = raw.get("marketId")
-    if exchange_id is not None and not isinstance(exchange_id, str):
-        raise RuntimeError("cancel-all journal entry contains malformed exchangeId")
-    if market_id is not None and not isinstance(market_id, str):
-        raise RuntimeError("cancel-all journal entry contains malformed marketId")
-
-    if envelope.lifecycle_state is not LifecycleState.RECONCILING:
-        journal.mark_state(envelope.logical_operation_id, LifecycleState.RECONCILING, clock_ns())
-    open_orders = [
-        order
-        async for order in rest.iter_orders(
-            status="open",
-            exchange_id=exchange_id,
-            market_id=market_id,
-            tournament_id=tournament_id,
-            limit=200,
-        )
-    ]
-    for order in open_orders:
-        async def cancel_open_order(
-            current_order: OrderReadDto = order,
-            current_envelope: ExecutionEnvelope = envelope,
-        ) -> ExecutionEvent:
-            cancel_envelope = ExecutionEnvelope.cancellation(
-                logical_operation_id=(
-                    f"{current_envelope.logical_operation_id}:startup-cancel:"
-                    f"{current_order.id}:{clock_ns()}"
-                ),
-                operation_kind=OperationKind.SINGLE_CANCELLATION,
-                sink_mode=current_envelope.sink_mode,
-                created_monotonic_ns=clock_ns(),
-                order_id=current_order.id,
-                tournament_id=current_envelope.tournament_id,
-            )
-            return await live_sink.cancel(cancel_envelope)
-
-        await _retry_recovery_sig_operation(
-            f"cancel_owned_order:{order.id}",
-            cancel_open_order,
-        )
-    if await _cancel_all_scope_has_open_orders(
-        rest=rest,
-        envelope_payload=envelope.payload_json,
-        tournament_id=tournament_id,
-    ):
-        return
-    journal.mark_state(envelope.logical_operation_id, LifecycleState.CANCELLED, clock_ns())
-
-
 def _unresolved_exchange_ids(
     journal: ExecutionJournal,
     unresolved: tuple[ExecutionEnvelope, ...],
     *,
     exchange_ids_by_market: dict[str, tuple[str, ...]],
+    open_order_ids: frozenset[int] = frozenset(),
 ) -> tuple[str, ...]:
-    """Map unresolved journal ownership to a conservative fail-closed scope."""
+    """Map unresolved economics to only the exchanges that can still be exposed."""
     exchange_ids: set[str] = set()
-    all_known = {
-        event.exchange_order_id: event.exchange_id
-        for envelope in journal.envelopes()
-        for event in journal.events(envelope.logical_operation_id)
-        if event.event_type == "ACK"
-        and event.exchange_order_id is not None
-        and event.exchange_id is not None
+    confirmed_closed = journal.confirmed_cancelled_order_ids()
+    all_mapped = {
+        exchange_id
+        for values in exchange_ids_by_market.values()
+        for exchange_id in values
     }
+
+    def fallback_all() -> tuple[str, ...]:
+        return tuple(sorted(all_mapped)) if all_mapped else ("*",)
+
     for envelope in unresolved:
         if envelope.operation_kind in {
             OperationKind.SINGLE_PLACEMENT,
@@ -825,36 +1183,66 @@ def _unresolved_exchange_ids(
             try:
                 payload = json.loads(envelope.payload_json)
                 if not isinstance(payload, dict):
-                    return ("*",)
+                    return fallback_all()
                 legs = payload.get("orders", payload.get("legs", [payload]))
                 if not isinstance(legs, list):
-                    return ("*",)
-                for leg in legs:
+                    return fallback_all()
+                by_intent = dict(zip(envelope.intent_ids, legs, strict=True))
+                active_intents = unresolved_placement_intent_ids(
+                    journal,
+                    envelope,
+                    open_order_ids=open_order_ids,
+                    confirmed_closed=confirmed_closed,
+                )
+                events = journal.events(envelope.logical_operation_id)
+                ack_by_intent = {
+                    event.logical_intent_id: event
+                    for event in events
+                    if event.event_type == "ACK" and event.logical_intent_id is not None
+                }
+                for intent_id in active_intents:
+                    leg = by_intent.get(intent_id)
                     if not isinstance(leg, dict):
-                        return ("*",)
-                    value = leg.get("exchangeId")
+                        return fallback_all()
+                    ack = ack_by_intent.get(intent_id)
+                    value = (
+                        None if ack is None else ack.exchange_id
+                    ) or leg.get("exchangeId")
                     if not isinstance(value, str) or not value.strip():
-                        return ("*",)
+                        return fallback_all()
                     exchange_ids.add(value)
-            except (json.JSONDecodeError, TypeError):
-                return ("*",)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                return fallback_all()
         elif envelope.operation_kind is OperationKind.SINGLE_CANCELLATION:
-            payload = json.loads(envelope.payload_json)
-            order_id = payload.get("orderId") if isinstance(payload, dict) else None
-            exchange_id = all_known.get(str(order_id))
+            order_id = _single_cancel_order_id(envelope)
+            if order_id is not None and (
+                str(order_id) in confirmed_closed and order_id not in open_order_ids
+            ):
+                continue
+            exchange_id = (
+                None if order_id is None else journal.exchange_id_for_order_id(str(order_id))
+            )
             if exchange_id is None:
-                return ("*",)
+                return fallback_all()
             exchange_ids.add(exchange_id)
         elif envelope.operation_kind is OperationKind.CANCEL_ALL:
-            payload = json.loads(envelope.payload_json)
+            try:
+                payload = json.loads(envelope.payload_json)
+            except json.JSONDecodeError:
+                return fallback_all()
             scoped_exchange = payload.get("exchangeId") if isinstance(payload, dict) else None
             scoped_market = payload.get("marketId") if isinstance(payload, dict) else None
             if isinstance(scoped_exchange, str):
                 exchange_ids.add(scoped_exchange)
             elif isinstance(scoped_market, str):
-                exchange_ids.update(exchange_ids_by_market.get(scoped_market, ()))
+                market_exchanges = exchange_ids_by_market.get(scoped_market)
+                if market_exchanges is None:
+                    return fallback_all()
+                exchange_ids.update(market_exchanges)
             else:
-                return ("*",)
+                if not all_mapped:
+                    return fallback_all()
+                exchange_ids.update(all_mapped)
     return tuple(sorted(exchange_ids))
 
 
@@ -1040,6 +1428,34 @@ async def _recover_single_cancel(
         terminal_status=terminal.value,
     )
     journal.mark_state(envelope.logical_operation_id, terminal, observed)
+
+
+def _cancel_all_scope_has_open_orders_in_snapshot(
+    envelope_payload: str,
+    *,
+    tournament_id: str,
+    open_orders: tuple[OrderReadDto, ...],
+    market_by_exchange: dict[str, str],
+) -> bool:
+    raw = json.loads(envelope_payload)
+    exchange_id = raw.get("exchangeId")
+    market_id = raw.get("marketId")
+    explicit_tournament = raw.get("tournamentId")
+    if explicit_tournament is not None and explicit_tournament != tournament_id:
+        raise RuntimeError("cancel-all journal entry targets a different tournament")
+    if exchange_id is not None and not isinstance(exchange_id, str):
+        raise RuntimeError("cancel-all journal entry contains malformed exchangeId")
+    if market_id is not None and not isinstance(market_id, str):
+        raise RuntimeError("cancel-all journal entry contains malformed marketId")
+    return any(
+        order.open
+        and (exchange_id is None or order.exchange_id == exchange_id)
+        and (
+            market_id is None
+            or market_by_exchange.get(order.exchange_id) == market_id
+        )
+        for order in open_orders
+    )
 
 
 async def _cancel_all_scope_has_open_orders(
