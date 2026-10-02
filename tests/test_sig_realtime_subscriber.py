@@ -327,6 +327,121 @@ class ShardClient:
         return channel
 
 
+def test_subscriber_bounds_unacknowledged_join_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        inflight = 0
+        max_inflight = 0
+        clients: list[ShardClient] = []
+
+        class DelayedAckChannel(ShardChannel):
+            async def subscribe(self, callback: StatusCallback) -> Self:
+                nonlocal inflight, max_inflight
+                inflight += 1
+                max_inflight = max(max_inflight, inflight)
+
+                def acknowledge() -> None:
+                    nonlocal inflight
+                    inflight -= 1
+                    callback(RealtimeSubscribeStates.SUBSCRIBED, None)
+
+                asyncio.get_running_loop().call_soon(acknowledge)
+                return self
+
+        class DelayedAckClient(ShardClient):
+            def channel(
+                self, topic: str, options: RealtimeChannelOptions | None = None
+            ) -> DelayedAckChannel:
+                self.options.append(options)
+                channel = DelayedAckChannel(topic)
+                self.channels[topic] = channel
+                return channel
+
+        async def fake_acreate_client(url: str, key: str) -> DelayedAckClient:
+            assert url.startswith("https://example.supabase.co")
+            assert key == "anon-secret"
+            client = DelayedAckClient()
+            clients.append(client)
+            return client
+
+        monkeypatch.setattr(subscriber_module, "acreate_client", fake_acreate_client)
+        topics = [f"tournament:cup:market:{index}" for index in range(25)]
+        stop_event = asyncio.Event()
+        subscriber = SupabaseTournamentSubscriber(
+            topics=topics,
+            token=_token(expires_at=datetime.now(UTC) + timedelta(hours=2)),
+        )
+
+        outcome = await subscriber.run(
+            on_batch=_never_batch,
+            on_connected=stop_event.set,
+            stop_event=stop_event,
+        )
+
+        assert outcome == SubscriberExit.STOPPED
+        assert max_inflight == 10
+        assert inflight == 0
+        assert list(clients[0].channels) == topics
+        assert clients[0].realtime.removed is True
+
+    asyncio.run(scenario())
+
+
+def test_subscriber_stops_on_join_failure_before_connected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        clients: list[ShardClient] = []
+
+        class FailingChannel(ShardChannel):
+            async def subscribe(self, callback: StatusCallback) -> Self:
+                status = (
+                    RealtimeSubscribeStates.TIMED_OUT
+                    if self.topic.endswith(":4")
+                    else RealtimeSubscribeStates.SUBSCRIBED
+                )
+                asyncio.get_running_loop().call_soon(callback, status, None)
+                return self
+
+        class FailingClient(ShardClient):
+            def channel(
+                self, topic: str, options: RealtimeChannelOptions | None = None
+            ) -> FailingChannel:
+                self.options.append(options)
+                channel = FailingChannel(topic)
+                self.channels[topic] = channel
+                return channel
+
+        async def fake_acreate_client(url: str, key: str) -> FailingClient:
+            assert url.startswith("https://example.supabase.co")
+            assert key == "anon-secret"
+            client = FailingClient()
+            clients.append(client)
+            return client
+
+        monkeypatch.setattr(subscriber_module, "acreate_client", fake_acreate_client)
+        connected: list[bool] = []
+        topics = [f"tournament:cup:market:{index}" for index in range(25)]
+        subscriber = SupabaseTournamentSubscriber(
+            topics=topics,
+            token=_token(expires_at=datetime.now(UTC) + timedelta(hours=2)),
+        )
+
+        outcome = await subscriber.run(
+            on_batch=_never_batch,
+            on_connected=lambda: connected.append(True),
+            stop_event=asyncio.Event(),
+        )
+
+        assert outcome == SubscriberExit.SOCKET_ERROR
+        assert connected == []
+        assert len(clients[0].channels) == 10
+        assert clients[0].realtime.removed is True
+
+    asyncio.run(scenario())
+
+
 def test_subscriber_shards_per_market_topics_and_routes_batches_by_topic(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
