@@ -129,7 +129,7 @@ _SIG_RETRY_MAX_SECONDS = 60.0
 _SIG_RETRY_DELAYS_SECONDS = (1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0)
 # Resync is fail-closed on read errors; bound each attempt while retaining the
 # client's normal retry count and the shared governor's pacing/cooldown rules.
-_ACCOUNT_RESYNC_TIMEOUT_SECONDS = 5.0
+_ACCOUNT_RESYNC_TIMEOUT_SECONDS = 10.0
 _ACCOUNT_RESYNC_RETRY_POLICY = RetryPolicy(
     max_attempts=3,
     base_delay_seconds=0.05,
