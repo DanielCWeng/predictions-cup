@@ -113,12 +113,19 @@ class GovernedSigRestClient(SigRestClient):
         route_template: str,
         params: dict[str, str | int] | None = None,
     ) -> object:
-        policy = self._retry_policy
+        timeout_seconds, policy = self._active_request_options()
         for attempt in range(1, policy.max_attempts + 1):
             await self._rest_governor.acquire(self._priority.get())
             started = time.monotonic()
             try:
-                response = await self._client.get(path, params=params)
+                if timeout_seconds is None:
+                    response = await self._client.get(path, params=params)
+                else:
+                    response = await self._client.get(
+                        path,
+                        params=params,
+                        timeout=timeout_seconds,
+                    )
             except httpx.TransportError as exc:
                 self._log_transport_failure(route_template, attempt, started, exc)
                 if attempt >= policy.max_attempts:
@@ -130,7 +137,7 @@ class GovernedSigRestClient(SigRestClient):
                             f"{type(exc).__name__} GET {route_template}"
                         ),
                     ) from exc
-                await self._sleep(self._retry_delay(attempt))
+                await self._sleep(self._retry_delay(attempt, policy=policy))
                 continue
 
             latency_ms = round((time.monotonic() - started) * 1000, 3)
@@ -165,7 +172,7 @@ class GovernedSigRestClient(SigRestClient):
                     },
                 )
                 if not isinstance(error, SigRateLimitError):
-                    await self._sleep(self._retry_delay(attempt))
+                    await self._sleep(self._retry_delay(attempt, policy=policy))
                 continue
             raise error
 
