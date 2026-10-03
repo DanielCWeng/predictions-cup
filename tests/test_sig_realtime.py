@@ -435,6 +435,10 @@ def test_initial_seed_source_sequence_is_not_gap_counter(tmp_path: Path) -> None
         assert len(rest.calls) == calls_after_first + 1
         assert engine.states["36"].trusted is True
         assert engine.states["36"].last_trade is not None
+        assert engine.states["36"].latest_price == Decimal("0.45")
+        assert engine.states["36"].last_trade_observed_at == observed + timedelta(
+            milliseconds=250
+        )
         await engine.aclose()
         recorder.close()
 

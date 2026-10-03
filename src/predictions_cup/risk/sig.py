@@ -59,6 +59,22 @@ class SigRealtimeRiskMarkProvider:
                 or exchange.last_realtime_observed_at
                 or exchange.last_rest_observed_at
             )
+            trade_observed_at = getattr(exchange, "last_trade_observed_at", None)
+            if trade_observed_at is not None and (
+                observed_at is None or trade_observed_at > observed_at
+            ):
+                observed_at = trade_observed_at
+            # With no new trade, SIG's latestPrice stays unchanged. A trusted
+            # current book plus a healthy realtime feed lets that unchanged
+            # last-trade value remain fresh without inventing a new price.
+            last_valid_batch = getattr(self._state.health, "last_valid_batch", None)
+            if (
+                self._state.health.connected
+                and getattr(exchange, "trusted", False)
+                and last_valid_batch is not None
+                and (observed_at is None or last_valid_batch > observed_at)
+            ):
+                observed_at = last_valid_batch
             if observed_at is None:
                 continue
             age_seconds = (
@@ -68,9 +84,15 @@ class SigRealtimeRiskMarkProvider:
             # Realtime socket, e.g. at the LIVE startup interlock; RISK applies
             # its own max mark age. A Realtime-sourced mark needs the socket.
             realtime_sourced = (
-                exchange.last_scalar_observed_at is None
+                trade_observed_at is not None
+                and (
+                    exchange.last_scalar_observed_at is None
+                    or trade_observed_at > exchange.last_scalar_observed_at
+                )
+            ) or (
+                trade_observed_at is None
+                and exchange.last_scalar_observed_at is None
                 and exchange.last_realtime_observed_at is not None
-                and observed_at == exchange.last_realtime_observed_at
             )
             trusted = age_seconds >= -1.0 and (
                 self._state.health.connected or not realtime_sourced
