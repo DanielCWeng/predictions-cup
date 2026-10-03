@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import replace
 from decimal import Decimal
@@ -21,6 +22,8 @@ from predictions_cup.risk.capital import (
     trip_global_halt,
 )
 from predictions_cup.risk.core import RiskContext, RiskLimits
+
+logger = logging.getLogger(__name__)
 
 
 def validate_restart_preflight(
@@ -188,6 +191,8 @@ class RiskContextSource:
         self._valuation_positions = valuation_positions
         self._mark_provider = mark_provider
         self._halt_checkpoint = halt_checkpoint
+        self._last_trusted_marks: dict[str, RiskMark] = {}
+        self._last_mark_log_ns = 0
 
     def __call__(self) -> RiskContext:
         return replace(
@@ -213,6 +218,9 @@ class RiskContextSource:
             frozenset(item.exchange_id for item in self._valuation_positions),
             now_monotonic_ns=observed_ns,
         )
+        for mark in marks:
+            if mark.trusted:
+                self._last_trusted_marks[mark.exchange_id] = mark
         revalued = revalue_capital_state(
             authoritative,
             positions=self._valuation_positions,
@@ -220,7 +228,18 @@ class RiskContextSource:
             now_monotonic_ns=observed_ns,
             max_mark_age_ns=self._base_context.max_mark_age_ns,
             peak_equity_floor=current.peak_session_equity,
+            fallback_marks=tuple(self._last_trusted_marks.values()),
+            fallback_max_age_ns=self._base_context.mark_fallback_max_age_ns,
+            max_unmarked_fraction=Decimal(str(self._base_context.max_unmarked_fraction)),
         )
+        if observed_ns - self._last_mark_log_ns >= 60_000_000_000:
+            logger.info(
+                "RISK marks fresh=%d fallback=%d unmarked=%d",
+                revalued.fresh_mark_count,
+                revalued.fallback_mark_count,
+                revalued.unmarked_position_count,
+            )
+            self._last_mark_log_ns = observed_ns
         revalued = replace(
             revalued,
             global_halt=current.global_halt,

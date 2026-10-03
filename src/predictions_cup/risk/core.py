@@ -86,6 +86,8 @@ class RiskContext:
     exposure_groups: tuple[MarketExposureGroup, ...] = ()
     max_account_age_ns: int | None = None
     max_mark_age_ns: int | None = None
+    mark_fallback_max_age_ns: int = 900_000_000_000
+    max_unmarked_fraction: float = 0.25
     require_capital_state: bool = False
     swing_control: SwingRiskControl | None = field(default=None, repr=False)
 
@@ -182,6 +184,9 @@ def evaluate_risk(
                 return _deny("risk_account_state_stale")
         if not capital.marks_trusted:
             return _deny("risk_marks_untrusted")
+        unmarked = set(capital.unmarked_positions)
+        if any((leg.exchange_id, leg.market_id) in unmarked for leg in opportunity.legs):
+            return _deny("risk_mark_untrusted_market")
         if (
             context.max_mark_age_ns is not None
             and capital.oldest_mark_observed_monotonic_ns is not None

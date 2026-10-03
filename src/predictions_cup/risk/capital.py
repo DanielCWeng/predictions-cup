@@ -289,6 +289,12 @@ class CapitalRiskState:
     # Kept separate from realised_pnl_cursor (fill reconstruction), which the
     # authoritative refresh overwrites; sharing them re-counted deposits.
     external_cash_flow_cursor: str | None = None
+    unmarked_positions: tuple[tuple[str, str], ...] = ()
+    unmarked_position_notional: Decimal = ZERO
+    total_position_notional: Decimal = ZERO
+    fresh_mark_count: int = 0
+    fallback_mark_count: int = 0
+    unmarked_position_count: int = 0
 
     def __post_init__(self) -> None:
         if not self.session_id.strip() or not self.limit_profile_version.strip():
@@ -338,31 +344,74 @@ def revalue_capital_state(
     now_monotonic_ns: int,
     max_mark_age_ns: int,
     peak_equity_floor: Decimal | None = None,
+    fallback_marks: tuple[RiskMark, ...] = (),
+    fallback_max_age_ns: int = 900_000_000_000,
+    max_unmarked_fraction: Decimal = Decimal("0.25"),
 ) -> CapitalRiskState:
     """Revalue open inventory from trusted YES-denominated in-memory marks."""
     if max_mark_age_ns <= 0:
         raise ValueError("max_mark_age_ns must be positive")
+    if fallback_max_age_ns <= 0:
+        raise ValueError("fallback_max_age_ns must be positive")
+    if not ZERO <= max_unmarked_fraction <= Decimal("1"):
+        raise ValueError("max_unmarked_fraction must be between zero and one")
     mark_by_exchange = {mark.exchange_id: mark for mark in marks}
+    fallback_by_exchange = {mark.exchange_id: mark for mark in fallback_marks}
     oldest: int | None = None
     unrealised = ZERO
+    unmarked: list[tuple[str, str]] = []
+    unmarked_notional = ZERO
+    total_notional = ZERO
+    fresh_count = 0
+    fallback_count = 0
     for position in positions:
+        notional = abs(position.signed_quantity)
+        total_notional += notional
         mark = mark_by_exchange.get(position.exchange_id)
-        if (
-            mark is None
-            or mark.market_id != position.market_id
-            or not mark.trusted
-            or now_monotonic_ns - mark.observed_monotonic_ns > max_mark_age_ns
-        ):
-            return replace(
-                state,
-                marks_trusted=False,
-                oldest_mark_observed_monotonic_ns=None,
-            )
-        oldest = (
-            mark.observed_monotonic_ns
-            if oldest is None
-            else min(oldest, mark.observed_monotonic_ns)
+        mark_age = None if mark is None else now_monotonic_ns - mark.observed_monotonic_ns
+        fresh = (
+            mark is not None
+            and mark.market_id == position.market_id
+            and mark.trusted
+            and mark_age is not None
+            and 0 <= mark_age <= max_mark_age_ns
         )
+        if fresh:
+            fresh_count += 1
+        else:
+            fallback = fallback_by_exchange.get(position.exchange_id)
+            fallback_age = (
+                None if fallback is None else now_monotonic_ns - fallback.observed_monotonic_ns
+            )
+            if (
+                fallback is not None
+                and fallback.market_id == position.market_id
+                and fallback.trusted
+                and fallback_age is not None
+                and 0 <= fallback_age <= fallback_max_age_ns
+            ):
+                mark = fallback
+                fallback_count += 1
+            else:
+                # Keep a stale last-known value for P&L bounds, while still
+                # treating the position as unmarked for admission controls.
+                last_known = fallback
+                unmarked.append((position.exchange_id, position.market_id))
+                unmarked_notional += notional
+                mark = last_known
+        if mark is None:
+            # Worst supported YES price bounds the unpriced position adversely.
+            conservative_price = ZERO if position.signed_quantity >= ZERO else Decimal("1")
+            unrealised += position.baseline_unrealised_pnl + position.signed_quantity * (
+                conservative_price - position.baseline_mark
+            )
+            continue
+        if fresh:
+            oldest = (
+                mark.observed_monotonic_ns
+                if oldest is None
+                else min(oldest, mark.observed_monotonic_ns)
+            )
         unrealised += position.baseline_unrealised_pnl + position.signed_quantity * (
             mark.price - position.baseline_mark
         )
@@ -383,8 +432,19 @@ def revalue_capital_state(
         current_equity=equity,
         peak_session_equity=peak,
         drawdown=peak - equity,
-        marks_trusted=True,
+        # Individual market uncertainty is handled at admission. The global
+        # trust bit is reserved for a configurable notional-fraction breach.
+        marks_trusted=(
+            total_notional == ZERO
+            or unmarked_notional / total_notional <= max_unmarked_fraction
+        ),
         oldest_mark_observed_monotonic_ns=oldest,
+        unmarked_positions=tuple(unmarked),
+        unmarked_position_notional=unmarked_notional,
+        total_position_notional=total_notional,
+        fresh_mark_count=fresh_count,
+        fallback_mark_count=fallback_count,
+        unmarked_position_count=len(unmarked),
     )
 
 

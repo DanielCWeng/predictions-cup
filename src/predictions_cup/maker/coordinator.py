@@ -192,6 +192,10 @@ class MakerCoordinator:
                 )
                 > current_risk_context.max_mark_age_ns
             )
+            market_mark_untrusted = (
+                capital is not None
+                and (exchange_id, snapshot.market_id) in set(capital.unmarked_positions)
+            )
             # Invalid/stale portfolio valuation is different from a transient
             # account resync. Existing resting quotes can add exposure while they
             # remain live, so valuation failure must withdraw them even when the
@@ -200,14 +204,12 @@ class MakerCoordinator:
             capital_force_cancel = capital is not None and (
                 not capital.marks_trusted
                 or mark_state_stale
+                or market_mark_untrusted
                 or (capital.global_halt is not None and capital.global_halt.active)
                 or capital.strategy_halted(
                     self._engine.strategy_id,
                     StrategyFamily.MAKE.value,
                 )
-                # Invalid portfolio valuation is a retention failure, not
-                # merely a fresh-admission failure. Resting risk comes off.
-                or not capital.marks_trusted
             )
             force_cancel = self._kill_switch.active or capital_force_cancel
             if decision.gate.mode is GateMode.HOLD and not force_cancel:
