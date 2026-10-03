@@ -138,6 +138,8 @@ def build_live_shadow_runtime(
         settings.shadow_journal_path,
         queue_capacity=settings.shadow_persistence_queue_capacity,
         batch_size=settings.shadow_persistence_batch_size,
+        max_bytes=settings.shadow_journal_max_bytes,
+        max_files=settings.shadow_journal_max_files,
     )
     mirrors: list[ShadowEventStore] = []
     if settings.shadow_capture_mirror_enabled:

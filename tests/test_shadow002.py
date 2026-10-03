@@ -456,6 +456,48 @@ def test_jsonl_restart_preserves_old_events_and_replays_snapshots(
     )
 
 
+def test_jsonl_rotation_keeps_configured_number_of_prior_files(tmp_path: Path) -> None:
+    path = tmp_path / "shadow.jsonl"
+    store = JsonlEventStore(path, max_bytes=1, max_files=2)
+    first = _snapshot(now=NOW)
+    second = _snapshot(now=NOW + 1)
+    third = _snapshot(now=NOW + 2)
+
+    store._append_events((first,))
+    first_contents = path.read_text(encoding="utf-8")
+    store._append_events((second,))
+    second_contents = path.read_text(encoding="utf-8")
+    store._append_events((third,))
+
+    assert not path.with_name("shadow.jsonl.3").exists()
+    assert path.with_name("shadow.jsonl.2").read_text(encoding="utf-8") == first_contents
+    assert path.with_name("shadow.jsonl.1").read_text(encoding="utf-8") == second_contents
+    assert path.read_text(encoding="utf-8")
+
+
+def test_jsonl_rotation_oserror_logs_and_drops_batch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    path = tmp_path / "shadow.jsonl"
+    path.write_text("existing\n", encoding="utf-8")
+    store = JsonlEventStore(path, max_bytes=1, max_files=1)
+    original_replace = Path.replace
+
+    def fail_current_rotation(self: Path, target: Path) -> Path:
+        if self == path:
+            raise OSError("rotation denied")
+        return original_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", fail_current_rotation)
+    store._append_events((_snapshot(now=NOW),))
+
+    assert path.read_text(encoding="utf-8") == "existing\n"
+    assert "SHADOW journal rotation failed" in caplog.text
+    assert "rotation denied" in caplog.text
+
+
 def test_live_shadow_runtime_persists_one_snapshot_boundary_and_all_candidates(
     tmp_path: Path,
 ) -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import uuid
 from collections import deque
@@ -20,6 +21,8 @@ from predictions_cup.shadow.contracts import (
     decision_semantic_record,
     maker_snapshot_record,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,12 +112,20 @@ class JsonlEventStore:
         *,
         queue_capacity: int = 65_536,
         batch_size: int = 256,
+        max_bytes: int = 512 * 1024 * 1024,
+        max_files: int = 4,
     ) -> None:
         if queue_capacity <= 0:
             raise ValueError("persistence queue capacity must be positive")
         if batch_size <= 0:
             raise ValueError("persistence batch size must be positive")
+        if max_bytes <= 0:
+            raise ValueError("journal maximum size must be positive")
+        if max_files <= 0:
+            raise ValueError("journal maximum file count must be positive")
         self._path = path
+        self._max_bytes = max_bytes
+        self._max_files = max_files
         self._queue: asyncio.Queue[PersistItem] = asyncio.Queue(maxsize=queue_capacity)
         self._batch_size = batch_size
         self._writer: asyncio.Task[None] | None = None
@@ -236,10 +247,45 @@ class JsonlEventStore:
             + "\n"
             for item in items
         )
+        encoded_bytes = len(lines.encode("utf-8"))
+        if not self._rotate_if_needed(encoded_bytes):
+            return
         with self._path.open("a", encoding="utf-8") as handle:
             handle.write(lines)
             handle.flush()
             os.fsync(handle.fileno())
+
+    def _rotate_if_needed(self, incoming_bytes: int) -> bool:
+        """Rotate closed JSONL files before appending; return false on rotation I/O failure."""
+        try:
+            try:
+                current_size = self._path.stat().st_size
+            except FileNotFoundError:
+                return True
+            if current_size + incoming_bytes <= self._max_bytes:
+                return True
+
+            oldest = self._path.with_name(f"{self._path.name}.{self._max_files}")
+            oldest.unlink(missing_ok=True)
+            for index in range(self._max_files - 1, 0, -1):
+                source = self._path.with_name(f"{self._path.name}.{index}")
+                try:
+                    source.stat()
+                except FileNotFoundError:
+                    continue
+                else:
+                    source.replace(
+                        self._path.with_name(f"{self._path.name}.{index + 1}")
+                    )
+            self._path.replace(self._path.with_name(f"{self._path.name}.1"))
+        except OSError as exc:
+            logger.warning(
+                "SHADOW journal rotation failed; dropping batch of %d bytes: %s",
+                incoming_bytes,
+                exc,
+            )
+            return False
+        return True
 
     def _require_started(self) -> None:
         if not self._started:
