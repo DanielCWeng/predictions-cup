@@ -100,6 +100,24 @@ def test_fill_hunt_settings_load_from_environment(
     assert settings.residual_taker_cooldown_seconds == 15.0
 
 
+def test_swing_accepted_mapping_path_loads(
+    clean_config_env: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    del clean_config_env
+    assert AppSettings().risk_swing_accepted_mapping_path is None
+    monkeypatch.setenv(
+        "PREDICTIONS_CUP_RISK_SWING_ACCEPTED_MAPPING_PATH",
+        "data/mappings/sig_polymarket_2026.json",
+    )
+
+    settings = AppSettings()
+
+    assert settings.risk_swing_accepted_mapping_path == Path(
+        "data/mappings/sig_polymarket_2026.json"
+    )
+
+
 def test_deep_ladder_configuration_loads(
     clean_config_env: None,
     monkeypatch: pytest.MonkeyPatch,

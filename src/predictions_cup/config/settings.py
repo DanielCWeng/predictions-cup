@@ -56,6 +56,9 @@ class AppSettings(BaseSettings):
     risk_swing_shock_points: float = Field(default=5.0, gt=0.0)
     risk_swing_max_loss: float = Field(default=2_000.0, gt=0.0)
     risk_swing_max_pm_mark_age_ms: int = Field(default=35_000, gt=0)
+    # Accepted MAPPING-001 artifact the runtime mapping must be a subset of.
+    # Unset means the runtime mapping file itself must carry the acceptance.
+    risk_swing_accepted_mapping_path: Path | None = None
     risk_state_path: Path = Path("data/risk_002.sqlite3")
     risk_exposure_groups_path: Path | None = None
     risk_profile_name: str = "competition"

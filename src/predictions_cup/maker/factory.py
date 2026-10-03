@@ -80,7 +80,10 @@ def build_maker_components(
             max_pm_mark_age_ns=settings.risk_swing_max_pm_mark_age_ms * 1_000_000,
             crosswalk=load_swing_crosswalk(
                 mapping,
-                mapping_path=settings.maker_mapping_path,
+                mapping_path=(
+                    settings.risk_swing_accepted_mapping_path
+                    or settings.maker_mapping_path
+                ),
             ),
             mark_provider=swing_mark_provider,
         )
