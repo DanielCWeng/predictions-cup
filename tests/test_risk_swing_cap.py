@@ -4,6 +4,8 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 from predictions_cup.config import AppSettings
 from predictions_cup.execution.models import ExecutionMode
 from predictions_cup.external.polymarket.orderbook import OrderBookStore
@@ -231,7 +233,9 @@ def test_verified_acceptance_allows_a_filtered_runtime_mapping() -> None:
     assert crosswalk.market_for("969") is None
 
 
-def test_runtime_mapping_mismatch_fails_closed_and_logs_the_clause(caplog) -> None:
+def test_runtime_mapping_mismatch_fails_closed_and_logs_the_clause(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     root = Path(__file__).resolve().parents[1]
     mapping_path = root / "data/mappings/sig_polymarket_2026.json"
     document = load_document(mapping_path)
@@ -249,7 +253,10 @@ def test_runtime_mapping_mismatch_fails_closed_and_logs_the_clause(caplog) -> No
     assert "clause=runtime_mapping_not_accepted_subset" in failures[0].message
 
 
-def test_unverified_acceptance_artifact_fails_closed_and_logs_the_clause(tmp_path, caplog) -> None:
+def test_unverified_acceptance_artifact_fails_closed_and_logs_the_clause(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     root = Path(__file__).resolve().parents[1]
     original_path = root / "data/mappings/sig_polymarket_2026.json"
     mapping_path = tmp_path / original_path.name
