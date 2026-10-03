@@ -51,6 +51,8 @@ class AppSettings(BaseSettings):
     risk_max_state_age_ms: int = Field(default=1_000, gt=0)
     risk_max_account_age_ms: int = Field(default=2_000, gt=0)
     risk_max_mark_age_ms: int = Field(default=12_000, gt=0)
+    risk_mark_fallback_max_age_seconds: int = Field(default=900, gt=0)
+    risk_max_unmarked_fraction: float = Field(default=0.25, ge=0.0, le=1.0)
     risk_capital_control_enabled: bool = False
     risk_swing_cap_enabled: bool = False
     risk_swing_shock_points: float = Field(default=5.0, gt=0.0)

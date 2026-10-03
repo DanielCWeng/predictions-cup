@@ -50,6 +50,7 @@ from predictions_cup.risk import (
     reconstruct_sig_cost_basis,
     replay_fills,
     reset_global_halt,
+    revalue_capital_state,
     scan_external_cash_flows,
     trip_global_halt,
     trip_strategy_halt,
@@ -555,6 +556,88 @@ def test_stale_or_untrusted_capital_state_fails_closed() -> None:
         ).reason
         == "risk_state_untrusted"
     )
+
+
+def test_one_stale_mark_blocks_only_its_market_below_global_fraction() -> None:
+    positions = (
+        RiskValuationPosition("1", "m1", Decimal("9"), Decimal("0.5"), Decimal("0")),
+        RiskValuationPosition("2", "m2", Decimal("1"), Decimal("0.5"), Decimal("0")),
+    )
+    state = revalue_capital_state(
+        _capital(),
+        positions=positions,
+        marks=(
+            RiskMark("1", "m1", Decimal("0.51"), "sig", 950, True, "v1", "test"),
+            RiskMark("2", "m2", Decimal("0.49"), "sig", 0, True, "v1", "test"),
+        ),
+        now_monotonic_ns=1_000,
+        max_mark_age_ns=100,
+    )
+    assert state.marks_trusted
+    assert state.unmarked_positions == (("2", "m2"),)
+    assert state.fresh_mark_count == 1
+    assert state.unmarked_position_count == 1
+    assert evaluate_risk(
+        _opportunity(market_id="m1", exchange_id="1"),
+        _snapshot(),
+        _context(_limits(), capital=state),
+    ).approved
+    assert evaluate_risk(
+        _opportunity(market_id="m2", exchange_id="2"),
+        _snapshot(),
+        _context(_limits(), capital=state),
+    ).reason == "risk_mark_untrusted_market"
+
+
+def test_mark_fallback_expires_after_configured_age() -> None:
+    state = revalue_capital_state(
+        _capital(),
+        positions=(
+            RiskValuationPosition("1", "m1", Decimal("10"), Decimal("0.5"), Decimal("0")),
+        ),
+        marks=(),
+        fallback_marks=(
+            RiskMark("1", "m1", Decimal("0.8"), "sig", 0, True, "v1", "test"),
+        ),
+        now_monotonic_ns=900_000_000_001,
+        max_mark_age_ns=12_000_000_000,
+        fallback_max_age_ns=900_000_000_000,
+    )
+    assert state.fallback_mark_count == 0
+    assert state.unmarked_positions == (("1", "m1"),)
+    assert state.unrealised_pnl == Decimal("3.0")  # last known mark is retained for valuation
+
+
+def test_unmarked_fraction_threshold_is_inclusive_and_fail_closed_above() -> None:
+    positions = (
+        RiskValuationPosition("1", "m1", Decimal("3"), Decimal("0.5"), Decimal("0")),
+        RiskValuationPosition("2", "m2", Decimal("7"), Decimal("0.5"), Decimal("0")),
+    )
+    marks = (RiskMark("2", "m2", Decimal("0.5"), "sig", 100, True, "v1", "test"),)
+    at_limit = revalue_capital_state(
+        _capital(), positions=positions, marks=marks, now_monotonic_ns=100,
+        max_mark_age_ns=100, max_unmarked_fraction=Decimal("0.30"),
+    )
+    above_limit = revalue_capital_state(
+        _capital(), positions=positions, marks=marks, now_monotonic_ns=100,
+        max_mark_age_ns=100, max_unmarked_fraction=Decimal("0.29"),
+    )
+    assert at_limit.marks_trusted
+    assert not above_limit.marks_trusted
+
+
+def test_unmarked_position_holds_baseline_without_known_mark() -> None:
+    state = revalue_capital_state(
+        _capital(),
+        positions=(
+            RiskValuationPosition("1", "m1", Decimal("2"), Decimal("0.5"), Decimal("0")),
+        ),
+        marks=(),
+        now_monotonic_ns=100,
+        max_mark_age_ns=100,
+    )
+    assert state.unrealised_pnl == Decimal("0")
+    assert state.unmarked_positions == (("1", "m1"),)
 
 
 def test_session_loss_drawdown_strategy_and_global_halts() -> None:
