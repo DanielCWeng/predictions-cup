@@ -62,7 +62,9 @@ def test_defaults_load_without_credentials(
     assert settings.polymarket_storage_path == Path("data/polymarket_operational.sqlite3")
     assert settings.polymarket_research_path == Path("data/polymarket_research")
     assert settings.live_learn_max_retained_decisions == 20_000
-    assert settings.shadow_snapshot_min_interval_seconds == 1.0
+    assert settings.shadow_journal_max_bytes == 512 * 1024 * 1024
+    assert settings.shadow_journal_max_files == 4
+    assert settings.shadow_snapshot_min_interval_seconds == 60.0
     assert settings.sig_capture_parquet_max_rows_per_shard == 5_000
     assert settings.maker_fill_seeking_enabled is False
     assert settings.maker_fill_seeking_min_edge == 0.02

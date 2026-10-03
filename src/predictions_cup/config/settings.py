@@ -129,13 +129,15 @@ class AppSettings(BaseSettings):
     # SHADOW-002 is disabled by default and has no order-write capability.
     shadow_enabled: bool = False
     shadow_journal_path: Path = Path("data/shadow_002/events.jsonl")
+    shadow_journal_max_bytes: int = Field(default=512 * 1024 * 1024, gt=0)
+    shadow_journal_max_files: int = Field(default=4, gt=0, le=100)
     shadow_candidate_queue_capacity: int = Field(default=512, gt=0, le=100_000)
     shadow_ingress_queue_capacity: int = Field(default=4096, gt=0, le=1_000_000)
     shadow_persistence_queue_capacity: int = Field(default=65_536, gt=0, le=2_000_000)
     shadow_persistence_batch_size: int = Field(default=256, gt=0, le=10_000)
     shadow_candidate_timeout_ms: int = Field(default=50, gt=0, le=60_000)
     shadow_capture_mirror_enabled: bool = True
-    shadow_snapshot_min_interval_seconds: float = Field(default=1.0, ge=0.0, le=60.0)
+    shadow_snapshot_min_interval_seconds: float = Field(default=60.0, ge=0.0, le=60.0)
     # Explicit only: no post-hoc 005F grid origin is inferred from observed outcomes.
     shadow_005f_grid_origin: datetime | None = None
 
@@ -471,6 +473,8 @@ class AppSettings(BaseSettings):
             "maker_min_requote_interval_ms": self.maker_min_requote_interval_ms,
             "shadow_enabled": self.shadow_enabled,
             "shadow_journal_path": str(self.shadow_journal_path),
+            "shadow_journal_max_bytes": self.shadow_journal_max_bytes,
+            "shadow_journal_max_files": self.shadow_journal_max_files,
             "shadow_candidate_queue_capacity": self.shadow_candidate_queue_capacity,
             "shadow_ingress_queue_capacity": self.shadow_ingress_queue_capacity,
             "shadow_persistence_queue_capacity": self.shadow_persistence_queue_capacity,
