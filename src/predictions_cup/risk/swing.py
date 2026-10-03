@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 import re
 from dataclasses import dataclass
@@ -23,6 +24,7 @@ from predictions_cup.mapping.models import (
 from predictions_cup.runtime.models import RuntimeSnapshot
 
 LOGIT_PER_SWING_POINT = 0.10
+_LOG = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,40 +123,13 @@ def load_swing_crosswalk(
     mapping_path: Path,
 ) -> SwingCrosswalk:
     """Load swing identities only from a byte-accepted MAPPING-001 artifact."""
-    acceptance_path = mapping_path.with_name(f"{mapping_path.stem}_acceptance.json")
-    try:
-        mapping_bytes = mapping_path.read_bytes()
-        acceptance = json.loads(acceptance_path.read_text(encoding="utf-8"))
-        accepted_document = MappingDocument.model_validate(
-            json.loads(mapping_bytes.decode("utf-8"))
+    failure_clause = _swing_crosswalk_verification_failure(mapping, mapping_path)
+    if failure_clause is not None:
+        _LOG.warning(
+            "swing crosswalk verification failed mapping_path=%s clause=%s",
+            mapping_path,
+            failure_clause,
         )
-        smoke = acceptance.get("clob_smoke")
-        verified = (
-            isinstance(acceptance, dict)
-            and acceptance.get("all_records_verified") is True
-            and isinstance(acceptance.get("artifact_sha256"), dict)
-            and acceptance["artifact_sha256"].get("crosswalk_json")
-            == hashlib.sha256(mapping_bytes).hexdigest()
-            and isinstance(smoke, dict)
-            and smoke.get("passed") is True
-            and accepted_document.normalized().model_dump(mode="json")
-            == mapping.normalized().model_dump(mode="json")
-            and all(
-                record.status is MappingStatus.VERIFIED
-                for record in accepted_document.records
-            )
-        )
-    except (
-        AttributeError,
-        OSError,
-        UnicodeDecodeError,
-        json.JSONDecodeError,
-        TypeError,
-        ValueError,
-    ):
-        verified = False
-
-    if not verified:
         return SwingCrosswalk(verified=False)
 
     markets = tuple(
@@ -163,6 +138,65 @@ def load_swing_crosswalk(
         if (market := _swing_market(record)) is not None
     )
     return SwingCrosswalk(verified=True, markets=markets)
+
+
+def _swing_crosswalk_verification_failure(
+    mapping: MappingDocument,
+    mapping_path: Path,
+) -> str | None:
+    acceptance_path = mapping_path.with_name(f"{mapping_path.stem}_acceptance.json")
+    try:
+        mapping_bytes = mapping_path.read_bytes()
+    except Exception as exc:
+        return f"crosswalk_json_read_error:{type(exc).__name__}"
+
+    try:
+        acceptance = json.loads(acceptance_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return f"acceptance_json_read_error:{type(exc).__name__}"
+
+    if not isinstance(acceptance, dict):
+        return "acceptance_document_not_object"
+    if acceptance.get("all_records_verified") is not True:
+        return "all_records_verified_false"
+
+    artifact_sha256 = acceptance.get("artifact_sha256")
+    if not isinstance(artifact_sha256, dict):
+        return "artifact_sha256_missing"
+    if artifact_sha256.get("crosswalk_json") != hashlib.sha256(mapping_bytes).hexdigest():
+        return "artifact_sha256.crosswalk_json_mismatch"
+
+    smoke = acceptance.get("clob_smoke")
+    if not isinstance(smoke, dict):
+        return "clob_smoke_missing"
+    if smoke.get("passed") is not True:
+        return "clob_smoke.passed_false"
+
+    try:
+        accepted_document = MappingDocument.model_validate(
+            json.loads(mapping_bytes.decode("utf-8"))
+        )
+    except Exception as exc:
+        return f"accepted_mapping_invalid:{type(exc).__name__}"
+
+    if not all(record.status is MappingStatus.VERIFIED for record in accepted_document.records):
+        return "accepted_records_not_all_verified"
+    if accepted_document.tournament_id != mapping.tournament_id:
+        return "runtime_mapping_tournament_id_mismatch"
+    if accepted_document.schema_version != mapping.schema_version:
+        return "runtime_mapping_schema_version_mismatch"
+
+    accepted_records = {
+        record.sig_exchange_id: record.model_dump(mode="json")
+        for record in accepted_document.normalized().records
+    }
+    runtime_records = mapping.normalized().records
+    if any(
+        accepted_records.get(record.sig_exchange_id) != record.model_dump(mode="json")
+        for record in runtime_records
+    ):
+        return "runtime_mapping_not_accepted_subset"
+    return None
 
 
 def _swing_market(record: MarketMapping) -> SwingMappedMarket | None:
@@ -300,6 +334,27 @@ def evaluate_swing_cap(
         probabilities,
         -control.shock_points,
     )
+    baseline_up_pnl = _scenario_pnl(
+        positions,
+        pending,
+        [],
+        mapped_by_exchange,
+        probabilities,
+        control.shock_points,
+    )
+    baseline_down_pnl = _scenario_pnl(
+        positions,
+        pending,
+        [],
+        mapped_by_exchange,
+        probabilities,
+        -control.shock_points,
+    )
+    baseline_worst_case_loss = max(
+        0.0,
+        -baseline_up_pnl,
+        -baseline_down_pnl,
+    )
     diagnostics = _diagnostics(
         positions + pending + candidates,
         mapped_by_exchange,
@@ -308,7 +363,14 @@ def evaluate_swing_cap(
         up_pnl=up_pnl,
         down_pnl=down_pnl,
     )
-    if max(diagnostics.positive_swing_loss, diagnostics.negative_swing_loss) > control.max_loss:
+    projected_worst_case_loss = max(
+        diagnostics.positive_swing_loss,
+        diagnostics.negative_swing_loss,
+    )
+    if (
+        projected_worst_case_loss > control.max_loss
+        and projected_worst_case_loss > baseline_worst_case_loss
+    ):
         return "swing_loss_limit", diagnostics
     return None, diagnostics
 
