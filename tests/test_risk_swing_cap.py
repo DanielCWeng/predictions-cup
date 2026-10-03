@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -479,3 +480,25 @@ def test_unverified_crosswalk_fails_closed_for_risk_increase() -> None:
     )
     assert decision.approved is False
     assert decision.reason == "swing_mapping_unverified"
+
+
+def test_unpriceable_inventory_elsewhere_is_bounded_not_a_global_block() -> None:
+    # Held inventory in an unmapped market used to deny every risk increase.
+    snapshot = _snapshot(
+        positions=(RuntimePosition("99", "other-market", TOURNAMENT_ID, 1_000, 1_000),),
+    )
+    approved = evaluate_risk(
+        _opportunity(),
+        snapshot,
+        _context(_control(mark=_mark())),
+    )
+    assert approved.approved is True
+    # Its worst-case swing contribution still counts against the cap.
+    bound = 1_000 * math.tanh(0.5 / 4.0)
+    denied = evaluate_risk(
+        _opportunity(quantity=100),
+        snapshot,
+        _context(_control(mark=_mark(), max_loss=bound)),
+    )
+    assert denied.approved is False
+    assert denied.reason == "swing_loss_limit"
