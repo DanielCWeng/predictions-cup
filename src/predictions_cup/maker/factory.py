@@ -171,6 +171,10 @@ def build_maker_components(
             # gaps/reconnects/fills revoke portfolio trust and force REST reconciliation.
             max_account_age_ns=None,
             max_mark_age_ns=settings.risk_max_mark_age_ms * ms,
+            mark_fallback_max_age_ns=(
+                settings.risk_mark_fallback_max_age_seconds * 1_000_000_000
+            ),
+            max_unmarked_fraction=settings.risk_max_unmarked_fraction,
             require_capital_state=settings.risk_capital_control_enabled,
             exposure_groups=exposure_groups,
             swing_control=swing_control,
