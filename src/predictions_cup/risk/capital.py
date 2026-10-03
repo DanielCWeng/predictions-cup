@@ -400,11 +400,10 @@ def revalue_capital_state(
                 unmarked_notional += notional
                 mark = last_known
         if mark is None:
-            # Worst supported YES price bounds the unpriced position adversely.
-            conservative_price = ZERO if position.signed_quantity >= ZERO else Decimal("1")
-            unrealised += position.baseline_unrealised_pnl + position.signed_quantity * (
-                conservative_price - position.baseline_mark
-            )
+            # Never-marked positions hold their reconciled baseline value; the
+            # market is still denied at admission via unmarked_positions. An
+            # adverse 0/1 bound here would trip session-loss on mark gaps alone.
+            unrealised += position.baseline_unrealised_pnl
             continue
         if fresh:
             oldest = (

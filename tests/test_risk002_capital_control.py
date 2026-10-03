@@ -626,7 +626,7 @@ def test_unmarked_fraction_threshold_is_inclusive_and_fail_closed_above() -> Non
     assert not above_limit.marks_trusted
 
 
-def test_unmarked_position_uses_worst_case_bound_without_known_mark() -> None:
+def test_unmarked_position_holds_baseline_without_known_mark() -> None:
     state = revalue_capital_state(
         _capital(),
         positions=(
@@ -636,8 +636,8 @@ def test_unmarked_position_uses_worst_case_bound_without_known_mark() -> None:
         now_monotonic_ns=100,
         max_mark_age_ns=100,
     )
-    assert state.unrealised_pnl == Decimal("-1.0")
-    assert state.current_equity == Decimal("99.0")
+    assert state.unrealised_pnl == Decimal("0")
+    assert state.unmarked_positions == (("1", "m1"),)
 
 
 def test_session_loss_drawdown_strategy_and_global_halts() -> None:
