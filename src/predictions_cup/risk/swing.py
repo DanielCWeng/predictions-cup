@@ -285,38 +285,33 @@ def evaluate_swing_cap(
         return "swing_pm_mark_missing", None
 
     positions, pending, candidates = _collect_exposures(snapshot, intents)
-    active = positions + pending + candidates
+    candidate_exchanges = {exposure.exchange_id for exposure in candidates}
     mapped_by_exchange: dict[str, SwingMappedMarket] = {}
     probabilities: dict[str, float] = {}
+    unpriced: set[str] = set()
     now = datetime.now(UTC)
-    for exposure in active:
-        mapped = mapped_by_exchange.get(exposure.exchange_id)
-        if mapped is None:
-            mapped = control.crosswalk.market_for(exposure.exchange_id)
-            if (
-                mapped is None
-                or mapped.market_id != exposure.market_id
-                or mapped.tournament_id != exposure.tournament_id
-            ):
-                return "swing_market_unmapped", None
-            mapped_by_exchange[exposure.exchange_id] = mapped
-
-            mark = control.mark_provider.mark_for(mapped.pm_yes_token_id)
-            if mark is None or mark.pm_condition_id != mapped.pm_condition_id:
-                return "swing_pm_mark_missing", None
-            if (
-                mark.observed_at.tzinfo is None
-                or mark.observed_at.utcoffset() is None
-                or not math.isfinite(mark.midpoint)
-                or not 0.0 < mark.midpoint < 1.0
-            ):
-                return "swing_pm_mark_invalid", None
-            age_ns = int((now - mark.observed_at.astimezone(UTC)).total_seconds() * 1_000_000_000)
-            if age_ns < 0 or age_ns > control.max_pm_mark_age_ns:
-                return "swing_pm_mark_stale", None
-            probabilities[exposure.exchange_id] = (
-                mark.midpoint if mapped.sig_yes_is_pm_yes else 1.0 - mark.midpoint
-            )
+    for exposure in positions + pending + candidates:
+        if exposure.exchange_id in mapped_by_exchange or exposure.exchange_id in unpriced:
+            continue
+        reason, mapped, probability = _price_exposure(control, exposure, now)
+        if reason is not None:
+            # The candidate's own market must be priceable. Existing inventory
+            # elsewhere that cannot be priced is bounded below instead of
+            # blocking every market (one stale PM mark used to deny all).
+            if exposure.exchange_id in candidate_exchanges:
+                return reason, None
+            unpriced.add(exposure.exchange_id)
+            continue
+        assert mapped is not None and probability is not None
+        mapped_by_exchange[exposure.exchange_id] = mapped
+        probabilities[exposure.exchange_id] = probability
+    unpriced_bound = sum(
+        abs(exposure.signed_quantity)
+        for exposure in positions + pending
+        if exposure.exchange_id in unpriced
+    ) * math.tanh(abs(LOGIT_PER_SWING_POINT * control.shock_points) / 4.0)
+    positions = [item for item in positions if item.exchange_id not in unpriced]
+    pending = [item for item in pending if item.exchange_id not in unpriced]
 
     up_pnl = _scenario_pnl(
         positions,
@@ -354,7 +349,7 @@ def evaluate_swing_cap(
         0.0,
         -baseline_up_pnl,
         -baseline_down_pnl,
-    )
+    ) + unpriced_bound
     diagnostics = _diagnostics(
         positions + pending + candidates,
         mapped_by_exchange,
@@ -366,13 +361,43 @@ def evaluate_swing_cap(
     projected_worst_case_loss = max(
         diagnostics.positive_swing_loss,
         diagnostics.negative_swing_loss,
-    )
+    ) + unpriced_bound
     if (
         projected_worst_case_loss > control.max_loss
         and projected_worst_case_loss > baseline_worst_case_loss
     ):
         return "swing_loss_limit", diagnostics
     return None, diagnostics
+
+
+def _price_exposure(
+    control: SwingRiskControl,
+    exposure: _Exposure,
+    now: datetime,
+) -> tuple[str | None, SwingMappedMarket | None, float | None]:
+    mapped = control.crosswalk.market_for(exposure.exchange_id)
+    if (
+        mapped is None
+        or mapped.market_id != exposure.market_id
+        or mapped.tournament_id != exposure.tournament_id
+    ):
+        return "swing_market_unmapped", None, None
+    assert control.mark_provider is not None
+    mark = control.mark_provider.mark_for(mapped.pm_yes_token_id)
+    if mark is None or mark.pm_condition_id != mapped.pm_condition_id:
+        return "swing_pm_mark_missing", None, None
+    if (
+        mark.observed_at.tzinfo is None
+        or mark.observed_at.utcoffset() is None
+        or not math.isfinite(mark.midpoint)
+        or not 0.0 < mark.midpoint < 1.0
+    ):
+        return "swing_pm_mark_invalid", None, None
+    age_ns = int((now - mark.observed_at.astimezone(UTC)).total_seconds() * 1_000_000_000)
+    if age_ns < 0 or age_ns > control.max_pm_mark_age_ns:
+        return "swing_pm_mark_stale", None, None
+    probability = mark.midpoint if mapped.sig_yes_is_pm_yes else 1.0 - mark.midpoint
+    return None, mapped, probability
 
 
 def _candidate_is_reducing(
