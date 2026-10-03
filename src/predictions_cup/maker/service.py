@@ -407,7 +407,12 @@ class MakerService:
                 open_book_max_trusted_age_seconds=(
                     self.settings.sig_realtime_open_book_refresh_seconds
                 ),
-                bulk_price_refresh_seconds=(self.settings.sig_realtime_bulk_price_refresh_seconds),
+                # This engine polls only held/tracked exchanges, so a 15-second
+                # fallback is enough alongside realtime last-trade marks and
+                # leaves the shared SIG budget for execution/account reads.
+                bulk_price_refresh_seconds=max(
+                    15.0, self.settings.sig_realtime_bulk_price_refresh_seconds
+                ),
                 periodic_bulk_price_priority=RestPriority.NORMAL,
                 governed_rate_per_second=(self.settings.sig_rest_governor_rate_per_second),
                 governor_snapshot=rest.governor_snapshot,
@@ -1481,17 +1486,11 @@ class MakerService:
                         if parsed is None:
                             runtime.notify_global(observed_monotonic_ns=monotonic_ns())
                             return
-                        dirty = {item.exchange_id for item in parsed.book_dirty}
-                        realtime_touches = dirty | {
+                        affected = {
+                            item.exchange_id for item in parsed.book_dirty
+                        } | {
                             trade.exchange_id for trade in parsed.trades
                         }
-                        if realtime_touches:
-                            await sig_state.refresh_exchange_prices(
-                                realtime_touches,
-                                reason="maker_realtime_touch",
-                                priority=RestPriority.HIGH,
-                            )
-                        affected = realtime_touches
                         if parsed.market_settled:
                             settled = {item.market_id for item in parsed.market_settled}
                             affected.update(
