@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from predictions_cup.risk.swing import (
     SwingMappedMarket,
     SwingPmMark,
     SwingRiskControl,
+    evaluate_swing_cap,
     load_swing_crosswalk,
 )
 from predictions_cup.runtime.models import (
@@ -43,6 +45,14 @@ class _MarkProvider:
         return self.mark
 
 
+class _MultiMarkProvider:
+    def __init__(self, marks: dict[str, SwingPmMark]) -> None:
+        self.marks = marks
+
+    def mark_for(self, token_id: str) -> SwingPmMark | None:
+        return self.marks.get(token_id)
+
+
 def _control(
     *,
     mark: SwingPmMark | None = None,
@@ -67,16 +77,23 @@ def _control(
     )
 
 
-def _market_mapping() -> SwingMappedMarket:
+def _market_mapping(
+    *,
+    exchange_id: str = EXCHANGE_ID,
+    market_id: str = MARKET_ID,
+    party_sign: int = 1,
+    pm_condition_id: str = PM_CONDITION_ID,
+    pm_yes_token_id: str = PM_YES_TOKEN_ID,
+) -> SwingMappedMarket:
     return SwingMappedMarket(
-        exchange_id=EXCHANGE_ID,
-        market_id=MARKET_ID,
+        exchange_id=exchange_id,
+        market_id=market_id,
         tournament_id=TOURNAMENT_ID,
-        race_id="pm-event:race-1",
+        race_id=f"pm-event:race-{exchange_id}",
         chamber="House",
-        party_sign=1,
-        pm_condition_id=PM_CONDITION_ID,
-        pm_yes_token_id=PM_YES_TOKEN_ID,
+        party_sign=party_sign,
+        pm_condition_id=pm_condition_id,
+        pm_yes_token_id=pm_yes_token_id,
         sig_yes_is_pm_yes=True,
     )
 
@@ -119,6 +136,7 @@ def _snapshot(
 def _opportunity(
     *,
     exchange_id: str = EXCHANGE_ID,
+    market_id: str = MARKET_ID,
     quantity: int = 1,
     action: OrderAction = OrderAction.BUY,
 ) -> Opportunity:
@@ -128,7 +146,7 @@ def _opportunity(
         legs=(
             CandidateLeg(
                 exchange_id=exchange_id,
-                market_id=MARKET_ID,
+                market_id=market_id,
                 tournament_id=TOURNAMENT_ID,
                 outcome_side=OutcomeSide.YES,
                 action=action,
@@ -198,6 +216,65 @@ def test_only_accepted_direct_party_mappings_enter_the_swing_crosswalk() -> None
     assert crosswalk.market_for("942") is None
 
 
+def test_verified_acceptance_allows_a_filtered_runtime_mapping() -> None:
+    root = Path(__file__).resolve().parents[1]
+    mapping_path = root / "data/mappings/sig_polymarket_2026.json"
+    document = load_document(mapping_path)
+    filtered = document.model_copy(
+        update={"records": (document.mapping_for_sig_exchange("840"),)}
+    )
+
+    crosswalk = load_swing_crosswalk(filtered, mapping_path=mapping_path)
+
+    assert crosswalk.verified is True
+    assert crosswalk.market_for("840") is not None
+    assert crosswalk.market_for("969") is None
+
+
+def test_runtime_mapping_mismatch_fails_closed_and_logs_the_clause(caplog) -> None:
+    root = Path(__file__).resolve().parents[1]
+    mapping_path = root / "data/mappings/sig_polymarket_2026.json"
+    document = load_document(mapping_path)
+    record = document.mapping_for_sig_exchange("840").model_copy(
+        update={"sig_market_title": "Will the Democratic Party win a different House?"}
+    )
+    mismatched = document.model_copy(update={"records": (record,)})
+
+    with caplog.at_level("WARNING", logger="predictions_cup.risk.swing"):
+        crosswalk = load_swing_crosswalk(mismatched, mapping_path=mapping_path)
+
+    assert crosswalk.verified is False
+    failures = [record for record in caplog.records if "verification failed" in record.message]
+    assert len(failures) == 1
+    assert "clause=runtime_mapping_not_accepted_subset" in failures[0].message
+
+
+def test_unverified_acceptance_artifact_fails_closed_and_logs_the_clause(tmp_path, caplog) -> None:
+    root = Path(__file__).resolve().parents[1]
+    original_path = root / "data/mappings/sig_polymarket_2026.json"
+    mapping_path = tmp_path / original_path.name
+    acceptance_path = tmp_path / "sig_polymarket_2026_acceptance.json"
+    mapping_path.write_bytes(original_path.read_bytes())
+    acceptance = json.loads(
+        original_path.with_name("sig_polymarket_2026_acceptance.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    acceptance["all_records_verified"] = False
+    acceptance_path.write_text(json.dumps(acceptance), encoding="utf-8")
+
+    with caplog.at_level("WARNING", logger="predictions_cup.risk.swing"):
+        crosswalk = load_swing_crosswalk(
+            load_document(original_path),
+            mapping_path=mapping_path,
+        )
+
+    assert crosswalk.verified is False
+    failures = [record for record in caplog.records if "verification failed" in record.message]
+    assert len(failures) == 1
+    assert "clause=all_records_verified_false" in failures[0].message
+
+
 def test_order_book_provider_returns_the_yes_token_midpoint_and_condition_id() -> None:
     observed = datetime.now(UTC)
     books = OrderBookStore()
@@ -256,6 +333,101 @@ def test_rejects_breach_after_positions_orders_reservations_and_candidate() -> N
     assert decision.swing_diagnostics.negative_swing_loss > 2_000
     assert decision.swing_diagnostics.house_derivative_per_point == 410.0
     assert decision.swing_diagnostics.senate_derivative_per_point == 0.0
+
+
+def test_swing_hedge_that_reduces_worst_case_loss_is_approved_above_limit() -> None:
+    opposing_exchange_id = "37"
+    opposing_market_id = "m2"
+    opposing_condition_id = "pm-condition-2"
+    opposing_token_id = "pm-yes-2"
+    mark = _mark()
+    opposing_mapping = _market_mapping(
+        exchange_id=opposing_exchange_id,
+        market_id=opposing_market_id,
+        party_sign=-1,
+        pm_condition_id=opposing_condition_id,
+        pm_yes_token_id=opposing_token_id,
+    )
+    control = SwingRiskControl(
+        shock_points=5.0,
+        max_loss=2_000.0,
+        max_pm_mark_age_ns=35_000_000_000,
+        crosswalk=SwingCrosswalk(
+            verified=True,
+            markets=(_market_mapping(), opposing_mapping),
+        ),
+        mark_provider=_MultiMarkProvider(
+            {
+                PM_YES_TOKEN_ID: mark,
+                opposing_token_id: SwingPmMark(
+                    pm_condition_id=opposing_condition_id,
+                    midpoint=0.5,
+                    observed_at=mark.observed_at,
+                ),
+            }
+        ),
+    )
+    snapshot = RuntimeSnapshot(
+        markets=(
+            RuntimeMarket(
+                market_id=MARKET_ID,
+                status="open",
+                exchange_ids=(EXCHANGE_ID,),
+                tournament_id=TOURNAMENT_ID,
+                mapping_accepted=True,
+                tradeable=True,
+            ),
+            RuntimeMarket(
+                market_id=opposing_market_id,
+                status="open",
+                exchange_ids=(opposing_exchange_id,),
+                tournament_id=TOURNAMENT_ID,
+                mapping_accepted=True,
+                tradeable=True,
+            ),
+        ),
+        books=(),
+        portfolio=RuntimePortfolio(
+            positions=(
+                RuntimePosition(
+                    EXCHANGE_ID,
+                    MARKET_ID,
+                    TOURNAMENT_ID,
+                    17_000,
+                    17_000,
+                ),
+            ),
+            account_trusted=True,
+        ),
+        observation_monotonic_ns=1_000_000_000,
+    )
+    _, baseline_diagnostics = evaluate_swing_cap(control, snapshot, ())
+
+    decision = evaluate_risk(
+        _opportunity(
+            exchange_id=opposing_exchange_id,
+            market_id=opposing_market_id,
+            quantity=400,
+        ),
+        snapshot,
+        _context(control),
+    )
+
+    assert baseline_diagnostics is not None
+    baseline_worst_case_loss = max(
+        baseline_diagnostics.positive_swing_loss,
+        baseline_diagnostics.negative_swing_loss,
+    )
+    assert baseline_worst_case_loss > control.max_loss
+    assert decision.approved is True
+    assert decision.reason == "approved"
+    assert decision.swing_diagnostics is not None
+    projected_worst_case_loss = max(
+        decision.swing_diagnostics.positive_swing_loss,
+        decision.swing_diagnostics.negative_swing_loss,
+    )
+    assert projected_worst_case_loss > control.max_loss
+    assert projected_worst_case_loss < baseline_worst_case_loss
 
 
 def test_reducing_order_is_allowed_even_when_pm_mark_is_stale() -> None:
