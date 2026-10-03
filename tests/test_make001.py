@@ -1334,11 +1334,11 @@ def test_fill_seeking_inventory_skew_cuts_opening_size_above_150() -> None:
 
 @pytest.mark.parametrize(
     ("fill_seeking_enabled", "deep_ladder_enabled", "max_inventory"),
-    # Fill-seeking binds on the configured maker cap; the deep ladder also
-    # binds on its own (default 200) projected-position cap.
-    [(True, False, 200.0), (False, True, 500.0)],
+    # The regular maker and fill-seeking mode retain the hard 200-share cap;
+    # the deep ladder uses its separately configurable (default 200) cap.
+    [(False, False, 500.0), (True, False, 500.0), (False, True, 500.0)],
 )
-def test_aggressive_maker_modes_enforce_configured_projected_position_cap(
+def test_maker_modes_enforce_projected_position_cap(
     fill_seeking_enabled: bool,
     deep_ladder_enabled: bool,
     max_inventory: float,
@@ -1372,6 +1372,35 @@ def test_aggressive_maker_modes_enforce_configured_projected_position_cap(
         else decision.desired.bid_size
     )
     assert 190 + bid_size <= 200
+
+
+def test_deep_ladder_respects_configured_cap_for_all_resting_levels() -> None:
+    snapshot = _maker_snapshot(
+        signed_inventory=70.0,
+        external={"token-yes": _external(bid=0.48, ask=0.52)},
+    )
+    book = RuntimeBook(
+        exchange_id="36",
+        market_id="m1",
+        tournament_id=TOURNAMENT,
+        bids=(RuntimeLevel(price_ticks=90, quantity=20.0),),
+        asks=(RuntimeLevel(price_ticks=110, quantity=20.0),),
+        trusted_depth=True,
+        observed_monotonic_ns=NOW,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, books=(book,)))
+
+    decision = _engine(
+        max_inventory=500.0,
+        deep_ladder_enabled=True,
+        deep_ladder_position_cap=75,
+    ).quote(snapshot)
+
+    assert decision.desired is not None
+    bid_size = sum(level.size for level in decision.desired.bid_levels)
+    ask_size = sum(level.size for level in decision.desired.ask_levels)
+    assert 70 + bid_size <= 75
+    assert 70 - ask_size >= -75
 
 
 def test_deep_ladder_joins_sig_touch_and_caps_all_resting_levels() -> None:
