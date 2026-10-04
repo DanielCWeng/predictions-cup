@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -19,11 +20,17 @@ from predictions_cup.sig.realtime_models import (
 class SigRealtimeRecorder:
     """Small normalized recorder; bounded by configured time-based retention."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(
+        self, path: Path, *, journal_size_limit_bytes: int = 64 * 1024 * 1024
+    ) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         self._connection = sqlite3.connect(path)
         self._connection.execute("PRAGMA journal_mode=WAL")
         self._connection.execute("PRAGMA synchronous=NORMAL")
+        self._connection.execute(
+            f"PRAGMA journal_size_limit={max(0, journal_size_limit_bytes)}"
+        )
+        self._last_checkpoint_monotonic = time.monotonic()
         self._connection.executescript(
             """
             CREATE TABLE IF NOT EXISTS realtime_deliveries (
@@ -146,6 +153,19 @@ class SigRealtimeRecorder:
 
     def close(self) -> None:
         self._connection.close()
+
+    def checkpoint_wal_if_due(self, *, interval_seconds: float = 300.0) -> None:
+        """Passively checkpoint the WAL at most once per interval.
+
+        PASSIVE never waits for readers or writers. journal_size_limit trims the WAL
+        after it has been checkpointed, while this cadence avoids relying only on
+        SQLite's default page-count trigger.
+        """
+        now = time.monotonic()
+        if now - self._last_checkpoint_monotonic < interval_seconds:
+            return
+        self._last_checkpoint_monotonic = now
+        self._connection.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
 
     def record_raw_batch(
         self,
@@ -442,8 +462,9 @@ class SigRealtimeRecorder:
         )
         self._connection.commit()
 
-    def prune_before(self, cutoff: datetime) -> None:
+    def prune_before(self, cutoff: datetime, *, book_cutoff: datetime | None = None) -> None:
         cutoff_iso = _iso(cutoff)
+        book_cutoff_iso = _iso(book_cutoff or cutoff)
         with self._connection:
             self._connection.execute(
                 "DELETE FROM realtime_deliveries WHERE observed_at < ?", (cutoff_iso,)
@@ -452,7 +473,7 @@ class SigRealtimeRecorder:
                 "DELETE FROM realtime_trades WHERE observed_at < ?", (cutoff_iso,)
             )
             self._connection.execute(
-                "DELETE FROM book_dirty_events WHERE observed_at < ?", (cutoff_iso,)
+                "DELETE FROM book_dirty_events WHERE observed_at < ?", (book_cutoff_iso,)
             )
             self._connection.execute(
                 "DELETE FROM market_settled_events WHERE observed_at < ?", (cutoff_iso,)
@@ -464,7 +485,8 @@ class SigRealtimeRecorder:
                 "DELETE FROM price_observations WHERE rest_observed_at < ?", (cutoff_iso,)
             )
             self._connection.execute(
-                "DELETE FROM book_observations WHERE rest_observed_at < ?", (cutoff_iso,)
+                "DELETE FROM book_observations WHERE rest_observed_at < ?",
+                (book_cutoff_iso,),
             )
             self._connection.execute(
                 "DELETE FROM trust_transitions WHERE observed_at < ?", (cutoff_iso,)

@@ -170,11 +170,16 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
 
         async def maintenance(observed_at: datetime) -> None:
             await engine.maintenance(observed_at)
+            recorder.checkpoint_wal_if_due()
             context_sampler.maybe_schedule(observed_at)
 
         try:
-            cutoff = datetime.now(UTC) - timedelta(days=settings.sig_realtime_retention_days)
-            recorder.prune_before(cutoff)
+            retention_now = datetime.now(UTC)
+            cutoff = retention_now - timedelta(days=settings.sig_realtime_retention_days)
+            book_cutoff = retention_now - timedelta(
+                days=settings.sig_realtime_book_retention_days
+            )
+            recorder.prune_before(cutoff, book_cutoff=book_cutoff)
             reason = SubscriptionReason.INITIAL_SUBSCRIBE
             while not stop_event.is_set():
                 try:
