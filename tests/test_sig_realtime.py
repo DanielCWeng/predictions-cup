@@ -1058,6 +1058,9 @@ def test_engine_subscribes_per_market_topics_not_tournament_topic(
         engine, recorder = _engine(tmp_path, rest)
         await engine.initialize()
         assert engine.subscription_topics() == ("tournament:cup:market:26",)
+        assert engine.subscription_topics(tournament_channel=True) == (
+            "tournament:cup:markets",
+        )
         assert engine.subscription_topics(exchange_ids={"36"}) == (
             "tournament:cup:market:26",
         )
@@ -1230,6 +1233,165 @@ def test_make_noop_recorder_survives_connect_batches_and_disconnect() -> None:
         await engine.maintenance(observed + timedelta(seconds=1))
         engine.mark_disconnected()
         assert engine.health.connected is False
+
+    asyncio.run(scenario())
+
+
+def test_tournament_markets_batch_dispatches_split_markets_and_suppresses_duplicates(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        rest = FakeRest()
+        engine, recorder = _engine(tmp_path, rest)
+        await engine.initialize()
+        observed = datetime(2026, 10, 1, 16, 10, 28, tzinfo=UTC)
+
+        await engine.handle_tournament_batches(
+            {
+                "markets": [
+                    {
+                        "marketId": "26",
+                        "batch": _live_market_batch(
+                            revision=10,
+                            previous=9,
+                            market_id="26",
+                            exchange_id="36",
+                        ),
+                    },
+                    {
+                        "marketId": "27",
+                        "batch": _live_market_batch(
+                            revision=2,
+                            previous=1,
+                            market_id="27",
+                            exchange_id="37",
+                        ),
+                    },
+                ]
+            },
+            observed,
+        )
+        duplicate_with_newer_book = _live_market_batch(
+            revision=10, previous=9, market_id="26", exchange_id="36"
+        )
+        duplicate_books = cast(
+            list[dict[str, object]], duplicate_with_newer_book["books"]
+        )
+        duplicate_books[0]["asOf"] = {
+            "sequence": 1854302,
+            "at": "2026-10-01T16:10:28.700Z",
+        }
+        await engine.handle_tournament_batches(
+            {
+                "markets": [
+                    {
+                        "marketId": "26",
+                        "batch": _live_market_batch(
+                            revision=11, previous=10, market_id="26", exchange_id="36"
+                        ),
+                    },
+                    {
+                        "marketId": "26",
+                        "batch": duplicate_with_newer_book,
+                    },
+                ]
+            },
+            observed,
+        )
+
+        assert engine.topic_revisions == {
+            engine.market_topic("26"): 11,
+            engine.market_topic("27"): 2,
+        }
+        assert engine.health.revision_gap_count == 0
+        assert engine.book_versions["36"] == (
+            1854302,
+            datetime(2026, 10, 1, 16, 10, 28, 700000, tzinfo=UTC),
+        )
+        connection = sqlite3.connect(tmp_path / "sig.sqlite3")
+        trades = connection.execute(
+            "SELECT exchange_id FROM realtime_trades ORDER BY id"
+        ).fetchall()
+        connection.close()
+        assert trades == [("36",), ("37",), ("36",)]
+
+        await engine.handle_tournament_batches(
+            {
+                "markets": [
+                    {
+                        "marketId": "27",
+                        "batch": _live_market_batch(
+                            revision=4,
+                            previous=3,
+                            market_id="27",
+                            exchange_id="37",
+                        ),
+                    }
+                ]
+            },
+            observed,
+        )
+        assert engine.health.revision_gap_count == 1
+        assert rest.market_calls == ["27"]
+        assert engine.topic_revisions[engine.market_topic("26")] == 11
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_tournament_unbatched_hints_resync_the_named_exchange_or_market(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        rest = FakeRest()
+        engine, recorder = _engine(tmp_path, rest, tracked={"36"})
+        await engine.initialize()
+        observed = datetime(2026, 10, 1, 16, 10, 28, tzinfo=UTC)
+
+        affected = await engine.handle_tournament_event(
+            "book_dirty",
+            {
+                "exchangeId": "36",
+                "marketId": "26",
+                "tournamentId": "cup",
+                "at": "2026-10-01T16:10:28.500Z",
+            },
+            observed,
+        )
+        assert affected == {"36"}
+        assert rest.calls.count("36") == 2
+
+        await engine.handle_tournament_event(
+            "book_dirty",
+            {
+                "exchangeId": "37",
+                "marketId": "27",
+                "tournamentId": "cup",
+                "at": "2026-10-01T16:10:28.750Z",
+            },
+            observed,
+        )
+        assert rest.calls.count("37") == 1
+
+        affected = await engine.handle_tournament_event(
+            "market_settled",
+            {
+                "marketId": "27",
+                "tournamentId": "cup",
+                "settledWith": "YES",
+                "at": "2026-10-01T16:10:29.000Z",
+            },
+            observed,
+        )
+        assert affected == {"37"}
+        assert rest.market_calls == ["27"]
+        connection = sqlite3.connect(tmp_path / "sig.sqlite3")
+        assert connection.execute("SELECT COUNT(*) FROM book_dirty_events").fetchone() == (2,)
+        assert connection.execute("SELECT COUNT(*) FROM market_settled_events").fetchone() == (1,)
+        connection.close()
+        await engine.aclose()
+        recorder.close()
 
     asyncio.run(scenario())
 

@@ -16,10 +16,15 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
-from predictions_cup.models import OrderBook
+from predictions_cup.models import OrderBook, OrderBookLevel
 from predictions_cup.observe.contracts import ObservationEmitter, ObservationKind, VenueObservation
 from predictions_cup.sig.dto import BulkPricesDto, MarketDto, OrderBookSnapshotDto
-from predictions_cup.sig.realtime_models import MarketBatchDto, RealtimeTradeDto
+from predictions_cup.sig.realtime_models import (
+    BookDirtyDto,
+    MarketBatchDto,
+    MarketSettledDto,
+    RealtimeTradeDto,
+)
 from predictions_cup.sig.realtime_storage import SigRealtimeRecorder
 from predictions_cup.sig.rest_governor import RestGovernorSnapshot, RestPriority
 
@@ -214,6 +219,7 @@ class SigRealtimeStateEngine:
         # batches arrive on per-market ``tournament:{id}:market:{market_id}``
         # topics (see ``subscription_topics``).
         self.topic = f"tournament:{tournament_id}"
+        self.markets_topic = f"{self.topic}:markets"
         self._market_topic_prefix = f"{self.topic}:market:"
         self._configured_tracked_exchange_ids = tracked
         # MAKE quotes a handful of exchanges; sweeping every tournament price
@@ -244,6 +250,7 @@ class SigRealtimeStateEngine:
         self.health = RuntimeHealth()
         self.last_accepted_revision: int | None = None
         self.topic_revisions: dict[str, int] = {}
+        self.book_versions: dict[str, tuple[int, datetime]] = {}
         self._last_bulk_price_refresh_at: datetime | None = None
 
         self._reconcile_registry_lock = asyncio.Lock()
@@ -264,7 +271,10 @@ class SigRealtimeStateEngine:
         return f"{self._market_topic_prefix}{market_id}"
 
     def subscription_topics(
-        self, *, exchange_ids: Iterable[str] | None = None
+        self,
+        *,
+        exchange_ids: Iterable[str] | None = None,
+        tournament_channel: bool = False,
     ) -> tuple[str, ...]:
         """Per-market Realtime topics for every unsettled known market.
 
@@ -274,6 +284,8 @@ class SigRealtimeStateEngine:
         universe is seeded. Falls back to the tournament topic only when no
         unsettled market is known when no exchange filter was requested.
         """
+        if tournament_channel:
+            return (self.markets_topic,)
         allowed = None if exchange_ids is None else frozenset(exchange_ids)
         allowed_market_ids = (
             None
@@ -620,6 +632,45 @@ class SigRealtimeStateEngine:
             if state.next_expiry_at is None or book.next_expiry_at < state.next_expiry_at:
                 state.next_expiry_at = book.next_expiry_at
 
+    def _apply_realtime_books(
+        self, batch: MarketBatchDto, observed_at: datetime, revision: int
+    ) -> None:
+        """Apply newer books independently of market batch revisions."""
+        for book in batch.books:
+            state = self.states.get(book.exchange_id)
+            if state is None:
+                continue
+            version = (book.as_of.sequence, book.as_of.at)
+            prior = self.book_versions.get(book.exchange_id)
+            if prior is not None and version <= prior:
+                continue
+            canonical = OrderBook(
+                exchange_id=book.exchange_id,
+                bids=tuple(
+                    OrderBookLevel(price=level.price, quantity=level.quantity)
+                    for level in book.bids
+                ),
+                asks=tuple(
+                    OrderBookLevel(price=level.price, quantity=level.quantity)
+                    for level in book.asks
+                ),
+                timestamp=observed_at,
+                source="sig-realtime",
+                revision=f"{book.as_of.sequence}:{book.as_of.at.isoformat()}",
+            )
+            state.orderbook = canonical
+            state.last_realtime_observed_at = observed_at
+            state.last_accepted_revision = revision
+            self.book_versions[book.exchange_id] = version
+            self._recorder.record_book(
+                market_id=state.market_id,
+                tournament_id=self.tournament_id,
+                book=canonical,
+                observed_at=observed_at,
+                reason="realtime_book",
+                triggering_revision=revision,
+            )
+
     async def handle_raw_batch(
         self,
         topic: str,
@@ -681,6 +732,7 @@ class SigRealtimeStateEngine:
         # message was missed only when previousRevision is above it.
         last_revision = self.topic_revisions.get(topic)
         if last_revision is not None and delivery.revision <= last_revision:
+            self._apply_realtime_books(batch, observed_at, delivery.revision)
             return
 
         revision_gap_recovered = False
@@ -714,6 +766,7 @@ class SigRealtimeStateEngine:
         self.topic_revisions[topic] = delivery.revision
         self.last_accepted_revision = delivery.revision
         await self._ensure_known_exchanges(batch)
+        self._apply_realtime_books(batch, observed_at, delivery.revision)
         self._record_trades(batch, observed_at, topic=topic)
 
         if batch.resync_required:
@@ -827,6 +880,166 @@ class SigRealtimeStateEngine:
             await self.refresh_bulk_prices(
                 reason="revision_gap",
                 priority=RestPriority.BACKGROUND,
+            )
+
+    async def handle_tournament_batches(
+        self, payload: object, observed_at: datetime
+    ) -> None:
+        """Dispatch each changed market through its existing revision handler."""
+        markets = payload.get("markets") if isinstance(payload, dict) else None
+        if not isinstance(markets, list):
+            await self._full_resync(
+                transition=TrustTransition.UNTRUSTED_MALFORMED_PAYLOAD,
+                reason="malformed_markets_batch",
+                triggering_revision=None,
+                refresh_bulk_prices=True,
+            )
+            return
+        for entry in markets:
+            if not isinstance(entry, dict):
+                await self._full_resync(
+                    transition=TrustTransition.UNTRUSTED_MALFORMED_PAYLOAD,
+                    reason="malformed_markets_batch_entry",
+                    triggering_revision=None,
+                    refresh_bulk_prices=True,
+                )
+                continue
+            market_id = entry.get("marketId")
+            if not isinstance(market_id, str) or not market_id:
+                await self._full_resync(
+                    transition=TrustTransition.UNTRUSTED_MALFORMED_PAYLOAD,
+                    reason="malformed_markets_batch_market_id",
+                    triggering_revision=None,
+                    refresh_bulk_prices=True,
+                )
+                continue
+            await self.handle_raw_batch(
+                self.market_topic(market_id), entry.get("batch"), observed_at
+            )
+
+    async def handle_tournament_event(
+        self, event_name: str, payload: object, observed_at: datetime
+    ) -> set[str]:
+        """Handle the unbatched invalidation hints on the tournament channel."""
+        if event_name == "book_dirty":
+            try:
+                dirty_event = BookDirtyDto.model_validate(payload)
+                if dirty_event.tournament_id != self.tournament_id:
+                    raise ValueError("book_dirty tournamentId mismatch")
+            except (ValidationError, ValueError) as exc:
+                logger.warning("SIG Realtime book_dirty rejected: %s", type(exc).__name__)
+                return set()
+            topic = self.market_topic(dirty_event.market_id)
+            revision = self.topic_revisions.get(topic, 0)
+            self._recorder.record_book_dirty(
+                topic=topic,
+                revision=revision,
+                event=dirty_event,
+                observed_at=observed_at,
+            )
+            state = self.states.get(dirty_event.exchange_id)
+            if state is None or state.market_id != dirty_event.market_id:
+                await self._resync_market(
+                    dirty_event.market_id,
+                    transition=TrustTransition.UNTRUSTED_BOOK_DIRTY,
+                    reason="book_dirty",
+                    triggering_revision=revision,
+                )
+                state = self.states.get(dirty_event.exchange_id)
+                if state is None or state.market_id != dirty_event.market_id:
+                    return {
+                        exchange_id
+                        for exchange_id, item in self.states.items()
+                        if item.market_id == dirty_event.market_id
+                    }
+            state.last_realtime_observed_at = observed_at
+            state.last_accepted_revision = revision
+            if state.tracked:
+                self._mark_untrusted(
+                    (dirty_event.exchange_id,),
+                    TrustTransition.UNTRUSTED_BOOK_DIRTY,
+                    revision=revision,
+                )
+                await self._reconcile_many(
+                    (dirty_event.exchange_id,),
+                    reason="book_dirty",
+                    final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                    triggering_revision=revision,
+                    priority=RestPriority.HIGH,
+                )
+            else:
+                await self._refetch_untracked_book(
+                    dirty_event.exchange_id,
+                    reason="book_dirty",
+                    triggering_revision=revision,
+                )
+            return {dirty_event.exchange_id}
+
+        if event_name == "market_settled":
+            try:
+                settled_event = MarketSettledDto.model_validate(payload)
+                if settled_event.tournament_id != self.tournament_id:
+                    raise ValueError("market_settled tournamentId mismatch")
+            except (ValidationError, ValueError) as exc:
+                logger.warning("SIG Realtime market_settled rejected: %s", type(exc).__name__)
+                return set()
+            topic = self.market_topic(settled_event.market_id)
+            revision = self.topic_revisions.get(topic, 0)
+            self._recorder.record_market_settled(
+                topic=topic,
+                revision=revision,
+                event=settled_event,
+                observed_at=observed_at,
+            )
+            await self._resync_market(
+                settled_event.market_id,
+                transition=TrustTransition.UNTRUSTED_SETTLEMENT,
+                reason="market_settled",
+                triggering_revision=revision,
+            )
+            return {
+                exchange_id
+                for exchange_id, item in self.states.items()
+                if item.market_id == settled_event.market_id
+            }
+        return set()
+
+    async def _refetch_untracked_book(
+        self, exchange_id: str, *, reason: str, triggering_revision: int
+    ) -> None:
+        state = self.states.get(exchange_id)
+        if state is None:
+            return
+        try:
+            self.health.full_book_refresh_count += 1
+            async with self._rest.priority(RestPriority.HIGH):
+                snapshot = await self._rest.get_orderbook(
+                    exchange_id,
+                    depth=self._book_depth,
+                    tournament_id=self.tournament_id,
+                )
+            observed_at = self._clock()
+            if snapshot.exchange_id != exchange_id or snapshot.market_id != state.market_id:
+                raise ValueError("authoritative orderbook identity mismatch")
+            book = snapshot.to_canonical(observed_at=observed_at)
+            state.orderbook = book
+            state.last_rest_observed_at = observed_at
+            state.last_reconciliation_at = observed_at
+            self.health.last_rest_reconciliation = observed_at
+            self._recorder.record_book(
+                market_id=state.market_id,
+                tournament_id=self.tournament_id,
+                book=book,
+                observed_at=observed_at,
+                reason=reason,
+                triggering_revision=triggering_revision,
+            )
+        except Exception as exc:
+            self.health.reconciliation_failure_count += 1
+            logger.warning(
+                "SIG REST reconciliation failed exchange=%s error=%s",
+                exchange_id,
+                type(exc).__name__,
             )
 
     def health_snapshot(self) -> dict[str, object]:
