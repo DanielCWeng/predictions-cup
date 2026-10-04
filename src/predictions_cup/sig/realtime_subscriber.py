@@ -17,6 +17,7 @@ from predictions_cup.sig.realtime_models import RealtimeTokenDto
 
 Clock = Callable[[], datetime]
 BatchHandler = Callable[[str, object, datetime], Awaitable[None]]
+EventHandler = Callable[[str, str, object, datetime], Awaitable[None]]
 MaintenanceHandler = Callable[[datetime], Awaitable[None]]
 ConnectedHandler = Callable[[], None]
 logger = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ class SupabaseTournamentSubscriber:
         subscribe_timeout_seconds: float = 15.0,
         maintenance_interval_seconds: float = 1.0,
         event_name: str = "market_batch",
+        event_names: Sequence[str] | None = None,
         max_channels_per_connection: int = DEFAULT_MAX_CHANNELS_PER_CONNECTION,
         clock: Clock = lambda: datetime.now(UTC),
     ) -> None:
@@ -80,6 +82,7 @@ class SupabaseTournamentSubscriber:
         if not event_name.strip():
             raise ValueError("event_name must not be blank")
         self._event_name = event_name
+        self._event_names = tuple(dict.fromkeys((event_name, *(event_names or ()))))
         self._max_channels_per_connection = max_channels_per_connection
         self._clock = clock
 
@@ -101,8 +104,9 @@ class SupabaseTournamentSubscriber:
         on_connected: ConnectedHandler,
         stop_event: asyncio.Event,
         on_maintenance: MaintenanceHandler | None = None,
+        on_event: EventHandler | None = None,
     ) -> SubscriberExit:
-        payload_queue: asyncio.Queue[tuple[str, object, datetime]] = asyncio.Queue(
+        payload_queue: asyncio.Queue[tuple[str, str, object, datetime]] = asyncio.Queue(
             maxsize=_MAX_PENDING_BROADCASTS
         )
         status_queue: asyncio.Queue[
@@ -113,11 +117,13 @@ class SupabaseTournamentSubscriber:
         queue_overflow = asyncio.Event()
         connections: list[tuple[Any, list[Any]]] = []
 
-        def broadcast_handler(topic: str) -> Callable[[BroadcastPayload], None]:
+        def broadcast_handler(
+            topic: str, event_name: str
+        ) -> Callable[[BroadcastPayload], None]:
             def handle_broadcast(message: BroadcastPayload) -> None:
                 try:
                     payload_queue.put_nowait(
-                        (topic, message.get("payload"), self._clock())
+                        (topic, event_name, message.get("payload"), self._clock())
                     )
                 except asyncio.QueueFull:
                     queue_overflow.set()
@@ -183,9 +189,11 @@ class SupabaseTournamentSubscriber:
                             channel = client.channel(topic, channel_options)
                             shard_channels.append(channel)
                             batch_pending.add(topic)
-                            await channel.on_broadcast(
-                                self._event_name, broadcast_handler(topic)
-                            ).subscribe(status_handler(topic))
+                            for event_name in self._event_names:
+                                channel = channel.on_broadcast(
+                                    event_name, broadcast_handler(topic, event_name)
+                                )
+                            await channel.subscribe(status_handler(topic))
 
                     deadline = loop.time() + self._subscribe_timeout_seconds
                     while batch_pending:
@@ -273,12 +281,15 @@ class SupabaseTournamentSubscriber:
                         return SubscriberExit.DISCONNECTED
 
                 try:
-                    topic, payload, observed_at = await asyncio.wait_for(
+                    topic, event_name, payload, observed_at = await asyncio.wait_for(
                         payload_queue.get(), timeout=0.25
                     )
                 except TimeoutError:
                     continue
-                await on_batch(topic, payload, observed_at)
+                if event_name == self._event_name:
+                    await on_batch(topic, payload, observed_at)
+                elif on_event is not None:
+                    await on_event(topic, event_name, payload, observed_at)
         finally:
             for client, shard_channels in connections:
                 try:

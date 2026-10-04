@@ -1464,11 +1464,24 @@ class MakerService:
                         exchange_ids=_mapped_sig_exchange_ids(
                             self.core.mapping,
                             allowed_exchange_ids=self._live_exchange_ids,
-                        )
+                        ),
+                        tournament_channel=(
+                            self.settings.sig_realtime_tournament_channel_enabled
+                        ),
                     ),
                     token=token,
                     token_refresh_margin_seconds=(
                         self.settings.sig_realtime_token_refresh_margin_seconds
+                    ),
+                    event_name=(
+                        "markets_batch"
+                        if self.settings.sig_realtime_tournament_channel_enabled
+                        else "market_batch"
+                    ),
+                    event_names=(
+                        ("book_dirty", "market_settled")
+                        if self.settings.sig_realtime_tournament_channel_enabled
+                        else ()
                     ),
                 )
 
@@ -1478,26 +1491,70 @@ class MakerService:
                     observed_at: datetime,
                 ) -> None:
                     try:
-                        parsed = MarketBatchDto.model_validate(payload)
-                    except ValidationError:
-                        parsed = None
-                    try:
-                        await sig_state.handle_raw_batch(topic, payload, observed_at)
-                        if parsed is None:
+                        if self.settings.sig_realtime_tournament_channel_enabled:
+                            entries = (
+                                payload.get("markets")
+                                if isinstance(payload, dict)
+                                else None
+                            )
+                            if not isinstance(entries, list):
+                                await sig_state.handle_tournament_batches(
+                                    payload, observed_at
+                                )
+                                runtime.notify_global(
+                                    observed_monotonic_ns=monotonic_ns()
+                                )
+                                return
+                            deliveries: list[tuple[str, object]] = []
+                            for entry in entries:
+                                if not isinstance(entry, dict) or not isinstance(
+                                    entry.get("marketId"), str
+                                ):
+                                    await sig_state.handle_tournament_batches(
+                                        payload, observed_at
+                                    )
+                                    runtime.notify_global(
+                                        observed_monotonic_ns=monotonic_ns()
+                                    )
+                                    return
+                                deliveries.append(
+                                    (
+                                        sig_state.market_topic(entry["marketId"]),
+                                        entry.get("batch"),
+                                    )
+                                )
+                        else:
+                            deliveries = [(topic, payload)]
+
+                        affected: set[str] = set()
+                        malformed = False
+                        for delivery_topic, batch_payload in deliveries:
+                            try:
+                                parsed = MarketBatchDto.model_validate(batch_payload)
+                            except ValidationError:
+                                parsed = None
+                            await sig_state.handle_raw_batch(
+                                delivery_topic, batch_payload, observed_at
+                            )
+                            if parsed is None:
+                                malformed = True
+                                continue
+                            affected.update(
+                                {item.exchange_id for item in parsed.book_dirty}
+                                | {trade.exchange_id for trade in parsed.trades}
+                            )
+                            if parsed.market_settled:
+                                settled = {
+                                    item.market_id for item in parsed.market_settled
+                                }
+                                affected.update(
+                                    state.exchange_id
+                                    for state in sig_state.states.values()
+                                    if state.market_id in settled
+                                )
+                        if malformed:
                             runtime.notify_global(observed_monotonic_ns=monotonic_ns())
                             return
-                        affected = {
-                            item.exchange_id for item in parsed.book_dirty
-                        } | {
-                            trade.exchange_id for trade in parsed.trades
-                        }
-                        if parsed.market_settled:
-                            settled = {item.market_id for item in parsed.market_settled}
-                            affected.update(
-                                state.exchange_id
-                                for state in sig_state.states.values()
-                                if state.market_id in settled
-                            )
                         await self._checkpoint_realtime_risk_transition(
                             source=risk_context_source,
                             service=risk_service,
@@ -1524,11 +1581,30 @@ class MakerService:
                         service=risk_service,
                     )
 
+                async def on_event(
+                    topic: str,
+                    event_name: str,
+                    payload: object,
+                    observed_at: datetime,
+                ) -> None:
+                    del topic
+                    affected = await sig_state.handle_tournament_event(
+                        event_name, payload, observed_at
+                    )
+                    await self._checkpoint_realtime_risk_transition(
+                        source=risk_context_source,
+                        service=risk_service,
+                    )
+                    runtime.notify_sig(
+                        affected, observed_monotonic_ns=monotonic_ns()
+                    )
+
                 outcome = await subscriber.run(
                     on_batch=on_batch,
                     on_connected=connected,
                     stop_event=self.stop_event,
                     on_maintenance=maintenance,
+                    on_event=on_event,
                 )
             except SigApiError as exc:
                 sig_state.mark_disconnected()

@@ -28,10 +28,13 @@ class FakeChannel:
         self.is_closed = False
         self.broadcast_callback: BroadcastCallback | None = None
         self.event: str | None = None
+        self.broadcast_callbacks: dict[str, BroadcastCallback] = {}
 
     def on_broadcast(self, event: str, callback: BroadcastCallback) -> Self:
-        self.event = event
+        if self.event is None:
+            self.event = event
         self.broadcast_callback = callback
+        self.broadcast_callbacks[event] = callback
         return self
 
     async def subscribe(self, callback: StatusCallback) -> Self:
@@ -166,6 +169,61 @@ def test_subscriber_uses_account_batch_event_name(
 
         assert outcome == SubscriberExit.STOPPED
         assert client.fake_channel.event == "account_batch"
+
+    asyncio.run(scenario())
+
+
+def test_subscriber_registers_and_dispatches_tournament_market_events(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        client = _install_fake_client(monkeypatch, follow_up_status=None)
+        stop_event = asyncio.Event()
+        batches: list[object] = []
+        events: list[tuple[str, object]] = []
+
+        async def stop_on_maintenance(at: datetime) -> None:
+            del at
+            assert client.fake_channel.broadcast_callbacks.keys() == {
+                "markets_batch",
+                "book_dirty",
+                "market_settled",
+            }
+            client.fake_channel.broadcast_callbacks["markets_batch"](
+                {"payload": {"markets": [{"marketId": "26", "batch": {}}]}}
+            )
+            client.fake_channel.broadcast_callbacks["book_dirty"](
+                {"payload": {"exchangeId": "36"}}
+            )
+
+        async def on_batch(topic: str, payload: object, at: datetime) -> None:
+            del topic, at
+            batches.append(payload)
+
+        async def on_event(
+            topic: str, event_name: str, payload: object, at: datetime
+        ) -> None:
+            del topic, at
+            events.append((event_name, payload))
+            stop_event.set()
+
+        subscriber = SupabaseTournamentSubscriber(
+            topic="tournament:cup:markets",
+            token=_token(expires_at=datetime.now(UTC) + timedelta(hours=2)),
+            event_name="markets_batch",
+            event_names=("book_dirty", "market_settled"),
+        )
+        outcome = await subscriber.run(
+            on_batch=on_batch,
+            on_event=on_event,
+            on_connected=lambda: None,
+            stop_event=stop_event,
+            on_maintenance=stop_on_maintenance,
+        )
+
+        assert outcome == SubscriberExit.STOPPED
+        assert batches == [{"markets": [{"marketId": "26", "batch": {}}]}]
+        assert events == [("book_dirty", {"exchangeId": "36"})]
 
     asyncio.run(scenario())
 
