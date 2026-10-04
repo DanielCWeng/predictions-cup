@@ -114,6 +114,7 @@ class ExchangeRuntimeState:
     orderbook: OrderBook | None = None
     last_trade: RealtimeTradeDto | None = None
     latest_price: Decimal | None = None
+    last_trade_observed_at: datetime | None = None
     scalar_best_bid: Decimal | None = None
     scalar_best_ask: Decimal | None = None
     scalar_spread: Decimal | None = None
@@ -1071,6 +1072,11 @@ class SigRealtimeStateEngine:
         for trade in batch.trades:
             state = self.states[trade.exchange_id]
             state.last_trade = trade
+            # SIG latestPrice is its last-trade value. Keep the realtime mark
+            # in step with that authoritative valuation field so an in-flight
+            # REST response rejected by _apply_bulk_prices cannot leave it stale.
+            state.latest_price = trade.price
+            state.last_trade_observed_at = observed_at
             state.last_realtime_observed_at = observed_at
             state.last_accepted_revision = revision
             self._recorder.record_trade(
