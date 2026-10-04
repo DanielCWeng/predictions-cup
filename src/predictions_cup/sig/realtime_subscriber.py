@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any, cast
@@ -61,6 +61,7 @@ class SupabaseTournamentSubscriber:
         event_name: str = "market_batch",
         event_names: Sequence[str] | None = None,
         max_channels_per_connection: int = DEFAULT_MAX_CHANNELS_PER_CONNECTION,
+        market_ids: Iterable[str] | None = None,
         clock: Clock = lambda: datetime.now(UTC),
     ) -> None:
         if (topic is None) == (topics is None):
@@ -84,6 +85,7 @@ class SupabaseTournamentSubscriber:
         self._event_name = event_name
         self._event_names = tuple(dict.fromkeys((event_name, *(event_names or ()))))
         self._max_channels_per_connection = max_channels_per_connection
+        self._market_ids = None if market_ids is None else frozenset(market_ids)
         self._clock = clock
 
     @property
@@ -121,9 +123,13 @@ class SupabaseTournamentSubscriber:
             topic: str, event_name: str
         ) -> Callable[[BroadcastPayload], None]:
             def handle_broadcast(message: BroadcastPayload) -> None:
+                payload = message.get("payload")
+                filtered_payload = self._filter_market_payload(event_name, payload)
+                if filtered_payload is None:
+                    return
                 try:
                     payload_queue.put_nowait(
-                        (topic, event_name, message.get("payload"), self._clock())
+                        (topic, event_name, filtered_payload, self._clock())
                     )
                 except asyncio.QueueFull:
                     queue_overflow.set()
@@ -297,3 +303,37 @@ class SupabaseTournamentSubscriber:
                         await client.realtime.remove_channel(cast(Any, channel))
                 except Exception:
                     await client.realtime.close()
+
+    def _filter_market_payload(self, event_name: str, payload: object) -> object | None:
+        """Drop known out-of-scope markets before they consume queue capacity.
+
+        Tournament channels carry updates for the full market universe. The maker
+        only needs markets represented by its configured SIG exchange mapping.
+        Malformed payloads pass through so the state engine can trigger its normal
+        authoritative resynchronization path.
+        """
+        if self._market_ids is None or not isinstance(payload, dict):
+            return payload
+
+        if event_name == "markets_batch":
+            markets = payload.get("markets")
+            if not isinstance(markets, list):
+                return payload
+            filtered = [
+                entry
+                for entry in markets
+                if not isinstance(entry, dict)
+                or not isinstance(entry.get("marketId"), str)
+                or entry["marketId"] in self._market_ids
+            ]
+            if not filtered:
+                return None
+            if len(filtered) == len(markets):
+                return payload
+            return {**payload, "markets": filtered}
+
+        if event_name in {"book_dirty", "market_settled"}:
+            market_id = payload.get("marketId")
+            if isinstance(market_id, str) and market_id not in self._market_ids:
+                return None
+        return payload

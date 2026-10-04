@@ -1459,15 +1459,26 @@ class MakerService:
                     sig_state.mark_connected()
                     runtime.notify_global(observed_monotonic_ns=monotonic_ns())
 
+                mapped_exchange_ids = _mapped_sig_exchange_ids(
+                    self.core.mapping,
+                    allowed_exchange_ids=self._live_exchange_ids,
+                )
+                tracked_market_ids = frozenset(
+                    state.market_id
+                    for exchange_id, state in sig_state.states.items()
+                    if exchange_id in mapped_exchange_ids
+                )
                 subscriber = SupabaseTournamentSubscriber(
                     topics=sig_state.subscription_topics(
-                        exchange_ids=_mapped_sig_exchange_ids(
-                            self.core.mapping,
-                            allowed_exchange_ids=self._live_exchange_ids,
-                        ),
+                        exchange_ids=mapped_exchange_ids,
                         tournament_channel=(
                             self.settings.sig_realtime_tournament_channel_enabled
                         ),
+                    ),
+                    market_ids=(
+                        tracked_market_ids
+                        if self.settings.sig_realtime_tournament_channel_enabled
+                        else None
                     ),
                     token=token,
                     token_refresh_margin_seconds=(
