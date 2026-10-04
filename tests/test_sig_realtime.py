@@ -834,6 +834,9 @@ def test_capacity_check_rejects_impossible_tracked_freshness(tmp_path: Path) -> 
 def test_recorder_normalization_wal_bulk_prices_and_retention(tmp_path: Path) -> None:
     path = tmp_path / "sig.sqlite3"
     recorder = SigRealtimeRecorder(path)
+    assert recorder._connection.execute("PRAGMA journal_size_limit").fetchone() == (
+        64 * 1024 * 1024,
+    )
     old = datetime(2026, 9, 1, tzinfo=UTC)
     delivery = RealtimeDeliveryDto.model_validate(
         {
@@ -875,6 +878,7 @@ def test_recorder_normalization_wal_bulk_prices_and_retention(tmp_path: Path) ->
     )
 
     recorder.record_delivery(topic="tournament:cup", delivery=delivery, observed_at=old)
+    recorder.checkpoint_wal_if_due(interval_seconds=0)
     recorder.record_trade(topic="tournament:cup", revision=1, trade=trade, observed_at=old)
     recorder.record_book_dirty(
         topic="tournament:cup",
@@ -947,6 +951,47 @@ def test_recorder_normalization_wal_bulk_prices_and_retention(tmp_path: Path) ->
         assert connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone() == (0,)
     assert connection.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
     connection.close()
+
+
+def test_recorder_retention_uses_shorter_book_window(tmp_path: Path) -> None:
+    recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+    timestamps = (
+        "2026-10-01T00:00:00+00:00",
+        "2026-10-02T00:00:00+00:00",
+        "2026-10-03T00:00:00+00:00",
+    )
+    for stamp in timestamps:
+        recorder._connection.execute(
+            """INSERT INTO realtime_deliveries (
+                topic, revision, previous_revision, correlation_id,
+                source_sequence_from, source_sequence_through, observed_at
+            ) VALUES ('t', 1, 0, 'c', 1, 1, ?)""",
+            (stamp,),
+        )
+        recorder._connection.execute(
+            """INSERT INTO book_dirty_events (
+                topic, revision, exchange_id, market_id, tournament_id,
+                source_at, observed_at
+            ) VALUES ('t', 1, 'x', 'm', 'cup', ?, ?)""",
+            (stamp, stamp),
+        )
+    recorder._connection.commit()
+
+    recorder.prune_before(
+        datetime.fromisoformat("2026-10-02T00:00:00+00:00"),
+        book_cutoff=datetime.fromisoformat("2026-10-03T00:00:00+00:00"),
+    )
+
+    delivery_stamps = recorder._connection.execute(
+        "SELECT observed_at FROM realtime_deliveries ORDER BY id"
+    ).fetchall()
+    book_stamps = recorder._connection.execute(
+        "SELECT observed_at FROM book_dirty_events ORDER BY id"
+    ).fetchall()
+    assert delivery_stamps == [(timestamps[1],), (timestamps[2],)]
+    assert book_stamps == [(timestamps[2],)]
+    recorder.close()
+
 
 def test_bounded_dirty_price_refresh_uses_high_priority_subset(tmp_path: Path) -> None:
     async def scenario() -> None:

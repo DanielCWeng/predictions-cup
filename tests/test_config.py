@@ -58,6 +58,8 @@ def test_defaults_load_without_credentials(
     assert settings.sig_rest_governor_rate_per_second == 2.0
     assert settings.sig_realtime_bulk_price_refresh_seconds == 10.0
     assert settings.sig_realtime_tracked_exchange_ids == ""
+    assert settings.sig_realtime_retention_days == 3
+    assert settings.sig_realtime_book_retention_days == 1
     assert settings.polymarket_supervised_ids == ""
     assert settings.polymarket_storage_path == Path("data/polymarket_operational.sqlite3")
     assert settings.polymarket_research_path == Path("data/polymarket_research")

@@ -176,7 +176,8 @@ class AppSettings(BaseSettings):
     sig_realtime_open_book_refresh_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
     sig_realtime_bulk_price_refresh_seconds: float = Field(default=10.0, ge=1.0, le=300.0)
     sig_realtime_token_refresh_margin_seconds: float = Field(default=300.0, ge=30, le=1800)
-    sig_realtime_retention_days: int = Field(default=14, ge=1, le=90)
+    sig_realtime_retention_days: int = Field(default=3, ge=1, le=90)
+    sig_realtime_book_retention_days: int = Field(default=1, ge=1, le=14)
 
     polymarket_capture_enabled: bool = False
     polymarket_gamma_base_url: AnyHttpUrl = AnyHttpUrl("https://gamma-api.polymarket.com")
@@ -522,6 +523,7 @@ class AppSettings(BaseSettings):
                 self.sig_realtime_token_refresh_margin_seconds
             ),
             "sig_realtime_retention_days": self.sig_realtime_retention_days,
+            "sig_realtime_book_retention_days": self.sig_realtime_book_retention_days,
             "polymarket_capture_enabled": self.polymarket_capture_enabled,
             "polymarket_universe": self.polymarket_universe,
             "polymarket_snapshot_interval_seconds": self.polymarket_snapshot_interval_seconds,
