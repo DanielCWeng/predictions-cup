@@ -228,6 +228,61 @@ def test_subscriber_registers_and_dispatches_tournament_market_events(
     asyncio.run(scenario())
 
 
+def test_tournament_market_filter_drops_irrelevant_burst_before_queueing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        client = _install_fake_client(monkeypatch, follow_up_status=None)
+        stop_event = asyncio.Event()
+        batches: list[object] = []
+
+        async def publish_burst(_at: datetime) -> None:
+            callback = client.fake_channel.broadcast_callbacks["markets_batch"]
+            for _ in range(_MAX_PENDING_BROADCASTS + 1):
+                callback(
+                    {
+                        "payload": {
+                            "markets": [{"marketId": "unfollowed", "batch": {}}]
+                        }
+                    }
+                )
+            callback(
+                {
+                    "payload": {
+                        "markets": [
+                            {"marketId": "unfollowed", "batch": {}},
+                            {"marketId": "followed", "batch": {"delivery": 1}},
+                        ]
+                    }
+                }
+            )
+
+        async def on_batch(topic: str, payload: object, at: datetime) -> None:
+            del topic, at
+            batches.append(payload)
+            stop_event.set()
+
+        subscriber = SupabaseTournamentSubscriber(
+            topic="tournament:cup:markets",
+            token=_token(expires_at=datetime.now(UTC) + timedelta(hours=2)),
+            event_name="markets_batch",
+            market_ids={"followed"},
+        )
+        outcome = await subscriber.run(
+            on_batch=on_batch,
+            on_connected=lambda: None,
+            stop_event=stop_event,
+            on_maintenance=publish_burst,
+        )
+
+        assert outcome == SubscriberExit.STOPPED
+        assert batches == [
+            {"markets": [{"marketId": "followed", "batch": {"delivery": 1}}]}
+        ]
+
+    asyncio.run(scenario())
+
+
 def test_subscriber_follow_up_error_exits_as_socket_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
