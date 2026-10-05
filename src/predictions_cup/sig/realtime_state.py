@@ -259,7 +259,21 @@ class SigRealtimeStateEngine:
         self._reconcile_priority: dict[str, RestPriority] = {}
         self._reconcile_reason: dict[str, str] = {}
         self._reconcile_revision: dict[str, int | None] = {}
+        self._untracked_refetch_tasks: dict[str, asyncio.Task[None]] = {}
+        self._untracked_refetch_generation: dict[str, int] = {}
+        self._untracked_refetch_reason: dict[str, str] = {}
+        self._untracked_refetch_revision: dict[str, int] = {}
+        self._untracked_refetch_market_id: dict[str, str | None] = {}
+        self.book_refetch_coalesced_count = 0
         self._background_tasks: set[asyncio.Task[None]] = set()
+
+    def refetch_metrics(self) -> tuple[int, int]:
+        """Return active per-exchange refetches and coalesced invalidations."""
+        in_flight = sum(
+            not task.done()
+            for task in (*self._reconcile_tasks.values(), *self._untracked_refetch_tasks.values())
+        )
+        return in_flight, self.book_refetch_coalesced_count
 
     @property
     def tracked_depth_exchange_ids(self) -> frozenset[str]:
@@ -874,6 +888,7 @@ class SigRealtimeStateEngine:
                 final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                 triggering_revision=delivery.revision,
                 priority=RestPriority.HIGH,
+                wait=False,
             )
 
         if revision_gap_recovered and market_id is None:
@@ -939,19 +954,17 @@ class SigRealtimeStateEngine:
             )
             state = self.states.get(dirty_event.exchange_id)
             if state is None or state.market_id != dirty_event.market_id:
-                await self._resync_market(
-                    dirty_event.market_id,
-                    transition=TrustTransition.UNTRUSTED_BOOK_DIRTY,
+                self._schedule_untracked_book_refetch(
+                    dirty_event.exchange_id,
                     reason="book_dirty",
                     triggering_revision=revision,
+                    market_id=dirty_event.market_id,
                 )
-                state = self.states.get(dirty_event.exchange_id)
-                if state is None or state.market_id != dirty_event.market_id:
-                    return {
-                        exchange_id
-                        for exchange_id, item in self.states.items()
-                        if item.market_id == dirty_event.market_id
-                    }
+                return {
+                    exchange_id
+                    for exchange_id, item in self.states.items()
+                    if item.market_id == dirty_event.market_id
+                }
             state.last_realtime_observed_at = observed_at
             state.last_accepted_revision = revision
             if state.tracked:
@@ -966,9 +979,10 @@ class SigRealtimeStateEngine:
                     final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                     triggering_revision=revision,
                     priority=RestPriority.HIGH,
+                    wait=False,
                 )
             else:
-                await self._refetch_untracked_book(
+                self._schedule_untracked_book_refetch(
                     dirty_event.exchange_id,
                     reason="book_dirty",
                     triggering_revision=revision,
@@ -1005,10 +1019,22 @@ class SigRealtimeStateEngine:
         return set()
 
     async def _refetch_untracked_book(
-        self, exchange_id: str, *, reason: str, triggering_revision: int
+        self,
+        exchange_id: str,
+        *,
+        reason: str,
+        triggering_revision: int,
+        market_id: str | None = None,
     ) -> None:
         state = self.states.get(exchange_id)
-        if state is None:
+        if state is None or (market_id is not None and state.market_id != market_id):
+            if market_id is not None:
+                await self._resync_market(
+                    market_id,
+                    transition=TrustTransition.UNTRUSTED_BOOK_DIRTY,
+                    reason=reason,
+                    triggering_revision=triggering_revision,
+                )
             return
         try:
             self.health.full_book_refresh_count += 1
@@ -1041,6 +1067,50 @@ class SigRealtimeStateEngine:
                 exchange_id,
                 type(exc).__name__,
             )
+
+    def _schedule_untracked_book_refetch(
+        self,
+        exchange_id: str,
+        *,
+        reason: str,
+        triggering_revision: int,
+        market_id: str | None = None,
+    ) -> None:
+        generation = self._untracked_refetch_generation.get(exchange_id, 0) + 1
+        self._untracked_refetch_generation[exchange_id] = generation
+        self._untracked_refetch_reason[exchange_id] = reason
+        self._untracked_refetch_revision[exchange_id] = triggering_revision
+        self._untracked_refetch_market_id[exchange_id] = market_id
+        task = self._untracked_refetch_tasks.get(exchange_id)
+        if task is not None and not task.done():
+            self.book_refetch_coalesced_count += 1
+            return
+        task = asyncio.create_task(
+            self._untracked_refetch_loop(exchange_id),
+            name=f"sig-untracked-book-refetch-{exchange_id}",
+        )
+        self._untracked_refetch_tasks[exchange_id] = task
+        self._track_background_task(task)
+
+    async def _untracked_refetch_loop(self, exchange_id: str) -> None:
+        while True:
+            generation = self._untracked_refetch_generation[exchange_id]
+            reason = self._untracked_refetch_reason[exchange_id]
+            revision = self._untracked_refetch_revision[exchange_id]
+            market_id = self._untracked_refetch_market_id[exchange_id]
+            await self._refetch_untracked_book(
+                exchange_id,
+                reason=reason,
+                triggering_revision=revision,
+                market_id=market_id,
+            )
+            if self._untracked_refetch_generation.get(exchange_id) == generation:
+                self._untracked_refetch_tasks.pop(exchange_id, None)
+                self._untracked_refetch_generation.pop(exchange_id, None)
+                self._untracked_refetch_reason.pop(exchange_id, None)
+                self._untracked_refetch_revision.pop(exchange_id, None)
+                self._untracked_refetch_market_id.pop(exchange_id, None)
+                return
 
     def health_snapshot(self) -> dict[str, object]:
         tracked_trusted = sum(
@@ -1528,6 +1598,8 @@ class SigRealtimeStateEngine:
                     self._reconcile_revision[exchange_id] = triggering_revision
 
             task = self._reconcile_tasks.get(exchange_id)
+            if task is not None and not task.done():
+                self.book_refetch_coalesced_count += 1
             if task is None or task.done():
                 task = asyncio.create_task(
                     self._reconcile_loop(
@@ -1712,6 +1784,11 @@ class SigRealtimeStateEngine:
             await asyncio.gather(*tasks, return_exceptions=True)
         self._background_tasks.clear()
         self._reconcile_tasks.clear()
+        self._untracked_refetch_tasks.clear()
+        self._untracked_refetch_generation.clear()
+        self._untracked_refetch_reason.clear()
+        self._untracked_refetch_revision.clear()
+        self._untracked_refetch_market_id.clear()
 
     def _track_background_task(self, task: asyncio.Task[None]) -> None:
         self._background_tasks.add(task)
