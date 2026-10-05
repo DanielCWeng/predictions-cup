@@ -1605,6 +1605,9 @@ class MakerService:
                     stop_event=self.stop_event,
                     on_maintenance=maintenance,
                     on_event=on_event,
+                    refetch_metrics=getattr(
+                        sig_state, "refetch_metrics", lambda: (0, 0)
+                    ),
                 )
             except SigApiError as exc:
                 sig_state.mark_disconnected()

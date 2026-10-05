@@ -92,6 +92,7 @@ class FakeRest:
         self.settled_with: dict[str, str | None] = {market_id: None for market_id, _ in pairs}
         self._priority = RestPriority.NORMAL
         self.block_exchange: str | None = None
+        self.orderbook_delay_seconds = 0.0
         self.block_started = asyncio.Event()
         self.block_release = asyncio.Event()
 
@@ -175,6 +176,8 @@ class FakeRest:
         assert tournament_id == "cup"
         self.calls.append(exchange_id)
         self.orderbook_priorities.append(self._priority)
+        if self.orderbook_delay_seconds:
+            await asyncio.sleep(self.orderbook_delay_seconds)
         if exchange_id == self.block_exchange and not self.block_release.is_set():
             self.block_started.set()
             await self.block_release.wait()
@@ -544,12 +547,15 @@ def test_untracked_book_dirty_is_persisted_without_full_book_fetch(tmp_path: Pat
     asyncio.run(scenario())
 
 
-def test_tracked_book_dirty_uses_high_priority_reconciliation(tmp_path: Path) -> None:
+def test_tracked_book_dirty_schedules_high_priority_reconciliation(tmp_path: Path) -> None:
     async def scenario() -> None:
         rest = FakeRest()
         engine, recorder = _engine(tmp_path, rest, tracked={"36"})
         await engine.initialize()
         initial_calls = len(rest.calls)
+        rest.block_exchange = "36"
+        rest.block_release.clear()
+        rest.block_started.clear()
 
         await engine.handle_raw_batch(
             engine.topic,
@@ -563,9 +569,51 @@ def test_tracked_book_dirty_uses_high_priority_reconciliation(tmp_path: Path) ->
             datetime(2026, 9, 25, 14, 0, tzinfo=UTC),
         )
 
+        await rest.block_started.wait()
+        assert len(rest.calls) == initial_calls + 1
+        assert engine.refetch_metrics()[0] == 1
+        rest.block_release.set()
+        await asyncio.gather(*engine._reconcile_tasks.values())
         assert len(rest.calls) == initial_calls + 1
         assert rest.orderbook_priorities[-1] == RestPriority.HIGH
         assert engine.states["36"].trusted
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_untracked_book_dirty_coalesces_without_waiting_for_slow_rest(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        rest = FakeRest()
+        rest.block_exchange = "36"
+        rest.block_release.clear()
+        engine, recorder = _engine(tmp_path, rest)
+        await engine.initialize()
+        observed = datetime(2026, 9, 25, 14, 0, tzinfo=UTC)
+        dirty_event = {
+            "exchangeId": "36",
+            "marketId": "26",
+            "tournamentId": "cup",
+            "at": "2026-09-25T14:00:00Z",
+        }
+
+        started = asyncio.get_running_loop().time()
+        await engine.handle_tournament_event("book_dirty", dirty_event, observed)
+        await rest.block_started.wait()
+        await engine.handle_tournament_event(
+            "book_dirty", dirty_event, observed + timedelta(milliseconds=1)
+        )
+        elapsed = asyncio.get_running_loop().time() - started
+
+        assert elapsed < 0.1
+        assert engine.refetch_metrics() == (1, 1)
+        rest.block_release.set()
+        await asyncio.gather(*engine._untracked_refetch_tasks.values())
+        assert rest.calls.count("36") == 2
+        assert engine.refetch_metrics() == (0, 1)
         await engine.aclose()
         recorder.close()
 
@@ -613,8 +661,10 @@ def test_reconciliation_coalesces_dirty_signal_arriving_in_flight(tmp_path: Path
         await asyncio.sleep(0)
         rest.block_release.set()
         await asyncio.gather(first, second)
+        await asyncio.gather(*engine._reconcile_tasks.values())
 
         assert len(rest.calls) == initial_calls + 2
+        assert engine.book_refetch_coalesced_count == 1
         assert engine.states["36"].trusted
         assert engine.states["36"].last_accepted_revision == 2
         await engine.aclose()
@@ -1360,6 +1410,7 @@ def test_tournament_unbatched_hints_resync_the_named_exchange_or_market(
             observed,
         )
         assert affected == {"36"}
+        await asyncio.gather(*engine._reconcile_tasks.values())
         assert rest.calls.count("36") == 2
 
         await engine.handle_tournament_event(
@@ -1372,6 +1423,7 @@ def test_tournament_unbatched_hints_resync_the_named_exchange_or_market(
             },
             observed,
         )
+        await asyncio.gather(*engine._untracked_refetch_tasks.values())
         assert rest.calls.count("37") == 1
 
         affected = await engine.handle_tournament_event(

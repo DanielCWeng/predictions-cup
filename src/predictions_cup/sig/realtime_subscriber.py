@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
+from collections import deque
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -23,6 +25,15 @@ ConnectedHandler = Callable[[], None]
 logger = logging.getLogger(__name__)
 _MAX_PENDING_BROADCASTS = 4_096
 _MAX_PENDING_STATUSES = 1_024
+_METRICS_INTERVAL_SECONDS = 60.0
+_PROCESSING_SAMPLE_LIMIT = 10_000
+
+
+def _percentile(sorted_samples: list[float], quantile: float) -> float:
+    if not sorted_samples:
+        return 0.0
+    index = min(len(sorted_samples) - 1, int((len(sorted_samples) - 1) * quantile))
+    return sorted_samples[index]
 
 
 class SubscriberExit(StrEnum):
@@ -105,10 +116,13 @@ class SupabaseTournamentSubscriber:
         stop_event: asyncio.Event,
         on_maintenance: MaintenanceHandler | None = None,
         on_event: EventHandler | None = None,
+        refetch_metrics: Callable[[], tuple[int, int]] | None = None,
     ) -> SubscriberExit:
         payload_queue: asyncio.Queue[tuple[str, str, object, datetime]] = asyncio.Queue(
             maxsize=_MAX_PENDING_BROADCASTS
         )
+        queue_depth_max = 0
+        processing_seconds: deque[float] = deque(maxlen=_PROCESSING_SAMPLE_LIMIT)
         status_queue: asyncio.Queue[
             tuple[str, RealtimeSubscribeStates, Exception | None]
         ] = asyncio.Queue(
@@ -116,15 +130,44 @@ class SupabaseTournamentSubscriber:
         )
         queue_overflow = asyncio.Event()
         connections: list[tuple[Any, list[Any]]] = []
+        metrics_task: asyncio.Task[None] | None = None
+        metrics_at = time.monotonic() + _METRICS_INTERVAL_SECONDS
+
+        def emit_metrics_if_due(now_monotonic: float) -> None:
+            nonlocal queue_depth_max, metrics_at
+            if now_monotonic < metrics_at:
+                return
+            samples = sorted(processing_seconds)
+            p50 = _percentile(samples, 0.50)
+            p99 = _percentile(samples, 0.99)
+            in_flight, coalesced = (
+                (0, 0) if refetch_metrics is None else refetch_metrics()
+            )
+            logger.info(
+                "SIG Realtime consumer metrics queue_depth_max=%s "
+                "payload_processing_p50_ms=%.3f payload_processing_p99_ms=%.3f "
+                "refetch_in_flight=%s refetch_coalesced=%s samples=%s",
+                queue_depth_max,
+                p50 * 1_000,
+                p99 * 1_000,
+                in_flight,
+                coalesced,
+                len(samples),
+            )
+            queue_depth_max = payload_queue.qsize()
+            processing_seconds.clear()
+            metrics_at = now_monotonic + _METRICS_INTERVAL_SECONDS
 
         def broadcast_handler(
             topic: str, event_name: str
         ) -> Callable[[BroadcastPayload], None]:
             def handle_broadcast(message: BroadcastPayload) -> None:
+                nonlocal queue_depth_max
                 try:
                     payload_queue.put_nowait(
                         (topic, event_name, message.get("payload"), self._clock())
                     )
+                    queue_depth_max = max(queue_depth_max, payload_queue.qsize())
                 except asyncio.QueueFull:
                     queue_overflow.set()
 
@@ -231,6 +274,15 @@ class SupabaseTournamentSubscriber:
             )
             on_connected()
 
+            async def metrics_monitor() -> None:
+                while True:
+                    await asyncio.sleep(_METRICS_INTERVAL_SECONDS)
+                    emit_metrics_if_due(time.monotonic())
+
+            metrics_task = asyncio.create_task(
+                metrics_monitor(), name="sig-realtime-consumer-metrics"
+            )
+
             refresh_at = self._token.expires_at - self._refresh_margin
             next_maintenance_at = self._clock()
             while True:
@@ -285,12 +337,21 @@ class SupabaseTournamentSubscriber:
                         payload_queue.get(), timeout=0.25
                     )
                 except TimeoutError:
+                    emit_metrics_if_due(time.monotonic())
                     continue
-                if event_name == self._event_name:
-                    await on_batch(topic, payload, observed_at)
-                elif on_event is not None:
-                    await on_event(topic, event_name, payload, observed_at)
+                processing_started = time.monotonic()
+                try:
+                    if event_name == self._event_name:
+                        await on_batch(topic, payload, observed_at)
+                    elif on_event is not None:
+                        await on_event(topic, event_name, payload, observed_at)
+                finally:
+                    processing_seconds.append(time.monotonic() - processing_started)
+                emit_metrics_if_due(time.monotonic())
         finally:
+            if metrics_task is not None:
+                metrics_task.cancel()
+                await asyncio.gather(metrics_task, return_exceptions=True)
             for client, shard_channels in connections:
                 try:
                     for channel in shard_channels:
