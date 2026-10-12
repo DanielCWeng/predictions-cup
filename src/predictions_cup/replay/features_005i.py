@@ -18,6 +18,7 @@ from predictions_cup.replay.model import (
     QuotePayload,
     ReplayEvent,
     ReplaySource,
+    ReplayState,
 )
 from predictions_cup.replay.runner import ReplayFrame, ReplayRunner
 
@@ -43,8 +44,14 @@ def causal_minute_features(
     history: dict[str, deque[Row]] = defaultdict(lambda: deque(maxlen=6))
     output: list[MinuteFeature] = []
 
-    def finish(token: str, at: datetime) -> None:
+    def finish(token: str, at: datetime, state: ReplayState) -> None:
         minute, book, count = ongoing.pop(token)
+        current = state.view(ReplaySource.POLYMARKET, token)
+        # A health disconnect after the last quote but before minute close
+        # invalidates the minute, even if the stored quote was once healthy.
+        if current is None or not current.source_available or not current.book_valid:
+            history[token].clear()
+            return
         minute_end = minute + timedelta(minutes=1)
         if book.quote_observed_at is None:
             history[token].clear()
@@ -107,11 +114,11 @@ def causal_minute_features(
             provenance="005I_V3_CAUSAL_COMPLETED_MINUTE",
         ))
 
-    def before_frame(at: datetime, _state: object) -> None:
+    def before_frame(at: datetime, state: ReplayState) -> None:
         for token in tuple(ongoing):
             minute, _, _ = ongoing[token]
             if minute + timedelta(minutes=1) <= at:
-                finish(token, at)
+                finish(token, at, state)
 
     def on_frame(frame: ReplayFrame) -> None:
         for event in frame.events:
