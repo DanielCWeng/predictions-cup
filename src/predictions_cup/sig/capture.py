@@ -42,6 +42,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="List accessible tournaments and exit without subscribing.",
     )
+    parser.add_argument(
+        "--prune-on-startup",
+        action="store_true",
+        help=(
+            "Opt in to potentially expensive SQLite retention deletes before "
+            "realtime subscription. Only use during approved maintenance after archival."
+        ),
+    )
     parser.add_argument("--storage-path", type=Path, help="Override SQLite recorder path.")
     parser.add_argument(
         "--research-root",
@@ -74,6 +82,25 @@ def parse_args() -> argparse.Namespace:
         help="Optional finite runtime for a manual credentialed smoke test.",
     )
     return parser.parse_args()
+
+
+def _prune_at_startup(
+    recorder: LaunchSigRecorder, *, enabled: bool, retention_days: int
+) -> None:
+    """Avoid a large unindexed DELETE scan on every capture restart.
+
+    Live ingestion must not depend on expensive historical cleanup. Retention
+    is now explicit maintenance, not a prerequisite for connecting the feed.
+    """
+    if not enabled:
+        logger.info(
+            "SIG startup retention pruning deferred; use --prune-on-startup "
+            "only in a planned archived maintenance window"
+        )
+        return
+    cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+    logger.warning("SIG startup retention pruning explicitly enabled")
+    recorder.prune_before(cutoff)
 
 
 async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
@@ -173,8 +200,11 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
             context_sampler.maybe_schedule(observed_at)
 
         try:
-            cutoff = datetime.now(UTC) - timedelta(days=settings.sig_realtime_retention_days)
-            recorder.prune_before(cutoff)
+            _prune_at_startup(
+                recorder,
+                enabled=args.prune_on_startup,
+                retention_days=settings.sig_realtime_retention_days,
+            )
             reason = SubscriptionReason.INITIAL_SUBSCRIBE
             while not stop_event.is_set():
                 try:
