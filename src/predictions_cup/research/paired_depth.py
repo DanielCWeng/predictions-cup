@@ -308,7 +308,8 @@ class PairedPaper:
         sig_levels = sig.asks if side == "BUY_YES" else _price_levels(sig.bids, True)
         mapped_yes = (side == "BUY_YES") == (spec.direction == "SAME")
         pm_levels = pm.bids if mapped_yes else _price_levels(pm.asks, True)
-        capacity = min(sum((q for _, q in sig_levels), Decimal(0)),\n                       sum((q for _, q in pm_levels), Decimal(0)),
+        capacity = min(sum((q for _, q in sig_levels), Decimal(0)),
+                       sum((q for _, q in pm_levels), Decimal(0)),
                        Decimal(self.lot_cap))
         lots = int(capacity.to_integral_value(rounding=ROUND_FLOOR))
         if lots < 1:
