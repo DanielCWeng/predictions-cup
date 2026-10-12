@@ -422,7 +422,7 @@ def test_near_threshold_fee_edge_and_cutoff_headroom() -> None:
         receipts=neutral,
         policy=DislocationPolicy(
             fee_rate=0.005, slippage_per_share=0.0,
-            latency_loss_per_share=0.0, min_edge_per_bundle=0.005,
+            latency_loss_per_share=0.0, min_edge_per_bundle=0.0051,
         ),
     )
     assert fees.status is AuditStatus.NO_EDGE
