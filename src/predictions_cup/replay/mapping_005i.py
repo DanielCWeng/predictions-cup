@@ -51,7 +51,7 @@ def load_accepted_005i_pairs(
     document = MappingDocument.model_validate_json(raw)
     records = [record for record in document.records if record.mapping_class is MappingClass.EXACT]
     selected = set(sig_exchange_ids) if sig_exchange_ids is not None else None
-    if selected is not None and len(selected) != len(sig_exchange_ids):
+    if sig_exchange_ids is not None and len(selected or ()) != len(sig_exchange_ids):
         raise ValueError("duplicate requested exchange ID")
     result: list[ExactPair] = []
     for record in records:
