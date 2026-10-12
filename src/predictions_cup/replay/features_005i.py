@@ -13,7 +13,12 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 from predictions_cup.replay.economic_005i import MinuteFeature
-from predictions_cup.replay.model import InstrumentView, ReplayEvent, ReplaySource, QuotePayload
+from predictions_cup.replay.model import (
+    InstrumentView,
+    QuotePayload,
+    ReplayEvent,
+    ReplaySource,
+)
 from predictions_cup.replay.runner import ReplayFrame, ReplayRunner
 
 D = Decimal
@@ -34,9 +39,8 @@ def causal_minute_features(
     if max_last_quote_age_ms < 0:
         raise ValueError("negative quote freshness")
     ongoing: dict[str, tuple[datetime, InstrumentView, int]] = {}
-    history: dict[str, deque[tuple[datetime, float, float, float, float, float, float]]] = defaultdict(
-        lambda: deque(maxlen=6)
-    )
+    Row = tuple[datetime, float, float, float, float, float, float]
+    history: dict[str, deque[Row]] = defaultdict(lambda: deque(maxlen=6))
     output: list[MinuteFeature] = []
 
     def finish(token: str, at: datetime) -> None:
@@ -61,10 +65,10 @@ def causal_minute_features(
             return
         bids = sorted(book.bids, key=lambda x: x.price, reverse=True)
         asks = sorted(book.asks, key=lambda x: x.price)
-        if any(l.quantity <= 0 for l in (*bids[:5], *asks[:5])):
+        if any(level.quantity <= 0 for level in (*bids[:5], *asks[:5])):
             history[token].clear()
             return
-        depth = sum((float(l.quantity) for l in (*bids[:5], *asks[:5])), 0.0)
+        depth = sum((float(level.quantity) for level in (*bids[:5], *asks[:5])), 0.0)
         bsz, asz = float(bids[0].quantity), float(asks[0].quantity)
         if depth <= 0 or bsz + asz <= 0:
             history[token].clear()
