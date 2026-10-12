@@ -24,7 +24,7 @@ No raw vote lead is accepted directly as evidence for a confident outcome; an in
 - BUY YES: `lower_probability - SIG_ask - hypothetical_cost`
 - SELL *held* YES: `SIG_bid - upper_probability - hypothetical_cost`
 - Size limited to visible opposite-side top depth; for BUY also cash/ask and currently free gross shares; for SELL also currently owned shares. No selling shares not owned.
-- Source/mapping/account/depth/status/time failures emit `Abstain`.
+- Source/mapping/account/depth/status/time failures emit `Abstain`. Locked or crossed YES books (`bid >= ask`) fail construction and cannot produce candidates. The scorer also requires an aware `now_utc` no earlier than event receipt and refuses candidate actionability from **2026-11-04 16:59:55 UTC**; this SHADOW research clock check never replaces the independent live HTTP cutoff in PR #202.
 - All results are informational. Top-of-book depth does not establish queue/fill/latency, full-depth economics, or true remaining liquidity; order flow and cancellation can invalidate it before arrival.
 
 A real economic qualification must integrate fee schedule, variable depth, opportunity-cost model, size-conditioned slippage, network RTT jitter, conservative adverse-selection haircut, per-race correlation, RISK-002 reservations, full balance/order account reconciliation, and the existing dual LIVE gates.
