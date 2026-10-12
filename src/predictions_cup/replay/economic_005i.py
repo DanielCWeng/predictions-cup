@@ -16,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from predictions_cup.replay.model import InstrumentView, ReplayEvent, ReplaySource
+from predictions_cup.replay.model import BookLevel, InstrumentView, ReplayEvent, ReplaySource
 from predictions_cup.replay.runner import ReplayRunner
 
 D = Decimal
@@ -33,19 +33,24 @@ FEATURES = (
 
 @dataclass(frozen=True)
 class ExactPair:
-    market_id: str
-    pm_yes: str
-    sig_yes: str
-    sig_no: str
-    acceptance: str
+    """One reviewed PM token linked to ONE binary SIG exchange.
+
+    PM token may itself be a NO token. mapping_direction is the relationship
+    between that token's economic payoff and the SIG exchange's YES payoff.
+    """
+
+    market_id: str  # PM market ID (feature tape key)
+    pm_yes: str  # specific MAPPING-001 aligned PM token (may be outcome NO)
+    sig_exchange_id: str
+    sig_market_id: str
+    mapping_direction: str
 
     def __post_init__(self) -> None:
-        if self.acceptance != "ACCEPTED_EXACT":
-            raise ValueError("only independently accepted EXACT pairs are permitted")
-        if not all((self.market_id, self.pm_yes, self.sig_yes, self.sig_no)):
-            raise ValueError("pair identity is incomplete")
-        if self.sig_yes == self.sig_no:
-            raise ValueError("YES and NO must be distinct SIG contracts")
+        if not all((self.market_id, self.pm_yes,
+                    self.sig_exchange_id, self.sig_market_id)):
+            raise ValueError("accepted pair identity is incomplete")
+        if self.mapping_direction not in ("SAME", "COMPLEMENT"):
+            raise ValueError("unreviewed SAME/COMPLEMENT mapping direction")
 
 
 @dataclass(frozen=True)
@@ -79,7 +84,8 @@ class EconomicConfig:
     latency_ms: int
     min_edge: Decimal
     quantity: Decimal
-    capital_limit: Decimal
+    capital_limit: Decimal  # actual cash in SUSQies, not share count
+    gross_share_limit: Decimal  # inventory/gross quantity cap
     max_quote_age_ms: int = 2000
     max_feature_delay_ms: int = 5000
     max_arrival_wait_ms: int = 1000
@@ -94,7 +100,7 @@ class EconomicConfig:
             self.max_arrival_wait_ms, self.max_exit_wait_ms, self.cooldown_seconds,
         )):
             raise ValueError("negative cost or timing assumption")
-        if self.quantity <= 0 or self.capital_limit <= 0:
+        if self.quantity <= 0 or self.capital_limit <= 0 or self.gross_share_limit <= 0:
             raise ValueError("quantity and capital must be positive")
         if not D("0") < self.depth_haircut <= D("1"):
             raise ValueError("depth haircut must be in (0, 1]")
@@ -159,6 +165,26 @@ def _walk(
         if remaining <= 0:
             return paid
     return None
+
+
+def _outcome_levels(book: InstrumentView, *, side: str, buy: bool) -> tuple[BookLevel, ...]:
+    """SIG order wire: exchangeId SAME, side='yes'/'no', action='buy'/'sell'.
+
+    Binary SIG depth is YES-denominated. NO buy crosses YES bids at 1-bid;
+    NO sell crosses YES asks at 1-ask. Nothing is sourced from a sibling
+    party's separate exchange or its unrelated outcome semantics.
+    """
+    if side not in ("YES", "NO"):
+        raise ValueError("invalid binary SIG order side")
+    if side == "YES":
+        return book.asks if buy else book.bids
+    levels = book.bids if buy else book.asks
+    return tuple(BookLevel(D(1) - x.price, x.quantity) for x in levels)
+
+
+def _sig_yes_delta(side: str, qty: Decimal) -> Decimal:
+    """BUY NO carries negative YES-equivalent inventory on same exchange."""
+    return qty if side == "YES" else -qty
 
 
 def _signal(strategy: str, feature: MinuteFeature, pair: ExactPair,
@@ -231,7 +257,7 @@ def evaluate(
     tapes: dict[tuple[ReplaySource, str], list[tuple[datetime, InstrumentView]]] = defaultdict(list)
     frame_times: list[datetime] = []
     needed = {(ReplaySource.POLYMARKET, p.pm_yes) for p in pair_list}
-    needed |= {(ReplaySource.SIG, s) for p in pair_list for s in (p.sig_yes, p.sig_no)}
+    needed |= {(ReplaySource.SIG, p.sig_exchange_id) for p in pair_list}
 
     def snapshot(frame: Any) -> None:
         frame_times.append(frame.observed_at)
@@ -267,7 +293,8 @@ def evaluate(
         outcomes: list[dict[str, Any]] = []
         active_until: dict[str, datetime] = {}
         market_last: dict[str, datetime] = {}
-        active_capital: list[tuple[datetime | None, Decimal]] = []
+        active_capital: list[tuple[datetime | None, Decimal, Decimal]] = []
+        occupied_market_until: dict[str, datetime] = {}
         for row in feature_list:
             pair = by_pair[(row.market_id, row.pm_yes)]
             side = _signal(strategy, row, pair, freeze)
@@ -291,48 +318,66 @@ def evaluate(
             if pm is None or pm.midpoint is None:
                 rejected["pm_stale_untrusted_or_depth_missing"] += 1
                 continue
+            # Reorient the frozen PM-token prediction into SIG YES inventory.
             pm_mid = pm.midpoint
+            sig_fair = pm_mid if pair.mapping_direction == "SAME" else D(1) - pm_mid
+            if side in ("YES", "NO") and pair.mapping_direction == "COMPLEMENT":
+                side = "NO" if side == "YES" else "YES"
             options = ("YES", "NO") if side == "BOTH" else (side,)
             proposals = []
             for choice in options:
-                contract = pair.sig_yes if choice == "YES" else pair.sig_no
+                contract = pair.sig_exchange_id
                 sig_key = (ReplaySource.SIG, contract)
                 book = _quote_at(tapes[sig_key], tape_times.get(sig_key, []),
                                  decision, config.max_quote_age_ms, sig=True)
                 if book is None:
                     continue
-                entry_cost = _walk(book.asks, config.quantity, buy=True,
-                                   haircut=config.depth_haircut)
+                entry_cost = _walk(
+                    _outcome_levels(book, side=choice, buy=True),
+                    config.quantity, buy=True, haircut=config.depth_haircut,
+                )
                 if entry_cost is None:
                     continue
-                fair_per_share = pm_mid if choice == "YES" else D(1) - pm_mid
+                fair_per_share = sig_fair if choice == "YES" else D(1) - sig_fair
                 # Conservative round-trip fee reserve; direction score is NOT fair value.
                 net_estimate = fair_per_share - entry_cost / config.quantity - (
                     fair_per_share + entry_cost / config.quantity
                 ) * fee
                 if net_estimate >= config.min_edge:
-                    proposals.append((net_estimate, choice, contract, entry_cost,
-                                      book.asks[0].price))
+                    proposals.append((net_estimate, choice, contract, entry_cost))
             if not proposals:
                 rejected["no_positive_crossing_edge_or_depth"] += 1
                 continue
-            _, choice, contract, expected_cost, _ = max(proposals)
-            if pair.market_id in market_last and decision - market_last[pair.market_id] < timedelta(
-                seconds=config.cooldown_seconds
+            _, choice, contract, expected_cost = max(proposals)
+            if pair.sig_exchange_id in market_last and (
+                decision - market_last[pair.sig_exchange_id]
+                < timedelta(seconds=config.cooldown_seconds)
             ):
                 rejected["overlap_purge"] += 1
                 continue
-            if active_until.get(pair.market_id, datetime.min.replace(tzinfo=UTC)) > decision:
+            if active_until.get(pair.sig_exchange_id, datetime.min.replace(
+                tzinfo=UTC
+            )) > decision:
                 rejected["inventory_locked"] += 1
                 continue
             # Release only exposures whose predetermined 5m horizon has elapsed.
-            active_capital = [(until, capital) for until, capital in active_capital
-                              if until is None or until > decision]
-            if sum((c for _, c in active_capital), D(0)) + config.quantity > config.capital_limit:
+            active_capital = [
+                (until, cash, gross) for until, cash, gross in active_capital
+                if until is None or until > decision
+            ]
+            proposed_cash = expected_cost * (D(1) + fee)
+            if sum((c for _, c, _ in active_capital), D(0)) + proposed_cash > (
+                config.capital_limit
+            ):
                 rejected["capital_exhausted"] += 1
                 continue
+            if sum((g for _, _, g in active_capital), D(0)) + config.quantity > (
+                config.gross_share_limit
+            ):
+                rejected["gross_share_limit"] += 1
+                continue
             qualified += 1
-            market_last[pair.market_id] = decision
+            market_last[pair.sig_exchange_id] = decision
             limit = expected_cost / config.quantity
             arrival_at = decision + timedelta(milliseconds=config.latency_ms)
             sig_key = (ReplaySource.SIG, contract)
@@ -344,7 +389,8 @@ def evaluate(
                 continue
             fill_time, fill_book = arrival
             filled_cost = _walk(
-                fill_book.asks, config.quantity, buy=True,
+                _outcome_levels(fill_book, side=choice, buy=True),
+                config.quantity, buy=True,
                 haircut=config.depth_haircut, max_buy_price=limit,
             )
             if filled_cost is None or filled_cost / config.quantity > limit:
@@ -362,8 +408,10 @@ def evaluate(
                                             config.max_quote_age_ms)
                 proceeds = None
                 if exit_snapshot is not None:
-                    proceeds = _walk(exit_snapshot[1].bids, config.quantity, buy=False,
-                                     haircut=config.depth_haircut)
+                    proceeds = _walk(
+                        _outcome_levels(exit_snapshot[1], side=choice, buy=False),
+                        config.quantity, buy=False, haircut=config.depth_haircut,
+                    )
                 pnl = (None if proceeds is None else
                        proceeds - filled_cost - entry_fee - proceeds * fee)
                 marks[str(seconds)] = _as_float(pnl)
@@ -378,15 +426,22 @@ def evaluate(
             # Unknown close is NOT marked as a profitable exit. Reserve forever and
             # report liquidation-zero downside separately until captured.
             if close_time is None:
-                active_capital.append((None, config.quantity))
-                active_until[pair.market_id] = datetime.max.replace(tzinfo=UTC)
+                active_capital.append((None, filled_cost + entry_fee, config.quantity))
+                active_until[pair.sig_exchange_id] = datetime.max.replace(tzinfo=UTC)
             else:
-                active_capital.append((close_time, config.quantity))
-                active_until[pair.market_id] = close_time
+                active_capital.append((close_time, filled_cost + entry_fee, config.quantity))
+                active_until[pair.sig_exchange_id] = close_time
             outcomes.append({
-                "market": pair.market_id, "day": decision.date().isoformat(),
+                "market": pair.sig_market_id,
+                "pm_market": pair.market_id, "exchange_id": pair.sig_exchange_id,
+                "day": decision.date().isoformat(),
                 "decision_at": decision.isoformat(), "filled_at": fill_time.isoformat(),
-                "side": choice, "qty": float(config.quantity),
+                "side": choice, "action": "buy",
+                "signed_yes_entry_delta": float(_sig_yes_delta(choice, config.quantity)),
+                "signed_yes_full_close_delta": float(-_sig_yes_delta(
+                    choice, config.quantity
+                )) if pnl_5m is not None else None,
+                "qty": float(config.quantity),
                 "entry_cost": float(filled_cost), "entry_fee": float(entry_fee),
                 "markouts_net_5s_30s_5m_1h": marks,
                 "net_pnl_5m": _as_float(pnl_5m),
@@ -428,7 +483,9 @@ def evaluate(
         "parameters": {
             "fee_bps_per_side": str(config.fee_bps_per_side),
             "latency_ms": config.latency_ms, "min_edge": str(config.min_edge),
-            "quantity": str(config.quantity), "capital_limit": str(config.capital_limit),
+            "quantity": str(config.quantity),
+            "cash_capital_limit_susqies": str(config.capital_limit),
+            "gross_share_limit": str(config.gross_share_limit),
             "depth_haircut": str(config.depth_haircut),
             "five_minute_purge_seconds": config.cooldown_seconds,
         },
