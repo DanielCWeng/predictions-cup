@@ -59,7 +59,11 @@ def test_six_consecutive_closed_minutes_only_past_returns_and_ofi() -> None:
 def test_sparse_previous_minutes_are_never_interpolated() -> None:
     start = datetime(2026, 10, 13, 12, 0, tzinfo=UTC)
     events = [
-        _pm(start + timedelta(minutes=i, seconds=30), str(Decimal("0.7") - i * Decimal("0.01")), i + 1)
+        _pm(
+            start + timedelta(minutes=i, seconds=30),
+            str(Decimal("0.7") - i * Decimal("0.01")),
+            i + 1,
+        )
         for i in range(7)
     ]
     assert not causal_minute_features(events, pm_token_ids={"pm-yes"})
