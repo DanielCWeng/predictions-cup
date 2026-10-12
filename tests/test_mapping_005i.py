@@ -8,7 +8,6 @@ import pytest
 
 from predictions_cup.replay.mapping_005i import load_accepted_005i_pairs
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
