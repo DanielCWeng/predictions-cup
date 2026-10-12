@@ -304,6 +304,9 @@ def evaluate(rows: list[dict[str, Any]], *, quantity: Decimal = DEFAULT_QTY,
                 if not window_end <= available_at <= decision:
                     item["reason"] = "feature_lookahead"
                     continue
+                if decision - available_at > timedelta(seconds=60):
+                    item["reason"] = "feature_stale"
+                    continue
             side = _direction(strategy, row)
             item["side"] = side
             if strategy == "NO_TRADE":
