@@ -159,7 +159,7 @@ def evaluate_election_lag(
     capacity: ShadowCapacity,
     *,
     now_monotonic_ns: int,
-    policy: ElectionLagPolicy = ElectionLagPolicy(),
+    policy: ElectionLagPolicy | None = None,
 ) -> ShadowLagDecision:
     """Inspect one indexed market in O(1); emit no actual order.
 
@@ -168,6 +168,8 @@ def evaluate_election_lag(
     Flat worst-case cost covers fees, slippage, latency and opportunity cost; an
     execution study must replace it with size/fill-conditional estimates.
     """
+    if policy is None:
+        policy = ElectionLagPolicy()
     if event.exchange_id != quote.exchange_id or event.market_id != quote.market_id:
         return Abstain("identity_mismatch")
     if not (event.source_verified and event.exact_mapping_verified):
