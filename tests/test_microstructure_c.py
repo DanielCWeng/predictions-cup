@@ -325,7 +325,8 @@ def test_unresolved_passive_order_locks_capital_not_counted_as_zero_fill() -> No
     item = next(x for x in out["ledger"] if x["strategy"] == "PASSIVE_SPREAD")
     assert item["status"] == "UNRESOLVED"
     assert item["reason"] == "unresolved_order_capital_locked"
-    assert out["scorecard"]["PASSIVE_SPREAD"]["conditional_on_terminal_matched_ack_fill_rate"] is None
+    rate = out["scorecard"]["PASSIVE_SPREAD"]["conditional_on_terminal_matched_ack_fill_rate"]
+    assert rate is None
 
 
 def test_after_tournament_lock_never_enters_economic_scenarios() -> None:
