@@ -21,6 +21,10 @@ from predictions_cup.replay.economic_005i import _outcome_levels
 from predictions_cup.replay.model import BookLevel, InstrumentView, ReplaySource
 
 D = Decimal
+DEFAULT_QTY = D(1)
+DEFAULT_FEE_BPS = D(20)
+DEFAULT_ZERO = D(0)
+DEFAULT_HAIRCUT = D("0.5")
 HORIZONS = (5, 30, 300, 3600)
 PASSIVE = ("PASSIVE_SPREAD", "DEPTH_PASSIVE", "INVENTORY_SKEW", "PASSIVE_RANDOM")
 CANDIDATES = (
@@ -195,9 +199,9 @@ def _observed_order(raw: dict[str, Any], decision: datetime, side: str,
     filled_at = _time(raw["fill_at"]) if qty > 0 else None
     if filled_at is not None and filled_at < ack:
         raise ValueError("fill before acknowledgement")
-    if raw.get("cancel_ack_at") is not None and filled_at is not None:
-        if filled_at > _time(raw["cancel_ack_at"]):
-            raise ValueError("fill after confirmed cancellation")
+    if (raw.get("cancel_ack_at") is not None and filled_at is not None
+            and filled_at > _time(raw["cancel_ack_at"])):
+        raise ValueError("fill after confirmed cancellation")
     return True, qty, qty * price, fee, filled_at
 
 
@@ -219,10 +223,10 @@ def _cluster_interval(rows: list[tuple[str, str, float]]) -> list[float] | None:
     return [samples[25], samples[975]]
 
 
-def evaluate(rows: list[dict[str, Any]], *, quantity: Decimal = D(1),
-             fee_bps: Decimal = D(20), latency_ms: int = 100,
-             gross_free: Decimal = D(0), cash_free: Decimal = D(0),
-             haircut: Decimal = D("0.5"), max_wait_ms: int = 1000
+def evaluate(rows: list[dict[str, Any]], *, quantity: Decimal = DEFAULT_QTY,
+             fee_bps: Decimal = DEFAULT_FEE_BPS, latency_ms: int = 100,
+             gross_free: Decimal = DEFAULT_ZERO, cash_free: Decimal = DEFAULT_ZERO,
+             haircut: Decimal = DEFAULT_HAIRCUT, max_wait_ms: int = 1000
              ) -> dict[str, Any]:
     """Evaluate each proposed action and return a complete rejection ledger.
 
