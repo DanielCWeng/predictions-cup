@@ -11,12 +11,13 @@ import hashlib
 import hmac
 import json
 import math
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 
 from predictions_cup.analysis.structural_certificates import (
+    BookLevel,
     ExecutableBook,
     LegAction,
     StructuralCertificate,
@@ -162,8 +163,8 @@ def _sign(opportunity: AuditedOpportunity, key: bytes) -> str:
         "source_event_id": opportunity.source_event_id,
         "mapping_sha256": opportunity.mapping_sha256,
         "evidence_sha256": opportunity.evidence_sha256,
-        "certificate_id": (
-            opportunity.structural.certificate_id if opportunity.structural else None
+        "structural": (
+            opportunity.structural.to_dict() if opportunity.structural else None
         ),
         "bundles": opportunity.bundles,
         "conditional_net_edge": opportunity.conditional_net_edge,
@@ -173,14 +174,12 @@ def _sign(opportunity: AuditedOpportunity, key: bytes) -> str:
     return hmac.new(key, _canonical(payload), hashlib.sha256).hexdigest()
 
 
-def _walk(levels: tuple[object, ...], amount: float) -> float | None:
+def _walk(levels: Sequence[BookLevel], amount: float) -> float | None:
     remaining = amount
     notional = 0.0
     for level in levels:
-        size = getattr(level, "size")
-        price = getattr(level, "price")
-        taken = min(remaining, size)
-        notional += taken * price
+        taken = min(remaining, level.size)
+        notional += taken * level.price
         remaining -= taken
         if remaining <= 1e-9:
             return notional
@@ -281,8 +280,6 @@ def audit_opportunity(
             ttl_ns=ttl_ns,
             signature="",
         )
-        from dataclasses import replace
-
         return replace(opportunity, signature=_sign(opportunity, signing_key))
 
     if (
@@ -298,7 +295,6 @@ def audit_opportunity(
         not clock_domain.strip()
         or source.clock_domain != clock_domain
         or decision_ns < source.received_ns
-        or source.received_ns < 0
         or source.received_ns < 0
         or decision_ns < 0
     ):
@@ -384,6 +380,11 @@ def audit_opportunity(
         ):
             return emit(AuditStatus.REJECTED, "STALE_CROSSED_OR_UNTRUSTED_BOOK")
 
+    ttl_ns = min(
+        ttl_ns,
+        *(p.max_quote_age_ns - (decision_ns - receipts[leg.instrument_id].received_ns)
+          for leg in relationship.legs),
+    )
     shares_per_bundle = sum(leg.units_per_bundle for leg in relationship.legs)
     # Conservative capital: reserve the MAX $1/share cost, not midpoint pricing.
     worst_cost_per_bundle = shares_per_bundle * (
@@ -401,9 +402,6 @@ def audit_opportunity(
 
     # Trim asks to the allowed bundle size. Retain actual bids to stress a
     # partially filled bundle with a forced immediate unwind.
-    from predictions_cup.analysis.structural_certificates import BookLevel
-    from dataclasses import replace
-
     trimmed: dict[str, ExecutableBook] = {}
     for leg in relationship.legs:
         b = receipts[leg.instrument_id].book
