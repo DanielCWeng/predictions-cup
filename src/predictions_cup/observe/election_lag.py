@@ -34,11 +34,13 @@ class ElectionProbabilityUpdate:
     published_at: datetime
     received_at: datetime
     received_monotonic_ns: int
+    clock_domain: str
     probability_lower: float
     probability_upper: float
     kind: ElectionEvidenceKind
     source_verified: bool
     exact_mapping_verified: bool
+    sig_yes_payoff_verified: bool
     probability_interval_calibrated: bool
 
     def __post_init__(self) -> None:
@@ -52,6 +54,8 @@ class ElectionProbabilityUpdate:
             for timestamp in (self.published_at, self.received_at)
         ):
             raise ValueError("election evidence timestamps must be timezone-aware")
+        if not self.clock_domain.strip():
+            raise ValueError("event clock domain must not be blank")
         if not isinstance(self.kind, ElectionEvidenceKind):
             raise ValueError("unsupported election evidence kind")
         if self.received_monotonic_ns < 0:
@@ -69,6 +73,7 @@ class SigExecutableTop:
     exchange_id: str
     market_id: str
     observed_monotonic_ns: int
+    clock_domain: str
     best_bid_ticks: int
     best_ask_ticks: int
     bid_shares: float
@@ -80,6 +85,8 @@ class SigExecutableTop:
     def __post_init__(self) -> None:
         if not self.exchange_id or not self.market_id:
             raise ValueError("missing SIG market identity")
+        if not self.clock_domain.strip():
+            raise ValueError("SIG quote clock domain must not be blank")
         if self.observed_monotonic_ns < 0:
             raise ValueError("negative SIG quote timestamp")
         if not (1 <= self.best_bid_ticks <= self.best_ask_ticks <= 199):
@@ -172,7 +179,13 @@ def evaluate_election_lag(
         policy = ElectionLagPolicy()
     if event.exchange_id != quote.exchange_id or event.market_id != quote.market_id:
         return Abstain("identity_mismatch")
-    if not (event.source_verified and event.exact_mapping_verified):
+    if event.clock_domain != quote.clock_domain:
+        return Abstain("incomparable_monotonic_clocks")
+    if not (
+        event.source_verified
+        and event.exact_mapping_verified
+        and event.sig_yes_payoff_verified
+    ):
         return Abstain("unverified_source_or_mapping")
     if not event.probability_interval_calibrated:
         return Abstain("uncalibrated_interval")
