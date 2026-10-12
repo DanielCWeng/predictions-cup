@@ -147,6 +147,8 @@ def test_acknowledged_zero_fill_counts_in_denominator_not_pnl() -> None:
         "submitted_at": START.isoformat(), "limit_price": "0.40",
         "side": "YES", "action": "buy", "ack_at": START.isoformat(),
         "filled_qty": "0", "fee_paid": "0",
+        "terminal_state": "CANCELLED",
+        "resolved_at": (START + timedelta(seconds=2)).isoformat(),
     }}
     out = evaluate([row], gross_free=Decimal(10), cash_free=Decimal(10))
     trade = next(x for x in out["ledger"] if x["strategy"] == "PASSIVE_SPREAD")
@@ -164,6 +166,8 @@ def test_observed_partial_fill_not_upscaled_to_order_quantity() -> None:
         "side": "YES", "action": "buy", "ack_at": START.isoformat(),
         "fill_at": (START + timedelta(seconds=1)).isoformat(),
         "filled_qty": "0.5", "fill_price": "0.40", "fee_paid": "0.001",
+        "terminal_state": "PARTIAL_CANCELLED",
+        "resolved_at": (START + timedelta(seconds=2)).isoformat(),
     }}
     # We allow fractional PARTIAL fills in historical data, not in order size.
     row["exits"] = {"300": snap(301.2, bid="0.70", ask="0.80")}
@@ -184,6 +188,8 @@ def test_no_hypothetical_fills_after_confirmed_cancel() -> None:
         "fill_at": (START + timedelta(seconds=5)).isoformat(),
         "cancel_ack_at": (START + timedelta(seconds=4)).isoformat(),
         "filled_qty": "1", "fill_price": "0.40", "fee_paid": "0",
+        "terminal_state": "FILLED",
+        "resolved_at": (START + timedelta(seconds=6)).isoformat(),
     }}
     with pytest.raises(ValueError, match="after confirmed cancellation"):
         result(row, "PASSIVE_SPREAD")
@@ -202,7 +208,9 @@ def test_duplicate_order_evidence_rejected_across_episodes() -> None:
              "limit_price": "0.40",
              "side": "YES", "action": "buy", "ack_at": (
                  START + timedelta(minutes=6)).isoformat(),
-             "filled_qty": "0", "fee_paid": "0"}
+             "filled_qty": "0", "fee_paid": "0",
+             "terminal_state": "CANCELLED",
+             "resolved_at": (START + timedelta(minutes=6, seconds=2)).isoformat()}
     a["observed_orders"] = {"PASSIVE_SPREAD": {
         **proof, "ack_at": START.isoformat(), "submitted_at": START.isoformat()}}
     b["observed_orders"] = {"PASSIVE_SPREAD": proof}
@@ -221,6 +229,8 @@ def test_invalid_noncausal_fill_or_book_raises() -> None:
         "side": "YES", "action": "buy", "ack_at": START.isoformat(),
         "fill_at": (START - timedelta(seconds=1)).isoformat(),
         "filled_qty": "1", "fill_price": "0.40", "fee_paid": "0",
+        "terminal_state": "FILLED",
+        "resolved_at": (START + timedelta(seconds=6)).isoformat(),
     }}
     with pytest.raises(ValueError, match="before acknowledgement"):
         result(row, "PASSIVE_SPREAD")
@@ -262,6 +272,8 @@ def test_wrong_journal_candidate_or_limit_fails_closed() -> None:
         "submitted_at": START.isoformat(), "ack_at": START.isoformat(),
         "limit_price": "0.41", "side": "YES", "action": "buy",
         "filled_qty": "0", "fee_paid": "0",
+        "terminal_state": "CANCELLED",
+        "resolved_at": (START + timedelta(seconds=2)).isoformat(),
     }}
     with pytest.raises(ValueError, match="passive limit"):
         result(row, "PASSIVE_SPREAD")
@@ -296,3 +308,25 @@ def test_stale_signal_requires_observed_external_update() -> None:
     row = episode()
     row["features"]["observable_external_update"] = False
     assert result(row, "STALE_QUOTE")["reason"] == "no_qualifying_signal"
+
+
+def test_unresolved_passive_order_locks_capital_not_counted_as_zero_fill() -> None:
+    row = episode()
+    row["observed_orders"] = {"PASSIVE_SPREAD": {
+        "order_id": "unresolved", "provenance": "SIG_EXECUTION_JOURNAL_JOINED",
+        "strategy_id": "PASSIVE_SPREAD", "sig_exchange_id": "101",
+        "submitted_at": START.isoformat(), "ack_at": START.isoformat(),
+        "limit_price": "0.40", "side": "YES", "action": "buy",
+        "filled_qty": "0", "fee_paid": "0",
+    }}
+    out = evaluate([row], gross_free=Decimal(10), cash_free=Decimal(10))
+    item = next(x for x in out["ledger"] if x["strategy"] == "PASSIVE_SPREAD")
+    assert item["status"] == "UNRESOLVED"
+    assert item["reason"] == "unresolved_order_capital_locked"
+    assert out["scorecard"]["PASSIVE_SPREAD"]["observed_passive_fill_probability"] is None
+
+
+def test_after_tournament_lock_never_enters_economic_scenarios() -> None:
+    row = episode()
+    row["decision_at"] = datetime(2026, 11, 4, 17, 0, tzinfo=UTC).isoformat()
+    assert result(row, "DIRECT_FV")["reason"] == "after_tournament_lock"
