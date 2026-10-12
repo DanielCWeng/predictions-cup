@@ -151,6 +151,7 @@ async def _probe(args: argparse.Namespace) -> int:
                      sort_keys=True))
     if args.preflight_only or not admission.permitted:
         return 0 if args.preflight_only else 2
+    assert isinstance(auth, dict)  # successful admission requires a present approval document
     # Never let the run extend beyond the operator's explicit approval.
     duration = min(args.duration, 3600)
     if duration <= 0:
