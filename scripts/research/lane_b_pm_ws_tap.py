@@ -12,6 +12,7 @@ import json
 import os
 import signal
 import time
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -67,10 +68,8 @@ async def _run(args: argparse.Namespace) -> int:
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
+        with suppress(NotImplementedError):
             loop.add_signal_handler(sig, stop.set)
-        except NotImplementedError:
-            pass
     start = time.monotonic()
     trace = Transcript(args.output)
     epoch = 0
@@ -80,7 +79,6 @@ async def _run(args: argparse.Namespace) -> int:
         ) as session:
             while not stop.is_set() and time.monotonic() - start < args.duration:
                 epoch += 1
-                at = datetime.now(UTC).isoformat()
                 try:
                     async with session.ws_connect(str(settings.polymarket_ws_url),
                                                   heartbeat=15) as ws:
