@@ -191,20 +191,28 @@ def _markouts(row: dict[str, Any], *, side: str, shares: Decimal,
 
 
 def _observed_order(raw: dict[str, Any], decision: datetime, side: str,
-                    quantity: Decimal) -> tuple[bool, Decimal, Decimal, Decimal,
+                    quantity: Decimal, *, exchange_id: str, strategy: str,
+                    resting_limit: Decimal) -> tuple[bool, Decimal, Decimal, Decimal,
                                                datetime | None]:
     """Only matched real journal ACKs/fills count in passive calibration."""
     if raw.get("provenance") != "SIG_EXECUTION_JOURNAL_JOINED":
         raise ValueError("unverified passive order source")
-    if raw.get("side") != side or raw.get("action") != "buy" or not raw.get("order_id"):
-        raise ValueError("order is not the same-side SIG BUY")
+    if (raw.get("side") != side or raw.get("action") != "buy"
+            or not raw.get("order_id")
+            or raw.get("strategy_id") != strategy
+            or str(raw.get("sig_exchange_id")) != exchange_id):
+        raise ValueError("journal order not unambiguously matched to candidate")
     ack = _time(raw["ack_at"])
-    if ack < decision:
-        raise ValueError("ack before decision")
+    submitted = _time(raw["submitted_at"])
+    if not decision <= submitted <= ack:
+        raise ValueError("submission/ack chronology invalid")
+    if _amount(raw["limit_price"]) != resting_limit:
+        raise ValueError("passive limit not the decision-time resting quote")
     qty = _amount(raw["filled_qty"])
     price = _amount(raw.get("fill_price", "0"))
     fee = _amount(raw["fee_paid"])
-    if qty < 0 or qty > quantity or fee < 0 or (qty > 0 and not D(0) < price < D(1)):
+    if (qty < 0 or qty > quantity or fee < 0
+            or (qty > 0 and not D(0) < price <= resting_limit)):
         raise ValueError("invalid matched fill")
     filled_at = _time(raw["fill_at"]) if qty > 0 else None
     if filled_at is not None and filled_at < ack:
@@ -312,8 +320,11 @@ def evaluate(rows: list[dict[str, Any]], *, quantity: Decimal = DEFAULT_QTY,
                 if order_id in unique_orders:
                     raise ValueError("reused passive journal order across opportunities")
                 unique_orders.add(order_id)
+                resting_levels = _levels(book, side, False)
+                resting_limit = max(level.price for level in resting_levels)
                 _, shares, paid, fee_paid, fill_at = _observed_order(
-                    proof, decision, side, quantity)
+                    proof, decision, side, quantity, exchange_id=exchange_id,
+                    strategy=strategy, resting_limit=resting_limit)
                 ack_counts[strategy].append(1 if shares > 0 else 0)
                 item["observed_passive_fill"] = bool(shares)
                 if shares == 0:
