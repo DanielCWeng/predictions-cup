@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from predictions_cup.sig.capture import _prune_at_startup, parse_args
 
 
@@ -16,7 +18,7 @@ class StubRecorder:
         self.cutoffs.append(cutoff)
 
 
-def test_startup_pruning_defaults_off(monkeypatch) -> None:
+def test_startup_pruning_defaults_off(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "argv", ["sig.capture"])
     assert parse_args().prune_on_startup is False
     recorder = StubRecorder()
@@ -24,7 +26,7 @@ def test_startup_pruning_defaults_off(monkeypatch) -> None:
     assert recorder.cutoffs == []
 
 
-def test_explicit_startup_pruning_only_with_flag(monkeypatch) -> None:
+def test_explicit_startup_pruning_only_with_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "argv", ["sig.capture", "--prune-on-startup"])
     assert parse_args().prune_on_startup is True
     recorder = StubRecorder()
