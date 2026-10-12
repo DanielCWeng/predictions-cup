@@ -441,7 +441,7 @@ def evaluate(rows: list[dict[str, Any]], *, quantity: Decimal = DEFAULT_QTY,
         status = "INSUFFICIENT_DATA"
         # Hypothetical exits cannot prove positive settled PnL or certify promotion.
         if strategy == "NO_TRADE":
-            status = "REJECTED_AS_ALPHA_CONTROL"
+            status = "CONTROL_ZERO_NEW_TRADE_PNL"
         scorecard[strategy] = {
             "classification": status,
             "candidate_rows": len(selected),
@@ -473,6 +473,7 @@ def evaluate(rows: list[dict[str, Any]], *, quantity: Decimal = DEFAULT_QTY,
                 if scenario else None),
             "day_event_clustered_markout_ci95": interval,
             "measured_realized_net_pnl": None,
+            "baseline_incremental_new_trade_pnl": (0.0 if strategy == "NO_TRADE" else None),
             "expected_net_pnl": None,
             "profit_per_capital_second": None,
             "capacity_ceiling": None,
