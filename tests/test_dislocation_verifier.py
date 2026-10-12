@@ -144,9 +144,6 @@ def _audit(**changes: object):
 def test_signed_candidate_consumes_full_depth_with_separate_orphan_risk() -> None:
     result = _audit(policy=DislocationPolicy(
         slippage_per_share=0.005, latency_loss_per_share=0.005,
-        fee_rate=0.002, minimum_net_edge=0.0,
-    )) if False else _audit(policy=DislocationPolicy(
-        slippage_per_share=0.005, latency_loss_per_share=0.005,
         fee_rate=0.002, min_edge_per_bundle=0.0,
     ))
     assert result.status is AuditStatus.SHADOW_CANDIDATE
