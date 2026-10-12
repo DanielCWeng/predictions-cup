@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """LANE B read-only paired-depth PAPER gate (#220).
 
 Consumes *explicitly provenance-attested* JSONL full-book observations, not live APIs.
@@ -8,11 +9,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation, ROUND_FLOOR
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 
 class InvalidInput(ValueError):
