@@ -56,9 +56,11 @@ def test_pm_source_epoch_and_no_sequence_are_explicit_no_trust() -> None:
     assert result["trusted"] is False
     a.boundary("DISCONNECTED", NOW + timedelta(seconds=1))
     assert len(a.seeded) == 0
-    disconnected = a.receive(delta("YES"), NOW + timedelta(seconds=2))[0]\n    assert disconnected["reason"] == "WEBSOCKET_DISCONNECTED"
+    disconnected = a.receive(delta("YES"), NOW + timedelta(seconds=2))[0]
+    assert disconnected["reason"] == "WEBSOCKET_DISCONNECTED"
     a.boundary("CONNECTED", NOW + timedelta(seconds=3))
-    assert a.receive(delta("YES"), NOW + timedelta(seconds=4))[0]["reason"] == "UNINITIALIZED_DELTA_SUBSCRIBED_UNSEEDED"
+    orphan = a.receive(delta("YES"), NOW + timedelta(seconds=4))[0]
+    assert orphan["reason"] == "UNINITIALIZED_DELTA_SUBSCRIBED_UNSEEDED"
     assert a.report()["counters"]["ignored_delta_SUBSCRIBED_UNSEEDED"] == 2
 
 
