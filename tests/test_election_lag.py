@@ -9,6 +9,7 @@ import pytest
 from predictions_cup.observe.election_lag import (
     Abstain,
     ElectionEvidenceKind,
+    ELECTION_2026_CANDIDATE_CUTOFF_UTC,
     ElectionLagPolicy,
     ElectionProbabilityUpdate,
     LagDirection,
@@ -82,6 +83,7 @@ def _decide(
     return evaluate_election_lag(
         event or _event(), quote or _quote(), capacity or _capacity(),
         now_monotonic_ns=now,
+        now_utc=T + timedelta(seconds=1),
     )
 
 
@@ -182,6 +184,8 @@ def test_contract_fails_on_invalid_data() -> None:
         _event(published_at=datetime(2026, 11, 4))
     with pytest.raises(ValueError, match="ticks"):
         _quote(best_bid_ticks=120, best_ask_ticks=80)
+    with pytest.raises(ValueError, match="ticks"):
+        _quote(best_bid_ticks=80, best_ask_ticks=80)
     with pytest.raises(ValueError, match="capacity"):
         _capacity(cash_available=float("nan"))
 
@@ -200,7 +204,45 @@ def test_policy_validation_and_strict_threshold() -> None:
     assert isinstance(
         evaluate_election_lag(
             _event(), _quote(), _capacity(),
-            now_monotonic_ns=NOW, policy=ElectionLagPolicy(min_net_edge_per_share=0.4),
+            now_monotonic_ns=NOW,
+            now_utc=T + timedelta(seconds=1),
+            policy=ElectionLagPolicy(min_net_edge_per_share=0.4),
         ),
         Abstain,
     )
+
+
+@pytest.mark.parametrize(
+    ("decision_time", "expected"),
+    [
+        (ELECTION_2026_CANDIDATE_CUTOFF_UTC - timedelta(microseconds=1), "CANDIDATE"),
+        (ELECTION_2026_CANDIDATE_CUTOFF_UTC, "competition_closed_for_candidates"),
+        (ELECTION_2026_CANDIDATE_CUTOFF_UTC + timedelta(minutes=1), "competition_closed_for_candidates"),
+        (datetime(2026, 11, 4, 16, 59, 55), "decision_clock_untrusted"),
+        (T - timedelta(milliseconds=1), "decision_before_event_receipt"),
+    ],
+)
+def test_candidate_clock_cutoff_boundary(
+    decision_time: datetime, expected: str
+) -> None:
+    decision = evaluate_election_lag(
+        _event(), _quote(), _capacity(),
+        now_monotonic_ns=NOW,
+        now_utc=decision_time,
+    )
+    if expected == "CANDIDATE":
+        assert isinstance(decision, ShadowLagCandidate)
+    else:
+        assert isinstance(decision, Abstain)
+        assert decision.reason == expected
+
+
+def test_locked_market_never_emits_candidate() -> None:
+    with pytest.raises(ValueError, match="ticks"):
+        evaluate_election_lag(
+            _event(),
+            _quote(best_bid_ticks=80, best_ask_ticks=80),
+            _capacity(),
+            now_monotonic_ns=NOW,
+            now_utc=T + timedelta(seconds=1),
+        )
