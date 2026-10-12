@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -145,11 +144,13 @@ def test_spread_and_cost_destroy_apparent_midpoint_edge() -> None:
     quote = _quote(best_bid_ticks=78, best_ask_ticks=90)
     assert isinstance(_decide(event, quote), Abstain)
     assert isinstance(
-        _decide(policy_event := _event(probability_lower=0.44, probability_upper=0.56)), Abstain
+        _decide(_event(probability_lower=0.44, probability_upper=0.56)), Abstain
     )
 
 
 def test_contract_fails_on_invalid_data() -> None:
+    with pytest.raises(ValueError, match="unsupported"):
+        _event(kind="PRELIMINARY_LEAD")
     with pytest.raises(ValueError, match="probability"):
         _event(probability_lower=0.9, probability_upper=0.5)
     with pytest.raises(ValueError, match="timezone"):
