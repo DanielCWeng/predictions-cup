@@ -163,7 +163,7 @@ def test_critical_feature_clock_and_frozen_schema_guards() -> None:
                       feature().provenance)
     with pytest.raises(ValueError, match="provenance"):
         MinuteFeature("market-1", "pm-yes", T, T, feature().values, "unknown")
-    with pytest.raises(ValueError, match="EXACT"):
+    with pytest.raises(ValueError, match="SAME/COMPLEMENT"):
         ExactPair("m", "pm", "yes", "m", "UNVERIFIED")
     with pytest.raises(ValueError, match="purge"):
         cfg(cooldown_seconds=20)
@@ -210,8 +210,9 @@ def test_no_buy_uses_same_exchange_yes_bid_complement_not_sibling_exchange() -> 
     assert trade["exchange_id"] == "sig-yes"
     assert trade["signed_yes_entry_delta"] == -1
     assert trade["signed_yes_full_close_delta"] == 1
-    # 5m NO bid = 1 - 0.62 = 0.38; NO entry=1-0.50=0.50 => loss
-    assert trade["net_pnl_5m"] < -0.12
+    # Latency: NO ask=1-0.54=0.46; 5m NO bid=1-0.62=0.38.
+    # The matching is on the SAME exchange; fee-adjusted loss is ~-0.08168.
+    assert abs(trade["net_pnl_5m"] - (-0.08168)) < 1e-8
 
 
 def test_no_third_party_winner_cannot_be_mistaken_for_no_exposure() -> None:
