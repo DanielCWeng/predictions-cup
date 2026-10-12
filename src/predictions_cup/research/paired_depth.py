@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation, ROUND_FLOOR
@@ -219,10 +219,14 @@ class PairedPaper:
                  skew_ms: int = 2000, lot_cap: int = 20,
                  sig_fee_per_share: Decimal | None = None,
                  pm_fee_per_share: Decimal | None = None,
-                 stress_per_share: Decimal | None = None) -> None:
+                 stress_per_share: Decimal | None = None,
+                 source_verifier: Callable[[Frame], bool] | None = None) -> None:
         if max_age_ms <= 0 or skew_ms < 0 or lot_cap < 1:
             raise InvalidInput("invalid limits")
         self.specs = specs
+        # Default-deny: a caller-provided trusted=True boolean is never source proof.
+        # Only a separately reviewed source-lifecycle verifier may allow comparison.
+        self.source_verifier = source_verifier
         self.max_age_ms = max_age_ms
         self.skew_ms = skew_ms
         self.lot_cap = lot_cap
@@ -301,6 +305,13 @@ class PairedPaper:
         assert sig is not None and pm is not None
         if abs((sig.received - pm.received).total_seconds()) * 1000 > self.skew_ms:
             row["reason"] = "PAIR_SKEW"
+            return row
+        if (
+            self.source_verifier is None
+            or not self.source_verifier(sig)
+            or not self.source_verifier(pm)
+        ):
+            row["reason"] = "UNVERIFIED_UPSTREAM_SOURCE_PROVENANCE"
             return row
         if any(c is None for c in self.costs):
             row["reason"] = "COSTS_UNKNOWN"
