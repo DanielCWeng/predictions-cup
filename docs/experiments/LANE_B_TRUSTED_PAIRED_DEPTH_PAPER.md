@@ -112,3 +112,8 @@ The recorder may be counted as prospective only when source collection began *be
 - **#201 / tournament:** no inventory-recycling executable close economics may be inferred from missing standalone SIG depth.
 
 **Rollback:** stop only the isolated PAPER tool. Preserve raw source databases, WALs and unrelated systemd services; delete nothing. All output writes are new-file exclusive. `NO_TRADE` and `NOT MEASURED` are intentional first-class research results.
+
+
+### Mandatory upstream trust verifier (13 Oct hardening)
+
+Even a well-formed JSONL row with `trusted:true` is **not** independent source evidence. The offline `PairedPaper` evaluator now defaults to `NO_TRADE:UNVERIFIED_UPSTREAM_SOURCE_PROVENANCE` unless a separately reviewed `source_verifier(Frame)` is injected for both venues. CLI use does **not** install a verifier and therefore does **not** infer positive economic comparability from self-declared booleans. Unit tests deliberately inject an always-true verifier **only for synthetic arithmetic correctness**; their PAPER marks are not empirical alpha. #207 must grade any eventual production-of-evidence verifier, including raw source file hashes, lifecycle/seed state, reconnect gaps, source-revision absence and after-arrival clocks, before it may be supplied to #205/#206/#223.
