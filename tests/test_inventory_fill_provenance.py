@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from runpy import run_path
 from typing import Any
 
 import pytest
-from scripts.research.reconcile_inventory_fills import match_fills
+
+_SCRIPT = Path(__file__).resolve().parents[1] / "scripts/research/reconcile_inventory_fills.py"
+match_fills = run_path(str(_SCRIPT))["match_fills"]
 
 
 def fill(ident: int = 42, order: int = 77) -> dict[str, Any]:
