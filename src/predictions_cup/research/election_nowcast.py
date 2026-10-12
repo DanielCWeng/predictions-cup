@@ -145,6 +145,8 @@ class ShadowCandidate:
     revision_id: str
     source_document_sha256: str
     source_id: str
+    revision_kind: str
+    reported_margin: int
     mode: str = "SHADOW"
     execution_authority: bool = False
 
@@ -166,6 +168,8 @@ class ShadowCandidate:
             "revision_id": self.revision_id,
             "source_document_sha256": self.source_document_sha256,
             "source_id": self.source_id,
+            "revision_kind": self.revision_kind,
+            "reported_margin": self.reported_margin,
             "mode": self.mode,
             "execution_authority": self.execution_authority,
         }
@@ -376,6 +380,8 @@ def make_shadow_candidate(
         revision_id=obs.revision_id,
         source_document_sha256=obs.source_document_sha256,
         source_id=obs.source_id,
+        revision_kind=obs.revision_kind,
+        reported_margin=a_votes - b_votes,
     )
 
 
