@@ -49,6 +49,9 @@ def test_valid_synthetic_b_is_still_unattested_and_no_trades() -> None:
                for x in result["ledger"] if x["strategy"] != "NO_TRADE")
     assert all(s["measured_realized_net_pnl"] is None
                for s in result["scorecard"].values())
+    assert result["scorecard"]["NO_TRADE"]["abstain_count"] == 1
+    assert result["scorecard"]["NO_TRADE"]["baseline_incremental_new_trade_pnl"] == 0.0
+    assert result["scorecard"]["DIRECT_FV"]["candidate_opportunities"] is None
 
 
 @pytest.mark.parametrize(("mutate", "reason"), [
