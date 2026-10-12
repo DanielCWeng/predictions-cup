@@ -16,7 +16,15 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from predictions_cup.replay.model import BookLevel, InstrumentView, ReplayEvent, ReplaySource
+from predictions_cup.replay.model import (
+    BookLevel,
+    HealthPayload,
+    InstrumentView,
+    QuotePayload,
+    ReplayEvent,
+    ReplaySource,
+    TrustPayload,
+)
 from predictions_cup.replay.runner import ReplayRunner
 
 D = Decimal
@@ -249,15 +257,20 @@ def _quote_at(points: list[tuple[datetime, InstrumentView]],
     return v if _valid(v, when, age_ms, sig=sig) else None
 
 
-def _next_quote(points: list[tuple[datetime, InstrumentView]],
-                times: list[datetime], when: datetime, wait_ms: int,
-                age_ms: int) -> tuple[datetime, InstrumentView] | None:
+def _next_quote(
+    points: list[tuple[datetime, InstrumentView]],
+    times: list[datetime], book_ticks: set[datetime],
+    when: datetime, wait_ms: int, age_ms: int,
+) -> tuple[datetime, InstrumentView] | None:
     i = bisect.bisect_left(times, when)
     while i < len(points) and points[i][0] <= when + timedelta(milliseconds=wait_ms):
         t, v = points[i]
         # Fresh actual book observation after the simulated transport latency.
-        if v.quote_observed_at is not None and v.quote_observed_at >= when and _valid(
-            v, t, age_ms, sig=True
+        if (
+            t in book_ticks
+            and v.quote_observed_at is not None
+            and v.quote_observed_at >= when
+            and _valid(v, t, age_ms, sig=True)
         ):
             return t, v
         i += 1
@@ -283,6 +296,7 @@ def evaluate(
     if set(freeze["models"]) != {"baseline", "ofi_challenger"}:
         raise ValueError("unexpected frozen model set")
     tapes: dict[tuple[ReplaySource, str], list[tuple[datetime, InstrumentView]]] = defaultdict(list)
+    book_ticks: dict[tuple[ReplaySource, str], set[datetime]] = defaultdict(set)
     frame_times: list[datetime] = []
     needed = {(ReplaySource.POLYMARKET, p.pm_yes) for p in pair_list}
     needed |= {(ReplaySource.SIG, p.sig_exchange_id) for p in pair_list}
@@ -290,6 +304,14 @@ def evaluate(
     def snapshot(frame: Any) -> None:
         frame_times.append(frame.observed_at)
         touched = {(e.source, e.instrument_id) for e in frame.events}
+        for e in frame.events:
+            key = (e.source, e.instrument_id)
+            if key in needed and isinstance(e.payload, QuotePayload):
+                book_ticks[key].add(frame.observed_at)
+            if e.instrument_id == "*" and isinstance(
+                e.payload, (HealthPayload, TrustPayload)
+            ):
+                touched.update(k for k in needed if k[0] == e.source)
         for key in touched & needed:
             v = frame.state.view(*key)
             if v is not None:
@@ -408,7 +430,9 @@ def evaluate(
             limit = expected_cost / config.quantity
             arrival_at = decision + timedelta(milliseconds=config.latency_ms)
             sig_key = (ReplaySource.SIG, contract)
-            arrival = _next_quote(tapes[sig_key], tape_times.get(sig_key, []),
+            arrival = _next_quote(
+                                  tapes[sig_key], tape_times.get(sig_key, []),
+                                  book_ticks.get(sig_key, set()),
                                   arrival_at, config.max_arrival_wait_ms,
                                   config.max_quote_age_ms)
             if arrival is None:
@@ -432,7 +456,9 @@ def evaluate(
             primary_close_proceeds = D(0)
             for seconds in HORIZONS:
                 target = fill_time + timedelta(seconds=seconds)
-                exit_snapshot = _next_quote(tapes[sig_key], tape_times.get(sig_key, []),
+                exit_snapshot = _next_quote(
+                                            tapes[sig_key], tape_times.get(sig_key, []),
+                                            book_ticks.get(sig_key, set()),
                                             target, config.max_exit_wait_ms,
                                             config.max_quote_age_ms)
                 proceeds = None
