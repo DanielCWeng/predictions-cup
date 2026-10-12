@@ -444,7 +444,12 @@ def evaluate(rows: list[dict[str, Any]], *, quantity: Decimal = DEFAULT_QTY,
             status = "REJECTED_AS_ALPHA_CONTROL"
         scorecard[strategy] = {
             "classification": status,
-            "candidate_opportunities": len(selected),
+            "candidate_rows": len(selected),
+            "candidate_opportunities": None,
+            "abstain_count": sum(x["status"] == "ABSTAIN" for x in selected),
+            "no_fill_count": sum(x["status"] == "NO_FILL" for x in selected),
+            "unresolved_count": sum(x["status"] == "UNRESOLVED" for x in selected),
+            "rejected_count": sum(x["status"] == "REJECTED" for x in selected),
             "signal_count": sum(x["side"] is not None for x in selected),
             "observed_passive_acks": len(ack_counts[strategy]),
             "observed_passive_fill_probability": None,
@@ -477,7 +482,8 @@ def evaluate(rows: list[dict[str, Any]], *, quantity: Decimal = DEFAULT_QTY,
                                for reason in sorted({str(x["reason"]) for x in selected})},
         }
     return {
-        "schema": "lane_c_microstructure_v1",
+        "schema": "lane_c_microstructure_v2",
+        "prospective_kill_rule_file": "data/research/lane_c_falsification_preregistration.json",
         "research_only": True, "execution_authority": False,
         "actual_orders_sent": 0,
         "notional_fee_bps_per_side": float(fee_bps),
