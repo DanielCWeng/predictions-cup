@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable, Sequence
+import time
+from collections import deque
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any, cast
@@ -17,11 +19,21 @@ from predictions_cup.sig.realtime_models import RealtimeTokenDto
 
 Clock = Callable[[], datetime]
 BatchHandler = Callable[[str, object, datetime], Awaitable[None]]
+EventHandler = Callable[[str, str, object, datetime], Awaitable[None]]
 MaintenanceHandler = Callable[[datetime], Awaitable[None]]
 ConnectedHandler = Callable[[], None]
 logger = logging.getLogger(__name__)
 _MAX_PENDING_BROADCASTS = 4_096
 _MAX_PENDING_STATUSES = 1_024
+_METRICS_INTERVAL_SECONDS = 60.0
+_PROCESSING_SAMPLE_LIMIT = 10_000
+
+
+def _percentile(sorted_samples: list[float], quantile: float) -> float:
+    if not sorted_samples:
+        return 0.0
+    index = min(len(sorted_samples) - 1, int((len(sorted_samples) - 1) * quantile))
+    return sorted_samples[index]
 
 
 class SubscriberExit(StrEnum):
@@ -58,7 +70,9 @@ class SupabaseTournamentSubscriber:
         subscribe_timeout_seconds: float = 15.0,
         maintenance_interval_seconds: float = 1.0,
         event_name: str = "market_batch",
+        event_names: Sequence[str] | None = None,
         max_channels_per_connection: int = DEFAULT_MAX_CHANNELS_PER_CONNECTION,
+        market_ids: Iterable[str] | None = None,
         clock: Clock = lambda: datetime.now(UTC),
     ) -> None:
         if (topic is None) == (topics is None):
@@ -80,7 +94,9 @@ class SupabaseTournamentSubscriber:
         if not event_name.strip():
             raise ValueError("event_name must not be blank")
         self._event_name = event_name
+        self._event_names = tuple(dict.fromkeys((event_name, *(event_names or ()))))
         self._max_channels_per_connection = max_channels_per_connection
+        self._market_ids = None if market_ids is None else frozenset(market_ids)
         self._clock = clock
 
     @property
@@ -101,10 +117,14 @@ class SupabaseTournamentSubscriber:
         on_connected: ConnectedHandler,
         stop_event: asyncio.Event,
         on_maintenance: MaintenanceHandler | None = None,
+        on_event: EventHandler | None = None,
+        refetch_metrics: Callable[[], tuple[int, int]] | None = None,
     ) -> SubscriberExit:
-        payload_queue: asyncio.Queue[tuple[str, object, datetime]] = asyncio.Queue(
+        payload_queue: asyncio.Queue[tuple[str, str, object, datetime]] = asyncio.Queue(
             maxsize=_MAX_PENDING_BROADCASTS
         )
+        queue_depth_max = 0
+        processing_seconds: deque[float] = deque(maxlen=_PROCESSING_SAMPLE_LIMIT)
         status_queue: asyncio.Queue[
             tuple[str, RealtimeSubscribeStates, Exception | None]
         ] = asyncio.Queue(
@@ -112,13 +132,48 @@ class SupabaseTournamentSubscriber:
         )
         queue_overflow = asyncio.Event()
         connections: list[tuple[Any, list[Any]]] = []
+        metrics_task: asyncio.Task[None] | None = None
+        metrics_at = time.monotonic() + _METRICS_INTERVAL_SECONDS
 
-        def broadcast_handler(topic: str) -> Callable[[BroadcastPayload], None]:
+        def emit_metrics_if_due(now_monotonic: float) -> None:
+            nonlocal queue_depth_max, metrics_at
+            if now_monotonic < metrics_at:
+                return
+            samples = sorted(processing_seconds)
+            p50 = _percentile(samples, 0.50)
+            p99 = _percentile(samples, 0.99)
+            in_flight, coalesced = (
+                (0, 0) if refetch_metrics is None else refetch_metrics()
+            )
+            logger.info(
+                "SIG Realtime consumer metrics queue_depth_max=%s "
+                "payload_processing_p50_ms=%.3f payload_processing_p99_ms=%.3f "
+                "refetch_in_flight=%s refetch_coalesced=%s samples=%s",
+                queue_depth_max,
+                p50 * 1_000,
+                p99 * 1_000,
+                in_flight,
+                coalesced,
+                len(samples),
+            )
+            queue_depth_max = payload_queue.qsize()
+            processing_seconds.clear()
+            metrics_at = now_monotonic + _METRICS_INTERVAL_SECONDS
+
+        def broadcast_handler(
+            topic: str, event_name: str
+        ) -> Callable[[BroadcastPayload], None]:
             def handle_broadcast(message: BroadcastPayload) -> None:
+                nonlocal queue_depth_max
+                payload = message.get("payload")
+                filtered_payload = self._filter_market_payload(event_name, payload)
+                if filtered_payload is None:
+                    return
                 try:
                     payload_queue.put_nowait(
-                        (topic, message.get("payload"), self._clock())
+                        (topic, event_name, filtered_payload, self._clock())
                     )
+                    queue_depth_max = max(queue_depth_max, payload_queue.qsize())
                 except asyncio.QueueFull:
                     queue_overflow.set()
 
@@ -183,9 +238,11 @@ class SupabaseTournamentSubscriber:
                             channel = client.channel(topic, channel_options)
                             shard_channels.append(channel)
                             batch_pending.add(topic)
-                            await channel.on_broadcast(
-                                self._event_name, broadcast_handler(topic)
-                            ).subscribe(status_handler(topic))
+                            for event_name in self._event_names:
+                                channel = channel.on_broadcast(
+                                    event_name, broadcast_handler(topic, event_name)
+                                )
+                            await channel.subscribe(status_handler(topic))
 
                     deadline = loop.time() + self._subscribe_timeout_seconds
                     while batch_pending:
@@ -222,6 +279,15 @@ class SupabaseTournamentSubscriber:
                 len(connections),
             )
             on_connected()
+
+            async def metrics_monitor() -> None:
+                while True:
+                    await asyncio.sleep(_METRICS_INTERVAL_SECONDS)
+                    emit_metrics_if_due(time.monotonic())
+
+            metrics_task = asyncio.create_task(
+                metrics_monitor(), name="sig-realtime-consumer-metrics"
+            )
 
             refresh_at = self._token.expires_at - self._refresh_margin
             next_maintenance_at = self._clock()
@@ -273,16 +339,62 @@ class SupabaseTournamentSubscriber:
                         return SubscriberExit.DISCONNECTED
 
                 try:
-                    topic, payload, observed_at = await asyncio.wait_for(
+                    topic, event_name, payload, observed_at = await asyncio.wait_for(
                         payload_queue.get(), timeout=0.25
                     )
                 except TimeoutError:
+                    emit_metrics_if_due(time.monotonic())
                     continue
-                await on_batch(topic, payload, observed_at)
+                processing_started = time.monotonic()
+                try:
+                    if event_name == self._event_name:
+                        await on_batch(topic, payload, observed_at)
+                    elif on_event is not None:
+                        await on_event(topic, event_name, payload, observed_at)
+                finally:
+                    processing_seconds.append(time.monotonic() - processing_started)
+                emit_metrics_if_due(time.monotonic())
         finally:
+            if metrics_task is not None:
+                metrics_task.cancel()
+                await asyncio.gather(metrics_task, return_exceptions=True)
             for client, shard_channels in connections:
                 try:
                     for channel in shard_channels:
                         await client.realtime.remove_channel(cast(Any, channel))
                 except Exception:
                     await client.realtime.close()
+
+    def _filter_market_payload(self, event_name: str, payload: object) -> object | None:
+        """Drop known out-of-scope markets before they consume queue capacity.
+
+        Tournament channels carry updates for the full market universe. The maker
+        only needs markets represented by its configured SIG exchange mapping.
+        Malformed payloads pass through so the state engine can trigger its normal
+        authoritative resynchronization path.
+        """
+        if self._market_ids is None or not isinstance(payload, dict):
+            return payload
+
+        if event_name == "markets_batch":
+            markets = payload.get("markets")
+            if not isinstance(markets, list):
+                return payload
+            filtered = [
+                entry
+                for entry in markets
+                if not isinstance(entry, dict)
+                or not isinstance(entry.get("marketId"), str)
+                or entry["marketId"] in self._market_ids
+            ]
+            if not filtered:
+                return None
+            if len(filtered) == len(markets):
+                return payload
+            return {**payload, "markets": filtered}
+
+        if event_name in {"book_dirty", "market_settled"}:
+            market_id = payload.get("marketId")
+            if isinstance(market_id, str) and market_id not in self._market_ids:
+                return None
+        return payload

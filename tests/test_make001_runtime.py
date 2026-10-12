@@ -919,8 +919,10 @@ def test_sig_market_callback_rest_failure_retries_without_kill_or_drain(
         def __init__(self) -> None:
             self.disconnected = False
 
-        def subscription_topics(self, *, exchange_ids: object) -> tuple[str, ...]:
-            del exchange_ids
+        def subscription_topics(
+            self, *, exchange_ids: object, tournament_channel: bool = False
+        ) -> tuple[str, ...]:
+            del exchange_ids, tournament_channel
             return ("market-topic",)
 
         async def handle_raw_batch(
@@ -978,7 +980,7 @@ def test_sig_market_callback_rest_failure_retries_without_kill_or_drain(
             return SubscriberExit.STOPPED
 
     service = MakerService(
-        AppSettings(maker_enabled=True),
+        AppSettings(maker_enabled=True, sig_realtime_tournament_channel_enabled=False),
         explicit_live_invocation=False,
     )
     rest = _Rest()
@@ -1089,8 +1091,10 @@ def test_sig_market_callback_internal_failure_still_kills_and_exits(
         def __init__(self) -> None:
             self.disconnected = False
 
-        def subscription_topics(self, *, exchange_ids: object) -> tuple[str, ...]:
-            del exchange_ids
+        def subscription_topics(
+            self, *, exchange_ids: object, tournament_channel: bool = False
+        ) -> tuple[str, ...]:
+            del exchange_ids, tournament_channel
             return ("market-topic",)
 
         async def handle_raw_batch(
@@ -1138,7 +1142,7 @@ def test_sig_market_callback_internal_failure_still_kills_and_exits(
             raise AssertionError("internal callback failure should escape")
 
     service = MakerService(
-        AppSettings(maker_enabled=True),
+        AppSettings(maker_enabled=True, sig_realtime_tournament_channel_enabled=False),
         explicit_live_invocation=False,
     )
     sig_state = _SigState()

@@ -191,17 +191,52 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                         reason=reason.value,
                     )
                     subscriber = SupabaseTournamentSubscriber(
-                        topics=engine.subscription_topics(),
+                        topics=engine.subscription_topics(
+                            tournament_channel=(
+                                settings.sig_realtime_tournament_channel_enabled
+                            )
+                        ),
                         token=token,
                         token_refresh_margin_seconds=(
                             settings.sig_realtime_token_refresh_margin_seconds
                         ),
+                        event_name=(
+                            "markets_batch"
+                            if settings.sig_realtime_tournament_channel_enabled
+                            else "market_batch"
+                        ),
+                        event_names=(
+                            ("book_dirty", "market_settled")
+                            if settings.sig_realtime_tournament_channel_enabled
+                            else ()
+                        ),
                     )
+
+                    async def on_event(
+                        topic: str,
+                        event_name: str,
+                        payload: object,
+                        observed_at: datetime,
+                    ) -> None:
+                        del topic
+                        await engine.handle_tournament_event(
+                            event_name, payload, observed_at
+                        )
+
+                    async def on_batch(
+                        topic: str, payload: object, observed_at: datetime
+                    ) -> None:
+                        if settings.sig_realtime_tournament_channel_enabled:
+                            await engine.handle_tournament_batches(payload, observed_at)
+                        else:
+                            await engine.handle_raw_batch(topic, payload, observed_at)
+
                     outcome = await subscriber.run(
-                        on_batch=engine.handle_raw_batch,
+                        on_batch=on_batch,
                         on_connected=engine.mark_connected,
                         stop_event=stop_event,
                         on_maintenance=maintenance,
+                        on_event=on_event,
                     )
                 except SigApiError as exc:
                     engine.mark_disconnected()

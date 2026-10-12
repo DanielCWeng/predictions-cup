@@ -28,10 +28,13 @@ class FakeChannel:
         self.is_closed = False
         self.broadcast_callback: BroadcastCallback | None = None
         self.event: str | None = None
+        self.broadcast_callbacks: dict[str, BroadcastCallback] = {}
 
     def on_broadcast(self, event: str, callback: BroadcastCallback) -> Self:
-        self.event = event
+        if self.event is None:
+            self.event = event
         self.broadcast_callback = callback
+        self.broadcast_callbacks[event] = callback
         return self
 
     async def subscribe(self, callback: StatusCallback) -> Self:
@@ -170,6 +173,116 @@ def test_subscriber_uses_account_batch_event_name(
     asyncio.run(scenario())
 
 
+def test_subscriber_registers_and_dispatches_tournament_market_events(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        client = _install_fake_client(monkeypatch, follow_up_status=None)
+        stop_event = asyncio.Event()
+        batches: list[object] = []
+        events: list[tuple[str, object]] = []
+
+        async def stop_on_maintenance(at: datetime) -> None:
+            del at
+            assert client.fake_channel.broadcast_callbacks.keys() == {
+                "markets_batch",
+                "book_dirty",
+                "market_settled",
+            }
+            client.fake_channel.broadcast_callbacks["markets_batch"](
+                {"payload": {"markets": [{"marketId": "26", "batch": {}}]}}
+            )
+            client.fake_channel.broadcast_callbacks["book_dirty"](
+                {"payload": {"exchangeId": "36"}}
+            )
+
+        async def on_batch(topic: str, payload: object, at: datetime) -> None:
+            del topic, at
+            batches.append(payload)
+
+        async def on_event(
+            topic: str, event_name: str, payload: object, at: datetime
+        ) -> None:
+            del topic, at
+            events.append((event_name, payload))
+            stop_event.set()
+
+        subscriber = SupabaseTournamentSubscriber(
+            topic="tournament:cup:markets",
+            token=_token(expires_at=datetime.now(UTC) + timedelta(hours=2)),
+            event_name="markets_batch",
+            event_names=("book_dirty", "market_settled"),
+        )
+        outcome = await subscriber.run(
+            on_batch=on_batch,
+            on_event=on_event,
+            on_connected=lambda: None,
+            stop_event=stop_event,
+            on_maintenance=stop_on_maintenance,
+        )
+
+        assert outcome == SubscriberExit.STOPPED
+        assert batches == [{"markets": [{"marketId": "26", "batch": {}}]}]
+        assert events == [("book_dirty", {"exchangeId": "36"})]
+
+    asyncio.run(scenario())
+
+
+def test_tournament_market_filter_drops_irrelevant_burst_before_queueing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        client = _install_fake_client(monkeypatch, follow_up_status=None)
+        stop_event = asyncio.Event()
+        batches: list[object] = []
+
+        async def publish_burst(_at: datetime) -> None:
+            callback = client.fake_channel.broadcast_callbacks["markets_batch"]
+            for _ in range(_MAX_PENDING_BROADCASTS + 1):
+                callback(
+                    {
+                        "payload": {
+                            "markets": [{"marketId": "unfollowed", "batch": {}}]
+                        }
+                    }
+                )
+            callback(
+                {
+                    "payload": {
+                        "markets": [
+                            {"marketId": "unfollowed", "batch": {}},
+                            {"marketId": "followed", "batch": {"delivery": 1}},
+                        ]
+                    }
+                }
+            )
+
+        async def on_batch(topic: str, payload: object, at: datetime) -> None:
+            del topic, at
+            batches.append(payload)
+            stop_event.set()
+
+        subscriber = SupabaseTournamentSubscriber(
+            topic="tournament:cup:markets",
+            token=_token(expires_at=datetime.now(UTC) + timedelta(hours=2)),
+            event_name="markets_batch",
+            market_ids={"followed"},
+        )
+        outcome = await subscriber.run(
+            on_batch=on_batch,
+            on_connected=lambda: None,
+            stop_event=stop_event,
+            on_maintenance=publish_burst,
+        )
+
+        assert outcome == SubscriberExit.STOPPED
+        assert batches == [
+            {"markets": [{"marketId": "followed", "batch": {"delivery": 1}}]}
+        ]
+
+    asyncio.run(scenario())
+
+
 def test_subscriber_follow_up_error_exits_as_socket_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -289,6 +402,102 @@ def test_broadcast_queue_overflow_exits_for_authoritative_resync(
 
         assert outcome == SubscriberExit.DISCONNECTED
         assert handled == []
+        assert client.realtime.removed is True
+
+    asyncio.run(scenario())
+
+
+def test_relevant_dirty_and_trade_burst_drains_while_rest_is_slow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        client = _install_fake_client(monkeypatch, follow_up_status=None)
+        stop_event = asyncio.Event()
+        processed = 0
+        coalesced = 0
+        rest_calls = 0
+        rest_task: asyncio.Task[None] | None = None
+
+        async def slow_fake_rest() -> None:
+            nonlocal rest_calls
+            rest_calls += 1
+            await asyncio.sleep(2.0)
+
+        def mark_dirty() -> None:
+            nonlocal coalesced, rest_task
+            if rest_task is not None and not rest_task.done():
+                coalesced += 1
+            else:
+                rest_task = asyncio.create_task(slow_fake_rest())
+
+        def flood_relevant_events() -> None:
+            dirty_callback = client.fake_channel.broadcast_callbacks["book_dirty"]
+            trade_callback = client.fake_channel.broadcast_callbacks["markets_batch"]
+            for _index in range(_MAX_PENDING_BROADCASTS // 2):
+                dirty_callback(
+                    {
+                        "payload": {
+                            "exchangeId": "36",
+                            "marketId": "26",
+                            "tournamentId": "cup",
+                            "at": "2026-09-25T14:00:00Z",
+                        }
+                    }
+                )
+                trade_callback(
+                    {
+                        "payload": {
+                            "markets": [
+                                {
+                                    "marketId": "26",
+                                    "batch": {
+                                        "trades": [{"exchangeId": "36", "marketId": "26"}]
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                )
+
+        async def on_batch(topic: str, payload: object, at: datetime) -> None:
+            nonlocal processed
+            assert topic == "tournament:cup:markets"
+            assert isinstance(payload, dict) and payload["markets"]
+            processed += 1
+            if processed == _MAX_PENDING_BROADCASTS:
+                stop_event.set()
+
+        async def on_event(
+            topic: str, event_name: str, payload: object, at: datetime
+        ) -> None:
+            nonlocal processed
+            assert topic == "tournament:cup:markets"
+            assert event_name == "book_dirty"
+            assert isinstance(payload, dict) and payload["exchangeId"] == "36"
+            mark_dirty()
+            processed += 1
+            if processed == _MAX_PENDING_BROADCASTS:
+                stop_event.set()
+
+        subscriber = SupabaseTournamentSubscriber(
+            topic="tournament:cup:markets",
+            token=_token(expires_at=datetime.now(UTC) + timedelta(hours=2)),
+            event_name="markets_batch",
+            event_names=("book_dirty",),
+        )
+        outcome = await subscriber.run(
+            on_batch=on_batch,
+            on_event=on_event,
+            on_connected=flood_relevant_events,
+            stop_event=stop_event,
+        )
+        if rest_task is not None:
+            await rest_task
+
+        assert outcome == SubscriberExit.STOPPED
+        assert processed == _MAX_PENDING_BROADCASTS == 4096
+        assert coalesced > 0
+        assert rest_calls >= 1
         assert client.realtime.removed is True
 
     asyncio.run(scenario())
