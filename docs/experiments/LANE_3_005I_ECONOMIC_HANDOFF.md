@@ -109,3 +109,10 @@ empirical fill probability unavailable, executable net PnL unavailable,
 economic confidence lower bound unavailable. These fixes correct the
 offline apparatus but do not confer strategy profitability or readiness
 for LIVE. The draft PR must receive independent regrade before merge.
+
+
+## IOC marginal-price remediation (integration follow-up)
+
+An economically favourable **depth-weighted entry VWAP** is not a legal per-share IOC limit. For each proposed whole-share order, the evaluator now computes the highest **marginal** buy price required at the decision-time displayed book (after the declared depth haircut); the simulated IOC uses that price at the first independent post-latency book. Cash capacity reserves the worst-case order limit times share quantity plus entry fees, instead of only the favourable decision VWAP. Actual arrival-depth quantities, executed total cost and VWAP are rewalked at that placeable limit. A later adverse yet inside-limit fill is **counted**, not selectively rejected using future economics. Multi-level, moving-depth, same-VWAP/different-limit, NO complementary and insufficient-cash fixtures prevent the earlier false-negative and reserve-understatement mistakes.
+
+The depth haircut can produce fractional *hypothetical* visible capacity even though real SIG orders must use integer shares; hypothetical touch fills remain unobserved execution scenarios. There is still **no prospective paired SIG/PM economic sample or measured realised PnL**. This remediation changes research arithmetic only; do not register it as a LIVE strategy.
