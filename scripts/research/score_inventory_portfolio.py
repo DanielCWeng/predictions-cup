@@ -17,6 +17,10 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from predictions_cup.research.inventory_decisions import (
+    action_economics,
+    rank_by_incremental_final_value,
+)
 from predictions_cup.research.inventory_portfolio import (
     build_ledger,
     dec,
@@ -39,6 +43,9 @@ def main() -> None:
     p.add_argument("--gross-cap", type=Decimal)
     p.add_argument("--gross-cap-source")
     p.add_argument("--scenarios", type=Path)
+    p.add_argument("--independent-forecasts", type=Path)
+    p.add_argument("--settlement-certificates", type=Path)
+    p.add_argument("--validated-redeployment", type=Path)
     p.add_argument("--max-age-seconds", default=8, type=int)
     args = p.parse_args()
     if args.gross_cap is not None and not args.gross_cap_source:
@@ -50,6 +57,29 @@ def main() -> None:
     as_of = args.as_of or snapshot["ended"]
     ledger = build_ledger(snapshot, books, evaluated_at=as_of,
                           max_age_seconds=args.max_age_seconds)
+    forecasts = (
+        json.loads(args.independent_forecasts.read_text())
+        if args.independent_forecasts else {}
+    )
+    certificates = (
+        json.loads(args.settlement_certificates.read_text())
+        if args.settlement_certificates else {}
+    )
+    redeployments = (
+        json.loads(args.validated_redeployment.read_text())
+        if args.validated_redeployment else {}
+    )
+    economic_actions = [
+        action_economics(
+            p, books.get(str(p["exchange_id"])),
+            forecast=forecasts.get(str(p["exchange_id"])),
+            settlement=certificates.get(str(p["exchange_id"])),
+            redeployment=redeployments.get(str(p["exchange_id"])),
+            evaluated_at=as_of,
+        )
+        for p in snapshot["positions"]
+    ]
+    ev_ranking = rank_by_incremental_final_value(economic_actions)
     pairs = paired_review(ledger, books, evaluated_at=as_of)
     marked = sum((dec(x["market_value"]) for x in ledger), Decimal("0"))
     basis = sum((dec(x["cost_basis"]) for x in ledger), Decimal("0"))
@@ -113,7 +143,13 @@ def main() -> None:
         "outstanding_orders": len(orders),
         "full_depth_and_fresh_book_count": fresh,
         "total_simultaneously_executable_cash": None,
-        "ranking_by_incremental_expected_benefit": "BLOCKED_INDEPENDENT_FV_AND_REDEPLOYMENT",
+        "ranking_by_incremental_expected_benefit": (
+            "CONDITIONAL_ONLY_REVIEW_REQUIRED"
+            if ev_ranking["top_ten_ev_review_only"]
+            else "BLOCKED_INDEPENDENT_FV_SETTLEMENT_AND_FRESH_LIQUIDITY"
+        ),
+        "top_10_conditional_incremental_EV": ev_ranking["top_ten_ev_review_only"],
+        "unrankable_economic_action_count": len(ev_ranking["unrankable"]),
         "screening_top_10_NOT_EV_RANKED": queue[:10],
         "scenario": scenario,
         "no_order_I_O": True,
@@ -123,6 +159,7 @@ def main() -> None:
     args.out.chmod(0o700)
     put(args.out / "ledger.json", ledger)
     put(args.out / "paired_proposals.json", pairs)
+    put(args.out / "economic_action_evaluations.json", economic_actions)
     put(args.out / "review_queue.json", queue)
     put(args.out / "summary.json", report)
     with (args.out / "ledger.csv").open("w", newline="") as f:
