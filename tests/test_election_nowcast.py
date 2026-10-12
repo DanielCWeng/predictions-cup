@@ -265,9 +265,13 @@ def test_swapped_counts_with_original_receipt_must_abstain() -> None:
     swapped = replace(obs, reported_choices=(replace(A, votes=5000), replace(B, votes=5100)))
     with pytest.raises(Abstain, match="receipt"):
         calculate(swapped, evidence=original_evidence)
-    # Even if adapter also lies about its digest, archive bytes bind the true columns.
-    with pytest.raises(Abstain, match="raw revision"):
+    # Even if an adapter changes the reported digest, old archived bytes disagree.
+    with pytest.raises(Abstain, match="receipt"):
         calculate(bind_payload(swapped), evidence=original_evidence)
+    with pytest.raises(Abstain, match="receipt"):
+        calculate(obs, evidence=replace(
+            original_evidence, extracted_choices=swapped.reported_choices
+        ))
 
 
 def test_third_party_votes_never_ignored_silently() -> None:
