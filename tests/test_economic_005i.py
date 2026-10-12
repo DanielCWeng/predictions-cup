@@ -17,6 +17,7 @@ from predictions_cup.replay.economic_005i import (
 )
 from predictions_cup.replay.model import (
     BookLevel,
+    HealthPayload,
     QuotePayload,
     ReplayEvent,
     ReplayEventType,
@@ -272,3 +273,42 @@ def test_no_partial_close_keeps_signed_residual_and_cost_capital_locked() -> Non
 def test_sig_order_quantities_are_whole_shares() -> None:
     with pytest.raises(ValueError, match="whole shares"):
         cfg(quantity=D("1.5"))
+
+
+def test_sig_untrusted_global_transition_after_book_blocks_entry() -> None:
+    original = list(tape())
+    at = T + timedelta(milliseconds=50)
+    original.append(ReplayEvent(
+        observed_at=at, source_at=None,
+        source=ReplaySource.SIG, event_type=ReplayEventType.TRUST,
+        instrument_id="*", market_id=None, sequence=99,
+        payload=TrustPayload(trusted=False, transition="UNTRUSTED_REVISION_GAP"),
+    ))
+    out = evaluate(original, [feature()], [pair()], cfg(), freeze())
+    assert out["results"]["REVERSAL"]["qualified_orders"] == 0
+
+
+def test_pm_feed_disconnect_blocks_asof_mid_even_without_book_change() -> None:
+    original = list(tape())
+    at = T + timedelta(milliseconds=50)
+    original.append(ReplayEvent(
+        observed_at=at, source_at=None,
+        source=ReplaySource.POLYMARKET, event_type=ReplayEventType.HEALTH,
+        instrument_id="*", market_id=None, sequence=99,
+        payload=HealthPayload(available=False, detail="gap"),
+    ))
+    out = evaluate(original, [feature()], [pair()], cfg(), freeze())
+    assert out["results"]["REVERSAL"]["qualified_orders"] == 0
+
+
+def test_health_recovery_event_alone_cannot_mint_a_tradeable_book_tick() -> None:
+    original = list(tape())
+    at = T + timedelta(milliseconds=150)
+    original.append(ReplayEvent(
+        observed_at=at, source_at=None,
+        source=ReplaySource.SIG, event_type=ReplayEventType.HEALTH,
+        instrument_id="*", market_id=None, sequence=99,
+        payload=HealthPayload(available=False, detail="gap"),
+    ))
+    out = evaluate(original, [feature()], [pair()], cfg(), freeze())
+    assert out["results"]["REVERSAL"]["touch_fill_upper_bound"] == 0
