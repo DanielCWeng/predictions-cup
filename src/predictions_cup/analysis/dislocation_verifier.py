@@ -553,7 +553,7 @@ def audit_opportunity(
     # Only prices on the exact integral-share lattice are admissible. The
     # underlying structural optimizer is continuous and can find a fractional
     # optimum: snap DOWN, rewalk all full-depth asks, and fully recalculate.
-    lots = math.floor(budget / share_lot + 1e-10)
+    lots = math.floor(budget / share_lot)
     if lots < 1:
         return emit(AuditStatus.REJECTED, "NO_WHOLE_SHARE_BUNDLE")
     while lots > 0:
@@ -573,8 +573,8 @@ def audit_opportunity(
             certificate.certificate_status is not StructuralStatus.EXECUTABLE_VIOLATION
         ):
             return emit(AuditStatus.NO_EDGE, certificate.certificate_status.value)
-        if certificate.available_size + 1e-9 < feasible_size:
-            next_lots = math.floor(certificate.available_size / share_lot + 1e-10)
+        if certificate.available_size < feasible_size:
+            next_lots = math.floor(certificate.available_size / share_lot)
             lots = min(lots - 1, next_lots)
             continue
         if (
