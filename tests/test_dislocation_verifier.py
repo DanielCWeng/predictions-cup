@@ -429,7 +429,7 @@ def test_near_threshold_fee_edge_and_cutoff_headroom() -> None:
     near = datetime(2026, 11, 4, 16, 59, 54, 950000, tzinfo=UTC)
     rel, quotes, doc, review, event, capital = _setup()
     fresh = {name: replace(receipt, book=replace(
-        receipt.book, observed_at=near - timedelta(milliseconds=80),
+        receipt.book, observed_at=near - timedelta(milliseconds=120),
     )) for name, receipt in quotes.items()}
     event = replace(
         event, published_at=near - timedelta(milliseconds=400),
