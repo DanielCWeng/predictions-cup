@@ -11,6 +11,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from predictions_cup.replay.economic_005i import EconomicConfig, ExactPair, MinuteFeature, evaluate
+from predictions_cup.replay.features_005i import causal_minute_features
 from predictions_cup.replay.loaders import CaptureSelection, load_polymarket_capture, load_sig_capture
 
 
@@ -25,7 +26,7 @@ def run() -> int:
     parser = argparse.ArgumentParser(description="Offline 005I net-economics research ONLY")
     parser.add_argument("--sig-db", type=Path, required=True)
     parser.add_argument("--pm-capture", type=Path, required=True)
-    parser.add_argument("--features", type=Path, required=True)
+    parser.add_argument("--features", type=Path, help="Optional externally audited causal minute tape; omitted => derive strictly from capture")
     parser.add_argument("--pairs", type=Path, required=True)
     parser.add_argument("--freeze", type=Path, default=Path("data/experiments/experiment_005i/OFI_TRAIN_MODEL_FREEZE.json"))
     parser.add_argument("--output", type=Path, required=True)
@@ -47,22 +48,9 @@ def run() -> int:
     if args.mode == "prospective" and args.start.date().isoformat() < "2026-10-12":
         parser.error("prospective PAPER must start no earlier than October 12")
     pairs = [ExactPair(**item) for item in json.loads(args.pairs.read_text())]
-    rows = []
-    with args.features.open() as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            item = json.loads(line)
-            item["minute_end"] = parse_time(item["minute_end"])
-            item["available_at"] = parse_time(item["available_at"])
-            row = MinuteFeature(**item)
-            if not (args.start <= row.available_at < args.end):
-                continue
-            if "2026-09-21" <= row.minute_end.date().isoformat() <= "2026-09-28":
-                raise ValueError("sealed HOLDOUT minute refused")
-            rows.append(row)
     selection = CaptureSelection(
-        start_at=args.start, end_at=args.end,
+        start_at=args.start - __import__("datetime").timedelta(minutes=8),
+        end_at=args.end,
         sig_exchange_ids=tuple(sorted({x for p in pairs for x in (p.sig_yes, p.sig_no)})),
         polymarket_token_ids=tuple(sorted({p.pm_yes for p in pairs})),
     )
@@ -70,6 +58,24 @@ def run() -> int:
         *load_sig_capture(args.sig_db, selection=selection),
         *load_polymarket_capture(args.pm_capture, selection=selection),
     )
+    if args.features is None:
+        rows = list(causal_minute_features(
+            events, pm_token_ids={p.pm_yes for p in pairs},
+        ))
+    else:
+        rows = []
+        with args.features.open() as fh:
+            for line in fh:
+                if not line.strip():
+                    continue
+                item = json.loads(line)
+                item["minute_end"] = parse_time(item["minute_end"])
+                item["available_at"] = parse_time(item["available_at"])
+                rows.append(MinuteFeature(**item))
+    rows = [row for row in rows if args.start <= row.available_at < args.end]
+    if any("2026-09-21" <= row.minute_end.date().isoformat() <= "2026-09-28"
+           for row in rows):
+        raise ValueError("sealed HOLDOUT minute refused")
     result = evaluate(
         events, rows, pairs,
         EconomicConfig(
@@ -83,7 +89,8 @@ def run() -> int:
     result["input_window"] = {"start": args.start.isoformat(), "end": args.end.isoformat()}
     result["input_provenance"] = {
         "sig_db": str(args.sig_db), "pm_capture": str(args.pm_capture),
-        "features": str(args.features), "pairs": str(args.pairs),
+        "features": "FROM_REPLAY_EVENTS" if args.features is None else str(args.features),
+        "pairs": str(args.pairs),
         "freeze": str(args.freeze),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
