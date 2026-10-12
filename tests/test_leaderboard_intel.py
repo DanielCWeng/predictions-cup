@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from typing import Any
 
 import pytest
 
@@ -14,7 +15,7 @@ from predictions_cup.analysis.leaderboard_intel import (
 )
 
 
-def sample() -> dict:
+def sample() -> dict[str, Any]:
     return {
         "period": "all", "limit": 25, "offset": 0, "total": 1467,
         "leaderboard": [
@@ -28,7 +29,9 @@ def sample() -> dict:
     }
 
 
-def norm(payload=None, when="2026-10-12T20:20:00Z"):
+def norm(
+    payload: dict[str, Any] | None = None, when: str = "2026-10-12T20:20:00Z"
+) -> list[dict[str, str]]:
     return normalize_official_payload(
         sample() if payload is None else payload,
         observed_at=when,
@@ -36,7 +39,7 @@ def norm(payload=None, when="2026-10-12T20:20:00Z"):
     )
 
 
-def test_roundtrip_decimal_and_missing_volume():
+def test_roundtrip_decimal_and_missing_volume() -> None:
     rows = norm()
     assert rows[0]["pnl_wire"] == "941965.08"
     assert rows[0]["start_bankroll_return_pct"] == "941.96508"
@@ -51,14 +54,14 @@ def test_roundtrip_decimal_and_missing_volume():
     ("tradesCount", -1), ("rank", 0), ("profileId", ""),
     ("roi", None),
 ])
-def test_fail_closed_malformed_rows(field, value):
+def test_fail_closed_malformed_rows(field: str, value: object) -> None:
     payload = sample()
     payload["leaderboard"][0][field] = value
     with pytest.raises(ValueError):
         norm(payload)
 
 
-def test_duplicate_profile_rejected_but_tied_ranks_allowed():
+def test_duplicate_profile_rejected_but_tied_ranks_allowed() -> None:
     payload = sample()
     payload["leaderboard"][1]["rank"] = 1
     assert len(norm(payload)) == 2
@@ -67,7 +70,7 @@ def test_duplicate_profile_rejected_but_tied_ranks_allowed():
         norm(payload)
 
 
-def test_wrong_page_and_naive_capture_rejected():
+def test_wrong_page_and_naive_capture_rejected() -> None:
     for k, v in [("period", "weekly"), ("limit", 101), ("offset", -1), ("total", 1)]:
         bad = sample()
         bad[k] = v
@@ -77,7 +80,7 @@ def test_wrong_page_and_naive_capture_rejected():
         norm(when="2026-10-12T20:20:00")
 
 
-def test_window_is_not_start_bankroll_return():
+def test_window_is_not_start_bankroll_return() -> None:
     payload = sample()
     payload["period"] = "1d"
     assert norm(payload)[0]["start_bankroll_return_pct"] == ""
@@ -85,7 +88,7 @@ def test_window_is_not_start_bankroll_return():
         compare_cumulative_snapshots(norm(payload), norm())
 
 
-def test_change_requires_future_same_period_and_identity():
+def test_change_requires_future_same_period_and_identity() -> None:
     before = norm()
     after_payload = copy.deepcopy(sample())
     after_payload["leaderboard"][0]["pnl"] = "941970.08"
@@ -98,8 +101,8 @@ def test_change_requires_future_same_period_and_identity():
         compare_cumulative_snapshots(after, before)
 
 
-def test_scenarios_strict_podium_and_mean_tail():
-    spec = {
+def test_scenarios_strict_podium_and_mean_tail() -> None:
+    spec: dict[str, Any] = {
         "third_place_thresholds": [
             {"value": 300000, "probability": "0.5"},
             {"value": 1000000, "probability": "0.5"},
@@ -119,7 +122,7 @@ def test_scenarios_strict_podium_and_mean_tail():
         score_tournament_scenarios(spec)
 
 
-def test_required_turnover_and_sanity_checks():
+def test_required_turnover_and_sanity_checks() -> None:
     assert required_volume(profit_gap="765000", net_profit_per_volume="0.02") == 38250000
     for bad in ["0", "-0.1", "NaN", "1.1"]:
         with pytest.raises(ValueError):
