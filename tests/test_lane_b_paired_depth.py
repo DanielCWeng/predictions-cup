@@ -1,16 +1,17 @@
+# ruff: noqa: E501
 """Adversarial, no-network tests for Lane B's PAPER data-quality boundary."""
 from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
 
 from predictions_cup.research.paired_depth import InvalidInput, PairedPaper, Spec, load_specs
 
-T = datetime(2026, 10, 12, 20, 0, tzinfo=timezone.utc)
+T = datetime(2026, 10, 12, 20, 0, tzinfo=UTC)
 D = Decimal
 
 
