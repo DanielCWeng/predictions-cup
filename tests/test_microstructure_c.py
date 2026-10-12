@@ -27,10 +27,13 @@ def episode(*, side: str = "YES") -> dict[str, Any]:
     row: dict[str, Any] = {
         "episode_id": "e-1", "event_id": "evt-1", "sig_exchange_id": "101",
         "decision_at": START.isoformat(),
+        "features_available_at": START.isoformat(),
+        "feature_window_end": START.isoformat(),
         "exact_mapping_verified": True, "paired_depth_trusted": True,
         "mapping_direction": "SAME",
         "features": {"pm_minus_sig": 0.10 if side == "YES" else -0.10,
-                     "verified_source_lag": True, "reference_orientation": "SIG_YES",
+                     "verified_source_lag": True, "observable_external_update": True,
+                     "reference_orientation": "SIG_YES",
                      "imbalance": 0.7,
                      "spread": 0.20, "aggressive_trade_sign": -1,
                      "replenishment": 0.9, "short_discovery": 0.1,
@@ -279,3 +282,17 @@ def test_depth_compression_and_high_volatility_are_not_assumed_robust() -> None:
     # Spread compression kills passive signal rather than imputing historic fills.
     row["features"]["spread"] = 0.02
     assert result(row, "PASSIVE_SPREAD")["reason"] == "no_qualifying_signal"
+
+
+def test_future_feature_window_cannot_be_traded() -> None:
+    row = episode()
+    row["features_available_at"] = (START + timedelta(seconds=1)).isoformat()
+    assert result(row, "DIRECT_FV")["reason"] == "feature_lookahead"
+    row.pop("features_available_at")
+    assert result(row, "DIRECT_FV")["reason"] == "feature_clock_missing_or_invalid"
+
+
+def test_stale_signal_requires_observed_external_update() -> None:
+    row = episode()
+    row["features"]["observable_external_update"] = False
+    assert result(row, "STALE_QUOTE")["reason"] == "no_qualifying_signal"
