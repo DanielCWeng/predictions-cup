@@ -31,11 +31,13 @@ def _event(**kwargs: object) -> ElectionProbabilityUpdate:
         published_at=T,
         received_at=T + timedelta(milliseconds=100),
         received_monotonic_ns=NOW - 200_000_000,
+        clock_domain="maker-process-1",
         probability_lower=0.80,
         probability_upper=0.90,
         kind=ElectionEvidenceKind.VERIFIED_MEDIA_CALL,
         source_verified=True,
         exact_mapping_verified=True,
+        sig_yes_payoff_verified=True,
         probability_interval_calibrated=True,
     )
     defaults.update(kwargs)
@@ -47,6 +49,7 @@ def _quote(**kwargs: object) -> SigExecutableTop:
         exchange_id="sig-123",
         market_id="market-456",
         observed_monotonic_ns=NOW - 100_000_000,
+        clock_domain="maker-process-1",
         best_bid_ticks=78,
         best_ask_ticks=80,
         bid_shares=100,
@@ -124,10 +127,15 @@ def test_cash_and_depth_limits_are_not_fictitious() -> None:
         ),
         (_event(source_verified=False), _quote(), _capacity(), "unverified_source_or_mapping"),
         (
+            _event(sig_yes_payoff_verified=False), _quote(), _capacity(),
+            "unverified_source_or_mapping",
+        ),
+        (
             _event(probability_interval_calibrated=False), _quote(), _capacity(),
             "uncalibrated_interval",
         ),
         (_event(market_id="wrong"), _quote(), _capacity(), "identity_mismatch"),
+        (_event(clock_domain="east-host"), _quote(), _capacity(), "incomparable_monotonic_clocks"),
         (_event(received_monotonic_ns=NOW + 1), _quote(), _capacity(), "future_observation"),
         (_event(received_monotonic_ns=0), _quote(), _capacity(), "event_stale"),
         (
