@@ -284,6 +284,6 @@ def test_trade_lock_negative_payoff_and_signature_tamper() -> None:
     assert candidate.structural is not None
     tampered = replace(
         candidate,
-        structural=replace(candidate.structural, fee_rate=0.0),
+        structural=replace(candidate.structural, fee_rate=0.5),
     )
     assert not verify_signature(tampered, KEY)
