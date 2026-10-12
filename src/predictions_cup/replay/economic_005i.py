@@ -9,12 +9,12 @@ import bisect
 import hashlib
 import math
 import random
-import statistics
 from collections import defaultdict
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from predictions_cup.replay.model import InstrumentView, ReplayEvent, ReplaySource
 from predictions_cup.replay.runner import ReplayRunner
@@ -128,9 +128,7 @@ def _valid(view: InstrumentView | None, at: datetime, age_ms: int, *, sig: bool)
         return False
     if not (D(0) <= view.best_bid < view.best_ask <= D(1)):
         return False
-    if not view.bids or not view.asks:
-        return False
-    return True
+    return bool(view.bids and view.asks)
 
 
 def _walk(levels: Iterable[Any], qty: Decimal, *, buy: bool, haircut: Decimal) -> Decimal | None:
@@ -188,7 +186,8 @@ def _quote_at(points: list[tuple[datetime, InstrumentView]],
 
 
 def _next_quote(points: list[tuple[datetime, InstrumentView]],
-                when: datetime, wait_ms: int, age_ms: int) -> tuple[datetime, InstrumentView] | None:
+                when: datetime, wait_ms: int, age_ms: int
+                ) -> tuple[datetime, InstrumentView] | None:
     times = [p[0] for p in points]
     i = bisect.bisect_left(times, when)
     while i < len(points) and points[i][0] <= when + timedelta(milliseconds=wait_ms):
@@ -348,7 +347,8 @@ def evaluate(
                 if exit_snapshot is not None:
                     proceeds = _walk(exit_snapshot[1].bids, config.quantity, buy=False,
                                      haircut=config.depth_haircut)
-                pnl = None if proceeds is None else proceeds - filled_cost - entry_fee - proceeds * fee
+                pnl = (None if proceeds is None else
+                       proceeds - filled_cost - entry_fee - proceeds * fee)
                 marks[str(seconds)] = _as_float(pnl)
                 if seconds == 300:
                     pnl_5m = pnl
