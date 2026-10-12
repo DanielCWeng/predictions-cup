@@ -94,3 +94,59 @@ Under stipulated assumptions, maximizing expected bankroll can conflict with max
 - Master #201: observe rather than copy leaderboard; only fund prospects with prospective positive after-cost evidence.
 
 **Research status:** dataset = 25 *rounded web display* rows and 3 precise *prior API issue* rows; cross-snapshot change and 1d/7d numerics NOT_OBSERVABLE; account DMM NOT VERIFIED; current account not freshly polled; validated economic alpha **none**; LIVE orders **zero**; no production changes.
+
+
+## Master-review closure — 13 October 2026
+
+### What the source **defines** versus what remains unknown
+
+| Quantity | Supported statement | What is NOT independently verified |
+|---|---|---|
+| Initial tournament bankroll | Each contestant starts with **100,000** SUSQies; one trade required to be ranked. Source: https://sig.thesuper.market/docs/tournaments-and-organizations | Different starting balances for top accounts (do **not** assume) |
+| **Terminal official ranking** | Ranking after **all** markets settle is by **final SUSQie balance**; outstanding markets may settle later and ties split prize pools. Sources: https://sig.thesuper.market/docs/tournaments-and-organizations and https://sig.thesuper.market/docs/settlement-and-payouts | Forecast terminal third-place threshold |
+| **Interim PnL / value** | Public portfolio shows available balance, **current position value** and daily gains/losses; 2 Oct SIG changelog says admin standings are ranked by account value. Own authorised `PortfolioPnlDto` has `realizedPnl`, `unrealizedPnl`, `totalAccountValue` and `totalHoldingsValue` as separate fields; public leaderboard `LeaderboardEntryDto` only has `pnl`, `roi`, `volume`, `tradesCount`, `winRate` and rank. Sources: https://sig.thesuper.market/docs/portfolio-and-leaderboards and https://sig.thesuper.market/docs/changelog?page=2 and repository `src/predictions_cup/sig/{trading_dto,realtime_models}.py` | **Exact server formula** for interim leaderboard PnL; mark source on sparse books; quantity of top accounts' **realised** or **unrealised** profits. Since held positions have current marks, mark-to-market gains **can plausibly dominate**, but no competitor attribution is possible |
+| **ROI and reported volume** | Participant response exposes named numeric fields `roi` and `volume`; descriptive PnL/volume is mathematically computable for nonzero volume | ROI percent-vs-fraction display contract; whether volume is one-sided/two-sided, notional vs shares, includes maker-side entries or netted reversals; realised profitability per volume; filled gross cash turnover. Until documented, do not equate reported volume to account capital churn |
+| **Competitor behaviour** | Public aggregate rank, PnL, count, volume and selected profile summary fields | Private orders, inventory, execution timestamps/price/role, strategy, market exposures, queue priority and personal account entitlements: **NOT OBSERVABLE** |
+
+Do not promote conditional `(reported PnL / 100,000) × 100` or `PnL / volume` to the vendor's officially specified ROI or realised execution edge. Avoid using the public site to automate private-profile or website-internal endpoints. Verified winning-share terminal payout is 1 SUSQie/share; cancellations/refunds may differ, and partial settlements mean displayed marks are not final bankroll.
+
+### Precise, zero-extra-request DMM entitlement check
+
+1. Inventory **already-authorised own-account** records, previously retained profile/tier/config responses and signed organiser correspondence for a **directly attributable DMM/account-level designation**. Keep credentials private; record source, date, account matching method and entitlement evidence only. Do not treat a configuration string `DMM` or higher local governor limit as proof of venue entitlement.
+2. Check the *existing* participant account UI if it already displays an explicit DMM designation, or any documented API response already in local logs expressly declaring the **account** tier. A rate-limit response/header or absence of HTTP 429 is not proof by itself. No fresh authenticated API reads required for this handoff.
+3. If no unambiguous signed-in entitlement exists, request **written confirmation from SIG support/organisers** of whether the specific tournament participant account has DMM status, effective date, read/write limits, execution privileges and any programme obligations. Do not submit private API keys. A public changelog states **standard 100 reads +30 writes/min, designated DMM 600/200**, **shared across keys**, but establishes no rights for *our* account: https://sig.thesuper.market/docs/changelog?page=2.
+4. Default all plans to the standard shared budget, no special fees/priority or additional order features. **Do not load test, 429 probe, spawn extra credentials, switch keys, poll website internals or change the LIVE governor** to infer entitlement.
+
+### Bounded permitted snapshots: offline runbook (not deployed)
+
+The existing `OBSERVE-001` competition_context stream is the first source. Research may only consume already-captured, participant-permitted `/api/v1/tournaments/{slug}/leaderboard` JSON. The offline CLI enforces an official endpoint URL *shape*, stamps user-supplied timezone-aware receipt time, retains a SHA256 of input **raw bytes**, persists normalized fields and **refuses to overwrite** output CSV. It cannot attest how raw bytes were originally obtained and cannot prove that the declared source URL is authentic; the capture operator must retain original immutable JSON and its transport/credential-scope provenance outside GitHub when appropriate. The prior three issue #221 rows are **transcriptions**, not full raw official payloads. The top-25 rounded **website** table is not valid `--official-json` input.
+
+Example, **only when a captured file already exists** (no API request is made by this command):
+
+```bash
+PYTHONPATH=src python -m predictions_cup.analysis.leaderboard_intel \
+  --official-json /safe/read_only/previously_captured_official_all.json \
+  --observed-at 2026-10-13T00:00:00Z \
+  --source-url 'https://sig.thesuper.market/api/v1/tournaments/ACTUAL_SLUG/leaderboard?period=all&limit=25&offset=0' \
+  --csv-out /safe/read_only/leaderboard_all_20261013T000000Z.csv
+```
+
+The `--observed-at` timestamp above is a **placeholder**, never reuse it as observed evidence: use the real capture timestamp only. For actual new daily collection, require source-authorised cadence and approved **residual aggregate account budget** first; otherwise **no new capture**. If authorised, cap at one top-25 request per period per day (all/1d/7d only where necessary); log actual UTC receive time, request parameters, response SHA, client SHA, status/429, page/period and total; do not capture hidden profiles; never infer true daily realised PnL from a change in displayed marks. No new SIG API call occurred in this lane.
+
+### Tournament terminal-settlement and competitor-correlation sensitivity
+
+The model in `hypothetical_scenarios.json` is a **discrete hypothetical illustration only** with independent terminal competitor third-place thresholds of 300k (10%), 700k (25%), 900k (35%) and 1.4m (30%). It does **not** estimate likely competitor settlements. Illustrative own "EV-focused" final values are 100k (30%), 500k (40%) and 900k (30%), expected 500k; the extreme unvalidated "tail" values are 0 (76%) and 1.25m (24%), expected 300k. The latter cannot be achieved by simply holding one static 100k-share portfolio, and neither is an executable opportunity.
+
+| Assumed terminal threshold stress | EV-focused P(top-three) | Tail hypothetical P(top-three) |
+|---|---:|---:|
+| Base arbitrary independent thresholds | **14.5%** | **16.8%** |
+| Each terminal competitor threshold shifted +250k SUSQies | **3.0%** | **16.8%** |
+| Each shifted +500k | **3.0%** | **8.4%** |
+
+Even the 14.5% base number is not a forecast. Under exactly the **same** EV-focused own-bankroll and competitor-threshold marginal distributions, varying their **joint correlation only** allows podium probabilities ranging from **0% (adverse alignment)** to **35% (favourable alignment)** instead of the independent 14.5%: an adverse coupling assigns the 900k own outcome to 1.4m competitor threshold (30%), 500k to 900k (35%) and 700k (5%), 100k to 700k (20%) and 300k (10%); a favourable coupling assigns 500k to 300k (10%), 900k to 700k (25%) and 900k (5%), 500k to 900k (30%) and 100k to 1.4m (30%). These are *mathematical couplings*, not plausible calibrated election states. They demonstrate why shared national/state election factors and the effect of mass settlement cannot be ignored.
+
+The needed **~38.25m** gross comparable turnover under **assumed** 2% realised net margin is purely `765k / 0.02` arithmetic: not a costed trading plan, not 100k-share-cap cycles, not a fill/depth estimate, and no reason to overtrade. Terminal competition cutoff and our prospective position payoff must eventually be evaluated jointly by risk scenario, with realistic restrictions on total cash, settled payout and capital reuse.
+
+### Owner handoff
+
+See [one-page matrix](LANE_D_FALSIFICATION_HANDOFF_20261013.md): #223/#205 selective maker; #206/#220 venue repricing; #206 hard settlement certificates; #225 inventory recycling; #204 official count shocks; #207 independent execution/economic red team. All five are **INSUFFICIENT EXECUTABLE EVIDENCE** until validated forward. Stop expanding this leaderboard lane unless permitted public information gains discriminatory power.
