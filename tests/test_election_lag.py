@@ -146,7 +146,7 @@ def test_cash_and_depth_limits_are_not_fictitious() -> None:
         ),
         (
             _event(received_at=T + timedelta(minutes=1)), _quote(), _capacity(),
-            "source_publication_clock_or_delay",
+            "decision_before_event_receipt",
         ),
         (_event(), _quote(depth_trusted=False), _capacity(), "sig_market_untrusted"),
         (_event(), _quote(observed_monotonic_ns=0), _capacity(), "sig_book_stale"),
@@ -249,3 +249,14 @@ def test_locked_market_never_emits_candidate() -> None:
             now_monotonic_ns=NOW,
             now_utc=T + timedelta(seconds=1),
         )
+
+
+def test_late_publication_delay_even_when_decision_after_receipt() -> None:
+    decision = evaluate_election_lag(
+        _event(received_at=T + timedelta(minutes=1)),
+        _quote(), _capacity(),
+        now_monotonic_ns=NOW,
+        now_utc=T + timedelta(minutes=1, seconds=1),
+    )
+    assert isinstance(decision, Abstain)
+    assert decision.reason == "source_publication_clock_or_delay"
