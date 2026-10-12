@@ -16,12 +16,12 @@ from predictions_cup.replay.economic_005i import (
     evaluate,
 )
 from predictions_cup.replay.features_005i import causal_minute_features
-from predictions_cup.replay.mapping_005i import load_accepted_005i_pairs
 from predictions_cup.replay.loaders import (
     CaptureSelection,
     load_polymarket_capture,
     load_sig_capture,
 )
+from predictions_cup.replay.mapping_005i import load_accepted_005i_pairs
 
 
 def parse_time(raw: str) -> datetime:
