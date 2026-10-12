@@ -1628,6 +1628,14 @@ def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
                 clock_ns=iter(range(900, 1200)).__next__,
                 observation_emitter=emitter,
                 observation_process_instance_id="recovery-test-process",
+                # Explicitly proven-current replay (never the default on restart).
+                placement_replay_allowed=lambda envelope: (
+                    envelope.logical_operation_id == plan.envelope.logical_operation_id
+                ),
+                wall_clock=lambda: (
+                    journal.operation_created_at(plan.envelope.logical_operation_id)
+                    or datetime.now(UTC)
+                ),
             )
         )
         emitter.close()
