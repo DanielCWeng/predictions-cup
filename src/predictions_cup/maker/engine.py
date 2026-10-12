@@ -29,6 +29,9 @@ from predictions_cup.maker.policies import with_quote_math
 from predictions_cup.runtime.models import SIG_TICK
 
 _TICK = float(SIG_TICK)
+# Non-configurable safety ceiling for projected per-market maker exposure.
+# More restrictive strategy and deep-ladder limits always take precedence.
+HARD_PROJECTED_POSITION_CAP = 200.0
 # Fill-seeking shrinks risk-increasing size once projected inventory passes
 # this fraction of the configured maker inventory cap.
 FILL_SEEKING_INVENTORY_SKEW_FRACTION = 0.75
@@ -165,9 +168,13 @@ class MakerEngine:
                 and position.tournament_id == snapshot.tournament_id
             )
         )
-        max_abs_inventory = self._config.max_abs_inventory
+        max_abs_inventory = min(
+            self._config.max_abs_inventory, HARD_PROJECTED_POSITION_CAP,
+        )
         if self._config.deep_ladder_enabled:
-            max_abs_inventory = min(max_abs_inventory, self._config.deep_ladder_position_cap)
+            max_abs_inventory = min(
+                max_abs_inventory, self._config.deep_ladder_position_cap,
+            )
         context = QuoteContext(
             snapshot=snapshot,
             raw_fair_value=fair_value,
