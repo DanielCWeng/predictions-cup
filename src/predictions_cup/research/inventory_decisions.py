@@ -140,7 +140,7 @@ def action_economics(
                 or int(redeployment["heldout_opportunities"]) < 1
                 or expires < timestamp(evaluated_at)
                 or not reinvest_lower <= reinvest_base <= reinvest_upper
-                or not ZERO <= reinvest_worst_loss
+                or reinvest_worst_loss < ZERO
                 or not ZERO <= gross_occupied <= qty
             ):
                 blockers.append("UNVERIFIED_REDEPLOYMENT_ECONOMICS")
