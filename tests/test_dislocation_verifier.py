@@ -180,7 +180,9 @@ def test_wrong_contract_shuffled_event_and_fake_semantics_rejected() -> None:
     assert _audit(source=replace(source, event_id="other")).reason == "UNVERIFIED_OR_SHUFFLED_EVENT"
     assert _audit(review=replace(review, approved=False)).reason == "SETTLEMENT_PROOF_MISMATCH"
     assert _audit(review=replace(review, rule_text="changed")).reason == "SETTLEMENT_PROOF_MISMATCH"
-    assert _audit(review=replace(review, state_vector_hash="bad")).reason == "SETTLEMENT_PROOF_MISMATCH"
+    assert _audit(review=replace(review, state_vector_hash="bad")).reason == (
+        "SETTLEMENT_PROOF_MISMATCH"
+    )
     sell = replace(rel, legs=(replace(rel.legs[0], action=LegAction.SELL), rel.legs[1]))
     assert _audit(relationship=sell).reason == "SETTLEMENT_PROOF_MISMATCH"
     signed_sell = replace(review, state_vector_hash=state_vector_sha256(sell))
