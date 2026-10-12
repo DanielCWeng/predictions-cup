@@ -294,6 +294,9 @@ def evaluate(rows: list[dict[str, Any]], *, quantity: Decimal = DEFAULT_QTY,
                 "observed_passive_fill": None, "evidence_class": "NOT_MEASURED",
             }
             ledger.append(item)
+            if strategy != "NO_TRADE" and decision >= TOURNAMENT_LOCK_UTC:
+                item["reason"] = "after_tournament_lock"
+                continue
             if strategy != "NO_TRADE":
                 try:
                     window_end = _time(row["feature_window_end"])
@@ -311,9 +314,6 @@ def evaluate(rows: list[dict[str, Any]], *, quantity: Decimal = DEFAULT_QTY,
             item["side"] = side
             if strategy == "NO_TRADE":
                 item["status"], item["reason"] = "ABSTAIN", "control_no_trade"
-                continue
-            if decision >= TOURNAMENT_LOCK_UTC:
-                item["reason"] = "after_tournament_lock"
                 continue
             if side is None:
                 item["reason"] = "no_qualifying_signal"
