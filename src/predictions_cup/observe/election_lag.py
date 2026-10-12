@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 
 SIG_PRICE_TICK = 0.005
+# Research actionability only. Independently enforce the same wire cutoff in #202.
+ELECTION_2026_CANDIDATE_CUTOFF_UTC = datetime(2026, 11, 4, 16, 59, 55, tzinfo=UTC)
 
 
 class ElectionEvidenceKind(StrEnum):
@@ -89,7 +91,7 @@ class SigExecutableTop:
             raise ValueError("SIG quote clock domain must not be blank")
         if self.observed_monotonic_ns < 0:
             raise ValueError("negative SIG quote timestamp")
-        if not (1 <= self.best_bid_ticks <= self.best_ask_ticks <= 199):
+        if not (1 <= self.best_bid_ticks < self.best_ask_ticks <= 199):
             raise ValueError("invalid SIG YES top-of-book ticks")
         if any(
             not math.isfinite(size) or size < 0
@@ -166,6 +168,7 @@ def evaluate_election_lag(
     capacity: ShadowCapacity,
     *,
     now_monotonic_ns: int,
+    now_utc: datetime,
     policy: ElectionLagPolicy | None = None,
 ) -> ShadowLagDecision:
     """Inspect one indexed market in O(1); emit no actual order.
@@ -177,6 +180,12 @@ def evaluate_election_lag(
     """
     if policy is None:
         policy = ElectionLagPolicy()
+    if now_utc.tzinfo is None or now_utc.utcoffset() is None:
+        return Abstain("decision_clock_untrusted")
+    if now_utc.astimezone(UTC) >= ELECTION_2026_CANDIDATE_CUTOFF_UTC:
+        return Abstain("competition_closed_for_candidates")
+    if now_utc.astimezone(UTC) < event.received_at.astimezone(UTC):
+        return Abstain("decision_before_event_receipt")
     if event.exchange_id != quote.exchange_id or event.market_id != quote.market_id:
         return Abstain("identity_mismatch")
     if event.clock_domain != quote.clock_domain:
