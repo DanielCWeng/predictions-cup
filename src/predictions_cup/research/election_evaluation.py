@@ -16,6 +16,7 @@ MAX_QUOTE_AGE = timedelta(seconds=30)
 class EvaluationRow:
     event_family: str
     contest_id: str
+    quote_exchange_id: str
     candidate: ShadowCandidate
     quote_asof: datetime
     quote_received: datetime
@@ -117,6 +118,8 @@ def evaluate_holdout(
                 raise Abstain("candidate is executable")
             if c.contest_id != row.contest_id or c.event_family != row.event_family:
                 raise Abstain("candidate event/contest does not match score target")
+            if c.target_exchange_id != row.quote_exchange_id:
+                raise Abstain("SIG quote instrument does not match candidate exchange")
             if not c.revision_id or not c.source_document_sha256:
                 raise Abstain("missing official source-revision provenance")
             if type(row.outcome_a_won) is not bool:
