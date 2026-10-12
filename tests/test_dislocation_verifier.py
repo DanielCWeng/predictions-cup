@@ -10,8 +10,8 @@ from decimal import Decimal
 import pytest
 
 from predictions_cup.analysis.dislocation_verifier import (
-    AuditStatus,
     AuditedOpportunity,
+    AuditStatus,
     AvailableCapital,
     BookReceipt,
     DislocationPolicy,
@@ -74,8 +74,14 @@ def _document() -> MappingDocument:
     return MappingDocument(tournament_id="cup-2026", records=tuple(records))
 
 
-def _setup() -> tuple[StructuralRelationship, dict[str, BookReceipt], MappingDocument, SettlementReview,
-                      SourceReceipt, AvailableCapital]:
+def _setup() -> tuple[
+    StructuralRelationship,
+    dict[str, BookReceipt],
+    MappingDocument,
+    SettlementReview,
+    SourceReceipt,
+    AvailableCapital,
+]:
     document = _document()
     mapping_hash = hashlib.sha256(document_json(document).encode()).hexdigest()
     relationship = complement_relationship(
