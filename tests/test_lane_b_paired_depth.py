@@ -88,7 +88,7 @@ def test_mapping_complement_changes_external_orientation_only() -> None:
         ({"complete": False}, "PM_INCOMPLETE_SNAPSHOT"),
         ({"bids": [], "asks": []}, "PM_ZERO_DEPTH"),
         ({"bids": [{"price": "0.52", "size": "1"}]}, "PM_CROSSED_OR_LOCKED"),
-        ({"exchange_at": (T + timedelta(seconds=10)).isoformat()}, "PM_FUTURE_INFORMATION"),
+        ({"exchange_at": (T + timedelta(seconds=10)).isoformat()}, "PM_SOURCE_CLOCK_AHEAD"),
     ],
 )
 def test_bad_pm_book_never_becomes_opportunity(frame_change: dict, reason: str) -> None:
