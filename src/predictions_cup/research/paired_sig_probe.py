@@ -87,8 +87,12 @@ def inspect_admission(
         reasons.append("OPERATOR_AUTHORISATION_MISSING")
     else:
         try:
-            reviewed_at = datetime.fromisoformat(\n                str(authorisation["measured_at"]).replace("Z", "+00:00")\n            )
-            expires_at = datetime.fromisoformat(\n                str(authorisation["expires_at"]).replace("Z", "+00:00")\n            )
+            reviewed_at = datetime.fromisoformat(
+                str(authorisation["measured_at"]).replace("Z", "+00:00")
+            )
+            expires_at = datetime.fromisoformat(
+                str(authorisation["expires_at"]).replace("Z", "+00:00")
+            )
             if (reviewed_at.tzinfo is None or expires_at.tzinfo is None or reviewed_at > now
                     or now - reviewed_at > timedelta(minutes=10) or expires_at <= now):
                 reasons.append("AUTHORISATION_STALE")
@@ -100,7 +104,10 @@ def inspect_admission(
             spare = float(authorisation["verified_free_reads_per_minute"])
             if not 0 < rate <= min(spare * 0.5, 6.0):
                 reasons.append("UNVERIFIED_RESIDUAL_CAPACITY")
-            if not (\n                isinstance(authorisation["approval_ticket"], str)\n                and authorisation["approval_ticket"]\n            ):
+            if not (
+                isinstance(authorisation["approval_ticket"], str)
+                and authorisation["approval_ticket"]
+            ):
                 reasons.append("APPROVAL_TICKET_MISSING")
         except (KeyError, TypeError, ValueError):
             reasons.append("INVALID_AUTHORISATION")
@@ -183,7 +190,9 @@ async def _probe(args: argparse.Namespace) -> int:
                                                  started=started, received=datetime.now(UTC),
                                                  run_id=run_id)
                         except Exception as exc:
-                            row = {\n                                "event": "SIG_API_ERROR", "venue": "SIG",\n                                "instrument_id": s.exchange,
+                            row = {
+                                "event": "SIG_API_ERROR", "venue": "SIG",
+                                "instrument_id": s.exchange,
                                    "received_at": datetime.now(UTC).isoformat(),
                                    "reason": type(exc).__name__, "trusted": False}
                             # Account 429 / transport problems should not trigger retries/spin.
@@ -193,7 +202,9 @@ async def _probe(args: argparse.Namespace) -> int:
                         if stop.is_set():
                             break
                         with suppress(TimeoutError):
-                            await asyncio.wait_for(\n                                stop.wait(), timeout=args.interval / len(specs)\n                            )
+                            await asyncio.wait_for(
+                                stop.wait(), timeout=args.interval / len(specs)
+                            )
         finally:
             out.write(json.dumps({"event": "STOP", "run_id": run_id,
                                   "received_at": datetime.now(UTC).isoformat(),
