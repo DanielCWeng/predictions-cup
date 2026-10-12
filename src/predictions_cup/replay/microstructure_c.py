@@ -127,9 +127,11 @@ def _direction(strategy: str, row: dict[str, Any]) -> str | None:
         inventory = features.get("inventory_yes")
         return sign(-float(inventory)) if inventory is not None else None
     if strategy == "STALE_QUOTE":
-        return sign(features.get("pm_minus_sig"), 0.04)
+        return (sign(features.get("pm_minus_sig"), 0.04)
+                if features.get("reference_orientation") == "SIG_YES" else None)
     if strategy == "CROSSVENUE_STALE":
-        if features.get("verified_source_lag") is not True:
+        if (features.get("verified_source_lag") is not True
+                or features.get("reference_orientation") != "SIG_YES"):
             return None
         return sign(features.get("pm_minus_sig"), 0.04)
     if strategy == "TRADE_REVERSION":
@@ -142,12 +144,20 @@ def _direction(strategy: str, row: dict[str, Any]) -> str | None:
     if strategy == "SHORT_DISCOVERY":
         return sign(features.get("short_discovery"), 0.02)
     if strategy == "FROZEN_005I":
-        # Source must provide already frozen 005I output, never a retrained proxy.
-        if features.get("frozen_005i_attested") is not True:
+        # Frozen signs describe PM token payoff. Canonical SAME/COMPLEMENT
+        # orientation must be resolved before using SIG YES/NO orders.
+        if (features.get("frozen_005i_attested") is not True
+                or row.get("mapping_direction") not in ("SAME", "COMPLEMENT")):
             return None
-        return sign(features.get("frozen_005i_signed"))
+        raw_sign = features.get("frozen_005i_signed")
+        if raw_sign is None:
+            return None
+        sign_in_sig_yes = float(raw_sign) * (
+            -1 if row["mapping_direction"] == "COMPLEMENT" else 1)
+        return sign(sign_in_sig_yes)
     if strategy == "DIRECT_FV":
-        return sign(features.get("pm_minus_sig"), 0.02)
+        return (sign(features.get("pm_minus_sig"), 0.02)
+                if features.get("reference_orientation") == "SIG_YES" else None)
     if strategy == "PASSIVE_RANDOM":
         digest = hashlib.sha256(str(row["episode_id"]).encode()).digest()
         return "YES" if digest[0] % 2 else "NO"
