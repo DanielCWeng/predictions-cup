@@ -26,6 +26,9 @@ jobs:
       - name: Install project and development tools
         run: python -m pip install -e '.[dev]'
 
+      - name: Audit Ruff import diff
+        run: ruff check --select I --diff src/predictions_cup/analysis/dislocation_verifier.py || true
+
       - name: Lint
         run: ruff check .
 
