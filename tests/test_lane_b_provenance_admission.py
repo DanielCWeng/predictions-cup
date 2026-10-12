@@ -43,7 +43,7 @@ def test_pm_source_epoch_and_no_sequence_are_explicit_no_trust() -> None:
     a = make_provenance()
     assert a.receive(book(), NOW)[0]["reason"] == "WEBSOCKET_DISCONNECTED"
     a.boundary("CONNECTED", NOW)
-    assert a.receive(delta("YES"), NOW) == []
+    assert a.receive(delta("YES"), NOW)[0]["reason"] == "UNINITIALIZED_DELTA_SUBSCRIBED_UNSEEDED"
     assert a.report()["counters"]["ignored_delta_SUBSCRIBED_UNSEEDED"] == 1
     seeded = a.receive(book(), NOW)[0]
     assert seeded["complete"] is True
@@ -58,7 +58,7 @@ def test_pm_source_epoch_and_no_sequence_are_explicit_no_trust() -> None:
     assert len(a.seeded) == 0
     assert a.receive(delta("YES"), NOW + timedelta(seconds=2))[0]["reason"] == "WEBSOCKET_DISCONNECTED"
     a.boundary("CONNECTED", NOW + timedelta(seconds=3))
-    assert a.receive(delta("YES"), NOW + timedelta(seconds=4)) == []
+    assert a.receive(delta("YES"), NOW + timedelta(seconds=4))[0]["reason"] == "UNINITIALIZED_DELTA_SUBSCRIBED_UNSEEDED"
     assert a.report()["counters"]["ignored_delta_SUBSCRIBED_UNSEEDED"] == 2
 
 
@@ -71,7 +71,7 @@ def test_pm_orphan_classification_by_subscribed_opposite_and_external() -> None:
         {"asset_id": "NO", "side": "BUY", "price": "0.42", "size": "1"},
         {"asset_id": "OUTSIDE", "side": "BUY", "price": "0.42", "size": "1"},
     ]
-    assert len(a.receive(mixed, NOW + timedelta(milliseconds=10))) == 1
+    assert len(a.receive(mixed, NOW + timedelta(milliseconds=10))) == 3
     counts = a.report()["counters"]
     assert counts["ignored_delta_UNSUBSCRIBED_OPPOSITE"] == 1
     assert counts["ignored_delta_OUTSIDE_ACCEPTED_TOKEN_SET"] == 1
