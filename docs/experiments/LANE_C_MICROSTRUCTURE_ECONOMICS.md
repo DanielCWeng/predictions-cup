@@ -25,13 +25,13 @@
 | DIRECT_FV | PM−SIG reference difference >0.02 | IOC control |
 | ADVERSE_SELECTION | agrees with recent aggressive trade | IOC negative control |
 
-Reference/midpoint differences are *hypothesis features*, never entry proceeds or realized profits. These feature fields still need an independent #220 preregistered causal feature producer: caller-entered numbers cannot establish evidence. No optimisation on sealed 005I HOLDOUT. The explicit thresholds are initial falsification rules, not empirically optimal model hyperparameters.
+Reference/midpoint differences are *hypothesis features*, never entry proceeds or realized profits. The external producer must supply reference_orientation=SIG_YES for reference-difference candidates and preserve the PM-token orientation for frozen_005i_signed; the evaluator reverses the frozen sign on a canonical COMPLEMENT mapping. Never interpret raw PM-token probabilities directly as SIG YES fair value. These feature fields still need an independent #220 preregistered causal feature producer: caller-entered numbers cannot establish evidence. No optimisation on sealed 005I HOLDOUT. The explicit thresholds are initial falsification rules, not empirically optimal model hyperparameters.
 
 ## Data contract and usage
 
 The research CLI takes one UTF-8 JSON object per line. Required: episode_id, event_id, sig_exchange_id, pm_token_id, mapping_direction, decision_at (with UTC offset), data_origin=LANE_B_PAIRED_PROSPECTIVE_PAPER, paired_depth_trusted=true, features, decision_book, arrivals and exits. Snapshot objects use observed_at, trusted=true, complete=true, bids and asks as ordered price/quantity pairs in **YES-quote** units. Arrival keys: 1x, 2x, 5x. Exit keys: 5, 30, 300, 3600 seconds.
 
-Passive observed_orders are keyed by candidate name and must have order_id, provenance=SIG_EXECUTION_JOURNAL_JOINED, side (YES/NO), action=buy, ack_at, filled_qty, fee_paid and for a positive fill: fill_at and fill_price. An observed ACK with zero fill is included in the fill-rate denominator. An order must have independent time-ordered journal proof; the caller's self-declared label is never sufficient scientific verification.
+Passive observed_orders are keyed by candidate name and must have order_id, provenance=SIG_EXECUTION_JOURNAL_JOINED, strategy_id, sig_exchange_id, submitted_at, limit_price, side (YES/NO), action=buy, ack_at, filled_qty, fee_paid and for a positive fill: fill_at and fill_price. The order must be uniquely matched by strategy, exchange, decision-time resting quote and ACK chronology. An observed ACK with zero fill is included in the fill-rate denominator. An order must have independent time-ordered journal proof; the caller's self-declared label is never sufficient scientific verification.
 
 Read-only example with no residual capacity:
 
