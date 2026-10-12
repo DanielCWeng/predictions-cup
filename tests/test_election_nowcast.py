@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 
-from predictions_cup.research.election_evaluation import EvaluationRow, ForecastReport, evaluate_holdout
+from predictions_cup.research.election_evaluation import (
+    EvaluationRow,
+    ForecastReport,
+    evaluate_holdout,
+)
 from predictions_cup.research.election_nowcast import (
     Abstain,
     CountObservation,
