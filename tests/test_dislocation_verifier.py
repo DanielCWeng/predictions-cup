@@ -11,6 +11,7 @@ import pytest
 
 from predictions_cup.analysis.dislocation_verifier import (
     AuditStatus,
+    AuditedOpportunity,
     AvailableCapital,
     BookReceipt,
     DislocationPolicy,
@@ -24,6 +25,7 @@ from predictions_cup.analysis.structural_certificates import (
     BookLevel,
     ExecutableBook,
     LegAction,
+    StructuralRelationship,
     complement_relationship,
 )
 from predictions_cup.mapping.crosswalk import document_json
@@ -72,7 +74,7 @@ def _document() -> MappingDocument:
     return MappingDocument(tournament_id="cup-2026", records=tuple(records))
 
 
-def _setup() -> tuple[object, dict[str, BookReceipt], MappingDocument, SettlementReview,
+def _setup() -> tuple[StructuralRelationship, dict[str, BookReceipt], MappingDocument, SettlementReview,
                       SourceReceipt, AvailableCapital]:
     document = _document()
     mapping_hash = hashlib.sha256(document_json(document).encode()).hexdigest()
@@ -123,7 +125,7 @@ def _setup() -> tuple[object, dict[str, BookReceipt], MappingDocument, Settlemen
     return relationship, receipts, document, review, source, capital
 
 
-def _audit(**changes: object):
+def _audit(**changes: object) -> AuditedOpportunity:
     rel, books, doc, review, source, capital = _setup()
     params = {
         "relationship": rel,
