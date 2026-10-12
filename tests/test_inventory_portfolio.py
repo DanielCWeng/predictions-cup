@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from decimal import Decimal as D
+from typing import Any
 
 import pytest
 
@@ -17,7 +18,7 @@ NOW = "2026-10-12T21:00:00Z"
 
 
 def book(eid: str, *, bid: str = ".60", ask: str = ".40", size: str = "100",
-         received: str = NOW) -> dict:
+         received: str = NOW) -> dict[str, Any]:
     return {
         "exchange_id": eid, "status": "open",
         "request_started_at": received, "received_at": received,
@@ -26,7 +27,7 @@ def book(eid: str, *, bid: str = ".60", ask: str = ".40", size: str = "100",
     }
 
 
-def p(eid: str, side: str, party: str, race: str = "FL-22") -> dict:
+def p(eid: str, side: str, party: str, race: str = "FL-22") -> dict[str, Any]:
     return {
         "exchange_id": eid, "market_id": eid,
         "market_title": f"Will the {party} Party win the {race} House race?",
@@ -134,7 +135,7 @@ def test_podium_requires_independent_assumptions_and_reviewed_semantics() -> Non
 def test_hypothetical_factor_sensitivity_is_deterministic() -> None:
     rows = build_ledger({"positions": [p("D", "100", "Democratic")]},
                         {"D": book("D")}, evaluated_at=NOW)
-    kwargs = {
+    kwargs: dict[str, Any] = {
         "cash": D("30000"),
         "race_inputs": {"FL-22": {"p_democratic": ".5", "state": "FL",
                                   "settlement_review": "VERIFIED",
