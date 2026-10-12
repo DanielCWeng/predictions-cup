@@ -41,12 +41,23 @@ def gate(direction: str = "SAME", costs: bool = True) -> PairedPaper:
                        lot_cap=8,
                        sig_fee_per_share=D("0.001") if costs else None,
                        pm_fee_per_share=D("0.002") if costs else None,
-                       stress_per_share=D("0.01") if costs else None)
+                       stress_per_share=D("0.01") if costs else None,
+                       source_verifier=lambda _frame: True)  # only synthetic math fixtures
 
 
 def match(g: PairedPaper, sig: dict[str, Any] | None = None, pm: dict[str, Any] | None = None) -> dict[str, Any]:
     g.observe(sig or book("SIG"))
     return g.observe(pm or book("PM", t=T + timedelta(milliseconds=100)))[0]
+
+
+def test_spoofed_trusted_booleans_do_not_admit_unverified_frames() -> None:
+    g = PairedPaper({"947": spec()}, max_age_ms=5000, skew_ms=2000,
+                    sig_fee_per_share=D("0.001"), pm_fee_per_share=D("0.001"),
+                    stress_per_share=D("0.01"))
+    g.observe(book("SIG"))
+    rows = g.observe(book("PM", t=T + timedelta(milliseconds=100)))
+    assert all(r["reason"] == "UNVERIFIED_UPSTREAM_SOURCE_PROVENANCE" for r in rows)
+    assert all(r["decision"] == "NO_TRADE" for r in rows)
 
 
 def test_complete_depth_marginal_not_vwap_and_no_fabricated_fills() -> None:
