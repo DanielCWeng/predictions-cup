@@ -667,7 +667,10 @@ def test_observe_classifies_final_429_503_and_transport_timeout(
 @pytest.mark.parametrize(
     ("wall_now", "error_code"),
     [
-        (\n            datetime(2026, 11, 4, 16, 59, 55, tzinfo=UTC),\n            "COMPETITION_CUTOFF_AFTER_DISPATCH",\n        ),
+        (
+            datetime(2026, 11, 4, 16, 59, 55, tzinfo=UTC),
+            "COMPETITION_CUTOFF_AFTER_DISPATCH",
+        ),
         (datetime(2026, 11, 4, 16, 59, 54), "COMPETITION_CLOCK_UNTRUSTED"),
     ],
 )
@@ -710,7 +713,9 @@ def test_recovery_cutoff_preserves_prior_attempt_reservation(
         with pytest.raises(SigApiError) as caught:
             asyncio.run(sink.dispatch_recovery(plan.envelope, plan=plan))
         assert caught.value.code == error_code
-        assert reservations.contains_operation(\n            plan.envelope.logical_operation_id, plan.envelope.intent_ids\n        )
+        assert reservations.contains_operation(
+            plan.envelope.logical_operation_id, plan.envelope.intent_ids
+        )
         assert len(journal.unresolved()) == 1
         assert journal.unresolved()[0].logical_operation_id == "prior-attempt"
     finally:
