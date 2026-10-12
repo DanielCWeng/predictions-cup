@@ -42,13 +42,18 @@ class ElectionProbabilityUpdate:
     probability_interval_calibrated: bool
 
     def __post_init__(self) -> None:
-        if not all((self.event_id, self.source_id, self.exchange_id, self.market_id)):
+        if not all(
+            value.strip() for value in
+            (self.event_id, self.source_id, self.exchange_id, self.market_id)
+        ):
             raise ValueError("election evidence identifiers must be nonempty")
         if any(
             timestamp.tzinfo is None or timestamp.utcoffset() is None
             for timestamp in (self.published_at, self.received_at)
         ):
             raise ValueError("election evidence timestamps must be timezone-aware")
+        if not isinstance(self.kind, ElectionEvidenceKind):
+            raise ValueError("unsupported election evidence kind")
         if self.received_monotonic_ns < 0:
             raise ValueError("negative event receive timestamp")
         if not (
