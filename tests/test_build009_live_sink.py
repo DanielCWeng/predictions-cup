@@ -748,7 +748,7 @@ def test_journaled_uncertain_fresh_reentry_preserves_capital(
 ) -> None:
     """A mistaken fresh retry cannot discard prior possible-fill exposure."""
     first = _intent()
-    intents = (first,)
+    intents: tuple[RuntimeOrderIntent, ...] = (first,)
     relationship_constraint = None
     if operation_kind is not OperationKind.SINGLE_PLACEMENT:
         intents = (
