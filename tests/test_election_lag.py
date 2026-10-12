@@ -217,7 +217,10 @@ def test_policy_validation_and_strict_threshold() -> None:
     [
         (ELECTION_2026_CANDIDATE_CUTOFF_UTC - timedelta(microseconds=1), "CANDIDATE"),
         (ELECTION_2026_CANDIDATE_CUTOFF_UTC, "competition_closed_for_candidates"),
-        (ELECTION_2026_CANDIDATE_CUTOFF_UTC + timedelta(minutes=1), "competition_closed_for_candidates"),
+        (
+            ELECTION_2026_CANDIDATE_CUTOFF_UTC + timedelta(minutes=1),
+            "competition_closed_for_candidates",
+        ),
         (datetime(2026, 11, 4, 16, 59, 55), "decision_clock_untrusted"),
         (T - timedelta(milliseconds=1), "decision_before_event_receipt"),
     ],
