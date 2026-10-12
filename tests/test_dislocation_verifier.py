@@ -435,15 +435,15 @@ def test_near_threshold_fee_edge_and_cutoff_headroom() -> None:
         event, published_at=near - timedelta(milliseconds=400),
         received_at=near - timedelta(milliseconds=200),
     )
-    kwargs = dict(
-        relationship=rel, receipts=fresh, mapping_document=doc,
-        review=review, source=event, capital=capital, signing_key=KEY,
-        decision_ns=NS, clock_domain="west-process-1",
-    )
-    denied = audit_opportunity(**kwargs, decision_at=near)
+    def at(instant: datetime) -> AuditedOpportunity:
+        return audit_opportunity(
+            rel, fresh, doc, review, event, capital,
+            signing_key=KEY, decision_at=instant, decision_ns=NS,
+            clock_domain="west-process-1",
+        )
+
+    denied = at(near)
     assert denied.reason == "INSUFFICIENT_ACTION_TTL"
-    allowed = audit_opportunity(
-        **kwargs, decision_at=near - timedelta(milliseconds=100),
-    )
+    allowed = at(near - timedelta(milliseconds=100))
     assert allowed.status is AuditStatus.SHADOW_CANDIDATE
     assert allowed.ttl_ns <= 150_000_000
