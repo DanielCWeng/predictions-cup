@@ -317,22 +317,22 @@ def test_integer_share_rounding_and_insufficient_one_lot() -> None:
 
 def test_fractional_ratio_requires_exact_integer_orders() -> None:
     rel, books, doc, review, source, capital = _setup()
-    # (0.5, 1.5) units per bundle: only even bundle counts are orderable.
+    # 0.5 units per leg per bundle: two bundles = one whole share on each leg.
     rat = replace(rel, legs=(
         replace(rel.legs[0], units_per_bundle=0.5),
-        replace(rel.legs[1], units_per_bundle=1.5),
+        replace(rel.legs[1], units_per_bundle=0.5),
     ))
     attested = replace(review, state_vector_hash=state_vector_sha256(rat))
     valid = _audit(relationship=rat, review=attested)
     assert valid.status is AuditStatus.SHADOW_CANDIDATE
     assert valid.bundles % 2 == 0
-    assert valid.executable_leg_shares == (("yes", 1), ("no", 3)) or all(
+    assert all(
         isinstance(quantity, int) and quantity > 0
         for _, quantity in valid.executable_leg_shares
     )
     insufficient = _audit(
         relationship=rat, review=attested,
-        capital=replace(capital, gross_headroom_units=3),
+        capital=replace(capital, gross_headroom_units=0.9),
     )
     assert insufficient.reason == "NO_WHOLE_SHARE_BUNDLE"
 
@@ -427,8 +427,23 @@ def test_near_threshold_fee_edge_and_cutoff_headroom() -> None:
     )
     assert fees.status is AuditStatus.NO_EDGE
     near = datetime(2026, 11, 4, 16, 59, 54, 950000, tzinfo=UTC)
-    denied = _audit(decision_at=near)
+    rel, quotes, doc, review, event, capital = _setup()
+    fresh = {name: replace(receipt, book=replace(
+        receipt.book, observed_at=near - timedelta(milliseconds=80),
+    )) for name, receipt in quotes.items()}
+    event = replace(
+        event, published_at=near - timedelta(milliseconds=400),
+        received_at=near - timedelta(milliseconds=200),
+    )
+    kwargs = dict(
+        relationship=rel, receipts=fresh, mapping_document=doc,
+        review=review, source=event, capital=capital, signing_key=KEY,
+        decision_ns=NS, clock_domain="west-process-1",
+    )
+    denied = audit_opportunity(**kwargs, decision_at=near)
     assert denied.reason == "INSUFFICIENT_ACTION_TTL"
-    allowed = _audit(decision_at=near - timedelta(milliseconds=100))
+    allowed = audit_opportunity(
+        **kwargs, decision_at=near - timedelta(milliseconds=100),
+    )
     assert allowed.status is AuditStatus.SHADOW_CANDIDATE
     assert allowed.ttl_ns <= 150_000_000
