@@ -28,7 +28,6 @@ from predictions_cup.analysis.structural_certificates import (
 from predictions_cup.mapping.crosswalk import document_json
 from predictions_cup.mapping.models import MappingClass, MappingDocument, MappingStatus
 
-
 CUP_2026_TRADE_LOCK = datetime(2026, 11, 4, 17, tzinfo=UTC)
 
 
