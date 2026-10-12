@@ -6,6 +6,8 @@ import hashlib
 import json
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -42,7 +44,7 @@ def gate(direction: str = "SAME", costs: bool = True) -> PairedPaper:
                        stress_per_share=D("0.01") if costs else None)
 
 
-def match(g: PairedPaper, sig: dict[str, Any] | None = None, pm: dict[str, Any] | None = None) -> dict:
+def match(g: PairedPaper, sig: dict[str, Any] | None = None, pm: dict[str, Any] | None = None) -> dict[str, Any]:
     g.observe(sig or book("SIG"))
     return g.observe(pm or book("PM", t=T + timedelta(milliseconds=100)))[0]
 
