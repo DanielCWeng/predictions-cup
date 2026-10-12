@@ -13,6 +13,7 @@ from predictions_cup.analysis.dislocation_verifier import (
     AuditedOpportunity,
     AuditStatus,
     AvailableCapital,
+    project_available_capital,
     BookReceipt,
     DislocationPolicy,
     SettlementReview,
@@ -29,6 +30,7 @@ from predictions_cup.analysis.structural_certificates import (
     complement_relationship,
 )
 from predictions_cup.mapping.crosswalk import document_json
+from predictions_cup.runtime.models import RuntimeOrderState, RuntimePortfolio, RuntimePosition
 from predictions_cup.mapping.models import (
     MappingClass,
     MappingDirection,
@@ -124,9 +126,12 @@ def _setup() -> tuple[
         clock_domain="west-process-1",
         verified=True,
     )
-    capital = AvailableCapital(
-        cash=100, gross_units=100, pending_reserved=0,
-        trusted=True, unresolved_orders=False,
+    capital = project_available_capital(
+        RuntimePortfolio(account_trusted=True),
+        cash_available=100, gross_limit_units=100,
+        snapshot_id="authoritative-fixture-A",
+        observed_ns=NS - 50_000_000,
+        clock_domain="west-process-1",
     )
     return relationship, receipts, document, review, source, capital
 
@@ -231,11 +236,13 @@ def test_future_stale_crossed_cancel_and_partial_fill_scenarios() -> None:
 def test_capital_and_pending_reservations_limit_size_and_reject() -> None:
     _, _, _, _, _, capital = _setup()
     ample = _audit()
-    capped = _audit(capital=replace(capital, cash=4, gross_units=3))
+    capped = _audit(capital=replace(
+        capital, cash_available=4, gross_headroom_units=3,
+    ))
     assert ample.status is AuditStatus.SHADOW_CANDIDATE
     assert capped.bundles < ample.bundles
-    assert capped.bundles <= 1.5 + 1e-8
-    assert _audit(capital=replace(capital, pending_reserved=100)).reason == (
+    assert capped.bundles == 1.0
+    assert _audit(capital=replace(capital, gross_headroom_units=0)).reason == (
         "CAPITAL_EXHAUSTED"
     )
 
@@ -268,8 +275,8 @@ def test_reject_duplicate_leg_and_invalid_policy() -> None:
 
 
 def test_trade_lock_negative_payoff_and_signature_tamper() -> None:
-    assert _audit(decision_at=datetime(2026, 11, 4, 17, tzinfo=UTC)).reason == (
-        "AFTER_2026_TRADE_LOCK"
+    assert _audit(decision_at=datetime(2026, 11, 4, 16, 59, 55, tzinfo=UTC)).reason == (
+        "AFTER_2026_WIRE_SAFETY_CUTOFF"
     )
     rel, _, _, review, _, _ = _setup()
     negative = replace(
@@ -287,3 +294,141 @@ def test_trade_lock_negative_payoff_and_signature_tamper() -> None:
         structural=replace(candidate.structural, fee_rate=0.5),
     )
     assert not verify_signature(tampered, KEY)
+
+
+def test_integer_share_rounding_and_insufficient_one_lot() -> None:
+    _, books, _, _, _, capital = _setup()
+    # 2-leg bundle: budget=1.5 used to generate 1.5 shares on each leg.
+    result = _audit(capital=replace(
+        capital, cash_available=100, gross_headroom_units=3,
+    ))
+    assert result.status is AuditStatus.SHADOW_CANDIDATE
+    assert result.bundles == 1.0
+    assert result.executable_leg_shares == (("yes", 1), ("no", 1))
+    assert all(isinstance(shares, int) for _, shares in result.executable_leg_shares)
+    assert result.structural is not None
+    assert result.structural.gross_cost == pytest.approx(0.80)
+
+    subshare = _audit(capital=replace(capital, gross_headroom_units=1.9))
+    assert subshare.status is AuditStatus.REJECTED
+    assert subshare.reason == "NO_WHOLE_SHARE_BUNDLE"
+    assert subshare.executable_leg_shares == ()
+
+
+def test_fractional_ratio_requires_exact_integer_orders() -> None:
+    rel, books, doc, review, source, capital = _setup()
+    # (0.5, 1.5) units per bundle: only even bundle counts are orderable.
+    rat = replace(rel, legs=(
+        replace(rel.legs[0], units_per_bundle=0.5),
+        replace(rel.legs[1], units_per_bundle=1.5),
+    ))
+    attested = replace(review, state_vector_hash=state_vector_sha256(rat))
+    valid = _audit(relationship=rat, review=attested)
+    assert valid.status is AuditStatus.SHADOW_CANDIDATE
+    assert valid.bundles % 2 == 0
+    assert valid.executable_leg_shares == (("yes", 1), ("no", 3)) or all(
+        isinstance(quantity, int) and quantity > 0
+        for _, quantity in valid.executable_leg_shares
+    )
+    insufficient = _audit(
+        relationship=rat, review=attested,
+        capital=replace(capital, gross_headroom_units=3),
+    )
+    assert insufficient.reason == "NO_WHOLE_SHARE_BUNDLE"
+
+    # Nearly-rational float cannot be silently represented as exactly 1/3.
+    irrational = replace(rel, legs=(
+        replace(rel.legs[0], units_per_bundle=0.333333312),
+        rel.legs[1],
+    ))
+    attested = replace(review, state_vector_hash=state_vector_sha256(irrational))
+    assert _audit(relationship=irrational, review=attested).reason == (
+        "INCOMPATIBLE_FRACTIONAL_LEG_RATIOS"
+    )
+
+
+def test_fractional_depth_stale_capital_and_open_reservations_fail_closed() -> None:
+    _, books, _, _, _, cap = _setup()
+    fractional = replace(books["yes"], book=replace(
+        books["yes"].book,
+        asks=(BookLevel(0.40, 0.7), BookLevel(0.43, 8)),
+    ))
+    assert _audit(receipts={**books, "yes": fractional}).reason == (
+        "FRACTIONAL_SIG_BOOK_DEPTH"
+    )
+    assert _audit(capital=replace(cap, clock_domain="wrong-process")).reason == (
+        "UNTRUSTED_CAPITAL_OR_PENDING_ORDERS"
+    )
+    assert _audit(capital=replace(cap, observed_ns=NS - 2_000_000_000)).reason == (
+        "UNTRUSTED_CAPITAL_OR_PENDING_ORDERS"
+    )
+    portfolio = RuntimePortfolio(
+        account_trusted=True,
+        positions=(RuntimePosition(
+            exchange_id="yes", market_id="market-yes", tournament_id="cup",
+            gross_exposure=97.0,
+        ),),
+    )
+    proj = project_available_capital(
+        portfolio, cash_available=4, gross_limit_units=100,
+        snapshot_id="account-v1", observed_ns=NS - 10_000_000,
+        clock_domain="west-process-1",
+    )
+    assert proj.gross_headroom_units == 3.0
+    assert _audit(capital=proj).bundles == 1.0
+
+    pending = RuntimePortfolio(
+        account_trusted=True,
+        orders=(RuntimeOrderState(
+            logical_intent_id="intent-1", exchange_id="yes",
+            market_id="market-yes", tournament_id="cup",
+            reserved_exposure=2.0, open=True, uncertain=False,
+        ),),
+    )
+    reservation = project_available_capital(
+        pending, cash_available=100, gross_limit_units=100,
+        snapshot_id="account-with-open", observed_ns=NS - 10_000_000,
+        clock_domain="west-process-1",
+    )
+    assert reservation.gross_headroom_units == 98.0
+    assert reservation.unresolved_orders
+    assert _audit(capital=reservation).reason == "UNTRUSTED_CAPITAL_OR_PENDING_ORDERS"
+
+    bad = project_available_capital(
+        RuntimePortfolio(account_trusted=False), cash_available=100,
+        gross_limit_units=100, snapshot_id="untrusted",
+        observed_ns=NS, clock_domain="west-process-1",
+    )
+    assert _audit(capital=bad).status is AuditStatus.REJECTED
+
+
+def test_near_threshold_fee_edge_and_cutoff_headroom() -> None:
+    _, books, _, _, _, _ = _setup()
+    neutral = {
+        name: replace(receipt, book=replace(
+            receipt.book, asks=(BookLevel(0.495, 10),),
+        )) for name, receipt in books.items()
+    }
+    # 1.0 payout - (0.495 + 0.495) - 0.010 haircuts = exactly zero.
+    zero = _audit(
+        receipts=neutral,
+        policy=DislocationPolicy(
+            fee_rate=0.0, slippage_per_share=0.0025,
+            latency_loss_per_share=0.0025, min_edge_per_bundle=0.0,
+        ),
+    )
+    assert zero.status is AuditStatus.NO_EDGE
+    fees = _audit(
+        receipts=neutral,
+        policy=DislocationPolicy(
+            fee_rate=0.005, slippage_per_share=0.0,
+            latency_loss_per_share=0.0, min_edge_per_bundle=0.005,
+        ),
+    )
+    assert fees.status is AuditStatus.NO_EDGE
+    near = datetime(2026, 11, 4, 16, 59, 54, 950000, tzinfo=UTC)
+    denied = _audit(decision_at=near)
+    assert denied.reason == "INSUFFICIENT_ACTION_TTL"
+    allowed = _audit(decision_at=near - timedelta(milliseconds=100))
+    assert allowed.status is AuditStatus.SHADOW_CANDIDATE
+    assert allowed.ttl_ns <= 150_000_000
