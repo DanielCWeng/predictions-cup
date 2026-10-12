@@ -10,13 +10,13 @@ import argparse
 import json
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from predictions_cup.external.polymarket.models import PayloadError
 from predictions_cup.external.polymarket.orderbook import OrderBookStore, event_type
-from predictions_cup.research.paired_depth import InvalidInput, load_specs, _time
+from predictions_cup.research.paired_depth import InvalidInput, _time, load_specs
 
 
 @dataclass
@@ -184,7 +184,7 @@ class PmProvenance:
 def main() -> int:
     p = argparse.ArgumentParser(description="PM WS RAW transcript forensic replay; NO network")
     p.add_argument("--input", type=Path, required=True,
-                   help="JSONL: {event:BOUNDARY,status,received_at} or {event:MESSAGE,payload,received_at}")
+                   help="JSONL raw WS MESSAGE and BOUNDARY records with received_at")
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--mapping", type=Path, required=True)
     p.add_argument("--acceptance", type=Path, required=True)
