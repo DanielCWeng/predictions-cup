@@ -86,7 +86,10 @@ def _client(
     return obj
 
 
-def test_governor_wait_crossing_cutoff_sends_zero_placements() -> None:
+@pytest.mark.parametrize(
+    "route", ("/orders", "/orders/batch", "/orders/multi-leg")
+)
+def test_governor_wait_crossing_cutoff_sends_zero_placements(route: str) -> None:
     async def _run() -> None:
         requests = 0
         now = LAST_ORDER_SUBMISSION_UTC - timedelta(seconds=1)
@@ -104,7 +107,7 @@ def test_governor_wait_crossing_cutoff_sends_zero_placements() -> None:
         try:
             with pytest.raises(SigApiError, match="COMPETITION_ORDER_CLOSED"):
                 await client._request_json(
-                    "POST", "orders", route_template="/orders",
+                    "POST", route.lstrip("/"), route_template=route,
                     resolved_payload={}, accepted_statuses=frozenset({200}),
                     execution_can_be_uncertain=True,
                 )
@@ -114,7 +117,10 @@ def test_governor_wait_crossing_cutoff_sends_zero_placements() -> None:
 
     asyncio.run(_run())
 
-def test_retry_after_prior_send_cannot_cross_cutoff() -> None:
+@pytest.mark.parametrize(
+    "route", ("/orders", "/orders/batch", "/orders/multi-leg")
+)
+def test_retry_after_prior_send_cannot_cross_cutoff(route: str) -> None:
     async def _run() -> None:
         requests = 0
         clock_samples = iter(
@@ -134,7 +140,7 @@ def test_retry_after_prior_send_cannot_cross_cutoff() -> None:
                 SigExecutionUncertainError, match="COMPETITION_CUTOFF_AFTER_DISPATCH"
             ):
                 await client._request_json(
-                    "POST", "orders", route_template="/orders",
+                    "POST", route.lstrip("/"), route_template=route,
                     resolved_payload={}, accepted_statuses=frozenset({200}),
                     execution_can_be_uncertain=True,
                 )
