@@ -16,7 +16,7 @@ Repository evidence:
 
 ### Provisional 10-exchange candidate universe
 
-`879,947,948,957,958,959,960,968,969,970`.
+`879,947,948,957,958,959,960,969,970` (9 PM-observable candidates only). SIG 968 is **explicitly excluded** after 35/35 zero-sided PM depth observations on 12 Oct. Even these 9 are **NOT PAIRABLE** without full SIG depth and verified PM per-epoch provenance.
 
 From reviewer-accepted MAPPING-001 EXACT rows: Pennsylvania governor; Georgia Senate two party legs; Louisiana Senate two; Maine Senate two; Nebraska Senate three. These are **candidates for coverage measurement**, not liquidity-ranked trading opportunities or automatically valid complementary baskets. Georgia and Maine mapped party legs may correspond to distinct PM markets. Require side-by-side settlement terms and event-level adjudication. Exclude any market with stale resolution semantics, incomplete token side, missing active book or weak residual rate budget. A smaller subset is preferable to API starvation.
 
@@ -37,7 +37,7 @@ python scripts/research/lane_b_coverage_audit.py \
   --pm-research-root /path/to/read_only_pm_research \
   --mapping data/mappings/sig_polymarket_2026.json \
   --acceptance data/mappings/sig_polymarket_2026_acceptance.json \
-  --exchange-ids 879,947,948,957,958,959,960,968,969,970 \
+  --exchange-ids 879,947,948,957,958,959,960,969,970 \
   --output /path/to/new_lane_b_output/coverage_001.json
 ```
 
@@ -91,7 +91,7 @@ The recorder may be counted as prospective only when source collection began *be
 | Metric | Status at repository-only review |
 |---|---|
 | Accepted EXACT mappings in canonical summary | 140 |
-| Provisionally selected IDs | 10 |
+| PM-observable provisional IDs (not SIG-pairable) | 9; exchange 968 excluded |
 | Live SIG independent tracked full-depth (issue snapshot) | 0 |
 | PM full-depth shard presence (issue snapshot) | Reported; independent trust unknown |
 | PM orphaned-delta causes / fraction | Unknown; token-level attribution required |
