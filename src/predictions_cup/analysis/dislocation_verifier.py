@@ -29,6 +29,9 @@ from predictions_cup.mapping.crosswalk import document_json
 from predictions_cup.mapping.models import MappingClass, MappingDocument, MappingStatus
 
 
+CUP_2026_TRADE_LOCK = datetime(2026, 11, 4, 17, tzinfo=UTC)
+
+
 class AuditStatus(StrEnum):
     REJECTED = "REJECTED"
     NO_EDGE = "NO_EDGE"
@@ -192,10 +195,10 @@ def _orphan_loss(
     bundles: float,
     policy: DislocationPolicy,
 ) -> float:
-    """Upper bound on unwind loss if ANY subset of BUY legs fills.
+    """Stress total committed cash if any subset fills and ALL exit depth cancels.
 
-    Since fill paths are unknown, sum all positive leg losses as a conservative
-    bound. Missing bid liquidity is assumed to have ZERO exit proceeds.
+    Credit zero recovery rather than today's bid: a future unwind book is not
+    known when the event is observed. All BUY terminal payoffs must be nonnegative.
     """
     risk = 0.0
     for leg in relationship.legs:
@@ -204,13 +207,9 @@ def _orphan_loss(
         entry = _walk(book.asks, amount)
         if entry is None:
             raise ValueError("full depth disappeared before orphan stress")
-        exit_proceeds = _walk(book.bids, amount) or 0.0
-        cost = (
-            entry * (1 + policy.fee_rate)
-            - exit_proceeds * (1 - policy.fee_rate)
-            + amount * (policy.latency_loss_per_share + policy.slippage_per_share)
+        risk += entry * (1 + policy.fee_rate) + amount * (
+            policy.latency_loss_per_share + policy.slippage_per_share
         )
-        risk += max(0.0, cost)
     return risk
 
 
@@ -291,6 +290,8 @@ def audit_opportunity(
         or source.received_at.utcoffset() is None
     ):
         return emit(AuditStatus.REJECTED, "NAIVE_CLOCK")
+    if decision_at >= CUP_2026_TRADE_LOCK:
+        return emit(AuditStatus.REJECTED, "AFTER_2026_TRADE_LOCK")
     if (
         not clock_domain.strip()
         or source.clock_domain != clock_domain
@@ -340,6 +341,11 @@ def audit_opportunity(
         return emit(AuditStatus.REJECTED, "MAPPING_HASH_MISMATCH")
     if len({leg.instrument_id for leg in relationship.legs}) != len(relationship.legs):
         return emit(AuditStatus.REJECTED, "DUPLICATE_LEG")
+    if any(
+        any(value not in (0.0, 1.0) for value in leg.payoff_by_state)
+        for leg in relationship.legs
+    ):
+        return emit(AuditStatus.REJECTED, "NON_BINARY_OR_NEGATIVE_PAYOFF")
     if any(leg.action is not LegAction.BUY for leg in relationship.legs):
         # Existing STRUCT-SCAN SELL math does not establish owned inventory.
         return emit(AuditStatus.REJECTED, "SHORT_OR_SELL_REQUIRES_INVENTORY_PROOF")
