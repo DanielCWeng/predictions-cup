@@ -662,3 +662,56 @@ def test_observe_classifies_final_429_503_and_transport_timeout(
     finally:
         emitter.close()
         journal.close()
+
+
+@pytest.mark.parametrize(
+    ("wall_now", "error_code"),
+    [
+        (\n            datetime(2026, 11, 4, 16, 59, 55, tzinfo=UTC),\n            "COMPETITION_CUTOFF_AFTER_DISPATCH",\n        ),
+        (datetime(2026, 11, 4, 16, 59, 54), "COMPETITION_CLOCK_UNTRUSTED"),
+    ],
+)
+def test_recovery_cutoff_preserves_prior_attempt_reservation(
+    tmp_path: Path, wall_now: datetime, error_code: str
+) -> None:
+    from predictions_cup.sig.errors import SigApiError
+
+    intent = _intent()
+    decision = RiskDecision(
+        approved=True,
+        reason="approved",
+        execution_mode=ExecutionMode.LIVE,
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        intents=(intent,),
+        strategy_family="FV-TAKE",
+        strategy_id="fixture",
+        signal_value=0.025,
+        fair_value=0.55,
+        decision_observation_ns=100,
+    )
+    plan = build_execution_plan(
+        decision, logical_operation_id="prior-attempt", created_monotonic_ns=150
+    )
+    journal = ExecutionJournal(tmp_path / "recovery-cutoff.sqlite3")
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    journal.record_before_dispatch(
+        plan.envelope, plan.intents, audit=plan.audit, submitted_monotonic_ns=200
+    )
+    journal.mark_state("prior-attempt", LifecycleState.UNCERTAIN, 250)
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, FakeTradingClient()),
+        journal=journal,
+        permit=_permit(),
+        reservations=reservations,
+        wall_clock=lambda: wall_now,
+    )
+    try:
+        with pytest.raises(SigApiError) as caught:
+            asyncio.run(sink.dispatch_recovery(plan.envelope, plan=plan))
+        assert caught.value.code == error_code
+        assert reservations.contains_operation(\n            plan.envelope.logical_operation_id, plan.envelope.intent_ids\n        )
+        assert len(journal.unresolved()) == 1
+        assert journal.unresolved()[0].logical_operation_id == "prior-attempt"
+    finally:
+        journal.close()
