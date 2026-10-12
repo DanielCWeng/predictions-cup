@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import statistics
 from collections import defaultdict, deque
+from collections.abc import Iterable
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Iterable
 
 from predictions_cup.replay.economic_005i import MinuteFeature
 from predictions_cup.replay.model import InstrumentView, ReplayEvent, ReplaySource, QuotePayload
