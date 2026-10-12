@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
+import re
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 PERIODS = frozenset({"1d", "7d", "30d", "all"})
 STARTING_SUSQIES = Decimal("100000")
@@ -41,7 +44,8 @@ def utc_timestamp(value: str) -> str:
 
 
 def normalize_official_payload(
-    payload: dict[str, Any], *, observed_at: str, source_url: str
+    payload: dict[str, Any], *, observed_at: str, source_url: str,
+    raw_payload_sha256: str | None = None,
 ) -> list[dict[str, str]]:
     """Normalize *one* actual API response; preserve full-precision wire fields.
 
@@ -49,8 +53,16 @@ def normalize_official_payload(
     descriptive, not executable net spread. Output can be CSV-serialized.
     """
     timestamp = utc_timestamp(observed_at)
-    if not source_url.startswith("https://"):
-        raise ValueError("source_url must be an https URL")
+    url = urlsplit(source_url)
+    if (
+        url.scheme != "https"
+        or url.netloc != "sig.thesuper.market"
+        or not re.fullmatch(r"/api/v1/tournaments/[^/]+/leaderboard", url.path)
+        or url.fragment
+    ):
+        raise ValueError("source_url must be the official SIG participant leaderboard endpoint")
+    if raw_payload_sha256 is not None and not re.fullmatch(r"[0-9a-f]{64}", raw_payload_sha256):
+        raise ValueError("raw_payload_sha256 must be a lowercase SHA256 hex digest")
     period = payload.get("period")
     if period not in PERIODS:
         raise ValueError("unrecognized leaderboard period")
@@ -94,7 +106,8 @@ def normalize_official_payload(
         normalized.append({
             "observed_at": timestamp,
             "source_url": source_url,
-            "source_kind": "official_participant_api",
+            "source_kind": "official_participant_api_declared_offline",
+            "raw_payload_sha256": raw_payload_sha256 or "",
             "period": period,
             "rank": str(rank),
             "profile_id": profile,
@@ -227,9 +240,13 @@ def main() -> None:
     if args.official_json:
         if not args.observed_at or not args.source_url or not args.csv_out:
             parser.error("official mode needs --observed-at, --source-url, --csv-out")
-        payload = json.loads(args.official_json.read_text(encoding="utf-8"))
+        raw_bytes = args.official_json.read_bytes()
+        payload = json.loads(raw_bytes)
         rows = normalize_official_payload(
-            payload, observed_at=args.observed_at, source_url=args.source_url
+            payload,
+            observed_at=args.observed_at,
+            source_url=args.source_url,
+            raw_payload_sha256=hashlib.sha256(raw_bytes).hexdigest(),
         )
         if not rows:
             parser.error("empty response: no CSV will be written")
