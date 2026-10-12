@@ -1,6 +1,7 @@
 """Economic replay adversarial tests: never substitute midpoint accuracy for net PnL."""
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -11,6 +12,7 @@ from predictions_cup.replay.economic_005i import (
     EconomicConfig,
     ExactPair,
     MinuteFeature,
+    _marginal_buy_limit,
     _walk,
     evaluate,
     frozen_probability,
@@ -321,3 +323,114 @@ def test_health_recovery_event_alone_cannot_mint_a_tradeable_book_tick() -> None
     ))
     out = evaluate(original, [feature()], [pair()], cfg(), freeze())
     assert out["results"]["REVERSAL"]["touch_fill_upper_bound"] == 0
+
+
+def _multilevel_tape(
+    decision_asks: tuple[BookLevel, ...],
+    arrival_asks: tuple[BookLevel, ...],
+) -> tuple[ReplayEvent, ...]:
+    """Keep book events and receipt times causal while varying executable depth."""
+    events = list(tape(depth="3"))
+    before = T - timedelta(milliseconds=100)
+    arrival = T + timedelta(milliseconds=200)
+    for index, event in enumerate(events):
+        if event.source is not ReplaySource.SIG or event.instrument_id != "sig-yes":
+            continue
+        asks = (
+            decision_asks if event.observed_at == before
+            else arrival_asks if event.observed_at == arrival
+            else None
+        )
+        if asks is None:
+            continue
+        assert isinstance(event.payload, QuotePayload)
+        events[index] = replace(
+            event,
+            payload=replace(
+                event.payload,
+                best_bid=D("0.20"),
+                bids=(BookLevel(D("0.20"), D("100")),),
+                best_ask=min(level.price for level in asks),
+                asks=asks,
+            ),
+        )
+    return tuple(events)
+
+
+def test_multilevel_buy_limit_places_order_at_marginal_not_vwap() -> None:
+    asks = (BookLevel(D("0.40"), D("1")), BookLevel(D("0.60"), D("1")))
+    assert _walk(asks, D("2"), buy=True, haircut=D("1")) == D("1.00")
+    assert _marginal_buy_limit(asks, D("2"), haircut=D("1")) == D("0.60")
+
+    result = evaluate(
+        _multilevel_tape(asks, asks), [feature()], [pair()],
+        cfg(quantity=D("2"), depth_haircut=D("1")), freeze(),
+    )["results"]["REVERSAL"]
+    assert result["qualified_orders"] == 1
+    assert result["touch_fill_upper_bound"] == 1
+    trade = result["trades"][0]
+    assert trade["decision_full_depth_vwap"] == 0.50
+    assert trade["placeable_marginal_buy_limit"] == 0.60
+    assert trade["reserved_worst_case_entry_cash"] > 1.20
+    assert trade["entry_cost"] == 1.00
+
+
+def test_multilevel_arrival_rewalk_respects_marginal_price_and_adverse_cost() -> None:
+    asks = (BookLevel(D("0.40"), D("1")), BookLevel(D("0.60"), D("1")))
+    above_limit = (BookLevel(D("0.40"), D("1")), BookLevel(D("0.65"), D("1")))
+    blocked = evaluate(
+        _multilevel_tape(asks, above_limit), [feature()], [pair()],
+        cfg(quantity=D("2"), depth_haircut=D("1")), freeze(),
+    )["results"]["REVERSAL"]
+    assert blocked["qualified_orders"] == 1
+    assert blocked["touch_fill_upper_bound"] == 0
+    assert blocked["rejections"]["ioc_limit_or_depth_no_fill"] == 1
+
+    worse_but_placeable = (
+        BookLevel(D("0.55"), D("1")),
+        BookLevel(D("0.60"), D("1")),
+    )
+    filled = evaluate(
+        _multilevel_tape(asks, worse_but_placeable), [feature()], [pair()],
+        cfg(quantity=D("2"), depth_haircut=D("1")), freeze(),
+    )["results"]["REVERSAL"]
+    assert filled["touch_fill_upper_bound"] == 1
+    assert filled["trades"][0]["entry_cost"] == 1.15
+    assert filled["trades"][0]["arrival_full_depth_vwap"] == 0.575
+
+
+def test_equal_decision_vwap_different_depth_distribution_changes_legal_limit() -> None:
+    staggered = (BookLevel(D("0.40"), D("1")), BookLevel(D("0.60"), D("1")))
+    flat = (BookLevel(D("0.50"), D("2")),)
+    arrival = (BookLevel(D("0.55"), D("2")),)
+    assert _walk(staggered, D("2"), buy=True, haircut=D("1")) == (
+        _walk(flat, D("2"), buy=True, haircut=D("1"))
+    )
+    staggered_result = evaluate(
+        _multilevel_tape(staggered, arrival), [feature()], [pair()],
+        cfg(quantity=D("2"), depth_haircut=D("1")), freeze(),
+    )["results"]["REVERSAL"]
+    flat_result = evaluate(
+        _multilevel_tape(flat, arrival), [feature()], [pair()],
+        cfg(quantity=D("2"), depth_haircut=D("1")), freeze(),
+    )["results"]["REVERSAL"]
+    assert staggered_result["touch_fill_upper_bound"] == 1
+    assert flat_result["touch_fill_upper_bound"] == 0
+    assert flat_result["rejections"]["ioc_limit_or_depth_no_fill"] == 1
+
+
+def test_multilevel_worst_case_cash_reservation_and_no_complement() -> None:
+    asks = (BookLevel(D("0.40"), D("1")), BookLevel(D("0.60"), D("1")))
+    underfunded = evaluate(
+        _multilevel_tape(asks, asks), [feature()], [pair()],
+        cfg(quantity=D("2"), depth_haircut=D("1"), capital_limit=D("1.10")),
+        freeze(),
+    )["results"]["REVERSAL"]
+    assert underfunded["qualified_orders"] == 0
+    assert underfunded["rejections"]["capital_exhausted"] == 1
+
+    # NO asks are exact complements of YES bids on the same binary exchange.
+    yes_bids = (BookLevel(D("0.60"), D("1")), BookLevel(D("0.40"), D("1")))
+    no_asks = tuple(BookLevel(D("1") - p.price, p.quantity) for p in yes_bids)
+    assert _walk(no_asks, D("2"), buy=True, haircut=D("1")) == D("1.00")
+    assert _marginal_buy_limit(no_asks, D("2"), haircut=D("1")) == D("0.60")
