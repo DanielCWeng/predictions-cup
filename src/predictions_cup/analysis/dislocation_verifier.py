@@ -389,8 +389,13 @@ def audit_opportunity(
             structural=structural,
             bundles=structural.available_size if structural else 0.0,
             executable_leg_shares=(
-                tuple((leg.instrument_id, int(round(leg.units_per_bundle * structural.available_size)))
-                      for leg in relationship.legs)
+                tuple(
+                    (
+                        leg.instrument_id,
+                        int(round(leg.units_per_bundle * structural.available_size)),
+                    )
+                    for leg in relationship.legs
+                )
                 if status is AuditStatus.SHADOW_CANDIDATE and structural else ()
             ),
             conditional_net_edge=structural.net_edge if structural else None,
