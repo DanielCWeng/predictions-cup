@@ -187,6 +187,19 @@ class SigLiveSink:
         }:
             raise ValueError("placement dispatch requires a placement operation kind")
 
+        # A fresh caller must not resurrect an already journaled placement.
+        # Any retry after an uncertain attempt belongs to dispatch_recovery(),
+        # which verifies the original durable idempotency/payload identity.
+        if require_reservation:
+            try:
+                self._journal.lifecycle_state(envelope.logical_operation_id)
+            except KeyError:
+                pass
+            else:
+                raise ValueError(
+                    "journaled placement must use identity-preserving recovery"
+                )
+
         # This check precedes the durable journal and *all* network attempts.
         # MakerCoordinator has already reserved/marked the quote submitted.
         # Release only a fresh, provably unsent operation so its SigApiError
@@ -201,7 +214,19 @@ class SigLiveSink:
                 "COMPETITION_ORDER_CLOSED",
                 "COMPETITION_CLOCK_UNTRUSTED",
             }:
-                self._reservations.release_operation(envelope.logical_operation_id)
+                # A dispatch may race with another writer even after the
+                # fast-path identity check above. Release risk only if the
+                # indexed durable lookup still proves this was never journaled.
+                try:
+                    self._journal.lifecycle_state(envelope.logical_operation_id)
+                except KeyError:
+                    self._reservations.release_operation(
+                        envelope.logical_operation_id
+                    )
+                else:
+                    raise ValueError(
+                        "journaled placement reservation must stay locked for recovery"
+                    ) from exc
             raise
 
         if plan.audit is not None:
