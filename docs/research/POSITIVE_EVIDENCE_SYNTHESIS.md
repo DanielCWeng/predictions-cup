@@ -568,3 +568,64 @@ Do not reopen another broad feature search before answering this narrower increm
 005G PR #114 is merged into `main` at `662969df4e481f1cbd9417c923ae35d3a0aa9f9f`; canonicality has been refreshed without changing the scientific conclusions.
 
 **The Predictions Cup research programme is currently best at predicting when a market or order book is likely to change state or reprice.**
+
+
+---
+
+# 13. Reproduction / Source Index
+
+## Reconstruction rule
+
+A fresh agent rebuilding this synthesis must use only the source artifacts and pinned revisions listed below.
+
+Do **not** infer positive evidence from experiment names, stale handoffs, intermediate outputs, superseded runs, development-only metrics, or unmerged branches unless they are explicitly listed here.
+
+Preserve these concepts separately:
+
+- **scientific status** — what the frozen experiment actually established;
+- **canonicality** — whether that evidence is merged into `main`;
+- **evidence level** — E0–E5 as used by this synthesis;
+- **economic authority** — whether the result has demonstrated executable/post-cost value.
+
+A predictive result is not promoted to E4/E5 merely because it is statistically strong. A non-canonical result may be scientifically valid while remaining unmerged.
+
+The machine-readable companion sources for this synthesis are:
+
+- `data/research/positive_evidence_ledger.json`
+- `data/research/positive_evidence_graph.json`
+- `docs/research/POSITIVE_EVIDENCE_LEDGER.md`
+
+If a number in this synthesis conflicts with a listed frozen experiment artifact, the experiment artifact controls and the synthesis must be refreshed.
+
+## Canonical source index
+
+| Finding | Scientific source | Reproduction / freeze entry points | Canonical status used here |
+|---|---|---|---|
+| **005F genuine-age renewal / jump hazard** | `docs/experiments/EXPERIMENT_005F_FINAL_REPORT.md` | `data/experiments/experiment_005f/pre_holdout_freeze.json`; `data/experiments/experiment_005f/holdout_evidence_manifest.json`; `scripts/kaggle/experiment_005f_fit_freeze/run.py`; `scripts/kaggle/experiment_005f_holdout/run.py` | `CANONICAL_ON_MAIN` |
+| **005F → 005G fresh replication; 005G state-dwell / renewal family** | `docs/experiments/EXPERIMENT_005G_FINAL.md`; `data/experiments/experiment_005g/FINAL_RESULT.json` | `data/experiments/experiment_005g/STATE_HAZARD_V1.json`; economic conversion: `data/experiments/experiment_005g/economic_replay/RESULT.json`; failure analysis: `docs/experiments/EXPERIMENT_005G_FAILURE_FORENSICS.md` and `data/experiments/experiment_005g/FAILURE_FORENSICS.json` | PR #114 merged; `CANONICAL_ON_MAIN` |
+| **PRED-006 next-price-change hazard** | `docs/experiments/PRED_006_FINAL_REPORT.md` | `data/experiments/pred_006/FINAL_IMMUTABLE_PROTOCOL.md`; runner `scripts/kaggle/pred006_final/run.py` | frozen FINAL result; future confirmation still required |
+| **005I five-minute mean reversion / depth-normalised OFI / liquidity states** | `docs/experiments/MASTER_HANDOFF_005I.md` | `data/experiments/experiment_005i/PRE_HOLDOUT_FREEZE.json`; `data/experiments/experiment_005i/FINAL_SUMMARY.json`; `data/experiments/experiment_005i/OUTPUT_REGISTRY.json`; `data/experiments/experiment_005i/status.json` | PR #93 merged at `4a040a7d309df26098af5e81e96c7f1108d03117`; `CANONICAL_ON_MAIN` |
+| **005D late-count structural convergence / reconstruction** | `docs/experiments/EXPERIMENT_005D_FINAL_REPORT.md` | use the frozen HOLDOUT cells and reconstruction outputs referenced by that report; do not generalise the 13 predictive cells outside canonical `LATE_COUNT` | PR #42; `CANONICAL_ON_MAIN` |
+| **005E secondary participant signed-flow diagnostics** | `data/experiments/experiment_005e/results/FINAL_REPORT_005E.md` | canonical outputs under `data/experiments/experiment_005e/results/`, including sealed HOLDOUT evidence and `MASTER_HANDOFF_005E.md` | PR #43; secondary evidence only; `CANONICAL_ON_MAIN` |
+| **005H C04 Arrival-State / C05 Direction-State** | EXPERIMENT-005H final report on PR #94 head `5d37a2f2a7b64685c4a012408fdca53e6bf75307` | frozen W17→W18 development specification; B0 one-shot holdout covering 2026-09-01 through 2026-09-21; causal ordering is V3 `timestamp_received` + sequence only | `NON_CANONICAL_UNMERGED`; `HISTORICAL_B0_SURVIVORS_REQUIRE_FUTURE_CONFIRMATION` |
+| **004C-B narrow soft competitive-family effect** | `data/experiments/experiment_004c_b/review/FINAL_REPORT_004C_B.md` | `data/experiments/experiment_004c_b/review/MASTER_HANDOFF_004C_B.md` plus its frozen result summaries | PR #35; `CANONICAL_ON_MAIN`; narrow discovery only |
+| **005A narrow same-family 5s effect** | `data/experiments/experiment_005a/results/FINAL_RESEARCH_REPORT.md` | `data/experiments/experiment_005a/results/MASTER_HANDOFF_005A.md`; `canonical_verification.json`; `artifact_hashes.json` | PR #38; `CANONICAL_ON_MAIN`; narrow evidence only |
+
+## Exact synthesis reconstruction procedure
+
+1. Read the source artifact for every row above before reading this synthesis's interpretation.
+2. Record each result's frozen target, dataset, sample/cluster count, holdout status, effect metric, temporal/cross-market consistency, known caveats and canonicality.
+3. Apply the evidence scale used in `docs/research/POSITIVE_EVIDENCE_LEDGER.md`; do not raise evidence level because a result looks economically attractive.
+4. Treat an exact fresh-dataset replication as distinct from repeated observations within the same corpus.
+5. Keep **movement/transition**, **direction**, **market interaction**, **own-quote fill probability**, **toxicity**, and **realised economics** as separate layers.
+6. Do not count multiple renewal-age/state-age variables as independent alphas without an incremental test.
+7. Preserve negative results and failed conversions. In particular, 005G's failed economic conversion is part of the canonical interpretation of the otherwise successful hazard family.
+8. Do not promote 005H C04 into “our quote will fill”: it predicts market interaction/fill moments versus matched non-fill states. Do not promote C05 into “profitable direction”: it predicts aggressor BUY/SELL conditional on a fill.
+9. Count an E4/E5 positive only where the source artifact explicitly demonstrates the corresponding executable or live economic evidence. At this snapshot, the count remains **E4 = 0, E5 = 0**.
+10. Rebuild `data/research/positive_evidence_ledger.json` first, derive the graph/family interpretation second, and write the prose synthesis last.
+
+## Reproducibility boundary
+
+This document is intended to be sufficient for a fresh agent with repository access to reconstruct the **research map and synthesis** without conversation history.
+
+It is not a replacement for the experiment artifacts themselves. Raw experiment reruns still require their frozen data manifests, scripts, external datasets and execution environments referenced by the source reports.
