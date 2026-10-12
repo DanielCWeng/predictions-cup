@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass
@@ -115,6 +116,8 @@ async def recover_startup(
     exchange_ids_by_market: dict[str, tuple[str, ...]] | None = None,
     reservations: ExecutionReservationBook | None = None,
     market_by_exchange: dict[str, str] | None = None,
+    max_placement_replay_age_seconds: float = 10.0,
+    placement_replay_allowed: Callable[[ExecutionEnvelope], bool] | None = None,
 ) -> StartupRecoveryResult:
     """Reconcile unresolved operations from paginated tournament snapshots.
 
@@ -123,6 +126,11 @@ async def recover_startup(
     run this coroutine in the background and keep only returned exchange IDs
     blocked while reconciliation is in flight.
     """
+    if (
+        not math.isfinite(max_placement_replay_age_seconds)
+        or max_placement_replay_age_seconds <= 0
+    ):
+        raise ValueError("max_placement_replay_age_seconds must be finite and positive")
     if authoritative_snapshot is None:
         try:
             authoritative_snapshot = await _retry_recovery_sig_operation(
@@ -192,6 +200,48 @@ async def recover_startup(
             continue
         if not replayable_state:
             continue
+
+        # Restored #79 default-deny authority. A durable, un-ACKed request
+        # never proves the original quote is still safe after a restart.
+        created_at = journal.operation_created_at(envelope.logical_operation_id)
+        now = wall_clock()
+        fresh = (
+            created_at is not None
+            and now.tzinfo is not None
+            and now.utcoffset() is not None
+            and now >= created_at
+            and (now - created_at).total_seconds() <= max_placement_replay_age_seconds
+        )
+        eligible = (
+            placement_replay_allowed is not None
+            and placement_replay_allowed(envelope)
+        )
+        if not fresh or not eligible:
+            # Preserve the unresolved economic reserve and move PENDING or
+            # RECONCILING to UNCERTAIN; only record why replay was withheld.
+            current = _unresolved_envelope(journal, envelope.logical_operation_id)
+            if current is None:
+                continue
+            if current.lifecycle_state is not LifecycleState.UNCERTAIN:
+                journal.mark_state(
+                    envelope.logical_operation_id,
+                    LifecycleState.UNCERTAIN,
+                    clock_ns(),
+                )
+            journal.record_event(
+                logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
+                event_type="RECOVERY_PLACEMENT_HELD",
+                observed_monotonic_ns=clock_ns(),
+                terminal_status=LifecycleState.UNCERTAIN.value,
+                detail_json=json.dumps(
+                    {"fresh": fresh, "eligibility_proven": eligible},
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+            )
+            continue
+
         try:
             current = _unresolved_envelope(journal, envelope.logical_operation_id)
             if current is None:
