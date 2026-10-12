@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from predictions_cup.research.election_evaluation import EvaluationRow, evaluate_holdout
+from predictions_cup.research.election_evaluation import EvaluationRow, ForecastReport, evaluate_holdout
 from predictions_cup.research.election_nowcast import (
     Abstain,
     CountObservation,
@@ -14,6 +15,7 @@ from predictions_cup.research.election_nowcast import (
     MarketRule,
     OfficialSource,
     RemainingGroup,
+    ShadowCandidate,
     choose_observation,
     make_shadow_candidate,
 )
@@ -21,7 +23,7 @@ from predictions_cup.research.election_nowcast import (
 T = datetime(2026, 11, 4, 2, tzinfo=UTC)
 
 
-def inputs():
+def inputs() -> tuple[OfficialSource, MarketRule, FrozenPrior, CountObservation]:
     source = OfficialSource(
         "official", "results.example.gov", True,
         "https://results.example.gov/races", "NOT_VERIFIED_FOR_REAL_HOST",
@@ -49,14 +51,14 @@ def inputs():
     return source, rule, prior, obs
 
 
-def candidate(**updates):
+def candidate(**updates: Any) -> ShadowCandidate:
     source, rule, prior, obs = inputs()
     return make_shadow_candidate(
         replace(obs, **updates), source, rule, prior, T, simulations=512
     )
 
 
-def test_shadow_interface_and_deterministic_probability():
+def test_shadow_interface_and_deterministic_probability() -> None:
     a = candidate()
     assert a == candidate()
     assert a.mode == "SHADOW" and a.execution_authority is False
@@ -71,7 +73,7 @@ def test_shadow_interface_and_deterministic_probability():
     } <= set(a.as_dict())
 
 
-def test_missing_remaining_inventory_and_frozen_prior_abstain():
+def test_missing_remaining_inventory_and_frozen_prior_abstain() -> None:
     source, rule, prior, obs = inputs()
     with pytest.raises(Abstain, match="remaining"):
         make_shadow_candidate(
@@ -85,7 +87,7 @@ def test_missing_remaining_inventory_and_frozen_prior_abstain():
         )
 
 
-def test_stale_future_and_inverted_clocks_abstain():
+def test_stale_future_and_inverted_clocks_abstain() -> None:
     with pytest.raises(Abstain, match="future"):
         candidate(receive_time=T + timedelta(seconds=1))
     with pytest.raises(Abstain, match="TTL"):
@@ -97,7 +99,7 @@ def test_stale_future_and_inverted_clocks_abstain():
         candidate(source_time=T - timedelta(hours=1))
 
 
-def test_official_hostname_and_exact_rules_are_required():
+def test_official_hostname_and_exact_rules_are_required() -> None:
     source, rule, prior, obs = inputs()
     with pytest.raises(Abstain, match="host"):
         make_shadow_candidate(
@@ -121,7 +123,7 @@ def test_official_hostname_and_exact_rules_are_required():
         )
 
 
-def test_training_overlap_and_postpublication_freeze_abstain():
+def test_training_overlap_and_postpublication_freeze_abstain() -> None:
     source, rule, prior, obs = inputs()
     with pytest.raises(Abstain, match="leakage"):
         make_shadow_candidate(
@@ -136,7 +138,7 @@ def test_training_overlap_and_postpublication_freeze_abstain():
         )
 
 
-def test_mail_day_composition_changes_probabilities_not_just_precinct_share():
+def test_mail_day_composition_changes_probabilities_not_just_precinct_share() -> None:
     source, rule, prior, obs = inputs()
     mail = replace(obs, remaining=(
         RemainingGroup("west-mail", "MAIL", 3000, 3000),
@@ -152,7 +154,7 @@ def test_mail_day_composition_changes_probabilities_not_just_precinct_share():
     assert p_day.probability_estimate > 0.9
 
 
-def test_remaining_ballot_uncertainty_expands_envelope():
+def test_remaining_ballot_uncertainty_expands_envelope() -> None:
     source, rule, prior, obs = inputs()
     wide = make_shadow_candidate(obs, source, rule, prior, T, simulations=1024)
     narrow = make_shadow_candidate(
@@ -165,7 +167,7 @@ def test_remaining_ballot_uncertainty_expands_envelope():
     assert wide.p_interval[1] >= narrow.p_interval[1] - 0.05
 
 
-def test_revision_not_visible_before_receipt_or_without_correction_label():
+def test_revision_not_visible_before_receipt_or_without_correction_label() -> None:
     _, _, _, original = inputs()
     corrected = replace(
         original, source_time=T + timedelta(seconds=1),
@@ -186,14 +188,14 @@ def test_revision_not_visible_before_receipt_or_without_correction_label():
         )
 
 
-def test_media_call_not_equivalent_to_official_result():
+def test_media_call_not_equivalent_to_official_result() -> None:
     with pytest.raises(Abstain, match="media projection"):
         candidate(status="MEDIA_CALL")
 
 
-def make_row(**updates):
+def make_row(**updates: Any) -> EvaluationRow:
     c = candidate()
-    fields = {
+    fields: dict[str, Any] = {
         "event_family": "2026-FAMILY", "contest_id": "race-one", "candidate": c,
         "quote_asof": T - timedelta(seconds=3),
         "quote_received": T - timedelta(seconds=2),
@@ -205,20 +207,22 @@ def make_row(**updates):
     return EvaluationRow(**fields)
 
 
-def evaluate(rows, training=frozenset({"2024-FAMILY"})):
+def evaluate(
+    rows: list[EvaluationRow], training: frozenset[str] = frozenset({"2024-FAMILY"})
+) -> ForecastReport:
     return evaluate_holdout(
         rows, sealed_event_families=frozenset({"2026-FAMILY"}),
         training_event_families=training, resamples=200,
     )
 
 
-def test_no_real_study_means_no_positive_alpha_claim():
+def test_no_real_study_means_no_positive_alpha_claim() -> None:
     report = evaluate([])
     assert report.status == "NO_VALID_DECISION_TIME_OBSERVATIONS"
     assert report.economic_advantage == "NOT_MEASURED_NO_EXECUTABLE_REPLAY"
 
 
-def test_split_mismatch_and_future_quote_are_hard_rejections():
+def test_split_mismatch_and_future_quote_are_hard_rejections() -> None:
     with pytest.raises(Abstain, match="overlaps"):
         evaluate([make_row()], training=frozenset({"2026-FAMILY"}))
     report = evaluate([
@@ -231,7 +235,7 @@ def test_split_mismatch_and_future_quote_are_hard_rejections():
     assert report.rows == 0 and report.failed_rows == 5
 
 
-def test_large_tick_count_from_one_event_cannot_pass_support():
+def test_large_tick_count_from_one_event_cannot_pass_support() -> None:
     report = evaluate([make_row() for _ in range(100)])
     assert report.rows == 100
     assert report.independent_event_families == 1
