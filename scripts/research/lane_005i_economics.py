@@ -1,4 +1,4 @@
-"""Read-only CLI for LANE-3 005I economics. Requires precomputed causal minute tape.
+"""Read-only CLI for LANE-3 005I economics; derives causal features by default.
 
 Never reads the 005I sealed HOLDOUT as an economic tuning input.
 """
@@ -12,11 +12,11 @@ from pathlib import Path
 
 from predictions_cup.replay.economic_005i import (
     EconomicConfig,
-    ExactPair,
     MinuteFeature,
     evaluate,
 )
 from predictions_cup.replay.features_005i import causal_minute_features
+from predictions_cup.replay.mapping_005i import load_accepted_005i_pairs
 from predictions_cup.replay.loaders import (
     CaptureSelection,
     load_polymarket_capture,
@@ -39,7 +39,8 @@ def run() -> int:
         "--features", type=Path,
         help="Optional externally audited causal minute tape; default derives from capture",
     )
-    parser.add_argument("--pairs", type=Path, required=True)
+    parser.add_argument("--sig-exchange-id", action="append")
+    parser.add_argument("--registry-root", type=Path, default=Path("."))
     parser.add_argument(
         "--freeze", type=Path,
         default=Path("data/experiments/experiment_005i/OFI_TRAIN_MODEL_FREEZE.json"),
@@ -53,6 +54,7 @@ def run() -> int:
     parser.add_argument("--min-edge", type=Decimal, required=True)
     parser.add_argument("--quantity", type=Decimal, required=True)
     parser.add_argument("--capital-limit", type=Decimal, required=True)
+    parser.add_argument("--gross-share-limit", type=Decimal, required=True)
     parser.add_argument("--depth-haircut", type=Decimal, default=Decimal("0.5"))
     args = parser.parse_args()
 
@@ -62,11 +64,16 @@ def run() -> int:
         parser.error("DEV mode cannot touch September 21 onward")
     if args.mode == "prospective" and args.start.date().isoformat() < "2026-10-12":
         parser.error("prospective PAPER must start no earlier than October 12")
-    pairs = [ExactPair(**item) for item in json.loads(args.pairs.read_text())]
+    pairs = load_accepted_005i_pairs(
+        args.registry_root,
+        sig_exchange_ids=(
+            tuple(args.sig_exchange_id) if args.sig_exchange_id is not None else None
+        ),
+    )
     selection = CaptureSelection(
         start_at=args.start - timedelta(minutes=8),
         end_at=args.end,
-        sig_exchange_ids=tuple(sorted({x for p in pairs for x in (p.sig_yes, p.sig_no)})),
+        sig_exchange_ids=tuple(sorted({p.sig_exchange_id for p in pairs})),
         polymarket_token_ids=tuple(sorted({p.pm_yes for p in pairs})),
     )
     events = (
@@ -96,7 +103,8 @@ def run() -> int:
         EconomicConfig(
             fee_bps_per_side=args.fee_bps_per_side, latency_ms=args.latency_ms,
             min_edge=args.min_edge, quantity=args.quantity,
-            capital_limit=args.capital_limit, depth_haircut=args.depth_haircut,
+            capital_limit=args.capital_limit, gross_share_limit=args.gross_share_limit,
+            depth_haircut=args.depth_haircut,
         ),
         json.loads(args.freeze.read_text()),
     )
@@ -105,7 +113,7 @@ def run() -> int:
     result["input_provenance"] = {
         "sig_db": str(args.sig_db), "pm_capture": str(args.pm_capture),
         "features": "FROM_REPLAY_EVENTS" if args.features is None else str(args.features),
-        "pairs": str(args.pairs),
+        "pairs": "HASH_VERIFIED_MAPPING_001_REGISTRY",
         "freeze": str(args.freeze),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
