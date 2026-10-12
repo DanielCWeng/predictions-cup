@@ -72,7 +72,7 @@ def bridge_lane_b(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dic
     episodes: list[dict[str, Any]] = []
     source_ledger: list[dict[str, Any]] = []
     source_counts: dict[str, int] = {}
-    seen: set[str] = set()
+    seen: dict[str, str] = {}
     for index, row in enumerate(rows):
         raw_digest = hashlib.sha256(
             json.dumps(row, sort_keys=True, default=str).encode()
@@ -137,14 +137,22 @@ def bridge_lane_b(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dic
             gate_reason = "LANE_B_NO_TRADE_OR_UNTRUSTED"
         else:
             gate_reason = "SOURCE_EPOCH_SEED_AUDIT_NOT_YET_PROVEN"
+        # Lane B emits BUY_YES *and* BUY_NO for each underlying paired frame.
+        # Preserve both raw audit rows, but never count two market observations.
         identity = (
             str(row.get("sequence")), str(row.get("sig_exchange_id")),
-            str(row.get("side")), str(row.get("decision_at"))
+            str(row.get("pm_token_id")), str(row.get("decision_at"))
         )
         dedupe = "|".join(identity)
-        if dedupe in seen:
-            gate_reason = "DUPLICATED_PAPER_EPISODE"
-        seen.add(dedupe)
+        repeated = dedupe in seen
+        if repeated:
+            gate_reason = (
+                "DUPLICATED_PAPER_EPISODE"
+                if seen[dedupe] == str(row.get("side"))
+                else "SECOND_SIDE_OF_SAME_PAIRED_SNAPSHOT"
+            )
+        else:
+            seen[dedupe] = str(row.get("side"))
         source_ledger.append({
             "input_index": index,
             "lane_b_sequence": row.get("sequence"),
@@ -161,7 +169,7 @@ def bridge_lane_b(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dic
         # Never elevate upstream "trusted=true" on a user-supplied row. Only an
         # external reviewed source/epoch attestation can permit actual candidate
         # economics; that workflow is intentionally absent from this adapter.
-        if at is None or not identity_ok:
+        if at is None or not identity_ok or repeated:
             continue
         stamp = at.isoformat()
         sig_stamp = sig_at.isoformat() if sig_at is not None else stamp
