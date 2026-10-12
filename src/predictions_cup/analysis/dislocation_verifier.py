@@ -432,7 +432,7 @@ def audit_opportunity(
         not source.verified
         or not source.source_id.strip()
         or not source.event_id.strip()
-        or not source.source_kind.strip()
+        or source.source_kind not in {"OFFICIAL_RESULT", "VERIFIED_MEDIA_CALL"}
         or source.event_id != relationship.event_group_id
     ):
         return emit(AuditStatus.REJECTED, "UNVERIFIED_OR_SHUFFLED_EVENT")
