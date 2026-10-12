@@ -352,7 +352,11 @@ def evaluate(
                 marks[str(seconds)] = _as_float(pnl)
                 if seconds == 300:
                     pnl_5m = pnl
-                    close_time = exit_snapshot[0] if pnl is not None and exit_snapshot is not None else None
+                    close_time = (
+                        exit_snapshot[0]
+                        if pnl is not None and exit_snapshot is not None
+                        else None
+                    )
             exited += int(pnl_5m is not None)
             # Unknown close is NOT marked as a profitable exit. Reserve forever and
             # report liquidation-zero downside separately until captured.
