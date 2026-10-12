@@ -265,3 +265,25 @@ def test_reject_duplicate_leg_and_invalid_policy() -> None:
         DislocationPolicy(fee_rate=float("nan"))
     with pytest.raises(ValueError, match="positive"):
         DislocationPolicy(max_quote_age_ns=0)
+
+
+def test_trade_lock_negative_payoff_and_signature_tamper() -> None:
+    assert _audit(decision_at=datetime(2026, 11, 4, 17, tzinfo=UTC)).reason == (
+        "AFTER_2026_TRADE_LOCK"
+    )
+    rel, _, _, review, _, _ = _setup()
+    negative = replace(
+        rel,
+        legs=(replace(rel.legs[0], payoff_by_state=(-0.2, 0.0)), rel.legs[1]),
+    )
+    attested = replace(review, state_vector_hash=state_vector_sha256(negative))
+    assert _audit(relationship=negative, review=attested).reason == (
+        "NON_BINARY_OR_NEGATIVE_PAYOFF"
+    )
+    candidate = _audit()
+    assert candidate.structural is not None
+    tampered = replace(
+        candidate,
+        structural=replace(candidate.structural, fee_rate=0.0),
+    )
+    assert not verify_signature(tampered, KEY)
