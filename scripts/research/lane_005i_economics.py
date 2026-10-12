@@ -6,13 +6,22 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from predictions_cup.replay.economic_005i import EconomicConfig, ExactPair, MinuteFeature, evaluate
+from predictions_cup.replay.economic_005i import (
+    EconomicConfig,
+    ExactPair,
+    MinuteFeature,
+    evaluate,
+)
 from predictions_cup.replay.features_005i import causal_minute_features
-from predictions_cup.replay.loaders import CaptureSelection, load_polymarket_capture, load_sig_capture
+from predictions_cup.replay.loaders import (
+    CaptureSelection,
+    load_polymarket_capture,
+    load_sig_capture,
+)
 
 
 def parse_time(raw: str) -> datetime:
@@ -26,9 +35,15 @@ def run() -> int:
     parser = argparse.ArgumentParser(description="Offline 005I net-economics research ONLY")
     parser.add_argument("--sig-db", type=Path, required=True)
     parser.add_argument("--pm-capture", type=Path, required=True)
-    parser.add_argument("--features", type=Path, help="Optional externally audited causal minute tape; omitted => derive strictly from capture")
+    parser.add_argument(
+        "--features", type=Path,
+        help="Optional externally audited causal minute tape; default derives from capture",
+    )
     parser.add_argument("--pairs", type=Path, required=True)
-    parser.add_argument("--freeze", type=Path, default=Path("data/experiments/experiment_005i/OFI_TRAIN_MODEL_FREEZE.json"))
+    parser.add_argument(
+        "--freeze", type=Path,
+        default=Path("data/experiments/experiment_005i/OFI_TRAIN_MODEL_FREEZE.json"),
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--mode", choices=("dev", "prospective"), required=True)
     parser.add_argument("--start", required=True, type=parse_time)
@@ -49,7 +64,7 @@ def run() -> int:
         parser.error("prospective PAPER must start no earlier than October 12")
     pairs = [ExactPair(**item) for item in json.loads(args.pairs.read_text())]
     selection = CaptureSelection(
-        start_at=args.start - __import__("datetime").timedelta(minutes=8),
+        start_at=args.start - timedelta(minutes=8),
         end_at=args.end,
         sig_exchange_ids=tuple(sorted({x for p in pairs for x in (p.sig_yes, p.sig_no)})),
         polymarket_token_ids=tuple(sorted({p.pm_yes for p in pairs})),
