@@ -177,6 +177,30 @@ def _walk(
     return None
 
 
+def _marginal_buy_limit(
+    levels: Iterable[Any], qty: Decimal, *, haircut: Decimal,
+) -> Decimal | None:
+    """Placeable buy limit: highest *marginal* price needed for full depth.
+
+    VWAP alone is never an order limit. Haircut quantities are research
+    scenarios and do not imply observed or independently placeable fills.
+    """
+    remaining = qty
+    previous: Decimal | None = None
+    for level in sorted(levels, key=lambda x: x.price):
+        if level.quantity < 0 or not D(0) < level.price < D(1):
+            return None
+        if previous is not None and level.price == previous:
+            return None
+        previous = level.price
+        take = min(remaining, level.quantity * haircut)
+        if take > 0:
+            remaining -= take
+        if remaining <= 0:
+            return level.price
+    return None
+
+
 def _walk_partial_close(
     levels: Iterable[BookLevel], qty: Decimal, *,
     haircut: Decimal,
@@ -381,11 +405,15 @@ def evaluate(
                                  decision, config.max_quote_age_ms, sig=True)
                 if book is None:
                     continue
+                entry_levels = _outcome_levels(book, side=choice, buy=True)
                 entry_cost = _walk(
-                    _outcome_levels(book, side=choice, buy=True),
-                    config.quantity, buy=True, haircut=config.depth_haircut,
+                    entry_levels, config.quantity, buy=True,
+                    haircut=config.depth_haircut,
                 )
-                if entry_cost is None:
+                marginal_limit = _marginal_buy_limit(
+                    entry_levels, config.quantity, haircut=config.depth_haircut,
+                )
+                if entry_cost is None or marginal_limit is None:
                     continue
                 fair_per_share = sig_fair if choice == "YES" else D(1) - sig_fair
                 # Conservative round-trip fee reserve; direction score is NOT fair value.
@@ -393,11 +421,13 @@ def evaluate(
                     fair_per_share + entry_cost / config.quantity
                 ) * fee
                 if net_estimate >= config.min_edge:
-                    proposals.append((net_estimate, choice, contract, entry_cost))
+                    proposals.append((
+                        net_estimate, choice, contract, entry_cost, marginal_limit,
+                    ))
             if not proposals:
                 rejected["no_positive_crossing_edge_or_depth"] += 1
                 continue
-            _, choice, contract, expected_cost = max(proposals)
+            _, choice, contract, expected_cost, limit = max(proposals)
             if pair.sig_exchange_id in market_last and (
                 decision - market_last[pair.sig_exchange_id]
                 < timedelta(seconds=config.cooldown_seconds)
@@ -414,7 +444,9 @@ def evaluate(
                 (until, cash, gross) for until, cash, gross in active_capital
                 if until is None or until > decision
             ]
-            proposed_cash = expected_cost * (D(1) + fee)
+            # The executable order reserves worst-case limit notional,
+            # not the attractive depth VWAP. This survives adverse reshuffling.
+            proposed_cash = limit * config.quantity * (D(1) + fee)
             if sum((c for _, c, _ in active_capital), D(0)) + proposed_cash > (
                 config.capital_limit
             ):
@@ -427,7 +459,6 @@ def evaluate(
                 continue
             qualified += 1
             market_last[pair.sig_exchange_id] = decision
-            limit = expected_cost / config.quantity
             arrival_at = decision + timedelta(milliseconds=config.latency_ms)
             sig_key = (ReplaySource.SIG, contract)
             arrival = _next_quote(
@@ -444,7 +475,7 @@ def evaluate(
                 config.quantity, buy=True,
                 haircut=config.depth_haircut, max_buy_price=limit,
             )
-            if filled_cost is None or filled_cost / config.quantity > limit:
+            if filled_cost is None:
                 rejected["ioc_limit_or_depth_no_fill"] += 1
                 continue
             fills_touch_upper += 1
@@ -532,6 +563,10 @@ def evaluate(
                     float(partial_realised) if primary_close_qty > 0 else None
                 ),
                 "entry_cost": float(filled_cost), "entry_fee": float(entry_fee),
+                "decision_full_depth_vwap": float(expected_cost / config.quantity),
+                "placeable_marginal_buy_limit": float(limit),
+                "reserved_worst_case_entry_cash": float(proposed_cash),
+                "arrival_full_depth_vwap": float(filled_cost / config.quantity),
                 "markouts_net_5s_30s_5m_1h": marks,
                 "net_pnl_5m": _as_float(pnl_5m),
                 "unresolved_liquidation_zero_bound": float(stress_zero_salvage),
