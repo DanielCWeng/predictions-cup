@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import ast
 import copy
+import csv
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -127,3 +130,76 @@ def test_required_turnover_and_sanity_checks() -> None:
     for bad in ["0", "-0.1", "NaN", "1.1"]:
         with pytest.raises(ValueError):
             required_volume(profit_gap="765000", net_profit_per_volume=bad)
+
+
+def test_declared_official_api_cannot_be_laundered_from_public_web_or_other_hosts() -> None:
+    invalid = [
+        "https://sig.thesuper.market/leaderboards",
+        "https://sig.thesuper.market/user/abc",
+        "https://fake.sig.thesuper.market/api/v1/tournaments/cup/leaderboard",
+        "http://sig.thesuper.market/api/v1/tournaments/cup/leaderboard",
+        "https://sig.thesuper.market/api/v1/tournaments/cup/leaderboard#cached",
+        "https://sig.thesuper.market/api/v1/tournaments/cup/portfolio/positions",
+    ]
+    for source_url in invalid:
+        with pytest.raises(ValueError):
+            normalize_official_payload(
+                sample(), observed_at="2026-10-12T20:20:00Z", source_url=source_url
+            )
+    rows = normalize_official_payload(
+        sample(),
+        observed_at="2026-10-12T20:20:00Z",
+        source_url="https://sig.thesuper.market/api/v1/tournaments/cup/leaderboard?period=all",
+        raw_payload_sha256="a" * 64,
+    )
+    assert rows[0]["source_kind"] == "official_participant_api_declared_offline"
+    assert rows[0]["raw_payload_sha256"] == "a" * 64
+    with pytest.raises(ValueError):
+        normalize_official_payload(
+            sample(),
+            observed_at="2026-10-12T20:20:00Z",
+            source_url="https://sig.thesuper.market/api/v1/tournaments/cup/leaderboard",
+            raw_payload_sha256="not-a-digest",
+        )
+
+
+def test_web_display_and_issue_transcription_provenance_are_never_combined() -> None:
+    root = Path(__file__).resolve().parents[1]
+    data = root / "data/research/leaderboard_intel_20261012"
+    with (data / "public_web_leaderboard_top25_approx.csv").open(
+        encoding="utf-8", newline=""
+    ) as input_file:
+        public_rows = list(csv.DictReader(input_file))
+    with (data / "issue221_official_aggregate_20261012T2020Z.csv").open(
+        encoding="utf-8", newline=""
+    ) as input_file:
+        issue_rows = list(csv.DictReader(input_file))
+    assert len(public_rows) == 25
+    assert len(issue_rows) == 3
+    assert all(r["volume"] == "NOT_OBSERVABLE" for r in public_rows)
+    assert all(r["settled_profit"] == "NOT_OBSERVABLE" for r in public_rows)
+    assert all(r["precision"] == "issue_transcription_of_official_API" for r in issue_rows)
+    assert all(r["public_profile_fills"] == "NOT_OBSERVABLE" for r in issue_rows)
+    assert all("T" not in r["retrieval_date_utc"] for r in public_rows)
+    assert all("T" in r["observed_at_utc_approx"] for r in issue_rows)
+
+
+def test_offline_module_has_no_trading_or_network_imports() -> None:
+    root = Path(__file__).resolve().parents[1]
+    path = root / "src/predictions_cup/analysis/leaderboard_intel.py"
+    syntax = ast.parse(path.read_text(encoding="utf-8"))
+    imports = []
+    for node in ast.walk(syntax):
+        if isinstance(node, ast.Import):
+            imports.extend(alias.name for alias in node.names)
+        if isinstance(node, ast.ImportFrom) and node.module:
+            imports.append(node.module)
+    prohibited = (
+        "httpx", "requests", "aiohttp", "urllib.request",
+        "predictions_cup.execution", "predictions_cup.maker", "predictions_cup.risk",
+    )
+    assert not any(
+        module == banned or module.startswith(banned + ".")
+        for module in imports
+        for banned in prohibited
+    )
