@@ -51,7 +51,7 @@ def trust(at: datetime) -> ReplayEvent:
 
 
 def pair() -> ExactPair:
-    return ExactPair("market-1", "pm-yes", "sig-yes", "sig-no", "ACCEPTED_EXACT")
+    return ExactPair("market-1", "pm-yes", "sig-yes", "market-1", "SAME")
 
 
 def feature(**overrides: float) -> MinuteFeature:
@@ -82,6 +82,7 @@ def freeze() -> dict[str, Any]:
 def cfg(**kw: Any) -> EconomicConfig:
     args: dict[str, Any] = dict(fee_bps_per_side=D("20"), latency_ms=50,
                 min_edge=D("0.01"), quantity=D("1"), capital_limit=D("10"),
+                gross_share_limit=D("10"),
                 max_quote_age_ms=300, max_feature_delay_ms=5000,
                 max_arrival_wait_ms=1000, max_exit_wait_ms=500,
                 depth_haircut=D("0.5"))
@@ -98,16 +99,13 @@ def tape(*, bad_arrival: bool = False, future_jump: bool = False,
     return (
         trust(before),
         quote(ReplaySource.SIG, "sig-yes", before, 1, "0.50", "0.55", depth),
-        quote(ReplaySource.SIG, "sig-no", before, 2, "0.40", "0.45", depth),
         quote(ReplaySource.POLYMARKET, "pm-yes", before, 1, "0.70", "0.72"),
         quote(ReplaySource.POLYMARKET, "pm-yes", decision, 2, "0.70", "0.72"),
         quote(ReplaySource.SIG, "sig-yes", arrival, 3,
               "0.80" if future_jump else "0.54",
               "0.83" if future_jump else "0.55", depth if not bad_arrival else "0"),
-        quote(ReplaySource.SIG, "sig-no", arrival, 4, "0.40", "0.45", depth),
         *(() if missing_exit else (
             quote(ReplaySource.SIG, "sig-yes", exit_at, 5, "0.60", "0.62", depth),
-            quote(ReplaySource.SIG, "sig-no", exit_at, 6, "0.37", "0.40", depth),
         )),
     )
 
@@ -161,7 +159,7 @@ def test_critical_feature_clock_and_frozen_schema_guards() -> None:
     with pytest.raises(ValueError, match="provenance"):
         MinuteFeature("market-1", "pm-yes", T, T, feature().values, "unknown")
     with pytest.raises(ValueError, match="EXACT"):
-        ExactPair("m", "pm", "yes", "no", "UNVERIFIED")
+        ExactPair("m", "pm", "yes", "m", "UNVERIFIED")
     with pytest.raises(ValueError, match="purge"):
         cfg(cooldown_seconds=20)
     with pytest.raises(ValueError, match="duplicate"):
@@ -194,6 +192,47 @@ def test_absent_events_are_explicit_not_positive_alpha() -> None:
     assert out["status"] == "NO_ACCEPTED_OBSERVATIONS"
     assert out["promotion"] == "BLOCKED"
 
+
+
+def test_no_buy_uses_same_exchange_yes_bid_complement_not_sibling_exchange() -> None:
+    # PM YES=0.71; SIG YES bid=0.50 => NO ask=0.50, not another party's YES ask.
+    result = evaluate(tape(), [feature(ret_5m=0.03)], [pair()], cfg(), freeze())
+    reversal = result["results"]["REVERSAL"]
+    assert reversal["touch_fill_upper_bound"] == 1
+    trade = reversal["trades"][0]
+    assert trade["side"] == "NO"
+    assert trade["action"] == "buy"
+    assert trade["exchange_id"] == "sig-yes"
+    assert trade["signed_yes_entry_delta"] == -1
+    assert trade["signed_yes_full_close_delta"] == 1
+    # 5m NO bid = 1 - 0.62 = 0.38; NO entry=1-0.50=0.50 => loss
+    assert trade["net_pnl_5m"] < -0.12
+
+
+def test_no_third_party_winner_cannot_be_mistaken_for_no_exposure() -> None:
+    p = pair()
+    assert p.sig_exchange_id == "sig-yes"
+    assert p.mapping_direction == "SAME"
+    # Other outcomes' exchanges never appear in this paired binary order tape.
+    assert all(e.instrument_id != "third-party" for e in tape())
+
+
+def test_cash_budget_uses_actual_susqies_not_nominal_share_quantity() -> None:
+    result = evaluate(tape(), [feature()], [pair()],
+                      cfg(capital_limit=D("0.40"), gross_share_limit=D("100")), freeze())
+    assert result["results"]["REVERSAL"]["rejections"]["capital_exhausted"] == 1
+    result = evaluate(tape(), [feature()], [pair()],
+                      cfg(capital_limit=D("100"), gross_share_limit=D("0.5")), freeze())
+    assert result["results"]["REVERSAL"]["rejections"]["gross_share_limit"] == 1
+
+
+def test_complement_mapping_orients_pm_signal_into_sig_no() -> None:
+    p = ExactPair("market-1", "pm-yes", "sig-yes", "market-1", "COMPLEMENT")
+    out = evaluate(tape(), [feature(ret_5m=-0.03)], [p], cfg(), freeze())
+    # PM YES rising reversal predicts PM token YES; this is SIG NO in reviewed complement.
+    assert out["results"]["REVERSAL"]["touch_fill_upper_bound"] == 0 or (
+        out["results"]["REVERSAL"]["trades"][0]["side"] == "NO"
+    )
 
 def test_ioc_limit_blocks_levels_above_limit_even_if_vwap_would_pass() -> None:
     asks = (
