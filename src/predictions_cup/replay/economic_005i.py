@@ -128,10 +128,17 @@ def _valid(view: InstrumentView | None, at: datetime, age_ms: int, *, sig: bool)
         return False
     if not (D(0) <= view.best_bid < view.best_ask <= D(1)):
         return False
-    return bool(view.bids and view.asks)
+    if not view.bids or not view.asks:
+        return False
+    return max(x.price for x in view.bids) == view.best_bid and min(
+        x.price for x in view.asks
+    ) == view.best_ask
 
 
-def _walk(levels: Iterable[Any], qty: Decimal, *, buy: bool, haircut: Decimal) -> Decimal | None:
+def _walk(
+    levels: Iterable[Any], qty: Decimal, *, buy: bool,
+    haircut: Decimal, max_buy_price: Decimal | None = None,
+) -> Decimal | None:
     """Executable VWAP, no top-of-book price used for quantity beyond actual depth."""
     remaining = qty
     paid = D(0)
@@ -141,6 +148,8 @@ def _walk(levels: Iterable[Any], qty: Decimal, *, buy: bool, haircut: Decimal) -
         if level.quantity < 0 or level.price <= 0 or level.price >= 1:
             return None
         if previous is not None and level.price == previous:
+            return None
+        if buy and max_buy_price is not None and level.price > max_buy_price:
             return None
         previous = level.price
         take = min(remaining, level.quantity * haircut)
@@ -334,8 +343,10 @@ def evaluate(
                 rejected["no_latency_safe_arrival"] += 1
                 continue
             fill_time, fill_book = arrival
-            filled_cost = _walk(fill_book.asks, config.quantity, buy=True,
-                                haircut=config.depth_haircut)
+            filled_cost = _walk(
+                fill_book.asks, config.quantity, buy=True,
+                haircut=config.depth_haircut, max_buy_price=limit,
+            )
             if filled_cost is None or filled_cost / config.quantity > limit:
                 rejected["ioc_limit_or_depth_no_fill"] += 1
                 continue
