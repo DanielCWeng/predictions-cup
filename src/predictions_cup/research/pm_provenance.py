@@ -138,7 +138,14 @@ class PmProvenance:
                     continue
                 token = str(raw.get("asset_id") or raw.get("tokenId") or "")
                 if token not in self.seeded or token not in self.subscribed:
-                    self.counters["ignored_delta_"+self._category(token)] += 1
+                    category = self._category(token)
+                    self.counters["ignored_delta_"+category] += 1
+                    accepted.append({
+                        "event": "REJECTED", "token_id": token,
+                        "reason": "UNINITIALIZED_DELTA_" + category,
+                        "received_at": received.isoformat(), "epoch": self.epoch,
+                        "trusted": False,
+                    })
                     continue
                 # Separate singleton delta to isolate a bad entry from all
                 # other tokens; never mark a failed partial as a full book.
