@@ -169,10 +169,10 @@ def _invalid(frame: Frame | None, now: datetime, max_age_ms: int) -> str | None:
         return "REVISION_OR_HEALTH_GAP"
     if not frame.trusted:
         return "UNTRUSTED"
-    if frame.received > now or frame.exchange_at > now:
-        return "FUTURE_INFORMATION"
     if frame.exchange_at > frame.received:
         return "SOURCE_CLOCK_AHEAD"
+    if frame.received > now or frame.exchange_at > now:
+        return "FUTURE_INFORMATION"
     if (now - frame.received).total_seconds() * 1000 > max_age_ms:
         return "STALE_RECEIPT"
     if (now - frame.exchange_at).total_seconds() * 1000 > max_age_ms:
