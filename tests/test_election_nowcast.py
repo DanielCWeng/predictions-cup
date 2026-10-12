@@ -296,6 +296,7 @@ def test_unverifiable_raw_body_and_revision_receipt_abstain() -> None:
 def make_row(**updates: Any) -> EvaluationRow:
     fields: dict[str, Any] = {
         "event_family": "2026-FAMILY", "contest_id": "race-one",
+        "quote_exchange_id": "844",
         "candidate": candidate(),
         "quote_asof": T - timedelta(seconds=3),
         "quote_received": T - timedelta(seconds=2),
@@ -332,8 +333,9 @@ def test_split_mismatch_and_future_quote_are_hard_rejections() -> None:
         make_row(sig_bid_yes=0.9, sig_ask_yes=0.1),
         make_row(split="DEV"),
         make_row(event_family="WRONG-FAMILY"),
+        make_row(quote_exchange_id="WRONG-EXCHANGE"),
     ])
-    assert report.rows == 0 and report.failed_rows == 6
+    assert report.rows == 0 and report.failed_rows == 7
 
 
 def test_duplicate_decision_and_conflicting_outcome_not_double_counted() -> None:
