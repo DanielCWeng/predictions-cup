@@ -294,7 +294,6 @@ def evaluate(
         active_until: dict[str, datetime] = {}
         market_last: dict[str, datetime] = {}
         active_capital: list[tuple[datetime | None, Decimal, Decimal]] = []
-        occupied_market_until: dict[str, datetime] = {}
         for row in feature_list:
             pair = by_pair[(row.market_id, row.pm_yes)]
             side = _signal(strategy, row, pair, freeze)
