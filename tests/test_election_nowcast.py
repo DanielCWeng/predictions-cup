@@ -286,7 +286,7 @@ def test_unverifiable_raw_body_and_revision_receipt_abstain() -> None:
         calculate(obs, evidence=replace(receipt, publisher_timestamp_field="HTTP_DATE"))
     with pytest.raises(Abstain, match="receipt"):
         calculate(obs, evidence=replace(receipt, receive_time=T))
-    with pytest.raises(Abstain, match="raw revision"):
+    with pytest.raises(Abstain, match="unparseable"):
         calculate(
             replace(obs, source_document_sha256=hashlib.sha256(b"{}").hexdigest()),
             evidence=replace(receipt, raw_source_body=b"{}"),
