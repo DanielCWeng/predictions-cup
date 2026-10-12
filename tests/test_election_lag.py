@@ -7,9 +7,9 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from predictions_cup.observe.election_lag import (
+    ELECTION_2026_CANDIDATE_CUTOFF_UTC,
     Abstain,
     ElectionEvidenceKind,
-    ELECTION_2026_CANDIDATE_CUTOFF_UTC,
     ElectionLagPolicy,
     ElectionProbabilityUpdate,
     LagDirection,
