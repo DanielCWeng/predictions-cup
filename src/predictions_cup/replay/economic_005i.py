@@ -197,7 +197,7 @@ def _marginal_buy_limit(
         if take > 0:
             remaining -= take
         if remaining <= 0:
-            return level.price
+            return D(str(level.price))
     return None
 
 
