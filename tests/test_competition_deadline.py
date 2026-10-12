@@ -130,7 +130,9 @@ def test_retry_after_prior_send_cannot_cross_cutoff() -> None:
 
         client = _client(httpx.MockTransport(respond), _Governor(), lambda: next(clock_samples))
         try:
-            with pytest.raises(SigExecutionUncertainError, match="COMPETITION_CUTOFF_AFTER_DISPATCH"):
+            with pytest.raises(
+                SigExecutionUncertainError, match="COMPETITION_CUTOFF_AFTER_DISPATCH"
+            ):
                 await client._request_json(
                     "POST", "orders", route_template="/orders",
                     resolved_payload={}, accepted_statuses=frozenset({200}),
