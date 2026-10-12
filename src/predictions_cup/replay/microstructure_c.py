@@ -128,7 +128,8 @@ def _direction(strategy: str, row: dict[str, Any]) -> str | None:
         return sign(-float(inventory)) if inventory is not None else None
     if strategy == "STALE_QUOTE":
         return (sign(features.get("pm_minus_sig"), 0.04)
-                if features.get("reference_orientation") == "SIG_YES" else None)
+                if features.get("reference_orientation") == "SIG_YES"
+                and features.get("observable_external_update") is True else None)
     if strategy == "CROSSVENUE_STALE":
         if (features.get("verified_source_lag") is not True
                 or features.get("reference_orientation") != "SIG_YES"):
@@ -281,6 +282,16 @@ def evaluate(rows: list[dict[str, Any]], *, quantity: Decimal = DEFAULT_QTY,
                 "observed_passive_fill": None, "evidence_class": "NOT_MEASURED",
             }
             ledger.append(item)
+            if strategy != "NO_TRADE":
+                try:
+                    window_end = _time(row["feature_window_end"])
+                    available_at = _time(row["features_available_at"])
+                except (KeyError, ValueError, TypeError):
+                    item["reason"] = "feature_clock_missing_or_invalid"
+                    continue
+                if not window_end <= available_at <= decision:
+                    item["reason"] = "feature_lookahead"
+                    continue
             side = _direction(strategy, row)
             item["side"] = side
             if strategy == "NO_TRADE":
