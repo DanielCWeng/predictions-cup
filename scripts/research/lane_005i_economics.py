@@ -40,7 +40,6 @@ def run() -> int:
         help="Optional externally audited causal minute tape; default derives from capture",
     )
     parser.add_argument("--sig-exchange-id", action="append")
-    parser.add_argument("--registry-root", type=Path, default=Path("."))
     parser.add_argument(
         "--freeze", type=Path,
         default=Path("data/experiments/experiment_005i/OFI_TRAIN_MODEL_FREEZE.json"),
@@ -65,7 +64,7 @@ def run() -> int:
     if args.mode == "prospective" and args.start.date().isoformat() < "2026-10-12":
         parser.error("prospective PAPER must start no earlier than October 12")
     pairs = load_accepted_005i_pairs(
-        args.registry_root,
+        Path(__file__).resolve().parents[2],
         sig_exchange_ids=(
             tuple(args.sig_exchange_id) if args.sig_exchange_id is not None else None
         ),
