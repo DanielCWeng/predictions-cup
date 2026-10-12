@@ -211,7 +211,10 @@ def evaluate_holdout(
         )
     ])
     low, high = (float(v) for v in np.quantile(bootstrap[:, 0], [0.025, 0.975]))
-    calibration_ci = tuple(float(v) for v in np.quantile(bootstrap[:, 1], [0.025, 0.975]))
+    calibration_ci = (
+        float(np.quantile(bootstrap[:, 1], 0.025)),
+        float(np.quantile(bootstrap[:, 1], 0.975)),
+    )
 
     # Shuffled *episode* probabilities, not highly correlated quote ticks.
     shuffled = rng.permutation([e.mean_forecast for e in per_event])
