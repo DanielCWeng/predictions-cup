@@ -12,7 +12,7 @@ The scorer lives at `predictions_cup.observe.election_lag.evaluate_election_lag`
 ## Input contract
 
 A validated source adapter (not implemented by this PR) supplies:
-- `ElectionProbabilityUpdate`: official result or verified media call, source identity, publication and local receive timestamps, pre-calibrated conservative lower/upper probability, authenticity flag, accepted EXACT SIG mapping flag and calibration flag.
+- `ElectionProbabilityUpdate`: official result or verified media call, source identity, publication and local receive timestamps, pre-calibrated conservative lower/upper **SIG YES settlement-payoff** probability, authenticity flag, accepted EXACT SIG mapping flag, independently verified YES-payout semantic alignment and calibration flag. The source and SIG quote must share a stated monotonic-clock domain; raw monotonic values from separate processes or hosts must not be compared.
 - `SigExecutableTop`: same-market YES-denominated best bid and ask in exact 0.005 ticks, visible shares, local receive monotonic time, open/tradeable, trusted BBO and depth.
 - `ShadowCapacity`: trusted account, liquid cash, free gross exposure and owned YES inventory.
 - Policy with bounded receive age (5s), book age (1s), publication-to-receive lag (10s), a **hypothetical placeholder** 0.02 per-share cost haircut, minimum edge 0.01, and max size 100. **These numbers are test fixture policy, not empirically calibrated or approved for LIVE.**
