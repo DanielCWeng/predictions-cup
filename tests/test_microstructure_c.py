@@ -140,6 +140,8 @@ def test_acknowledged_zero_fill_counts_in_denominator_not_pnl() -> None:
     row = episode()
     row["observed_orders"] = {"PASSIVE_SPREAD": {
         "order_id": "o-1", "provenance": "SIG_EXECUTION_JOURNAL_JOINED",
+        "strategy_id": "PASSIVE_SPREAD", "sig_exchange_id": "101",
+        "submitted_at": START.isoformat(), "limit_price": "0.40",
         "side": "YES", "action": "buy", "ack_at": START.isoformat(),
         "filled_qty": "0", "fee_paid": "0",
     }}
@@ -154,6 +156,8 @@ def test_observed_partial_fill_not_upscaled_to_order_quantity() -> None:
     row = episode()
     row["observed_orders"] = {"PASSIVE_SPREAD": {
         "order_id": "o-2", "provenance": "SIG_EXECUTION_JOURNAL_JOINED",
+        "strategy_id": "PASSIVE_SPREAD", "sig_exchange_id": "101",
+        "submitted_at": START.isoformat(), "limit_price": "0.40",
         "side": "YES", "action": "buy", "ack_at": START.isoformat(),
         "fill_at": (START + timedelta(seconds=1)).isoformat(),
         "filled_qty": "0.5", "fill_price": "0.40", "fee_paid": "0.001",
@@ -171,6 +175,8 @@ def test_no_hypothetical_fills_after_confirmed_cancel() -> None:
     row = episode()
     row["observed_orders"] = {"PASSIVE_SPREAD": {
         "order_id": "o-3", "provenance": "SIG_EXECUTION_JOURNAL_JOINED",
+        "strategy_id": "PASSIVE_SPREAD", "sig_exchange_id": "101",
+        "submitted_at": START.isoformat(), "limit_price": "0.40",
         "side": "YES", "action": "buy", "ack_at": START.isoformat(),
         "fill_at": (START + timedelta(seconds=5)).isoformat(),
         "cancel_ack_at": (START + timedelta(seconds=4)).isoformat(),
@@ -188,10 +194,14 @@ def test_duplicate_order_evidence_rejected_across_episodes() -> None:
     # Provide b's decision book to pass stale check at its later decision.
     b["decision_book"] = snap(360)
     proof = {"order_id": "same", "provenance": "SIG_EXECUTION_JOURNAL_JOINED",
+             "strategy_id": "PASSIVE_SPREAD", "sig_exchange_id": "101",
+             "submitted_at": (START + timedelta(minutes=6)).isoformat(),
+             "limit_price": "0.40",
              "side": "YES", "action": "buy", "ack_at": (
                  START + timedelta(minutes=6)).isoformat(),
              "filled_qty": "0", "fee_paid": "0"}
-    a["observed_orders"] = {"PASSIVE_SPREAD": {**proof, "ack_at": START.isoformat()}}
+    a["observed_orders"] = {"PASSIVE_SPREAD": {
+        **proof, "ack_at": START.isoformat(), "submitted_at": START.isoformat()}}
     b["observed_orders"] = {"PASSIVE_SPREAD": proof}
     with pytest.raises(ValueError, match="reused passive journal"):
         evaluate([a, b], gross_free=Decimal(10), cash_free=Decimal(10))
@@ -203,6 +213,8 @@ def test_invalid_noncausal_fill_or_book_raises() -> None:
     row = episode()
     row["observed_orders"] = {"PASSIVE_SPREAD": {
         "order_id": "bad", "provenance": "SIG_EXECUTION_JOURNAL_JOINED",
+        "strategy_id": "PASSIVE_SPREAD", "sig_exchange_id": "101",
+        "submitted_at": START.isoformat(), "limit_price": "0.40",
         "side": "YES", "action": "buy", "ack_at": START.isoformat(),
         "fill_at": (START - timedelta(seconds=1)).isoformat(),
         "filled_qty": "1", "fill_price": "0.40", "fee_paid": "0",
@@ -237,3 +249,33 @@ def test_non_sig_reference_orientation_never_trades() -> None:
     row["features"]["reference_orientation"] = "PM_TOKEN"
     assert result(row, "DIRECT_FV")["reason"] == "no_qualifying_signal"
     assert result(row, "CROSSVENUE_STALE")["reason"] == "no_qualifying_signal"
+
+
+def test_wrong_journal_candidate_or_limit_fails_closed() -> None:
+    row = episode()
+    row["observed_orders"] = {"PASSIVE_SPREAD": {
+        "order_id": "wrong-limit", "provenance": "SIG_EXECUTION_JOURNAL_JOINED",
+        "strategy_id": "PASSIVE_SPREAD", "sig_exchange_id": "101",
+        "submitted_at": START.isoformat(), "ack_at": START.isoformat(),
+        "limit_price": "0.41", "side": "YES", "action": "buy",
+        "filled_qty": "0", "fee_paid": "0",
+    }}
+    with pytest.raises(ValueError, match="passive limit"):
+        result(row, "PASSIVE_SPREAD")
+    row["observed_orders"]["PASSIVE_SPREAD"]["limit_price"] = "0.40"
+    row["observed_orders"]["PASSIVE_SPREAD"]["strategy_id"] = "another_model"
+    with pytest.raises(ValueError, match="not unambiguously matched"):
+        result(row, "PASSIVE_SPREAD")
+
+
+def test_depth_compression_and_high_volatility_are_not_assumed_robust() -> None:
+    row = episode()
+    # Less executable depth alone can eliminate the IOC at fixed quantity.
+    assert result(row, "DIRECT_FV", haircut=Decimal("0.01"))[
+        "reason"] == "insufficient_decision_depth"
+    # A genuinely different high-volatility future exit yields an adverse markout.
+    row["exits"]["300"] = snap(300.2, bid="0.10", ask="0.20")
+    assert result(row, "DIRECT_FV")["conditional_net_5m"] < 0
+    # Spread compression kills passive signal rather than imputing historic fills.
+    row["features"]["spread"] = 0.02
+    assert result(row, "PASSIVE_SPREAD")["reason"] == "no_qualifying_signal"
