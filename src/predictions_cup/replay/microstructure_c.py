@@ -26,6 +26,7 @@ DEFAULT_FEE_BPS = D(20)
 DEFAULT_ZERO = D(0)
 DEFAULT_HAIRCUT = D("0.5")
 HORIZONS = (5, 30, 300, 3600)
+TOURNAMENT_LOCK_UTC = datetime(2026, 11, 4, 17, 0, tzinfo=UTC)
 PASSIVE = ("PASSIVE_SPREAD", "DEPTH_PASSIVE", "INVENTORY_SKEW", "PASSIVE_RANDOM")
 CANDIDATES = (
     "PASSIVE_SPREAD", "DEPTH_PASSIVE", "STALE_QUOTE", "INVENTORY_SKEW",
@@ -209,12 +210,23 @@ def _observed_order(raw: dict[str, Any], decision: datetime, side: str,
         raise ValueError("submission/ack chronology invalid")
     if _amount(raw["limit_price"]) != resting_limit:
         raise ValueError("passive limit not the decision-time resting quote")
+    terminal = raw.get("terminal_state")
+    if terminal not in ("FILLED", "CANCELLED", "PARTIAL_CANCELLED", "EXPIRED"):
+        raise ValueError("unresolved journal order")
+    if _time(raw["resolved_at"]) < ack:
+        raise ValueError("order resolution before ACK")
     qty = _amount(raw["filled_qty"])
     price = _amount(raw.get("fill_price", "0"))
     fee = _amount(raw["fee_paid"])
     if (qty < 0 or qty > quantity or fee < 0
             or (qty > 0 and not D(0) < price <= resting_limit)):
         raise ValueError("invalid matched fill")
+    if terminal == "FILLED" and qty != quantity:
+        raise ValueError("full-fill status conflicts with quantity")
+    if terminal in ("CANCELLED", "EXPIRED") and qty != 0:
+        raise ValueError("zero-fill terminal state conflicts with quantity")
+    if terminal == "PARTIAL_CANCELLED" and not D(0) < qty < quantity:
+        raise ValueError("partial terminal state conflicts with quantity")
     filled_at = _time(raw["fill_at"]) if qty > 0 else None
     if filled_at is not None and filled_at < ack:
         raise ValueError("fill before acknowledgement")
@@ -297,6 +309,9 @@ def evaluate(rows: list[dict[str, Any]], *, quantity: Decimal = DEFAULT_QTY,
             if strategy == "NO_TRADE":
                 item["status"], item["reason"] = "ABSTAIN", "control_no_trade"
                 continue
+            if decision >= TOURNAMENT_LOCK_UTC:
+                item["reason"] = "after_tournament_lock"
+                continue
             if side is None:
                 item["reason"] = "no_qualifying_signal"
                 continue
@@ -333,6 +348,12 @@ def evaluate(rows: list[dict[str, Any]], *, quantity: Decimal = DEFAULT_QTY,
                 unique_orders.add(order_id)
                 resting_levels = _levels(book, side, False)
                 resting_limit = max(level.price for level in resting_levels)
+                if proof.get("terminal_state") not in (
+                        "FILLED", "CANCELLED", "PARTIAL_CANCELLED", "EXPIRED"):
+                    item["status"] = "UNRESOLVED"
+                    item["reason"] = "unresolved_order_capital_locked"
+                    item["evidence_class"] = "UNRESOLVED_JOURNAL_ORDER"
+                    continue
                 _, shares, paid, fee_paid, fill_at = _observed_order(
                     proof, decision, side, quantity, exchange_id=exchange_id,
                     strategy=strategy, resting_limit=resting_limit)
