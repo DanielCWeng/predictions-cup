@@ -7,10 +7,19 @@ from decimal import Decimal
 import pytest
 
 from predictions_cup.replay.economic_005i import (
-    EconomicConfig, ExactPair, MinuteFeature, evaluate, frozen_probability,
+    EconomicConfig,
+    ExactPair,
+    MinuteFeature,
+    evaluate,
+    frozen_probability,
 )
 from predictions_cup.replay.model import (
-    BookLevel, QuotePayload, ReplayEvent, ReplayEventType, ReplaySource, TrustPayload,
+    BookLevel,
+    QuotePayload,
+    ReplayEvent,
+    ReplayEventType,
+    ReplaySource,
+    TrustPayload,
 )
 
 D = Decimal
