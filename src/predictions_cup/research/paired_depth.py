@@ -1,4 +1,4 @@
-# ruff: noqa: E501
+# ruff: noqa: E501, I001
 """LANE B read-only paired-depth PAPER gate (#220).
 
 Consumes *explicitly provenance-attested* JSONL full-book observations, not live APIs.
