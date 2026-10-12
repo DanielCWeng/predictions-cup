@@ -28,8 +28,10 @@ def episode(*, side: str = "YES") -> dict[str, Any]:
         "episode_id": "e-1", "event_id": "evt-1", "sig_exchange_id": "101",
         "decision_at": START.isoformat(),
         "exact_mapping_verified": True, "paired_depth_trusted": True,
+        "mapping_direction": "SAME",
         "features": {"pm_minus_sig": 0.10 if side == "YES" else -0.10,
-                     "verified_source_lag": True, "imbalance": 0.7,
+                     "verified_source_lag": True, "reference_orientation": "SIG_YES",
+                     "imbalance": 0.7,
                      "spread": 0.20, "aggressive_trade_sign": -1,
                      "replenishment": 0.9, "short_discovery": 0.1,
                      "inventory_yes": -10, "frozen_005i_signed": 1,
@@ -221,3 +223,17 @@ def test_cluster_confidence_unavailable_for_single_event() -> None:
     for candidate in out["scorecard"].values():
         assert candidate["day_event_clustered_markout_ci95"] is None
         assert candidate["capacity_ceiling"] is None
+
+
+def test_complemented_frozen_pm_prediction_inverts_sig_side() -> None:
+    row = episode(side="YES")
+    row["mapping_direction"] = "COMPLEMENT"
+    item = result(row, "FROZEN_005I")
+    assert item["side"] == "NO"
+
+
+def test_non_sig_reference_orientation_never_trades() -> None:
+    row = episode()
+    row["features"]["reference_orientation"] = "PM_TOKEN"
+    assert result(row, "DIRECT_FV")["reason"] == "no_qualifying_signal"
+    assert result(row, "CROSSVENUE_STALE")["reason"] == "no_qualifying_signal"
