@@ -141,7 +141,11 @@ changed settlement text, fake reviewed vector, mismatched canonical mapping
 hash, stale/future source, stale/foreign-clock/crossed book, missing/cancelled
 leg, pending/uncertain orders, fractional depth, incompatible leg
 ratios, sub-integer gross/cash capacity, stale account projections, #202 wire
-cutoff boundary and spread/fee/latency that destroys midpoint edge. Deterministic partial-fill stress *does not*
+cutoff boundary, unsupported event kinds, 429-like upstream source gaps and
+call reversals, 10× repeated snapshot bursts, and spread/fee/latency that
+destroys midpoint edge. The evaluator performs **no network requests**:
+a real HTTP 429 must be translated by the shared upstream collector into
+unverified/stale evidence; it cannot directly observe a 429 itself. Deterministic partial-fill stress *does not*
 simulate fills; it reports a worst-orphan exposure, never assumes atomicity.
 
 A prospective study may consume read-only capture from the existing realtime
