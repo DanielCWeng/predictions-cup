@@ -187,11 +187,22 @@ class SigLiveSink:
         }:
             raise ValueError("placement dispatch requires a placement operation kind")
 
-        # Pre-journal deadline check: never create a fresh pending placement
-        # once trading has closed. SigTradingClient checks again after waits.
-        assert_competition_placement_open(
-            self._wall_clock(), attempted_network=not require_reservation
-        )
+        # This check precedes the durable journal and *all* network attempts.
+        # MakerCoordinator has already reserved/marked the quote submitted.
+        # Release only a fresh, provably unsent operation so its SigApiError
+        # handler clears the local quote instead of manufacturing UNCERTAIN risk.
+        # Never release a recovery reservation: earlier economic effects may exist.
+        try:
+            assert_competition_placement_open(
+                self._wall_clock(), attempted_network=not require_reservation
+            )
+        except SigApiError as exc:
+            if require_reservation and exc.code in {
+                "COMPETITION_ORDER_CLOSED",
+                "COMPETITION_CLOCK_UNTRUSTED",
+            }:
+                self._reservations.release_operation(envelope.logical_operation_id)
+            raise
 
         if plan.audit is not None:
             self._observe(
