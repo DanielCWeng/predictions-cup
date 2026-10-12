@@ -49,6 +49,13 @@ def source_delta_ms(fill: dict[str, Any], event: dict[str, Any]) -> float | None
     )
 
 
+def realtime_source_within(
+    fill: dict[str, Any], event: dict[str, Any], tolerance_ms: float
+) -> bool:
+    delta = source_delta_ms(fill, event)
+    return delta is not None and delta <= tolerance_ms
+
+
 def match_fills(
     venue: list[dict[str, Any]],
     journal: list[dict[str, Any]],
@@ -65,7 +72,7 @@ def match_fills(
         if row["exchange_order_id"] is not None:
             by_order[str(row["exchange_order_id"])].append(row)
     seen_realtime: set[int] = set()
-    records = []
+    records: list[dict[str, Any]] = []
     for fill in sorted(venue, key=lambda x: (x["filled_at"], int(x["id"]))):
         order_events = [
             e
@@ -111,8 +118,7 @@ def match_fills(
                 if e["event_type"] == "REALTIME_FILL"
                 and e["event_id"] not in seen_realtime
                 and economics_match(fill, e)
-                and source_delta_ms(fill, e) is not None
-                and source_delta_ms(fill, e) <= tolerance_ms
+                and realtime_source_within(fill, e, tolerance_ms)
             ]
             candidates = len(matches)
             if len(matches) == 1:
@@ -123,9 +129,9 @@ def match_fills(
             elif len(matches) > 1:
                 status = "AMBIGUOUS_REALTIME_TUPLE"
             else:
-                summary = [e for e in order_events if e["event_type"] == "FILL_SUMMARY"]
-                if summary:
-                    chosen = summary[0]
+                summaries = [e for e in order_events if e["event_type"] == "FILL_SUMMARY"]
+                if summaries:
+                    chosen = summaries[0]
                     status = "ORDER_HAS_AGGREGATE_SUMMARY"
                     confidence = "ORDER_ONLY"
                 elif order_events:
@@ -176,7 +182,7 @@ def match_fills(
         day: dict(Counter(x["status"] for x in records if x["filled_at"].startswith(day)))
         for day in sorted({x["filled_at"][:10] for x in records})
     }
-    summary = {
+    summary: dict[str, Any] = {
         "venue_fill_count": len(venue),
         "unique_venue_order_count": len({str(x["order_id"]) for x in venue}),
         "journal_event_count": len(journal),
