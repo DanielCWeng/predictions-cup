@@ -447,3 +447,25 @@ def test_near_threshold_fee_edge_and_cutoff_headroom() -> None:
     allowed = at(near - timedelta(milliseconds=100))
     assert allowed.status is AuditStatus.SHADOW_CANDIDATE
     assert allowed.ttl_ns <= 150_000_000
+
+
+def test_429_gap_call_reversal_and_tenfold_snapshot_burst() -> None:
+    # The scanner performs no I/O; an upstream 429/reconnection must mark its
+    # source unverified or stale, rather than silently replay last good data.
+    rel, books, doc, review, source, cap = _setup()
+    baseline = [_audit() for _ in range(10)]
+    assert all(item.status is AuditStatus.SHADOW_CANDIDATE for item in baseline)
+    assert len({item.signature for item in baseline}) == 1
+    assert len({item.structural.certificate_id for item in baseline
+                if item.structural is not None}) == 1
+
+    unavailable = replace(source, verified=False)
+    assert _audit(source=unavailable).reason == "UNVERIFIED_OR_SHUFFLED_EVENT"
+    unsupported = replace(source, source_kind="UNVERIFIED_INITIAL_TALLY")
+    assert _audit(source=unsupported).reason == "UNVERIFIED_OR_SHUFFLED_EVENT"
+    reversed_call = replace(source, event_id="reversed-event")
+    assert _audit(source=reversed_call).reason == "UNVERIFIED_OR_SHUFFLED_EVENT"
+    assert _audit(
+        source=replace(source, received_ns=NS - 7_000_000_000),
+    ).reason == "STALE_OR_FUTURE_SOURCE"
+    assert len(books) == 2 and cap.trusted and doc.records and review.approved
