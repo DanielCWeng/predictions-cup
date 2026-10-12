@@ -175,10 +175,11 @@ def _signal(strategy: str, feature: MinuteFeature, pair: ExactPair,
 
 
 def _quote_at(points: list[tuple[datetime, InstrumentView]],
-              when: datetime, age_ms: int, *, sig: bool) -> InstrumentView | None:
+              times: list[datetime], when: datetime, age_ms: int,
+              *, sig: bool) -> InstrumentView | None:
     if not points:
         return None
-    idx = bisect.bisect_right([p[0] for p in points], when) - 1
+    idx = bisect.bisect_right(times, when) - 1
     if idx < 0:
         return None
     v = points[idx][1]
@@ -186,9 +187,8 @@ def _quote_at(points: list[tuple[datetime, InstrumentView]],
 
 
 def _next_quote(points: list[tuple[datetime, InstrumentView]],
-                when: datetime, wait_ms: int, age_ms: int
-                ) -> tuple[datetime, InstrumentView] | None:
-    times = [p[0] for p in points]
+                times: list[datetime], when: datetime, wait_ms: int,
+                age_ms: int) -> tuple[datetime, InstrumentView] | None:
     i = bisect.bisect_left(times, when)
     while i < len(points) and points[i][0] <= when + timedelta(milliseconds=wait_ms):
         t, v = points[i]
@@ -233,6 +233,7 @@ def evaluate(
                     tapes[key].append((frame.observed_at, v))
 
     ReplayRunner(events).run(snapshot)
+    tape_times = {key: [point[0] for point in value] for key, value in tapes.items()}
     if not frame_times:
         return {"status": "NO_ACCEPTED_OBSERVATIONS", "promotion": "BLOCKED", "results": {}}
 
@@ -275,7 +276,8 @@ def evaluate(
             if decision <= row.minute_end:
                 rejected["early_decision"] += 1
                 continue
-            pm = _quote_at(tapes[(ReplaySource.POLYMARKET, pair.pm_yes)],
+            pm_key = (ReplaySource.POLYMARKET, pair.pm_yes)
+            pm = _quote_at(tapes[pm_key], tape_times.get(pm_key, []),
                            decision, config.max_quote_age_ms, sig=False)
             if pm is None or pm.midpoint is None:
                 rejected["pm_stale_untrusted_or_depth_missing"] += 1
@@ -285,7 +287,8 @@ def evaluate(
             proposals = []
             for choice in options:
                 contract = pair.sig_yes if choice == "YES" else pair.sig_no
-                book = _quote_at(tapes[(ReplaySource.SIG, contract)],
+                sig_key = (ReplaySource.SIG, contract)
+                book = _quote_at(tapes[sig_key], tape_times.get(sig_key, []),
                                  decision, config.max_quote_age_ms, sig=True)
                 if book is None:
                     continue
@@ -323,8 +326,10 @@ def evaluate(
             market_last[pair.market_id] = decision
             limit = expected_cost / config.quantity
             arrival_at = decision + timedelta(milliseconds=config.latency_ms)
-            arrival = _next_quote(tapes[(ReplaySource.SIG, contract)], arrival_at,
-                                  config.max_arrival_wait_ms, config.max_quote_age_ms)
+            sig_key = (ReplaySource.SIG, contract)
+            arrival = _next_quote(tapes[sig_key], tape_times.get(sig_key, []),
+                                  arrival_at, config.max_arrival_wait_ms,
+                                  config.max_quote_age_ms)
             if arrival is None:
                 rejected["no_latency_safe_arrival"] += 1
                 continue
@@ -341,8 +346,9 @@ def evaluate(
             close_time: datetime | None = None
             for seconds in HORIZONS:
                 target = fill_time + timedelta(seconds=seconds)
-                exit_snapshot = _next_quote(tapes[(ReplaySource.SIG, contract)], target,
-                                            config.max_exit_wait_ms, config.max_quote_age_ms)
+                exit_snapshot = _next_quote(tapes[sig_key], tape_times.get(sig_key, []),
+                                            target, config.max_exit_wait_ms,
+                                            config.max_quote_age_ms)
                 proceeds = None
                 if exit_snapshot is not None:
                     proceeds = _walk(exit_snapshot[1].bids, config.quantity, buy=False,
