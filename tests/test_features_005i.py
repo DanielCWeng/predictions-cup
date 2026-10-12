@@ -7,6 +7,7 @@ from decimal import Decimal
 from predictions_cup.replay.features_005i import causal_minute_features
 from predictions_cup.replay.model import (
     BookLevel,
+    HealthPayload,
     QuotePayload,
     ReplayEvent,
     ReplayEventType,
@@ -78,3 +79,21 @@ def test_out_of_order_receive_time_determinism() -> None:
     a = causal_minute_features(events, pm_token_ids={"pm-yes"})
     b = causal_minute_features(reversed(events), pm_token_ids={"pm-yes"})
     assert a == b
+
+
+def test_disconnected_pm_source_fails_closed_before_minute_closure() -> None:
+    start = datetime(2026, 10, 13, 12, 0, tzinfo=UTC)
+    events = [
+        _pm(start + timedelta(minutes=i, seconds=59), "0.60", i + 1)
+        for i in range(7)
+    ]
+    disconnected = start + timedelta(minutes=5, seconds=59, milliseconds=500)
+    events.append(ReplayEvent(
+        observed_at=disconnected,
+        source_at=None,
+        source=ReplaySource.POLYMARKET,
+        event_type=ReplayEventType.HEALTH,
+        instrument_id="*", market_id=None, sequence=100,
+        payload=HealthPayload(available=False, detail="disconnect"),
+    ))
+    assert not causal_minute_features(events, pm_token_ids={"pm-yes"})
