@@ -10,7 +10,7 @@ This evaluator does not respend the historical sealed 005I HOLDOUT (2026-09-21 t
 
 ## Current measurement
 
-- Accepted, connected PM plus SIG full-depth future PAPER captures accessible in this lane: **none confirmed**.
+- Accepted, connected PM plus SIG full-depth prospective PAPER captures evaluated in this lane: **none**.
 - Measured cross-SIG eligible opportunities: **unavailable / NOT RUN**.
 - Measured net executable PnL / 95% lower bound: **unavailable / NOT RUN**.
 - Empirically calibrated maker or taker fill probability: **unavailable / NOT RUN**.
@@ -59,10 +59,53 @@ python scripts/research/lane_005i_economics.py \
   --output /tmp/lane3_paper_scorecard.json
 ```
 
-Pair file is a JSON array of `{"market_id":"...", "pm_yes":"...", "sig_yes":"...", "sig_no":"...", "acceptance":"ACCEPTED_EXACT"}`. These values must come from the existing audited mapping source; self-asserted labels are insufficient for confirmation. The 20 bps / 100 ms example is **illustrative**, not an assertion about the venue. Replace with independently checked cost and latency measurements.
+Mapping is read from `data/mappings/sig_polymarket_2026.json` and the
+accepted `sig_polymarket_2026_acceptance.json`, with a verified SHA-256
+crosswalk digest, complete CLOB-smoke evidence and `VERIFIED` `EXACT`
+`SAME/COMPLEMENT` entries only. The exchange ID filter is optional.
+The CLI **does not take a user-supplied pair file**: self-declared
+`ACCEPTED_EXACT` strings no longer establish anything.
+
+For each **one** SIG exchange ID, YES buy consumes YES asks; NO buy
+consumes YES bids at `1 - YES bid`. YES sell consumes YES bids;
+NO sell consumes YES asks at `1 - YES ask`. Each consumes the observed
+*same-exchange* depth. NO BUY increments negative YES-equivalent
+inventory; a partial NO close sells NO and reduces that negative
+inventory while locking residual cash and gross. Nothing offsets
+different party exchanges or assumes exactly two political parties
+can win. PM token outcome and orientation are taken only from canonical
+reviewed identity (PM token itself may represent NO).
+
+`--capital-limit` is an actual SUSQies cash commitment; 
+`--gross-share-limit` separately caps quantity exposure. Both are
+applied independently with entry fee reserve. The 20 bps / 100 ms
+example is **illustrative**, not measured venue fees or latency.
+`--quantity` must be integral under the SIG order contract.
 
 Do not place real orders or add LIVE toggles. Run offline against captured data, freeze choices on TRAIN/DEV, and use prospective PAPER forward observations before considering review. Verify the rows' same-time and gap semantics, event coverage and original 005I feature formula parity first.
 
 ## Promotion decision
 
 **NO PROMOTION.** A passed lint/test suite only means the evaluator is mechanically safer; it is not evidence of positive net PnL. Minimum future evidence: full-depth paired EXACT capture + independently verified feature parity, actual order acknowledgements/fill and fee calibration, profit positive under latency/depth/no-fill stress, non-overlapping independent day/event lower bound positive, gains over frozen baselines and negative controls, and no material concentration by market or liquidity regime. Any failed gate kills the candidate. Master orchestrator should retain 005I as a predictive research result until then.
+
+## Adversarial review response (12 Oct 2026)
+
+Master reviewer identified a genuine P1 semantic defect in PR #209:
+`sig_no` was incorrectly a distinct SIG exchange and BUY NO
+incorrectly purchased another SIG YES outcome. This has been removed.
+The PAPER evaluator now orders NO by `side=no`, `action=buy`
+on the **same** SIG exchange, with NO prices/liquidity derived from
+YES bids; sale/liquidation uses YES asks and conserved partial
+signed YES-equivalent inventory. Cash reservations now use
+actual price-weighted entry commitment and fees, separate from gross.
+Mapping comes only from SHA-bound canonical MAPPING-001 acceptance,
+not an arbitrary pair JSON file. Added targeted regressions for
+NO settlement contrast/third-party non-equivalence, partial closes,
+complement orientation, invalid mapping/digest, trust/health outages,
+and no phantom depth tick on reconnect.
+
+**Science status unchanged:** prospective paired episode count unmeasured,
+empirical fill probability unavailable, executable net PnL unavailable,
+economic confidence lower bound unavailable. These fixes correct the
+offline apparatus but do not confer strategy profitability or readiness
+for LIVE. The draft PR must receive independent regrade before merge.
