@@ -200,6 +200,8 @@ def test_duplicate_order_evidence_rejected_across_episodes() -> None:
     b = deepcopy(a)
     b["episode_id"] = "e-2"
     b["decision_at"] = (START + timedelta(minutes=6)).isoformat()
+    b["features_available_at"] = (START + timedelta(minutes=6)).isoformat()
+    b["feature_window_end"] = (START + timedelta(minutes=6)).isoformat()
     # Provide b's decision book to pass stale check at its later decision.
     b["decision_book"] = snap(360)
     proof = {"order_id": "same", "provenance": "SIG_EXECUTION_JOURNAL_JOINED",
@@ -330,3 +332,9 @@ def test_after_tournament_lock_never_enters_economic_scenarios() -> None:
     row = episode()
     row["decision_at"] = datetime(2026, 11, 4, 17, 0, tzinfo=UTC).isoformat()
     assert result(row, "DIRECT_FV")["reason"] == "after_tournament_lock"
+
+
+def test_old_feature_signal_abstains() -> None:
+    row = episode()
+    row["decision_at"] = (START + timedelta(minutes=2)).isoformat()
+    assert result(row, "DIRECT_FV")["reason"] == "feature_stale"
