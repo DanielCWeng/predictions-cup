@@ -105,3 +105,14 @@ def test_duplicate_valid_paper_rows_never_generate_two_opportunities() -> None:
     assert report["preserved_source_rejection_count"] == 2
     assert report["source_ledger"][1]["reason"] == "DUPLICATED_PAPER_EPISODE"
     assert all(not r["paired_depth_trusted"] for r in rows)
+
+
+def test_two_sides_of_same_lane_b_frame_do_not_double_opportunity() -> None:
+    yes = frame()
+    no = frame()
+    no["side"] = "BUY_NO"
+    rows, report = bridge_lane_b([yes, no])
+    assert len(rows) == 1
+    assert report["source_row_count"] == 2
+    assert report["preserved_source_rejection_count"] == 2
+    assert report["source_ledger"][1]["reason"] == "SECOND_SIDE_OF_SAME_PAIRED_SNAPSHOT"
