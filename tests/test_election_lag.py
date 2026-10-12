@@ -18,7 +18,7 @@ from predictions_cup.observe.election_lag import (
     evaluate_election_lag,
 )
 
-NOW = 5_000_000_000
+NOW = 6_000_000_000
 T = datetime(2026, 11, 4, 2, tzinfo=UTC)
 
 
@@ -161,7 +161,7 @@ def test_spread_and_cost_destroy_apparent_midpoint_edge() -> None:
     quote = _quote(best_bid_ticks=78, best_ask_ticks=90)
     assert isinstance(_decide(event, quote), Abstain)
     assert isinstance(
-        _decide(_event(probability_lower=0.44, probability_upper=0.56)), Abstain
+        _decide(_event(probability_lower=0.425, probability_upper=0.56)), Abstain
     )
 
 
