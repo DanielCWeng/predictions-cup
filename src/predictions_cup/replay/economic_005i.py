@@ -235,11 +235,11 @@ def evaluate(
 
     def snapshot(frame: Any) -> None:
         frame_times.append(frame.observed_at)
-        for key in needed:
-            if any((e.source, e.instrument_id) == key for e in frame.events):
-                v = frame.state.view(*key)
-                if v is not None:
-                    tapes[key].append((frame.observed_at, v))
+        touched = {(e.source, e.instrument_id) for e in frame.events}
+        for key in touched & needed:
+            v = frame.state.view(*key)
+            if v is not None:
+                tapes[key].append((frame.observed_at, v))
 
     ReplayRunner(events).run(snapshot)
     tape_times = {key: [point[0] for point in value] for key, value in tapes.items()}
