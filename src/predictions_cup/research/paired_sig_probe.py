@@ -9,11 +9,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import signal
 import subprocess
 import time
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -87,8 +87,8 @@ def inspect_admission(
         reasons.append("OPERATOR_AUTHORISATION_MISSING")
     else:
         try:
-            reviewed_at = datetime.fromisoformat(str(authorisation["measured_at"]).replace("Z", "+00:00"))
-            expires_at = datetime.fromisoformat(str(authorisation["expires_at"]).replace("Z", "+00:00"))
+            reviewed_at = datetime.fromisoformat(\n                str(authorisation["measured_at"]).replace("Z", "+00:00")\n            )
+            expires_at = datetime.fromisoformat(\n                str(authorisation["expires_at"]).replace("Z", "+00:00")\n            )
             if (reviewed_at.tzinfo is None or expires_at.tzinfo is None or reviewed_at > now
                     or now - reviewed_at > timedelta(minutes=10) or expires_at <= now):
                 reasons.append("AUTHORISATION_STALE")
@@ -100,7 +100,7 @@ def inspect_admission(
             spare = float(authorisation["verified_free_reads_per_minute"])
             if not 0 < rate <= min(spare * 0.5, 6.0):
                 reasons.append("UNVERIFIED_RESIDUAL_CAPACITY")
-            if not isinstance(authorisation["approval_ticket"], str) or not authorisation["approval_ticket"]:
+            if not (\n                isinstance(authorisation["approval_ticket"], str)\n                and authorisation["approval_ticket"]\n            ):
                 reasons.append("APPROVAL_TICKET_MISSING")
         except (KeyError, TypeError, ValueError):
             reasons.append("INVALID_AUTHORISATION")
@@ -153,10 +153,8 @@ async def _probe(args: argparse.Namespace) -> int:
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for code in (signal.SIGINT, signal.SIGTERM):
-        try:
+        with suppress(NotImplementedError):
             loop.add_signal_handler(code, stop.set)
-        except NotImplementedError:
-            pass
     run_id = uuid.uuid4().hex
     max_reads = min(int(duration * admission.proposed_requests_per_minute / 60) + len(specs), 180)
     count = 0
@@ -185,7 +183,7 @@ async def _probe(args: argparse.Namespace) -> int:
                                                  started=started, received=datetime.now(UTC),
                                                  run_id=run_id)
                         except Exception as exc:
-                            row = {"event": "SIG_API_ERROR", "venue": "SIG", "instrument_id": s.exchange,
+                            row = {\n                                "event": "SIG_API_ERROR", "venue": "SIG",\n                                "instrument_id": s.exchange,
                                    "received_at": datetime.now(UTC).isoformat(),
                                    "reason": type(exc).__name__, "trusted": False}
                             # Account 429 / transport problems should not trigger retries/spin.
@@ -194,10 +192,8 @@ async def _probe(args: argparse.Namespace) -> int:
                         out.write(json.dumps(row, sort_keys=True) + "\n")
                         if stop.is_set():
                             break
-                        try:
-                            await asyncio.wait_for(stop.wait(), timeout=args.interval / len(specs))
-                        except TimeoutError:
-                            pass
+                        with suppress(TimeoutError):
+                            await asyncio.wait_for(\n                                stop.wait(), timeout=args.interval / len(specs)\n                            )
         finally:
             out.write(json.dumps({"event": "STOP", "run_id": run_id,
                                   "received_at": datetime.now(UTC).isoformat(),
