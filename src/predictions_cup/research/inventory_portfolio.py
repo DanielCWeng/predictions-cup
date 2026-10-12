@@ -16,6 +16,7 @@ from typing import Any
 
 D = Decimal
 TICK = D("0.005")
+DEFAULT_FEE_BPS = D("10")
 RACE = re.compile(r"the (Republican|Democratic) Party win the ([A-Z]{2}-\d{2}) House race")
 
 
@@ -53,7 +54,7 @@ def close_slice(
     evaluated_at: str,
     max_age_seconds: int = 8,
     extra_slippage_ticks: int = 1,
-    fee_bps: Decimal = D("10"),
+    fee_bps: Decimal = DEFAULT_FEE_BPS,
 ) -> dict[str, Any]:
     """YES sells hit bids; NO cancellation pays YES asks; strict whole depth."""
     if signed_quantity == 0 or not 0 < quantity <= abs(signed_quantity):
