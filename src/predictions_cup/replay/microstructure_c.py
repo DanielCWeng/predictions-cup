@@ -310,19 +310,22 @@ def evaluate(rows: list[dict[str, Any]], *, quantity: Decimal = DEFAULT_QTY,
                 if decision - available_at > timedelta(seconds=60):
                     item["reason"] = "feature_stale"
                     continue
-            side = _direction(strategy, row)
-            item["side"] = side
             if strategy == "NO_TRADE":
                 item["status"], item["reason"] = "ABSTAIN", "control_no_trade"
                 continue
-            if side is None:
-                item["reason"] = "no_qualifying_signal"
-                continue
+            # Report missing primary source/mapping proof before discussing a
+            # signal; otherwise an untrusted all-NO_TRADE tape appears merely
+            # to contain "no_qualifying_signal" instead of a hard data failure.
             if row.get("exact_mapping_verified") is not True:
                 item["reason"] = "mapping_not_independently_verified"
                 continue
             if row.get("paired_depth_trusted") is not True:
                 item["reason"] = "paired_depth_not_trusted"
+                continue
+            side = _direction(strategy, row)
+            item["side"] = side
+            if side is None:
+                item["reason"] = "no_qualifying_signal"
                 continue
             key = (strategy, exchange_id)
             prior = last_episode.get(key)
@@ -444,9 +447,15 @@ def evaluate(rows: list[dict[str, Any]], *, quantity: Decimal = DEFAULT_QTY,
             "candidate_opportunities": len(selected),
             "signal_count": sum(x["side"] is not None for x in selected),
             "observed_passive_acks": len(ack_counts[strategy]),
-            "observed_passive_fill_probability": (
+            "observed_passive_fill_probability": None,
+            "conditional_on_terminal_matched_ack_fill_rate": (
                 sum(ack_counts[strategy]) / len(ack_counts[strategy])
                 if ack_counts[strategy] else None),
+            "observed_full_lifecycle_trade_count": 0,
+            "observed_funded_executable_opportunity_count": None,
+            "expected_profit_per_trade": None,
+            "profit_per_gross_share_day": None,
+            "prospective_qualifying_opportunity_count": None,
             "observed_entry_count": len(observed),
             "hypothetical_ioc_touch_count": sum(
                 x["status"] == "IOC_TOUCH_UPPER_BOUND" for x in selected),
@@ -462,6 +471,8 @@ def evaluate(rows: list[dict[str, Any]], *, quantity: Decimal = DEFAULT_QTY,
             "expected_net_pnl": None,
             "profit_per_capital_second": None,
             "capacity_ceiling": None,
+            "mean_full_lifecycle_drawdown": None,
+            "realized_loss_tail_5pct": None,
             "failure_counts": {reason: sum(x["reason"] == reason for x in selected)
                                for reason in sorted({str(x["reason"]) for x in selected})},
         }
