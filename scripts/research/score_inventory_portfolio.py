@@ -17,7 +17,11 @@ from pathlib import Path
 from typing import Any
 
 from predictions_cup.research.inventory_portfolio import (
-    build_ledger, dec, paired_review, timestamp, tournament_sensitivity,
+    build_ledger,
+    dec,
+    paired_review,
+    timestamp,
+    tournament_sensitivity,
 )
 
 
