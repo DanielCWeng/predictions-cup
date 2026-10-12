@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+import asyncio
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -28,7 +29,7 @@ def test_official_deadline_and_buffer() -> None:
 
 
 def test_timezone_and_clock_anomalies_fail_closed() -> None:
-    plus_one = UTC + timedelta(hours=1)
+    plus_one = timezone(timedelta(hours=1))
     assert_competition_placement_open(
         (LAST_ORDER_SUBMISSION_UTC - timedelta(seconds=1)).astimezone(plus_one)
     )
@@ -74,6 +75,7 @@ def _client(
     obj._retry_policy = RetryPolicy(
         max_attempts=2, base_delay_seconds=0, max_delay_seconds=0, jitter_ratio=0
     )
+    obj._sleep = asyncio.sleep
     obj._timeout_seconds = 1.0
     obj._request_in_flight_wait_seconds = 0.0
     return obj
