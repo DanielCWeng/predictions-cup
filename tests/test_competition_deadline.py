@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta, timezone
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import pytest
@@ -16,6 +16,7 @@ from predictions_cup.sig.competition_deadline import (
     assert_competition_placement_open,
 )
 from predictions_cup.sig.errors import SigApiError, SigExecutionUncertainError
+from predictions_cup.sig.rest_governor import SigRestGovernor
 from predictions_cup.sig.trading_client import SigTradingClient
 
 
@@ -74,7 +75,7 @@ def _client(
     obj._client = httpx.AsyncClient(
         transport=transport, base_url="https://sig.invalid/"
     )
-    obj._governor = governor
+    obj._governor = cast(SigRestGovernor, governor)
     obj._wall_clock = clock
     obj._retry_policy = RetryPolicy(
         max_attempts=2, base_delay_seconds=0, max_delay_seconds=0, jitter_ratio=0
