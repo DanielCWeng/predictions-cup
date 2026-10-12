@@ -22,7 +22,7 @@ def spec(direction: str = "SAME") -> Spec:
 def book(venue: str, *, t: datetime = T, exchange: datetime | None = None,
          instrument: str | None = None, trusted: bool = True, connected: bool = True,
          continuity: bool = True, complete: bool = True, epoch: int = 1,
-         revision: int | None = None, prev: int | None = None) -> dict:
+         revision: int | None = None, prev: int | None = None) -> dict[str, Any]:
     return {
         "venue": venue, "instrument_id": instrument or ("947" if venue == "SIG" else "PM-YES"),
         "received_at": t.isoformat(), "exchange_at": (exchange or t).isoformat(),
@@ -42,7 +42,7 @@ def gate(direction: str = "SAME", costs: bool = True) -> PairedPaper:
                        stress_per_share=D("0.01") if costs else None)
 
 
-def match(g: PairedPaper, sig: dict | None = None, pm: dict | None = None) -> dict:
+def match(g: PairedPaper, sig: dict[str, Any] | None = None, pm: dict[str, Any] | None = None) -> dict:
     g.observe(sig or book("SIG"))
     return g.observe(pm or book("PM", t=T + timedelta(milliseconds=100)))[0]
 
@@ -91,7 +91,7 @@ def test_mapping_complement_changes_external_orientation_only() -> None:
         ({"exchange_at": (T + timedelta(seconds=10)).isoformat()}, "PM_SOURCE_CLOCK_AHEAD"),
     ],
 )
-def test_bad_pm_book_never_becomes_opportunity(frame_change: dict, reason: str) -> None:
+def test_bad_pm_book_never_becomes_opportunity(frame_change: dict[str, Any], reason: str) -> None:
     pm = book("PM", t=T + timedelta(milliseconds=100))
     pm.update(frame_change)
     assert match(gate(), pm=pm)["reason"] == reason
@@ -148,7 +148,7 @@ def test_missing_explicit_integrity_attestation_rejected(field: str) -> None:
     assert g.observe(payload)[0]["reason"].startswith("INVALID_INPUT:")
 
 
-def test_acceptance_hash_and_verified_exact_identity_required(tmp_path) -> None:
+def test_acceptance_hash_and_verified_exact_identity_required(tmp_path: Path) -> None:
     mapping = {
         "records": [
             {"sig_exchange_id": "947", "sig_market_id": "100",
