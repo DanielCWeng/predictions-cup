@@ -55,15 +55,36 @@ settlement rule. Human proof acceptance must be genuinely documented first.
 4. Only **BUY** legs are allowed in this version. The pre-existing
    `STRUCT-SCAN-001` SELL maths does not alone verify owned inventory or
    shorting permission. Selling would need a separate inventory-proof design.
-5. Available cash and gross exposure must be trustworthy and bounded *after
-   pending reservations*. Any unresolved order is an unconditional abstain.
-   Admission uses worst-case $1/share cash reservation plus fees and
-   adverse fill/latency haircuts; no hypothetical borrowing or leverage.
-6. Full opposite-side asks at the proposed size, exact worst-case payoff in
-   every settlement state, fee rate, slippage, latency haircut and minimum
-   edge must produce strictly positive conditional net economics. This is
-   **not** a risk-free profit claim: separate `worst_orphan_unwind_loss`
-   stress sums adverse exit losses if only a subset of legs fills or cancels.
+5. Available cash and gross headroom must come from one fresh, trusted,
+   reconciled account observation through `project_available_capital`.
+   The adapter consumes `RuntimePortfolio` and canonical RISK-002
+   `build_exposure_snapshot`: `gross_headroom_units = max(0, gross_limit -
+   (position_gross + open_or_uncertain_order_exposure))`. The external
+   `cash_available` argument means *authoritative spendable cash after
+   venue holds*, **not** total equity or cash prior to open-order reservation.
+   No reservations are subtracted again. Account snapshot identity, monotonic
+   timestamp and shared clock domain are mandatory; proxy/untrusted, stale and
+   active open/uncertain orders abstain. The adapter cannot authenticate a
+   caller's cash/limit inputs: these must come from the authoritative account
+   and active RISK-002 policy at the same reconciliation point. No direct
+   realtime wiring is included in this research PR.
+6. SIG orders require integer shares. The entire payoff vector must have a
+   compatible bounded rational leg ratio (denominator up to 1000); compute its
+   common whole-share lot, floor affordable+visible depth to whole lots,
+   evaluate a full-depth certificate, then floor any continuous optimal size
+   again to the feasible lot and **recompute** price, fees and worst-state
+   edge. Fractional on-book SIG depth, an incomplete unit, and near-zero
+   net edge are rejected. Each candidate includes the explicit signed
+   `executable_leg_shares` integer amounts.
+7. Full opposite-side asks at the valid whole-share size, exact worst-case
+   payoff in every settlement state, fee rate, slippage, latency haircut and
+   minimum edge must produce strictly positive conditional net economics.
+   **Not** a risk-free profit claim: separate `worst_orphan_unwind_loss`
+   stresses zero future exit liquidity when only a subset of legs fills.
+8. The quote and event TTL are additionally limited by the #202 wire-level
+   **2026-11-04 16:59:55 UTC safety cutoff**, not the 17:00 exchange lock.
+   Any remaining action TTL below 100 ms is rejected. SHADOW eligibility
+   cannot override, predict, or replace a real order-time cutoff.
 
 ### Cross-venue caveat
 
@@ -100,13 +121,15 @@ and conservative adverse execution haircuts, to cover a cancellation,
 partial-fill or vanished-liquidity case. It is a gross adverse funding
 stress, not a calibrated loss distribution, forecast expected loss,
 or a promise of available exit liquidity. Negative/non-binary terminal
-payoffs and post-2026-11-04 17:00 UTC candidates are rejected.
+payoffs and candidates at/after the 2026-11-04 **16:59:55 UTC**
+pre-wire safety cutoff are rejected.
 
 ### Candidate fields
 
 `AuditedOpportunity` records review/mapping/evidence SHA-256 hashes,
 reference structural-certificate ID plus all signed economics, full-depth
-size, conditional all-leg net edge, worst orphan unwind loss, residual TTL,
+size and exact integer shares per leg, conditional all-leg net edge,
+worst orphan unwind loss, residual TTL,
 explanation, HMAC and **realised_pnl=None**. Recipients must verify the
 signature with their own protected key, not trust a self-certified reviewer
 flag or title.
@@ -116,8 +139,9 @@ flag or title.
 Mandatory negatives: wrong PM contract/event, shuffled event identity,
 changed settlement text, fake reviewed vector, mismatched canonical mapping
 hash, stale/future source, stale/foreign-clock/crossed book, missing/cancelled
-leg, pending/uncertain orders, reduced cash/gross, and spread/fee/latency
-that destroys midpoint edge. Deterministic partial-fill stress *does not*
+leg, pending/uncertain orders, fractional depth, incompatible leg
+ratios, sub-integer gross/cash capacity, stale account projections, #202 wire
+cutoff boundary and spread/fee/latency that destroys midpoint edge. Deterministic partial-fill stress *does not*
 simulate fills; it reports a worst-orphan exposure, never assumes atomicity.
 
 A prospective study may consume read-only capture from the existing realtime
