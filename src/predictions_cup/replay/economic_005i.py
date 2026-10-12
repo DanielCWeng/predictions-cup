@@ -102,6 +102,8 @@ class EconomicConfig:
             raise ValueError("negative cost or timing assumption")
         if self.quantity <= 0 or self.capital_limit <= 0 or self.gross_share_limit <= 0:
             raise ValueError("quantity and capital must be positive")
+        if self.quantity != self.quantity.to_integral_value():
+            raise ValueError("SIG order quantity must be whole shares")
         if not D("0") < self.depth_haircut <= D("1"):
             raise ValueError("depth haircut must be in (0, 1]")
         if self.cooldown_seconds < 300:
@@ -165,6 +167,32 @@ def _walk(
         if remaining <= 0:
             return paid
     return None
+
+
+def _walk_partial_close(
+    levels: Iterable[BookLevel], qty: Decimal, *,
+    haircut: Decimal,
+) -> tuple[Decimal, Decimal]:
+    """Hypothetical sale; partial fills never masquerade as a closed lot.
+
+    Return the quantity and actual visible proceeds of the matched part.
+    Any remaining quantity is carried at unverified value and capital-locked.
+    """
+    done, proceeds = D(0), D(0)
+    previous: Decimal | None = None
+    for level in sorted(levels, key=lambda x: x.price, reverse=True):
+        if not D(0) < level.price < D(1) or level.quantity < 0:
+            return D(0), D(0)
+        if previous == level.price:
+            return D(0), D(0)
+        previous = level.price
+        amount = min(qty - done, level.quantity * haircut)
+        if amount > 0:
+            done += amount
+            proceeds += amount * level.price
+        if done >= qty:
+            break
+    return done, proceeds
 
 
 def _outcome_levels(book: InstrumentView, *, side: str, buy: bool) -> tuple[BookLevel, ...]:
@@ -400,21 +428,32 @@ def evaluate(
             marks: dict[str, float | None] = {}
             pnl_5m: Decimal | None = None
             close_time: datetime | None = None
+            primary_close_qty = D(0)
+            primary_close_proceeds = D(0)
             for seconds in HORIZONS:
                 target = fill_time + timedelta(seconds=seconds)
                 exit_snapshot = _next_quote(tapes[sig_key], tape_times.get(sig_key, []),
                                             target, config.max_exit_wait_ms,
                                             config.max_quote_age_ms)
                 proceeds = None
+                close_qty, partial_proceeds = D(0), D(0)
                 if exit_snapshot is not None:
-                    proceeds = _walk(
-                        _outcome_levels(exit_snapshot[1], side=choice, buy=False),
-                        config.quantity, buy=False, haircut=config.depth_haircut,
+                    levels = _outcome_levels(
+                        exit_snapshot[1], side=choice, buy=False
                     )
-                pnl = (None if proceeds is None else
-                       proceeds - filled_cost - entry_fee - proceeds * fee)
+                    close_qty, partial_proceeds = _walk_partial_close(
+                        levels, config.quantity, haircut=config.depth_haircut
+                    )
+                    if close_qty >= config.quantity:
+                        proceeds = partial_proceeds
+                pnl = (
+                    None if proceeds is None
+                    else proceeds - filled_cost - entry_fee - proceeds * fee
+                )
                 marks[str(seconds)] = _as_float(pnl)
                 if seconds == 300:
+                    primary_close_qty = close_qty
+                    primary_close_proceeds = partial_proceeds
                     pnl_5m = pnl
                     close_time = (
                         exit_snapshot[0]
@@ -422,14 +461,28 @@ def evaluate(
                         else None
                     )
             exited += int(pnl_5m is not None)
-            # Unknown close is NOT marked as a profitable exit. Reserve forever and
-            # report liquidation-zero downside separately until captured.
+            # Partial NO/YES closes consume same binary exchange inventory.
+            # Unclosed residuals remain locked indefinitely in this fixed-window
+            # scenario; avoid borrowing their unobserved eventual liquidation.
+            remaining_qty = config.quantity - primary_close_qty
             if close_time is None:
-                active_capital.append((None, filled_cost + entry_fee, config.quantity))
+                reserve_cash = (
+                    filled_cost + entry_fee
+                ) * remaining_qty / config.quantity
+                active_capital.append((None, reserve_cash, remaining_qty))
                 active_until[pair.sig_exchange_id] = datetime.max.replace(tzinfo=UTC)
             else:
-                active_capital.append((close_time, filled_cost + entry_fee, config.quantity))
+                active_capital.append((close_time, D(0), D(0)))
                 active_until[pair.sig_exchange_id] = close_time
+            partial_realised = (
+                primary_close_proceeds
+                - (filled_cost + entry_fee) * primary_close_qty / config.quantity
+                - primary_close_proceeds * fee
+            )
+            stress_zero_salvage = (
+                primary_close_proceeds - filled_cost - entry_fee
+                - primary_close_proceeds * fee
+            )
             outcomes.append({
                 "market": pair.sig_market_id,
                 "pm_market": pair.market_id, "exchange_id": pair.sig_exchange_id,
@@ -437,14 +490,25 @@ def evaluate(
                 "decision_at": decision.isoformat(), "filled_at": fill_time.isoformat(),
                 "side": choice, "action": "buy",
                 "signed_yes_entry_delta": float(_sig_yes_delta(choice, config.quantity)),
-                "signed_yes_full_close_delta": float(-_sig_yes_delta(
-                    choice, config.quantity
-                )) if pnl_5m is not None else None,
+                "signed_yes_full_close_delta": (
+                    float(-_sig_yes_delta(choice, config.quantity))
+                    if pnl_5m is not None else None
+                ),
+                "signed_yes_partial_close_delta": float(
+                    -_sig_yes_delta(choice, primary_close_qty)
+                ),
+                "remaining_signed_yes_quantity": float(
+                    _sig_yes_delta(choice, remaining_qty)
+                ),
                 "qty": float(config.quantity),
+                "liquidated_quantity_5m": float(primary_close_qty),
+                "partial_realised_5m_pnl_proxy": (
+                    float(partial_realised) if primary_close_qty > 0 else None
+                ),
                 "entry_cost": float(filled_cost), "entry_fee": float(entry_fee),
                 "markouts_net_5s_30s_5m_1h": marks,
                 "net_pnl_5m": _as_float(pnl_5m),
-                "unresolved_liquidation_zero_bound": float(-filled_cost - entry_fee),
+                "unresolved_liquidation_zero_bound": float(stress_zero_salvage),
             })
         net_known = sum(o["net_pnl_5m"] for o in outcomes if o["net_pnl_5m"] is not None)
         pessimistic = sum(
