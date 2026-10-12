@@ -20,10 +20,14 @@ from predictions_cup.sig.trading_client import SigTradingClient
 
 
 def test_official_deadline_and_buffer() -> None:
-    assert COMPETITION_END_UTC == datetime(2026, 11, 4, 17, tzinfo=UTC)
-    assert LAST_ORDER_SUBMISSION_UTC == COMPETITION_END_UTC - timedelta(seconds=5)
+    assert datetime(2026, 11, 4, 17, tzinfo=UTC) == COMPETITION_END_UTC
+    assert COMPETITION_END_UTC - timedelta(seconds=5) == LAST_ORDER_SUBMISSION_UTC
     assert_competition_placement_open(LAST_ORDER_SUBMISSION_UTC - timedelta(microseconds=1))
-    for now in (LAST_ORDER_SUBMISSION_UTC, COMPETITION_END_UTC, COMPETITION_END_UTC + timedelta(days=1)):
+    for now in (
+        LAST_ORDER_SUBMISSION_UTC,
+        COMPETITION_END_UTC,
+        COMPETITION_END_UTC + timedelta(days=1),
+    ):
         with pytest.raises(SigApiError, match="COMPETITION_ORDER_CLOSED"):
             assert_competition_placement_open(now)
 
