@@ -118,21 +118,38 @@ def test_cash_and_depth_limits_are_not_fictitious() -> None:
 @pytest.mark.parametrize(
     ("event", "quote", "capacity", "reason"),
     [
-        (_event(exact_mapping_verified=False), _quote(), _capacity(), "unverified_source_or_mapping"),
+        (
+            _event(exact_mapping_verified=False), _quote(), _capacity(),
+            "unverified_source_or_mapping",
+        ),
         (_event(source_verified=False), _quote(), _capacity(), "unverified_source_or_mapping"),
-        (_event(probability_interval_calibrated=False), _quote(), _capacity(), "uncalibrated_interval"),
+        (
+            _event(probability_interval_calibrated=False), _quote(), _capacity(),
+            "uncalibrated_interval",
+        ),
         (_event(market_id="wrong"), _quote(), _capacity(), "identity_mismatch"),
         (_event(received_monotonic_ns=NOW + 1), _quote(), _capacity(), "future_observation"),
         (_event(received_monotonic_ns=0), _quote(), _capacity(), "event_stale"),
-        (_event(received_at=T - timedelta(seconds=1)), _quote(), _capacity(), "source_publication_clock_or_delay"),
-        (_event(received_at=T + timedelta(minutes=1)), _quote(), _capacity(), "source_publication_clock_or_delay"),
+        (
+            _event(received_at=T - timedelta(seconds=1)), _quote(), _capacity(),
+            "source_publication_clock_or_delay",
+        ),
+        (
+            _event(received_at=T + timedelta(minutes=1)), _quote(), _capacity(),
+            "source_publication_clock_or_delay",
+        ),
         (_event(), _quote(depth_trusted=False), _capacity(), "sig_market_untrusted"),
         (_event(), _quote(observed_monotonic_ns=0), _capacity(), "sig_book_stale"),
         (_event(), _quote(tradeable=False), _capacity(), "sig_market_untrusted"),
         (_event(), _quote(), _capacity(account_trusted=False), "account_untrusted"),
     ],
 )
-def test_negative_controls(event: ElectionProbabilityUpdate, quote: SigExecutableTop, capacity: ShadowCapacity, reason: str) -> None:
+def test_negative_controls(
+    event: ElectionProbabilityUpdate,
+    quote: SigExecutableTop,
+    capacity: ShadowCapacity,
+    reason: str,
+) -> None:
     decision = _decide(event, quote, capacity)
     assert isinstance(decision, Abstain)
     assert decision.reason == reason
