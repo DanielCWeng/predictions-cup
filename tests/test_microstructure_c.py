@@ -153,7 +153,7 @@ def test_acknowledged_zero_fill_counts_in_denominator_not_pnl() -> None:
     out = evaluate([row], gross_free=Decimal(10), cash_free=Decimal(10))
     trade = next(x for x in out["ledger"] if x["strategy"] == "PASSIVE_SPREAD")
     assert trade["status"] == "NO_FILL"
-    assert out["scorecard"]["PASSIVE_SPREAD"]["observed_passive_fill_probability"] == 0
+    assert out["scorecard"]["PASSIVE_SPREAD"]["conditional_on_terminal_matched_ack_fill_rate"] == 0
     assert out["scorecard"]["PASSIVE_SPREAD"]["measured_realized_net_pnl"] is None
 
 
@@ -325,7 +325,7 @@ def test_unresolved_passive_order_locks_capital_not_counted_as_zero_fill() -> No
     item = next(x for x in out["ledger"] if x["strategy"] == "PASSIVE_SPREAD")
     assert item["status"] == "UNRESOLVED"
     assert item["reason"] == "unresolved_order_capital_locked"
-    assert out["scorecard"]["PASSIVE_SPREAD"]["observed_passive_fill_probability"] is None
+    assert out["scorecard"]["PASSIVE_SPREAD"]["conditional_on_terminal_matched_ack_fill_rate"] is None
 
 
 def test_after_tournament_lock_never_enters_economic_scenarios() -> None:
