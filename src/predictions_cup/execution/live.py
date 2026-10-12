@@ -23,6 +23,7 @@ from predictions_cup.execution.models import (
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.observe.contracts import ObservationEmitter, ObservationKind, VenueObservation
+from predictions_cup.sig.competition_deadline import assert_competition_placement_open
 from predictions_cup.sig.errors import SigApiError, SigExecutionUncertainError
 from predictions_cup.sig.trading_client import SigTradingClient
 
@@ -94,6 +95,7 @@ class SigLiveSink:
     ) -> ExecutionEvent:
         """Redispatch one durable unresolved placement with the same identity."""
         recovery_state = self._assert_recovery_authority(envelope)
+        assert_competition_placement_open(self._wall_clock(), attempted_network=True)
         if recovery_state is not LifecycleState.RECONCILING:
             self._journal.mark_state(
                 envelope.logical_operation_id,
@@ -184,6 +186,12 @@ class SigLiveSink:
             OperationKind.ATOMIC_MULTI_LEG,
         }:
             raise ValueError("placement dispatch requires a placement operation kind")
+
+        # Pre-journal deadline check: never create a fresh pending placement
+        # once trading has closed. SigTradingClient checks again after waits.
+        assert_competition_placement_open(
+            self._wall_clock(), attempted_network=not require_reservation
+        )
 
         if plan.audit is not None:
             self._observe(
