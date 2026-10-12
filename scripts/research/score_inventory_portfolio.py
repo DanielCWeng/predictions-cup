@@ -2,7 +2,8 @@
 
 python scripts/research/score_inventory_portfolio.py \
   --snapshot /private/snapshot.json --books /private/orderbooks.json \
-  --out /private/inventory_report --gross-cap 100000
+  --out /private/inventory_report --gross-cap 100000 \
+  --gross-cap-source "Independent operator-confirmed current risk cap"
 Gross cap is explicit and requires an independent up-to-date source.
 """
 from __future__ import annotations
