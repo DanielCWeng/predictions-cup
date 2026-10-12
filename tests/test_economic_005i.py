@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from decimal import Decimal
 
 import pytest
@@ -63,7 +64,7 @@ def feature(**overrides: float) -> MinuteFeature:
                          "005I_V3_CAUSAL_COMPLETED_MINUTE")
 
 
-def freeze() -> dict:
+def freeze() -> dict[str, Any]:
     common = {
         "features": list(feature().values),
         "medians": dict(feature().values),
@@ -77,8 +78,8 @@ def freeze() -> dict:
     }}
 
 
-def cfg(**kw: object) -> EconomicConfig:
-    args = dict(fee_bps_per_side=D("20"), latency_ms=50,
+def cfg(**kw: Any) -> EconomicConfig:
+    args: dict[str, Any] = dict(fee_bps_per_side=D("20"), latency_ms=50,
                 min_edge=D("0.01"), quantity=D("1"), capital_limit=D("10"),
                 max_quote_age_ms=300, max_feature_delay_ms=5000,
                 max_arrival_wait_ms=1000, max_exit_wait_ms=500,
