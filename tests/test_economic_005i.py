@@ -12,8 +12,8 @@ from predictions_cup.replay.economic_005i import (
     EconomicConfig,
     ExactPair,
     MinuteFeature,
-    _walk,
     _marginal_buy_limit,
+    _walk,
     evaluate,
     frozen_probability,
 )
