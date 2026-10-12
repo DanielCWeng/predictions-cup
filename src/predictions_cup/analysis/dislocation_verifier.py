@@ -572,7 +572,20 @@ def audit_opportunity(
         if (
             certificate.certificate_status is not StructuralStatus.EXECUTABLE_VIOLATION
         ):
-            return emit(AuditStatus.NO_EDGE, certificate.certificate_status.value)
+            # Negative certificates also retain the full-depth economics only
+            # if their size is on the integer-share lattice.
+            economic_proof = (
+                certificate
+                if math.isclose(
+                    certificate.available_size, feasible_size,
+                    rel_tol=0, abs_tol=1e-12,
+                )
+                else None
+            )
+            return emit(
+                AuditStatus.NO_EDGE, certificate.certificate_status.value,
+                economic_proof,
+            )
         if certificate.available_size < feasible_size:
             next_lots = math.floor(certificate.available_size / share_lot)
             lots = min(lots - 1, next_lots)
