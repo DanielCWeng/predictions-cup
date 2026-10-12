@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """Read-only coverage inventory for existing SIG/Polymarket Parquet research shards.
 
 This is a *data availability* audit, not proof of trustworthy executable books.
