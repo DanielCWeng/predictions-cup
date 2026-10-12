@@ -75,6 +75,33 @@ cross-venue proceeds. The only event-to-SIG route intended is **PR #203's
 pure SHADOW event scorer**, once its independently validated official-source
 adapter and depth/latency evidence exist. No second realtime consumer.
 
+### Static accepted-mapping preflight (not arbitrage evidence)
+
+The committed `data/mappings/sig_polymarket_2026.json` crosswalk
+contains 237 SIG exchanges, including 140 EXACT; 134 of the EXACT
+records have a nonblank PM event ID. Those 134 span 85 external events.
+There are **48 multi-SIG-contract event groups**: 47 have two aligned
+EXACT records; one (Nebraska Senate: Democratic/Independent/Republican)
+has three. Examples of two-leg same-event groupings include Louisiana
+Senate Democratic/Republican and AZ-01 House Democratic/Republican.
+
+These are only **semantic review queues**. They are not exact complements
+or exhaustive partitions merely because they have a shared PM event ID.
+Write-ins, independents, ties, voids, recounts, term-of-office and
+source-specific settlement wording must be audited contract by contract.
+No live full-depth cost/fee/receipt evidence accompanies the mapping
+snapshot. Do not rank the 48 by imagined midpoint edge.
+
+### Explicit maximum orphan loss
+
+`worst_orphan_unwind_loss` assumes every purchased leg consumes the
+recorded full-depth asks but **zero later bid-side recovery**, plus fees
+and conservative adverse execution haircuts, to cover a cancellation,
+partial-fill or vanished-liquidity case. It is a gross adverse funding
+stress, not a calibrated loss distribution, forecast expected loss,
+or a promise of available exit liquidity. Negative/non-binary terminal
+payoffs and post-2026-11-04 17:00 UTC candidates are rejected.
+
 ### Candidate fields
 
 `AuditedOpportunity` records review/mapping/evidence SHA-256 hashes,
