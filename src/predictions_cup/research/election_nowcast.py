@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import itertools
+import json
 import math
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -271,6 +272,23 @@ def _validated(
         or hashlib.sha256(evidence.raw_source_body).hexdigest() != obs.source_document_sha256
     ):
         raise Abstain("missing or mismatched authoritative revision receipt")
+    # This intentionally supports only a verifiable, explicitly reviewed JSON
+    # source schema. Arbitrary scraped HTML or undocumented adapters abstain.
+    try:
+        parsed = json.loads(evidence.raw_source_body)
+        parsed_choices = tuple(ReportedChoice(**c) for c in parsed["choices"])
+        payload_matches = (
+            parsed["publisher_id"] == source.publisher_id
+            and parsed["contest_id"] == obs.contest_id
+            and parsed["revision_id"] == obs.revision_id
+            and parsed["source_time"] == published.isoformat()
+            and parsed["source_url"] == obs.source_url
+            and parsed_choices == obs.reported_choices
+        )
+    except (ValueError, TypeError, KeyError, AttributeError):
+        raise Abstain("unparseable publisher-specific revision payload") from None
+    if not payload_matches:
+        raise Abstain("reported choices do not match archived raw revision")
     if not 0 < len(obs.remaining) <= MAX_GROUPS:
         raise Abstain("missing or unbounded number of ballot strata")
     if not all(
