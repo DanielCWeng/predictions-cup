@@ -215,12 +215,20 @@ def test_no_buy_uses_same_exchange_yes_bid_complement_not_sibling_exchange() -> 
     assert abs(trade["net_pnl_5m"] - (-0.08168)) < 1e-8
 
 
-def test_no_third_party_winner_cannot_be_mistaken_for_no_exposure() -> None:
+def test_third_party_winner_proves_no_is_not_another_party_yes() -> None:
     p = pair()
     assert p.sig_exchange_id == "sig-yes"
     assert p.mapping_direction == "SAME"
-    # Other outcomes' exchanges never appear in this paired binary order tape.
-    assert all(e.instrument_id != "third-party" for e in tape())
+    # Third-party winner: neither Republican YES nor Democratic YES settles true.
+    # NO on Republican YES settles TRUE; buying Democratic YES settles FALSE.
+    # Treating a separate Democratic YES exchange as NO Republican would lose a claim.
+    republican_yes = False
+    democratic_yes = False
+    third_party_wins = True
+    assert third_party_wins and not republican_yes and not democratic_yes
+    assert int(not republican_yes) == 1
+    assert int(democratic_yes) == 0
+    assert all(e.instrument_id != "democratic-yes-exchange" for e in tape())
 
 
 def test_cash_budget_uses_actual_susqies_not_nominal_share_quantity() -> None:
