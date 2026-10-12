@@ -4,6 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
@@ -14,7 +15,7 @@ START = datetime(2026, 10, 13, 12, 0, tzinfo=UTC)
 
 def snap(seconds: float = 0, *, bid: str = "0.40", ask: str = "0.60",
          bid_qty: int = 20, ask_qty: int = 20,
-         trusted: bool = True, complete: bool = True) -> dict[str, object]:
+         trusted: bool = True, complete: bool = True) -> dict[str, Any]:
     return {
         "observed_at": (START + timedelta(seconds=seconds)).isoformat(),
         "bids": [[bid, bid_qty]], "asks": [[ask, ask_qty]],
@@ -22,8 +23,8 @@ def snap(seconds: float = 0, *, bid: str = "0.40", ask: str = "0.60",
     }
 
 
-def episode(*, side: str = "YES") -> dict[str, object]:
-    row: dict[str, object] = {
+def episode(*, side: str = "YES") -> dict[str, Any]:
+    row: dict[str, Any] = {
         "episode_id": "e-1", "event_id": "evt-1", "sig_exchange_id": "101",
         "decision_at": START.isoformat(),
         "exact_mapping_verified": True, "paired_depth_trusted": True,
@@ -45,7 +46,7 @@ def episode(*, side: str = "YES") -> dict[str, object]:
     return row
 
 
-def result(row: dict[str, object], strategy: str, **kw: object) -> dict[str, object]:
+def result(row: dict[str, Any], strategy: str, **kw: Any) -> dict[str, Any]:
     out = evaluate([row], gross_free=Decimal(10), cash_free=Decimal(10), **kw)
     return next(x for x in out["ledger"] if x["strategy"] == strategy)
 
