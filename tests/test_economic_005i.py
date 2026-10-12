@@ -12,6 +12,7 @@ from predictions_cup.replay.economic_005i import (
     ExactPair,
     MinuteFeature,
     evaluate,
+    _walk,
     frozen_probability,
 )
 from predictions_cup.replay.model import (
@@ -192,3 +193,14 @@ def test_absent_events_are_explicit_not_positive_alpha() -> None:
     out = evaluate([], [feature()], [pair()], cfg(), freeze())
     assert out["status"] == "NO_ACCEPTED_OBSERVATIONS"
     assert out["promotion"] == "BLOCKED"
+
+
+def test_ioc_limit_blocks_levels_above_limit_even_if_vwap_would_pass() -> None:
+    asks = (
+        BookLevel(D("0.50"), D("1")),
+        BookLevel(D("0.60"), D("1")),
+    )
+    assert _walk(asks, D("2"), buy=True, haircut=D("1")) == D("1.10")
+    assert _walk(
+        asks, D("2"), buy=True, haircut=D("1"), max_buy_price=D("0.55"),
+    ) is None
