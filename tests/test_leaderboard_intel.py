@@ -188,7 +188,7 @@ def test_offline_module_has_no_trading_or_network_imports() -> None:
     root = Path(__file__).resolve().parents[1]
     path = root / "src/predictions_cup/analysis/leaderboard_intel.py"
     syntax = ast.parse(path.read_text(encoding="utf-8"))
-    imports = []
+    imports: list[str] = []
     for node in ast.walk(syntax):
         if isinstance(node, ast.Import):
             imports.extend(alias.name for alias in node.names)
