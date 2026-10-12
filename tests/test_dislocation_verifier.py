@@ -13,12 +13,12 @@ from predictions_cup.analysis.dislocation_verifier import (
     AuditedOpportunity,
     AuditStatus,
     AvailableCapital,
-    project_available_capital,
     BookReceipt,
     DislocationPolicy,
     SettlementReview,
     SourceReceipt,
     audit_opportunity,
+    project_available_capital,
     state_vector_sha256,
     verify_signature,
 )
@@ -30,7 +30,6 @@ from predictions_cup.analysis.structural_certificates import (
     complement_relationship,
 )
 from predictions_cup.mapping.crosswalk import document_json
-from predictions_cup.runtime.models import RuntimeOrderState, RuntimePortfolio, RuntimePosition
 from predictions_cup.mapping.models import (
     MappingClass,
     MappingDirection,
@@ -39,6 +38,7 @@ from predictions_cup.mapping.models import (
     MarketMapping,
     PolymarketContractIdentity,
 )
+from predictions_cup.runtime.models import RuntimeOrderState, RuntimePortfolio, RuntimePosition
 
 NOW = datetime(2026, 10, 12, 15, tzinfo=UTC)
 NS = 10_000_000_000
