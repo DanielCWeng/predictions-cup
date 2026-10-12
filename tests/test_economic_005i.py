@@ -91,16 +91,18 @@ def cfg(**kw: Any) -> EconomicConfig:
 
 
 def tape(*, bad_arrival: bool = False, future_jump: bool = False,
-         missing_exit: bool = False, depth: str = "100") -> tuple[ReplayEvent, ...]:
+         missing_exit: bool = False, depth: str = "100",
+         pm_no_favoured: bool = False) -> tuple[ReplayEvent, ...]:
     before = T - timedelta(milliseconds=100)
     decision = T + timedelta(milliseconds=100)
     arrival = T + timedelta(milliseconds=200)
     exit_at = arrival + timedelta(minutes=5)
+    pm_bid, pm_ask = ("0.30", "0.32") if pm_no_favoured else ("0.70", "0.72")
     return (
         trust(before),
         quote(ReplaySource.SIG, "sig-yes", before, 1, "0.50", "0.55", depth),
-        quote(ReplaySource.POLYMARKET, "pm-yes", before, 1, "0.70", "0.72"),
-        quote(ReplaySource.POLYMARKET, "pm-yes", decision, 2, "0.70", "0.72"),
+        quote(ReplaySource.POLYMARKET, "pm-yes", before, 1, pm_bid, pm_ask),
+        quote(ReplaySource.POLYMARKET, "pm-yes", decision, 2, pm_bid, pm_ask),
         quote(ReplaySource.SIG, "sig-yes", arrival, 3,
               "0.80" if future_jump else "0.54",
               "0.83" if future_jump else "0.55", depth if not bad_arrival else "0"),
@@ -196,7 +198,7 @@ def test_absent_events_are_explicit_not_positive_alpha() -> None:
 
 def test_no_buy_uses_same_exchange_yes_bid_complement_not_sibling_exchange() -> None:
     # PM YES=0.71; SIG YES bid=0.50 => NO ask=0.50, not another party's YES ask.
-    result = evaluate(tape(), [feature(ret_5m=0.03)], [pair()], cfg(), freeze())
+    result = evaluate(tape(pm_no_favoured=True), [feature(ret_5m=0.03)], [pair()], cfg(), freeze())
     reversal = result["results"]["REVERSAL"]
     assert reversal["touch_fill_upper_bound"] == 1
     trade = reversal["trades"][0]
@@ -230,9 +232,8 @@ def test_complement_mapping_orients_pm_signal_into_sig_no() -> None:
     p = ExactPair("market-1", "pm-yes", "sig-yes", "market-1", "COMPLEMENT")
     out = evaluate(tape(), [feature(ret_5m=-0.03)], [p], cfg(), freeze())
     # PM YES rising reversal predicts PM token YES; this is SIG NO in reviewed complement.
-    assert out["results"]["REVERSAL"]["touch_fill_upper_bound"] == 0 or (
-        out["results"]["REVERSAL"]["trades"][0]["side"] == "NO"
-    )
+    assert out["results"]["REVERSAL"]["touch_fill_upper_bound"] == 1
+    assert out["results"]["REVERSAL"]["trades"][0]["side"] == "NO"
 
 def test_ioc_limit_blocks_levels_above_limit_even_if_vwap_would_pass() -> None:
     asks = (
