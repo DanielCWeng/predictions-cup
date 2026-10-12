@@ -92,7 +92,8 @@ def cfg(**kw: Any) -> EconomicConfig:
 
 def tape(*, bad_arrival: bool = False, future_jump: bool = False,
          missing_exit: bool = False, depth: str = "100",
-         pm_no_favoured: bool = False) -> tuple[ReplayEvent, ...]:
+         pm_no_favoured: bool = False,
+         exit_depth: str | None = None) -> tuple[ReplayEvent, ...]:
     before = T - timedelta(milliseconds=100)
     decision = T + timedelta(milliseconds=100)
     arrival = T + timedelta(milliseconds=200)
@@ -107,7 +108,8 @@ def tape(*, bad_arrival: bool = False, future_jump: bool = False,
               "0.80" if future_jump else "0.54",
               "0.83" if future_jump else "0.55", depth if not bad_arrival else "0"),
         *(() if missing_exit else (
-            quote(ReplaySource.SIG, "sig-yes", exit_at, 5, "0.60", "0.62", depth),
+            quote(ReplaySource.SIG, "sig-yes", exit_at, 5, "0.60", "0.62",
+                  exit_depth if exit_depth is not None else depth),
         )),
     )
 
@@ -244,3 +246,29 @@ def test_ioc_limit_blocks_levels_above_limit_even_if_vwap_would_pass() -> None:
     assert _walk(
         asks, D("2"), buy=True, haircut=D("1"), max_buy_price=D("0.55"),
     ) is None
+
+
+def test_no_partial_close_keeps_signed_residual_and_cost_capital_locked() -> None:
+    out = evaluate(
+        tape(pm_no_favoured=True, exit_depth="2"),
+        [feature(ret_5m=0.03)], [pair()], cfg(quantity=D("2")), freeze(),
+    )
+    row = out["results"]["REVERSAL"]
+    assert row["touch_fill_upper_bound"] == 1
+    assert row["filled_with_5m_depth_exit"] == 0
+    trade = row["trades"][0]
+    assert trade["side"] == "NO"
+    assert trade["exchange_id"] == "sig-yes"
+    assert trade["signed_yes_entry_delta"] == -2
+    assert trade["liquidated_quantity_5m"] == 1
+    assert trade["signed_yes_partial_close_delta"] == 1
+    assert trade["signed_yes_full_close_delta"] is None
+    assert trade["remaining_signed_yes_quantity"] == -1
+    assert trade["net_pnl_5m"] is None
+    assert trade["partial_realised_5m_pnl_proxy"] is not None
+    assert trade["unresolved_liquidation_zero_bound"] < 0
+
+
+def test_sig_order_quantities_are_whole_shares() -> None:
+    with pytest.raises(ValueError, match="whole shares"):
+        cfg(quantity=D("1.5"))
