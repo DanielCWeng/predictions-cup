@@ -38,6 +38,8 @@ class OfficialSource:
     approved: bool
     reference_url: str
     licensing_note: str
+    publisher_id: str
+    reviewed_registry_sha256: str
 
 
 @dataclass(frozen=True)
@@ -50,6 +52,12 @@ class MarketRule:
     settlement_rule_sha256: str
     rules_reviewed: bool
     binary_contest_reviewed: bool
+    a_candidate_id: str
+    a_party_id: str
+    a_ballot_choice_id: str
+    b_candidate_id: str
+    b_party_id: str
+    b_ballot_choice_id: str
     rule_type: str = "TWO_CANDIDATE_PLURALITY"
 
 
@@ -59,6 +67,14 @@ class RemainingGroup:
     ballot_type: str
     min_count: int
     max_count: int
+
+
+@dataclass(frozen=True)
+class ReportedChoice:
+    candidate_id: str
+    party_id: str
+    ballot_choice_id: str
+    votes: int
 
 
 @dataclass(frozen=True)
@@ -72,11 +88,32 @@ class CountObservation:
     revision_id: str
     revision_kind: str
     status: str
-    a_votes: int
-    b_votes: int
+    reported_choices: tuple[ReportedChoice, ...]
     remaining: tuple[RemainingGroup, ...]
     remaining_inventory_verified: bool
     source_document_sha256: str
+
+
+@dataclass(frozen=True)
+class RevisionEvidence:
+    """Independent captured-revision receipt; retain original bytes for audit.
+
+    The source-specific parser/capture must be separately vetted: hashing alone
+    does not authenticate an internet publisher or verify parsing semantics.
+    """
+
+    publisher_id: str
+    source_id: str
+    contest_id: str
+    revision_id: str
+    source_url: str
+    source_time: datetime
+    receive_time: datetime
+    raw_source_body: bytes
+    extracted_choices: tuple[ReportedChoice, ...]
+    capture_ref: str
+    capture_manifest_sha256: str
+    publisher_timestamp_field: str
 
 
 @dataclass(frozen=True)
@@ -103,6 +140,11 @@ class ShadowCandidate:
     decision_time: datetime
     probability_estimate: float
     publication_to_receipt_ms: int
+    contest_id: str
+    event_family: str
+    revision_id: str
+    source_document_sha256: str
+    source_id: str
     mode: str = "SHADOW"
     execution_authority: bool = False
 
@@ -119,6 +161,11 @@ class ShadowCandidate:
             "decision_time": self.decision_time.isoformat(),
             "probability_estimate": self.probability_estimate,
             "publication_to_receipt_ms": self.publication_to_receipt_ms,
+            "contest_id": self.contest_id,
+            "event_family": self.event_family,
+            "revision_id": self.revision_id,
+            "source_document_sha256": self.source_document_sha256,
+            "source_id": self.source_id,
             "mode": self.mode,
             "execution_authority": self.execution_authority,
         }
@@ -140,8 +187,9 @@ def _validated(
     source: OfficialSource,
     rule: MarketRule,
     prior: FrozenPrior,
+    evidence: RevisionEvidence,
     decision_at: datetime,
-) -> tuple[datetime, datetime, datetime]:
+) -> tuple[datetime, datetime, datetime, int, int]:
     published, received, decision = utc(obs.source_time), utc(obs.receive_time), utc(decision_at)
     if not published <= received <= decision:
         raise Abstain("future publication/receipt or inverted clock")
@@ -168,7 +216,10 @@ def _validated(
         obs.revision_id, prior.model_id, prior.evidence_ref
     )):
         raise Abstain("missing source/contract/provenance identifier")
-    for digest in (rule.settlement_rule_sha256, obs.source_document_sha256):
+    for digest in (
+        rule.settlement_rule_sha256, obs.source_document_sha256,
+        source.reviewed_registry_sha256, evidence.capture_manifest_sha256,
+    ):
         if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
             raise Abstain("missing verified SHA256 identifier")
     if obs.revision_kind not in {"INITIAL", "UPDATE", "CORRECTION"}:
@@ -177,11 +228,45 @@ def _validated(
         raise Abstain("media projection is not official count status")
     if not obs.remaining_inventory_verified:
         raise Abstain("unverified remaining-ballot inventory")
+    reviewed_a = (rule.a_candidate_id, rule.a_party_id, rule.a_ballot_choice_id)
+    reviewed_b = (rule.b_candidate_id, rule.b_party_id, rule.b_ballot_choice_id)
     if (
-        type(obs.a_votes) is not int or type(obs.b_votes) is not int
-        or min(obs.a_votes, obs.b_votes) < 0
+        not all((*reviewed_a, *reviewed_b))
+        or reviewed_a[0] == reviewed_b[0]
+        or reviewed_a[2] == reviewed_b[2]
+        or rule.outcome_a != rule.a_candidate_id
     ):
-        raise Abstain("invalid vote counts")
+        raise Abstain("unreviewed candidate/outcome orientation")
+    if len(obs.reported_choices) != 2:
+        raise Abstain("third-party/multi-candidate results unsupported")
+    counts: dict[tuple[str, str, str], int] = {}
+    for choice in obs.reported_choices:
+        identity = (choice.candidate_id, choice.party_id, choice.ballot_choice_id)
+        if (
+            not all(identity) or identity in counts
+            or type(choice.votes) is not int or choice.votes < 0
+        ):
+            raise Abstain("invalid or duplicated candidate/ballot identity")
+        counts[identity] = choice.votes
+    if set(counts) != {reviewed_a, reviewed_b}:
+        raise Abstain("candidate, party or ballot choice mismatch")
+    if (
+        evidence.publisher_id != source.publisher_id
+        or not source.publisher_id
+        or evidence.source_id != obs.source_id
+        or evidence.contest_id != obs.contest_id
+        or evidence.revision_id != obs.revision_id
+        or evidence.source_url != obs.source_url
+        or utc(evidence.source_time) != published
+        or utc(evidence.receive_time) != received
+        or evidence.extracted_choices != obs.reported_choices
+        or evidence.publisher_timestamp_field != "PUBLISHER_REPORTED"
+        or not evidence.capture_ref
+        or not isinstance(evidence.raw_source_body, bytes)
+        or not evidence.raw_source_body
+        or hashlib.sha256(evidence.raw_source_body).hexdigest() != obs.source_document_sha256
+    ):
+        raise Abstain("missing or mismatched authoritative revision receipt")
     if not 0 < len(obs.remaining) <= MAX_GROUPS:
         raise Abstain("missing or unbounded number of ballot strata")
     if not all(
@@ -206,7 +291,7 @@ def _validated(
         a, b = prior.beta_by_stratum[group.stratum]
         if not all(math.isfinite(v) and v > 0 for v in (a, b)):
             raise Abstain("nonfinite beta prior")
-    return published, received, decision
+    return published, received, decision, counts[reviewed_a], counts[reviewed_b]
 
 
 def _wilson(successes: int, total: int) -> tuple[float, float]:
@@ -223,6 +308,7 @@ def make_shadow_candidate(
     source: OfficialSource,
     rule: MarketRule,
     prior: FrozenPrior,
+    evidence: RevisionEvidence,
     decision_at: datetime,
     *,
     simulations: int = 4096,
@@ -232,7 +318,9 @@ def make_shadow_candidate(
     This is a *model-dependent* probability interval with Monte Carlo uncertainty
     and stated calibration allowance, NOT verified forecast accuracy or trade EV.
     """
-    published, received, decision = _validated(obs, source, rule, prior, decision_at)
+    published, received, decision, a_votes, b_votes = _validated(
+        obs, source, rule, prior, evidence, decision_at
+    )
     if type(simulations) is not int or not 512 <= simulations <= 65536:
         raise Abstain("invalid simulation support")
     token = "|".join((prior.model_id, obs.source_document_sha256, obs.revision_id))
@@ -247,8 +335,8 @@ def make_shadow_candidate(
     highs: list[float] = []
     estimates: list[float] = []
     for corner in itertools.product((0, 1), repeat=len(obs.remaining)):
-        for_count = np.full(simulations, obs.a_votes, dtype=np.int64)
-        against_count = np.full(simulations, obs.b_votes, dtype=np.int64)
+        for_count = np.full(simulations, a_votes, dtype=np.int64)
+        against_count = np.full(simulations, b_votes, dtype=np.int64)
         for group, upper, share in zip(obs.remaining, corner, shares, strict=True):
             n = group.max_count if upper else group.min_count
             added = rng.binomial(n, share)
@@ -273,14 +361,21 @@ def make_shadow_candidate(
         expiry=received + CANDIDATE_TTL,
         reason=(
             f"{obs.status}; revision={obs.revision_id}; "
-            f"reported_margin={obs.a_votes - obs.b_votes}; "
+            f"reported_margin={a_votes - b_votes}; "
             f"strata={len(obs.remaining)}; prior={prior.model_id}; "
             "not a settlement call or executable edge"
         ),
-        source_refs=(obs.source_ref, source.reference_url, prior.evidence_ref),
+        source_refs=(
+            obs.source_ref, source.reference_url, evidence.capture_ref, prior.evidence_ref
+        ),
         decision_time=decision,
         probability_estimate=float((min(estimates) + max(estimates)) / 2),
         publication_to_receipt_ms=int((received - published).total_seconds() * 1000),
+        contest_id=obs.contest_id,
+        event_family=rule.event_family,
+        revision_id=obs.revision_id,
+        source_document_sha256=obs.source_document_sha256,
+        source_id=obs.source_id,
     )
 
 
@@ -307,8 +402,18 @@ def choose_observation(
         if prev is not None:
             if utc(obs.source_time) < utc(prev.source_time):
                 raise Abstain("out-of-order publication")
+            previous = {
+                (c.candidate_id, c.party_id, c.ballot_choice_id): c.votes
+                for c in prev.reported_choices
+            }
+            current = {
+                (c.candidate_id, c.party_id, c.ballot_choice_id): c.votes
+                for c in obs.reported_choices
+            }
+            if set(previous) != set(current) or len(current) != len(obs.reported_choices):
+                raise Abstain("unreviewed candidate identity changed in revision")
             if (
-                (obs.a_votes < prev.a_votes or obs.b_votes < prev.b_votes)
+                any(current[k] < v for k, v in previous.items())
                 and obs.revision_kind != "CORRECTION"
             ):
                 raise Abstain("unlabeled downward correction")
