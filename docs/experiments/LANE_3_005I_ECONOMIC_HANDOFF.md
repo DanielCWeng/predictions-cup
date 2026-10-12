@@ -53,9 +53,9 @@ python scripts/research/lane_005i_economics.py \
   --mode prospective --start 2026-10-13T00:00:00Z --end 2026-10-14T00:00:00Z \
   --sig-db /path/to/accepted_sig_capture.sqlite \
   --pm-capture /path/to/accepted_pm_capture_or_parquet \
-  --pairs /path/to/independently_approved_exact_pairs.json \
+  --sig-exchange-id 1234 --registry-root . \
   --fee-bps-per-side 20 --latency-ms 100 --min-edge 0.02 \
-  --quantity 1 --capital-limit 100 --depth-haircut 0.5 \
+  --quantity 1 --capital-limit 100 --gross-share-limit 100 --depth-haircut 0.5 \
   --output /tmp/lane3_paper_scorecard.json
 ```
 
