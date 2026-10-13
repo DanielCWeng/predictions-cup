@@ -30,7 +30,7 @@ def publish(mirror: MakerDepthMirror) -> None:
 
 
 def test_default_disabled_and_relative_destination_rejected(tmp_path: Path) -> None:
-    assert AppSettings(_env_file=None).maker_depth_mirror_output_file is None
+    assert AppSettings().maker_depth_mirror_output_file is None
     with pytest.raises(ValueError, match="absolute"):
         MakerDepthMirror(Path("capture.jsonl"))
     with pytest.raises(ValueError, match="bounded"):
