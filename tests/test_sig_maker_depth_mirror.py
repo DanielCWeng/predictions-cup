@@ -128,3 +128,40 @@ def test_closed_mirror_drops_new_capture_and_never_restarts(tmp_path: Path) -> N
     assert mirror.snapshot()["dropped"] == 1
     with pytest.raises(ValueError, match="twice"):
         mirror.start()
+
+
+
+def test_maker_research_writer_starts_within_cleanup_try_finally() -> None:
+    """Prevent a startup exception stranding a daemon research writer."""
+    import ast
+
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "src/predictions_cup/maker/service.py"
+    )
+    syntax = ast.parse(path.read_text(encoding="utf-8"))
+    service = next(
+        n for n in syntax.body
+        if isinstance(n, ast.ClassDef) and n.name == "MakerService"
+    )
+    run = next(
+        n for n in service.body
+        if isinstance(n, ast.AsyncFunctionDef) and n.name == "run"
+    )
+    guarded = next(n for n in run.body if isinstance(n, ast.Try))
+
+    def calls(method: str, nodes: list[ast.stmt]) -> list[ast.Call]:
+        return [
+            node
+            for block in nodes
+            for node in ast.walk(block)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == method
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "depth_mirror"
+        ]
+
+    assert len(calls("start", guarded.body)) == 1
+    assert len(calls("close", guarded.finalbody)) == 1
+    assert not calls("start", run.body[: run.body.index(guarded)])

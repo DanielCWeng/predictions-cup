@@ -261,8 +261,6 @@ class MakerService:
             MakerDepthMirror(self.settings.maker_depth_mirror_output_file)
             if self.settings.maker_depth_mirror_output_file is not None else None
         )
-        if depth_mirror is not None:
-            depth_mirror.start()
         observe_recorder = ObservationCaptureRecorder(
             self.settings.sig_research_path,
             queue_max=max(1_024, min(self.settings.sig_capture_queue_max, 65_536)),
@@ -319,6 +317,9 @@ class MakerService:
             instance_lock.acquire()
 
         try:
+            # Optional research writer starts under the guaranteed cleanup guard.
+            if depth_mirror is not None:
+                depth_mirror.start()
             if self.settings.risk_capital_control_enabled:
                 risk_store = SqliteRiskStateStore(self.settings.risk_state_path)
                 risk_service = CapitalControlService(
