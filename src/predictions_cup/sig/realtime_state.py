@@ -195,6 +195,7 @@ class SigRealtimeStateEngine:
         clock: Clock = lambda: datetime.now(UTC),
         observation_emitter: ObservationEmitter | None = None,
         observation_process_instance_id: str | None = None,
+        depth_capture: Callable[[OrderBook, str, str, datetime, int | None], None] | None = None,
     ) -> None:
         if not tournament_id.strip():
             raise ValueError("tournament_id must not be blank")
@@ -237,6 +238,7 @@ class SigRealtimeStateEngine:
         self._governor_snapshot = governor_snapshot
         self._clock = clock
         self._observation_emitter = observation_emitter
+        self._depth_capture = depth_capture
         self._observation_process_instance_id = (
             uuid4().hex
             if observation_process_instance_id is None
@@ -1742,6 +1744,14 @@ class SigRealtimeStateEngine:
             revision=triggering_revision,
             detail=reason,
         )
+        # Best-effort research copy AFTER the current generation is trusted.
+        # This callback must only enqueue; disk serialisation occurs off-thread.
+        if self._depth_capture is not None:
+            try:
+                self._depth_capture(book, state.market_id, self.tournament_id,
+                                    observed_at, triggering_revision)
+            except Exception:
+                logger.warning("Optional SIG depth research capture failed", exc_info=True)
 
     async def _generation_is_current(
         self,

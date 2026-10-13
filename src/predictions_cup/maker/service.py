@@ -109,6 +109,7 @@ from predictions_cup.sig.account_state import (
     AccountTrustTransition,
 )
 from predictions_cup.sig.client import RetryPolicy
+from predictions_cup.sig.depth_mirror import MakerDepthMirror
 from predictions_cup.sig.errors import (
     SigApiError,
     SigExecutionUncertainError,
@@ -256,6 +257,12 @@ class MakerService:
         governor = build_rest_governor(self.settings)
         rest = GovernedSigRestClient(self.settings, governor=governor)
         sig_recorder = cast(SigRealtimeRecorder, NoopSigRealtimeRecorder())
+        depth_mirror = (
+            MakerDepthMirror(self.settings.maker_depth_mirror_output_file)
+            if self.settings.maker_depth_mirror_output_file is not None else None
+        )
+        if depth_mirror is not None:
+            depth_mirror.start()
         observe_recorder = ObservationCaptureRecorder(
             self.settings.sig_research_path,
             queue_max=max(1_024, min(self.settings.sig_capture_queue_max, 65_536)),
@@ -424,6 +431,7 @@ class MakerService:
                 ),
                 observation_emitter=observation_emitter,
                 observation_process_instance_id=observe_recorder.session_id,
+                depth_capture=(None if depth_mirror is None else depth_mirror.record),
             )
             await _retry_startup_sig_operation(
                 "initial_sig_market_state",
@@ -1122,6 +1130,9 @@ class MakerService:
                 await context_sampler.aclose()
             observation_emitter.close()
             observe_recorder.close()
+            if depth_mirror is not None:
+                depth_mirror.close()
+                _LOG.info("Optional SIG depth mirror counters: %s", depth_mirror.snapshot())
             await rest.aclose()
 
     async def _initialize_capital_control(

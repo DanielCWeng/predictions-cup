@@ -159,6 +159,8 @@ class AppSettings(BaseSettings):
 
     sig_realtime_storage_path: Path = Path("data/sig_realtime.sqlite3")
     sig_research_path: Path = Path("data/sig_research")
+    # Opt-in maker depth mirror: independent research JSONL, never a capture DB.
+    maker_depth_mirror_output_file: Path | None = None
     sig_capture_queue_max: int = Field(default=16_384, ge=10_000, le=65_536)
     sig_capture_parquet_shard_seconds: int = Field(default=60, ge=10, le=300)
     sig_capture_parquet_max_rows_per_shard: int = Field(default=5_000, ge=1_000, le=1_000_000)

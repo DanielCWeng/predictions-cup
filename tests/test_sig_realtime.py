@@ -1486,3 +1486,63 @@ def test_book_next_expiry_triggers_one_targeted_refetch_without_dropping_trust(
         recorder.close()
 
     asyncio.run(scenario())
+
+
+
+def test_opt_in_mirror_does_not_create_extra_sig_rest_reads(tmp_path: Path) -> None:
+    """Real state engine: copy accepted reconciliations, no separate REST poller."""
+    from predictions_cup.sig.depth_mirror import MakerDepthMirror
+
+    async def scenario() -> None:
+        rest = FakeRest()
+        journal = SigRealtimeRecorder(tmp_path / "engine.sqlite3")
+        mirror = MakerDepthMirror(tmp_path / "isolated-depth.jsonl")
+        mirror.start()
+        engine = SigRealtimeStateEngine(
+            rest=rest, recorder=journal, tournament_id="cup",
+            tracked_depth_exchange_ids={"36"},
+            depth_capture=mirror.record,
+        )
+        await engine.initialize()
+        assert rest.calls == ["36"]
+        assert engine.states["36"].depth_state == DepthState.TRACKED_TRUSTED
+        await engine.aclose()
+        journal.close()
+        mirror.close(timeout=2)
+        import json
+        records = [
+            json.loads(s)
+            for s in (tmp_path / "isolated-depth.jsonl").read_text().splitlines()
+        ]
+        assert len(records) == 1
+        assert records[0]["exchange_id"] == "36"
+        assert records[0]["bids"] == [{"price": "0.4", "quantity": "10"}]
+        assert records[0]["asks"] == [{"price": "0.6", "quantity": "12"}]
+        assert records[0]["trusted_for_paired_paper"] is False
+
+    asyncio.run(scenario())
+
+
+def test_optional_capture_exception_cannot_abort_reconciliation(tmp_path: Path) -> None:
+    """Research callback errors must never change SIG trusted state or maker flow."""
+    def broken_capture(
+        book: OrderBook, market_id: str, tournament_id: str,
+        received_at: datetime, revision: int | None,
+    ) -> None:
+        raise OSError("synthetic research disk failure")
+
+    async def scenario() -> None:
+        rest = FakeRest()
+        recorder = SigRealtimeRecorder(tmp_path / "engine.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest, recorder=recorder, tournament_id="cup",
+            tracked_depth_exchange_ids={"36"},
+            depth_capture=broken_capture,
+        )
+        await engine.initialize()
+        assert rest.calls == ["36"]
+        assert engine.states["36"].depth_state == DepthState.TRACKED_TRUSTED
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
