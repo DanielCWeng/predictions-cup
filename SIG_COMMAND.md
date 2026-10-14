@@ -9,6 +9,14 @@
 - **LIVE maker already exists and is active**, subject to safety and capital constraints. Never describe the project as having no live capability.
 - **Autonomy:** execute clearly safe, reversible, read-only and source-only work without repeated debate. Economic and safety gates remain binding. Broad permission to manage the project is not evidence that an untested order, liquidation, risk cap increase, restart, or market-data poll is safe.
 
+## Active BBO recovery — 15 Oct 2026 (source-only, LIVE unchanged)
+
+- West deployed checkout `fb4f6c66` serial Realtime consumer awaits REST dirty-book reconciliation, causing queue backlog. Two 4096-slot queue overflows in 20 minutes; one 15-minute log window recorded only 3 maker bulk-price GET completions versus 216 individual book GETs. Merged [#198](https://github.com/DanielCWeng/predictions-cup/pull/198) addresses prequeue filtering and async/coalesced refetch but is NOT deployed.
+- [Draft PR #236](https://github.com/DanielCWeng/predictions-cup/pull/236), head `19bc256f`, removes hidden minimum 15-second maker scalar refresh interval equal to LIVE 15-second BBO expiry and enforces config refresh < expiry. [Exact-head CI 38654465180](https://github.com/DanielCWeng/predictions-cup/actions/runs/38654465180) SUCCESS. Does not relax BBO/risk gates.
+- Deploying #236 at configured 10-second refresh would change nominal maker bulk GET from 4/min to 6/min; combined #198+#236 needs #207 independent host/REST-budget safety assessment and owner production release. NO automatic merge/deployment or service restart. Feed repair may immediately create actual orders.
+- Gross remains at 100,000 held shares versus observed 100,000 LIVE cap; no proved fresh economically justified reductions. Do not raise cap or sell from old books.
+- Next allowed action: offline independent safety assessment of merged #198 against #207 and #236 exact diff; prepare narrowly bounded deployment acceptance, not another issue/strategy family.
+
 ## Hard facts (explicit timestamps)
 
 - **West production checkout:** observed `fb4f6c66` on 2026-10-14; production **not** automatically updated when GitHub merges.
