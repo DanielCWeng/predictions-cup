@@ -20,6 +20,7 @@ import tempfile
 import threading
 import time
 import tracemalloc
+from contextlib import suppress
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -151,10 +152,8 @@ async def run_case(
                 if mirror is not None:
                     mirror.record(book, "market", "cup", observed_at, 42)
                 elif full_queue is not None:
-                    try:
+                    with suppress(queue.Full):
                         full_queue.put_nowait(None)
-                    except queue.Full:
-                        pass
                 control_ns.append(time.perf_counter_ns() - now)
                 # Fixed synthetic decision work, identical across conditions.
                 checksum = (17 * 31 + 19 * 37) % 997
