@@ -1144,7 +1144,8 @@ class MakerService:
             finally:
                 # Research cleanup also runs if unrelated LIVE teardown raises.
                 if depth_mirror is not None:
-                    depth_mirror.close()
+                    # Never synchronously join a research thread on the maker loop.
+                    await depth_mirror.aclose()
                     _LOG.info("Optional SIG depth mirror counters: %s", depth_mirror.snapshot())
 
     async def _initialize_capital_control(
