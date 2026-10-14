@@ -89,3 +89,101 @@ def test_recorder_close_survives_unrelated_maker_cleanup_exception() -> None:
     )
     starts_with_close = bool(outer.finalbody) and mirror_close(outer.finalbody[:1])
     assert nested_finally or starts_with_close
+
+
+def test_enospc_from_actual_stream_write_is_counted(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    import errno
+    import os
+    import predictions_cup.sig.depth_mirror as mirror_module
+
+    original_fdopen = os.fdopen
+    class NoSpaceStream:
+        def __init__(self, fd: int) -> None:
+            self.underlying = original_fdopen(fd, "w", encoding="utf-8", buffering=1)
+
+        def __enter__(self) -> "NoSpaceStream":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            self.underlying.close()
+
+        def write(self, _record: str) -> None:
+            raise OSError(errno.ENOSPC, "injected full test filesystem")
+
+    def fake_fdopen(fd: int, *_args: object, **_kwargs: object) -> NoSpaceStream:
+        return NoSpaceStream(fd)
+
+    mirror = MakerDepthMirror(tmp_path / "enospc.jsonl")
+    with monkeypatch.context() as patch:
+        patch.setattr(mirror_module.os, "fdopen", fake_fdopen)
+        mirror.start()
+        _record(mirror)
+        assert mirror._thread is not None
+        mirror._thread.join(timeout=2)
+        assert not mirror._thread.is_alive()
+
+    s = mirror.snapshot()
+    assert s["accepted"] == 1
+    assert s["written"] == 0
+    assert s["errors"] == 1
+    assert s["writer_lost"] == 1
+    assert s["dropped"] == 1
+    assert s["queue_pending"] == 0
+
+
+def test_symlink_output_cannot_replace_existing_destination(tmp_path: Path) -> None:
+    destination = tmp_path / "private-output.jsonl"
+    destination.write_text("SENTINEL", encoding="utf-8")
+    link = tmp_path / "research.jsonl"
+    link.symlink_to(destination)
+    mirror = MakerDepthMirror(link)
+    mirror.start()
+    _record(mirror)
+    mirror.close(timeout=2)
+    assert destination.read_text(encoding="utf-8") == "SENTINEL"
+    assert mirror.snapshot()["errors"] == 1
+    assert mirror.snapshot()["disabled"] is True
+
+
+def test_file_cap_accounts_for_accepted_but_unwritten_records(tmp_path: Path) -> None:
+    mirror = MakerDepthMirror(tmp_path / "capped.jsonl", max_bytes=1024)
+    mirror.start()
+    for _ in range(40):
+        _record(mirror)
+    mirror.close(timeout=2)
+    stats = mirror.snapshot()
+    assert stats["disabled"] is True
+    assert stats["queue_pending"] == 0
+    assert stats["accepted"] == stats["written"] + stats["writer_lost"]
+    assert stats["dropped"] == stats["producer_rejected"] + stats["writer_lost"]
+    assert (tmp_path / "capped.jsonl").stat().st_size <= 1024
+
+
+def test_close_with_blocked_writer_never_waits_indefinitely(tmp_path: Path) -> None:
+    from threading import Event
+    from time import perf_counter
+
+    entered, release = Event(), Event()
+    mirror = MakerDepthMirror(tmp_path / "blocked.jsonl", queue_size=1)
+    original = mirror._book_row
+    def held(item: object) -> dict[str, object]:
+        entered.set()
+        assert release.wait(timeout=3)
+        return original(item)  # type: ignore[arg-type]
+    mirror._book_row = held  # type: ignore[method-assign]
+    mirror.start()
+    _record(mirror)
+    try:
+        assert entered.wait(timeout=2)
+        _record(mirror)
+        started = perf_counter()
+        mirror.close(timeout=0.02)
+        assert perf_counter() - started < 0.4
+        _record(mirror)
+        assert mirror.snapshot()["producer_rejected"] == 1
+    finally:
+        release.set()
+        assert mirror._thread is not None
+        mirror._thread.join(timeout=2)
