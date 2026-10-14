@@ -381,7 +381,8 @@ def audit(path: Path, expected_sha256: str, specs: dict[str, Accepted], *,
         "producer_attempted": None, "producer_rejected": None, "writer_lost": None,
         "queue_drops": None, "drop_rate": None, "unobserved_producer_attempts": None,
         "reconnect_count": None, "terminal_quiescence_proven": False,
-        "counter_arithmetic_ok": None, "accepted_balance_without_inflight": None,
+        "counter_arithmetic_ok": None, "counter_feasibility_ok": None,
+        "accepted_balance_without_inflight": None,
         "written_equals_raw_line_count_unattested": None,
     }
     if counters is not None:
@@ -400,8 +401,17 @@ def audit(path: Path, expected_sha256: str, specs: dict[str, Accepted], *,
                 attempted, dropped = counters["producer_attempted"], counters["dropped"]
                 counter_report["schema"] = "CORRECTED_PRODUCER_V2"
                 counter_report["producer_attempted"] = attempted
+                # The producer may have in-flight work, so accepted need not
+                # equal written + lost + pending. However, completed/lost/queued
+                # records can NEVER exceed admitted records in a coherent
+                # snapshot. Torn or contradictory counters must not yield a
+                # believable-looking loss statistic.
+                completed_or_pending = written + lost + counters["queue_pending"]
+                feasible = completed_or_pending <= accepted
                 consistent = (attempted == accepted + rejected
-                              and dropped == rejected + lost)
+                              and dropped == rejected + lost
+                              and feasible)
+                counter_report["counter_feasibility_ok"] = feasible
                 counter_report["counter_arithmetic_ok"] = consistent
                 # Do not publish actionable counter components or ratios when
                 # the producer contradicts itself. Raw aggregate stays diagnostic.
