@@ -7,6 +7,8 @@ from decimal import Decimal
 from pathlib import Path
 from threading import Thread
 
+import pytest
+
 from predictions_cup.models.market import OrderBook, OrderBookLevel
 from predictions_cup.sig.depth_mirror import MakerDepthMirror
 
@@ -31,7 +33,7 @@ def test_inflight_serialization_failure_counts_lost_snapshot(tmp_path: Path) -> 
     def fail(_item: object) -> dict[str, object]:
         raise OSError("injected ENOSPC while serialising/writing")
 
-    mirror._book_row = fail  # type: ignore[method-assign]
+    setattr(mirror, "_book_row", fail)
     mirror.start()
     _record(mirror)
     assert mirror._thread is not None
@@ -47,7 +49,7 @@ def test_inflight_serialization_failure_counts_lost_snapshot(tmp_path: Path) -> 
 
 
 def test_research_thread_start_failure_must_not_abort_maker(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     mirror = MakerDepthMirror(tmp_path / "thread-failure.jsonl")
 
@@ -100,8 +102,6 @@ def test_enospc_from_actual_stream_write_is_counted(
     import errno
     import os
 
-    import predictions_cup.sig.depth_mirror as mirror_module
-
     original_fdopen = os.fdopen
     class NoSpaceStream:
         def __init__(self, fd: int) -> None:
@@ -121,7 +121,7 @@ def test_enospc_from_actual_stream_write_is_counted(
 
     mirror = MakerDepthMirror(tmp_path / "enospc.jsonl")
     with monkeypatch.context() as patch:
-        patch.setattr(mirror_module.os, "fdopen", fake_fdopen)
+        patch.setattr(os, "fdopen", fake_fdopen)
         mirror.start()
         _record(mirror)
         assert mirror._thread is not None
@@ -176,7 +176,7 @@ def test_close_with_blocked_writer_never_waits_indefinitely(tmp_path: Path) -> N
         entered.set()
         assert release.wait(timeout=3)
         return original(item)  # type: ignore[arg-type]
-    mirror._book_row = held  # type: ignore[method-assign]
+    setattr(mirror, "_book_row", held)
     mirror.start()
     _record(mirror)
     try:
