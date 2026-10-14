@@ -5,6 +5,8 @@ No network, exchange clients, production files, credentials or order placement.
 from __future__ import annotations
 
 import json
+
+import pytest
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal as D
 from pathlib import Path
@@ -20,7 +22,8 @@ from predictions_cup.research.maker_depth_audit import (
 from predictions_cup.sig.depth_mirror import MakerDepthMirror
 
 
-def test_actual_recorder_to_auditor_to_lane_c_is_never_promoted(tmp_path: Path) -> None:
+@pytest.mark.parametrize("pm_size", ["20", "20.5", "20.00000001"])
+def test_actual_recorder_to_auditor_to_lane_c_is_never_promoted(tmp_path: Path, pm_size: str) -> None:
     received = datetime(2026, 10, 14, 10, tzinfo=UTC)
     raw_file = tmp_path / "producer.jsonl"
     producer = MakerDepthMirror(raw_file, queue_size=8)
@@ -83,7 +86,7 @@ def test_actual_recorder_to_auditor_to_lane_c_is_never_promoted(tmp_path: Path) 
     pm_path.write_text(json.dumps({
         "venue": "PM", "instrument_id": "pm_yes",
         "received_at": (received - timedelta(milliseconds=100)).isoformat(),
-        "bids": [{"price": "0.66", "size": "20"}],
+        "bids": [{"price": "0.66", "size": pm_size}],
         "asks": [{"price": "0.70", "size": "20"}],
         # Deliberately forged trust cannot promote paired data.
         "trusted": True, "continuity": True, "source_clock_verified": True,
