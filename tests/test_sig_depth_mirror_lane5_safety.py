@@ -66,7 +66,7 @@ def test_research_thread_start_failure_must_not_abort_maker(
 
 
 def test_recorder_close_survives_unrelated_maker_cleanup_exception() -> None:
-    """Structural guard: a preceding cleanup await must not bypass mirror.close()."""
+    """Structural guard: a preceding cleanup await must not bypass recorder shutdown."""
     path = Path(__file__).resolve().parents[1] / "src/predictions_cup/maker/service.py"
     module = ast.parse(path.read_text(encoding="utf-8"))
     service = next(
@@ -82,7 +82,7 @@ def test_recorder_close_survives_unrelated_maker_cleanup_exception() -> None:
             and isinstance(node.func, ast.Attribute)
             and isinstance(node.func.value, ast.Name)
             and node.func.value.id == "depth_mirror"
-            and node.func.attr == "close"
+            and node.func.attr in {"close", "aclose"}
             for stmt in nodes for node in ast.walk(stmt)
         )
 
