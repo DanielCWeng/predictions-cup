@@ -129,7 +129,8 @@ def accepted_specs(mapping: Path, acceptance: Path, ids: tuple[str, ...]) -> dic
     return result
 
 
-def levels(raw: Any, *, reverse: bool, tick: Decimal | None) -> tuple[tuple[Decimal, Decimal], ...]:
+def levels(raw: Any, *, reverse: bool, tick: Decimal | None,
+           require_integral_quantity: bool = True) -> tuple[tuple[Decimal, Decimal], ...]:
     if not isinstance(raw, list):
         raise AuditError("INVALID_LADDER_TYPE")
     parsed: list[tuple[Decimal, Decimal]] = []
@@ -139,9 +140,10 @@ def levels(raw: Any, *, reverse: bool, tick: Decimal | None) -> tuple[tuple[Deci
         p, q = dec(item["price"]), dec(item["quantity"])
         if not D(0) < p < D(1) or q <= 0:
             raise AuditError("INVALID_PRICE_OR_QUANTITY")
-        # Whole-share PAPER is our conservative accepted research universe.
-        # The producer does not certify fractional SIG lot semantics.
-        if q != q.to_integral_value():
+        # SIG source depth is admitted as whole shares only. PM depth may
+        # legitimately contain fractional sizes; the later conservative
+        # hypothetical whole-lot walk floors size * haircut per level.
+        if require_integral_quantity and q != q.to_integral_value():
             raise AuditError("FRACTIONAL_QUANTITY_UNVERIFIED")
         if q > MAX_RESEARCH_LEVEL_QUANTITY:
             raise AuditError("QUANTITY_EXCEEDS_RESEARCH_CAP")
@@ -398,15 +400,17 @@ def audit(path: Path, expected_sha256: str, specs: dict[str, Accepted], *,
                 attempted, dropped = counters["producer_attempted"], counters["dropped"]
                 counter_report["schema"] = "CORRECTED_PRODUCER_V2"
                 counter_report["producer_attempted"] = attempted
-                counter_report["producer_rejected"] = rejected
-                counter_report["writer_lost"] = lost
-                counter_report["queue_drops"] = rejected
+                consistent = (attempted == accepted + rejected
+                              and dropped == rejected + lost)
+                counter_report["counter_arithmetic_ok"] = consistent
+                # Do not publish actionable counter components or ratios when
+                # the producer contradicts itself. Raw aggregate stays diagnostic.
+                counter_report["producer_rejected"] = rejected if consistent else None
+                counter_report["writer_lost"] = lost if consistent else None
+                counter_report["queue_drops"] = rejected if consistent else None
                 counter_report["unobserved_producer_attempts"] = None
-                counter_report["counter_arithmetic_ok"] = (
-                    attempted == accepted + rejected and dropped == rejected + lost)
                 counter_report["drop_rate"] = (
-                    (rejected + lost) / attempted
-                    if attempted and counter_report["counter_arithmetic_ok"] else None)
+                    (rejected + lost) / attempted if attempted and consistent else None)
                 # In-flight writer work cannot be counted from a queue snapshot.
                 # Balance is diagnostic, NOT proof of terminal flush/durability.
                 counter_report["accepted_balance_without_inflight"] = (
@@ -458,7 +462,8 @@ def _pm_levels(raw: dict[str, Any], key: str, reverse: bool) -> tuple[tuple[Deci
                   for x in ladder if isinstance(x, dict)]
     if len(normalized) != len(ladder):
         raise AuditError("INVALID_PM_LADDER")
-    return levels(normalized, reverse=reverse, tick=None)
+    return levels(normalized, reverse=reverse, tick=None,
+                  require_integral_quantity=False)
 
 def pm_pair_rejections(snapshots: list[Snapshot], specs: dict[str, Accepted],
                        pm_path: Path, expected_pm_sha256: str, *,
