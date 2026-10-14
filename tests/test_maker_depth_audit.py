@@ -361,16 +361,76 @@ def test_malformed_v2_counters_cannot_assert_drop_rate(
     assert c["independently_attested"] is False
 
 
-def test_independent_impossible_writer_balance_invalidates_loss_statistics(tmp_path: Path) -> None:
-    """A writer cannot have written more accepted entries than ever admitted."""
+@pytest.mark.parametrize(("overrides", "why"), [
+    ({"written": 4}, "written exceeds accepted"),
+    ({"writer_lost": 4, "dropped": 6}, "writer losses exceed accepted"),
+    ({"queue_pending": 4}, "pending plus completed exceeds accepted"),
+    ({"accepted": 1, "producer_attempted": 3}, "accepted below completed"),
+    ({"writer_lost": 4, "dropped": 6, "queue_pending": 2},
+     "reported drops exceed attempts"),
+])
+def test_impossible_writer_counter_balance_nulls_loss_statistics(
+    tmp_path: Path, overrides: dict[str, int], why: str,
+) -> None:
+    """A self-contradictory or torn snapshot must not create a loss rate."""
     counters = {
-        "accepted": 3, "written": 4, "dropped": 3,
+        "accepted": 3, "written": 2, "dropped": 3,
         "producer_attempted": 5, "producer_rejected": 2, "writer_lost": 1,
-        "errors": 1, "queue_pending": 0,
+        "errors": 0, "queue_pending": 0,
     }
-    r, _ = audit_rows(tmp_path, [book()], counters=counters)
-    c = r["producer_counters"]
+    counters.update(overrides)
+    report, _ = audit_rows(tmp_path, [book()], counters=counters)
+    c = report["producer_counters"]
+    assert c["counter_feasibility_ok"] is False, why
+    assert c["counter_arithmetic_ok"] is False, why
     assert c["accepted_balance_without_inflight"] is False
-    assert c["drop_rate"] is None, "contradictory writer count must invalidate loss rate"
     assert c["queue_drops"] is None
+    assert c["producer_rejected"] is None
     assert c["writer_lost"] is None
+    assert c["drop_rate"] is None
+    assert c["unobserved_producer_attempts"] is None
+    assert c["terminal_quiescence_proven"] is False
+    assert c["independently_attested"] is False
+
+
+def test_inflight_writer_work_is_not_mistaken_for_counter_corruption(
+    tmp_path: Path,
+) -> None:
+    """Underbalance may be an in-flight record; it is not terminal proof."""
+    counters = {
+        "accepted": 4, "written": 2, "dropped": 3,
+        "producer_attempted": 6, "producer_rejected": 2, "writer_lost": 1,
+        "errors": 0, "queue_pending": 0,
+    }
+    report, _ = audit_rows(tmp_path, [book()], counters=counters)
+    c = report["producer_counters"]
+    assert c["counter_feasibility_ok"] is True
+    assert c["counter_arithmetic_ok"] is True
+    assert c["accepted_balance_without_inflight"] is False
+    assert c["terminal_quiescence_proven"] is False
+    assert c["independently_attested"] is False
+    assert c["drop_rate"] == pytest.approx(3 / 6)
+    assert report["coverage_rate"] is None
+
+
+@pytest.mark.parametrize("pm_size", ["0", "-0.00000001", "NaN", "Infinity", "-Infinity"])
+def test_pm_nonpositive_or_nonfinite_sizes_are_rejected(
+    tmp_path: Path, pm_size: str,
+) -> None:
+    specs, _ = mapping(tmp_path)
+    path = fixture(tmp_path, [book()])
+    _, _, books = audit(path, sha256_file(path), specs)
+    pm = tmp_path / "pm-nonpositive.jsonl"
+    pm.write_text(json.dumps({
+        "venue": "PM", "instrument_id": "pm_yes",
+        "received_at": (STAMP - timedelta(milliseconds=100)).isoformat(),
+        "bids": [{"price": "0.66", "size": pm_size}],
+        "asks": [{"price": "0.70", "size": "20.25"}],
+    }) + "\n")
+    rows, report = pm_pair_rejections(books, specs, pm, sha256_file(pm))
+    assert report["pm_readable_depth_rows"] == 0
+    assert report["conditional_comparisons"] == 0
+    assert report["certified_pair_count"] == 0
+    assert report["pm_rejection_reasons"] == {"PM_MALFORMED_OR_INVALID_RECORD": 1}
+    assert all(row["decision"] == "NO_TRADE" for row in rows)
+    assert all(row["paired_depth_trusted"] is False for row in rows)
