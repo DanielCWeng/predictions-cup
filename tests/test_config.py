@@ -144,7 +144,7 @@ def test_maker_freshness_defaults_cover_sig_refresh_intervals(
     del clean_config_env
     settings = AppSettings()
 
-    assert settings.maker_max_bbo_age_ms >= int(
+    assert settings.maker_max_bbo_age_ms > int(
         settings.sig_realtime_bulk_price_refresh_seconds * 1_000
     )
     assert settings.maker_max_depth_age_ms >= int(
