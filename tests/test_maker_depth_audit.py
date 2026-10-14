@@ -178,8 +178,10 @@ def test_fee_unknown_and_tick_assumption_are_explicit(tmp_path: Path) -> None:
 def test_counters_cannot_prove_drop_rate_or_complete_session(tmp_path: Path) -> None:
     r, _ = audit_rows(tmp_path, [book()], counters={"accepted": 2, "written": 1,
         "dropped": 3, "errors": 0, "queue_pending": 0})
-    assert r["producer_counters"]["queue_drops"] == 3
-    assert r["producer_counters"]["drop_rate"] == pytest.approx(3 / 5)
+    assert r["producer_counters"]["schema"] == "LEGACY_UNCLASSIFIED_DROPS"
+    assert r["producer_counters"]["reported_dropped"] == 3
+    assert r["producer_counters"]["queue_drops"] is None
+    assert r["producer_counters"]["drop_rate"] is None
     assert r["producer_counters"]["independently_attested"] is False
     assert r["coverage_rate"] is None
 
@@ -240,3 +242,73 @@ def test_empty_run_is_not_claimed_as_complete(tmp_path: Path) -> None:
     assert r["offline_liquidity_eligible_observations"] == 0
     assert r["capture_cadence_sec"] is None
     assert r["independently_certified_causal_paired_paper_observations"] == 0
+
+
+@pytest.mark.parametrize(("quantity", "reason"), [
+    ("2.5", "FRACTIONAL_QUANTITY_UNVERIFIED"),
+    ("1000000001", "QUANTITY_EXCEEDS_RESEARCH_CAP"),
+    ("1E+1000000", "QUANTITY_EXCEEDS_RESEARCH_CAP"),
+])
+def test_invalid_fractional_or_unbounded_depth_is_not_liquidity(
+    tmp_path: Path, quantity: str, reason: str,
+) -> None:
+    row = book()
+    row["bids"][0]["quantity"] = quantity
+    report, ledger = audit_rows(tmp_path, [row])
+    assert report["valid_two_sided_snapshots"] == 0
+    assert report["offline_liquidity_eligible_observations"] == 0
+    assert ledger[0]["reason"] == reason
+
+
+def test_corrected_producer_counters_report_rejected_and_lost_separately(
+    tmp_path: Path,
+) -> None:
+    # A producer snapshot may correspond to a wider capture than our one-row
+    # illustrative file; arithmetic is only diagnostic and NEVER provenance.
+    counters = {
+        "accepted": 3, "written": 2, "dropped": 3,
+        "producer_attempted": 5, "producer_rejected": 2, "writer_lost": 1,
+        "errors": 1, "queue_pending": 0, "disabled": True,
+    }
+    r, _ = audit_rows(tmp_path, [book()], counters=counters)
+    c = r["producer_counters"]
+    assert c["schema"] == "CORRECTED_PRODUCER_V2"
+    assert c["producer_attempted"] == 5
+    assert c["producer_rejected"] == c["queue_drops"] == 2
+    assert c["writer_lost"] == 1
+    assert c["reported_dropped"] == 3
+    assert c["drop_rate"] == pytest.approx(3 / 5)
+    assert c["counter_arithmetic_ok"] is True
+    assert c["accepted_balance_without_inflight"] is True
+    assert c["written_equals_raw_line_count_unattested"] is False
+    assert c["terminal_quiescence_proven"] is False
+    assert c["independently_attested"] is False
+    assert r["coverage_rate"] is None
+
+
+@pytest.mark.parametrize("broken", [
+    {"producer_attempted": 6},
+    {"writer_lost": -1},
+    {"producer_rejected": "2"},
+])
+def test_malformed_v2_counters_cannot_assert_drop_rate(
+    tmp_path: Path, broken: dict[str, object],
+) -> None:
+    counters: dict[str, object] = {
+        "accepted": 3, "written": 2, "dropped": 3,
+        "producer_attempted": 5, "producer_rejected": 2, "writer_lost": 1,
+        "errors": 1, "queue_pending": 0,
+    }
+    counters.update(broken)
+    r, _ = audit_rows(tmp_path, [book()], counters=counters)
+    c = r["producer_counters"]
+    if set(broken) == {"producer_attempted"} and broken["producer_attempted"] == 6:
+        # All fields present but arithmetic contradictory: may never be called
+        # verified, even though typed values can still be displayed.
+        assert c["counter_arithmetic_ok"] is False
+        assert c["drop_rate"] is None
+    else:
+        assert c["schema"] == "INVALID_PARTIAL_V2"
+        assert c["drop_rate"] is None
+    assert c["terminal_quiescence_proven"] is False
+    assert c["independently_attested"] is False

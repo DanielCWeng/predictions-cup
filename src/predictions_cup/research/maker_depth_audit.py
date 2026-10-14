@@ -21,6 +21,8 @@ DEFAULT_HAIRCUT = D("0.5")
 MAX_FILE_BYTES = 32 * 1024 * 1024
 SCHEMA = "maker-depth-mirror-v1"
 DEFAULT_SIZES = (1, 5, 10, 20)
+# Conservative research-only upper bound; NOT a venue-defined maximum lot size.
+MAX_RESEARCH_LEVEL_QUANTITY = D("1000000000")
 
 
 class AuditError(ValueError):
@@ -137,6 +139,12 @@ def levels(raw: Any, *, reverse: bool, tick: Decimal | None) -> tuple[tuple[Deci
         p, q = dec(item["price"]), dec(item["quantity"])
         if not D(0) < p < D(1) or q <= 0:
             raise AuditError("INVALID_PRICE_OR_QUANTITY")
+        # Whole-share PAPER is our conservative accepted research universe.
+        # The producer does not certify fractional SIG lot semantics.
+        if q != q.to_integral_value():
+            raise AuditError("FRACTIONAL_QUANTITY_UNVERIFIED")
+        if q > MAX_RESEARCH_LEVEL_QUANTITY:
+            raise AuditError("QUANTITY_EXCEEDS_RESEARCH_CAP")
         if tick is not None and p % tick != 0:
             raise AuditError("PRICE_OFF_ASSUMED_TICK")
         parsed.append((p, q))
@@ -362,19 +370,54 @@ def audit(path: Path, expected_sha256: str, specs: dict[str, Accepted], *,
             for metric in ("vwap", "slippage"):
                 p[f"conditional_{side}_{metric}"] = {
                     k: dist(v) for k, v in p[f"conditional_{side}_{metric}"].items()}
-    counter_report: dict[str, Any] = {"available": counters is not None,
-        "independently_attested": False, "queue_drops": None, "drop_rate": None,
-        "unobserved_producer_attempts": None, "reconnect_count": None}
+    # Counters are NEVER independently bound to the captured bytes. The original
+    # producer exposed only total "dropped"; corrected #227 distinguishes dropped
+    # before admission from records accepted but lost in the writer.
+    counter_report: dict[str, Any] = {
+        "available": counters is not None, "independently_attested": False,
+        "schema": "NONE", "reported_dropped": None,
+        "producer_attempted": None, "producer_rejected": None, "writer_lost": None,
+        "queue_drops": None, "drop_rate": None, "unobserved_producer_attempts": None,
+        "reconnect_count": None, "terminal_quiescence_proven": False,
+        "counter_arithmetic_ok": None, "accepted_balance_without_inflight": None,
+        "written_equals_raw_line_count_unattested": None,
+    }
     if counters is not None:
-        # Diagnostic ONLY: cannot cryptographically bind process logs to this file.
         keys = ("accepted", "written", "dropped", "errors", "queue_pending")
-        if all(type(counters.get(k)) is int and counters[k] >= 0 for k in keys):
-            counter_report["queue_drops"] = counters["dropped"]
-            counter_report["unobserved_producer_attempts"] = counters["accepted"] + counters["dropped"]
-            attempts = counters["accepted"] + counters["dropped"]
-            counter_report["drop_rate"] = counters["dropped"] / attempts if attempts else None
-            counter_report["written_count_matches_file"] = counters["written"] == totals
+        if (isinstance(counters, dict)
+                and all(type(counters.get(k)) is int and counters[k] >= 0 for k in keys)):
+            counter_report["reported_dropped"] = counters["dropped"]
+            # A legacy aggregate must NOT be relabelled "queue drops" or used
+            # as evidence of a complete capture.
+            newer = ("producer_attempted", "producer_rejected", "writer_lost")
+            if not any(k in counters for k in newer):
+                counter_report["schema"] = "LEGACY_UNCLASSIFIED_DROPS"
+            elif all(type(counters.get(k)) is int and counters[k] >= 0 for k in newer):
+                accepted, written = counters["accepted"], counters["written"]
+                rejected, lost = counters["producer_rejected"], counters["writer_lost"]
+                attempted, dropped = counters["producer_attempted"], counters["dropped"]
+                counter_report["schema"] = "CORRECTED_PRODUCER_V2"
+                counter_report["producer_attempted"] = attempted
+                counter_report["producer_rejected"] = rejected
+                counter_report["writer_lost"] = lost
+                counter_report["queue_drops"] = rejected
+                counter_report["unobserved_producer_attempts"] = None
+                counter_report["counter_arithmetic_ok"] = (
+                    attempted == accepted + rejected and dropped == rejected + lost)
+                counter_report["drop_rate"] = (
+                    (rejected + lost) / attempted
+                    if attempted and counter_report["counter_arithmetic_ok"] else None)
+                # In-flight writer work cannot be counted from a queue snapshot.
+                # Balance is diagnostic, NOT proof of terminal flush/durability.
+                counter_report["accepted_balance_without_inflight"] = (
+                    accepted == written + lost + counters["queue_pending"])
+                counter_report["written_equals_raw_line_count_unattested"] = (
+                    written == totals and not trailing_partial)
+            else:
+                counter_report["schema"] = "INVALID_PARTIAL_V2"
+                counter_report["invalid_counters"] = True
         else:
+            counter_report["schema"] = "INVALID_COUNTERS"
             counter_report["invalid_counters"] = True
     report: dict[str, Any] = {
         "schema": "lane-b-maker-depth-audit-v1", "mode": "OFFLINE_READ_ONLY",
@@ -392,7 +435,8 @@ def audit(path: Path, expected_sha256: str, specs: dict[str, Accepted], *,
         "native_sig_event_time": None, "native_sig_revision": None,
         "source_book_age_ms": None, "unknown_clock_coverage": len(snapshots),
         "tick_assumption": str(tick) if tick is not None else None,
-        "whole_lot_assumption": "floor per level after liquidity haircut",
+        "whole_lot_assumption": "reject fractional source quantities; floor per level after liquidity haircut",
+        "research_level_quantity_cap": str(MAX_RESEARCH_LEVEL_QUANTITY),
         "haircut_fraction": str(haircut), "fee_per_share_assumption": (
             str(fee_per_share) if fee_per_share is not None else None),
         "capture_cadence_sec": None, "scheduled_expected_snapshots": None,
