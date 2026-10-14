@@ -66,7 +66,7 @@ jobs:
               f"- Latest `main` CI: {ci.get('status', 'unknown') if ci else 'unknown'} / {ci.get('conclusion', 'unknown') if ci else 'unknown'} ({ci.get('html_url', 'not available') if ci else 'not available'})",
               f"- Open tracked PRs: {', '.join('#'+str(n)+(' [DRAFT]' if p['draft'] else '') for n,p in active) or 'none'}",
               "- Evidence boundary: GitHub state ONLY; LIVE host/account/venue data, capital headroom, and alpha economics NOT CHECKED.",
-              "- Current command/handoff: [SIG_COMMAND.md](../blob/main/SIG_COMMAND.md) and master issue #201.",
+              "- Current command/handoff: [SIG_COMMAND.md](https://github.com/DanielCWeng/predictions-cup/blob/main/SIG_COMMAND.md) and master issue #201.",
               "- This workflow does not trade, deploy, modify issues, call SIG/PM, or create ChatGPT conversations.",
           ]
           text = "\n".join(lines) + "\n"
