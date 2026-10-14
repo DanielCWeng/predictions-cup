@@ -19,7 +19,6 @@ import sys
 import tempfile
 import threading
 import time
-from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -35,6 +34,7 @@ from predictions_cup.maker import (
     ShadowMakerExecutionAdapter,
 )
 from predictions_cup.risk.core import RiskContext
+from predictions_cup.models.market import OrderBook
 from predictions_cup.sig.depth_mirror import MakerDepthMirror
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -64,7 +64,14 @@ async def run_case(
     )
     exchange_id = sorted(snapshots)[0]
     snapshot = snapshots[exchange_id]
-    book = replace(book_with_levels(levels), exchange_id=exchange_id)
+    fixture_book = book_with_levels(levels)
+    book = OrderBook(
+        exchange_id=exchange_id,
+        bids=fixture_book.bids,
+        asks=fixture_book.asks,
+        timestamp=fixture_book.timestamp,
+        source=fixture_book.source,
+    )
     # The serialized fixture identity is independent of recorder OFF/ON.
     tape = json.dumps({
         "exchange_id": exchange_id, "levels": levels, "iterations": iterations,
