@@ -136,6 +136,9 @@ def test_gap_and_quote_change_do_not_imply_missing_count(tmp_path: Path) -> None
     assert m["gap_count"] == 1
     assert m["max_gap_seconds"] == 51
     assert m["best_bid_changes"]["p50"] == pytest.approx(.01)
+    assert m["bid_quantity_changes"]["p50"] == 20.0  # second bid has 8; first 8+20
+    assert m["ask_quantity_changes"]["p50"] == 20.0
+    assert m["conditional_buy_yes_slippage"]["5"]["count"] == 1  # second snapshot fails haircut
     assert r["missing_segments"] is None
     assert r["source_book_age_ms"] is None
 
