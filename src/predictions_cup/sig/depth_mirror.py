@@ -56,13 +56,21 @@ class MakerDepthMirror:
         self.accepted = 0
         self.written = 0
         self.dropped = 0
+        self.producer_rejected = 0
+        self.writer_lost = 0
         self.errors = 0
 
     def start(self) -> None:
         if self._thread is not None:
             raise ValueError("mirror cannot start twice")
         self._thread = Thread(target=self._write_loop, name="sig-depth-mirror", daemon=True)
-        self._thread.start()
+        try:
+            self._thread.start()
+        except Exception:
+            # An optional research thread must not prevent LIVE maker startup.
+            self.errors += 1
+            self._disabled = True
+            self._thread = None
 
     def record(
         self,
@@ -76,6 +84,7 @@ class MakerDepthMirror:
         if (self._disabled or self._stop.is_set() or self._thread is None
                 or received_at.utcoffset() is None):
             self.dropped += 1
+            self.producer_rejected += 1
             return
         try:
             self._queue.put_nowait(_Captured(
@@ -84,6 +93,7 @@ class MakerDepthMirror:
             self.accepted += 1
         except Full:
             self.dropped += 1
+            self.producer_rejected += 1
 
     def _book_row(self, item: _Captured) -> dict[str, Any]:
         book = item.book
@@ -130,11 +140,17 @@ class MakerDepthMirror:
                         size = len(encoded.encode())
                         if written_bytes + size > self.max_bytes:
                             self.dropped += 1
+                            self.writer_lost += 1
                             self._disabled = True
                             break
                         stream.write(encoded)
                         written_bytes += size
                         self.written += 1
+                    except Exception:
+                        # A dequeued item is no longer in the queue drain below.
+                        self.dropped += 1
+                        self.writer_lost += 1
+                        raise
                     finally:
                         self._queue.task_done()
                 # No unbounded flush/fsync on shutdown: writer is daemonised.
@@ -153,6 +169,7 @@ class MakerDepthMirror:
                     break
                 else:
                     self.dropped += 1
+                    self.writer_lost += 1
                     self._queue.task_done()
 
     def close(self, *, timeout: float = 0.2) -> None:
@@ -165,6 +182,9 @@ class MakerDepthMirror:
             "accepted": self.accepted,
             "written": self.written,
             "dropped": self.dropped,
+            "producer_attempted": self.accepted + self.producer_rejected,
+            "producer_rejected": self.producer_rejected,
+            "writer_lost": self.writer_lost,
             "errors": self.errors,
             "disabled": self._disabled,
             "queue_pending": self._queue.qsize(),
