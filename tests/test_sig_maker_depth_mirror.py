@@ -59,6 +59,8 @@ def test_capture_is_full_depth_and_explicitly_untrusted_for_paper(tmp_path: Path
     assert not row["source_clock_verified"] and not row["source_sequence_verified"]
     assert output.stat().st_mode & 0o777 == 0o600
     assert mirror.snapshot()["written"] == 1
+    assert mirror.snapshot()["file_synced"] is True
+    assert mirror.snapshot()["terminal_complete"] is True
 
 
 def test_existing_output_never_overwritten_even_if_activated(tmp_path: Path) -> None:
@@ -203,5 +205,28 @@ def test_stalled_writer_async_shutdown_preserves_event_loop_and_flags_incomplete
             await mirror.aclose(timeout=1)
         assert mirror.snapshot()["writer_alive"] is False
         assert mirror.snapshot()["written"] == 1
+    assert mirror.snapshot()["terminal_complete"] is True
 
     asyncio.run(_exercise(tmp_path))
+
+
+def test_fsync_failure_cannot_certify_complete_capture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import os
+    mirror = MakerDepthMirror(tmp_path / "fsync-failed.jsonl")
+
+    def fail(_fd: int) -> None:
+        raise OSError("injected offline disk fsync failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "fsync", fail)
+        mirror.start()
+        publish(mirror)
+        mirror.close(timeout=2)
+    stats = mirror.snapshot()
+    assert stats["written"] == 1
+    assert stats["errors"] == 1
+    assert stats["file_synced"] is False
+    assert stats["terminal_complete"] is False
+    assert stats["writer_alive"] is False
