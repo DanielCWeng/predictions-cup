@@ -7,6 +7,7 @@ supplies no exchange event timestamp or source revision.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from dataclasses import dataclass
@@ -188,6 +189,16 @@ class MakerDepthMirror:
         if self._thread is not None:
             self._thread.join(timeout=max(0.0, timeout))
 
+    async def aclose(self, *, timeout: float = 0.2) -> None:
+        """Request stop immediately and join off-loop so risk tasks can run.
+
+        A timed-out join is NOT terminal evidence. Inspect writer_alive in the
+        snapshot and quarantine an incomplete research file if still running.
+        """
+        self._stop.set()
+        if self._thread is not None:
+            await asyncio.to_thread(self._thread.join, max(0.0, timeout))
+
     def snapshot(self) -> dict[str, int | bool]:
         return {
             "accepted": self.accepted,
@@ -199,4 +210,5 @@ class MakerDepthMirror:
             "errors": self.errors,
             "disabled": self._disabled,
             "queue_pending": self._queue.qsize(),
+            "writer_alive": self._thread is not None and self._thread.is_alive(),
         }
