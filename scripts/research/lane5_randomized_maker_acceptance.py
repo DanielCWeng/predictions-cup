@@ -33,8 +33,8 @@ from predictions_cup.maker import (
     QuoteSide,
     ShadowMakerExecutionAdapter,
 )
-from predictions_cup.risk.core import RiskContext
 from predictions_cup.models.market import OrderBook
+from predictions_cup.risk.core import RiskContext
 from predictions_cup.sig.depth_mirror import MakerDepthMirror
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
