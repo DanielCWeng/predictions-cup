@@ -1,6 +1,7 @@
 """Independent offline safety regressions for the opt-in maker depth mirror."""
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -163,5 +164,40 @@ def test_maker_research_writer_starts_within_cleanup_try_finally() -> None:
         ]
 
     assert len(calls("start", guarded.body)) == 1
-    assert len(calls("close", guarded.finalbody)) == 1
+    assert len(calls("aclose", guarded.finalbody)) == 1
+    assert not calls("close", guarded.finalbody)
     assert not calls("start", run.body[: run.body.index(guarded)])
+
+
+@pytest.mark.asyncio
+async def test_stalled_writer_async_shutdown_preserves_event_loop_and_flags_incomplete(
+    tmp_path: Path,
+) -> None:
+    """A blocked research writer cannot hold the maker's async teardown loop."""
+    entered, release = Event(), Event()
+    mirror = MakerDepthMirror(tmp_path / "stalled.jsonl")
+    original = mirror._book_row
+
+    def held(item: object) -> dict[str, object]:
+        entered.set()
+        assert release.wait(timeout=3)
+        return original(item)  # type: ignore[arg-type]
+
+    mirror._book_row = held  # type: ignore[method-assign]
+    mirror.start()
+    try:
+        publish(mirror)
+        assert await asyncio.to_thread(entered.wait, 2)
+        shutdown = asyncio.create_task(mirror.aclose(timeout=0.15))
+        # A synchronous 150ms join would prevent this 20ms timer from running.
+        await asyncio.sleep(0.02)
+        assert not shutdown.done(), "shutdown did not wait for stalled writer"
+        await shutdown
+        assert mirror.snapshot()["writer_alive"] is True
+        assert mirror.snapshot()["accepted"] == 1
+        assert mirror.snapshot()["written"] == 0
+    finally:
+        release.set()
+        await mirror.aclose(timeout=1)
+    assert mirror.snapshot()["writer_alive"] is False
+    assert mirror.snapshot()["written"] == 1
