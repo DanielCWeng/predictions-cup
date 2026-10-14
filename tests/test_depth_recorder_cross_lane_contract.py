@@ -5,11 +5,11 @@ No network, exchange clients, production files, credentials or order placement.
 from __future__ import annotations
 
 import json
-
-import pytest
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal as D
 from pathlib import Path
+
+import pytest
 
 from predictions_cup.models.market import OrderBook, OrderBookLevel
 from predictions_cup.replay.microstructure_c_bridge import bridge_lane_b
