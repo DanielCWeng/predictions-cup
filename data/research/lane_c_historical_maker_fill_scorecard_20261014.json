@@ -1,0 +1,69 @@
+{
+  "schema": "LANE_C_HISTORICAL_MAKER_FILL_SCORECARD_20261014",
+  "measured_on_utc_date": "2026-10-14",
+  "source_period_utc": "2026-10-01 to 2026-10-06 (exact first/last fill times available only in retained private CSV)",
+  "source": "Lane A retained private fill_provenance.csv + fill_aggregate.json, produced by 12 Oct authenticated SIG venue snapshot and read-only journal reconciliation",
+  "source_authentication": "UPSTREAM_LANE_A_ATTESTED; independent Lane C source reauthentication NOT RUN",
+  "source_csv_sha256": "0b8040f82c489dc4450f3c568e1f2700f5bc878fc15e34eb094effaf6e40690e",
+  "venue_snapshot_sha256": "bd38a5b0df97656d796a979b4455ca6041fb8ecc3f6f8555aa9f217b7e98911c",
+  "venue_fills": 568,
+  "unique_venue_orders_with_fills": 448,
+  "fill_level_confidence": {
+    "exact_authoritative_or_duplicate_same_economics": 85,
+    "unique_real_time_economic_tuple": 104,
+    "total": 189
+  },
+  "weaker_order_associations": {
+    "summary_only": 312,
+    "order_event_without_fill": 66,
+    "ack_only_null_exchange": 1,
+    "total": 379
+  },
+  "observed_fill_level_family_label": {
+    "MAKE": 3,
+    "TAKE": 87,
+    "UNKNOWN": 99
+  },
+  "weaker_order_family_attribution": "NOT VERIFIED",
+  "matched_realtime_yes": 104,
+  "confirmed_authoritative_id_side": {
+    "NO": 53,
+    "YES": 32
+  },
+  "venue_fill_side_totals": {
+    "NO": 362,
+    "YES": 206
+  },
+  "venue_fills_per_utc_day": {
+    "2026-10-01": 63,
+    "2026-10-02": 138,
+    "2026-10-03": 161,
+    "2026-10-04": 85,
+    "2026-10-05": 117,
+    "2026-10-06": 4
+  },
+  "journal_event_totals_not_unique_maker_orders": {
+    "ACK": 11210,
+    "CANCEL_ACK": 10619,
+    "CANCEL_REJECTED": 104,
+    "CANCEL_UNCERTAIN": 285,
+    "SUBMISSION": 22166
+  },
+  "maker_eligible_ack_denominator": null,
+  "verified_passive_maker_lifecycles": null,
+  "verified_zero_fill_maker_ack": null,
+  "source_timed_market_spreads": null,
+  "valid_fee_attribution": null,
+  "observed_5s_30s_5m_1h_post_fill_markouts": null,
+  "realised_full_lifecycle_net_pnl": null,
+  "market_event_day_clustered_net_lower_bound": null,
+  "gross_share_day_profit": null,
+  "no_quote_incremental_order_pnl": 0,
+  "no_quote_caveat": "Not a measured counterfactual portfolio value",
+  "comparison_to_historical_487_4_expected_149_actual": "DIFFERENT_SAMPLES; NO RECONCILIATION",
+  "research_verdict": "INSUFFICIENT_VERIFIABLE_FILLS",
+  "shadow_hypotheses_proposed": [],
+  "live_changes_authorised": false,
+  "interpretation": "Only 3 matched fill rows are explicitly tagged MAKE, which is NOT a reliable count of all maker fills. 87 are tagged TAKE and 99 have no family; the 379 weak links cannot certify fill-specific maker role. Do not calculate maker economic PnL, alpha, or fill-rate from the raw 568.",
+  "next_necessary_evidence": "Independently attested complete order-level maker submission/ACK/terminal/cancel/no-fill join, fee records, source receipt-valid quote/exit books, canonical YES/NO semantics, inventory/settlement lifecycle and market/day controls, on immutable research copies."
+}

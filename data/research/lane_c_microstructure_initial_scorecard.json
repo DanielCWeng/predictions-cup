@@ -1,0 +1,111 @@
+{
+  "schema": "lane_c_microstructure_initial_v1",
+  "as_of": "2026-10-12",
+  "source": "#201 and #220; no new trusted matched PAPER tape evaluated",
+  "data_quality": "SIG full-depth paired capture not yet certified; PM orphan delta integrity unresolved",
+  "promotion": "NO_PROMOTION",
+  "execution_authority": false,
+  "orders_sent_by_this_lane": 0,
+  "observed_prospective_opportunities": null,
+  "observed_fills": null,
+  "observed_net_pnl": null,
+  "observed_pnl_ci95": null,
+  "profit_per_capital_second": null,
+  "capacity_ceiling": null,
+  "strategies": {
+    "PASSIVE_SPREAD": {
+      "disposition": "INSUFFICIENT_DATA",
+      "qualified_opportunities": null,
+      "net_pnl": null,
+      "fill_probability": null,
+      "main_blocker": "no audited prospective paired full-depth execution tape"
+    },
+    "DEPTH_PASSIVE": {
+      "disposition": "INSUFFICIENT_DATA",
+      "qualified_opportunities": null,
+      "net_pnl": null,
+      "fill_probability": null,
+      "main_blocker": "no audited prospective paired full-depth execution tape"
+    },
+    "STALE_QUOTE": {
+      "disposition": "INSUFFICIENT_DATA",
+      "qualified_opportunities": null,
+      "net_pnl": null,
+      "fill_probability": null,
+      "main_blocker": "no audited prospective paired full-depth execution tape"
+    },
+    "INVENTORY_SKEW": {
+      "disposition": "INSUFFICIENT_DATA",
+      "qualified_opportunities": null,
+      "net_pnl": null,
+      "fill_probability": null,
+      "main_blocker": "no audited prospective paired full-depth execution tape"
+    },
+    "TRADE_REVERSION": {
+      "disposition": "INSUFFICIENT_DATA",
+      "qualified_opportunities": null,
+      "net_pnl": null,
+      "fill_probability": null,
+      "main_blocker": "no audited prospective paired full-depth execution tape"
+    },
+    "REPLENISHMENT": {
+      "disposition": "INSUFFICIENT_DATA",
+      "qualified_opportunities": null,
+      "net_pnl": null,
+      "fill_probability": null,
+      "main_blocker": "no audited prospective paired full-depth execution tape"
+    },
+    "SHORT_DISCOVERY": {
+      "disposition": "INSUFFICIENT_DATA",
+      "qualified_opportunities": null,
+      "net_pnl": null,
+      "fill_probability": null,
+      "main_blocker": "no audited prospective paired full-depth execution tape"
+    },
+    "CROSSVENUE_STALE": {
+      "disposition": "INSUFFICIENT_DATA",
+      "qualified_opportunities": null,
+      "net_pnl": null,
+      "fill_probability": null,
+      "main_blocker": "no audited prospective paired full-depth execution tape"
+    },
+    "PASSIVE_RANDOM": {
+      "disposition": "INSUFFICIENT_DATA",
+      "qualified_opportunities": null,
+      "net_pnl": null,
+      "fill_probability": null,
+      "main_blocker": "no audited prospective paired full-depth execution tape"
+    },
+    "SIMPLE_IMBALANCE": {
+      "disposition": "INSUFFICIENT_DATA",
+      "qualified_opportunities": null,
+      "net_pnl": null,
+      "fill_probability": null,
+      "main_blocker": "no audited prospective paired full-depth execution tape"
+    },
+    "FROZEN_005I": {
+      "disposition": "INSUFFICIENT_DATA",
+      "qualified_opportunities": null,
+      "net_pnl": null,
+      "fill_probability": null,
+      "main_blocker": "no audited prospective paired full-depth execution tape"
+    },
+    "DIRECT_FV": {
+      "disposition": "INSUFFICIENT_DATA",
+      "qualified_opportunities": null,
+      "net_pnl": null,
+      "fill_probability": null,
+      "main_blocker": "no audited prospective paired full-depth execution tape"
+    },
+    "ADVERSE_SELECTION": {
+      "disposition": "INSUFFICIENT_DATA",
+      "qualified_opportunities": null,
+      "net_pnl": null,
+      "fill_probability": null,
+      "main_blocker": "no audited prospective paired full-depth execution tape"
+    }
+  },
+  "baseline": "NO_TRADE",
+  "historical_warning": "#175 out-of-sample 487.4 predicted vs 149 actual maker fills",
+  "independent_review_issue": 207
+}
