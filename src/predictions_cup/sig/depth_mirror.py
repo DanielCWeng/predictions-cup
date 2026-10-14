@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from queue import Empty, Full, Queue
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 from typing import Any
 from uuid import uuid4
 
@@ -50,6 +50,9 @@ class MakerDepthMirror:
         self.max_bytes = max_bytes
         self.run_id = uuid4().hex
         self._queue: Queue[_Captured | object] = Queue(maxsize=queue_size)
+        # Coordinate admission against a dying writer so no accepted record
+        # can arrive AFTER terminal queue-drain/loss accounting completes.
+        self._admission_lock = Lock()
         self._stop = Event()
         self._thread: Thread | None = None
         self._disabled = False
@@ -81,19 +84,23 @@ class MakerDepthMirror:
         triggering_revision: int | None,
     ) -> None:
         """Maker-safe O(1) enqueue; never serialize, sleep, await or touch disk."""
-        if (self._disabled or self._stop.is_set() or self._thread is None
-                or received_at.utcoffset() is None):
-            self.dropped += 1
-            self.producer_rejected += 1
-            return
-        try:
-            self._queue.put_nowait(_Captured(
-                book, market_id, tournament_id, received_at, triggering_revision,
-            ))
-            self.accepted += 1
-        except Full:
-            self.dropped += 1
-            self.producer_rejected += 1
+        # The worker's terminal disable shares this short lock. Otherwise a
+        # callback can pass the enabled check, stall, and enqueue AFTER the
+        # writer has drained and exited, silently stranding accepted evidence.
+        with self._admission_lock:
+            if (self._disabled or self._stop.is_set() or self._thread is None
+                    or received_at.utcoffset() is None):
+                self.dropped += 1
+                self.producer_rejected += 1
+                return
+            try:
+                self._queue.put_nowait(_Captured(
+                    book, market_id, tournament_id, received_at, triggering_revision,
+                ))
+                self.accepted += 1
+            except Full:
+                self.dropped += 1
+                self.producer_rejected += 1
 
     def _book_row(self, item: _Captured) -> dict[str, Any]:
         book = item.book
@@ -159,7 +166,11 @@ class MakerDepthMirror:
             self.errors += 1
             self._disabled = True
         finally:
-            self._disabled = True
+            # Disable admissions atomically with the producer-side check,
+            # then drain without holding the lock. No new item may arrive
+            # behind this terminal loss-accounting pass.
+            with self._admission_lock:
+                self._disabled = True
             # When the output file fails/caps, account for accepted but unwritten
             # queued evidence; never allow an unknown gap to appear complete.
             while True:
