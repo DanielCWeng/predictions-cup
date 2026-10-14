@@ -169,35 +169,39 @@ def test_maker_research_writer_starts_within_cleanup_try_finally() -> None:
     assert not calls("start", run.body[: run.body.index(guarded)])
 
 
-@pytest.mark.asyncio
-async def test_stalled_writer_async_shutdown_preserves_event_loop_and_flags_incomplete(
+def test_stalled_writer_async_shutdown_preserves_event_loop_and_flags_incomplete(
     tmp_path: Path,
 ) -> None:
-    """A blocked research writer cannot hold the maker's async teardown loop."""
-    entered, release = Event(), Event()
-    mirror = MakerDepthMirror(tmp_path / "stalled.jsonl")
-    original = mirror._book_row
+    async def _exercise(
+        tmp_path: Path,
+    ) -> None:
+        """A blocked research writer cannot hold the maker's async teardown loop."""
+        entered, release = Event(), Event()
+        mirror = MakerDepthMirror(tmp_path / "stalled.jsonl")
+        original = mirror._book_row
 
-    def held(item: object) -> dict[str, object]:
-        entered.set()
-        assert release.wait(timeout=3)
-        return original(item)  # type: ignore[arg-type]
+        def held(item: object) -> dict[str, object]:
+            entered.set()
+            assert release.wait(timeout=3)
+            return original(item)  # type: ignore[arg-type]
 
-    mirror._book_row = held  # type: ignore[method-assign]
-    mirror.start()
-    try:
-        publish(mirror)
-        assert await asyncio.to_thread(entered.wait, 2)
-        shutdown = asyncio.create_task(mirror.aclose(timeout=0.15))
-        # A synchronous 150ms join would prevent this 20ms timer from running.
-        await asyncio.sleep(0.02)
-        assert not shutdown.done(), "shutdown did not wait for stalled writer"
-        await shutdown
-        assert mirror.snapshot()["writer_alive"] is True
-        assert mirror.snapshot()["accepted"] == 1
-        assert mirror.snapshot()["written"] == 0
-    finally:
-        release.set()
-        await mirror.aclose(timeout=1)
-    assert mirror.snapshot()["writer_alive"] is False
-    assert mirror.snapshot()["written"] == 1
+        mirror._book_row = held  # type: ignore[method-assign]
+        mirror.start()
+        try:
+            publish(mirror)
+            assert await asyncio.to_thread(entered.wait, 2)
+            shutdown = asyncio.create_task(mirror.aclose(timeout=0.15))
+            # A synchronous 150ms join would prevent this 20ms timer from running.
+            await asyncio.sleep(0.02)
+            assert not shutdown.done(), "shutdown did not wait for stalled writer"
+            await shutdown
+            assert mirror.snapshot()["writer_alive"] is True
+            assert mirror.snapshot()["accepted"] == 1
+            assert mirror.snapshot()["written"] == 0
+        finally:
+            release.set()
+            await mirror.aclose(timeout=1)
+        assert mirror.snapshot()["writer_alive"] is False
+        assert mirror.snapshot()["written"] == 1
+
+    asyncio.run(_exercise(tmp_path))
