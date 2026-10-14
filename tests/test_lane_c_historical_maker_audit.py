@@ -11,12 +11,13 @@ import pytest
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts/research/lane_c_historical_maker_audit.py"
 audit_fills = run_path(str(_SCRIPT))["audit_fills"]
 
-HEADER = (
-    "venue_fill_id venue_order_id exchange_id market_id filled_at side "
-    "signed_quantity price status confidence journal_event_id journal_event_type "
-    "journal_fill_id journal_order_id journal_exchange_id journal_quantity "
-    "journal_price journal_timestamp journal_strategy_family"
-).split()
+HEADER = [
+    "venue_fill_id", "venue_order_id", "exchange_id", "market_id", "filled_at",
+    "side", "signed_quantity", "price", "status", "confidence", "journal_event_id",
+    "journal_event_type", "journal_fill_id", "journal_order_id",
+    "journal_exchange_id", "journal_quantity", "journal_price",
+    "journal_timestamp", "journal_strategy_family",
+]
 
 
 def row(*, fill: str = "42", status: str = "EXACT_AUTHORITATIVE_FILL_ID",
