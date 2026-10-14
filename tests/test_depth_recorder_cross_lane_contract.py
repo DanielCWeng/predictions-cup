@@ -23,7 +23,9 @@ from predictions_cup.sig.depth_mirror import MakerDepthMirror
 
 
 @pytest.mark.parametrize("pm_size", ["20", "20.5", "20.00000001"])
-def test_actual_recorder_to_auditor_to_lane_c_is_never_promoted(tmp_path: Path, pm_size: str) -> None:
+def test_actual_recorder_to_auditor_to_lane_c_is_never_promoted(
+    tmp_path: Path, pm_size: str,
+) -> None:
     received = datetime(2026, 10, 14, 10, tzinfo=UTC)
     raw_file = tmp_path / "producer.jsonl"
     producer = MakerDepthMirror(raw_file, queue_size=8)
