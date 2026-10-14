@@ -23,11 +23,11 @@ jobs:
         run: python -m pip install -e '.[dev]'
       - name: Lint offline benchmark (project source mypy runs in full CI)
         run: ruff check scripts/research/lane5_randomized_maker_acceptance.py
-      - name: Pre-registered 12-pair randomized OFF/ON on real maker and fake sink
+      - name: Pre-registered 24-pair randomized OFF/ON on real maker and fake sink
         shell: bash
         run: |
           set -o pipefail
-          python scripts/research/lane5_randomized_maker_acceptance.py --seed 207220 --pairs 12 --iterations 1000 | tee lane5_randomized_maker.jsonl
+          python scripts/research/lane5_randomized_maker_acceptance.py --seed 207220 --pairs 24 --iterations 1000 | tee lane5_randomized_maker.jsonl
       - name: Upload immutable runner evidence
         uses: actions/upload-artifact@v4
         with:
