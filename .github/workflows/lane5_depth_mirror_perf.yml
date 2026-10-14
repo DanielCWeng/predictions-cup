@@ -1,0 +1,53 @@
+name: Lane 5 Depth Mirror Offline Benchmark
+
+on:
+  push:
+    branches:
+      - audit/lane5-depth-mirror-safety-20261014
+      - integration/depth-mirror-constructor-guard-20261014
+      - integration/depth-recorder-cross-lane-ci-20261014
+
+permissions:
+  contents: read
+
+jobs:
+  offline-perf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install project without LIVE credentials
+        run: python -m pip install -e .
+      - name: Isolated baseline, saturated-queue, writer and pressure controls
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/research/lane5_depth_mirror_perf.py --iterations 3000 | tee lane5_baseline.jsonl
+      - name: Election-style 10x synthetic burst at 200 book levels per side
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/research/lane5_depth_mirror_perf.py --iterations 1000 --burst | tee lane5_burst.jsonl
+      - name: Actual offline MakerRuntimeLoop decision-cycle A/B
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/research/lane5_maker_loop_ab.py --iterations 1000 | tee lane5_maker_baseline.jsonl
+      - name: Actual maker decision cycles with 10x synthetic depth burst
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/research/lane5_maker_loop_ab.py --iterations 1000 --burst | tee lane5_maker_burst.jsonl
+      - name: Upload reproducible machine-readable reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: lane5-depth-mirror-offline-performance
+          path: |
+            lane5_baseline.jsonl
+            lane5_burst.jsonl
+            lane5_maker_baseline.jsonl
+            lane5_maker_burst.jsonl

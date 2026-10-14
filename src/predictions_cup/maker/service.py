@@ -109,6 +109,7 @@ from predictions_cup.sig.account_state import (
     AccountTrustTransition,
 )
 from predictions_cup.sig.client import RetryPolicy
+from predictions_cup.sig.depth_mirror import MakerDepthMirror
 from predictions_cup.sig.errors import (
     SigApiError,
     SigExecutionUncertainError,
@@ -256,6 +257,18 @@ class MakerService:
         governor = build_rest_governor(self.settings)
         rest = GovernedSigRestClient(self.settings, governor=governor)
         sig_recorder = cast(SigRealtimeRecorder, NoopSigRealtimeRecorder())
+        # Research capture is optional: bad destinations and resource failures
+        # disable the mirror, never maker startup or risk/order recovery.
+        depth_mirror: MakerDepthMirror | None = None
+        if self.settings.maker_depth_mirror_output_file is not None:
+            try:
+                depth_mirror = MakerDepthMirror(self.settings.maker_depth_mirror_output_file)
+            except Exception as exc:
+                # Avoid logging an arbitrary research path or other sensitive values.
+                _LOG.warning(
+                    "Optional SIG depth mirror constructor failed (%s); capture disabled",
+                    type(exc).__name__,
+                )
         observe_recorder = ObservationCaptureRecorder(
             self.settings.sig_research_path,
             queue_max=max(1_024, min(self.settings.sig_capture_queue_max, 65_536)),
@@ -312,6 +325,9 @@ class MakerService:
             instance_lock.acquire()
 
         try:
+            # Optional research writer starts under the guaranteed cleanup guard.
+            if depth_mirror is not None:
+                depth_mirror.start()
             if self.settings.risk_capital_control_enabled:
                 risk_store = SqliteRiskStateStore(self.settings.risk_state_path)
                 risk_service = CapitalControlService(
@@ -424,6 +440,7 @@ class MakerService:
                 ),
                 observation_emitter=observation_emitter,
                 observation_process_instance_id=observe_recorder.session_id,
+                depth_capture=(None if depth_mirror is None else depth_mirror.record),
             )
             await _retry_startup_sig_operation(
                 "initial_sig_market_state",
@@ -1103,26 +1120,32 @@ class MakerService:
             stop_waiter.cancel()
             await asyncio.gather(stop_waiter, return_exceptions=True)
         finally:
-            await stop_startup_recovery()
-            if instance_lock is not None:
-                instance_lock.close()
-            self.pm_ws.stop()
-            if shadow_runtime is not None:
+            try:
+                await stop_startup_recovery()
+                if instance_lock is not None:
+                    instance_lock.close()
+                self.pm_ws.stop()
+                if shadow_runtime is not None:
+                    with suppress(Exception):
+                        await shadow_runtime.close()
+                if sig_state is not None:
+                    await sig_state.aclose()
+                if trading is not None:
+                    await trading.aclose()
+                if journal is not None:
+                    journal.close()
+                if risk_store is not None:
+                    risk_store.close()
                 with suppress(Exception):
-                    await shadow_runtime.close()
-            if sig_state is not None:
-                await sig_state.aclose()
-            if trading is not None:
-                await trading.aclose()
-            if journal is not None:
-                journal.close()
-            if risk_store is not None:
-                risk_store.close()
-            with suppress(Exception):
-                await context_sampler.aclose()
-            observation_emitter.close()
-            observe_recorder.close()
-            await rest.aclose()
+                    await context_sampler.aclose()
+                observation_emitter.close()
+                observe_recorder.close()
+                await rest.aclose()
+            finally:
+                # Research cleanup also runs if unrelated LIVE teardown raises.
+                if depth_mirror is not None:
+                    depth_mirror.close()
+                    _LOG.info("Optional SIG depth mirror counters: %s", depth_mirror.snapshot())
 
     async def _initialize_capital_control(
         self,
