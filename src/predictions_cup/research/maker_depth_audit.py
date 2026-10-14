@@ -163,7 +163,7 @@ def dist(vals: list[float]) -> dict[str, Any]:
 
 
 def walk(levels_: tuple[tuple[Decimal, Decimal], ...], qty: int,
-         haircut: Decimal) -> dict[str, str] | None:
+         haircut: Decimal) -> dict[str, Any] | None:
     remaining, cash = D(qty), D(0)
     marginal: Decimal | None = None
     for price, size in levels_:
@@ -249,13 +249,16 @@ def audit(path: Path, expected_sha256: str, specs: dict[str, Accepted], *,
             or tick is not None and (tick <= 0 or tick >= 1)
             or fee_per_share is not None and fee_per_share < 0):
         raise AuditError("INVALID_AUDIT_PARAMETERS")
-    source_size = path.stat().st_size
-    actual_sha = sha256_file(path)
-    if actual_sha != expected_sha256:
-        raise AuditError("INPUT_SHA256_MISMATCH")
+    if path.stat().st_size > max_bytes:
+        raise AuditError("FILE_OVER_APPROVED_CAP")
+    # Hash EXACTLY the bytes parsed: no TOCTOU between digest and ingestion.
+    data = path.read_bytes()
+    source_size = len(data)
     if source_size > max_bytes:
         raise AuditError("FILE_OVER_APPROVED_CAP")
-    data = path.read_bytes()
+    actual_sha = sha256_bytes(data)
+    if actual_sha != expected_sha256:
+        raise AuditError("INPUT_SHA256_MISMATCH")
     # Never silently ignore a partial final book from a killed writer.
     trailing_partial = bool(data and not data.endswith(b"\n"))
     snapshots: list[Snapshot] = []
@@ -411,17 +414,23 @@ def pm_pair_rejections(snapshots: list[Snapshot], specs: dict[str, Accepted],
     Emits Lane B v1 rows accepted by Lane C's existing *rejection* bridge. Every
     comparison is labelled CONDITIONAL/NO_TRADE and carries null observed fills.
     """
-    if not positive_sha(expected_pm_sha256) or sha256_file(pm_path) != expected_pm_sha256:
+    if not positive_sha(expected_pm_sha256):
         raise AuditError("PM_INPUT_SHA256_MISMATCH")
     if pm_path.stat().st_size > MAX_FILE_BYTES:
         raise AuditError("PM_FILE_OVER_REVIEW_CAP")
+    # Both checksum and parser use the SAME immutable byte image.
+    pm_data = pm_path.read_bytes()
+    if len(pm_data) > MAX_FILE_BYTES:
+        raise AuditError("PM_FILE_OVER_REVIEW_CAP")
+    if sha256_bytes(pm_data) != expected_pm_sha256:
+        raise AuditError("PM_INPUT_SHA256_MISMATCH")
     if size < 1 or max_skew_seconds <= 0:
         raise AuditError("INVALID_PAIR_PARAMETERS")
     pm: dict[str, list[tuple[datetime, Any, Any, str]]] = defaultdict(list)
     pm_rejects: Counter[str] = Counter()
     previous_pm: dict[str, datetime] = {}
     seen_pm: set[str] = set()
-    for line in pm_path.read_bytes().splitlines(keepends=True):
+    for line in pm_data.splitlines(keepends=True):
         try:
             if not line.endswith(b"\n"):
                 pm_rejects["TRUNCATED_PM_LINE"] += 1
