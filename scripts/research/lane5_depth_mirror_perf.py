@@ -16,7 +16,6 @@ import gc
 import json
 import queue
 import resource
-import statistics
 import tempfile
 import threading
 import time
@@ -24,7 +23,6 @@ import tracemalloc
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Callable
 
 from predictions_cup.models.market import OrderBook, OrderBookLevel
 from predictions_cup.sig.depth_mirror import MakerDepthMirror
