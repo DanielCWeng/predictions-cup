@@ -30,6 +30,16 @@ jobs:
         run: |
           set -o pipefail
           python scripts/research/lane5_depth_mirror_perf.py --iterations 1000 --burst | tee lane5_burst.jsonl
+      - name: Actual offline MakerRuntimeLoop decision-cycle A/B
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/research/lane5_maker_loop_ab.py --iterations 1000 | tee lane5_maker_baseline.jsonl
+      - name: Actual maker decision cycles with 10x synthetic depth burst
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/research/lane5_maker_loop_ab.py --iterations 1000 --burst | tee lane5_maker_burst.jsonl
       - name: Upload reproducible machine-readable reports
         uses: actions/upload-artifact@v4
         with:
@@ -37,3 +47,5 @@ jobs:
           path: |
             lane5_baseline.jsonl
             lane5_burst.jsonl
+            lane5_maker_baseline.jsonl
+            lane5_maker_burst.jsonl
