@@ -1546,3 +1546,81 @@ def test_optional_capture_exception_cannot_abort_reconciliation(tmp_path: Path) 
         recorder.close()
 
     asyncio.run(scenario())
+
+
+def test_lane5_depth_capture_rejects_stale_reconciliation_generation(tmp_path: Path) -> None:
+    """Invalidate an in-flight REST book; only the latest trusted generation may capture."""
+    from predictions_cup.sig.realtime_state import TrustTransition
+
+    async def scenario() -> None:
+        rest = FakeRest()
+        recorder = SigRealtimeRecorder(tmp_path / "generation.sqlite3")
+        captured: list[int | None] = []
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            tracked_depth_exchange_ids={"36"},
+            depth_capture=lambda _b, _m, _t, _ts, revision: captured.append(revision),
+        )
+        await engine.initialize()
+        captured.clear()
+        rest.block_exchange = "36"
+        rest.block_release.clear()
+        old = asyncio.create_task(engine._queue_reconciliation(
+            "36", reason="stale", final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+            triggering_revision=11, priority=RestPriority.HIGH, wait=True,
+        ))
+        try:
+            await asyncio.wait_for(rest.block_started.wait(), timeout=2)
+            new = asyncio.create_task(engine._queue_reconciliation(
+                "36", reason="current",
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=12, priority=RestPriority.HIGH, wait=True,
+            ))
+            # The queued invalidation increments the generation while the old
+            # HTTP response is still held; release only after registration.
+            await asyncio.sleep(0)
+            rest.block_release.set()
+            await asyncio.wait_for(asyncio.gather(old, new), timeout=3)
+            assert captured == [12], "stale generation was exported to the research mirror"
+            assert engine.states["36"].depth_state == DepthState.TRACKED_TRUSTED
+        finally:
+            rest.block_release.set()
+            await engine.aclose()
+            recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_lane5_depth_capture_rejects_rest_identity_mismatch(tmp_path: Path) -> None:
+    """Even a successful HTTP response cannot be mirrored with the wrong market ID."""
+    from predictions_cup.sig.realtime_state import TrustTransition
+
+    async def scenario() -> None:
+        rest = FakeRest()
+        recorder = SigRealtimeRecorder(tmp_path / "identity.sqlite3")
+        seen: list[str] = []
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder, tournament_id="cup",
+            tracked_depth_exchange_ids={"36"},
+            depth_capture=lambda book, *_: seen.append(book.exchange_id),
+        )
+        await engine.initialize()
+        assert seen == ["36"]
+        seen.clear()
+        rest.exchange_to_market["36"] = "wrong-market"
+        try:
+            await engine._queue_reconciliation(
+                "36", reason="bad-identity",
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=13, priority=RestPriority.HIGH, wait=True,
+            )
+            assert seen == []
+            assert engine.states["36"].depth_state == DepthState.TRACKED_UNTRUSTED
+        finally:
+            await engine.aclose()
+            recorder.close()
+
+    asyncio.run(scenario())
