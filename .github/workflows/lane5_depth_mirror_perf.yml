@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - audit/lane5-depth-mirror-safety-20261014
+      - integration/depth-mirror-constructor-guard-20261014
+      - integration/depth-recorder-cross-lane-ci-20261014
 
 permissions:
   contents: read
