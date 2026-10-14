@@ -27,8 +27,12 @@ from unittest.mock import patch
 
 from predictions_cup.execution.models import ExecutionMode, LifecycleState
 from predictions_cup.maker import (
-    MakerCoordinator, MakerRuntimeLoop, QuoteLifecycleManager, QuoteRegistry,
-    QuoteSide, ShadowMakerExecutionAdapter,
+    MakerCoordinator,
+    MakerRuntimeLoop,
+    QuoteLifecycleManager,
+    QuoteRegistry,
+    QuoteSide,
+    ShadowMakerExecutionAdapter,
 )
 from predictions_cup.risk.core import RiskContext
 from predictions_cup.sig.depth_mirror import MakerDepthMirror
@@ -153,11 +157,15 @@ async def run_case(
                     mirror._book_row = failed  # type: ignore[method-assign]
                 mirror.start()
                 if case == "blocked200":
-                    mirror.record(book, snapshot.market_id, snapshot.tournament_id, timestamp, 1)
+                    mirror.record(
+                            book, snapshot.market_id, snapshot.tournament_id, timestamp, 1
+                        )
                     if not await asyncio.to_thread(writer_entered.wait, 2):
                         raise AssertionError("writer stall fixture did not enter")
                     for _ in range(128):
-                        mirror.record(book, snapshot.market_id, snapshot.tournament_id, timestamp, 1)
+                        mirror.record(
+                            book, snapshot.market_id, snapshot.tournament_id, timestamp, 1
+                        )
 
             if case == "cpu_gc200":
                 def busy() -> None:
@@ -183,7 +191,9 @@ async def run_case(
                 for _ in range(iterations):
                     if mirror is not None:
                         t = time.perf_counter_ns()
-                        mirror.record(book, snapshot.market_id, snapshot.tournament_id, timestamp, 1)
+                        mirror.record(
+                            book, snapshot.market_id, snapshot.tournament_id, timestamp, 1
+                        )
                         record_ns.append(time.perf_counter_ns() - t)
                     t = time.perf_counter_ns()
                     runtime.notify_sig({exchange_id}, observed_monotonic_ns=t)
