@@ -89,7 +89,10 @@ async def run_case(
     event_loop_ns: list[int] = []
     temp_dir = tempfile.TemporaryDirectory(prefix="lane5-perf-")
     try:
-        if name not in ("disabled", "queue_only"):
+        if name not in (
+            "disabled", "disabled_pressure", "paced_disabled",
+            "queue_only", "queue_pressure",
+        ):
             mirror = MakerDepthMirror(Path(temp_dir.name) / "isolated.jsonl", queue_size=128)
             if name in ("blocked_writer", "saturated", "blocked_pressure"):
                 original = mirror._book_row
@@ -112,7 +115,7 @@ async def run_case(
                 assert mirror.snapshot()["queue_pending"] == 128
 
         full_queue: queue.Queue[None] | None = None
-        if name == "queue_only":
+        if name in ("queue_only", "queue_pressure"):
             full_queue = queue.Queue(maxsize=1)
             full_queue.put_nowait(None)
 
@@ -161,6 +164,9 @@ async def run_case(
                     raise AssertionError("unreachable synthetic workload check")
                 decisions_ns.append(time.perf_counter_ns() - decision_start)
                 await asyncio.sleep(0)
+                if name.startswith("paced_"):
+                    # 500 books/second rather than an unrealistic unpaced producer.
+                    await asyncio.sleep(.002)
             await asyncio.sleep(.01)
             wall_ns = time.perf_counter_ns() - wall_start
             cpu_ns = time.process_time_ns() - cpu_start
@@ -208,9 +214,15 @@ async def main() -> None:
         "burst": args.burst, "synthetic_only": True,
         "source_clock_verified": False, "is_live_measurement": False,
     }, sort_keys=True))
-    for name in ("disabled", "enabled", "queue_only", "saturated",
-                 "blocked_writer", "disk_failure", "blocked_pressure"):
-        case = await run_case(name, n, levels, pressure=name == "blocked_pressure")
+    for name in (
+        "disabled", "enabled", "paced_disabled", "paced_enabled",
+        "queue_only", "saturated", "blocked_writer", "disk_failure",
+        "disabled_pressure", "queue_pressure", "blocked_pressure",
+    ):
+        count = min(1000, n) if args.burst and name.startswith("paced_") else n
+        case = await run_case(
+            name, count, levels, pressure=name.endswith("_pressure"),
+        )
         print(json.dumps(case, sort_keys=True, default=str), flush=True)
 
 
