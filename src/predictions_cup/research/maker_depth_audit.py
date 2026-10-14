@@ -1,3 +1,4 @@
+# ruff: noqa: E501, I001
 """Offline, fail-closed quality audit of the untrusted maker-depth-mirror-v1 feed.
 
 No trading dependencies, network, maker imports, exchange clients or DB writes.
@@ -16,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 D = Decimal
+DEFAULT_HAIRCUT = D("0.5")
 MAX_FILE_BYTES = 32 * 1024 * 1024
 SCHEMA = "maker-depth-mirror-v1"
 DEFAULT_SIZES = (1, 5, 10, 20)
@@ -239,7 +241,7 @@ def _strict_record(row: Any, specs: dict[str, Accepted], run: str | None,
 
 def audit(path: Path, expected_sha256: str, specs: dict[str, Accepted], *,
           tick: Decimal | None = None, sizes: tuple[int, ...] = DEFAULT_SIZES,
-          haircut: Decimal = D("0.5"), fee_per_share: Decimal | None = None,
+          haircut: Decimal = DEFAULT_HAIRCUT, fee_per_share: Decimal | None = None,
           gap_seconds: float = 20, max_bytes: int = MAX_FILE_BYTES,
           counters: dict[str, Any] | None = None) -> tuple[dict[str, Any], list[dict[str, Any]], list[Snapshot]]:
     if (not positive_sha(expected_sha256) or not sizes or any(x < 1 for x in sizes)
@@ -254,11 +256,8 @@ def audit(path: Path, expected_sha256: str, specs: dict[str, Accepted], *,
     if source_size > max_bytes:
         raise AuditError("FILE_OVER_APPROVED_CAP")
     data = path.read_bytes()
-    if data and not data.endswith(b"\n"):
-        # Never silently ignore a partial final book from a killed writer.
-        trailing_partial = True
-    else:
-        trailing_partial = False
+    # Never silently ignore a partial final book from a killed writer.
+    trailing_partial = bool(data and not data.endswith(b"\n"))
     snapshots: list[Snapshot] = []
     ledger: list[dict[str, Any]] = []
     rejects: Counter[str] = Counter()
@@ -390,11 +389,22 @@ def audit(path: Path, expected_sha256: str, specs: dict[str, Accepted], *,
     return report, ledger, snapshots
 
 
+
+def _pm_levels(raw: dict[str, Any], key: str, reverse: bool) -> tuple[tuple[Decimal, Decimal], ...]:
+    ladder = raw.get(key)
+    if not isinstance(ladder, list):
+        return ()
+    normalized = [{"price": x["price"], "quantity": str(x.get("size", x.get("quantity")))}
+                  for x in ladder if isinstance(x, dict)]
+    if len(normalized) != len(ladder):
+        raise AuditError("INVALID_PM_LADDER")
+    return levels(normalized, reverse=reverse, tick=None)
+
 def pm_pair_rejections(snapshots: list[Snapshot], specs: dict[str, Accepted],
                        pm_path: Path, expected_pm_sha256: str, *,
                        max_skew_seconds: float = 2,
                        fee_per_share: Decimal | None = None,
-                       haircut: Decimal = D("0.5"), size: int = 5
+                       haircut: Decimal = DEFAULT_HAIRCUT, size: int = 5
                        ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Optional PM comparison: never assert PM epoch/seed or native SIG causality.
 
@@ -411,7 +421,7 @@ def pm_pair_rejections(snapshots: list[Snapshot], specs: dict[str, Accepted],
     pm_rejects: Counter[str] = Counter()
     previous_pm: dict[str, datetime] = {}
     seen_pm: set[str] = set()
-    for n, line in enumerate(pm_path.read_bytes().splitlines(keepends=True), 1):
+    for line in pm_path.read_bytes().splitlines(keepends=True):
         try:
             if not line.endswith(b"\n"):
                 pm_rejects["TRUNCATED_PM_LINE"] += 1
@@ -431,17 +441,8 @@ def pm_pair_rejections(snapshots: list[Snapshot], specs: dict[str, Accepted],
                 pm_rejects["OUT_OF_ORDER_PM_RECEIPT"] += 1
                 continue
             previous_pm[token] = stamp
-            def pm_levels(key: str, reverse: bool) -> tuple[tuple[Decimal, Decimal], ...]:
-                ladder = raw.get(key)
-                if not isinstance(ladder, list):
-                    return ()
-                normalized = [{"price": x["price"], "quantity": str(x.get("size", x.get("quantity")))}
-                              for x in ladder if isinstance(x, dict)]
-                if len(normalized) != len(ladder):
-                    raise AuditError("INVALID_PM_LADDER")
-                return levels(normalized, reverse=reverse, tick=None)
-            b = pm_levels("bids", True)
-            a = pm_levels("asks", False)
+            b = _pm_levels(raw, "bids", True)
+            a = _pm_levels(raw, "asks", False)
             if not b or not a or b[0][0] >= a[0][0]:
                 pm_rejects["PM_INVALID_TWO_SIDED_DEPTH"] += 1
                 continue
