@@ -268,10 +268,13 @@ def audit(path: Path, expected_sha256: str, specs: dict[str, Accepted], *,
             "rejects": {}, "gap_count": 0, "max_gap_seconds": None,
             "first_received_at": None, "last_received_at": None, "unchanged_ladders": 0,
             "inter_receipt_gap_seconds": [], "spreads": [], "best_bid_changes": [],
-            "best_ask_changes": [], "sizes_fully_visible": {
+            "best_ask_changes": [], "bid_quantity_changes": [],
+            "ask_quantity_changes": [], "sizes_fully_visible": {
                 str(n): {"buy_yes": 0, "buy_no": 0} for n in sizes},
             "conditional_buy_yes_vwap": {str(n): [] for n in sizes},
-            "conditional_buy_no_vwap": {str(n): [] for n in sizes}} for eid in specs}
+            "conditional_buy_no_vwap": {str(n): [] for n in sizes},
+            "conditional_buy_yes_slippage": {str(n): [] for n in sizes},
+            "conditional_buy_no_slippage": {str(n): [] for n in sizes}} for eid in specs}
     run: str | None = None
     last: dict[str, Snapshot] = {}
     global_last: datetime | None = None
@@ -310,6 +313,12 @@ def audit(path: Path, expected_sha256: str, specs: dict[str, Accepted], *,
                 p["max_gap_seconds"] = max(p["max_gap_seconds"] or 0, dt)
                 p["best_bid_changes"].append(float(abs(parsed.bids[0][0] - prev.bids[0][0])))
                 p["best_ask_changes"].append(float(abs(parsed.asks[0][0] - prev.asks[0][0])))
+                p["bid_quantity_changes"].append(float(abs(
+                    sum((q for _, q in parsed.bids), D(0)) -
+                    sum((q for _, q in prev.bids), D(0)))))
+                p["ask_quantity_changes"].append(float(abs(
+                    sum((q for _, q in parsed.asks), D(0)) -
+                    sum((q for _, q in prev.asks), D(0)))))
             last[parsed.exchange] = parsed
             global_last = parsed.received
             seen.add(line_hash)
@@ -328,6 +337,8 @@ def audit(path: Path, expected_sha256: str, specs: dict[str, Accepted], *,
                     if v is not None:
                         p["sizes_fully_visible"][str(n)][side] += 1
                         p[f"conditional_{side}_vwap"][str(n)].append(float(v["vwap"]))
+                        p[f"conditional_{side}_slippage"][str(n)].append(
+                            float(v["slippage_vs_best"]))
             ledger.append({"line": line_no, "raw_sha256": line_hash, "exchange_id": eid,
                            "state": "INDICATIVE_LIQUIDITY_ONLY", "reason": "SIG_NATIVE_CLOCK_SEQUENCE_UNKNOWN",
                            "received_at": parsed.received.isoformat(), "run_id": run,
@@ -344,11 +355,13 @@ def audit(path: Path, expected_sha256: str, specs: dict[str, Accepted], *,
                            "certified_paired_paper": False})
     totals = len(ledger)
     for p in per.values():
-        for key in ("spreads", "inter_receipt_gap_seconds", "best_bid_changes", "best_ask_changes"):
+        for key in ("spreads", "inter_receipt_gap_seconds", "best_bid_changes",
+                    "best_ask_changes", "bid_quantity_changes", "ask_quantity_changes"):
             p[key] = dist(p[key])
         for side in ("buy_yes", "buy_no"):
-            p[f"conditional_{side}_vwap"] = {
-                k: dist(v) for k, v in p[f"conditional_{side}_vwap"].items()}
+            for metric in ("vwap", "slippage"):
+                p[f"conditional_{side}_{metric}"] = {
+                    k: dist(v) for k, v in p[f"conditional_{side}_{metric}"].items()}
     counter_report: dict[str, Any] = {"available": counters is not None,
         "independently_attested": False, "queue_drops": None, "drop_rate": None,
         "unobserved_producer_attempts": None, "reconnect_count": None}
