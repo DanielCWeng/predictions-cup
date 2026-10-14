@@ -63,6 +63,8 @@ class MakerDepthMirror:
         self.producer_rejected = 0
         self.writer_lost = 0
         self.errors = 0
+        # A mere successful write() is not a file-durability certificate.
+        self._file_synced = False
 
     def start(self) -> None:
         if self._thread is not None:
@@ -161,7 +163,11 @@ class MakerDepthMirror:
                         raise
                     finally:
                         self._queue.task_done()
-                # No unbounded flush/fsync on shutdown: writer is daemonised.
+                # Durability work runs ONLY in the research worker, never maker.
+                # Do not certify a complete run if close or fsync later fails.
+                stream.flush()
+                os.fsync(stream.fileno())
+                self._file_synced = True
         except Exception:
             # Research loss must never interrupt maker's execution path.
             self.errors += 1
@@ -211,4 +217,17 @@ class MakerDepthMirror:
             "disabled": self._disabled,
             "queue_pending": self._queue.qsize(),
             "writer_alive": self._thread is not None and self._thread.is_alive(),
+            "file_synced": self._file_synced,
+            # Internal terminal consistency, not independent provenance/attestation.
+            "terminal_complete": (
+                self._thread is not None
+                and not self._thread.is_alive()
+                and self._file_synced
+                and self.errors == 0
+                and self.dropped == 0
+                and self.producer_rejected == 0
+                and self.writer_lost == 0
+                and self._queue.empty()
+                and self.accepted == self.written
+            ),
         }
