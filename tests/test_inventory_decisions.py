@@ -26,7 +26,7 @@ def fixture_book(*, status: str = "open", when: str = NOW) -> dict[str, Any]:
     return {
         "exchange_id": "10", "status": status,
         "request_started_at": when, "received_at": when,
-        "bids": [{"price": ".60", "quantity": "100"}],
+        "bids": [{"price": ".35", "quantity": "100"}],
         "asks": [{"price": ".40", "quantity": "100"}],
     }
 

@@ -56,17 +56,24 @@ def close_slice(
     extra_slippage_ticks: int = 1,
     fee_bps: Decimal = DEFAULT_FEE_BPS,
 ) -> dict[str, Any]:
-    """YES sells hit bids; NO cancellation pays YES asks; strict whole depth."""
-    if signed_quantity == 0 or not 0 < quantity <= abs(signed_quantity):
+    """Unreserved YES-bid / (1 - YES-ask) close; validate BOTH complete ladders."""
+    signed, qty, fees = dec(signed_quantity), dec(quantity), dec(fee_bps)
+    if (signed == 0 or signed != signed.to_integral_value()
+            or qty != qty.to_integral_value() or not 0 < qty <= abs(signed)):
         raise ValueError("invalid close quantity")
-    if extra_slippage_ticks < 0 or fee_bps < 0 or max_age_seconds <= 0:
+    if (not isinstance(extra_slippage_ticks, int) or isinstance(extra_slippage_ticks, bool)
+            or extra_slippage_ticks < 0 or not 0 <= fees <= 10000
+            or not isinstance(max_age_seconds, int) or max_age_seconds <= 0):
         raise ValueError("invalid stress")
     base = {
-        "exchange_id": exchange_id, "requested": str(quantity), "fillable": "0",
+        "exchange_id": exchange_id, "requested": str(qty), "fillable": "0",
         "gross_freed_if_filled": "0", "net_cash_if_filled": None,
         "status": "NOT_READY", "reason": "MISSING_BOOK",
     }
     if book is None:
+        return base
+    if not isinstance(book, dict):
+        base["reason"] = "MALFORMED_BOOK"
         return base
     if str(book.get("exchange_id")) != exchange_id:
         base["reason"] = "WRONG_EXCHANGE"
@@ -75,7 +82,7 @@ def close_slice(
         started = timestamp(book["request_started_at"])
         received = timestamp(book["received_at"])
         end = timestamp(evaluated_at)
-    except (KeyError, TypeError, ValueError):
+    except (KeyError, TypeError, ValueError, AttributeError):
         base["reason"] = "MISSING_CLOCK"
         return base
     if started > received or received > end or (end - received).total_seconds() > max_age_seconds:
@@ -84,41 +91,68 @@ def close_slice(
     if book.get("status") != "open":
         base["reason"] = "MARKET_NOT_VERIFIED_OPEN"
         return base
-    levels = book.get("bids" if signed_quantity > 0 else "asks", [])
-    remaining = quantity
+
+    # Full-depth integrity is required even when the requested slice fills
+    # at the best level: malformed unconsumed depth cannot be trusted.
+    ladders: dict[str, list[tuple[Decimal, Decimal]]] = {}
+    for side, descending in (("bids", True), ("asks", False)):
+        raw = book.get(side)
+        if not isinstance(raw, list) or not raw:
+            base["reason"] = "ONE_SIDED_OR_EMPTY_BOOK"
+            return base
+        parsed: list[tuple[Decimal, Decimal]] = []
+        previous: Decimal | None = None
+        for level in raw:
+            if not isinstance(level, dict):
+                base["reason"] = "INVALID_DEPTH"
+                return base
+            try:
+                price = dec(level["price"])
+                capacity = dec(level["quantity"])
+            except (KeyError, TypeError, ValueError):
+                base["reason"] = "INVALID_DEPTH"
+                return base
+            if (not D("0") < price < D("1") or price % TICK != 0
+                    or capacity <= 0 or capacity != capacity.to_integral_value()):
+                base["reason"] = "INVALID_DEPTH"
+                return base
+            if previous is not None and (
+                (descending and price >= previous)
+                or (not descending and price <= previous)
+            ):
+                base["reason"] = "UNSORTED_OR_DUPLICATE_DEPTH"
+                return base
+            parsed.append((price, capacity))
+            previous = price
+        ladders[side] = parsed
+    if ladders["bids"][0][0] >= ladders["asks"][0][0]:
+        base["reason"] = "CROSSED_OR_LOCKED_BOOK"
+        return base
+
+    remaining = qty
     gross_cash = D("0")
-    net_cash = D("0")
-    last: Decimal | None = None
-    for level in levels:
-        price, capacity = dec(level["price"]), dec(level["quantity"])
-        if not D("0") <= price <= D("1") or capacity < 0:
-            base["reason"] = "INVALID_DEPTH"
-            return base
-        if last is not None and ((signed_quantity > 0 and price > last)
-                                 or (signed_quantity < 0 and price < last)):
-            base["reason"] = "UNSORTED_DEPTH"
-            return base
-        last = price
+    stressed_cash = D("0")
+    levels = ladders["bids" if signed > 0 else "asks"]
+    for price, capacity in levels:
         amount = min(remaining, capacity)
-        unit = price if signed_quantity > 0 else D("1") - price
+        unit = price if signed > 0 else D("1") - price
         gross_cash += amount * unit
-        net_cash += amount * max(D("0"), unit - TICK * extra_slippage_ticks)
+        stressed_cash += amount * max(D("0"), unit - TICK * extra_slippage_ticks)
         remaining -= amount
         if remaining == 0:
             break
-    base["fillable"] = str(quantity - remaining)
+    base["fillable"] = str(qty - remaining)
     if remaining != 0:
         base["reason"] = "INSUFFICIENT_DEPTH"
         return base
     base.update({
-        "gross_freed_if_filled": str(quantity),
+        "gross_freed_if_filled": str(qty),
         "gross_cash_at_book": str(gross_cash),
-        "net_cash_if_filled": str(net_cash * (D("1") - fee_bps / D("10000"))),
+        "net_cash_if_filled": str(stressed_cash * (D("1") - fees / D("10000"))),
         "status": "DEPTH_ONLY_NOT_RESERVED",
         "reason": "FILL_LATENCY_AND_ADVERSE_SELECTION_UNMEASURED",
     })
     return base
-
 
 def build_ledger(snapshot: dict[str, Any], books: dict[str, Any], *,
                  evaluated_at: str, max_age_seconds: int = 8) -> list[dict[str, Any]]:

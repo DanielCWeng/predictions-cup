@@ -17,7 +17,7 @@ from predictions_cup.research.inventory_portfolio import (
 NOW = "2026-10-12T21:00:00Z"
 
 
-def book(eid: str, *, bid: str = ".60", ask: str = ".40", size: str = "100",
+def book(eid: str, *, bid: str = ".30", ask: str = ".40", size: str = "100",
          received: str = NOW) -> dict[str, Any]:
     return {
         "exchange_id": eid, "status": "open",
@@ -84,7 +84,7 @@ def test_wrong_exchange_or_closed_market_abstains() -> None:
 
 
 def test_depth_walk_requires_second_price_level() -> None:
-    b = book("D", bid=".60", size="40")
+    b = book("D", bid=".60", ask=".70", size="40")
     b["bids"].append({"price": ".50", "quantity": "60"})
     v = close_slice(D("100"), D("100"), b, exchange_id="D",
                     evaluated_at=NOW, extra_slippage_ticks=0, fee_bps=D("0"))
@@ -106,7 +106,7 @@ def test_no_no_pair_disadvantage_and_no_promotion() -> None:
 
 def test_opposite_party_yes_no_is_not_a_hedge() -> None:
     snapshot = {"positions": [p("D", "100", "Democratic"), p("R", "-100", "Republican")]}
-    books = {"D": book("D", bid=".8"), "R": book("R", ask=".4")}
+    books = {"D": book("D", bid=".8", ask=".85"), "R": book("R", ask=".4")}
     pair = paired_review(build_ledger(snapshot, books, evaluated_at=NOW),
                          books, evaluated_at=NOW)[0]
     assert pair["type"] == "DOUBLED_DIRECTIONAL"
@@ -146,3 +146,82 @@ def test_hypothetical_factor_sensitivity_is_deterministic() -> None:
     a = tournament_sensitivity(rows, **kwargs)
     assert a == tournament_sensitivity(rows, **kwargs)
     assert "SYNTHETIC" in a["model"]
+
+@pytest.mark.parametrize("bid,ask", [(".60", ".40"), (".40", ".40")])
+@pytest.mark.parametrize("signed", ["100", "-100"])
+def test_crossed_locked_fail_closed_for_yes_and_no(bid: str, ask: str, signed: str) -> None:
+    result = close_slice(D(signed), D("10"), book("D", bid=bid, ask=ask),
+                         exchange_id="D", evaluated_at=NOW)
+    assert result["reason"] == "CROSSED_OR_LOCKED_BOOK"
+    assert result["net_cash_if_filled"] is None
+    assert result["gross_freed_if_filled"] == "0"
+
+
+@pytest.mark.parametrize("signed", ["100", "-100"])
+@pytest.mark.parametrize("missing", ["bids", "asks"])
+def test_one_sided_books_never_produce_proceeds(signed: str, missing: str) -> None:
+    b = book("D")
+    del b[missing]
+    result = close_slice(D(signed), D("10"), b, exchange_id="D", evaluated_at=NOW)
+    assert result["reason"] == "ONE_SIDED_OR_EMPTY_BOOK"
+    assert result["net_cash_if_filled"] is None
+
+
+@pytest.mark.parametrize("price,capacity", [
+    (".401", "100"), ("1.005", "100"), ("0", "100"),
+    (".40", "0"), (".40", "-1"), (".40", "1.5"),
+    (".40", "NaN"), ("NaN", "100"), ("bad", "100"),
+])
+def test_malformed_tick_price_lot_rejected_on_opposite_side(
+    price: str, capacity: str
+) -> None:
+    b = book("D")
+    b["asks"][0] = {"price": price, "quantity": capacity}
+    result = close_slice(D("100"), D("10"), b, exchange_id="D", evaluated_at=NOW)
+    assert result["reason"] == "INVALID_DEPTH"
+    assert result["net_cash_if_filled"] is None
+
+
+@pytest.mark.parametrize("side,extra_price", [
+    ("bids", ".35"), ("asks", ".35"), ("bids", ".40"), ("asks", ".40")
+])
+def test_unsorted_duplicate_depth_rejected(side: str, extra_price: str) -> None:
+    b = book("D")
+    b[side].append({"price": extra_price, "quantity": "50"})
+    result = close_slice(D("-100"), D("5"), b, exchange_id="D", evaluated_at=NOW)
+    assert result["reason"] == "UNSORTED_OR_DUPLICATE_DEPTH"
+    assert result["net_cash_if_filled"] is None
+
+
+def test_validate_unconsumed_levels_after_requested_size() -> None:
+    b = book("D")
+    b["asks"].append({"price": ".405", "quantity": "0"})
+    result = close_slice(D("100"), D("1"), b, exchange_id="D", evaluated_at=NOW)
+    assert result["reason"] == "INVALID_DEPTH"
+    assert result["net_cash_if_filled"] is None
+
+
+@pytest.mark.parametrize("signed,quantity", [
+    ("1.5", "1"), ("100", ".5"), ("-100", "1.5"),
+])
+def test_fractional_position_or_close_lot_rejected(signed: str, quantity: str) -> None:
+    with pytest.raises(ValueError, match="invalid close quantity"):
+        close_slice(D(signed), D(quantity), book("D"),
+                    exchange_id="D", evaluated_at=NOW)
+
+
+def test_partial_no_close_uses_complement_and_frees_only_slice() -> None:
+    result = close_slice(D("-200"), D("40"), book("D", ask=".45"),
+                         exchange_id="D", evaluated_at=NOW,
+                         extra_slippage_ticks=0, fee_bps=D("0"))
+    assert result["status"] == "DEPTH_ONLY_NOT_RESERVED"
+    assert result["gross_freed_if_filled"] == "40"
+    assert D(result["net_cash_if_filled"]) == D("22")
+
+
+def test_stale_book_never_certifies_partial_close() -> None:
+    result = close_slice(D("-200"), D("40"),
+                         book("D", received="2026-10-12T20:00:00Z"),
+                         exchange_id="D", evaluated_at=NOW)
+    assert result["reason"] == "STALE_NONCAUSAL_BOOK"
+    assert result["net_cash_if_filled"] is None
