@@ -208,6 +208,50 @@ def test_pm_adapter_respects_asof_uses_size_and_never_certifies(tmp_path: Path) 
     assert rows[0]["observed_pnl"] is None
 
 
+
+
+@pytest.mark.parametrize("pm_size", ["20.5", "20.00000001"])
+def test_pm_fractional_sizes_remain_valid_readable_depth(
+    tmp_path: Path, pm_size: str,
+) -> None:
+    """A SIG whole-lot rule must not discard valid fractional PM books."""
+    specs, _ = mapping(tmp_path)
+    path = fixture(tmp_path, [book()])
+    _, _, books = audit(path, sha256_file(path), specs)
+    pm = tmp_path / "pm-fractional.jsonl"
+    pm.write_text(json.dumps({"venue": "PM", "instrument_id": "pm_yes",
+        "received_at": (STAMP - timedelta(milliseconds=100)).isoformat(),
+        "bids": [{"price": "0.66", "size": pm_size}],
+        "asks": [{"price": "0.70", "size": "20.25"}]}) + "\n")
+    rows, report = pm_pair_rejections(books, specs, pm, sha256_file(pm))
+    assert len(rows) == 2
+    assert report["pm_readable_depth_rows"] == 1
+    assert report["pm_rejection_reasons"] == {}
+    assert report["conditional_comparisons"] == 2
+    assert all(x["reason"] == "CONDITIONAL_DEPTH_NOT_SOURCE_CERTIFIED" for x in rows)
+    assert all(x["decision"] == "NO_TRADE" and not x["paired_depth_trusted"] for x in rows)
+    assert all(x["pm_depth"]["bids"][0]["size"] == pm_size for x in rows)
+    assert report["certified_pair_count"] == 0
+
+
+@pytest.mark.parametrize("pm_size", ["NaN", "-0.5", "1000000001"])
+def test_pm_invalid_sizes_still_fail_closed(tmp_path: Path, pm_size: str) -> None:
+    specs, _ = mapping(tmp_path)
+    path = fixture(tmp_path, [book()])
+    _, _, books = audit(path, sha256_file(path), specs)
+    pm = tmp_path / "pm-invalid.jsonl"
+    pm.write_text(json.dumps({"venue": "PM", "instrument_id": "pm_yes",
+        "received_at": (STAMP - timedelta(milliseconds=100)).isoformat(),
+        "bids": [{"price": "0.66", "size": pm_size}],
+        "asks": [{"price": "0.70", "size": "20.25"}]}) + "\n")
+    rows, report = pm_pair_rejections(books, specs, pm, sha256_file(pm))
+    assert report["pm_readable_depth_rows"] == 0
+    assert report["conditional_comparisons"] == 0
+    assert report["pm_rejection_reasons"] == {"PM_MALFORMED_OR_INVALID_RECORD": 1}
+    assert all(x["reason"] == "PM_MISSING_ASOF_DEPTH" for x in rows)
+    assert all(x["decision"] == "NO_TRADE" for x in rows)
+
+
 def test_pm_future_and_stale_frames_never_used_at_decision(tmp_path: Path) -> None:
     specs, _ = mapping(tmp_path)
     path = fixture(tmp_path, [book()])
@@ -307,6 +351,9 @@ def test_malformed_v2_counters_cannot_assert_drop_rate(
         # verified, even though typed values can still be displayed.
         assert c["counter_arithmetic_ok"] is False
         assert c["drop_rate"] is None
+        assert c["producer_rejected"] is None
+        assert c["queue_drops"] is None
+        assert c["writer_lost"] is None
     else:
         assert c["schema"] == "INVALID_PARTIAL_V2"
         assert c["drop_rate"] is None
