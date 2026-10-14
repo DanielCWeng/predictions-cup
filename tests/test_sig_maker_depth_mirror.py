@@ -205,7 +205,7 @@ def test_stalled_writer_async_shutdown_preserves_event_loop_and_flags_incomplete
             await mirror.aclose(timeout=1)
         assert mirror.snapshot()["writer_alive"] is False
         assert mirror.snapshot()["written"] == 1
-    assert mirror.snapshot()["terminal_complete"] is True
+        assert mirror.snapshot()["terminal_complete"] is True
 
     asyncio.run(_exercise(tmp_path))
 
