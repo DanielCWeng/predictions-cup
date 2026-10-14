@@ -47,7 +47,7 @@ def test_writer_exit_cannot_leave_a_late_accepted_item_stranded(
         assert writer_continue.wait(timeout=3.0)
         raise OSError("injected permanent writer failure")
 
-    mirror._book_row = writer_fails  # type: ignore[method-assign]
+    mirror._book_row = writer_fails  # type: ignore[assignment,method-assign]
     mirror.start()
     mirror.record(book, "77", "cup", stamp, 5)
     assert writer_entered.wait(timeout=2.0)
