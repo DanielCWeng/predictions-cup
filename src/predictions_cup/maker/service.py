@@ -423,11 +423,12 @@ class MakerService:
                 open_book_max_trusted_age_seconds=(
                     self.settings.sig_realtime_open_book_refresh_seconds
                 ),
-                # This engine polls only held/tracked exchanges, so a 15-second
-                # fallback is enough alongside realtime last-trade marks and
-                # leaves the shared SIG budget for execution/account reads.
-                bulk_price_refresh_seconds=max(
-                    15.0, self.settings.sig_realtime_bulk_price_refresh_seconds
+                # Honor the validated maker bulk-price interval. A hidden
+                # 15-second floor can equal the 15-second BBO expiry, leaving
+                # zero scheduling margin even when the REST feed is healthy.
+                # Shared SIG quota/governor and NORMAL priority still apply.
+                bulk_price_refresh_seconds=(
+                    self.settings.sig_realtime_bulk_price_refresh_seconds
                 ),
                 periodic_bulk_price_priority=RestPriority.NORMAL,
                 governed_rate_per_second=(self.settings.sig_rest_governor_rate_per_second),
