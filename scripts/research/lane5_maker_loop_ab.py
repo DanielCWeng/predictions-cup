@@ -21,10 +21,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from lane5_depth_mirror_perf import book_with_levels, percentiles
+
 from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
 from predictions_cup.sig.depth_mirror import MakerDepthMirror
-
-from lane5_depth_mirror_perf import book_with_levels, percentiles
 
 
 def maker_fixture() -> tuple[MakerRuntimeLoop, str]:
