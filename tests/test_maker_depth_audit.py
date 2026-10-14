@@ -1,7 +1,7 @@
+# ruff: noqa: E501, I001
 """Synthetic, adversarial offline tests; never evidence of actual SIG fills."""
 from __future__ import annotations
 
-import hashlib
 import json
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal as D
@@ -225,10 +225,10 @@ def test_no_side_complement_ladders_use_sig_bids_only(tmp_path: Path) -> None:
     specs, _ = mapping(tmp_path)
     path = fixture(tmp_path, [book()])
     _, _, books = audit(path, sha256_file(path), specs)
-    l = liquidity(books[0], (1, 4, 5), D("0.5"), None)
-    assert l["buy_yes"]["sizes"]["4"]["vwap"] == "0.55"
-    assert l["buy_no"]["sizes"]["4"]["vwap"] == "0.55"
-    assert l["buy_no"]["sizes"]["5"]["marginal"] == "0.56"
+    liq_result = liquidity(books[0], (1, 4, 5), D("0.5"), None)
+    assert liq_result["buy_yes"]["sizes"]["4"]["vwap"] == "0.55"
+    assert liq_result["buy_no"]["sizes"]["4"]["vwap"] == "0.55"
+    assert liq_result["buy_no"]["sizes"]["5"]["marginal"] == "0.56"
 
 
 def test_empty_run_is_not_claimed_as_complete(tmp_path: Path) -> None:
