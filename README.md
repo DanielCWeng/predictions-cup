@@ -1,5 +1,7 @@
 # Predictions Cup
 
+> **15 October 2026 LIVE status:** This README contains historical project-foundation material and its old claim of no trading capability is **obsolete**. The LIVE maker is already running. For current account/risk/economic decisions and cross-chat handoff, start at **[SIG_COMMAND.md](SIG_COMMAND.md)** and [master issue #201](https://github.com/DanielCWeng/predictions-cup/issues/201). GitHub `main` and LIVE West deployed heads are different; do not confuse an inert source merge with a production deployment.
+
 Foundation for a quantitative prediction-market trading system being developed for the 2026 Susquehanna Predictions Trading Cup.
 
 ## Current status
