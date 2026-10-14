@@ -42,7 +42,7 @@ The immutable report uses `lane-b-maker-depth-audit-v1`. Core keys:
 | Record denominator | `record_lines = valid_two_sided_snapshots + rejected_snapshots`, reasons/line hashes in append-only rejection ledger |
 | Offline research | `offline_liquidity_eligible_observations` = locally well-formed, accepted EXACT, nonduplicated, two-sided SIG books |
 | Paired causal research | `independently_certified_causal_paired_paper_observations:0` **for v1 recorder alone**, independent of offline liquidity count |
-| Market liquidity | Per exchange `spreads` quantiles; 1/5/10/20 size success counts, stressed VWAP quantiles, best bid/ask changes, repeated identical ladders |
+| Market liquidity | Per exchange `spreads` quantiles; 1/5/10/20 size success counts, stressed VWAP and slippage quantiles, best bid/ask and total visible-depth quantity changes, repeated identical ladders |
 | Coverage | Per exchange local inter-receipt gaps, observed >20s gaps, maximal local gap; *scheduled coverage, missing segments and native book ages null* |
 | Producer data | Optional final accepted/written/dropped/error/pending counters; if available still `independently_attested:false` without separately checked complete logs/manifest |
 | Unknowns | `native_sig_event_time:null`, `native_sig_revision:null`, `source_book_age_ms:null`, `reconnect_count:null`, `coverage_rate:null`, real fills/PnL `null` |
