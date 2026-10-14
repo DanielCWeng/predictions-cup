@@ -97,7 +97,7 @@ def test_recorder_close_survives_unrelated_maker_cleanup_exception() -> None:
 
 
 def test_enospc_from_actual_stream_write_is_counted(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import errno
     import os
@@ -176,7 +176,7 @@ def test_close_with_blocked_writer_never_waits_indefinitely(tmp_path: Path) -> N
         entered.set()
         assert release.wait(timeout=3)
         return original(item)  # type: ignore[arg-type]
-    mirror._book_row = held  # type: ignore[assignment,method-assign]
+    mirror._book_row = held  # type: ignore[method-assign]
     mirror.start()
     _record(mirror)
     try:
