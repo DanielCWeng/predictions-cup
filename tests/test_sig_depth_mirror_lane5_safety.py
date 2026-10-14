@@ -67,7 +67,10 @@ def test_recorder_close_survives_unrelated_maker_cleanup_exception() -> None:
     """Structural guard: a preceding cleanup await must not bypass mirror.close()."""
     path = Path(__file__).resolve().parents[1] / "src/predictions_cup/maker/service.py"
     module = ast.parse(path.read_text(encoding="utf-8"))
-    service = next(n for n in module.body if isinstance(n, ast.ClassDef) and n.name == "MakerService")
+    service = next(
+        n for n in module.body
+        if isinstance(n, ast.ClassDef) and n.name == "MakerService"
+    )
     run = next(n for n in service.body if isinstance(n, ast.AsyncFunctionDef) and n.name == "run")
     outer = next(n for n in run.body if isinstance(n, ast.Try))
 
@@ -96,6 +99,7 @@ def test_enospc_from_actual_stream_write_is_counted(
 ) -> None:
     import errno
     import os
+
     import predictions_cup.sig.depth_mirror as mirror_module
 
     original_fdopen = os.fdopen
@@ -103,7 +107,7 @@ def test_enospc_from_actual_stream_write_is_counted(
         def __init__(self, fd: int) -> None:
             self.underlying = original_fdopen(fd, "w", encoding="utf-8", buffering=1)
 
-        def __enter__(self) -> "NoSpaceStream":
+        def __enter__(self) -> NoSpaceStream:
             return self
 
         def __exit__(self, *_args: object) -> None:
