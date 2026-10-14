@@ -257,10 +257,18 @@ class MakerService:
         governor = build_rest_governor(self.settings)
         rest = GovernedSigRestClient(self.settings, governor=governor)
         sig_recorder = cast(SigRealtimeRecorder, NoopSigRealtimeRecorder())
-        depth_mirror = (
-            MakerDepthMirror(self.settings.maker_depth_mirror_output_file)
-            if self.settings.maker_depth_mirror_output_file is not None else None
-        )
+        # Research capture is optional: bad destinations and resource failures
+        # disable the mirror, never maker startup or risk/order recovery.
+        depth_mirror: MakerDepthMirror | None = None
+        if self.settings.maker_depth_mirror_output_file is not None:
+            try:
+                depth_mirror = MakerDepthMirror(self.settings.maker_depth_mirror_output_file)
+            except Exception as exc:
+                # Avoid logging an arbitrary research path or other sensitive values.
+                _LOG.warning(
+                    "Optional SIG depth mirror constructor failed (%s); capture disabled",
+                    type(exc).__name__,
+                )
         observe_recorder = ObservationCaptureRecorder(
             self.settings.sig_research_path,
             queue_max=max(1_024, min(self.settings.sig_capture_queue_max, 65_536)),
