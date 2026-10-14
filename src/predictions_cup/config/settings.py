@@ -273,9 +273,11 @@ class AppSettings(BaseSettings):
             or any(value <= 0 for value in self.maker_deep_ladder_level_sizes)
         ):
             raise ValueError("deep ladder offsets/sizes must be positive matching tuples")
-        if self.maker_max_bbo_age_ms < int(self.sig_realtime_bulk_price_refresh_seconds * 1_000):
+        if self.maker_max_bbo_age_ms <= int(
+            self.sig_realtime_bulk_price_refresh_seconds * 1_000
+        ):
             raise ValueError(
-                "maker_max_bbo_age_ms must cover the configured SIG bulk-price refresh interval"
+                "maker_max_bbo_age_ms must exceed the configured SIG bulk-price refresh interval"
             )
         if self.maker_require_trusted_depth and self.maker_max_depth_age_ms < int(
             self.sig_realtime_open_book_refresh_seconds * 1_000
