@@ -33,7 +33,7 @@ def test_inflight_serialization_failure_counts_lost_snapshot(tmp_path: Path) -> 
     def fail(_item: object) -> dict[str, object]:
         raise OSError("injected ENOSPC while serialising/writing")
 
-    setattr(mirror, "_book_row", fail)
+    mirror._book_row = fail  # type: ignore[assignment,method-assign]
     mirror.start()
     _record(mirror)
     assert mirror._thread is not None
@@ -176,7 +176,7 @@ def test_close_with_blocked_writer_never_waits_indefinitely(tmp_path: Path) -> N
         entered.set()
         assert release.wait(timeout=3)
         return original(item)  # type: ignore[arg-type]
-    setattr(mirror, "_book_row", held)
+    mirror._book_row = held  # type: ignore[assignment,method-assign]
     mirror.start()
     _record(mirror)
     try:
