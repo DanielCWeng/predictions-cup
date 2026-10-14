@@ -222,7 +222,10 @@ def audit_fills(
         "measured_capital_share_days": None,
         "market_day_clustered_95pct_interval": None,
         "no_quote_incremental_trading_pnl": 0,
-        "no_quote_control_caveat": "incremental order PnL only, not counterfactual inventory or opportunity cost",
+        "no_quote_control_caveat": (
+            "incremental order PnL only, not counterfactual inventory "
+            "or opportunity cost"
+        ),
         "adverse_selection_and_fv_regime_subgroups": None,
         "shadow_hypotheses_proposed": [],
         "decision": "INSUFFICIENT_VERIFIABLE_FILLS",
