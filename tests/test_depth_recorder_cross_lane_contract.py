@@ -12,7 +12,10 @@ from pathlib import Path
 from predictions_cup.models.market import OrderBook, OrderBookLevel
 from predictions_cup.replay.microstructure_c_bridge import bridge_lane_b
 from predictions_cup.research.maker_depth_audit import (
-    accepted_specs, audit, pm_pair_rejections, sha256_file,
+    accepted_specs,
+    audit,
+    pm_pair_rejections,
+    sha256_file,
 )
 from predictions_cup.sig.depth_mirror import MakerDepthMirror
 
