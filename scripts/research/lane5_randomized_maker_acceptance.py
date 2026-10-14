@@ -135,6 +135,7 @@ async def run_case(
     timestamp = datetime(2026, 10, 14, tzinfo=UTC)
     record_ns: list[int] = []
     maker_ns: list[int] = []
+    pipeline_ns: list[int] = []
     heartbeat_ns: list[int] = []
     recovery_ns: list[int] = []
     cpu_stop = threading.Event()
@@ -196,6 +197,7 @@ async def run_case(
             heartbeat_task = asyncio.create_task(heartbeat())
             try:
                 for _ in range(iterations):
+                    pipeline_started = time.perf_counter_ns()
                     if mirror is not None:
                         t = time.perf_counter_ns()
                         mirror.record(
@@ -207,7 +209,9 @@ async def run_case(
                     result = await runtime.drain_once()
                     if result is None or len(result.decisions) != 1:
                         raise AssertionError("real MakerRuntimeLoop did not decide")
-                    maker_ns.append(time.perf_counter_ns() - t)
+                    finished = time.perf_counter_ns()
+                    maker_ns.append(finished - t)
+                    pipeline_ns.append(finished - pipeline_started)
                     await asyncio.sleep(0)
                     if case.startswith("paced"):
                         await asyncio.sleep(.001)
@@ -264,7 +268,8 @@ async def run_case(
             "pair": pair, "case": case, "recorder": "ON" if enabled else "OFF",
             "levels_per_side": levels, "maker_cycles": iterations,
             "fixture_sha256": tape_sha256,
-            "maker_decision": percentiles(maker_ns),
+            "maker_decision_excluding_recorder": percentiles(maker_ns),
+            "maker_decision": percentiles(pipeline_ns),
             "producer_callback": percentiles(record_ns),
             "fake_cancel": percentiles(fake_cancel_ns),
             "fake_place": percentiles(fake_place_ns),
@@ -297,6 +302,8 @@ async def run(seed: int, pairs: int, iterations: int) -> dict[str, Any]:
         "schema": "lane5-preregistered-offline-maker-v1", "seed": seed,
         "pairs": plan, "iterations_per_condition": iterations,
         "max_on_minus_off_microseconds": THRESHOLD_DELTA_US,
+        "prior_runbook_relative_p99_9_regression_threshold_percent": 10.0,
+        "primary_timing": "full_callback_plus_MakerRuntimeLoop",
         "scientific_label": "synthetic_OFFLINE_not_LIVE_acceptance",
     }, sort_keys=True), flush=True)
     results: list[dict[str, Any]] = []
@@ -320,20 +327,43 @@ async def run(seed: int, pairs: int, iterations: int) -> dict[str, Any]:
             k: round(on["maker_decision"][k] - off["maker_decision"][k], 3)
             for k in THRESHOLD_DELTA_US
         }
+        off_tail = off["maker_decision"]["p99_9_us"]
+        relative = (
+            None if off_tail == 0 else
+            round(100 * (on["maker_decision"]["p99_9_us"] / off_tail - 1), 3)
+        )
         comparisons.append({
-            "pair": i, "case": off["case"], "maker_on_minus_off_us": delta,
+            "pair": i, "case": off["case"],
+            "full_producer_plus_maker_on_minus_off_us": delta,
+            "p99_9_relative_regression_percent": relative,
+            "relative_regression_exceeds_10_percent": (
+                relative is None or relative > 10.0
+            ),
             "meets_strict_absolute_delta": all(
                 delta[k] <= limit for k, limit in THRESHOLD_DELTA_US.items()
             ),
         })
-    sufficient = pairs >= 12 and iterations >= 1000
+    # At least four independent OFF/ON repetitions per *condition*;
+    # 12 total pairs alone are insufficient across six distinct stress modes.
+    sufficient = (
+        iterations >= 1000
+        and all(sum(x["case"] == case for x in comparisons) >= 4 for case in CASES)
+    )
     out = {
         "schema": "lane5-offline-decision-v1", "seed": seed, "pairs": comparisons,
         "sufficient_repeats_for_proposed_screen": sufficient,
-        "strict_thresholds_met": all(
+        "strict_absolute_thresholds_met": all(
             x["meets_strict_absolute_delta"] for x in comparisons
         ),
-        "verdict": "SCREEN_ONLY" if sufficient else "INSUFFICIENT_SAMPLE",
+        "relative_p99_9_over_10_percent_pairs": sum(
+            x["relative_regression_exceeds_10_percent"] for x in comparisons
+        ),
+        "relative_p99_9_has_no_pair_over_10_percent": all(
+            not x["relative_regression_exceeds_10_percent"] for x in comparisons
+        ),
+        # OFF-noise envelope / genuine venue ACK and host budget still unknown.
+        "verdict": "SCREEN_ONLY" if sufficient else "INSUFFICIENT_REPLICATION",
+        "target_host_safety_verdict": "BLOCKED",
         "live_activation_verdict": "BLOCKED",
         "real_venue_capture_verdict": "NOT_RUN",
     }
