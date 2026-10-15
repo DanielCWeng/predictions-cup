@@ -744,6 +744,8 @@ def test_maker_journal_probe_counts_bbo_rejections_from_current_pid(
         "MAKE outcome exchange=902 no_place gate=CANCEL reason=sig_bbo_untrusted",
         "MAKE outcome exchange=903 risk_denied reason=max_gross_exposure",
         "MAKE outcome exchange=904 no_place reason=sig_bbo_stale",
+        "MAKE outcome exchange=905 no_place gate=HOLD",
+        "MAKE outcome exchange=906 order_intent",
     ]
     stdout = "\n".join(
         json.dumps({
@@ -777,10 +779,10 @@ def test_maker_journal_probe_counts_bbo_rejections_from_current_pid(
     }
     status, section = sources._read_maker_liveness()
     assert status.valid
-    assert section["outcomes_sampled"] == 4
+    assert section["outcomes_sampled"] == 6
     assert section["bbo_rejections_sampled"] == 3
     assert section["gross_cap_rejections_sampled"] == 1
-    assert section["bbo_rejection_fraction"] == 0.75
+    assert section["bbo_rejection_fraction"] == 0.5
 
 
 def test_enabled_maker_is_added_to_expected_services(tmp_path: Path) -> None:
