@@ -888,6 +888,10 @@ class LaunchSigRecorder(SigRealtimeRecorder):
     ) -> None:
         """Start a new socket/subscription epoch inside one process session."""
         self._connection_epoch += 1
+        # After a disconnect or token re-subscription, the first observed book
+        # is a fresh baseline. Never compare it with an earlier epoch: unseen
+        # fills/cancels would look like causally observed liquidity changes.
+        self._last_books.clear()
         self._emit_normalized(
             event_type="CONNECTION_BOUNDARY",
             observed_at=observed_at,
