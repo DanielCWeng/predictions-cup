@@ -165,6 +165,9 @@ class RuntimeHealth:
     last_valid_batch: datetime | None = None
     last_rest_reconciliation: datetime | None = None
     revision_gap_count: int = 0
+    # Counts every scoped or whole-universe recovery, including semantically
+    # invalid but syntactically parseable batches with no trade/dirty rows.
+    recovery_count: int = 0
     reconnect_count: int = 0
     reconciliation_failure_count: int = 0
     bounded_book_refresh_count: int = 0
@@ -1249,6 +1252,7 @@ class SigRealtimeStateEngine:
         triggering_revision: int | None,
         refresh_bulk_prices: bool,
     ) -> None:
+        self.health.recovery_count += 1
         self._mark_untrusted(
             self.tracked_depth_exchange_ids,
             transition,
@@ -1343,6 +1347,7 @@ class SigRealtimeStateEngine:
         triggering_revision: int | None,
     ) -> None:
         """Topic-scoped authoritative recovery for one tournament market."""
+        self.health.recovery_count += 1
         exchange_ids = {
             exchange_id
             for exchange_id, state in self.states.items()
