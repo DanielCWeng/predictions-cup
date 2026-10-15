@@ -148,6 +148,58 @@ def test_high_priority_overtakes_background_waiting_for_capacity() -> None:
     asyncio.run(scenario())
 
 
+def test_live_scalar_bbo_preempts_advisory_depth_burst_without_delaying_high() -> None:
+    """Simulate 76 maker-tracked dirty books at one governed request per second."""
+    async def scenario() -> None:
+        now = 0.0
+        started_wait = asyncio.Event()
+        release_wait = asyncio.Event()
+        sleeps = 0
+        completions: list[str] = []
+
+        def monotonic() -> float:
+            return now
+
+        async def sleep(delay: float) -> None:
+            nonlocal now, sleeps
+            sleeps += 1
+            if sleeps == 1:
+                started_wait.set()
+                await release_wait.wait()
+            now += delay
+            await asyncio.sleep(0)
+
+        governor = SigRestGovernor(
+            rate_per_second=1.0,
+            sleep=sleep,
+            monotonic=monotonic,
+            random_fn=lambda: 0.0,
+            queue_max=512,
+        )
+        await governor.acquire(RestPriority.NORMAL)  # one token left
+
+        async def get(name: str, priority: RestPriority) -> None:
+            await governor.acquire(priority)
+            completions.append(name)
+
+        pending = [
+            asyncio.create_task(get(f"advisory_{i}", RestPriority.BACKGROUND))
+            for i in range(76)
+        ]
+        await started_wait.wait()
+        scalar = asyncio.create_task(get("scalar_bbo", RestPriority.NORMAL))
+        cancel = asyncio.create_task(get("execution_high", RestPriority.HIGH))
+        release_wait.set()
+        await asyncio.gather(*pending, scalar, cancel)
+
+        assert completions[:2] == ["execution_high", "scalar_bbo"]
+        assert len(completions) == 78
+        assert governor.snapshot().requests_total == 79
+        await governor.aclose()
+
+    asyncio.run(scenario())
+
+
 def test_429_applies_shared_cooldown_to_next_caller() -> None:
     async def scenario() -> None:
         clock = FakeClock()
