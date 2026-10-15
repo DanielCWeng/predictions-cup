@@ -47,9 +47,16 @@ class RawBookAudit:
     versioned_books: int = 0
     unversioned_or_malformed_books: int = 0
     two_sided_versioned_books: int = 0
-    duplicate_versions_in_epoch: int = 0
-    backwards_versions_in_epoch: int = 0
+    # The immutable writer uses random UUID shard names, so path order is
+    # NOT event order across shards. Only consecutive observations retained
+    # in a single FIFO Parquet shard support sequence-order diagnostics.
+    duplicate_versions_within_shard: int = 0
+    backwards_versions_within_shard: int = 0
     _versions: dict[tuple[str, int, str], int] = field(default_factory=dict)
+
+    def begin_shard(self) -> None:
+        """Reset ordering evidence; filename UUIDs cannot order shard events."""
+        self._versions.clear()
     _exchanges: set[str] = field(default_factory=set)
     _sessions: set[str] = field(default_factory=set)
 
@@ -105,9 +112,9 @@ class RawBookAudit:
                 prior = self._versions.get(key)
                 if prior is not None:
                     if sequence == prior:
-                        self.duplicate_versions_in_epoch += 1
+                        self.duplicate_versions_within_shard += 1
                     elif sequence < prior:
-                        self.backwards_versions_in_epoch += 1
+                        self.backwards_versions_within_shard += 1
                 if prior is None or sequence > prior:
                     self._versions[key] = sequence
 
@@ -123,8 +130,9 @@ class RawBookAudit:
             "two_sided_versioned_books": self.two_sided_versioned_books,
             "unique_exchanges": len(self._exchanges),
             "observed_sessions": len(self._sessions),
-            "duplicate_versions_in_epoch": self.duplicate_versions_in_epoch,
-            "backwards_versions_in_epoch": self.backwards_versions_in_epoch,
+            "duplicate_versions_within_shard": self.duplicate_versions_within_shard,
+            "backwards_versions_within_shard": self.backwards_versions_within_shard,
+            "cross_shard_sequence_continuity": "UNKNOWN_UUID_NAMED_SHARDS",
             "coverage_completeness": "UNKNOWN",
             "paired_executable_opportunities": None,
             "fill_probability": None,
@@ -151,6 +159,10 @@ def scan_raw_events(research_root: Path, *, max_files: int = 100_000) -> RawBook
         if path.is_symlink() or not path.is_file():
             raise ValueError("refusing symlink or missing raw_events shard")
         parquet = pq.ParquetFile(path)
+        # Each Parquet writer shard retains FIFO row order, but shards sharing
+        # a minute have random filenames. Never compare their version highs
+        # unless an independently proven event sort has been performed.
+        audit.begin_shard()
         fields = set(parquet.schema_arrow.names)
         if "raw_json" not in fields:
             raise ValueError("raw shard lacks raw_json column")
