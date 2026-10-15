@@ -566,12 +566,18 @@ class SigRealtimeStateEngine:
             # Targeted refetch only. Trust is kept: an expired foreign order
             # leaves at most one vanished level for about one request, and
             # flipping trust would make MAKE cancel/requote on every expiry.
+            # Optional maker depth must not compete at NORMAL with the scalar
+            # BBO sweep; strict trusted-depth mode retains its old priority.
             await self._reconcile_many(
                 expired,
                 reason="order_expiry_refresh",
                 final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                 triggering_revision=self.last_accepted_revision,
-                priority=RestPriority.NORMAL,
+                priority=(
+                    RestPriority.NORMAL
+                    if self._eager_tracked_depth_bootstrap
+                    else RestPriority.BACKGROUND
+                ),
                 wait=wait,
             )
 
