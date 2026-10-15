@@ -30,6 +30,7 @@ from predictions_cup.sig.realtime_state import (
     DepthState,
     SigRealtimeStateEngine,
     SubscriptionReason,
+    TrustTransition,
 )
 from predictions_cup.sig.realtime_storage import SigRealtimeRecorder
 from predictions_cup.sig.rest_governor import RestPriority
@@ -767,6 +768,88 @@ def test_scalar_maker_reconnect_does_not_block_on_76_optional_depth_reads(
         assert len(rest.calls) == 76
         assert all(p == RestPriority.BACKGROUND for p in rest.orderbook_priorities)
         assert all(state.trusted for state in engine.states.values())
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_scalar_market_resync_refreshes_prices_before_optional_depth(
+    tmp_path: Path,
+) -> None:
+    """A market gap must not hold the scalar maker behind advisory book REST."""
+    async def scenario() -> None:
+        rest = FakeRest()
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            tracked_depth_exchange_ids={"36"},
+            eager_tracked_depth_bootstrap=False,
+            tracked_dirty_priority=RestPriority.BACKGROUND,
+        )
+        await engine.initialize()
+        rest.block_exchange = "36"
+        rest.block_release.clear()
+        initial_bulk = len(rest.bulk_calls)
+
+        await asyncio.wait_for(
+            engine._resync_market(
+                "26",
+                transition=TrustTransition.UNTRUSTED_REVISION_GAP,
+                reason="revision_gap",
+                triggering_revision=2,
+            ),
+            timeout=1.0,
+        )
+        assert rest.market_calls == ["26"]
+        assert len(rest.bulk_calls) == initial_bulk + 1
+        assert rest.bulk_priorities[-1] == RestPriority.NORMAL
+        assert engine.states["36"].depth_state == DepthState.TRACKED_UNTRUSTED
+
+        await asyncio.wait_for(rest.block_started.wait(), timeout=1.0)
+        assert rest.orderbook_priorities[-1] == RestPriority.BACKGROUND
+        assert not engine.states["36"].trusted
+        rest.block_release.set()
+        await asyncio.gather(*engine._reconcile_tasks.values())
+        assert engine.states["36"].trusted
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_trusted_depth_market_resync_still_waits_for_high_priority_book(
+    tmp_path: Path,
+) -> None:
+    """Full-depth-required capture retains authoritative blocking recovery."""
+    async def scenario() -> None:
+        rest = FakeRest()
+        engine, recorder = _engine(tmp_path, rest, tracked={"36"})
+        await engine.initialize()
+        rest.block_exchange = "36"
+        rest.block_release.clear()
+        rest.block_started.clear()
+        initial_bulk = len(rest.bulk_calls)
+
+        pending = asyncio.create_task(
+            engine._resync_market(
+                "26",
+                transition=TrustTransition.UNTRUSTED_REVISION_GAP,
+                reason="revision_gap",
+                triggering_revision=2,
+            )
+        )
+        await asyncio.wait_for(rest.block_started.wait(), timeout=1.0)
+        assert not pending.done()
+        assert rest.orderbook_priorities[-1] == RestPriority.HIGH
+        assert len(rest.bulk_calls) == initial_bulk
+        rest.block_release.set()
+        await pending
+        assert len(rest.bulk_calls) == initial_bulk + 1
+        assert rest.bulk_priorities[-1] == RestPriority.BACKGROUND
+        assert engine.states["36"].trusted
         await engine.aclose()
         recorder.close()
 
