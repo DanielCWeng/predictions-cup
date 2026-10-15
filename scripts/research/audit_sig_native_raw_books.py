@@ -43,6 +43,8 @@ class RawBookAudit:
     files_read: int = 0
     raw_rows: int = 0
     malformed_json_rows: int = 0
+    rejected_validation_rows: int = 0
+    missing_epoch_rows: int = 0
     batches_with_books: int = 0
     versioned_books: int = 0
     unversioned_or_malformed_books: int = 0
@@ -60,8 +62,17 @@ class RawBookAudit:
     _exchanges: set[str] = field(default_factory=set)
     _sessions: set[str] = field(default_factory=set)
 
-    def consume(self, raw: object, *, session: object, epoch: object) -> None:
+    def consume(
+        self, raw: object, *, session: object, epoch: object,
+        validation_error: object,
+    ) -> None:
         self.raw_rows += 1
+        # This is a census of accepted market messages, not an inventory
+        # of arbitrary untrusted JSON. Old CAPTURE-001 persisted rejected
+        # payloads too, with a non-null validation_error.
+        if validation_error is not None:
+            self.rejected_validation_rows += 1
+            return
         if not isinstance(raw, str):
             self.malformed_json_rows += 1
             return
@@ -70,9 +81,17 @@ class RawBookAudit:
         except (ValueError, TypeError):
             self.malformed_json_rows += 1
             return
-        session_key = str(session) if isinstance(session, str) else "UNKNOWN_SESSION"
+        epoch_identity_valid = (
+            isinstance(session, str) and bool(session.strip())
+            and isinstance(epoch, int) and not isinstance(epoch, bool)
+            and epoch >= 0
+        )
+        if not epoch_identity_valid:
+            self.missing_epoch_rows += 1
+        session_key = session if isinstance(session, str) else "UNKNOWN_SESSION"
         epoch_key = epoch if isinstance(epoch, int) and not isinstance(epoch, bool) else -1
-        self._sessions.add(session_key)
+        if epoch_identity_valid:
+            self._sessions.add(session_key)
         for batch in _batches(payload):
             books = batch.get("books")
             if not isinstance(books, list) or not books:
@@ -107,16 +126,19 @@ class RawBookAudit:
                 ):
                     # Descriptive presence only; levels are NOT executable certified.
                     self.two_sided_versioned_books += 1
-                key = (session_key, epoch_key, exchange_id)
-                sequence = version["sequence"]
-                prior = self._versions.get(key)
-                if prior is not None:
-                    if sequence == prior:
-                        self.duplicate_versions_within_shard += 1
-                    elif sequence < prior:
-                        self.backwards_versions_within_shard += 1
-                if prior is None or sequence > prior:
-                    self._versions[key] = sequence
+                # Sequence anomalies require an identified socket epoch;
+                # missing session metadata must not create false continuity.
+                if epoch_identity_valid:
+                    key = (session_key, epoch_key, exchange_id)
+                    sequence = version["sequence"]
+                    prior = self._versions.get(key)
+                    if prior is not None:
+                        if sequence == prior:
+                            self.duplicate_versions_within_shard += 1
+                        elif sequence < prior:
+                            self.backwards_versions_within_shard += 1
+                    if prior is None or sequence > prior:
+                        self._versions[key] = sequence
 
     def summary(self) -> dict[str, object]:
         return {
@@ -124,6 +146,8 @@ class RawBookAudit:
             "files_read": self.files_read,
             "raw_rows": self.raw_rows,
             "malformed_json_rows": self.malformed_json_rows,
+            "rejected_validation_rows": self.rejected_validation_rows,
+            "missing_epoch_rows": self.missing_epoch_rows,
             "batches_with_books": self.batches_with_books,
             "versioned_books": self.versioned_books,
             "unversioned_or_malformed_books": self.unversioned_or_malformed_books,
@@ -164,18 +188,17 @@ def scan_raw_events(research_root: Path, *, max_files: int = 100_000) -> RawBook
         # unless an independently proven event sort has been performed.
         audit.begin_shard()
         fields = set(parquet.schema_arrow.names)
-        if "raw_json" not in fields:
-            raise ValueError("raw shard lacks raw_json column")
-        columns = [
-            name for name in ("raw_json", "session_id", "connection_epoch")
-            if name in fields
-        ]
+        required = {"raw_json", "session_id", "connection_epoch", "validation_error"}
+        if not required.issubset(fields):
+            raise ValueError("raw shard lacks mandatory CAPTURE-001 audit columns")
+        columns = ["raw_json", "session_id", "connection_epoch", "validation_error"]
         for batch in parquet.iter_batches(batch_size=512, columns=columns):
             for row in batch.to_pylist():
                 audit.consume(
                     row["raw_json"],
                     session=row.get("session_id"),
                     epoch=row.get("connection_epoch"),
+                    validation_error=row.get("validation_error"),
                 )
         audit.files_read += 1
     return audit
