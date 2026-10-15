@@ -708,7 +708,12 @@ class SigRealtimeStateEngine:
                 source="sig-realtime",
                 revision=f"{book.as_of.sequence}:{book.as_of.at.isoformat()}",
             )
-            state.orderbook = canonical
+            # Keep source-native pushed depth as independent RESEARCH evidence,
+            # not a replacement for a tracked REST-certified execution book.
+            # Leaving TRACKED_TRUSTED unchanged while installing an unverified
+            # websocket book would silently promote it to maker-eligible depth.
+            if not state.tracked:
+                state.orderbook = canonical
             state.last_realtime_observed_at = observed_at
             state.last_accepted_revision = revision
             self.book_versions[book.exchange_id] = version
