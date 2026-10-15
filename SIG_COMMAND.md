@@ -9,6 +9,12 @@
 - **LIVE maker already exists and is active**, subject to safety and capital constraints. Never describe the project as having no live capability.
 - **Autonomy:** execute clearly safe, reversible, read-only and source-only work without repeated debate. Economic and safety gates remain binding. Broad permission to manage the project is not evidence that an untested order, liquidation, risk cap increase, restart, or market-data poll is safe.
 
+## 15 Oct 2026 ~11:00 UTC — #236 latest scalar reconnect correction (SOURCE ONLY)
+
+- The earlier #236 head `5311794` had green CI but does not cover the newest changes. **PR #236 new head `c46b6d3c2eea17372ba10430cd35544bf2cca7d9`**, latest [CI 38723711739](https://github.com/DanielCWeng/predictions-cup/actions/runs/38723711739) pending at documentation time; do not cite earlier CI as validation. Independent #207 LIVE gate still stands; West remains `fb4f6c66`.
+- Deployed West maker settings `maker_require_trusted_depth=False`, 76 tracked depth, 1rps implied reconnect `prepare_subscription()` could wait 76 depth fetches before restoring scalar BBO and subscribing. New `SigRealtimeStateEngine.eager_tracked_depth_bootstrap=True` default preserves capture/full-depth-required semantics; maker with optional trusted depth sets False to restore validated scalar BBO before realtime subscription, retain explicit UNTRUSTED depth, and let maintenance recover advisory depth at BACKGROUND. Same conditional applied to full resync.
+- East isolated maker+governor+realtime tests PASS after test fixture correctly uses **180-second tracked refresh / 1 rps** matching West operational depth demand budget; an initial unrealistic 30-second test correctly triggered existing sustainability validator and was fixed. No West production changes, LIVE orders or new SIG polling.
+
 ## 15 Oct 2026 10:45 UTC — operator take-over: true LIVE config and queued releases
 
 - **West actual running maker environment (PID 578967, `fb4f6c66`) is layered from runtime.env + trade.env + fs002_stage/live_band.env**. Inspection of a safe allowlist from `/proc/578967/environ` plus corresponding already-loaded settings confirmed `TRADING_ENABLED=true`, **76 tracked-depth exchange IDs**, `SIG_REST_GOVERNOR_RATE_PER_SECOND=1.0`, `MAKER_MAX_BBO_AGE_MS=15000`, gross cap `100000`, `maker_require_trusted_depth=False`, `maker_deep_ladder_enabled=True`. Avoid incorrectly reading only base runtime.env (which claims false/0 tracked/2rps).
