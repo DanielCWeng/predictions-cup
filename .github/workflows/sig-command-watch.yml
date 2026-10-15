@@ -53,7 +53,7 @@ jobs:
           prs = get(f"/repos/{repo}/pulls?state=open&per_page=100")
           runs = get(f"/repos/{repo}/actions/workflows/ci.yml/runs?branch=main&per_page=1")
           by_num = {p["number"]: p for p in prs}
-          active = [(n, by_num[n]) for n in (202, 213, 218, 219, 223, 225, 228, 229, 232, 233, 234) if n in by_num]
+          active = [(n, by_num[n]) for n in (202, 213, 218, 219, 223, 225, 228, 229, 232, 233, 234, 236, 239) if n in by_num]
           latest = runs.get("workflow_runs", [None])
           ci = latest[0] if latest else None
           now = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -65,6 +65,8 @@ jobs:
               f"- Safety #207: {safety['state']}; updated {safety.get('updated_at')}",
               f"- Latest `main` CI: {ci.get('status', 'unknown') if ci else 'unknown'} / {ci.get('conclusion', 'unknown') if ci else 'unknown'} ({ci.get('html_url', 'not available') if ci else 'not available'})",
               f"- Open tracked PRs: {', '.join('#'+str(n)+(' [DRAFT]' if p['draft'] else '') for n,p in active) or 'none'}",
+              f"- Maker recovery #236: {by_num[236]['head']['sha'][:12] if 236 in by_num else 'not open'}; independent review/host acceptance still required",
+              f"- Maker supervisor #239: {by_num[239]['head']['sha'][:12] if 239 in by_num else 'not open'}; source-only unless independently accepted",
               "- Evidence boundary: GitHub state ONLY; LIVE host/account/venue data, capital headroom, and alpha economics NOT CHECKED.",
               "- Current command/handoff: [SIG_COMMAND.md](https://github.com/DanielCWeng/predictions-cup/blob/main/SIG_COMMAND.md) and master issue #201.",
               "- This workflow does not trade, deploy, modify issues, call SIG/PM, or create ChatGPT conversations.",
