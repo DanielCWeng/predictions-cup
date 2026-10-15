@@ -1577,14 +1577,27 @@ class MakerService:
 
                         affected: set[str] = set()
                         malformed = False
+                        global_recheck_required = False
                         for delivery_topic, batch_payload in deliveries:
                             try:
                                 parsed = MarketBatchDto.model_validate(batch_payload)
                             except ValidationError:
                                 parsed = None
+                            previous_gap_count = sig_state.health.revision_gap_count
                             await sig_state.handle_raw_batch(
                                 delivery_topic, batch_payload, observed_at
                             )
+                            # Revision-gap recovery invalidates *all* tracked
+                            # exchanges, and truncated batches can invalidate
+                            # an entire market without a trade/bookDirty row.
+                            # An affected-only notification can otherwise
+                            # leave sibling resting orders live after the
+                            # market's authoritative status became unknown.
+                            if (
+                                sig_state.health.revision_gap_count > previous_gap_count
+                                or (parsed is not None and parsed.resync_required)
+                            ):
+                                global_recheck_required = True
                             if parsed is None:
                                 malformed = True
                                 continue
@@ -1608,10 +1621,13 @@ class MakerService:
                             source=risk_context_source,
                             service=risk_service,
                         )
-                        runtime.notify_sig(
-                            affected,
-                            observed_monotonic_ns=monotonic_ns(),
-                        )
+                        if global_recheck_required:
+                            runtime.notify_global(observed_monotonic_ns=monotonic_ns())
+                        else:
+                            runtime.notify_sig(
+                                affected,
+                                observed_monotonic_ns=monotonic_ns(),
+                            )
                     except SigApiError:
                         sig_state.mark_disconnected()
                         runtime.notify_global(observed_monotonic_ns=monotonic_ns())
