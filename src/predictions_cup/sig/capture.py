@@ -27,6 +27,7 @@ from predictions_cup.sig.realtime_subscriber import SubscriberExit, SupabaseTour
 
 logger = logging.getLogger(__name__)
 CAPTURE_PERIODIC_BULK_REFRESH_ENABLED = True
+_CAPTURE_RETRY_MAX_SECONDS = 60.0
 
 
 def parse_args() -> argparse.Namespace:
@@ -101,6 +102,21 @@ def _prune_at_startup(
     cutoff = datetime.now(UTC) - timedelta(days=retention_days)
     logger.warning("SIG startup retention pruning explicitly enabled")
     recorder.prune_before(cutoff)
+
+
+def _capture_retry_delay_seconds(consecutive_failures: int) -> float:
+    """Bound repeated authoritative SIG recovery failures without a tight REST loop."""
+    if consecutive_failures < 1:
+        raise ValueError("consecutive_failures must be positive")
+    return min(_CAPTURE_RETRY_MAX_SECONDS, float(2 ** min(consecutive_failures - 1, 6)))
+
+
+async def _wait_or_stop(stop_event: asyncio.Event, delay_seconds: float) -> None:
+    """Respect SIG capture shutdown while sleeping after a failed recovery."""
+    try:
+        await asyncio.wait_for(stop_event.wait(), timeout=delay_seconds)
+    except TimeoutError:
+        pass
 
 
 async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
@@ -206,6 +222,7 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                 retention_days=settings.sig_realtime_retention_days,
             )
             reason = SubscriptionReason.INITIAL_SUBSCRIBE
+            consecutive_recovery_failures = 0
             while not stop_event.is_set():
                 try:
                     # The documented lifecycle is token -> authoritative REST resync
@@ -270,13 +287,19 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
                     )
                 except SigApiError as exc:
                     engine.mark_disconnected()
+                    consecutive_recovery_failures += 1
+                    delay = _capture_retry_delay_seconds(consecutive_recovery_failures)
                     logger.warning(
-                        "SIG authoritative recovery failed error=%s",
+                        "SIG authoritative recovery failed error=%s "
+                        "consecutive_failures=%d retry_delay_seconds=%.1f",
                         type(exc).__name__,
+                        consecutive_recovery_failures,
+                        delay,
                     )
-                    await asyncio.sleep(1.0)
+                    await _wait_or_stop(stop_event, delay)
                     continue
 
+                consecutive_recovery_failures = 0
                 engine.mark_disconnected()
                 logger.info("SIG Realtime subscriber exited reason=%s", outcome.value)
                 if outcome == SubscriberExit.STOPPED:
