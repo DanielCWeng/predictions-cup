@@ -1092,6 +1092,51 @@ def test_lifecycle_recovery_only_reseeds_tracked_depth(tmp_path: Path) -> None:
     asyncio.run(scenario())
 
 
+def test_unknown_market_status_cannot_make_missing_depth_trusted(
+    tmp_path: Path,
+) -> None:
+    """Skipped book REST on an unverified status must remain UNTRUSTED."""
+    async def scenario() -> None:
+        rest = FakeRest()
+        engine, recorder = _engine(tmp_path, rest, tracked={"36"})
+        await engine.initialize()
+        state = engine.states["36"]
+        assert state.trusted
+        initial_books = len(rest.calls)
+
+        engine.market_states["26"].status = "unknown"
+        await engine._queue_reconciliation(
+            "36",
+            reason="unverified_market_status",
+            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+            triggering_revision=2,
+            priority=RestPriority.BACKGROUND,
+            wait=True,
+        )
+        assert len(rest.calls) == initial_books
+        assert state.orderbook is None
+        assert state.depth_state == DepthState.TRACKED_UNTRUSTED
+
+        # A separately authoritative terminal market is allowed to complete
+        # its depth lifecycle without a pointless order-book REST request.
+        engine.market_states["26"].status = "settled"
+        await engine._queue_reconciliation(
+            "36",
+            reason="verified_market_settlement",
+            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+            triggering_revision=3,
+            priority=RestPriority.BACKGROUND,
+            wait=True,
+        )
+        assert len(rest.calls) == initial_books
+        assert state.depth_state == DepthState.TRACKED_TRUSTED
+        assert state.orderbook is None
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
 def test_market_settlement_refetches_market_and_avoids_closed_book_read(
     tmp_path: Path,
 ) -> None:
