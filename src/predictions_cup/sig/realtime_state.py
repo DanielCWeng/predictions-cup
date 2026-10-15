@@ -192,6 +192,7 @@ class SigRealtimeStateEngine:
         bulk_prices_tracked_only: bool = False,
         capture_untracked_dirty_books: bool = True,
         tracked_dirty_priority: RestPriority = RestPriority.HIGH,
+        eager_tracked_depth_bootstrap: bool = True,
         extra_bulk_price_exchange_ids: Iterable[str] = (),
         governor_snapshot: GovernorSnapshotFn | None = None,
         clock: Clock = lambda: datetime.now(UTC),
@@ -233,6 +234,10 @@ class SigRealtimeStateEngine:
         # trusted depth. Keep dirty invalidation fail-closed but prevent its
         # REST depth reads from starving NORMAL scalar BBO refresh.
         self._tracked_dirty_priority = RestPriority(tracked_dirty_priority)
+        # A scalar-only maker may reconnect before optional depth has finished;
+        # default-on preserves mandatory full-depth recovery in capture/strategies
+        # that require trusted depth before subscription.
+        self._eager_tracked_depth_bootstrap = eager_tracked_depth_bootstrap
         self._bulk_price_exchange_ids = tracked | frozenset(extra_bulk_price_exchange_ids)
         self._book_depth = book_depth
         self._open_book_max_trusted_age = timedelta(
@@ -368,13 +373,14 @@ class SigRealtimeStateEngine:
             TrustTransition.UNTRUSTED_INITIAL_SUBSCRIBE,
             revision=None,
         )
-        await self._reconcile_many(
-            tracked,
-            reason=SubscriptionReason.INITIAL_SUBSCRIBE.value,
-            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
-            triggering_revision=None,
-            priority=RestPriority.NORMAL,
-        )
+        if self._eager_tracked_depth_bootstrap:
+            await self._reconcile_many(
+                tracked,
+                reason=SubscriptionReason.INITIAL_SUBSCRIBE.value,
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=None,
+                priority=RestPriority.NORMAL,
+            )
 
     async def refresh_universe(
         self,
@@ -426,16 +432,23 @@ class SigRealtimeStateEngine:
             priority=RestPriority.HIGH,
         )
         self._validate_tracked_configuration()
-        await self._reconcile_many(
-            self.tracked_depth_exchange_ids,
-            reason=reason.value,
-            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
-            triggering_revision=None,
-            priority=RestPriority.HIGH,
-        )
+        if self._eager_tracked_depth_bootstrap:
+            await self._reconcile_many(
+                self.tracked_depth_exchange_ids,
+                reason=reason.value,
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=None,
+                priority=RestPriority.HIGH,
+            )
+        # The scalar-only maker must restore a validated BBO before subscribing,
+        # without blocking behind all optional 76-deep depth reconciliations.
         await self.refresh_bulk_prices(
             reason=reason.value,
-            priority=RestPriority.BACKGROUND,
+            priority=(
+                RestPriority.BACKGROUND
+                if self._eager_tracked_depth_bootstrap
+                else RestPriority.NORMAL
+            ),
         )
         self._observe(
             ObservationKind.RECONNECT_RESOLVED,
@@ -1240,17 +1253,22 @@ class SigRealtimeStateEngine:
             priority=RestPriority.HIGH,
         )
         self._validate_tracked_configuration()
-        await self._reconcile_many(
-            self.tracked_depth_exchange_ids,
-            reason=reason,
-            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
-            triggering_revision=triggering_revision,
-            priority=RestPriority.HIGH,
-        )
+        if self._eager_tracked_depth_bootstrap:
+            await self._reconcile_many(
+                self.tracked_depth_exchange_ids,
+                reason=reason,
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=triggering_revision,
+                priority=RestPriority.HIGH,
+            )
         if refresh_bulk_prices:
             await self.refresh_bulk_prices(
                 reason=reason,
-                priority=RestPriority.BACKGROUND,
+                priority=(
+                    RestPriority.BACKGROUND
+                    if self._eager_tracked_depth_bootstrap
+                    else RestPriority.NORMAL
+                ),
             )
 
     async def _ensure_known_exchanges(self, batch: MarketBatchDto) -> None:
