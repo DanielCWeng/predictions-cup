@@ -9,6 +9,12 @@
 - **LIVE maker already exists and is active**, subject to safety and capital constraints. Never describe the project as having no live capability.
 - **Autonomy:** execute clearly safe, reversible, read-only and source-only work without repeated debate. Economic and safety gates remain binding. Broad permission to manage the project is not evidence that an untested order, liquidation, risk cap increase, restart, or market-data poll is safe.
 
+## East capture production recovery VERIFIED — 2026-10-15 09:40 UTC
+- Operator ran guarded `/home/ec2-user/east_capture_release_20261015.sh`; SIG capture systemd **new PID `715576`** active since **09:39:11 UTC** with drop-in `90-east-capture-source-20261015.conf` pointing PYTHONPATH to tested `/home/ec2-user/predictions-cup-east-recovery-20261015/src` at `78083ca`. PM capture remained active; East XFS root **80G / 51G free**.
+- Authoritative startup completed, SIG Realtime **subscribed at 09:39:16 UTC**. In 09:39:11–09:40:49 UTC local journal: 1 Realtime-token POST, 3 market GETs, 24 bulk-price GETs, **0 malformed, 0 HTTP 429, 0 authoritative recovery failures**. SIG recorder SQLite file and WAL modification timestamps continue advancing. Initial healthy recovery, **not yet proof of prolonged feed quality or full research-depth capture** (configured tracked depth count is 0).
+- Monitor market-data request budget, rate limits, ongoing recorder growth, Realtime cadence and data-quality coverage. **24 bulk GETs during initial 98-second window** may be a startup/batch burst; compare steady-state request counts against cross-host venue quota rather than prematurely assuming improvement for West. Recorders must remain online and active database/WAL must not be altered.
+- Source #237 merged; East active new code confirmed. West trading unchanged on `fb4f6c66`, and #236 head `42a0c912` remains pending independent #207 LIVE gates.
+
 ## East storage and capture — verified 15 Oct 2026 ~08:49 UTC
 
 - **East root expanded successfully from 30 GiB to 80 GiB**: `lsblk` reports 80G NVMe device and `/dev/nvme0n1p1`, mounted XFS root `df -hT /` reports total 80G, used 30G, available **51G**, 37% used. Both East SIG and Polymarket capture services observed `active`. The user approved 30→80 GB EBS expansion and stated completed; expansion was verified, NOT performed by this chat. Do not re-execute resize.
