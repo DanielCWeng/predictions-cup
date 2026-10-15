@@ -45,6 +45,9 @@ class RawBookAudit:
     malformed_json_rows: int = 0
     rejected_validation_rows: int = 0
     missing_epoch_rows: int = 0
+    wrong_or_unknown_topic_rows: int = 0
+    non_market_batch_rows: int = 0
+    tournament_filter_active: bool = False
     batches_with_books: int = 0
     versioned_books: int = 0
     unversioned_or_malformed_books: int = 0
@@ -66,9 +69,30 @@ class RawBookAudit:
 
     def consume(
         self, raw: object, *, session: object, epoch: object,
-        validation_error: object,
+        validation_error: object, topic: object,
+        source: object, event_type: object,
+        expected_tournament_id: str | None,
     ) -> None:
         self.raw_rows += 1
+        self.tournament_filter_active = expected_tournament_id is not None
+        if source != "SIG_REALTIME_DECODED" or event_type != "MARKET_BATCH":
+            self.non_market_batch_rows += 1
+            return
+        # SIG's older CAPTURE-001 book-only rows often have tournament_id
+        # NULL. The subscription topic, not an optional payload label, is
+        # the scoped identity for each native versioned-book batch.
+        if expected_tournament_id is not None:
+            expected_prefix = f"tournament:{expected_tournament_id}:market:"
+            if not (
+                isinstance(topic, str)
+                and (
+                    topic == f"tournament:{expected_tournament_id}"
+                    or topic.startswith(expected_prefix)
+                    and len(topic) > len(expected_prefix)
+                )
+            ):
+                self.wrong_or_unknown_topic_rows += 1
+                return
         # Scope the census to messages passing initial DTO/identity parsing,
         # not arbitrary rejected JSON. This marker is recorded BEFORE later
         # state changes or REST reconciliation: a null validation_error does
@@ -158,6 +182,12 @@ class RawBookAudit:
             "malformed_json_rows": self.malformed_json_rows,
             "rejected_validation_rows": self.rejected_validation_rows,
             "missing_epoch_rows": self.missing_epoch_rows,
+            "wrong_or_unknown_topic_rows": self.wrong_or_unknown_topic_rows,
+            "non_market_batch_rows": self.non_market_batch_rows,
+            "tournament_scope": (
+                "SCOPED_BY_SUBSCRIPTION_TOPIC"
+                if self.tournament_filter_active else "UNVERIFIED_MIXED_POSSIBLE"
+            ),
             "batches_with_books": self.batches_with_books,
             "versioned_books": self.versioned_books,
             "unversioned_or_malformed_books": self.unversioned_or_malformed_books,
@@ -185,8 +215,15 @@ class RawBookAudit:
         }
 
 
-def scan_raw_events(research_root: Path, *, max_files: int = 100_000) -> RawBookAudit:
+def scan_raw_events(
+    research_root: Path, *, max_files: int = 100_000,
+    expected_tournament_id: str | None = None,
+) -> RawBookAudit:
     """Stream existing immutable raw shards; fail on absent/incomplete input paths."""
+    if expected_tournament_id is not None and (
+        not expected_tournament_id.strip() or ":" in expected_tournament_id
+    ):
+        raise ValueError("expected tournament ID must be nonblank without colons")
     raw_root = research_root if research_root.name == "raw_events" else research_root / "raw_events"
     if (
         not raw_root.is_dir()
@@ -209,10 +246,16 @@ def scan_raw_events(research_root: Path, *, max_files: int = 100_000) -> RawBook
         # unless an independently proven event sort has been performed.
         audit.begin_shard()
         fields = set(parquet.schema_arrow.names)
-        required = {"raw_json", "session_id", "connection_epoch", "validation_error"}
+        required = {
+            "raw_json", "session_id", "connection_epoch", "validation_error",
+            "topic", "source", "event_type",
+        }
         if not required.issubset(fields):
             raise ValueError("raw shard lacks mandatory CAPTURE-001 audit columns")
-        columns = ["raw_json", "session_id", "connection_epoch", "validation_error"]
+        columns = [
+            "raw_json", "session_id", "connection_epoch", "validation_error",
+            "topic", "source", "event_type",
+        ]
         for batch in parquet.iter_batches(batch_size=512, columns=columns):
             for row in batch.to_pylist():
                 audit.consume(
@@ -220,6 +263,10 @@ def scan_raw_events(research_root: Path, *, max_files: int = 100_000) -> RawBook
                     session=row.get("session_id"),
                     epoch=row.get("connection_epoch"),
                     validation_error=row.get("validation_error"),
+                    topic=row.get("topic"),
+                    source=row.get("source"),
+                    event_type=row.get("event_type"),
+                    expected_tournament_id=expected_tournament_id,
                 )
         audit.files_read += 1
     return audit
@@ -229,11 +276,19 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--research-root", type=Path, required=True)
     parser.add_argument("--max-files", type=int, default=100_000)
+    parser.add_argument(
+        "--tournament-id",
+        help="Limit source presence to exact tournament topic; without this, "
+             "output is explicitly unscoped and not attributable to the cup.",
+    )
     args = parser.parse_args()
     if args.max_files < 1:
         parser.error("max-files must be positive")
     try:
-        result = scan_raw_events(args.research_root, max_files=args.max_files)
+        result = scan_raw_events(
+            args.research_root, max_files=args.max_files,
+            expected_tournament_id=args.tournament_id,
+        )
     except (ValueError, OSError) as exc:
         parser.error(str(exc))
     print(json.dumps(result.summary(), sort_keys=True))
