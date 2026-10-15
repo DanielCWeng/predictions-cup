@@ -1797,6 +1797,45 @@ def test_tournament_unbatched_hints_resync_the_named_exchange_or_market(
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize(
+    ("depth_required", "expected_priority"),
+    (
+        (False, RestPriority.BACKGROUND),
+        (True, RestPriority.NORMAL),
+    ),
+)
+def test_maker_optional_book_expiry_cannot_preempt_scalar_bbo_refresh(
+    tmp_path: Path, depth_required: bool, expected_priority: RestPriority,
+) -> None:
+    """Expiry-driven full-depth REST is advisory unless quotes require depth."""
+    async def scenario() -> None:
+        rest = FakeRest()
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            tracked_depth_exchange_ids={"36"},
+            eager_tracked_depth_bootstrap=depth_required,
+            tracked_dirty_priority=(
+                RestPriority.HIGH if depth_required else RestPriority.BACKGROUND
+            ),
+        )
+        await engine.initialize()
+        before = len(rest.calls)
+        now = datetime.now(UTC)
+        state = engine.states["36"]
+        state.next_expiry_at = now - timedelta(seconds=2)
+        await engine.refresh_stale_open_books(now)
+        assert len(rest.calls) == before + 1
+        assert rest.orderbook_priorities[-1] == expected_priority
+        assert state.trusted
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
 def test_book_next_expiry_triggers_one_targeted_refetch_without_dropping_trust(
     tmp_path: Path,
 ) -> None:
