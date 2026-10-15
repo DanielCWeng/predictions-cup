@@ -792,23 +792,35 @@ class LaunchSigRecorder(SigRealtimeRecorder):
         best_bid = book.bids[0].price if book.bids else None
         best_ask = book.asks[0].price if book.asks else None
         spread = None if best_bid is None or best_ask is None else best_ask - best_bid
+        # Realtime books carry a source-native asOf sequence/time in
+        # book.revision. book.timestamp is only local receipt time: do NOT
+        # relabel that as a venue timestamp or a REST snapshot. The raw batch
+        # retains the typed asOf, while book_json retains its revision string.
+        realtime = book.source == "sig-realtime"
         self._emit_normalized(
             event_type="DEPTH_SNAPSHOT",
             tournament_id=tournament_id,
             exchange_id=book.exchange_id,
             market_id=market_id,
-            venue_timestamp=book.timestamp,
+            venue_timestamp=None if realtime else book.timestamp,
             observed_at=observed_at,
             revision=triggering_revision,
-            provenance="SIG_REST_AUTHORITATIVE",
-            evidence_label="AUTHORITATIVE_DEPTH",
+            provenance=(
+                "SIG_REALTIME_VERSIONED" if realtime else "SIG_REST_AUTHORITATIVE"
+            ),
+            evidence_label=(
+                "VERSIONED_PUSH_DEPTH_UNVERIFIED"
+                if realtime else "AUTHORITATIVE_DEPTH"
+            ),
             best_bid=_decimal(best_bid),
             best_ask=_decimal(best_ask),
             spread=_decimal(spread),
             reason=reason,
             payload=book.model_dump(mode="json"),
         )
-        if previous is not None:
+        # A change from REST snapshot to push book (or vice versa) is a
+        # source transition, not evidence of a causally timed liquidity event.
+        if previous is not None and previous.source == book.source:
             self._emit_liquidity_changes(
                 previous=previous,
                 current=book,
