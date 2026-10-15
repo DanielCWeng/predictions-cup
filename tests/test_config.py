@@ -23,6 +23,7 @@ def clean_config_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "SIG_REST_GOVERNOR_RATE_PER_SECOND",
         "SIG_REST_SHARED_COOLDOWN_MAX_SECONDS",
         "SIG_REALTIME_BULK_PRICE_REFRESH_SECONDS",
+        "SIG_CAPTURE_BULK_PRICE_REFRESH_SECONDS",
         "SIG_REALTIME_TRACKED_EXCHANGE_IDS",
         "POLYMARKET_SUPERVISED_IDS",
         "POLYMARKET_RESEARCH_PATH",
@@ -57,6 +58,7 @@ def test_defaults_load_without_credentials(
     assert str(settings.sig_api_base_url) == "https://www.thesuper.market/api/v1"
     assert settings.sig_rest_governor_rate_per_second == 2.0
     assert settings.sig_realtime_bulk_price_refresh_seconds == 10.0
+    assert settings.sig_capture_bulk_price_refresh_seconds == 60.0
     assert settings.sig_realtime_tracked_exchange_ids == ""
     assert settings.polymarket_supervised_ids == ""
     assert settings.polymarket_storage_path == Path("data/polymarket_operational.sqlite3")
