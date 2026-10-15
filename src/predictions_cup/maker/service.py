@@ -445,6 +445,9 @@ class MakerService:
                     if self.settings.maker_require_trusted_depth
                     else RestPriority.BACKGROUND
                 ),
+                # In scalar-BBO mode, subscribing must not wait for 76 optional
+                # REST depth snapshots. Maintenance recovers depth in BACKGROUND.
+                eager_tracked_depth_bootstrap=self.settings.maker_require_trusted_depth,
                 extra_bulk_price_exchange_ids=tuple(
                     value.strip()
                     for value in self.settings.maker_mark_only_exchange_ids.split(",")
