@@ -434,6 +434,9 @@ class MakerService:
                 governed_rate_per_second=(self.settings.sig_rest_governor_rate_per_second),
                 governor_snapshot=rest.governor_snapshot,
                 bulk_prices_tracked_only=True,
+                # Trade from governed scalar BBO; untracked full-depth dirty
+                # refetches would otherwise preempt NORMAL scalar refreshes.
+                capture_untracked_dirty_books=False,
                 extra_bulk_price_exchange_ids=tuple(
                     value.strip()
                     for value in self.settings.maker_mark_only_exchange_ids.split(",")
