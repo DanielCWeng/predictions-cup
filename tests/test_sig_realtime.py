@@ -620,6 +620,57 @@ def test_untracked_book_dirty_coalesces_without_waiting_for_slow_rest(
     asyncio.run(scenario())
 
 
+def test_maker_skips_untracked_dirty_book_rest_but_retains_tracked_recovery(
+    tmp_path: Path,
+) -> None:
+    """Only capture workers should consume HIGH priority REST for untracked depth."""
+    async def scenario() -> None:
+        rest = FakeRest()
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            tracked_depth_exchange_ids={"36"},
+            capture_untracked_dirty_books=False,
+        )
+        await engine.initialize()
+        observed = datetime(2026, 10, 1, 16, 10, 28, tzinfo=UTC)
+        initial_calls = tuple(rest.calls)
+
+        await engine.handle_tournament_event(
+            "book_dirty",
+            {
+                "exchangeId": "37",
+                "marketId": "27",
+                "tournamentId": "cup",
+                "at": "2026-10-01T16:10:28Z",
+            },
+            observed,
+        )
+        assert tuple(rest.calls) == initial_calls
+        assert not engine._untracked_refetch_tasks
+        assert engine.states["37"].last_realtime_observed_at == observed
+
+        await engine.handle_tournament_event(
+            "book_dirty",
+            {
+                "exchangeId": "36",
+                "marketId": "26",
+                "tournamentId": "cup",
+                "at": "2026-10-01T16:10:28Z",
+            },
+            observed,
+        )
+        await asyncio.gather(*engine._reconcile_tasks.values())
+        assert rest.calls.count("36") == initial_calls.count("36") + 1
+        assert rest.orderbook_priorities[-1] == RestPriority.HIGH
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
 def test_reconciliation_coalesces_dirty_signal_arriving_in_flight(tmp_path: Path) -> None:
     async def scenario() -> None:
         rest = FakeRest()
