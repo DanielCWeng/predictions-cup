@@ -1583,7 +1583,11 @@ class MakerService:
                                 parsed = MarketBatchDto.model_validate(batch_payload)
                             except ValidationError:
                                 parsed = None
-                            previous_gap_count = sig_state.health.revision_gap_count
+                            previous_gap_count = (
+                                sig_state.health.revision_gap_count
+                                if parsed is not None
+                                else 0
+                            )
                             await sig_state.handle_raw_batch(
                                 delivery_topic, batch_payload, observed_at
                             )
@@ -1593,9 +1597,9 @@ class MakerService:
                             # An affected-only notification can otherwise
                             # leave sibling resting orders live after the
                             # market's authoritative status became unknown.
-                            if (
+                            if parsed is not None and (
                                 sig_state.health.revision_gap_count > previous_gap_count
-                                or (parsed is not None and parsed.resync_required)
+                                or parsed.resync_required
                             ):
                                 global_recheck_required = True
                             if parsed is None:
