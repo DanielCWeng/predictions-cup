@@ -856,6 +856,64 @@ def test_trusted_depth_market_resync_still_waits_for_high_priority_book(
     asyncio.run(scenario())
 
 
+def test_scalar_maker_revision_gap_refreshes_bbo_at_normal_priority(
+    tmp_path: Path,
+) -> None:
+    """Tournament gap recovery keeps scalar BBO ahead of advisory book reads."""
+    async def scenario() -> None:
+        rest = FakeRest(market_count=76)
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            tracked_depth_exchange_ids={
+                exchange_id for _, exchange_id in rest.pairs
+            },
+            bulk_prices_tracked_only=True,
+            eager_tracked_depth_bootstrap=False,
+            tracked_dirty_priority=RestPriority.BACKGROUND,
+        )
+        await engine.initialize()
+        observed = datetime(2026, 10, 15, 16, 0, tzinfo=UTC)
+        initial_books = len(rest.calls)
+
+        await engine.handle_raw_batch(
+            engine.topic,
+            _batch(
+                revision=10,
+                previous=9,
+                source_from=1,
+                source_through=1,
+                exchange_id="e-0",
+                market_id="m-0",
+            ),
+            observed,
+        )
+        before_gap_bulk = len(rest.bulk_calls)
+        await engine.handle_raw_batch(
+            engine.topic,
+            _batch(
+                revision=12,
+                previous=11,
+                source_from=2,
+                source_through=2,
+                exchange_id="e-0",
+                market_id="m-0",
+            ),
+            observed + timedelta(seconds=1),
+        )
+        assert engine.health.revision_gap_count == 1
+        assert len(rest.bulk_calls) == before_gap_bulk + 1
+        assert rest.bulk_priorities[-1] == RestPriority.NORMAL
+        assert len(rest.calls) == initial_books
+        assert not any(state.trusted for state in engine.states.values())
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
 def test_reconciliation_coalesces_dirty_signal_arriving_in_flight(tmp_path: Path) -> None:
     async def scenario() -> None:
         rest = FakeRest()
