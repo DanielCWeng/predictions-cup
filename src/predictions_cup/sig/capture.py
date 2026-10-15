@@ -113,10 +113,8 @@ def _capture_retry_delay_seconds(consecutive_failures: int) -> float:
 
 async def _wait_or_stop(stop_event: asyncio.Event, delay_seconds: float) -> None:
     """Respect SIG capture shutdown while sleeping after a failed recovery."""
-    try:
+    with suppress(TimeoutError):
         await asyncio.wait_for(stop_event.wait(), timeout=delay_seconds)
-    except TimeoutError:
-        pass
 
 
 async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
