@@ -9,6 +9,13 @@
 - **LIVE maker already exists and is active**, subject to safety and capital constraints. Never describe the project as having no live capability.
 - **Autonomy:** execute clearly safe, reversible, read-only and source-only work without repeated debate. Economic and safety gates remain binding. Broad permission to manage the project is not evidence that an untested order, liquidation, risk cap increase, restart, or market-data poll is safe.
 
+## East storage and capture — verified 15 Oct 2026 ~08:49 UTC
+
+- **East root expanded successfully from 30 GiB to 80 GiB**: `lsblk` reports 80G NVMe device and `/dev/nvme0n1p1`, mounted XFS root `df -hT /` reports total 80G, used 30G, available **51G**, 37% used. Both East SIG and Polymarket capture services observed `active`. The user approved 30→80 GB EBS expansion and stated completed; expansion was verified, NOT performed by this chat. Do not re-execute resize.
+- **East capture still malformed-retry looping on production checkout `4556f5e`**: five-minute read-only sample ~08:45 UTC showed 95 `SigMalformedResponseError` and 3 rate-limit indications. Its deployed `sig/capture.py` sleeps 1s after every `SigApiError`; server continues to run. Malformed 200-response root field/schema not proven; `main` DTO tolerates extra fields but cannot claim this is the only cause.
+- **Source-only DRAFT [PR #237](https://github.com/DanielCWeng/predictions-cup/pull/237)** adds bounded 1→60s error backoff with stop-aware wait, reset after success, and regression tests. NOT merged or deployed. Requires exact-head CI, independent review and operator-authorised East rollout; EBS permission does not grant service restart/deployment. No new SIG GET/POST issued by this inspection.
+- **Division of responsibility:** East = research and canonical historical SIG/PM capture; West = LIVE strategy/risk/execution plus independently necessary fresh local market-data feeds. Do not disable West capture or supervisor merely by changing ownership labels; verify dependencies, replay and #207 gates before any process changes.
+
 ## Active BBO recovery — 15 Oct 2026 (source-only, LIVE unchanged)
 
 - West deployed checkout `fb4f6c66` serial Realtime consumer awaits REST dirty-book reconciliation, causing queue backlog. Two 4096-slot queue overflows in 20 minutes; one 15-minute log window recorded only 3 maker bulk-price GET completions versus 216 individual book GETs. Merged [#198](https://github.com/DanielCWeng/predictions-cup/pull/198) addresses prequeue filtering and async/coalesced refetch but is NOT deployed.
