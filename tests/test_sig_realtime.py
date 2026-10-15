@@ -671,6 +671,64 @@ def test_maker_skips_untracked_dirty_book_rest_but_retains_tracked_recovery(
     asyncio.run(scenario())
 
 
+def test_advisory_maker_dirty_depth_yields_priority_to_scalar_prices(
+    tmp_path: Path,
+) -> None:
+    """Maker depth invalidation stays fail-closed while optional REST is BACKGROUND."""
+    async def scenario() -> None:
+        rest = FakeRest()
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            tracked_depth_exchange_ids={"36"},
+            capture_untracked_dirty_books=False,
+            tracked_dirty_priority=RestPriority.BACKGROUND,
+        )
+        await engine.initialize()
+        initial_calls = rest.calls.count("36")
+        rest.block_exchange = "36"
+        rest.block_release.clear()
+
+        await engine.handle_tournament_event(
+            "book_dirty",
+            {
+                "exchangeId": "36",
+                "marketId": "26",
+                "tournamentId": "cup",
+                "at": "2026-10-01T16:10:28Z",
+            },
+            datetime(2026, 10, 1, 16, 10, 28, tzinfo=UTC),
+        )
+        await rest.block_started.wait()
+        assert engine.states["36"].depth_state == DepthState.TRACKED_UNTRUSTED
+        assert not engine.states["36"].trusted
+        assert rest.orderbook_priorities[-1] == RestPriority.BACKGROUND
+        rest.block_release.set()
+        await asyncio.gather(*engine._reconcile_tasks.values())
+        assert rest.calls.count("36") == initial_calls + 1
+        assert engine.states["36"].trusted
+
+        await engine.handle_raw_batch(
+            engine.topic,
+            _batch(
+                revision=1,
+                previous=0,
+                source_from=1,
+                source_through=1,
+                dirty=True,
+            ),
+            datetime(2026, 10, 1, 16, 10, 29, tzinfo=UTC),
+        )
+        await asyncio.gather(*engine._reconcile_tasks.values())
+        assert rest.orderbook_priorities[-1] == RestPriority.BACKGROUND
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
 def test_reconciliation_coalesces_dirty_signal_arriving_in_flight(tmp_path: Path) -> None:
     async def scenario() -> None:
         rest = FakeRest()
