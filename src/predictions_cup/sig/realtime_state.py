@@ -1360,6 +1360,10 @@ class SigRealtimeStateEngine:
             for exchange_id, state in self.states.items()
             if state.market_id == market_id
         }
+        if not reconciled:
+            # Never revive a scalar BBO while authoritative market status is
+            # unknown; maker market-status eligibility must fail closed.
+            return
         if reconciled:
             # Market identity/status recovery is mandatory and stays HIGH.
             # Scalar-BBO makers must not stall the Realtime consumer while
@@ -1569,6 +1573,12 @@ class SigRealtimeStateEngine:
             )
         except Exception as exc:
             self.health.reconciliation_failure_count += 1
+            # A cached "open" market is not an authoritative status after a
+            # failed recovery. The maker bridge rejects unknown market status
+            # even if a previously read scalar BBO is still within its TTL.
+            known_market = self.market_states.get(market_id)
+            if known_market is not None:
+                known_market.status = "unknown"
             logger.warning(
                 "SIG REST market reconciliation failed market=%s error=%s",
                 market_id,
