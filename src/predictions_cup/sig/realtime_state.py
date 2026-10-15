@@ -190,6 +190,7 @@ class SigRealtimeStateEngine:
         governed_rate_per_second: float = 2.0,
         periodic_bulk_refresh_enabled: bool = True,
         bulk_prices_tracked_only: bool = False,
+        capture_untracked_dirty_books: bool = True,
         extra_bulk_price_exchange_ids: Iterable[str] = (),
         governor_snapshot: GovernorSnapshotFn | None = None,
         clock: Clock = lambda: datetime.now(UTC),
@@ -226,6 +227,7 @@ class SigRealtimeStateEngine:
         # MAKE quotes a handful of exchanges; sweeping every tournament price
         # through the shared REST governor starves its account/mark refreshes.
         self._bulk_prices_tracked_only = bulk_prices_tracked_only and bool(tracked)
+        self._capture_untracked_dirty_books = capture_untracked_dirty_books
         self._bulk_price_exchange_ids = tracked | frozenset(extra_bulk_price_exchange_ids)
         self._book_depth = book_depth
         self._open_book_max_trusted_age = timedelta(
@@ -956,12 +958,16 @@ class SigRealtimeStateEngine:
             )
             state = self.states.get(dirty_event.exchange_id)
             if state is None or state.market_id != dirty_event.market_id:
-                self._schedule_untracked_book_refetch(
-                    dirty_event.exchange_id,
-                    reason="book_dirty",
-                    triggering_revision=revision,
-                    market_id=dirty_event.market_id,
-                )
+                # A maker using scalar BBOs must not spend HIGH-priority REST
+                # capacity fetching unknown/untracked full-depth books.
+                # Preserve full capture behaviour by default.
+                if self._capture_untracked_dirty_books:
+                    self._schedule_untracked_book_refetch(
+                        dirty_event.exchange_id,
+                        reason="book_dirty",
+                        triggering_revision=revision,
+                        market_id=dirty_event.market_id,
+                    )
                 return {
                     exchange_id
                     for exchange_id, item in self.states.items()
@@ -983,7 +989,7 @@ class SigRealtimeStateEngine:
                     priority=RestPriority.HIGH,
                     wait=False,
                 )
-            else:
+            elif self._capture_untracked_dirty_books:
                 self._schedule_untracked_book_refetch(
                     dirty_event.exchange_id,
                     reason="book_dirty",
