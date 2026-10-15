@@ -770,6 +770,43 @@ def test_market_context_accepts_current_settlement_fields() -> None:
     asyncio.run(scenario())
 
 
+def test_sig_market_transport_ignores_additive_fields_and_rejects_wrong_types() -> None:
+    """Provider market-schema additions must not trigger capture retry storms."""
+    payload = _public_market()
+    payload["marketImage"] = "https://example.invalid/thumbnail.png"
+    exchanges = payload["exchanges"]
+    assert isinstance(exchanges, list)
+    assert isinstance(exchanges[0], dict)
+    exchanges[0]["experimentalLiquidity"] = {"value": 1}
+    contexts = payload["contexts"]
+    assert isinstance(contexts, list)
+    assert isinstance(contexts[0], dict)
+    contexts[0]["providerMetadata"] = {"rev": 2}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(200, json=payload)
+
+    async def scenario() -> None:
+        async with SigRestClient(_settings(), transport=httpx.MockTransport(handler)) as client:
+            result = await client.get_market("opaque-market")
+            assert result.id == "opaque-market"
+
+        # Unknown keys are tolerated; a malformed required field is not.
+        malformed = dict(payload, id=[])
+        def bad_handler(request: httpx.Request) -> httpx.Response:
+            del request
+            return httpx.Response(200, json=malformed)
+
+        async with SigRestClient(
+            _settings(), transport=httpx.MockTransport(bad_handler)
+        ) as client:
+            with pytest.raises(SigMalformedResponseError):
+                await client.get_market("opaque-market")
+
+    asyncio.run(scenario())
+
+
 def test_transport_models_ignore_unknown_extra_fields_but_keep_types() -> None:
     import pytest
     from pydantic import ValidationError
