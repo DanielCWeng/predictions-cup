@@ -1583,22 +1583,22 @@ class MakerService:
                                 parsed = MarketBatchDto.model_validate(batch_payload)
                             except ValidationError:
                                 parsed = None
-                            previous_gap_count = (
-                                sig_state.health.revision_gap_count
+                            previous_recovery_count = (
+                                sig_state.health.recovery_count
                                 if parsed is not None
                                 else 0
                             )
                             await sig_state.handle_raw_batch(
                                 delivery_topic, batch_payload, observed_at
                             )
-                            # Revision-gap recovery invalidates *all* tracked
-                            # exchanges, and truncated batches can invalidate
-                            # an entire market without a trade/bookDirty row.
-                            # An affected-only notification can otherwise
-                            # leave sibling resting orders live after the
-                            # market's authoritative status became unknown.
+                            # Scoped and whole-universe recovery can
+                            # invalidate sibling resting quotes even when a
+                            # syntactically valid batch has no affected rows.
+                            # This also covers semantic validation failures
+                            # where a parsed batch triggers authoritative
+                            # recovery but has no trade/bookDirty entries.
                             if parsed is not None and (
-                                sig_state.health.revision_gap_count > previous_gap_count
+                                sig_state.health.recovery_count > previous_recovery_count
                                 or parsed.resync_required
                             ):
                                 global_recheck_required = True
