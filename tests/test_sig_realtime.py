@@ -1129,7 +1129,7 @@ def test_unknown_market_status_cannot_make_missing_depth_trusted(
             wait=True,
         )
         assert len(rest.calls) == initial_books
-        assert state.depth_state == DepthState.TRACKED_TRUSTED
+        assert state.trusted
         assert state.orderbook is None
         await engine.aclose()
         recorder.close()
