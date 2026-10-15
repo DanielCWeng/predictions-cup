@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from predictions_cup.config import AppSettings
 from predictions_cup.sig.capture import (
     _capture_retry_delay_seconds,
     _prune_at_startup,
@@ -76,3 +77,9 @@ def test_sig_capture_backoff_wait_expires_without_shutdown() -> None:
         assert not stop_event.is_set()
 
     asyncio.run(scenario())
+
+def test_research_capture_bulk_cadence_is_decoupled_from_live_maker() -> None:
+    settings = AppSettings()
+    assert settings.sig_capture_bulk_price_refresh_seconds == 60.0
+    assert settings.sig_realtime_bulk_price_refresh_seconds == 10.0
+    assert settings.maker_max_bbo_age_ms < 60_000
