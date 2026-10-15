@@ -873,6 +873,8 @@ def test_scalar_maker_revision_gap_refreshes_bbo_at_normal_priority(
             bulk_prices_tracked_only=True,
             eager_tracked_depth_bootstrap=False,
             tracked_dirty_priority=RestPriority.BACKGROUND,
+            open_book_max_trusted_age_seconds=180.0,
+            governed_rate_per_second=1.0,
         )
         await engine.initialize()
         observed = datetime(2026, 10, 15, 16, 0, tzinfo=UTC)
