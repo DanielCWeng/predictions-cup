@@ -1748,22 +1748,24 @@ class SigRealtimeStateEngine:
             state.orderbook = None
             state.last_rest_observed_at = observed_at
             state.last_reconciliation_at = observed_at
-            if await self._generation_is_current(exchange_id, generation):
-                # A verified settled/closed market needs no further depth.
-                # An *unknown* status (for example failed get_market REST)
-                # cannot certify depth merely because we skipped its book.
-                if market_state.status != "unknown":
-                    state.depth_state = DepthState.TRACKED_TRUSTED
-                    if triggering_revision is not None:
-                        state.last_accepted_revision = triggering_revision
-                    self._recorder.record_transition(
-                        topic=self.topic,
-                        exchange_id=exchange_id,
-                        transition=final_transition.value,
-                        observed_at=observed_at,
-                        revision=triggering_revision,
-                        detail=f"{reason}:market_{market_state.status}",
-                    )
+            # A verified settled/closed market needs no further depth.
+            # An *unknown* status (for example failed get_market REST)
+            # cannot certify depth merely because we skipped its book.
+            if (
+                market_state.status != "unknown"
+                and await self._generation_is_current(exchange_id, generation)
+            ):
+                state.depth_state = DepthState.TRACKED_TRUSTED
+                if triggering_revision is not None:
+                    state.last_accepted_revision = triggering_revision
+                self._recorder.record_transition(
+                    topic=self.topic,
+                    exchange_id=exchange_id,
+                    transition=final_transition.value,
+                    observed_at=observed_at,
+                    revision=triggering_revision,
+                    detail=f"{reason}:market_{market_state.status}",
+                )
             return
 
         try:
