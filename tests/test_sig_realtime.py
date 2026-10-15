@@ -1490,6 +1490,51 @@ def test_live_market_topic_batch_shape_validates() -> None:
     assert compact.trades == () and compact.books == ()
 
 
+def test_versioned_realtime_books_persist_without_extra_rest_depth(
+    tmp_path: Path,
+) -> None:
+    """Existing tournament websocket books can be research evidence, not live depth trust."""
+    async def scenario() -> None:
+        rest = FakeRest()
+        engine, recorder = _engine(tmp_path, rest)
+        await engine.initialize()
+        assert rest.calls == []
+        initial_bulk = list(rest.bulk_calls)
+        payload = _live_market_batch(revision=11, previous=10, with_trade=False)
+        payload["bookDirty"] = []
+        observed_at = datetime(2026, 10, 1, 16, 10, 29, tzinfo=UTC)
+        await engine.handle_tournament_batches(
+            {"markets": [{"marketId": "26", "batch": payload}]}, observed_at
+        )
+        assert rest.calls == []
+        assert rest.market_calls == []
+        assert rest.bulk_calls == initial_bulk
+        assert engine.book_versions["36"] == (
+            1854301,
+            datetime(2026, 10, 1, 16, 10, 28, 600000, tzinfo=UTC),
+        )
+        assert not engine.states["36"].trusted  # untracked != maker-certified depth
+        await engine.aclose()
+        recorder.close()
+
+        connection = sqlite3.connect(tmp_path / "sig.sqlite3")
+        rows = connection.execute(
+            "SELECT reason, book_json FROM book_observations ORDER BY id"
+        ).fetchall()
+        connection.close()
+        assert len(rows) == 1
+        reason, encoded = rows[0]
+        assert reason == "realtime_book"
+        book = json.loads(encoded)
+        assert book["source"] == "sig-realtime"
+        assert book["revision"] == "1854301:2026-10-01T16:10:28.600000+00:00"
+        assert book["exchange_id"] == "36"
+        assert book["bids"][0]["price"] == "0.06"
+        assert book["asks"][0]["price"] == "0.08"
+
+    asyncio.run(scenario())
+
+
 def test_engine_subscribes_per_market_topics_not_tournament_topic(
     tmp_path: Path,
 ) -> None:
