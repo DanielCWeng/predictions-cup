@@ -191,6 +191,7 @@ class SigRealtimeStateEngine:
         periodic_bulk_refresh_enabled: bool = True,
         bulk_prices_tracked_only: bool = False,
         capture_untracked_dirty_books: bool = True,
+        tracked_dirty_priority: RestPriority = RestPriority.HIGH,
         extra_bulk_price_exchange_ids: Iterable[str] = (),
         governor_snapshot: GovernorSnapshotFn | None = None,
         clock: Clock = lambda: datetime.now(UTC),
@@ -228,6 +229,10 @@ class SigRealtimeStateEngine:
         # through the shared REST governor starves its account/mark refreshes.
         self._bulk_prices_tracked_only = bulk_prices_tracked_only and bool(tracked)
         self._capture_untracked_dirty_books = capture_untracked_dirty_books
+        # Depth is advisory for maker configurations that do not require
+        # trusted depth. Keep dirty invalidation fail-closed but prevent its
+        # REST depth reads from starving NORMAL scalar BBO refresh.
+        self._tracked_dirty_priority = RestPriority(tracked_dirty_priority)
         self._bulk_price_exchange_ids = tracked | frozenset(extra_bulk_price_exchange_ids)
         self._book_depth = book_depth
         self._open_book_max_trusted_age = timedelta(
@@ -891,7 +896,7 @@ class SigRealtimeStateEngine:
                 reason="book_dirty",
                 final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                 triggering_revision=delivery.revision,
-                priority=RestPriority.HIGH,
+                priority=self._tracked_dirty_priority,
                 wait=False,
             )
 
@@ -986,7 +991,7 @@ class SigRealtimeStateEngine:
                     reason="book_dirty",
                     final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                     triggering_revision=revision,
-                    priority=RestPriority.HIGH,
+                    priority=self._tracked_dirty_priority,
                     wait=False,
                 )
             elif self._capture_untracked_dirty_books:
