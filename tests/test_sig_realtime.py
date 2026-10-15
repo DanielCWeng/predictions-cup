@@ -1501,8 +1501,10 @@ def test_versioned_realtime_books_persist_without_extra_rest_depth(
         await engine.initialize()
         assert rest.calls == []
         initial_bulk = list(rest.bulk_calls)
+        # The native observed market_batch shape carries bookDirty alongside
+        # its versioned full book. Capture should record that invalidation
+        # without launching a redundant untracked REST book request.
         payload = _live_market_batch(revision=11, previous=10, with_trade=False)
-        payload["bookDirty"] = []
         observed_at = datetime(2026, 10, 1, 16, 10, 29, tzinfo=UTC)
         await engine.handle_tournament_batches(
             {"markets": [{"marketId": "26", "batch": payload}]}, observed_at
