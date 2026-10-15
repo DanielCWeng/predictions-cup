@@ -7,10 +7,11 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 import pyarrow.parquet as pq
 
@@ -134,7 +135,11 @@ class RawBookAudit:
 def scan_raw_events(research_root: Path, *, max_files: int = 100_000) -> RawBookAudit:
     """Stream existing immutable raw shards; fail on absent/incomplete input paths."""
     raw_root = research_root if research_root.name == "raw_events" else research_root / "raw_events"
-    if not raw_root.is_dir() or raw_root.is_symlink():
+    if (
+        not raw_root.is_dir()
+        or raw_root.is_symlink()
+        or raw_root.resolve() != raw_root.absolute()
+    ):
         raise ValueError("existing non-symlink raw_events directory required")
     paths = sorted(raw_root.rglob("*.parquet"))
     if not paths:
