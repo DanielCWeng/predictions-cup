@@ -9,7 +9,7 @@ import argparse
 import json
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -55,12 +55,14 @@ class RawBookAudit:
     duplicate_versions_within_shard: int = 0
     backwards_versions_within_shard: int = 0
     _versions: dict[tuple[str, int, str], int] = field(default_factory=dict)
+    _exchanges: set[str] = field(default_factory=set)
+    _sessions: set[str] = field(default_factory=set)
+    _first_native_asof: datetime | None = None
+    _last_native_asof: datetime | None = None
 
     def begin_shard(self) -> None:
         """Reset ordering evidence; filename UUIDs cannot order shard events."""
         self._versions.clear()
-    _exchanges: set[str] = field(default_factory=set)
-    _sessions: set[str] = field(default_factory=set)
 
     def consume(
         self, raw: object, *, session: object, epoch: object,
@@ -119,6 +121,13 @@ class RawBookAudit:
                 exchange_id = str(native_id)
                 self._exchanges.add(exchange_id)
                 self.versioned_books += 1
+                source_time = datetime.fromisoformat(
+                    version["at"].replace("Z", "+00:00")
+                ).astimezone(UTC)
+                if self._first_native_asof is None or source_time < self._first_native_asof:
+                    self._first_native_asof = source_time
+                if self._last_native_asof is None or source_time > self._last_native_asof:
+                    self._last_native_asof = source_time
                 if (
                     isinstance(item.get("bids"), list)
                     and bool(item["bids"])
@@ -155,6 +164,15 @@ class RawBookAudit:
             "two_sided_versioned_books": self.two_sided_versioned_books,
             "unique_exchanges": len(self._exchanges),
             "observed_sessions": len(self._sessions),
+            "earliest_native_asof": (
+                self._first_native_asof.isoformat()
+                if self._first_native_asof is not None else None
+            ),
+            "latest_native_asof": (
+                self._last_native_asof.isoformat()
+                if self._last_native_asof is not None else None
+            ),
+            "time_range_does_not_prove_dense_coverage": True,
             "duplicate_versions_within_shard": self.duplicate_versions_within_shard,
             "backwards_versions_within_shard": self.backwards_versions_within_shard,
             "cross_shard_sequence_continuity": "UNKNOWN_UUID_NAMED_SHARDS",
