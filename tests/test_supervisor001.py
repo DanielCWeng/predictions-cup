@@ -482,6 +482,62 @@ def test_maker_stale_outcome_and_kill_latch_are_critical() -> None:
     assert by_code["MAKER_KILL_LATCHED"].severity is Severity.CRITICAL
 
 
+def test_maker_bbo_starvation_is_critical_even_with_fresh_outcomes() -> None:
+    collection = _healthy_collection()
+    sections = dict(collection.sections)
+    sections["maker_liveness"] = {
+        "enabled": True,
+        "service": "predictions-cup-maker-live.service",
+        "main_pid": "123",
+        "query_ok": True,
+        "last_outcome_age_seconds": 0.5,
+        "kill_latched": False,
+        "outcomes_sampled": 100,
+        "bbo_rejections_sampled": 75,
+        "gross_cap_rejections_sampled": 20,
+    }
+    findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
+    bbo = next(item for item in findings if item.code == "MAKER_BBO_STARVATION")
+    assert bbo.severity is Severity.CRITICAL
+    assert bbo.evidence["bbo_rejections"] == 75
+    assert severity_and_gate(findings)[1] is LaunchGate.HOLD
+
+
+def test_maker_bbo_starvation_requires_adequate_sample() -> None:
+    collection = _healthy_collection()
+    sections = dict(collection.sections)
+    sections["maker_liveness"] = {
+        "enabled": True,
+        "query_ok": True,
+        "last_outcome_age_seconds": 0.5,
+        "kill_latched": False,
+        "outcomes_sampled": 29,
+        "bbo_rejections_sampled": 29,
+        "gross_cap_rejections_sampled": 0,
+    }
+    findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
+    assert not any(item.code == "MAKER_BBO_STARVATION" for item in findings)
+
+
+def test_maker_cap_saturation_is_warning_not_feed_fault() -> None:
+    collection = _healthy_collection()
+    sections = dict(collection.sections)
+    sections["maker_liveness"] = {
+        "enabled": True,
+        "query_ok": True,
+        "last_outcome_age_seconds": 0.5,
+        "kill_latched": False,
+        "outcomes_sampled": 100,
+        "bbo_rejections_sampled": 15,
+        "gross_cap_rejections_sampled": 70,
+    }
+    findings = evaluate(SourceCollection(collection.statuses, sections), SupervisorPolicy())
+    cap = next(item for item in findings if item.code == "MAKER_GROSS_CAP_SATURATION")
+    assert cap.severity is Severity.WARN
+    assert not any(item.code == "MAKER_BBO_STARVATION" for item in findings)
+    assert severity_and_gate(findings)[1] is LaunchGate.PASS
+
+
 def test_maker_outcome_probe_failure_is_unknown() -> None:
     collection = _healthy_collection()
     sections = dict(collection.sections)
@@ -676,6 +732,53 @@ def test_maker_journal_probe_is_scoped_to_current_pid(
     assert section["main_pid"] == "123"
     journal_calls = [args for args in calls if args and args[0] == "journalctl"]
     assert journal_calls[0][-1] == "_PID=123"
+
+
+def test_maker_journal_probe_counts_bbo_rejections_from_current_pid(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed = datetime.now(UTC)
+    messages = [
+        "MAKE outcome exchange=901 no_place gate=CANCEL reason=sig_bbo_stale",
+        "MAKE outcome exchange=902 no_place gate=CANCEL reason=sig_bbo_untrusted",
+        "MAKE outcome exchange=903 risk_denied reason=max_gross_exposure",
+        "MAKE outcome exchange=904 no_place reason=sig_bbo_stale",
+    ]
+    stdout = "\\n".join(
+        json.dumps({
+            "MESSAGE": message,
+            "__REALTIME_TIMESTAMP": str(int(observed.timestamp() * 1_000_000)),
+        })
+        for message in messages
+    ) + "\\n"
+
+    def fake_run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        del kwargs
+        assert args[-1] == "_PID=123"
+        return subprocess.CompletedProcess(args, 0, stdout, "")
+
+    monkeypatch.setattr("predictions_cup.supervisor.sources.subprocess.run", fake_run)
+    sources = SupervisorSources(
+        AppSettings(maker_enabled=False),
+        repo_root=tmp_path,
+        host_role=HostRole.WEST_EXECUTION,
+        expected_services=(),
+    )
+    sources._system_cache = {
+        "services": {
+            "predictions-cup-maker-live.service": {
+                "active_state": "active",
+                "main_pid": "123",
+            }
+        }
+    }
+    status, section = sources._read_maker_liveness()
+    assert status.valid
+    assert section["outcomes_sampled"] == 4
+    assert section["bbo_rejections_sampled"] == 3
+    assert section["gross_cap_rejections_sampled"] == 1
+    assert section["bbo_rejection_fraction"] == 0.75
 
 
 def test_enabled_maker_is_added_to_expected_services(tmp_path: Path) -> None:
