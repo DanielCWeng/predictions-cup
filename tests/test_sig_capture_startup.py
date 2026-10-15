@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from predictions_cup.sig.capture import _prune_at_startup, parse_args
+from predictions_cup.sig.capture import (
+    _capture_retry_delay_seconds,
+    _prune_at_startup,
+    _wait_or_stop,
+    parse_args,
+)
 
 
 class StubRecorder:
@@ -35,3 +41,38 @@ def test_explicit_startup_pruning_only_with_flag(monkeypatch: pytest.MonkeyPatch
     after = datetime.now(UTC) - timedelta(days=14)
     assert len(recorder.cutoffs) == 1
     assert before <= recorder.cutoffs[0] <= after
+
+
+@pytest.mark.parametrize(
+    ("failures", "expected_seconds"),
+    ((1, 1.0), (2, 2.0), (3, 4.0), (4, 8.0), (6, 32.0), (7, 60.0), (20, 60.0)),
+)
+def test_sig_capture_recovery_backoff_is_bounded(
+    failures: int, expected_seconds: float
+) -> None:
+    assert _capture_retry_delay_seconds(failures) == expected_seconds
+
+
+def test_sig_capture_recovery_backoff_rejects_invalid_counter() -> None:
+    with pytest.raises(ValueError, match="positive"):
+        _capture_retry_delay_seconds(0)
+
+
+def test_sig_capture_backoff_wait_responds_to_shutdown() -> None:
+    async def scenario() -> None:
+        stop_event = asyncio.Event()
+        worker = asyncio.create_task(_wait_or_stop(stop_event, 60.0))
+        await asyncio.sleep(0)
+        stop_event.set()
+        await asyncio.wait_for(worker, timeout=0.5)
+
+    asyncio.run(scenario())
+
+
+def test_sig_capture_backoff_wait_expires_without_shutdown() -> None:
+    async def scenario() -> None:
+        stop_event = asyncio.Event()
+        await _wait_or_stop(stop_event, 0.001)
+        assert not stop_event.is_set()
+
+    asyncio.run(scenario())
