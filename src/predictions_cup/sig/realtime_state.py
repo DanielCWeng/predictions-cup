@@ -1790,6 +1790,7 @@ class SigRealtimeStateEngine:
 
         try:
             self.health.full_book_refresh_count += 1
+            request_started_at = self._clock()
             async with self._rest.priority(priority):
                 snapshot = await self._rest.get_orderbook(
                     exchange_id,
@@ -1810,6 +1811,20 @@ class SigRealtimeStateEngine:
                 exchange_id,
                 type(exc).__name__,
             )
+            return
+
+        # Cached REST books can be up to one second old. Do not certify
+        # execution depth when the exchange received a newer websocket touch
+        # after the request began, nor after its market left OPEN during the
+        # request. Existing depth stays UNTRUSTED; periodic maintenance may
+        # attempt a new bounded reconciliation, without polling from here.
+        latest_market = self.market_states.get(state.market_id)
+        if (
+            (state.last_realtime_observed_at is not None
+             and state.last_realtime_observed_at > request_started_at)
+            or latest_market is None
+            or latest_market.status != "open"
+        ):
             return
 
         state.orderbook = book
