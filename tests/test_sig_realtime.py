@@ -729,6 +729,48 @@ def test_advisory_maker_dirty_depth_yields_priority_to_scalar_prices(
     asyncio.run(scenario())
 
 
+def test_scalar_maker_reconnect_does_not_block_on_76_optional_depth_reads(
+    tmp_path: Path,
+) -> None:
+    """Restore fresh scalar prices before optional depth when the maker does not require it."""
+    async def scenario() -> None:
+        rest = FakeRest(market_count=76)
+        tracked = {exchange_id for _, exchange_id in rest.pairs}
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            tracked_depth_exchange_ids=tracked,
+            bulk_prices_tracked_only=True,
+            eager_tracked_depth_bootstrap=False,
+            tracked_dirty_priority=RestPriority.BACKGROUND,
+        )
+        await engine.initialize()
+        assert len(engine.states) == 76
+        assert not rest.calls
+        assert rest.bulk_calls
+        assert not any(state.trusted for state in engine.states.values())
+
+        before_bulk = len(rest.bulk_calls)
+        await engine.prepare_subscription(SubscriptionReason.RECONNECT)
+        assert not rest.calls
+        assert len(rest.bulk_calls) == before_bulk + 1
+        assert rest.bulk_priorities[-1] == RestPriority.NORMAL
+        assert not any(state.trusted for state in engine.states.values())
+
+        await engine.refresh_stale_open_books(
+            datetime.now(UTC), wait=True,
+        )
+        assert len(rest.calls) == 76
+        assert all(p == RestPriority.BACKGROUND for p in rest.orderbook_priorities)
+        assert all(state.trusted for state in engine.states.values())
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
 def test_reconciliation_coalesces_dirty_signal_arriving_in_flight(tmp_path: Path) -> None:
     async def scenario() -> None:
         rest = FakeRest()
