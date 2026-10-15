@@ -745,18 +745,20 @@ def test_maker_journal_probe_counts_bbo_rejections_from_current_pid(
         "MAKE outcome exchange=903 risk_denied reason=max_gross_exposure",
         "MAKE outcome exchange=904 no_place reason=sig_bbo_stale",
     ]
-    stdout = "\\n".join(
+    stdout = "\n".join(
         json.dumps({
             "MESSAGE": message,
             "__REALTIME_TIMESTAMP": str(int(observed.timestamp() * 1_000_000)),
         })
         for message in messages
-    ) + "\\n"
+    ) + "\n"
 
     def fake_run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         del kwargs
-        assert args[-1] == "_PID=123"
-        return subprocess.CompletedProcess(args, 0, stdout, "")
+        if args and args[0] == "journalctl":
+            assert args[-1] == "_PID=123"
+            return subprocess.CompletedProcess(args, 0, stdout, "")
+        return subprocess.CompletedProcess(args, 0, "", "")
 
     monkeypatch.setattr("predictions_cup.supervisor.sources.subprocess.run", fake_run)
     sources = SupervisorSources(
