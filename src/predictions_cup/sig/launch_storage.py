@@ -792,17 +792,18 @@ class LaunchSigRecorder(SigRealtimeRecorder):
         best_bid = book.bids[0].price if book.bids else None
         best_ask = book.asks[0].price if book.asks else None
         spread = None if best_bid is None or best_ask is None else best_ask - best_bid
-        # Realtime books carry a source-native asOf sequence/time in
-        # book.revision. book.timestamp is only local receipt time: do NOT
-        # relabel that as a venue timestamp or a REST snapshot. The raw batch
-        # retains the typed asOf, while book_json retains its revision string.
+        # Both REST to_canonical() and versioned realtime books currently put
+        # local receipt time into book.timestamp. Neither source establishes
+        # an exchange event timestamp, so never promote that value to venue
+        # time. Realtime asOf sequence/time remains in book.revision and raw
+        # events for separate independent causal continuity verification.
         realtime = book.source == "sig-realtime"
         self._emit_normalized(
             event_type="DEPTH_SNAPSHOT",
             tournament_id=tournament_id,
             exchange_id=book.exchange_id,
             market_id=market_id,
-            venue_timestamp=None if realtime else book.timestamp,
+            venue_timestamp=None,
             observed_at=observed_at,
             revision=triggering_revision,
             provenance=(
