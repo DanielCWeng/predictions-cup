@@ -415,6 +415,11 @@ class SigRealtimeStateEngine:
         self.health.connected = False
         self.last_accepted_revision = None
         self.topic_revisions.clear()
+        # Source-native book asOf sequence/time belongs to the prior socket
+        # epoch. Keeping its watermark can silently discard the first books
+        # after token refresh or reconnect if venue sequences restart.
+        # Within the new epoch the ordinary monotone/dedup check still applies.
+        self.book_versions.clear()
         transition = {
             SubscriptionReason.INITIAL_SUBSCRIBE: TrustTransition.UNTRUSTED_INITIAL_SUBSCRIBE,
             SubscriptionReason.RECONNECT: TrustTransition.UNTRUSTED_RECONNECT,
