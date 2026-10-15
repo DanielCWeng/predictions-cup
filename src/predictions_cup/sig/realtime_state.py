@@ -1354,18 +1354,30 @@ class SigRealtimeStateEngine:
             if state.market_id == market_id
         }
         if reconciled:
+            # Market identity/status recovery is mandatory and stays HIGH.
+            # Scalar-BBO makers must not stall the Realtime consumer while
+            # optional depth books reconcile before a fresh price read.
             await self._reconcile_many(
                 exchange_ids,
                 reason=reason,
                 final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                 triggering_revision=triggering_revision,
-                priority=RestPriority.HIGH,
+                priority=(
+                    RestPriority.HIGH
+                    if self._eager_tracked_depth_bootstrap
+                    else RestPriority.BACKGROUND
+                ),
+                wait=self._eager_tracked_depth_bootstrap,
             )
         try:
             await self.refresh_exchange_prices(
                 exchange_ids,
                 reason=reason,
-                priority=RestPriority.BACKGROUND,
+                priority=(
+                    RestPriority.BACKGROUND
+                    if self._eager_tracked_depth_bootstrap
+                    else RestPriority.NORMAL
+                ),
             )
         except Exception as exc:
             self.health.reconciliation_failure_count += 1
