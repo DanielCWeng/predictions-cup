@@ -914,9 +914,16 @@ class SigRealtimeStateEngine:
             )
 
         if revision_gap_recovered and market_id is None:
+            # Following a tournament revision gap, the scalar maker needs a
+            # fresh BBO ahead of optional depth maintenance. Full-depth
+            # capture retains the existing background refresh priority.
             await self.refresh_bulk_prices(
                 reason="revision_gap",
-                priority=RestPriority.BACKGROUND,
+                priority=(
+                    RestPriority.BACKGROUND
+                    if self._eager_tracked_depth_bootstrap
+                    else RestPriority.NORMAL
+                ),
             )
 
     async def handle_tournament_batches(
