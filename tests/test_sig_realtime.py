@@ -856,6 +856,59 @@ def test_trusted_depth_market_resync_still_waits_for_high_priority_book(
     asyncio.run(scenario())
 
 
+def test_failed_market_status_resync_cannot_reauthorise_cached_scalar_bbo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Loss of authoritative market status must block maker eligibility."""
+    async def scenario() -> None:
+        rest = FakeRest()
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            tracked_depth_exchange_ids={"36"},
+            eager_tracked_depth_bootstrap=False,
+            tracked_dirty_priority=RestPriority.BACKGROUND,
+        )
+        await engine.initialize()
+        assert engine.market_states["26"].status == "open"
+        assert engine.states["36"].scalar_best_bid == Decimal("0.4")
+        original_get_market = rest.get_market
+
+        async def rejected_market(
+            market_id: str, *, tournament_id: str | None = None,
+        ) -> MarketDto:
+            del market_id, tournament_id
+            raise RuntimeError("synthetic status lookup unavailable")
+
+        monkeypatch.setattr(rest, "get_market", rejected_market)
+        before_bulk = len(rest.bulk_calls)
+        await engine._resync_market(
+            "26",
+            transition=TrustTransition.UNTRUSTED_REVISION_GAP,
+            reason="revision_gap",
+            triggering_revision=2,
+        )
+        assert engine.market_states["26"].status == "unknown"
+        assert engine.states["36"].depth_state == DepthState.TRACKED_UNTRUSTED
+        assert len(rest.bulk_calls) == before_bulk
+
+        monkeypatch.setattr(rest, "get_market", original_get_market)
+        await engine._resync_market(
+            "26",
+            transition=TrustTransition.UNTRUSTED_REVISION_GAP,
+            reason="recovered_revision_gap",
+            triggering_revision=3,
+        )
+        assert engine.market_states["26"].status == "open"
+        assert len(rest.bulk_calls) == before_bulk + 1
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
 def test_scalar_maker_revision_gap_refreshes_bbo_at_normal_priority(
     tmp_path: Path,
 ) -> None:
