@@ -194,8 +194,11 @@ async def _run(args: argparse.Namespace, settings: AppSettings) -> int:
             open_book_max_trusted_age_seconds=(
                 settings.sig_realtime_open_book_refresh_seconds
             ),
+            # Full-universe research capture must not exhaust the shared SIG
+            # budget needed for West's essential LIVE BBO refreshes.
+            # The maker keeps its independently configured fast cadence.
             bulk_price_refresh_seconds=(
-                settings.sig_realtime_bulk_price_refresh_seconds
+                settings.sig_capture_bulk_price_refresh_seconds
             ),
             governed_rate_per_second=settings.sig_rest_governor_rate_per_second,
             # CAPTURE-001 is the canonical forensic recorder, so it must keep

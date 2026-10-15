@@ -177,6 +177,9 @@ class AppSettings(BaseSettings):
     sig_rest_shared_cooldown_max_seconds: float = Field(default=8.0, ge=0.5, le=120.0)
     sig_realtime_open_book_refresh_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
     sig_realtime_bulk_price_refresh_seconds: float = Field(default=10.0, ge=1.0, le=300.0)
+    # Read-only research capture has a separate slower full-universe sampling cadence.
+    # Do not couple this to maker BBO freshness/risk configuration.
+    sig_capture_bulk_price_refresh_seconds: float = Field(default=60.0, ge=10.0, le=300.0)
     sig_realtime_token_refresh_margin_seconds: float = Field(default=300.0, ge=30, le=1800)
     sig_realtime_tournament_channel_enabled: bool = True
     sig_realtime_retention_days: int = Field(default=14, ge=1, le=90)
@@ -520,6 +523,9 @@ class AppSettings(BaseSettings):
             "sig_realtime_open_book_refresh_seconds": (self.sig_realtime_open_book_refresh_seconds),
             "sig_realtime_bulk_price_refresh_seconds": (
                 self.sig_realtime_bulk_price_refresh_seconds
+            ),
+            "sig_capture_bulk_price_refresh_seconds": (
+                self.sig_capture_bulk_price_refresh_seconds
             ),
             "sig_realtime_token_refresh_margin_seconds": (
                 self.sig_realtime_token_refresh_margin_seconds
