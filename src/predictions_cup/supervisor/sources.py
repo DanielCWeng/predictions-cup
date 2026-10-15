@@ -294,13 +294,15 @@ class SupervisorSources:
                     reason in {"sig_bbo_stale", "sig_bbo_untrusted"}
                     for reason in reasons
                 )
-                base["outcomes_sampled"] = len(reasons)
+                # Sample all MAKE outcomes, including successful/held paths
+                # that have no reason=. Otherwise a few rejected decisions
+                # can look like majority starvation and incorrectly HOLD LIVE.
+                base["outcomes_sampled"] = len(outcome_events)
                 base["bbo_rejections_sampled"] = bbo_rejected
                 base["gross_cap_rejections_sampled"] = reasons.count(
                     "max_gross_exposure"
                 )
-                if reasons:
-                    base["bbo_rejection_fraction"] = bbo_rejected / len(reasons)
+                base["bbo_rejection_fraction"] = bbo_rejected / len(outcome_events)
             if latest is None:
                 base["query_ok"] = False
                 base["query_error"] = "journal_result_missing_make_outcome"
