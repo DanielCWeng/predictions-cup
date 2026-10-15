@@ -1348,6 +1348,16 @@ class SigRealtimeStateEngine:
             raise ValueError("market topic bookDirty marketId mismatch")
         if any(item.market_id != market_id for item in batch.market_settled):
             raise ValueError("market topic marketSettled marketId mismatch")
+        # Versioned books identify their exchange but omit marketId. Check
+        # against the authoritative exchange->market mapping before applying:
+        # accepting a book carried by a different market topic would poison
+        # the wrong contract's local depth and its research provenance.
+        if any(
+            state is not None and state.market_id != market_id
+            for book in batch.books
+            if (state := self.states.get(book.exchange_id)) is not None
+        ):
+            raise ValueError("market topic book exchange marketId mismatch")
 
     async def _resync_market(
         self,
