@@ -437,6 +437,14 @@ class MakerService:
                 # Trade from governed scalar BBO; untracked full-depth dirty
                 # refetches would otherwise preempt NORMAL scalar refreshes.
                 capture_untracked_dirty_books=False,
+                # When trusted depth is not a requirement, preserve book_dirty
+                # invalidation but let NORMAL scalar BBO reads outrank advisory
+                # tracked-depth refetch. Full-depth-required LIVE keeps HIGH.
+                tracked_dirty_priority=(
+                    RestPriority.HIGH
+                    if self.settings.maker_require_trusted_depth
+                    else RestPriority.BACKGROUND
+                ),
                 extra_bulk_price_exchange_ids=tuple(
                     value.strip()
                     for value in self.settings.maker_mark_only_exchange_ids.split(",")
