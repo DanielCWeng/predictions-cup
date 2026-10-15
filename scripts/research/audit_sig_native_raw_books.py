@@ -67,9 +67,10 @@ class RawBookAudit:
         validation_error: object,
     ) -> None:
         self.raw_rows += 1
-        # This is a census of accepted market messages, not an inventory
-        # of arbitrary untrusted JSON. Old CAPTURE-001 persisted rejected
-        # payloads too, with a non-null validation_error.
+        # Scope the census to messages passing initial DTO/identity parsing,
+        # not arbitrary rejected JSON. This marker is recorded BEFORE later
+        # state changes or REST reconciliation: a null validation_error does
+        # NOT prove downstream source or executable-book acceptance.
         if validation_error is not None:
             self.rejected_validation_rows += 1
             return
@@ -158,6 +159,8 @@ class RawBookAudit:
             "backwards_versions_within_shard": self.backwards_versions_within_shard,
             "cross_shard_sequence_continuity": "UNKNOWN_UUID_NAMED_SHARDS",
             "coverage_completeness": "UNKNOWN",
+            "post_parse_state_acceptance": "UNVERIFIED",
+            "source_clock_causality": "UNVERIFIED",
             "paired_executable_opportunities": None,
             "fill_probability": None,
             "after_cost_pnl": None,
