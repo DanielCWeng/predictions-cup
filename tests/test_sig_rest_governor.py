@@ -460,6 +460,78 @@ def test_governor_shutdown_cancels_waiters_without_deadlock() -> None:
     asyncio.run(scenario())
 
 
+def test_queue_admission_reserves_cancel_and_scalar_slots_under_depth_flood() -> None:
+    """Saturating advisory reads must not reject execution or scalar BBO."""
+    async def scenario() -> None:
+        now = 0.0
+        waiting = asyncio.Event()
+        release = asyncio.Event()
+        count = 0
+        completed: list[str] = []
+
+        def monotonic() -> float:
+            return now
+
+        async def sleep(delay: float) -> None:
+            nonlocal now, count
+            count += 1
+            if count == 1:
+                waiting.set()
+                await release.wait()
+            now += delay
+            await asyncio.sleep(0)
+
+        governor = SigRestGovernor(
+            rate_per_second=1.0,
+            sleep=sleep,
+            monotonic=monotonic,
+            random_fn=lambda: 0.0,
+            queue_max=16,
+        )
+        await governor.acquire(RestPriority.NORMAL)
+
+        async def get(name: str, priority: RestPriority) -> None:
+            await governor.acquire(priority)
+            completed.append(name)
+
+        depth = [
+            asyncio.create_task(get(f"depth_{i}", RestPriority.BACKGROUND))
+            for i in range(12)
+        ]
+        await waiting.wait()
+        assert governor.snapshot().pending_background_reads == 12
+        with pytest.raises(RestGovernorQueueFullError, match="capacity=16"):
+            await governor.acquire(RestPriority.BACKGROUND)
+
+        scalar = [
+            asyncio.create_task(get(f"scalar_{i}", RestPriority.NORMAL))
+            for i in range(2)
+        ]
+        await asyncio.sleep(0)
+        assert governor.snapshot().pending_normal_reads == 2
+        with pytest.raises(RestGovernorQueueFullError, match="capacity=16"):
+            await governor.acquire(RestPriority.NORMAL)
+
+        execution = [
+            asyncio.create_task(get(f"cancel_{i}", RestPriority.HIGH))
+            for i in range(2)
+        ]
+        await asyncio.sleep(0)
+        assert governor.snapshot().pending_high_priority_reads == 2
+        with pytest.raises(RestGovernorQueueFullError, match="capacity=16"):
+            await governor.acquire(RestPriority.HIGH)
+
+        release.set()
+        await asyncio.gather(*execution, *scalar, *depth)
+        assert completed[:2] == ["cancel_0", "cancel_1"]
+        assert completed[2:4] == ["scalar_0", "scalar_1"]
+        assert len(completed) == 16
+        assert governor.snapshot().requests_total == 17
+        await governor.aclose()
+
+    asyncio.run(scenario())
+
+
 def test_governor_rejects_requests_when_bounded_queue_is_full() -> None:
     async def scenario() -> None:
         governor = SigRestGovernor(rate_per_second=1.0, queue_max=1)
