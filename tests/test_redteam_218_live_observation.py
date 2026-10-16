@@ -267,3 +267,101 @@ def test_84_rate_limit_retry_must_emit_each_actual_wire_and_rate_limit(tmp_path:
         emitter.close()
         asyncio.run(client.aclose())
         journal.close()
+
+
+def test_84_recovery_fake_http_same_operation_and_session(tmp_path: Path) -> None:
+    """Recovery sink delivers per-dispatch telemetry without fake fresh IDs."""
+    plan = _make_plan("recovery-84-partial")
+    wires: list[bytes] = []
+
+    def respond(req: httpx.Request) -> httpx.Response:
+        wires.append(req.content)
+        return _success(partial=True)
+
+    client = _client(httpx.MockTransport(respond))
+    journal = ExecutionJournal(tmp_path / "recovery.sqlite3")
+    journal.record_before_dispatch(
+        plan.envelope, plan.intents, submitted_monotonic_ns=160
+    )
+    journal.mark_state(
+        plan.envelope.logical_operation_id, LifecycleState.UNCERTAIN, 170
+    )
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    collected = InMemoryObservationSink()
+    emitter = BoundedObservationEmitter(collected, queue_max=100)
+    sink = SigLiveSink(
+        client=client, journal=journal, permit=_permit(),
+        reservations=reservations, observation_emitter=emitter,
+        observation_process_instance_id="maker-session-84",
+        clock_ns=iter((200, 300, 400, 500)).__next__,
+    )
+    try:
+        result = asyncio.run(sink.dispatch_recovery(plan.envelope, plan=plan))
+        emitter.close()
+        assert result.state is LifecycleState.OPEN
+        assert wires == [plan.envelope.payload_json.encode()]
+        kinds = [x.kind for x in collected.observations]
+        assert kinds == [
+            ObservationKind.PLAN_CREATED, ObservationKind.REQUEST_ENQUEUED,
+            ObservationKind.REQUEST_DISPATCHED, ObservationKind.RESPONSE_RECEIVED,
+            ObservationKind.RESPONSE_PARSED, ObservationKind.ACK,
+            ObservationKind.PARTIAL_FILL,
+        ]
+        assert all(
+            x.logical_operation_id == plan.envelope.logical_operation_id
+            and x.process_instance_id == "maker-session-84"
+            for x in collected.observations
+        )
+        assert kinds.count(ObservationKind.ACK) == 1
+        assert kinds.count(ObservationKind.PARTIAL_FILL) == 1
+        assert any(
+            x.event_type == "RESUBMISSION"
+            for x in journal.events(plan.envelope.logical_operation_id)
+        )
+    finally:
+        emitter.close()
+        asyncio.run(client.aclose())
+        journal.close()
+
+
+def test_84_transient_rate_limit_visibility_even_if_retry_acknowledged(
+    tmp_path: Path,
+) -> None:
+    """A transient 429 is still a wire outcome requiring RATE_LIMIT evidence."""
+    plan = _make_plan("fresh-84-transient-429")
+    wires: list[bytes] = []
+
+    def respond(req: httpx.Request) -> httpx.Response:
+        wires.append(req.content)
+        if len(wires) == 1:
+            return httpx.Response(
+                429, json={"error": {"code": "RATE_LIMITED", "message": "retry"}},
+                headers={"Retry-After": "0"},
+            )
+        return _success()
+
+    client = _client(httpx.MockTransport(respond), attempts=2)
+    journal = ExecutionJournal(tmp_path / "rate-limit.sqlite3")
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    collected = InMemoryObservationSink()
+    emitter = BoundedObservationEmitter(collected, queue_max=100)
+    sink = SigLiveSink(
+        client=client, journal=journal, permit=_permit(),
+        reservations=reservations, observation_emitter=emitter,
+        observation_process_instance_id="maker-session-84",
+    )
+    try:
+        event = asyncio.run(sink.dispatch(plan))
+        emitter.close()
+        assert event.state is LifecycleState.OPEN
+        assert len(wires) == 2
+        assert any(x.kind is ObservationKind.ACK for x in collected.observations)
+        assert any(
+            x.kind is ObservationKind.RATE_LIMIT for x in collected.observations
+        ), "Successful bounded retry hid preceding rate-limit attempt from observer"
+    finally:
+        emitter.close()
+        asyncio.run(client.aclose())
+        journal.close()
