@@ -246,8 +246,11 @@ def test_lease_expiry_crash_and_uncertain_do_not_free_reserved_gross(
         assert db.execute(
             "SELECT state FROM intents WHERE intent_id='intent-a'"
         ).fetchone()[0] == "UNCERTAIN"
+    # Even the SAME attested sender cannot reacquire after crash while the
+    # previous uncertain intent still consumes capital. A rival is additionally
+    # denied by the signed sender binding tested below.
     takeover = recovered.claim(
-        epoch="e1", holder="east", now=NOW + timedelta(seconds=70),
+        epoch="e1", holder="west", now=NOW + timedelta(seconds=70),
         expires=NOW + timedelta(seconds=90),
     )
     assert takeover.status == "NO_CAPACITY"
