@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
+import httpx
 import pytest
 from pydantic import SecretStr
 
@@ -23,6 +25,7 @@ from predictions_cup.execution.models import (
 )
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.reservations import ExecutionReservationBook
+from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.observe import (
     BoundedObservationEmitter,
     InMemoryObservationSink,
@@ -30,11 +33,13 @@ from predictions_cup.observe import (
 )
 from predictions_cup.risk.core import RiskDecision
 from predictions_cup.runtime import OrderAction, OutcomeSide
+from predictions_cup.sig.client import RetryPolicy
 from predictions_cup.sig.errors import (
     SigClientRequestError,
     SigExecutionUncertainError,
     SigRateLimitError,
 )
+from predictions_cup.sig.rest_governor import SigRestGovernor
 from predictions_cup.sig.trading_client import SigTradingClient
 from predictions_cup.sig.trading_dto import (
     BatchOrderResponseDto,
@@ -1108,4 +1113,169 @@ def test_recovery_governor_cutoff_does_not_clear_prior_uncertain_order(
             plan.envelope.logical_operation_id, plan.envelope.intent_ids
         )
     finally:
+        journal.close()
+
+
+class _NaiveCutoffGovernor:
+    async def acquire(self, priority: object) -> None:
+        del priority
+
+    def record_response(
+        self, status: int, *, retry_after_seconds: float | None,
+    ) -> None:
+        del status, retry_after_seconds
+
+
+def _naive_retry_plan(operation_kind: OperationKind) -> ExecutionPlan:
+    first = _intent()
+    intents: tuple[RuntimeOrderIntent, ...] = (first,)
+    relationship_constraint = None
+    if operation_kind is not OperationKind.SINGLE_PLACEMENT:
+        intents = (first, replace(first, intent_id="naive-retry-second", exchange_id="37"))
+    if operation_kind is OperationKind.ATOMIC_MULTI_LEG:
+        relationship_constraint = "44444444-4444-4444-4444-444444444444"
+    decision = RiskDecision(
+        approved=True, reason="approved", execution_mode=ExecutionMode.LIVE,
+        operation_kind=operation_kind, intents=intents,
+        relationship_constraint=relationship_constraint,
+        strategy_family="STRUCT" if relationship_constraint else "FV-TAKE",
+        strategy_id="fixture", signal_value=0.025, fair_value=0.55,
+        decision_observation_ns=100,
+    )
+    return build_execution_plan(
+        decision,
+        logical_operation_id=f"naive-retry-{operation_kind.value}",
+        created_monotonic_ns=150,
+    )
+
+
+def _naive_retry_client(
+    transport: httpx.MockTransport, clock: Callable[[], datetime],
+) -> SigTradingClient:
+    client = object.__new__(SigTradingClient)
+    client._client = httpx.AsyncClient(
+        transport=transport, base_url="https://sig.invalid/"
+    )
+    client._governor = cast(SigRestGovernor, _NaiveCutoffGovernor())
+    client._wall_clock = clock
+    client._retry_policy = RetryPolicy(
+        max_attempts=2, base_delay_seconds=0, max_delay_seconds=0, jitter_ratio=0
+    )
+    client._sleep = asyncio.sleep
+    client._timeout_seconds = 0.01
+    client._request_in_flight_wait_seconds = 0.0
+    return client
+
+
+@pytest.mark.parametrize(
+    "operation_kind",
+    (
+        OperationKind.SINGLE_PLACEMENT,
+        OperationKind.BEST_EFFORT_BATCH,
+        OperationKind.ATOMIC_MULTI_LEG,
+    ),
+)
+@pytest.mark.parametrize("first_response", ("unknown_502", "rate_429", "transport"))
+def test_redteam_naive_clock_after_wire_keeps_sink_journal_uncertain(
+    tmp_path: Path, operation_kind: OperationKind, first_response: str,
+) -> None:
+    """#207's real sink-level counterexample: no phantom release after first POST."""
+    from predictions_cup.sig.competition_deadline import LAST_ORDER_SUBMISSION_UTC
+
+    clock = [LAST_ORDER_SUBMISSION_UTC - timedelta(seconds=1)]
+    sends: list[bytes] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        sends.append(request.content)
+        clock[0] = datetime(2026, 11, 4, 16, 59, 54)
+        if first_response == "transport":
+            raise httpx.ConnectError("ACK lost", request=request)
+        if first_response == "rate_429":
+            return httpx.Response(
+                429, json={"error": {"code": "RATE_LIMITED", "message": "retry"}},
+                headers={"Retry-After": "0"},
+            )
+        return httpx.Response(
+            502,
+            json={"error": {"code": "ORDER_STATUS_UNKNOWN", "message": "unknown"}},
+        )
+
+    plan = _naive_retry_plan(operation_kind)
+    journal = ExecutionJournal(
+        tmp_path / f"naive-retry-{operation_kind.value}-{first_response}.sqlite3"
+    )
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    client = _naive_retry_client(httpx.MockTransport(respond), lambda: clock[0])
+    sink = SigLiveSink(
+        client=client, journal=journal, permit=_permit(),
+        reservations=reservations, wall_clock=lambda: LAST_ORDER_SUBMISSION_UTC
+        - timedelta(seconds=1),
+    )
+    try:
+        with pytest.raises(SigExecutionUncertainError) as caught:
+            asyncio.run(sink.dispatch(plan))
+        assert caught.value.code == "COMPETITION_CLOCK_UNTRUSTED"
+        assert len(sends) == 1
+        assert sends[0] == plan.envelope.payload_json.encode()
+        assert journal.lifecycle_state(plan.envelope.logical_operation_id) is (
+            LifecycleState.UNCERTAIN
+        )
+        assert len(journal.unresolved()) == 1
+        assert reservations.contains_operation(
+            plan.envelope.logical_operation_id, plan.envelope.intent_ids
+        )
+        assert sum(
+            event.event_type == "NETWORK_DISPATCH"
+            for event in journal.events(plan.envelope.logical_operation_id)
+        ) == 1
+    finally:
+        asyncio.run(client.aclose())
+        journal.close()
+
+
+@pytest.mark.parametrize(
+    "operation_kind",
+    (
+        OperationKind.SINGLE_PLACEMENT,
+        OperationKind.BEST_EFFORT_BATCH,
+        OperationKind.ATOMIC_MULTI_LEG,
+    ),
+)
+def test_redteam_first_naive_clock_releases_only_never_sent_reservation(
+    tmp_path: Path, operation_kind: OperationKind,
+) -> None:
+    from predictions_cup.sig.errors import SigApiError
+
+    plan = _naive_retry_plan(operation_kind)
+    journal = ExecutionJournal(tmp_path / f"never-sent-{operation_kind.value}.sqlite3")
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    wires: list[bytes] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        wires.append(request.content)
+        return httpx.Response(200, json={})
+
+    client = _naive_retry_client(
+        httpx.MockTransport(respond),
+        lambda: datetime(2026, 11, 4, 16, 59, 54),
+    )
+    sink = SigLiveSink(
+        client=client, journal=journal, permit=_permit(),
+        reservations=reservations,
+        wall_clock=lambda: datetime(2026, 11, 4, 16, 59, 54),
+    )
+    try:
+        with pytest.raises(SigApiError) as caught:
+            asyncio.run(sink.dispatch(plan))
+        assert caught.value.code == "COMPETITION_CLOCK_UNTRUSTED"
+        assert not isinstance(caught.value, SigExecutionUncertainError)
+        assert not wires
+        assert not journal.unresolved()
+        assert not reservations.contains_operation(
+            plan.envelope.logical_operation_id, plan.envelope.intent_ids
+        )
+    finally:
+        asyncio.run(client.aclose())
         journal.close()
