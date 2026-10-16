@@ -439,7 +439,21 @@ class OfflineAccountLease:
                         or proof.cumulative_filled > qty
                     ):
                         return self._deny("missing_or_untrusted_terminal_fill", unverified=True)
-                    # An externally claimed reopened order is NEVER terminal.
+                    # A test-key signature proves bytes, NOT SIG order-state
+                    # semantics. A contradictory or unverified terminal claim
+                    # cannot retire an UNCERTAIN reserved intent.
+                    if _state not in {"RESERVED", "UNCERTAIN"}:
+                        return self._deny("unresolved_intent_state", unverified=True)
+                    if proof.terminal_status == "FILLED":
+                        if proof.cumulative_filled != qty:
+                            return self._deny("filled_requires_full_quantity", unverified=True)
+                    elif proof.terminal_status in {"REJECTED", "CANCELLED", "EXPIRED"}:
+                        # Venue rules for positive partial terminal fills are not
+                        # authenticated. Conservatively deny until attested.
+                        if proof.cumulative_filled != 0:
+                            return self._deny("partial_terminal_semantics_unknown", unverified=True)
+                    else:
+                        return self._deny("unsupported_terminal_status", unverified=True)
                     expected[str(exchange)] = expected.get(str(exchange), 0) + (
                         (1 if delta > 0 else -1) * proof.cumulative_filled
                     )
