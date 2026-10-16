@@ -96,6 +96,8 @@ def _json_object(data: bytes) -> dict[str, Any]:
             json.loads(data.decode("utf-8"), parse_constant=_reject_nonstandard_json_constant),
             "INVALID_JSON_OBJECT",
         )
+    except SchemaDenied:
+        raise
     except (UnicodeError, ValueError) as exc:
         raise SchemaDenied("INVALID_JSON_OBJECT") from exc
 
