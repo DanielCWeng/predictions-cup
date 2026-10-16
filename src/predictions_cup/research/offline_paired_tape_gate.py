@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, cast
 
@@ -120,9 +121,9 @@ def _levels(row: dict[str, Any]) -> None:
             )
             prices.append(price)
         _require(
-            all(a > b for a, b in zip(prices, prices[1:]))
+            all(a > b for a, b in pairwise(prices))
             if side == "bids"
-            else all(a < b for a, b in zip(prices, prices[1:])),
+            else all(a < b for a, b in pairwise(prices)),
             "UNSORTED_OR_DUPLICATE_DEPTH",
         )
         sides.append(prices)
@@ -140,8 +141,10 @@ def _row_clock(row: dict[str, Any], manifest: dict[str, Any]) -> tuple[datetime,
     _require(uncertainty <= budget, "CLOCK_UNCERTAINTY_BREACH")
     slack = timedelta(milliseconds=uncertainty)
     _require(source <= received + slack and received <= decision, "NONCAUSAL_CLOCK_ORDER")
-    _require(decision >= source and (decision - source) + slack <= timedelta(milliseconds=age_limit),
-             "STALE_OR_UNAVAILABLE_BOOK")
+    _require(
+        decision >= source and (decision - source) + slack <= timedelta(milliseconds=age_limit),
+        "STALE_OR_UNAVAILABLE_BOOK",
+    )
     return received, decision
 
 
@@ -246,7 +249,7 @@ def validate_offline_tape(manifest_path: Path, mapping_path: Path, sig_path: Pat
         _require(len(sig_rows) == len(pm_rows) == manifest["interval_count"], "PARTIAL_ARCHIVE")
         seen: set[str] = set()
         rejection: list[tuple[str, str]] = []
-        for sig, pm in zip(sig_rows, pm_rows):
+        for sig, pm in zip(sig_rows, pm_rows, strict=True):
             label = sig.get("interval_id")
             identity = label if isinstance(label, str) and label else "INVALID_INTERVAL"
             try:
