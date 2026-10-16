@@ -3,6 +3,7 @@
 import pytest
 
 from predictions_cup.research.signed_reduction_screen import (
+    ConditionalReduction,
     SignedInventoryEvidence,
     screen_signed_reduction,
 )
@@ -74,7 +75,7 @@ def test_repeated_screen_against_same_snapshot_is_not_a_reservation() -> None:
         global_halt_clear=True,
         account_age_seconds=1.0,
     )
-    def check():
+    def check() -> ConditionalReduction:
         return screen_signed_reduction(
             evidence, exchange_id="x", outcome_side="YES",
             action="BUY", quantity=2000, gross_limit=5000,
