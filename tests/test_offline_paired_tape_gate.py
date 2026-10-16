@@ -245,3 +245,103 @@ def test_no_socket_or_network_even_for_well_formed_synthetic_fixture(
     monkeypatch.setattr(socket.socket, "connect", deny)
     monkeypatch.setattr(socket, "create_connection", deny)
     assert _run(tmp_path).verdict == "SCHEMA_ONLY/PAPER_NOT_ADMITTED"
+
+
+def _two_interval_schema(
+    tmp_path: Path, *, second_sig_sequence: int, second_pm_sequence: int,
+) -> GateResult:
+    paths, _ = _sample(tmp_path)
+    manifest_path, _, sig_path, pm_path = paths
+    sig_first = json.loads(sig_path.read_text(encoding="utf-8"))
+    pm_first = json.loads(pm_path.read_text(encoding="utf-8"))
+    sig_next = dict(sig_first)
+    pm_next = dict(pm_first)
+    sig_next.update({
+        "interval_id": "interval-2", "source_at": "2026-10-16T12:00:00.600Z",
+        "received_at": "2026-10-16T12:00:00.700Z",
+        "decision_at": "2026-10-16T12:00:01.000Z",
+        "source_sequence": second_sig_sequence,
+    })
+    pm_next.update({
+        "interval_id": "interval-2", "source_at": "2026-10-16T12:00:00.650Z",
+        "received_at": "2026-10-16T12:00:00.800Z",
+        "decision_at": "2026-10-16T12:00:01.000Z",
+        "ws_sequence": second_pm_sequence,
+    })
+    sig_path.write_text(
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in (sig_first, sig_next)),
+        encoding="utf-8",
+    )
+    pm_path.write_text(
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in (pm_first, pm_next)),
+        encoding="utf-8",
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["interval_count"] = 2
+    manifest["file_sha256"]["sig"] = hashlib.sha256(sig_path.read_bytes()).hexdigest()
+    manifest["file_sha256"]["pm"] = hashlib.sha256(pm_path.read_bytes()).hexdigest()
+    raw = json.dumps(manifest, sort_keys=True).encode()
+    manifest_path.write_bytes(raw)
+    return validate_offline_tape(
+        *paths, expected_manifest_sha256=hashlib.sha256(raw).hexdigest(),
+    )
+
+
+@pytest.mark.parametrize(
+    ("sig_sequence", "pm_sequence", "reason"),
+    [
+        (52, 7, "PM_WS_SEQUENCE_NOT_INCREASING"),
+        (50, 9, "SIG_NATIVE_SEQUENCE_NOT_INCREASING"),
+        (51, 9, "SIG_NATIVE_SEQUENCE_NOT_INCREASING"),
+        (52, 8, "PM_WS_SEQUENCE_NOT_INCREASING"),
+    ],
+)
+def test_same_run_native_and_ws_sequences_never_reset_or_repeat(
+    tmp_path: Path, sig_sequence: int, pm_sequence: int, reason: str,
+) -> None:
+    _blocked(
+        _two_interval_schema(
+            tmp_path, second_sig_sequence=sig_sequence,
+            second_pm_sequence=pm_sequence,
+        ),
+        reason,
+    )
+
+
+def test_two_causally_ordered_synthetic_intervals_remain_schema_only(tmp_path: Path) -> None:
+    result = _two_interval_schema(
+        tmp_path, second_sig_sequence=52, second_pm_sequence=9,
+    )
+    assert result.verdict == "SCHEMA_ONLY/PAPER_NOT_ADMITTED"
+    assert result.schema_valid_intervals == 2
+    assert result.source_admitted is False
+    assert result.paper_admitted is False
+    assert result.network_requests == 0
+
+
+@pytest.mark.parametrize("file_index", [0, 1, 2, 3])
+@pytest.mark.parametrize("bad_number", [float("nan"), float("inf"), float("-inf")])
+def test_all_json_inputs_reject_nonstandard_numeric_literals_even_after_rehash(
+    tmp_path: Path, file_index: int, bad_number: float,
+) -> None:
+    paths, _ = _sample(tmp_path)
+    manifest_path = paths[0]
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if file_index == 0:
+        manifest["extra_field"] = bad_number
+    else:
+        target = paths[file_index]
+        payload = json.loads(target.read_text(encoding="utf-8"))
+        payload["unrecognised_metadata"] = bad_number
+        suffix = "\n" if file_index in (2, 3) else ""
+        target.write_text(json.dumps(payload, sort_keys=True) + suffix, encoding="utf-8")
+        key = ("mapping", "sig", "pm")[file_index - 1]
+        manifest["file_sha256"][key] = hashlib.sha256(target.read_bytes()).hexdigest()
+    raw = json.dumps(manifest, sort_keys=True).encode()
+    manifest_path.write_bytes(raw)
+    _blocked(
+        validate_offline_tape(
+            *paths, expected_manifest_sha256=hashlib.sha256(raw).hexdigest(),
+        ),
+        "NONSTANDARD_JSON_CONSTANT",
+    )
