@@ -143,9 +143,11 @@ def test_replay_scope_restores_context_after_success_exception_and_cancel() -> N
     with enforce_startup_replay_wire_authorization(lambda: True):
         assert callable(_startup_replay_wire_authorizer.get())
     assert _startup_replay_wire_authorizer.get() is None
-    with pytest.raises(RuntimeError, match="fixture"):
-        with enforce_startup_replay_wire_authorization(lambda: True):
-            raise RuntimeError("fixture")
+    with (
+        pytest.raises(RuntimeError, match="fixture"),
+        enforce_startup_replay_wire_authorization(lambda: True),
+    ):
+        raise RuntimeError("fixture")
     assert _startup_replay_wire_authorizer.get() is None
 
     async def cancel_parent() -> None:
