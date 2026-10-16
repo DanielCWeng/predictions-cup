@@ -124,11 +124,9 @@ class OrderBookStore:
             token_id = require_text(
                 change.get("asset_id") or change.get("tokenId"), "price_change asset_id"
             )
-            book = self._books.get(token_id)
-            if book is None:
-                missing += 1
-                missing_token_ids.add(token_id)
-                continue
+            # Validate even unknown/unseeded-token entries before touching any
+            # initialized book. One malformed entry rejects the entire frame.
+            # Missing-token accounting still applies to valid unknown entries.
             side_raw = require_text(change.get("side"), "price_change side").upper()
             normalized_side: BookSide
             if side_raw == "BUY":
@@ -144,6 +142,11 @@ class OrderBookStore:
             size = _shared_size(size)
             if price < 0 or price > 1 or size < 0:
                 raise PayloadError("price_change price/size outside valid range")
+            book = self._books.get(token_id)
+            if book is None:
+                missing += 1
+                missing_token_ids.add(token_id)
+                continue
             validated.append(
                 (book, normalized_side, price, size, optional_text(change.get("hash")))
             )
