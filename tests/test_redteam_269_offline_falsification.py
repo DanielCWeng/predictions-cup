@@ -27,6 +27,7 @@ from test_account_terminality_lease import (
     _seed,
     _signed_epoch,
     _signed_terminal,
+    proven,
 )
 
 
