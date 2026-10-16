@@ -303,10 +303,10 @@ def test_84_recovery_fake_http_same_operation_and_session(tmp_path: Path) -> Non
         assert wires == [plan.envelope.payload_json.encode()]
         kinds = [x.kind for x in collected.observations]
         assert kinds == [
-            ObservationKind.PLAN_CREATED, ObservationKind.REQUEST_ENQUEUED,
-            ObservationKind.REQUEST_DISPATCHED, ObservationKind.RESPONSE_RECEIVED,
-            ObservationKind.RESPONSE_PARSED, ObservationKind.ACK,
-            ObservationKind.PARTIAL_FILL,
+            ObservationKind.DECISION_OBSERVED, ObservationKind.PLAN_CREATED,
+            ObservationKind.REQUEST_ENQUEUED, ObservationKind.REQUEST_DISPATCHED,
+            ObservationKind.RESPONSE_RECEIVED, ObservationKind.RESPONSE_PARSED,
+            ObservationKind.ACK, ObservationKind.PARTIAL_FILL,
         ]
         assert all(
             x.logical_operation_id == plan.envelope.logical_operation_id
