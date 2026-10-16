@@ -2,11 +2,13 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
 from predictions_cup.research.reduction_reservations import (
     OfflineReductionReservations,
+    ReductionReservation,
     ReservationDenied,
 )
 from predictions_cup.research.signed_reduction_screen import SignedInventoryEvidence
@@ -30,11 +32,9 @@ def ev(ledger: dict[int, int] | None = None) -> SignedInventoryEvidence:
 
 
 def start(
-    tmp_path: object, data: SignedInventoryEvidence | None = None
+    tmp_path: Path, data: SignedInventoryEvidence | None = None
 ) -> OfflineReductionReservations:
-    from pathlib import Path
-
-    r = OfflineReductionReservations(Path(str(tmp_path)) / "isolated_reduction_sim.sqlite")
+    r = OfflineReductionReservations(tmp_path / "isolated_reduction_sim.sqlite")
     r.seed(epoch="signed-account-01", evidence=data or ev(), cap=100000, age=5.0)
     return r
 
@@ -43,7 +43,7 @@ def reserve(
     r: OfflineReductionReservations, *, intent: str = "i1", qty: int = 1000,
     ex: str = "-1", side: str = "YES", action: str = "BUY",
     data: SignedInventoryEvidence | None = None,
-):
+) -> ReductionReservation:
     return r.reserve(
         epoch="signed-account-01", evidence=data or ev(), intent_id=intent,
         exchange_id=ex, outcome_side=side, action=action, quantity=qty,
@@ -51,7 +51,7 @@ def reserve(
     )
 
 
-def test_canonical_both_sides_and_default_no_execution(tmp_path) -> None:
+def test_canonical_both_sides_and_default_no_execution(tmp_path: Path) -> None:
     r = start(tmp_path)
     held_no = reserve(r)
     held_yes = reserve(r, intent="yes-close", ex="1", qty=500, side="NO", action="BUY")
@@ -60,11 +60,11 @@ def test_canonical_both_sides_and_default_no_execution(tmp_path) -> None:
     assert held_yes.execution_authorised is False
 
 
-def test_parallel_atomic_allocation_cross_instances(tmp_path) -> None:
+def test_parallel_atomic_allocation_cross_instances(tmp_path: Path) -> None:
     r = start(tmp_path)
     r2 = OfflineReductionReservations(tmp_path / "isolated_reduction_sim.sqlite")
 
-    def attempt(pair) -> int:
+    def attempt(pair: tuple[OfflineReductionReservations, str]) -> int:
         engine, intent = pair
         try:
             return reserve(engine, intent=intent, qty=1500).quantity
@@ -76,7 +76,7 @@ def test_parallel_atomic_allocation_cross_instances(tmp_path) -> None:
     assert sorted(results) == [0, 1500]
 
 
-def test_replay_same_intent_idempotent_and_conflict_denied(tmp_path) -> None:
+def test_replay_same_intent_idempotent_and_conflict_denied(tmp_path: Path) -> None:
     r = start(tmp_path)
     first = reserve(r)
     assert reserve(r) == first
@@ -84,7 +84,7 @@ def test_replay_same_intent_idempotent_and_conflict_denied(tmp_path) -> None:
         reserve(r, qty=999)
 
 
-def test_timeout_cancel_restart_never_release_slice(tmp_path) -> None:
+def test_timeout_cancel_restart_never_release_slice(tmp_path: Path) -> None:
     r = start(tmp_path)
     reserve(r, intent="a", qty=2000)
     r.observe(intent_id="a", event_id="timeout", kind="TIMEOUT")
@@ -99,7 +99,7 @@ def test_timeout_cancel_restart_never_release_slice(tmp_path) -> None:
         )
 
 
-def test_partial_fill_does_not_recycle_unconfirmed_remainder(tmp_path) -> None:
+def test_partial_fill_does_not_recycle_unconfirmed_remainder(tmp_path: Path) -> None:
     r = start(tmp_path)
     reserve(r, qty=2000)
     fill = r.observe(
@@ -116,7 +116,7 @@ def test_partial_fill_does_not_recycle_unconfirmed_remainder(tmp_path) -> None:
         )
 
 
-def test_terminal_exact_signed_reconciliation_and_new_epoch(tmp_path) -> None:
+def test_terminal_exact_signed_reconciliation_and_new_epoch(tmp_path: Path) -> None:
     r = start(tmp_path)
     reserve(r, qty=2000)
     r.observe(
@@ -147,7 +147,7 @@ def test_terminal_exact_signed_reconciliation_and_new_epoch(tmp_path) -> None:
     assert answer.signed_delta == 1000
 
 
-def test_conflicting_event_and_reversed_fill_fail_closed(tmp_path) -> None:
+def test_conflicting_event_and_reversed_fill_fail_closed(tmp_path: Path) -> None:
     r = start(tmp_path)
     reserve(r)
     r.observe(
@@ -185,25 +185,27 @@ def test_conflicting_event_and_reversed_fill_fail_closed(tmp_path) -> None:
         {"account_net": 100000},
     ],
 )
-def test_invalid_account_proofs_fail_before_bootstrap(tmp_path, alter) -> None:
+def test_invalid_account_proofs_fail_before_bootstrap(
+    tmp_path: Path, alter: dict[str, object]
+) -> None:
     data = replace(ev(), **alter)
     with pytest.raises(ReservationDenied):
         start(tmp_path, data)
 
 
-def test_changed_ledger_same_epoch_denied(tmp_path) -> None:
+def test_changed_ledger_same_epoch_denied(tmp_path: Path) -> None:
     r = start(tmp_path)
     with pytest.raises(ReservationDenied, match="stale_or_changed_ledger_epoch"):
         reserve(r, data=ev({-1: -2000, 1: 97500}))
 
 
-def test_signed_provenance_required_per_intent(tmp_path) -> None:
+def test_signed_provenance_required_per_intent(tmp_path: Path) -> None:
     r = start(tmp_path)
     with pytest.raises(ReservationDenied, match="signed_position_provenance_missing"):
         reserve(r, data=replace(ev(), signed_positions_verified=False))
 
 
-def test_restarted_engine_cannot_resync_from_open_orders(tmp_path) -> None:
+def test_restarted_engine_cannot_resync_from_open_orders(tmp_path: Path) -> None:
     r = start(tmp_path)
     reserve(r)
     r.observe(intent_id="i1", event_id="final", kind="TERMINAL", cumulative_filled=0)
