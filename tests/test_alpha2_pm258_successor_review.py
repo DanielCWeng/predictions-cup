@@ -8,8 +8,8 @@ from typing import Any
 import pytest
 
 from predictions_cup.config import AppSettings
-from predictions_cup.external.polymarket.recorder import PolymarketRecorder
 from predictions_cup.external.polymarket.health import IngestionHealth
+from predictions_cup.external.polymarket.recorder import PolymarketRecorder
 from predictions_cup.external.polymarket.websocket import MarketWebSocket
 
 
