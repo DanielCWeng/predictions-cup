@@ -381,7 +381,14 @@ class ExecutionJournal:
         intents: tuple[RuntimeOrderIntent, ...] = (),
         audit: ExecutionAudit | None = None,
         submitted_monotonic_ns: int | None = None,
+        fresh_only: bool = False,
     ) -> None:
+        """Reserve a unique durable dispatch identity before the network.
+
+        Fresh LIVE admissions MUST NOT use the normal idempotent journal replay
+        path: a second caller could otherwise send a duplicate economic request.
+        Recovery uses the legacy same-key identity-checked path.
+        """
         submission_ns = (
             envelope.created_monotonic_ns
             if submitted_monotonic_ns is None
@@ -463,7 +470,11 @@ class ExecutionJournal:
                     )
             self._notify_operation_listeners(envelope.logical_operation_id)
             return
-        except sqlite3.IntegrityError:
+        except sqlite3.IntegrityError as exc:
+            if fresh_only:
+                raise ValueError(
+                    "journaled placement must use identity-preserving recovery"
+                ) from exc
             # The hot path optimistically INSERTs. Only an idempotent retry pays
             # the read needed to prove the logical operation is byte-identical.
             existing = self._connection.execute(
