@@ -42,6 +42,8 @@ class MarketWebSocket:
         self.receive_liveness_timeout_seconds = receive_liveness_timeout_seconds
         self.max_backoff_seconds = max_backoff_seconds
         self._desired_tokens: frozenset[str] = frozenset()
+        # Exact universe whose REST seed completed, not merely a token count.
+        self._seeded_tokens: frozenset[str] = frozenset()
         self._ws: aiohttp.ClientWebSocketResponse | None = None
         self._subscription_lock = asyncio.Lock()
         self._stopping = False
@@ -83,8 +85,12 @@ class MarketWebSocket:
                         self._ws = ws
                         async with self._subscription_lock:
                             tokens = sorted(self._desired_tokens)
+                            self._require_current_seed(frozenset(tokens))
                             await ws.send_json({"assets_ids": tokens, "type": "market"})
-                        self._mark_connection_established()
+                            # A refresh can commit a new generation while the
+                            # subscription send is awaited. Reject this socket.
+                            self._require_current_seed(frozenset(tokens))
+                            self._mark_connection_established()
                         self.health.websocket_connected = True
                         has_connected = True
                         attempt = 0
@@ -131,6 +137,18 @@ class MarketWebSocket:
                     if ping_task is not None:
                         ping_task.cancel()
                         await asyncio.gather(ping_task, return_exceptions=True)
+
+    def _require_current_seed(self, tokens: frozenset[str]) -> None:
+        if (
+            not tokens
+            or tokens != self._seeded_tokens
+            or self.health.seed_status != "COMPLETE"
+            or self.health.seed_attempt_epoch != self.health.seed_complete_epoch
+            or self.health.seed_subscription_epoch != self.health.subscription_epoch
+            or self.health.seed_initialized_tokens != len(tokens)
+            or self.health.seed_expected_tokens != len(tokens)
+        ):
+            raise RuntimeError("Polymarket desired universe changed after REST seed")
 
     def _mark_connection_established(self) -> None:
         # Local connection generation, linked to the last completed REST seed.
