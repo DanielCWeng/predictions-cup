@@ -1023,3 +1023,89 @@ def test_atomic_fresh_journal_claim_denies_byte_identical_duplicate(
         assert len(journal.events(plan.envelope.logical_operation_id)) == len(intents)
     finally:
         journal.close()
+
+
+@pytest.mark.parametrize(
+    "operation_kind",
+    (
+        OperationKind.SINGLE_PLACEMENT,
+        OperationKind.BEST_EFFORT_BATCH,
+        OperationKind.ATOMIC_MULTI_LEG,
+    ),
+)
+def test_recovery_governor_cutoff_does_not_clear_prior_uncertain_order(
+    tmp_path: Path, operation_kind: OperationKind,
+) -> None:
+    """The recovery's *first* new attempt can be blocked, but old risk persists."""
+    from predictions_cup.sig.errors import SigApiError
+
+    class FirstAttemptCutoff(FakeUncertainTradingClient):
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def _blocked(self, payload_json: str) -> None:
+            del payload_json
+            self.calls += 1
+            raise SigApiError(
+                status_code=None,
+                code="COMPETITION_ORDER_CLOSED",
+                safe_message="fixture post-governor per-attempt cutoff",
+            )
+
+        async def place_order_payload(self, payload_json: str) -> SingleOrderResponseDto:
+            self._blocked(payload_json)
+            raise AssertionError("unreachable")
+
+        async def place_batch_payload(self, payload_json: str) -> BatchOrderResponseDto:
+            self._blocked(payload_json)
+            raise AssertionError("unreachable")
+
+        async def place_multi_leg_payload(self, payload_json: str) -> MultiLegResponseDto:
+            self._blocked(payload_json)
+            raise AssertionError("unreachable")
+
+    first = _intent()
+    intents = (
+        (first,) if operation_kind is OperationKind.SINGLE_PLACEMENT
+        else (first, replace(first, intent_id="second", exchange_id="37"))
+    )
+    constraint = (
+        "33333333-3333-3333-3333-333333333333"
+        if operation_kind is OperationKind.ATOMIC_MULTI_LEG else None
+    )
+    decision = RiskDecision(
+        approved=True, reason="approved", execution_mode=ExecutionMode.LIVE,
+        operation_kind=operation_kind, intents=intents,
+        relationship_constraint=constraint,
+        strategy_family="STRUCT" if constraint else "FV-TAKE",
+        strategy_id="fixture", signal_value=0.025, fair_value=0.55,
+        decision_observation_ns=100,
+    )
+    plan = build_execution_plan(
+        decision, logical_operation_id="prior-possible-wire", created_monotonic_ns=150
+    )
+    journal = ExecutionJournal(tmp_path / "recovery-queued.sqlite3")
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    journal.record_before_dispatch(plan.envelope, plan.intents)
+    journal.mark_state(plan.envelope.logical_operation_id, LifecycleState.UNCERTAIN, 250)
+    fake = FirstAttemptCutoff()
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, fake),
+        journal=journal, reservations=reservations, permit=_permit(),
+        wall_clock=lambda: datetime(2026, 11, 4, 16, 59, 50, tzinfo=UTC),
+    )
+    try:
+        with pytest.raises(
+            SigExecutionUncertainError, match="Prior journaled placement"
+        ):
+            asyncio.run(sink.dispatch_recovery(plan.envelope, plan=plan))
+        assert fake.calls == 1
+        assert journal.lifecycle_state(plan.envelope.logical_operation_id) is (
+            LifecycleState.UNCERTAIN
+        )
+        assert reservations.contains_operation(
+            plan.envelope.logical_operation_id, plan.envelope.intent_ids
+        )
+    finally:
+        journal.close()
