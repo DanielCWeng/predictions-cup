@@ -12,6 +12,7 @@ from predictions_cup.external.polymarket.models import PayloadError
 from predictions_cup.external.polymarket.orderbook import OrderBookStore
 from predictions_cup.external.polymarket.recorder import PolymarketRecorder
 
+
 def _seed(store: OrderBookStore, token: str, observed: datetime) -> None:
     store.apply_full_snapshot(
         {
