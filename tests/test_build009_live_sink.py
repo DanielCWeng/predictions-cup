@@ -889,7 +889,7 @@ def test_concurrent_fresh_reentry_cannot_duplicate_economic_dispatch(
 ) -> None:
     """First request may be in flight; second must never get to any wire route."""
     first_intent = _intent()
-    intents = (first_intent,)
+    intents: tuple[RuntimeOrderIntent, ...] = (first_intent,)
     relationship_constraint = None
     if operation_kind is not OperationKind.SINGLE_PLACEMENT:
         intents = (
