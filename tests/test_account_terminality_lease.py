@@ -376,3 +376,88 @@ def test_risk_002_gross_is_absolute_even_when_intent_claims_reduction(
     assert answer.status == "NO_CAPACITY"
     assert answer.reason == "absolute_gross_cap_or_reservation"
     assert answer.execution_authorised is False
+
+
+@pytest.mark.parametrize(
+    ("status", "filled"),
+    [
+        ("FILLED", 0),
+        ("FILLED", 300),
+        ("REJECTED", 200),
+        ("CANCELLED", 200),
+        ("EXPIRED", 200),
+    ],
+)
+def test_unverified_terminal_status_fill_does_not_release_uncertain(
+    tmp_path: Path,
+    proven: tuple[Ed25519PrivateKey, OfflineIssuerRegistry, AccountEpochProof],
+    status: str,
+    filled: int,
+) -> None:
+    """A fixture signature alone cannot authorise an ambiguous terminal transition."""
+    private, registry, prior = proven
+    store = _seed(tmp_path / "terminal-status.sqlite", registry, prior)
+    token = _claim(store)
+    assert _reserve(store, prior, token, qty=700) == "SIMULATED_ONLY"
+    assert store.simulated_possible_wire("intent-a").status == "SIMULATED_ONLY"
+    successor = _signed_epoch(
+        private,
+        epoch="e2",
+        revision="r2",
+        published=NOW + timedelta(seconds=60),
+        positions={"36": 99_000 + filled},
+    )
+    event = _signed_terminal(private, status=status, cumulative=filled)
+    decision = store.reconcile(
+        prior=prior, successor=successor, terminal=(event,),
+        now=NOW + timedelta(seconds=61),
+    )
+    assert decision.status in {"UNVERIFIED", "NO_CAPACITY"}
+    assert decision.execution_authorised is False
+    assert decision.current_verified_headroom == "UNKNOWN"
+    with sqlite3.connect(store.path) as db:
+        assert db.execute(
+            "SELECT state FROM intents WHERE intent_id='intent-a'"
+        ).fetchone()[0] == "UNCERTAIN"
+        assert db.execute("SELECT epoch FROM account WHERE slot=1").fetchone()[0] == "e1"
+        assert db.execute(
+            "SELECT count(*) FROM epochs WHERE epoch='e2'"
+        ).fetchone()[0] == 0
+        assert db.execute("SELECT count(*) FROM lease").fetchone()[0] == 1
+
+
+@pytest.mark.parametrize(
+    ("status", "filled"),
+    [("FILLED", 700), ("REJECTED", 0), ("CANCELLED", 0), ("EXPIRED", 0)],
+)
+def test_compatible_fixture_terminal_remains_simulation_only(
+    tmp_path: Path,
+    proven: tuple[Ed25519PrivateKey, OfflineIssuerRegistry, AccountEpochProof],
+    status: str,
+    filled: int,
+) -> None:
+    """Only fixture consistency, never authenticated venue terminality."""
+    private, registry, prior = proven
+    store = _seed(tmp_path / "terminal-positive.sqlite", registry, prior)
+    token = _claim(store)
+    assert _reserve(store, prior, token, qty=700) == "SIMULATED_ONLY"
+    assert store.simulated_possible_wire("intent-a").status == "SIMULATED_ONLY"
+    successor = _signed_epoch(
+        private,
+        epoch="e2",
+        revision="r2",
+        published=NOW + timedelta(seconds=60),
+        positions={"36": 99_000 + filled},
+    )
+    event = _signed_terminal(private, status=status, cumulative=filled)
+    decision = store.reconcile(
+        prior=prior, successor=successor, terminal=(event,),
+        now=NOW + timedelta(seconds=61),
+    )
+    assert decision.status == "SIMULATED_ONLY"
+    assert decision.execution_authorised is False
+    assert decision.current_verified_headroom == "UNKNOWN"
+    with sqlite3.connect(store.path) as db:
+        assert db.execute(
+            "SELECT state FROM intents WHERE intent_id='intent-a'"
+        ).fetchone()[0] == "RECONCILED"
