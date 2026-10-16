@@ -178,7 +178,7 @@ def _crash_after_mock_wire(
         CallbackObservationSink(deferred_writer), queue_max=32
     )
     plan = _make_plan("crash-after-possible-wire")
-    journal = ExecutionJournal(db_path)
+    journal = ExecutionJournal(Path(db_path))
     reservations = ExecutionReservationBook()
     reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
 
