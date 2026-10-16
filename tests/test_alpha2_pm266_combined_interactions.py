@@ -1,13 +1,14 @@
 """Independent combined PM #266 source-only fake-frame acceptance tests."""
 
 import asyncio
+from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from predictions_cup.config import AppSettings
-from predictions_cup.external.polymarket.models import PayloadError
+from predictions_cup.external.polymarket.models import BookChangeEvent, PayloadError
 from predictions_cup.external.polymarket.recorder import PolymarketRecorder
 
 
@@ -37,10 +38,10 @@ def test_combined_atomicity_attribution_reason_counters_and_persistence(
     observed = datetime(2026, 10, 16, 20, tzinfo=UTC)
     recorder.books.apply_full_snapshot(_snap("A", "market-A", "A0"), observed)
     recorder.books.apply_full_snapshot(_snap("B", "market-B", "B0"), observed)
-    recorded: list[tuple[object, ...]] = []
+    recorded: list[tuple[BookChangeEvent, ...]] = []
 
-    def fake_persist(changes: object) -> int:
-        batch = tuple(changes)  # type: ignore[arg-type]
+    def fake_persist(changes: Iterable[BookChangeEvent]) -> int:
+        batch = tuple(changes)
         recorded.append(batch)
         return len(batch)
 
