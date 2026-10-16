@@ -217,7 +217,8 @@ class OfflineAccountLease:
                     epoch TEXT NOT NULL, revision TEXT NOT NULL,
                     publisher TEXT NOT NULL, expires TEXT NOT NULL,
                     digest TEXT NOT NULL, positions TEXT NOT NULL,
-                    gross INTEGER NOT NULL, fence INTEGER NOT NULL DEFAULT 0
+                    gross INTEGER NOT NULL, sender TEXT NOT NULL,
+                    fence INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS epochs (epoch TEXT PRIMARY KEY);
                 CREATE TABLE IF NOT EXISTS lease (
@@ -259,12 +260,12 @@ class OfflineAccountLease:
                 db.execute("INSERT INTO epochs(epoch) VALUES(?)", (proof.epoch,))
                 db.execute(
                     "INSERT INTO account(slot,epoch,revision,publisher,expires,digest,"
-                    "positions,gross,fence) VALUES(1,?,?,?,?,?,?,?,0)",
+                    "positions,gross,sender,fence) VALUES(1,?,?,?,?,?,?,?,?,0)",
                     (proof.epoch, proof.publisher_revision, _time(proof.publisher_at),
                      _time(proof.expires_at),
                      hashlib.sha256(proof.signed_content()).hexdigest(),
                      json.dumps(dict(proof.signed_by_exchange), sort_keys=True),
-                     proof.gross),
+                     proof.gross, proof.active_sender_ids[0]),
                 )
                 return OfflineVerdict("SIMULATED_ONLY", "synthetic_signed_epoch_seeded")
         except sqlite3.Error:
@@ -283,12 +284,14 @@ class OfflineAccountLease:
             with self._db() as db:
                 db.execute("BEGIN IMMEDIATE")
                 acct = db.execute(
-                    "SELECT epoch,expires,fence FROM account WHERE slot=1"
+                    "SELECT epoch,expires,fence,sender FROM account WHERE slot=1"
                 ).fetchone()
                 if acct is None or acct[0] != epoch:
                     return self._deny("wrong_or_absent_account_epoch", unverified=True)
                 if clock > acct[1]:
                     return self._deny("expired_account_snapshot", unverified=True)
+                if holder != acct[3]:
+                    return self._deny("unattested_cross_host_sender")
                 lease = db.execute("SELECT holder,token,expires FROM lease WHERE slot=1").fetchone()
                 if lease is not None and clock <= lease[2]:
                     return self._deny("another_lease_or_owner_active")
@@ -327,7 +330,7 @@ class OfflineAccountLease:
             with self._db() as db:
                 db.execute("BEGIN IMMEDIATE")
                 acct = db.execute(
-                    "SELECT epoch,revision,digest,gross FROM account WHERE slot=1"
+                    "SELECT epoch,revision,digest,gross,sender FROM account WHERE slot=1"
                 ).fetchone()
                 if acct is None or (
                     acct[0] != proof.epoch or acct[1] != proof.publisher_revision
@@ -336,7 +339,8 @@ class OfflineAccountLease:
                     return self._deny("stale_epoch_compare_and_reserve", unverified=True)
                 lease = db.execute("SELECT holder,token,expires FROM lease WHERE slot=1").fetchone()
                 if (
-                    lease is None or lease[0] != holder or lease[1] != token
+                    holder != acct[4]
+                    or lease is None or lease[0] != holder or lease[1] != token
                     or _time(now) > lease[2]
                 ):
                     return self._deny("unfenced_or_expired_lease")
@@ -445,11 +449,12 @@ class OfflineAccountLease:
                 db.execute("INSERT INTO epochs(epoch) VALUES(?)", (successor.epoch,))
                 db.execute(
                     "UPDATE account SET epoch=?,revision=?,publisher=?,expires=?,"
-                    "digest=?,positions=?,gross=?,fence=fence+1 WHERE slot=1",
+                    "digest=?,positions=?,gross=?,sender=?,fence=fence+1 WHERE slot=1",
                     (successor.epoch, successor.publisher_revision,
                      _time(successor.publisher_at), _time(successor.expires_at),
                      hashlib.sha256(successor.signed_content()).hexdigest(),
-                     json.dumps(expected, sort_keys=True), successor.gross),
+                     json.dumps(expected, sort_keys=True), successor.gross,
+                     successor.active_sender_ids[0]),
                 )
                 db.execute("UPDATE intents SET state='RECONCILED' WHERE state != 'RECONCILED'")
                 db.execute("DELETE FROM lease")
