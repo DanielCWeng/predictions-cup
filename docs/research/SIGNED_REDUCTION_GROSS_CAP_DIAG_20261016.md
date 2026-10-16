@@ -62,3 +62,51 @@ This design is intentionally insufficient to release an actual order. An indepen
 - [Master #201](https://github.com/DanielCWeng/predictions-cup/issues/201): risk-state gross-cap diagnosis.
 - [Lane A #225](https://github.com/DanielCWeng/predictions-cup/pull/225): 50%-haircut native SIG depth conditional unwind feasibility; tiny cross-PM relative quote advantage does not certify positive portfolio EV.
 - [Safety #207](https://github.com/DanielCWeng/predictions-cup/issues/207): independent STOP-SHIP boundary.
+
+## 16 Oct — added isolated durable lifecycle stress model (draft #241)
+
+`research/reduction_reservations.py` is a standalone, **offline-only** SQLite
+transactional reservation *model*, never imported by maker, execution, or RISK-002.
+The model deliberately **cannot authorise orders**; each returned reservation
+reports `execution_authorised=False`. It creates only a database file explicitly
+named by an offline caller and must never point at LIVE account or journal DBs.
+
+In its isolated prototype, `BEGIN IMMEDIATE` serialises allocation across
+simultaneous processes and `synchronous=FULL` makes committed reserve/event
+records durable. Each reservation occupies its **full original intended share
+quantity** until a new authenticated signed account epoch matches all completed
+cumulative order fills exactly. A partial fill, ACK, timeout, cancellation
+request, duplicate replay or process restart **does not release residual capacity**.
+The prototype rejects position flips, duplicate logical-intent conflicts,
+negative/decreasing/oversized cumulative fills, mismatched signed ledger/hash,
+reused account epochs and any unresolved order/cancel before reconciliation.
+
+This is **not** an operational implementation of venue-authenticated,
+atomic-with-order-send reservations. In particular, `SignedInventoryEvidence`
+contains externally provided trust booleans rather than independently
+cryptographically authenticated account facts; order event IDs and claimed
+terminal status have no connector-authenticated provenance in this isolated
+model. Another LIVE maker/sender does not participate in this database's lock.
+No atomic commit across venue wire + database exists. A production design must
+instead use one *shared* writer/serialiser and a journaled send-intent-before-wire
+protocol, reserve and classify all other senders' open/uncertain orders,
+reconcile via actual authoritative account/order IDs after restart, and preserve
+all existing gross, per-market, order, event, strategy, drawdown and cutoff gates.
+RISK-002 is **unchanged** and still denies placements at the cap.
+
+**Economic status:** historical depth can support conditional unwind math,
+not a priced exit now. Three held-NO relative-PM proxy candidates had 3/7/6
+untouched-window samples, median full-size half-depth gross relative gaps of
+3.50c/2.29c/1.00c per share. Sum ~160 SUSQies *gross*, illustrative extra
+1c/share cost leaves ~95; a common 3pp PM proxy model error costs ~195.
+The PM book is not independent calibrated settlement fair value, and no
+validated positive-EV replacement exists. Four historical paired NO/NO races
+have 4,640 conditional minimum payout units on 9,280 gross shares; matched
+historical cost ~4,643.89, floor minus sunk cost -3.89 pre-fee, **not** current
+marginal hold-vs-liquidate EV. Do not discard floor without rule verification.
+
+**Capital decision: 0 executable reduction candidates, NO-GO for rotation**
+without current authoritative per-exchange signed lots; independently audited
+rules/FV and asynchronous native depth; active reservation lifecycle and fill
+parity; genuine positive net replacement benefit; and #207 independent PASS.
+Unwinding merely because gross exposure equals the cap is not permitted.
