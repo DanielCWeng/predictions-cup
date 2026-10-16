@@ -256,6 +256,7 @@ class SigLiveSink:
             plan.intents,
             audit=plan.audit,
             submitted_monotonic_ns=submitted,
+            fresh_only=require_reservation,
         )
         network_dispatch_ns = self._clock_ns()
         self._observe(
