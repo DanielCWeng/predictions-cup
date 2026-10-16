@@ -54,6 +54,8 @@ class PolymarketRecorder:
         )
         self.websocket = MarketWebSocket(str(settings.polymarket_ws_url), self.health)
         self._token_ids: tuple[str, ...] = ()
+        # Rebuilt only on universe refresh: O(1) membership on missing deltas.
+        self._subscribed_tokens: frozenset[str] = frozenset()
         self._market_count = 0
         self._last_depth_snapshot_at: datetime | None = None
 
@@ -139,6 +141,9 @@ class PolymarketRecorder:
             self.books.invalidate(removals)
 
         self._token_ids = selection.token_ids
+        self._subscribed_tokens = new_tokens
+        if new_tokens != old_tokens:
+            self.health.subscription_epoch += 1
         self._market_count = len(selection.markets)
         self.health.markets_subscribed = self._market_count
         self.health.tokens_subscribed = len(self._token_ids)
@@ -149,8 +154,47 @@ class PolymarketRecorder:
         return True
 
     async def _before_websocket_connect(self) -> None:
+        # Capture immutable desired-token identity and generation BEFORE the
+        # awaited REST seed. A refresh may change the universe while it waits.
+        token_ids = self._token_ids
+        desired = frozenset(token_ids)
+        subscription_epoch = self.health.subscription_epoch
+        self.health.seed_attempt_epoch += 1
+        attempt_epoch = self.health.seed_attempt_epoch
+        self.health.seed_expected_tokens = len(desired)
+        self.health.seed_initialized_tokens = 0
+        self.health.seed_status = "IN_PROGRESS"
+        self.health.seed_completed_at = None
+        self.websocket._seeded_tokens = frozenset()
         self.books.invalidate_all()
-        await self._seed_books(self._token_ids, invalidate=False)
+        try:
+            await self._seed_books(token_ids, invalidate=False)
+            if (
+                self._token_ids != token_ids
+                or self._subscribed_tokens != desired
+                or self.health.subscription_epoch != subscription_epoch
+            ):
+                # Never certify a seed of A as COMPLETE for newly selected B.
+                # Next ordinary connection retry will seed the current set.
+                self.books.invalidate_all()
+                self.health.seed_status = "STALE"
+                raise RuntimeError("Polymarket subscriptions changed during REST seed")
+            if not desired.issubset(self.books.initialized_tokens):
+                raise RuntimeError("Polymarket seed lost a subscribed token")
+        except Exception:
+            self.health.seed_initialized_tokens = len(
+                self.books.initialized_tokens.intersection(desired)
+            )
+            if self.health.seed_status != "STALE":
+                self.health.seed_status = "FAILED"
+            raise
+        self.health.seed_initialized_tokens = len(desired)
+        self.health.seed_complete_epoch = attempt_epoch
+        self.health.seed_subscription_epoch = subscription_epoch
+        self.health.seed_status = "COMPLETE"
+        self.health.seed_completed_at = utc_now()
+        # Exact identity, not just equal cardinality/epoch, for WS subscribe.
+        self.websocket._seeded_tokens = desired
 
     async def _seed_books(self, token_ids: tuple[str, ...], *, invalidate: bool) -> None:
         if invalidate:
@@ -177,6 +221,29 @@ class PolymarketRecorder:
         if kind == "price_change":
             result = self.books.apply_price_change(payload, observed_at)
             self.health.book_uninitialized_delta_count += result.uninitialized_deltas
+            if result.uninitialized_deltas:
+                # The store returns distinct missing IDs; count actual entries,
+                # including duplicate IDs, without retaining individual tokens.
+                event = _event_payload(payload)
+                raw_changes = event.get("price_changes") or event.get("priceChanges")
+                subscribed = 0
+                other = 0
+                if isinstance(raw_changes, list):
+                    for change in raw_changes:
+                        if not isinstance(change, dict):
+                            continue
+                        token = change.get("asset_id") or change.get("tokenId")
+                        if token not in result.uninitialized_token_ids:
+                            continue
+                        if token in self._subscribed_tokens:
+                            subscribed += 1
+                        else:
+                            other += 1
+                self.health.price_change_missing_subscribed += subscribed
+                self.health.price_change_missing_other += other
+                self.health.price_change_missing_unclassified += max(
+                    0, result.uninitialized_deltas - subscribed - other
+                )
             if result.changes:
                 try:
                     await asyncio.to_thread(
@@ -206,6 +273,12 @@ class PolymarketRecorder:
                 self.health.last_valid_book_update_at = observed_at
             else:
                 self.health.book_uninitialized_delta_count += 1
+                event = _event_payload(payload)
+                token = event.get("asset_id") or event.get("tokenId")
+                if token in self._subscribed_tokens:
+                    self.health.tick_size_missing_subscribed += 1
+                else:
+                    self.health.tick_size_missing_other += 1
             return
 
         self.health.unknown_event_count += 1
@@ -270,6 +343,11 @@ class PolymarketRecorder:
         while True:
             await asyncio.sleep(10)
             recorded_at = utc_now().isoformat()
+            # Aggregate initialized/desired cardinality once per 10 seconds,
+            # never per incoming delta; not proof of continuous validity.
+            self.health.subscribed_books_initialized = len(
+                self.books.initialized_tokens.intersection(self._subscribed_tokens)
+            )
             try:
                 await asyncio.to_thread(self.storage.append_health, self.health, recorded_at)
             except Exception:

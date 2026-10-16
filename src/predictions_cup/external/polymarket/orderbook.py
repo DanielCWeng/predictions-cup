@@ -110,6 +110,12 @@ class OrderBookStore:
         normalized_changes: list[BookChangeEvent] = []
         missing = 0
         missing_token_ids: set[str] = set()
+        # Validate the entire wire message before changing any cached book.
+        # Otherwise an invalid later entry leaves earlier deltas applied even
+        # though the WebSocket rejects the frame and records no changes.
+        validated: list[
+            tuple[_MutableBook, BookSide, Decimal, Decimal, str | None]
+        ] = []
 
         for change_raw in changes_raw:
             if not isinstance(change_raw, dict):
@@ -118,18 +124,14 @@ class OrderBookStore:
             token_id = require_text(
                 change.get("asset_id") or change.get("tokenId"), "price_change asset_id"
             )
-            book = self._books.get(token_id)
-            if book is None:
-                missing += 1
-                missing_token_ids.add(token_id)
-                continue
+            # Validate even unknown/unseeded-token entries before touching any
+            # initialized book. One malformed entry rejects the entire frame.
+            # Missing-token accounting still applies to valid unknown entries.
             side_raw = require_text(change.get("side"), "price_change side").upper()
             normalized_side: BookSide
             if side_raw == "BUY":
-                side = book.bids
                 normalized_side = "BUY"
             elif side_raw == "SELL":
-                side = book.asks
                 normalized_side = "SELL"
             else:
                 raise PayloadError(f"unsupported price_change side: {side_raw}")
@@ -140,18 +142,31 @@ class OrderBookStore:
             size = _shared_size(size)
             if price < 0 or price > 1 or size < 0:
                 raise PayloadError("price_change price/size outside valid range")
+            book = self._books.get(token_id)
+            if book is None:
+                missing += 1
+                missing_token_ids.add(token_id)
+                continue
+            validated.append(
+                (book, normalized_side, price, size, optional_text(change.get("hash")))
+            )
+
+        # Preserve the original change order (including repeated levels) when
+        # computing per-delta best prices and book hashes.
+        for book, normalized_side, price, size, change_hash in validated:
+            side = book.bids if normalized_side == "BUY" else book.asks
             if size == 0:
                 side.pop(price, None)
             else:
                 side[price] = size
             book.source_timestamp = source_ts
             book.observed_at = observed
-            book.book_hash = optional_text(change.get("hash")) or book.book_hash
-            changed.add(token_id)
+            book.book_hash = change_hash or book.book_hash
+            changed.add(book.token_id)
             normalized_changes.append(
                 BookChangeEvent(
                     market_id=book.market_id,
-                    token_id=token_id,
+                    token_id=book.token_id,
                     side=normalized_side,
                     price=price,
                     size=size,
