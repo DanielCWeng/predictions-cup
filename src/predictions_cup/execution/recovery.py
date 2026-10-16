@@ -312,7 +312,11 @@ async def recover_startup(
                         permission=placement_replay_allowed,
                         wall_clock=wall_clock,
                         journal=journal,
-                    )
+                    ),
+                    logical_operation_id=current_envelope.logical_operation_id,
+                    tournament_id=current_envelope.tournament_id,
+                    idempotency_key=current_envelope.idempotency_key or "",
+                    payload_sha256=current_envelope.payload_sha256,
                 ):
                     return await live_sink.dispatch_recovery(current_envelope)
 

@@ -25,7 +25,10 @@ from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.observe.contracts import ObservationEmitter, ObservationKind, VenueObservation
 from predictions_cup.sig.competition_deadline import assert_competition_placement_open
 from predictions_cup.sig.errors import SigApiError, SigExecutionUncertainError
-from predictions_cup.sig.trading_client import SigTradingClient
+from predictions_cup.sig.trading_client import (
+    SigTradingClient,
+    startup_recovery_wire_authorized,
+)
 
 ClockNs = Callable[[], int]
 WallClock = Callable[[], datetime]
@@ -93,7 +96,12 @@ class SigLiveSink:
         *,
         plan: ExecutionPlan | None = None,
     ) -> ExecutionEvent:
-        """Redispatch one durable unresolved placement with the same identity."""
+        """Redispatch one durable unresolved placement with the same identity.
+
+        An unresolved journal alone is NEVER permission for a new HTTP wire.
+        Fail closed even for direct calls that bypass recover_startup().
+        """
+        self._require_recovery_replay_scope(envelope)
         recovery_state = self._assert_recovery_authority(envelope)
         assert_competition_placement_open(self._wall_clock(), attempted_network=True)
         if recovery_state is not LifecycleState.RECONCILING:
@@ -113,6 +121,25 @@ class SigLiveSink:
             recovery_plan,
             require_reservation=False,
         )
+
+    @staticmethod
+    def _require_recovery_replay_scope(envelope: ExecutionEnvelope) -> None:
+        if not startup_recovery_wire_authorized(
+            logical_operation_id=envelope.logical_operation_id,
+            tournament_id=envelope.tournament_id,
+            idempotency_key=envelope.idempotency_key,
+            payload_sha256=envelope.payload_sha256,
+        ):
+            # Existing durable placement may have filled: never reject it or
+            # release reserved economic exposure on absent/expired authority.
+            raise SigExecutionUncertainError(
+                status_code=None,
+                code="STARTUP_REPLAY_WIRE_NOT_AUTHORISED",
+                safe_message=(
+                    "Recovery placement missing an exact, current replay scope; "
+                    "preserve journal and reservation for reconciliation"
+                ),
+            )
 
     def _assert_recovery_authority(
         self,
@@ -199,6 +226,11 @@ class SigLiveSink:
                 raise ValueError(
                     "journaled placement must use identity-preserving recovery"
                 )
+
+        # Guard even a private direct _dispatch_placement recovery invocation:
+        # no one may bypass dispatch_recovery() by passing require_reservation=False.
+        if not require_reservation:
+            self._require_recovery_replay_scope(envelope)
 
         # This check precedes the durable journal and *all* network attempts.
         # MakerCoordinator has already reserved/marked the quote submitted.

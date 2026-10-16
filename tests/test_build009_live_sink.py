@@ -40,7 +40,10 @@ from predictions_cup.sig.errors import (
     SigRateLimitError,
 )
 from predictions_cup.sig.rest_governor import SigRestGovernor
-from predictions_cup.sig.trading_client import SigTradingClient
+from predictions_cup.sig.trading_client import (
+    SigTradingClient,
+    enforce_startup_replay_wire_authorization,
+)
 from predictions_cup.sig.trading_dto import (
     BatchOrderResponseDto,
     MultiLegOrderRequestDto,
@@ -671,6 +674,24 @@ def test_observe_classifies_final_429_503_and_transport_timeout(
         journal.close()
 
 
+async def _authorised_recovery_fixture(
+    sink: SigLiveSink, plan: ExecutionPlan,
+) -> object:
+    """Supply explicit synthetic scope so cutoff tests reach the actual gate.
+
+    Unscoped DIRECT recovery is separately asserted to send zero HTTP wires.
+    This is a test-only grant, never a production issuer or trusted credential.
+    """
+    envelope = plan.envelope
+    with enforce_startup_replay_wire_authorization(
+        lambda: True, logical_operation_id=envelope.logical_operation_id,
+        tournament_id=envelope.tournament_id,
+        idempotency_key=envelope.idempotency_key or "",
+        payload_sha256=envelope.payload_sha256,
+    ):
+        return await sink.dispatch_recovery(envelope, plan=plan)
+
+
 @pytest.mark.parametrize(
     ("wall_now", "error_code"),
     [
@@ -718,7 +739,7 @@ def test_recovery_cutoff_preserves_prior_attempt_reservation(
     )
     try:
         with pytest.raises(SigApiError) as caught:
-            asyncio.run(sink.dispatch_recovery(plan.envelope, plan=plan))
+            asyncio.run(_authorised_recovery_fixture(sink, plan))
         assert caught.value.code == error_code
         assert reservations.contains_operation(
             plan.envelope.logical_operation_id, plan.envelope.intent_ids
@@ -1104,7 +1125,7 @@ def test_recovery_governor_cutoff_does_not_clear_prior_uncertain_order(
         with pytest.raises(
             SigExecutionUncertainError, match="Prior journaled placement"
         ):
-            asyncio.run(sink.dispatch_recovery(plan.envelope, plan=plan))
+            asyncio.run(_authorised_recovery_fixture(sink, plan))
         assert fake.calls == 1
         assert journal.lifecycle_state(plan.envelope.logical_operation_id) is (
             LifecycleState.UNCERTAIN

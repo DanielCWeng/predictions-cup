@@ -57,9 +57,16 @@ from predictions_cup.sig.account_state import (
     AccountTrustTransition,
 )
 from predictions_cup.sig.client import RetryPolicy
-from predictions_cup.sig.errors import SigRateLimitError, SigUnexpectedServerError
+from predictions_cup.sig.errors import (
+    SigExecutionUncertainError,
+    SigRateLimitError,
+    SigUnexpectedServerError,
+)
 from predictions_cup.sig.rest_governor import SigRestGovernor
-from predictions_cup.sig.trading_client import SigTradingClient
+from predictions_cup.sig.trading_client import (
+    SigTradingClient,
+    enforce_startup_replay_wire_authorization,
+)
 from predictions_cup.sig.trading_dto import (
     CancelAllResponseDto,
     OrderFillsResponseDto,
@@ -2272,4 +2279,206 @@ def test_251_continuously_valid_replay_permission_allows_bounded_original_key_re
         assert len(journal.events(envelope.logical_operation_id)) > 0
     finally:
         asyncio.run(client.aclose())
+        journal.close()
+
+
+
+# --- #256 successor: close direct SigLiveSink recovery-entrypoint bypass ---
+
+@pytest.mark.parametrize(
+    "state", (LifecycleState.PENDING, LifecycleState.UNCERTAIN, LifecycleState.RECONCILING)
+)
+def test_direct_recovery_without_replay_scope_never_sends_or_releases(
+    tmp_path: Path, state: LifecycleState,
+) -> None:
+    journal, reservations, trading, rest, sink, envelope = _restart_replay_case(
+        tmp_path, state
+    )
+    try:
+        # Restore every unresolved exposure as startup would, with NO grant.
+        asyncio.run(recover_startup(
+            journal=journal, rest=cast(RecoveryRest, rest), live_sink=sink,
+            tournament_id="t1", tournament_slug="cup",
+            reservations=reservations, market_by_exchange={"36": "m1"},
+        ))
+        assert reservations.contains_operation(envelope.logical_operation_id, envelope.intent_ids)
+        async def directly() -> None:
+            with pytest.raises(SigExecutionUncertainError, match="Recovery placement"):
+                await sink.dispatch_recovery(envelope)
+
+        asyncio.run(directly())
+        assert trading.payloads == []
+        assert journal.lifecycle_state(envelope.logical_operation_id) is state
+        assert reservations.contains_operation(envelope.logical_operation_id, envelope.intent_ids)
+    finally:
+        journal.close()
+
+
+@pytest.mark.parametrize("mismatch", ("operation", "tournament", "key", "hash"))
+def test_direct_recovery_cannot_borrow_another_orders_scoped_grant(
+    tmp_path: Path, mismatch: str,
+) -> None:
+    journal, reservations, trading, rest, sink, envelope = _restart_replay_case(
+        tmp_path, LifecycleState.UNCERTAIN
+    )
+    identity = {
+        "logical_operation_id": envelope.logical_operation_id,
+        "tournament_id": envelope.tournament_id,
+        "idempotency_key": envelope.idempotency_key or "",
+        "payload_sha256": envelope.payload_sha256,
+    }
+    substitutions = {
+        "operation": ("logical_operation_id", "unrelated-operation"),
+        "tournament": ("tournament_id", "other-tournament"),
+        "key": ("idempotency_key", "wrong-key"),
+        "hash": ("payload_sha256", "0" * 64),
+    }
+    field, wrong = substitutions[mismatch]
+    identity[field] = wrong
+
+    async def directly() -> None:
+        with (
+            enforce_startup_replay_wire_authorization(
+                lambda: True,
+                logical_operation_id=identity["logical_operation_id"],
+                tournament_id=identity["tournament_id"],
+                idempotency_key=identity["idempotency_key"],
+                payload_sha256=identity["payload_sha256"],
+            ),
+            pytest.raises(SigExecutionUncertainError),
+        ):
+            await sink.dispatch_recovery(envelope)
+
+    try:
+        asyncio.run(recover_startup(
+            journal=journal, rest=cast(RecoveryRest, rest), live_sink=sink,
+            tournament_id="t1", tournament_slug="cup",
+            reservations=reservations, market_by_exchange={"36": "m1"},
+        ))
+        asyncio.run(directly())
+        assert trading.payloads == []
+        assert journal.lifecycle_state(envelope.logical_operation_id) is LifecycleState.UNCERTAIN
+        assert reservations.contains_operation(envelope.logical_operation_id, envelope.intent_ids)
+    finally:
+        journal.close()
+
+
+def test_direct_recovery_scoped_grant_denies_revocation_and_callback_error(
+    tmp_path: Path,
+) -> None:
+    journal, reservations, trading, rest, sink, envelope = _restart_replay_case(
+        tmp_path, LifecycleState.UNCERTAIN
+    )
+    allowed = [True]
+
+    def revoked() -> bool:
+        return allowed[0]
+
+    def broken() -> bool:
+        raise RuntimeError("grant service unavailable")
+
+    async def directly() -> None:
+        for callback in (revoked, broken):
+            with enforce_startup_replay_wire_authorization(
+                callback, logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
+                idempotency_key=envelope.idempotency_key or "",
+                payload_sha256=envelope.payload_sha256,
+            ):
+                allowed[0] = False
+                with pytest.raises(SigExecutionUncertainError):
+                    await sink.dispatch_recovery(envelope)
+        # Token must have been reset after every nested exception.
+        with pytest.raises(SigExecutionUncertainError):
+            await sink.dispatch_recovery(envelope)
+
+    try:
+        asyncio.run(recover_startup(
+            journal=journal, rest=cast(RecoveryRest, rest), live_sink=sink,
+            tournament_id="t1", tournament_slug="cup",
+            reservations=reservations, market_by_exchange={"36": "m1"},
+        ))
+        asyncio.run(directly())
+        assert trading.payloads == []
+        assert journal.lifecycle_state(envelope.logical_operation_id) is LifecycleState.UNCERTAIN
+        assert reservations.contains_operation(envelope.logical_operation_id, envelope.intent_ids)
+    finally:
+        journal.close()
+
+
+def test_recovery_context_never_propagates_to_spawned_task_even_with_same_client(
+    tmp_path: Path,
+) -> None:
+    journal, reservations, trading, rest, sink, envelope = _restart_replay_case(
+        tmp_path, LifecycleState.UNCERTAIN
+    )
+
+    async def cross_task() -> None:
+        with enforce_startup_replay_wire_authorization(
+            lambda: True, logical_operation_id=envelope.logical_operation_id,
+            tournament_id=envelope.tournament_id,
+            idempotency_key=envelope.idempotency_key or "",
+            payload_sha256=envelope.payload_sha256,
+        ):
+            # asyncio child tasks inherit ContextVars, but must NOT inherit the
+            # permission: binding includes the original calling Task.
+            task = asyncio.create_task(sink.dispatch_recovery(envelope))
+            with pytest.raises(SigExecutionUncertainError):
+                await task
+        with pytest.raises(SigExecutionUncertainError):
+            await sink.dispatch_recovery(envelope)
+
+    try:
+        asyncio.run(recover_startup(
+            journal=journal, rest=cast(RecoveryRest, rest), live_sink=sink,
+            tournament_id="t1", tournament_slug="cup",
+            reservations=reservations, market_by_exchange={"36": "m1"},
+        ))
+        asyncio.run(cross_task())
+        assert trading.payloads == []
+        assert journal.lifecycle_state(envelope.logical_operation_id) is LifecycleState.UNCERTAIN
+        assert reservations.contains_operation(envelope.logical_operation_id, envelope.intent_ids)
+    finally:
+        journal.close()
+
+
+def test_recovery_scope_clears_after_cancelled_authorized_task(tmp_path: Path) -> None:
+    journal, reservations, trading, rest, sink, envelope = _restart_replay_case(
+        tmp_path, LifecycleState.UNCERTAIN
+    )
+
+    async def scenario() -> None:
+        entered = asyncio.Event()
+
+        async def worker() -> None:
+            with enforce_startup_replay_wire_authorization(
+                lambda: True,
+                logical_operation_id=envelope.logical_operation_id,
+                tournament_id=envelope.tournament_id,
+                idempotency_key=envelope.idempotency_key or "",
+                payload_sha256=envelope.payload_sha256,
+            ):
+                entered.set()
+                await asyncio.Event().wait()
+
+        task = asyncio.create_task(worker())
+        await entered.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        # No permission leaked into the parent task or a later direct call.
+        with pytest.raises(SigExecutionUncertainError):
+            await sink.dispatch_recovery(envelope)
+
+    try:
+        asyncio.run(recover_startup(
+            journal=journal, rest=cast(RecoveryRest, rest), live_sink=sink,
+            tournament_id="t1", tournament_slug="cup",
+            reservations=reservations, market_by_exchange={"36": "m1"},
+        ))
+        asyncio.run(scenario())
+        assert trading.payloads == []
+        assert journal.lifecycle_state(envelope.logical_operation_id) is LifecycleState.UNCERTAIN
+        assert reservations.contains_operation(envelope.logical_operation_id, envelope.intent_ids)
+    finally:
         journal.close()
