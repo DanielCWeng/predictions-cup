@@ -29,10 +29,17 @@ def assert_competition_placement_open(
     HTTP placement attempt. A naive check only at strategy decision time is unsafe.
     """
     if now.tzinfo is None or now.utcoffset() is None:
-        raise SigApiError(
+        # Untrusted clock BEFORE any possible wire attempt is conclusively
+        # unsent; after a prior attempt it cannot negate earlier economic risk.
+        # The latter must be journalled UNCERTAIN and keep its reservation.
+        error_type = SigExecutionUncertainError if attempted_network else SigApiError
+        raise error_type(
             status_code=None,
             code="COMPETITION_CLOCK_UNTRUSTED",
-            safe_message="Timezone-aware clock required for SIG placement cutoff",
+            safe_message=(
+                "Timezone-aware clock required; preserve original placement "
+                "identity and reconcile if an earlier HTTP attempt was made"
+            ),
         )
     if now.astimezone(UTC) < LAST_ORDER_SUBMISSION_UTC:
         return
