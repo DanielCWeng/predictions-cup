@@ -76,7 +76,8 @@ def _pending_case(
     token = _claim(store)
     assert _reserve(store, prior, token, qty=700) == "SIMULATED_ONLY"
     assert store.simulated_possible_wire("intent-a").status == "SIMULATED_ONLY"
-    assert _state(path)[1][0][2] == "UNCERTAIN"
+    with sqlite3.connect(path) as db:
+        assert db.execute("SELECT state FROM intents").fetchone()[0] == "UNCERTAIN"
     return private, store, prior
 
 
