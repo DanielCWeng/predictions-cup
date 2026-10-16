@@ -44,8 +44,11 @@ def test_two_initialized_tokens_preserve_per_change_identity_and_hash() -> None:
         ("A", "market-A", "a-new"),
         ("B", "market-B", "b-new"),
     ]
-    assert store.snapshot("A", depth=1).bids[0].size == Decimal("9")
-    assert store.snapshot("B", depth=1).asks[0].size == Decimal("8")
+    snapshot_a = store.snapshot("A", depth=1)
+    snapshot_b = store.snapshot("B", depth=1)
+    assert snapshot_a is not None and snapshot_b is not None
+    assert snapshot_a.bids[0].size == Decimal("9")
+    assert snapshot_b.asks[0].size == Decimal("8")
 
 
 def test_initialized_a_and_unknown_c_not_mislabelled_as_b() -> None:
