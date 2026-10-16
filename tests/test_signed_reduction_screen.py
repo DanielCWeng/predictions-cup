@@ -5,6 +5,7 @@ from dataclasses import replace
 import pytest
 
 from predictions_cup.research.signed_reduction_screen import (
+    ConditionalReduction,
     SignedInventoryEvidence,
     screen_signed_reduction,
 )
@@ -32,7 +33,7 @@ def _screen(
     outcome_side: str = "YES",
     action: str = "BUY",
     quantity: int = 1000,
-):
+) -> ConditionalReduction:
     return screen_signed_reduction(
         data or _case(),
         exchange_id=exchange_id,
@@ -88,26 +89,34 @@ def test_requires_positive_integral_lots(amount: int | float) -> None:
 
 
 @pytest.mark.parametrize(
-    "field",
+    "evidence",
     [
-        "account_trusted",
-        "reconciliation_complete",
-        "signed_positions_verified",
-        "venue_netting_verified",
-        "market_open_verified",
-        "global_halt_clear",
+        replace(_case(), account_trusted=False),
+        replace(_case(), reconciliation_complete=False),
+        replace(_case(), signed_positions_verified=False),
+        replace(_case(), venue_netting_verified=False),
+        replace(_case(), market_open_verified=False),
+        replace(_case(), global_halt_clear=False),
     ],
 )
-def test_missing_independent_proof_denies(field: str) -> None:
-    assert not _screen(replace(_case(), **{field: False})).mathematically_reducing
+def test_missing_independent_proof_denies(
+    evidence: SignedInventoryEvidence,
+) -> None:
+    assert not _screen(evidence).mathematically_reducing
 
 
 @pytest.mark.parametrize(
-    "field",
-    ["open_order_exposure", "uncertain_order_exposure", "reservation_exposure"],
+    "evidence",
+    [
+        replace(_case(), open_order_exposure=1),
+        replace(_case(), uncertain_order_exposure=1),
+        replace(_case(), reservation_exposure=1),
+    ],
 )
-def test_any_pending_exposure_denies(field: str) -> None:
-    assert not _screen(replace(_case(), **{field: 1})).mathematically_reducing
+def test_any_pending_exposure_denies(
+    evidence: SignedInventoryEvidence,
+) -> None:
+    assert not _screen(evidence).mathematically_reducing
 
 
 @pytest.mark.parametrize("age", [None, float("nan"), -1.0, 11.0])
