@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-
-import pytest
 from datetime import UTC, datetime
 from typing import Any, cast
+
+import pytest
 
 from predictions_cup.external.polymarket.health import IngestionHealth
 from predictions_cup.external.polymarket.models import JsonObject
