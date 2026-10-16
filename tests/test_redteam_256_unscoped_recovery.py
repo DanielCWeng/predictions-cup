@@ -109,6 +109,7 @@ def test_child_task_must_not_inherit_other_operation_grant_after_scope_exit() ->
         await asyncio.sleep(0)  # the parent's authorisation scope has ended
         await client._request_json(
             "POST", "orders", route_template="/orders",
+            resolved_payload=None,
             resolved_content=b'{"idempotencyKey":"DIFFERENT-OPERATION"}',
             accepted_statuses=frozenset({200}),
             execution_can_be_uncertain=True,
