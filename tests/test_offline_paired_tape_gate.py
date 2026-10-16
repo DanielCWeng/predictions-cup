@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import socket
-from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable
 
@@ -78,7 +77,7 @@ def _sample(
     mapping_file, sig_file, pm_file = (tmp_path / f"{kind}.jsonl" for kind in blobs)
     mf_bytes = json.dumps(manifest, sort_keys=True).encode()
     mf.write_bytes(mf_bytes)
-    for kind, path in zip(blobs, (mapping_file, sig_file, pm_file)):
+    for kind, path in zip(blobs, (mapping_file, sig_file, pm_file), strict=True):
         path.write_bytes(blobs[kind])
     return (mf, mapping_file, sig_file, pm_file), hashlib.sha256(mf_bytes).hexdigest()
 
