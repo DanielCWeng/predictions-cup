@@ -1,18 +1,16 @@
 """Independent Alpha-2 replay of frozen #254 tests against corrected #257 source."""
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-import asyncio
-
-from predictions_cup.config import AppSettings
-from predictions_cup.external.polymarket.recorder import PolymarketRecorder
 
 import pytest
 
+from predictions_cup.config import AppSettings
 from predictions_cup.external.polymarket.models import PayloadError
 from predictions_cup.external.polymarket.orderbook import OrderBookStore
-
+from predictions_cup.external.polymarket.recorder import PolymarketRecorder
 
 def _seed(store: OrderBookStore, token: str, observed: datetime) -> None:
     store.apply_full_snapshot(
