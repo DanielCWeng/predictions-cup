@@ -176,3 +176,129 @@ def test_cancellation_remains_permitted_after_cutoff() -> None:
 
     asyncio.run(_run())
 
+
+
+@pytest.mark.parametrize("route", ("/orders", "/orders/batch", "/orders/multi-leg"))
+def test_exhausted_429_preserves_unknown_placement(route: str) -> None:
+    async def _run() -> None:
+        wires: list[bytes] = []
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            wires.append(request.content)
+            return httpx.Response(
+                429, json={"error": {"code": "RATE_LIMITED", "message": "slow down"}},
+                headers={"Retry-After": "0"},
+            )
+
+        client = _client(
+            httpx.MockTransport(respond), _Governor(),
+            lambda: LAST_ORDER_SUBMISSION_UTC - timedelta(seconds=10),
+        )
+        try:
+            with pytest.raises(SigExecutionUncertainError, match="RATE_LIMITED"):
+                await client._request_json(
+                    "POST", route.lstrip("/"), route_template=route,
+                    resolved_payload={"idempotencyKey": "fixed"},
+                    accepted_statuses=frozenset({200}),
+                    execution_can_be_uncertain=True,
+                )
+            assert len(wires) == 2
+            assert wires[0] == wires[1]
+        finally:
+            await client.aclose()
+
+    asyncio.run(_run())
+
+
+@pytest.mark.parametrize("route", ("/orders", "/orders/batch", "/orders/multi-leg"))
+def test_retry_429_then_cutoff_retains_uncertain_single_wire(route: str) -> None:
+    async def _run() -> None:
+        now = LAST_ORDER_SUBMISSION_UTC - timedelta(seconds=1)
+        wires = 0
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            nonlocal now, wires
+            wires += 1
+            now = LAST_ORDER_SUBMISSION_UTC
+            return httpx.Response(
+                429, json={"error": {"code": "RATE_LIMITED", "message": "retry"}},
+                headers={"Retry-After": "0"},
+            )
+
+        client = _client(httpx.MockTransport(respond), _Governor(), lambda: now)
+        try:
+            with pytest.raises(
+                SigExecutionUncertainError, match="COMPETITION_CUTOFF_AFTER_DISPATCH"
+            ):
+                await client._request_json(
+                    "POST", route.lstrip("/"), route_template=route,
+                    resolved_payload={"idempotencyKey": "same"},
+                    accepted_statuses=frozenset({200}),
+                    execution_can_be_uncertain=True,
+                )
+            assert wires == 1
+        finally:
+            await client.aclose()
+
+    asyncio.run(_run())
+
+
+def test_clock_rollback_within_client_blocks_retry_after_prior_wire() -> None:
+    async def _run() -> None:
+        now = LAST_ORDER_SUBMISSION_UTC - timedelta(seconds=1)
+        wires = 0
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            nonlocal now, wires
+            wires += 1
+            now -= timedelta(seconds=15)
+            return httpx.Response(
+                502, json={"error": {"code": "ORDER_STATUS_UNKNOWN", "message": "unknown"}},
+            )
+
+        client = _client(httpx.MockTransport(respond), _Governor(), lambda: now)
+        try:
+            with pytest.raises(SigExecutionUncertainError, match="COMPETITION_CLOCK_ROLLBACK"):
+                await client._request_json(
+                    "POST", "orders", route_template="/orders",
+                    resolved_payload={"idempotencyKey": "same"},
+                    accepted_statuses=frozenset({200}),
+                    execution_can_be_uncertain=True,
+                )
+            assert wires == 1
+        finally:
+            await client.aclose()
+
+    asyncio.run(_run())
+
+
+def test_clock_reopens_after_cutoff_same_client_is_denied() -> None:
+    async def _run() -> None:
+        now = COMPETITION_END_UTC
+        wires = 0
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            nonlocal wires
+            wires += 1
+            return httpx.Response(200, json={"ok": True})
+
+        client = _client(httpx.MockTransport(respond), _Governor(), lambda: now)
+        try:
+            with pytest.raises(SigApiError, match="COMPETITION_ORDER_CLOSED"):
+                await client._request_json(
+                    "POST", "orders", route_template="/orders",
+                    resolved_payload={}, accepted_statuses=frozenset({200}),
+                    execution_can_be_uncertain=True,
+                )
+            now -= timedelta(hours=1)
+            with pytest.raises(SigApiError, match="COMPETITION_CLOCK_ROLLBACK"):
+                await client._request_json(
+                    "POST", "orders", route_template="/orders",
+                    resolved_payload={}, accepted_statuses=frozenset({200}),
+                    execution_can_be_uncertain=True,
+                )
+            assert wires == 0
+        finally:
+            await client.aclose()
+
+    asyncio.run(_run())
