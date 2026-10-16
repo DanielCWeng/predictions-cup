@@ -1638,7 +1638,7 @@ def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
                 placement_replay_allowed=lambda envelope: PlacementReplayAuthorization(
                     logical_operation_id=envelope.logical_operation_id,
                     tournament_id=envelope.tournament_id,
-                    idempotency_key=envelope.idempotency_key,
+                    idempotency_key=envelope.idempotency_key or "",
                     payload_sha256=envelope.payload_sha256,
                     issued_at_utc=datetime.now(UTC) - timedelta(seconds=1),
                     expires_at_utc=datetime.now(UTC) + timedelta(seconds=10),
@@ -1747,7 +1747,7 @@ def _fresh_replay_grant(
     return PlacementReplayAuthorization(
         logical_operation_id=envelope.logical_operation_id,
         tournament_id=envelope.tournament_id,
-        idempotency_key=envelope.idempotency_key,
+        idempotency_key=envelope.idempotency_key or "",
         payload_sha256=envelope.payload_sha256,
         issued_at_utc=now - timedelta(seconds=1),
         expires_at_utc=now + timedelta(seconds=15),
