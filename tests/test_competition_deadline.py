@@ -302,3 +302,76 @@ def test_clock_reopens_after_cutoff_same_client_is_denied() -> None:
             await client.aclose()
 
     asyncio.run(_run())
+
+
+@pytest.mark.parametrize("route", ("/orders", "/orders/batch", "/orders/multi-leg"))
+@pytest.mark.parametrize("outcome", ("unknown_502", "rate_429", "transport"))
+def test_earlier_possible_wire_then_naive_retry_is_uncertain(
+    route: str, outcome: str,
+) -> None:
+    """Original #207/#246 red-team P0 falsifier: no second wire, never REJECTED."""
+    async def run() -> None:
+        now: datetime = LAST_ORDER_SUBMISSION_UTC - timedelta(seconds=1)
+        wires: list[bytes] = []
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            nonlocal now
+            wires.append(request.content)
+            now = datetime(2026, 11, 4, 16, 59, 54)  # same nominal time, no tz
+            if outcome == "transport":
+                raise httpx.ConnectError("possible lost ACK", request=request)
+            if outcome == "rate_429":
+                return httpx.Response(429, json={
+                    "error": {"code": "RATE_LIMITED", "message": "fixture"}
+                }, headers={"Retry-After": "0"})
+            return httpx.Response(502, json={
+                "error": {"code": "ORDER_STATUS_UNKNOWN", "message": "fixture"}
+            })
+
+        client = _client(httpx.MockTransport(respond), _Governor(), lambda: now)
+        try:
+            with pytest.raises(SigExecutionUncertainError) as caught:
+                await client._request_json(
+                    "POST", route.lstrip("/"), route_template=route,
+                    resolved_payload={"idempotencyKey": "original-unmodified"},
+                    accepted_statuses=frozenset({200}),
+                    execution_can_be_uncertain=True,
+                )
+            assert caught.value.code == "COMPETITION_CLOCK_UNTRUSTED"
+            assert len(wires) == 1
+            assert b"original-unmodified" in wires[0]
+        finally:
+            await client.aclose()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("route", ("/orders", "/orders/batch", "/orders/multi-leg"))
+def test_first_attempt_naive_clock_is_rejected_with_zero_wire(route: str) -> None:
+    async def run() -> None:
+        wires = 0
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            nonlocal wires
+            wires += 1
+            return httpx.Response(200, json={"ok": True})
+
+        client = _client(
+            httpx.MockTransport(respond), _Governor(),
+            lambda: datetime(2026, 11, 4, 16, 59, 54),
+        )
+        try:
+            with pytest.raises(SigApiError) as caught:
+                await client._request_json(
+                    "POST", route.lstrip("/"), route_template=route,
+                    resolved_payload={"idempotencyKey": "never-sent"},
+                    accepted_statuses=frozenset({200}),
+                    execution_can_be_uncertain=True,
+                )
+            assert caught.value.code == "COMPETITION_CLOCK_UNTRUSTED"
+            assert not isinstance(caught.value, SigExecutionUncertainError)
+            assert wires == 0
+        finally:
+            await client.aclose()
+
+    asyncio.run(run())
