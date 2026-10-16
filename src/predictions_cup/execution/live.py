@@ -347,6 +347,32 @@ class SigLiveSink:
             )
             raise
         except SigApiError as exc:
+            # A recovery has a *previous* durable possibility of execution,
+            # even if this invocation was stopped by a post-governor pre-wire
+            # cutoff, 429, or client-side error. Never reinterpret the older
+            # economic attempt as conclusively rejected or free its capital.
+            if not require_reservation:
+                observed = self._clock_ns()
+                self._mark_uncertain_unless_resolved(envelope, observed)
+                self._journal.record_event(
+                    logical_operation_id=envelope.logical_operation_id,
+                    tournament_id=envelope.tournament_id,
+                    event_type="UNCERTAIN",
+                    observed_monotonic_ns=observed,
+                    terminal_status=LifecycleState.UNCERTAIN.value,
+                    detail_json=json.dumps(
+                        {"reason": "recovery_response_not_authoritative"}
+                    ),
+                )
+                raise SigExecutionUncertainError(
+                    status_code=exc.status_code,
+                    code=exc.code,
+                    safe_message=(
+                        "Prior journaled placement remains uncertain; preserve "
+                        "reservation and reconcile original idempotency key"
+                    ),
+                    details=exc.details,
+                ) from exc
             observed = self._clock_ns()
             self._observe_error(exc, envelope, observed, plan=plan)
             self._observe(
