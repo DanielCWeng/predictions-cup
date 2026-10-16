@@ -130,17 +130,17 @@ class RawBookAudit:
             self._sessions.add(session_key)
         for batch in _batches(payload):
             books = batch.get("books")
-            if not isinstance(books, list) or not books:
-                continue
-            self.batches_with_books += 1
-            # Old capture persists the raw payload before the state engine
-            # checks revision continuity, duplicates and resyncRequired.
-            # A count of raw books is NOT a count of accepted depth.
-            if batch.get("resyncRequired") is True:
-                self.resync_required_batches_with_books += 1
+            has_books = isinstance(books, list) and bool(books)
+
+            # Revision continuity belongs to the *topic*, not to books[].
+            # Trade-only/settlement-only batches must advance the watermark:
+            # otherwise a later book carrying a valid revision looks like a
+            # fake gap. Within a FIFO shard we can detect local anomalies,
+            # but cannot reconstruct acceptance across unsortable shards.
             delivery = batch.get("delivery")
             if not isinstance(delivery, dict):
-                self.missing_delivery_batches_with_books += 1
+                if has_books:
+                    self.missing_delivery_batches_with_books += 1
             else:
                 revision = delivery.get("revision")
                 previous_revision = delivery.get("previousRevision")
@@ -149,26 +149,33 @@ class RawBookAudit:
                     or type(previous_revision) is not int
                     or previous_revision < 0
                 ):
-                    self.missing_delivery_batches_with_books += 1
+                    if has_books:
+                        self.missing_delivery_batches_with_books += 1
                 elif (
                     epoch_identity_valid
                     and isinstance(topic, str)
                     and ":market:" in topic
                 ):
-                    # Within one FIFO shard, per-market topic revisions are
-                    # comparable. Not comparable across UUID shard boundaries,
-                    # nor across markets multiplexed on a root topic.
                     delivery_key = (session_key, epoch_key, topic)
                     old_revision = self._delivery_revisions.get(delivery_key)
-                    if old_revision is not None:
+                    if has_books and old_revision is not None:
                         if revision <= old_revision:
                             self.duplicate_delivery_batches_with_books_within_shard += 1
                         elif previous_revision > old_revision:
                             self.revision_gap_batches_with_books_within_shard += 1
                     if old_revision is None or revision > old_revision:
                         self._delivery_revisions[delivery_key] = revision
-                else:
+                elif has_books:
                     self.unscoped_delivery_continuity_batches_with_books += 1
+
+            if not has_books:
+                continue
+            self.batches_with_books += 1
+            # The recorder persists raw messages before the state engine
+            # applies duplicate/gap/resyncRequired rejection or recovery.
+            # These figures count raw appearances, not accepted depth.
+            if batch.get("resyncRequired") is True:
+                self.resync_required_batches_with_books += 1
             for item in books:
                 if not isinstance(item, dict):
                     self.unversioned_or_malformed_books += 1
