@@ -21,7 +21,6 @@ from predictions_cup.sig.realtime_state import (
 )
 from predictions_cup.sig.realtime_storage import SigRealtimeRecorder
 from predictions_cup.sig.rest_governor import RestPriority
-
 from test_sig_realtime import FakeRest
 
 
@@ -155,7 +154,7 @@ def test_sig_realtime_on_off_fake_rest_transcripts_match_and_never_infer_trust(
         if mirror is not None:
             mirror.start()
         engine = SigRealtimeStateEngine(
-            rest=rest, recorder=recorder, tournament_id="fake-cup",
+            rest=rest, recorder=recorder, tournament_id="cup",
             tracked_depth_exchange_ids={"36", "37"},
             depth_capture=mirror.record if mirror else None,
         )
