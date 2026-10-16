@@ -2337,15 +2337,17 @@ def test_direct_recovery_cannot_borrow_another_orders_scoped_grant(
     identity[field] = wrong
 
     async def directly() -> None:
-        with enforce_startup_replay_wire_authorization(
-            lambda: True,
-            logical_operation_id=identity["logical_operation_id"],
-            tournament_id=identity["tournament_id"],
-            idempotency_key=identity["idempotency_key"],
-            payload_sha256=identity["payload_sha256"],
+        with (
+            enforce_startup_replay_wire_authorization(
+                lambda: True,
+                logical_operation_id=identity["logical_operation_id"],
+                tournament_id=identity["tournament_id"],
+                idempotency_key=identity["idempotency_key"],
+                payload_sha256=identity["payload_sha256"],
+            ),
+            pytest.raises(SigExecutionUncertainError),
         ):
-            with pytest.raises(SigExecutionUncertainError):
-                await sink.dispatch_recovery(envelope)
+            await sink.dispatch_recovery(envelope)
 
     try:
         asyncio.run(recover_startup(
