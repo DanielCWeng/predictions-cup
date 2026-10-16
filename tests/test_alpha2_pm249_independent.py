@@ -71,7 +71,10 @@ def test_reason_counters_repeated_missing_price_changes_and_tick_events(
 
 @pytest.mark.xfail(
     strict=True,
-    reason="PR #249 marks seed COMPLETE and associates new subscription epoch even if selection changes while awaiting the old REST seed",
+    reason=(
+        "PR #249 marks seed COMPLETE for a new subscription epoch even when "
+        "the old REST seed was in flight"
+    ),
 )
 def test_subscription_mutation_during_seed_cannot_mark_new_selection_complete(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
