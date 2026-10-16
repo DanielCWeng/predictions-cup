@@ -138,6 +138,7 @@ def test_hypothetical_factor_sensitivity_is_deterministic() -> None:
     kwargs: dict[str, Any] = {
         "cash": D("30000"),
         "race_inputs": {"FL-22": {"p_democratic": ".5", "state": "FL",
+                                  "p_republican": ".5", "p_other": "0",
                                   "settlement_review": "VERIFIED",
                                   "independent_source": "SYNTHETIC"}},
         "competitor_inputs": [{"mean": "30000", "sd": "1000"}] * 3,
@@ -146,6 +147,67 @@ def test_hypothetical_factor_sensitivity_is_deterministic() -> None:
     a = tournament_sensitivity(rows, **kwargs)
     assert a == tournament_sensitivity(rows, **kwargs)
     assert "SYNTHETIC" in a["model"]
+
+def test_third_party_winner_pays_both_party_no_positions_not_yes() -> None:
+    # An Other winner is an admissible election state. Both D and R YES
+    # contracts lose; both NO contracts pay. A binary D/not-D model would
+    # incorrectly settle the R YES as a win in every Other scenario.
+    holdings = [
+        p("DYES", "100", "Democratic"),
+        p("RYES", "100", "Republican"),
+        p("DNO", "-100", "Democratic"),
+        p("RNO", "-100", "Republican"),
+    ]
+    rows = build_ledger(
+        {"positions": holdings},
+        {row["exchange_id"]: book(row["exchange_id"]) for row in holdings},
+        evaluated_at=NOW,
+    )
+    got = tournament_sensitivity(
+        rows,
+        cash=D("300"),
+        race_inputs={
+            "FL-22": {
+                "state": "FL", "p_democratic": "0", "p_republican": "0",
+                "p_other": "1", "settlement_review": "VERIFIED",
+                "independent_source": "SYNTHETIC_3WAY",
+            }
+        },
+        competitor_inputs=[{"mean": "0", "sd": "0"}] * 3,
+        national_logit_sd=0,
+        state_logit_sd=0,
+        paths=20,
+    )
+    assert got["expected_final_value"] == 500
+    assert got["p05_final_value"] == 500
+
+
+def test_third_party_probability_is_not_automatically_republican() -> None:
+    rows = build_ledger(
+        {"positions": [p("R", "100", "Republican")]},
+        {"R": book("R")},
+        evaluated_at=NOW,
+    )
+    race = {
+        "state": "FL", "p_democratic": ".45", "p_republican": ".45",
+        "p_other": ".10", "settlement_review": "VERIFIED",
+        "independent_source": "SYNTHETIC_3WAY",
+    }
+    kwargs = {
+        "cash": D("0"),
+        "race_inputs": {"FL-22": race},
+        "competitor_inputs": [{"mean": "0", "sd": "0"}] * 3,
+        "national_logit_sd": 0,
+        "state_logit_sd": 0,
+        "seed": 3,
+        "paths": 12000,
+    }
+    got = tournament_sensitivity(rows, **kwargs)
+    assert 43 < got["expected_final_value"] < 47
+    del race["p_other"]
+    with pytest.raises(KeyError, match="p_other"):
+        tournament_sensitivity(rows, **kwargs)
+
 
 @pytest.mark.parametrize("bid,ask", [(".60", ".40"), (".40", ".40")])
 @pytest.mark.parametrize("signed", ["100", "-100"])
