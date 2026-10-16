@@ -49,6 +49,11 @@ class RawBookAudit:
     non_market_batch_rows: int = 0
     tournament_filter_active: bool = False
     batches_with_books: int = 0
+    resync_required_batches_with_books: int = 0
+    missing_delivery_batches_with_books: int = 0
+    duplicate_delivery_batches_with_books_within_shard: int = 0
+    revision_gap_batches_with_books_within_shard: int = 0
+    unscoped_delivery_continuity_batches_with_books: int = 0
     versioned_books: int = 0
     unversioned_or_malformed_books: int = 0
     two_sided_versioned_books: int = 0
@@ -58,6 +63,9 @@ class RawBookAudit:
     duplicate_versions_within_shard: int = 0
     backwards_versions_within_shard: int = 0
     _versions: dict[tuple[str, int, str], int] = field(default_factory=dict)
+    _delivery_revisions: dict[tuple[str, int, str], int] = field(
+        default_factory=dict
+    )
     _exchanges: set[str] = field(default_factory=set)
     _sessions: set[str] = field(default_factory=set)
     _first_native_asof: datetime | None = None
@@ -66,6 +74,7 @@ class RawBookAudit:
     def begin_shard(self) -> None:
         """Reset ordering evidence; filename UUIDs cannot order shard events."""
         self._versions.clear()
+        self._delivery_revisions.clear()
 
     def consume(
         self, raw: object, *, session: object, epoch: object,
@@ -124,6 +133,42 @@ class RawBookAudit:
             if not isinstance(books, list) or not books:
                 continue
             self.batches_with_books += 1
+            # Old capture persists the raw payload before the state engine
+            # checks revision continuity, duplicates and resyncRequired.
+            # A count of raw books is NOT a count of accepted depth.
+            if batch.get("resyncRequired") is True:
+                self.resync_required_batches_with_books += 1
+            delivery = batch.get("delivery")
+            if not isinstance(delivery, dict):
+                self.missing_delivery_batches_with_books += 1
+            else:
+                revision = delivery.get("revision")
+                previous_revision = delivery.get("previousRevision")
+                if (
+                    type(revision) is not int or revision < 0
+                    or type(previous_revision) is not int
+                    or previous_revision < 0
+                ):
+                    self.missing_delivery_batches_with_books += 1
+                elif (
+                    epoch_identity_valid
+                    and isinstance(topic, str)
+                    and ":market:" in topic
+                ):
+                    # Within one FIFO shard, per-market topic revisions are
+                    # comparable. Not comparable across UUID shard boundaries,
+                    # nor across markets multiplexed on a root topic.
+                    delivery_key = (session_key, epoch_key, topic)
+                    old_revision = self._delivery_revisions.get(delivery_key)
+                    if old_revision is not None:
+                        if revision <= old_revision:
+                            self.duplicate_delivery_batches_with_books_within_shard += 1
+                        elif previous_revision > old_revision:
+                            self.revision_gap_batches_with_books_within_shard += 1
+                    if old_revision is None or revision > old_revision:
+                        self._delivery_revisions[delivery_key] = revision
+                else:
+                    self.unscoped_delivery_continuity_batches_with_books += 1
             for item in books:
                 if not isinstance(item, dict):
                     self.unversioned_or_malformed_books += 1
@@ -189,6 +234,22 @@ class RawBookAudit:
                 if self.tournament_filter_active else "UNVERIFIED_MIXED_POSSIBLE"
             ),
             "batches_with_books": self.batches_with_books,
+            "resync_required_batches_with_books": (
+                self.resync_required_batches_with_books
+            ),
+            "missing_delivery_batches_with_books": (
+                self.missing_delivery_batches_with_books
+            ),
+            "duplicate_delivery_batches_with_books_within_shard": (
+                self.duplicate_delivery_batches_with_books_within_shard
+            ),
+            "revision_gap_batches_with_books_within_shard": (
+                self.revision_gap_batches_with_books_within_shard
+            ),
+            "unscoped_delivery_continuity_batches_with_books": (
+                self.unscoped_delivery_continuity_batches_with_books
+            ),
+            "batch_acceptance": "NOT_RECONSTRUCTED_FROM_RAW_MESSAGES",
             "versioned_books": self.versioned_books,
             "unversioned_or_malformed_books": self.unversioned_or_malformed_books,
             "two_sided_versioned_books": self.two_sided_versioned_books,
