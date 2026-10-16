@@ -35,6 +35,7 @@ from predictions_cup.sig.errors import (
     SigTemporaryServiceError,
     SigTransportError,
 )
+from predictions_cup.sig.trading_client import enforce_startup_replay_wire_authorization
 from predictions_cup.sig.trading_dto import (
     FillReadDto,
     OrderFillItemDto,
@@ -301,7 +302,19 @@ async def recover_startup(
                     journal=journal,
                 ):
                     raise PermissionError("startup placement replay permission denied")
-                return await live_sink.dispatch_recovery(current_envelope)
+                # Reuse the SAME bounded authorizer on every nested client
+                # 408/429/503/transport retry, not just the outer retry loop.
+                # ContextVar isolates concurrent tasks without mutating the
+                # shared trading client; missing/revoked authority denies wire.
+                with enforce_startup_replay_wire_authorization(
+                    lambda: _placement_replay_authorised(
+                        current_envelope,
+                        permission=placement_replay_allowed,
+                        wall_clock=wall_clock,
+                        journal=journal,
+                    )
+                ):
+                    return await live_sink.dispatch_recovery(current_envelope)
 
             await _retry_recovery_sig_operation(
                 f"placement_recovery:{envelope.logical_operation_id}",
