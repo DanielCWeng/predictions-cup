@@ -4,6 +4,8 @@ import asyncio
 from datetime import UTC, datetime
 from typing import Any, cast
 
+import pytest
+
 from predictions_cup.external.polymarket.health import IngestionHealth
 from predictions_cup.external.polymarket.models import JsonObject
 from predictions_cup.external.polymarket.websocket import MarketWebSocket
@@ -79,3 +81,66 @@ def test_malformed_message_is_counted_without_calling_handler() -> None:
 
     assert health.parse_failures == 1
     assert called is False
+
+
+def test_connection_generation_is_linked_to_completed_seed_epoch() -> None:
+    health = IngestionHealth()
+    transport = MarketWebSocket("wss://example.invalid/ws", health)
+    health.seed_attempt_epoch = 3
+    health.seed_complete_epoch = 2
+    health.seed_status = "FAILED"
+    health.subscription_epoch = 7
+
+    transport._mark_connection_established()
+
+    assert health.connection_epoch == 1
+    assert health.connection_seed_epoch == 2
+    assert health.connection_subscription_epoch == 7
+    assert health.seed_complete_epoch != health.seed_attempt_epoch
+    assert health.research_book_state_accepted is False
+    health.seed_complete_epoch = 4
+    transport._mark_connection_established()
+    assert (health.connection_epoch, health.connection_seed_epoch) == (2, 4)
+
+
+def test_refuse_websocket_initial_subscribe_for_changed_token_generation() -> None:
+    health = IngestionHealth()
+    ws = MarketWebSocket("wss://example.invalid/ws", health)
+    health.subscription_epoch = 1
+    health.seed_subscription_epoch = 1
+    health.seed_attempt_epoch = 1
+    health.seed_complete_epoch = 1
+    health.seed_status = "COMPLETE"
+    health.seed_expected_tokens = 1
+    health.seed_initialized_tokens = 1
+    ws._seeded_tokens = frozenset({"A"})
+    ws._desired_tokens = frozenset({"A"})
+    ws._require_current_seed(frozenset({"A"}))
+
+    # Same cardinality, different token identity: no valid subscribe.
+    ws._desired_tokens = frozenset({"B"})
+    with pytest.raises(RuntimeError, match="changed after REST seed"):
+        ws._require_current_seed(frozenset({"B"}))
+    health.subscription_epoch = 2
+    ws._desired_tokens = frozenset({"A"})
+    with pytest.raises(RuntimeError, match="changed after REST seed"):
+        ws._require_current_seed(frozenset({"A"}))
+    assert health.connection_epoch == 0
+    assert health.research_book_state_accepted is False
+
+
+def test_failed_or_partial_seed_can_never_authorize_ws_subscription() -> None:
+    health = IngestionHealth()
+    ws = MarketWebSocket("wss://example.invalid/ws", health)
+    ws._desired_tokens = frozenset({"A", "B"})
+    ws._seeded_tokens = frozenset({"A", "B"})
+    health.subscription_epoch = 1
+    health.seed_subscription_epoch = 1
+    health.seed_attempt_epoch = 2
+    health.seed_complete_epoch = 1
+    health.seed_status = "FAILED"
+    health.seed_expected_tokens = 2
+    health.seed_initialized_tokens = 1
+    with pytest.raises(RuntimeError, match="changed after REST seed"):
+        ws._require_current_seed(ws._desired_tokens)
+    assert health.connection_epoch == 0
