@@ -8,8 +8,8 @@ the reservation. Only mocked HTTP is used; no venue credentials or API calls.
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from datetime import datetime, timedelta
+from typing import cast
 
 import httpx
 import pytest
