@@ -111,7 +111,7 @@ def _levels(row: dict[str, Any]) -> None:
             price_raw, size_raw = item.get("price"), item.get("size")
             _require(type(price_raw) is str and type(size_raw) is str, "INVALID_BOOK_LEVEL")
             try:
-                price, size = Decimal(price_raw), Decimal(size_raw)
+                price, size = Decimal(cast(str, price_raw)), Decimal(cast(str, size_raw))
             except InvalidOperation as exc:
                 raise SchemaDenied("INVALID_BOOK_LEVEL") from exc
             _require(
