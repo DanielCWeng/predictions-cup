@@ -3,6 +3,9 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
+import pytest
+
+from predictions_cup.external.polymarket.models import PayloadError
 from predictions_cup.external.polymarket.orderbook import OrderBookStore
 
 
@@ -151,3 +154,39 @@ def test_reconnect_invalidation_discards_old_books() -> None:
     store.invalidate_all()
 
     assert store.initialized_tokens == frozenset()
+
+
+def test_invalid_later_price_change_does_not_partially_mutate_book() -> None:
+    store = OrderBookStore()
+    observed = datetime(2026, 10, 16, 12, 0, tzinfo=UTC)
+    store.apply_full_snapshot(
+        {
+            "market": "0xmarket",
+            "asset_id": "token-1",
+            "timestamp": "1782753357257",
+            "hash": "original",
+            "bids": [{"price": "0.45", "size": "10"}],
+            "asks": [{"price": "0.46", "size": "10"}],
+        },
+        observed,
+    )
+    before = store.snapshot("token-1", depth=10)
+    with pytest.raises(PayloadError, match="outside valid range"):
+        store.apply_price_change(
+            {
+                "market": "0xmarket",
+                "timestamp": "1782753358257",
+                "price_changes": [
+                    {
+                        "asset_id": "token-1", "side": "BUY",
+                        "price": "0.45", "size": "0", "hash": "changed",
+                    },
+                    {
+                        "asset_id": "token-1", "side": "SELL",
+                        "price": "1.01", "size": "1",
+                    },
+                ],
+            },
+            observed + timedelta(seconds=1),
+        )
+    assert store.snapshot("token-1", depth=10) == before
