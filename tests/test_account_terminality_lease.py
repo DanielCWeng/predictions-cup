@@ -266,14 +266,20 @@ def test_fencing_rollover_only_without_unresolved_intents(
         epoch="e1", holder="east", now=NOW,
         expires=NOW + timedelta(seconds=90),
     ).status == "NO_CAPACITY"
-    second = lease.claim(
+    # Even AFTER lease expiry, East cannot hijack an account epoch signed
+    # as West's exclusive sender. An epoch attesting a new owner is required.
+    assert lease.claim(
         epoch="e1", holder="east", now=NOW + timedelta(seconds=70),
+        expires=NOW + timedelta(seconds=85),
+    ).status == "NO_CAPACITY"
+    second = lease.claim(
+        epoch="e1", holder="west", now=NOW + timedelta(seconds=70),
         expires=NOW + timedelta(seconds=85),
     )
     assert second.status == "SIMULATED_ONLY"
     assert second.lease_token == first + 1
     assert _reserve(lease, proof, first) == "NO_CAPACITY"
-    assert _reserve(lease, proof, second.lease_token or -1, holder="east") == "SIMULATED_ONLY"
+    assert _reserve(lease, proof, second.lease_token or -1, holder="west") == "SIMULATED_ONLY"
 
 
 def test_same_epoch_replay_unknown_terminal_cancel_ack_cannot_recycle(
