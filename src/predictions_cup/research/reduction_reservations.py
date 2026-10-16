@@ -151,10 +151,14 @@ class OfflineReductionReservations:
         with self._connect() as db:
             self._transaction(db)
             active, stored_digest, ledger = self._epoch(db)
-            if epoch != active or stored_digest != digest or ledger != dict(evidence.signed_by_exchange):
+            if (
+                epoch != active or stored_digest != digest
+                or ledger != dict(evidence.signed_by_exchange)
+            ):
                 raise ReservationDenied("stale_or_changed_ledger_epoch")
             row = db.execute(
-                "SELECT epoch,exchange_id,signed_delta,quantity,cumulative,state FROM intents WHERE intent_id=?",
+                "SELECT epoch,exchange_id,signed_delta,quantity,cumulative,state "
+                "FROM intents WHERE intent_id=?",
                 (intent_id,),
             ).fetchone()
             if row is not None:
@@ -170,7 +174,8 @@ class OfflineReductionReservations:
             if consumed + quantity > abs(ledger[exchange_id]):
                 raise ReservationDenied("inventory_slice_already_reserved")
             db.execute(
-                "INSERT INTO intents(intent_id,epoch,exchange_id,signed_delta,quantity,cumulative,state)"
+                "INSERT INTO intents(intent_id,epoch,exchange_id,signed_delta,quantity,"
+                "cumulative,state)"
                 " VALUES(?,?,?,?,?,0,'RESERVED')",
                 (intent_id, epoch, exchange_id, verdict.signed_delta, quantity),
             )
