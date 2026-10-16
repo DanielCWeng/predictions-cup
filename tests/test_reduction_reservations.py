@@ -172,23 +172,22 @@ def test_conflicting_event_and_reversed_fill_fail_closed(tmp_path: Path) -> None
 
 
 @pytest.mark.parametrize(
-    "alter",
+    "data",
     [
-        {"signed_positions_verified": False},
-        {"account_trusted": False},
-        {"reconciliation_complete": False},
-        {"account_age_seconds": 99.0},
-        {"uncertain_order_exposure": 1},
-        {"reservation_exposure": 1},
-        {"open_order_exposure": 1},
-        {"venue_netting_verified": False},
-        {"account_net": 100000},
+        replace(ev(), signed_positions_verified=False),
+        replace(ev(), account_trusted=False),
+        replace(ev(), reconciliation_complete=False),
+        replace(ev(), account_age_seconds=99.0),
+        replace(ev(), uncertain_order_exposure=1),
+        replace(ev(), reservation_exposure=1),
+        replace(ev(), open_order_exposure=1),
+        replace(ev(), venue_netting_verified=False),
+        replace(ev(), account_net=100000),
     ],
 )
 def test_invalid_account_proofs_fail_before_bootstrap(
-    tmp_path: Path, alter: dict[str, object]
+    tmp_path: Path, data: SignedInventoryEvidence
 ) -> None:
-    data = replace(ev(), **alter)
     with pytest.raises(ReservationDenied):
         start(tmp_path, data)
 
