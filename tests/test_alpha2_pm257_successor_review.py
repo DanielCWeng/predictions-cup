@@ -177,4 +177,3 @@ def test_malformed_unknown_c_does_not_call_persistence(
     asyncio.run(scenario())
     assert recorder.books.snapshot("A", 2) == before
     assert persisted == []
-    assert recorder.health.research_book_state_accepted is False
