@@ -129,7 +129,9 @@ def _valid_snapshot(
     proof: AccountEpochProof, registry: OfflineIssuerRegistry, now: datetime
 ) -> str | None:
     try:
-        current, published, expires = (_time(t) for t in (now, proof.publisher_at, proof.expires_at))
+        current, published, expires = (
+            _time(t) for t in (now, proof.publisher_at, proof.expires_at)
+        )
         if not current or not published or not expires:
             return "untrusted_clock"
         if not (proof.publisher_at <= now <= proof.expires_at):
@@ -425,7 +427,7 @@ class OfflineAccountLease:
                     return self._deny("missing_venue_terminal_proofs")
                 indexed = {p.intent_id: p for p in terminal}
                 expected = dict(prior.signed_by_exchange)
-                for intent, order, exchange, delta, qty, state in rows:
+                for intent, order, exchange, delta, qty, _state in rows:
                     proof = indexed.get(str(intent))
                     if (
                         proof is None or proof.venue_order_id != order
