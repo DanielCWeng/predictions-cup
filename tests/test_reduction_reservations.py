@@ -29,7 +29,9 @@ def ev(ledger: dict[int, int] | None = None) -> SignedInventoryEvidence:
     )
 
 
-def start(tmp_path: object, data: SignedInventoryEvidence | None = None) -> OfflineReductionReservations:
+def start(
+    tmp_path: object, data: SignedInventoryEvidence | None = None
+) -> OfflineReductionReservations:
     from pathlib import Path
 
     r = OfflineReductionReservations(Path(str(tmp_path)) / "isolated_reduction_sim.sqlite")
