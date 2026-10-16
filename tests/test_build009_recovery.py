@@ -4,10 +4,12 @@ import asyncio
 import json
 import sqlite3
 from collections.abc import AsyncIterator, Callable
-from datetime import UTC, datetime
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
 
+import httpx
 import pytest
 from pydantic import SecretStr
 
@@ -23,9 +25,11 @@ from predictions_cup.execution.models import (
     ExecutionMode,
     LifecycleState,
     OperationKind,
+    RuntimeOrderIntent,
 )
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.recovery import (
+    PlacementReplayAuthorization,
     RecoveryRest,
     recover_in_session_cancellations,
     recover_startup,
@@ -52,7 +56,9 @@ from predictions_cup.sig.account_state import (
     AccountRealtimeStateEngine,
     AccountTrustTransition,
 )
+from predictions_cup.sig.client import RetryPolicy
 from predictions_cup.sig.errors import SigRateLimitError, SigUnexpectedServerError
+from predictions_cup.sig.rest_governor import SigRestGovernor
 from predictions_cup.sig.trading_client import SigTradingClient
 from predictions_cup.sig.trading_dto import (
     CancelAllResponseDto,
@@ -1628,6 +1634,16 @@ def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
                 clock_ns=iter(range(900, 1200)).__next__,
                 observation_emitter=emitter,
                 observation_process_instance_id="recovery-test-process",
+                wall_clock=lambda: datetime.now(UTC),
+                placement_replay_allowed=lambda envelope: PlacementReplayAuthorization(
+                    logical_operation_id=envelope.logical_operation_id,
+                    tournament_id=envelope.tournament_id,
+                    idempotency_key=envelope.idempotency_key or "",
+                    payload_sha256=envelope.payload_sha256,
+                    issued_at_utc=datetime.now(UTC) - timedelta(seconds=1),
+                    expires_at_utc=datetime.now(UTC) + timedelta(seconds=10),
+                    authority_id="approved-test-only",
+                ),
             )
         )
         emitter.close()
@@ -1678,3 +1694,375 @@ def test_order_fills_accepts_live_sig_item_shape() -> None:
     parsed = OrderFillsResponseDto.model_validate(payload)
     assert parsed.data[0].exchange_id is None
     assert parsed.exchange_id == "1045"
+
+
+# --- #79 isolated adversarial default-DENY startup placement replay gates ---
+
+def _restart_replay_case(
+    tmp_path: Path,
+    state: LifecycleState,
+) -> tuple[
+    ExecutionJournal,
+    ExecutionReservationBook,
+    _RecoveryTradingFixture,
+    _RecoveryRestFixture,
+    SigLiveSink,
+    ExecutionEnvelope,
+]:
+    intent = RuntimeOrderIntent(
+        intent_id="replay-risk-intent", exchange_id="36", market_id="m1",
+        tournament_id="t1", outcome_side=OutcomeSide.YES, action=OrderAction.BUY,
+        quantity=1, limit_price_ticks=100, strategy_id="fixture",
+        decision_observation_ns=100,
+    )
+    envelope = ExecutionEnvelope.placement(
+        logical_operation_id="replay-risk-original",
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        sink_mode=ExecutionMode.LIVE,
+        idempotency_key="replay-risk-fixed-key",
+        intents=(intent,),
+        created_monotonic_ns=100,
+    )
+    path = tmp_path / "restart-guard.sqlite3"
+    original = ExecutionJournal(path)
+    original.record_before_dispatch(envelope, (intent,), submitted_monotonic_ns=101)
+    if state is not LifecycleState.PENDING:
+        original.mark_state(envelope.logical_operation_id, state, 102)
+    original.close()
+    journal = ExecutionJournal(path)
+    reservations = ExecutionReservationBook()
+    trading = _RecoveryTradingFixture()
+    rest = _RecoveryRestFixture()
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, trading),
+        journal=journal, permit=_recovery_permit(), reservations=reservations,
+    )
+    return journal, reservations, trading, rest, sink, envelope
+
+
+def _fresh_replay_grant(
+    envelope: ExecutionEnvelope,
+    now: datetime,
+) -> PlacementReplayAuthorization:
+    return PlacementReplayAuthorization(
+        logical_operation_id=envelope.logical_operation_id,
+        tournament_id=envelope.tournament_id,
+        idempotency_key=envelope.idempotency_key or "",
+        payload_sha256=envelope.payload_sha256,
+        issued_at_utc=now - timedelta(seconds=1),
+        expires_at_utc=now + timedelta(seconds=15),
+        authority_id="synthetic-independent-recovery-authority",
+    )
+
+
+@pytest.mark.parametrize(
+    "state", (LifecycleState.PENDING, LifecycleState.UNCERTAIN, LifecycleState.RECONCILING)
+)
+def test_79_restart_without_permission_keeps_unresolved_risk(
+    tmp_path: Path, state: LifecycleState,
+) -> None:
+    journal, reservations, trading, rest, sink, envelope = _restart_replay_case(
+        tmp_path, state
+    )
+    try:
+        for _ in range(2):  # repeated startup, same durable DB, no replay authority
+            result = asyncio.run(recover_startup(
+                journal=journal, rest=cast(RecoveryRest, rest), live_sink=sink,
+                tournament_id="t1", tournament_slug="cup",
+                reservations=reservations, market_by_exchange={"36": "m1"},
+                exchange_ids_by_market={"m1": ("36",)},
+            ))
+            assert result.safe_to_resume_live is False
+            assert envelope.logical_operation_id in result.unresolved_operation_ids
+            assert reservations.contains_operation(
+                envelope.logical_operation_id, envelope.intent_ids
+            )
+            assert journal.lifecycle_state(envelope.logical_operation_id) is state
+            assert trading.payloads == []
+            assert all(
+                event.event_type != "RESUBMISSION"
+                for event in journal.events(envelope.logical_operation_id)
+            )
+    finally:
+        journal.close()
+
+
+@pytest.mark.parametrize(
+    "mode",
+    (
+        "bool", "wrong-id", "wrong-tournament", "wrong-key", "wrong-hash",
+        "expired", "future", "long-lived", "empty-authority", "naive-clock",
+        "naive-grant", "callback-exception",
+    ),
+)
+def test_79_wrong_or_stale_authority_fails_closed(
+    tmp_path: Path, mode: str,
+) -> None:
+    journal, reservations, trading, rest, sink, envelope = _restart_replay_case(
+        tmp_path, LifecycleState.UNCERTAIN
+    )
+    now = datetime.now(UTC)
+
+    def invalid_grant(candidate: ExecutionEnvelope) -> PlacementReplayAuthorization | None:
+        good = _fresh_replay_grant(candidate, now)
+        if mode == "bool":
+            return cast(PlacementReplayAuthorization, True)
+        if mode == "wrong-id":
+            return replace(good, logical_operation_id="different")
+        if mode == "wrong-tournament":
+            return replace(good, tournament_id="another")
+        if mode == "wrong-key":
+            return replace(good, idempotency_key="rotated")
+        if mode == "wrong-hash":
+            return replace(good, payload_sha256="0" * 64)
+        if mode == "expired":
+            return replace(good, issued_at_utc=now - timedelta(seconds=40),
+                           expires_at_utc=now - timedelta(seconds=5))
+        if mode == "future":
+            return replace(good, issued_at_utc=now + timedelta(seconds=1))
+        if mode == "long-lived":
+            return replace(good, expires_at_utc=now + timedelta(minutes=5))
+        if mode == "empty-authority":
+            return replace(good, authority_id=" ")
+        if mode == "naive-grant":
+            return replace(good, issued_at_utc=now.replace(tzinfo=None))
+        if mode == "callback-exception":
+            raise RuntimeError("permission store unavailable")
+        return good
+
+    def trust_clock() -> datetime:
+        return now.replace(tzinfo=None) if mode == "naive-clock" else now
+
+    try:
+        result = asyncio.run(recover_startup(
+            journal=journal, rest=cast(RecoveryRest, rest), live_sink=sink,
+            tournament_id="t1", tournament_slug="cup",
+            placement_replay_allowed=invalid_grant,
+            wall_clock=trust_clock,
+            reservations=reservations, market_by_exchange={"36": "m1"},
+            exchange_ids_by_market={"m1": ("36",)},
+        ))
+        assert result.safe_to_resume_live is False
+        assert result.unresolved_operation_ids == (envelope.logical_operation_id,)
+        assert reservations.contains_operation(
+            envelope.logical_operation_id, envelope.intent_ids
+        )
+        assert journal.lifecycle_state(envelope.logical_operation_id) is (
+            LifecycleState.UNCERTAIN
+        )
+        assert trading.payloads == []
+    finally:
+        journal.close()
+
+
+def test_79_old_operation_denied_even_with_new_good_grant(tmp_path: Path) -> None:
+    journal, reservations, trading, rest, sink, envelope = _restart_replay_case(
+        tmp_path, LifecycleState.PENDING
+    )
+    now = datetime.now(UTC)
+    with journal._connection:
+        journal._connection.execute(
+            "UPDATE execution_envelopes SET created_at_utc = ? "
+            "WHERE logical_operation_id = ?",
+            ((now - timedelta(hours=1)).isoformat(), envelope.logical_operation_id),
+        )
+    try:
+        result = asyncio.run(recover_startup(
+            journal=journal, rest=cast(RecoveryRest, rest), live_sink=sink,
+            tournament_id="t1", tournament_slug="cup", wall_clock=lambda: now,
+            placement_replay_allowed=lambda item: _fresh_replay_grant(item, now),
+            reservations=reservations, market_by_exchange={"36": "m1"},
+        ))
+        assert not result.safe_to_resume_live
+        assert journal.lifecycle_state(envelope.logical_operation_id) is LifecycleState.PENDING
+        assert trading.payloads == []
+        assert reservations.contains_operation(
+            envelope.logical_operation_id, envelope.intent_ids
+        )
+    finally:
+        journal.close()
+
+
+def test_79_explicit_recent_grant_only_reuses_original_wire_identity(tmp_path: Path) -> None:
+    journal, reservations, trading, rest, sink, envelope = _restart_replay_case(
+        tmp_path, LifecycleState.UNCERTAIN
+    )
+    now = datetime.now(UTC)
+    try:
+        asyncio.run(recover_startup(
+            journal=journal, rest=cast(RecoveryRest, rest), live_sink=sink,
+            tournament_id="t1", tournament_slug="cup", wall_clock=lambda: now,
+            placement_replay_allowed=lambda item: _fresh_replay_grant(item, now),
+            reservations=reservations, market_by_exchange={"36": "m1"},
+        ))
+        assert trading.payloads == [envelope.payload_json]
+        assert json.loads(trading.payloads[0])["idempotencyKey"] == envelope.idempotency_key
+        assert sum(
+            event.event_type == "RESUBMISSION"
+            for event in journal.events(envelope.logical_operation_id)
+        ) == 1
+        # A subsequent restart with permission ABSENT never sends that payload again.
+        asyncio.run(recover_startup(
+            journal=journal, rest=cast(RecoveryRest, rest), live_sink=sink,
+            tournament_id="t1", tournament_slug="cup",
+            reservations=reservations, market_by_exchange={"36": "m1"},
+        ))
+        assert trading.payloads == [envelope.payload_json]
+    finally:
+        journal.close()
+
+
+class _79Governor:
+    async def acquire(self, priority: object) -> None:
+        del priority
+
+    def record_response(
+        self, status: int, *, retry_after_seconds: float | None,
+    ) -> None:
+        del status, retry_after_seconds
+
+
+@pytest.mark.parametrize("response", ("429", "503", "timeout"))
+def test_79_fake_http_errors_do_not_erase_prior_risk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, response: str,
+) -> None:
+    import predictions_cup.execution.recovery as recovery_module
+
+    journal, reservations, trading, rest, _sink, envelope = _restart_replay_case(
+        tmp_path, LifecycleState.UNCERTAIN
+    )
+    del trading
+    raw_wires: list[bytes] = []
+
+    def fake_http(req: httpx.Request) -> httpx.Response:
+        raw_wires.append(req.content)
+        if response == "timeout":
+            raise httpx.ReadTimeout("lost ACK", request=req)
+        status = 429 if response == "429" else 503
+        code = "RATE_LIMITED" if status == 429 else "SERVICE_UNAVAILABLE"
+        return httpx.Response(
+            status,
+            json={"error": {"code": code, "message": "fixture uncertain"}},
+            headers={"Retry-After": "0"},
+        )
+
+    client = object.__new__(SigTradingClient)
+    client._client = httpx.AsyncClient(
+        transport=httpx.MockTransport(fake_http), base_url="https://sig.invalid/"
+    )
+    client._governor = cast(SigRestGovernor, _79Governor())
+    client._retry_policy = RetryPolicy(
+        max_attempts=1, base_delay_seconds=0, max_delay_seconds=0, jitter_ratio=0
+    )
+    client._sleep = asyncio.sleep
+    client._timeout_seconds = 0.01
+    client._request_in_flight_wait_seconds = 0.0
+    client._wall_clock = lambda: datetime.now(UTC)
+    sink = SigLiveSink(
+        client=client, journal=journal, permit=_recovery_permit(),
+        reservations=reservations,
+    )
+    now = datetime.now(UTC)
+    monkeypatch.setattr(recovery_module, "_RECOVERY_BACKOFF_SECONDS", (0.0, 0.0))
+    try:
+        result = asyncio.run(recover_startup(
+            journal=journal, rest=cast(RecoveryRest, rest), live_sink=sink,
+            tournament_id="t1", tournament_slug="cup", wall_clock=lambda: now,
+            placement_replay_allowed=lambda item: _fresh_replay_grant(item, now),
+            reservations=reservations, market_by_exchange={"36": "m1"},
+            exchange_ids_by_market={"m1": ("36",)},
+        ))
+        assert len(raw_wires) == (1 if response == "timeout" else 3)
+        assert all(blob == envelope.payload_json.encode() for blob in raw_wires)
+        assert result.safe_to_resume_live is False
+        assert result.unresolved_operation_ids == (envelope.logical_operation_id,)
+        assert journal.lifecycle_state(envelope.logical_operation_id) is (
+            LifecycleState.UNCERTAIN
+        )
+        assert reservations.contains_operation(
+            envelope.logical_operation_id, envelope.intent_ids
+        )
+    finally:
+        asyncio.run(client.aclose())
+        journal.close()
+
+
+def test_79_revoked_replay_grant_blocks_retry_after_lost_ack(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import predictions_cup.execution.recovery as recovery_module
+
+    journal, reservations, _trading, rest, _sink, envelope = _restart_replay_case(
+        tmp_path, LifecycleState.UNCERTAIN
+    )
+    now = datetime.now(UTC)
+    clock = [now]
+    payloads: list[bytes] = []
+
+    def transient(req: httpx.Request) -> httpx.Response:
+        payloads.append(req.content)
+        clock[0] += timedelta(minutes=1)
+        return httpx.Response(
+            503, json={"error": {"code": "SERVICE_UNAVAILABLE", "message": "fixture"}},
+        )
+
+    client = object.__new__(SigTradingClient)
+    client._client = httpx.AsyncClient(
+        transport=httpx.MockTransport(transient), base_url="https://sig.invalid/"
+    )
+    client._governor = cast(SigRestGovernor, _79Governor())
+    client._retry_policy = RetryPolicy(
+        max_attempts=1, base_delay_seconds=0, max_delay_seconds=0, jitter_ratio=0
+    )
+    client._sleep = asyncio.sleep
+    client._timeout_seconds = 0.01
+    client._request_in_flight_wait_seconds = 0.0
+    client._wall_clock = lambda: datetime.now(UTC)
+    sink = SigLiveSink(
+        client=client, journal=journal, permit=_recovery_permit(),
+        reservations=reservations,
+    )
+    monkeypatch.setattr(recovery_module, "_RECOVERY_BACKOFF_SECONDS", (0.0, 0.0))
+    try:
+        result = asyncio.run(recover_startup(
+            journal=journal, rest=cast(RecoveryRest, rest), live_sink=sink,
+            tournament_id="t1", tournament_slug="cup",
+            wall_clock=lambda: clock[0],
+            placement_replay_allowed=lambda item: _fresh_replay_grant(item, now),
+            reservations=reservations, market_by_exchange={"36": "m1"},
+        ))
+        assert len(payloads) == 1
+        assert payloads[0] == envelope.payload_json.encode()
+        assert journal.lifecycle_state(envelope.logical_operation_id) is (
+            LifecycleState.UNCERTAIN
+        )
+        assert result.unresolved_operation_ids == (envelope.logical_operation_id,)
+        assert reservations.contains_operation(
+            envelope.logical_operation_id, envelope.intent_ids
+        )
+    finally:
+        asyncio.run(client.aclose())
+        journal.close()
+
+
+@pytest.mark.parametrize("error_kind", ("corrupt", "busy"))
+def test_79_journal_failure_stops_recovery_before_any_wire(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error_kind: str,
+) -> None:
+    journal, _reservations, trading, rest, sink, _envelope = _restart_replay_case(
+        tmp_path, LifecycleState.UNCERTAIN
+    )
+    exc: Exception = (
+        sqlite3.DatabaseError("file is not a database") if error_kind == "corrupt"
+        else sqlite3.OperationalError("database is locked")
+    )
+    monkeypatch.setattr(journal, "unresolved", lambda: (_ for _ in ()).throw(exc))
+    try:
+        with pytest.raises(sqlite3.DatabaseError):
+            asyncio.run(recover_startup(
+                journal=journal, rest=cast(RecoveryRest, rest), live_sink=sink,
+                tournament_id="t1", tournament_slug="cup",
+            ))
+        assert trading.payloads == []
+    finally:
+        journal.close()
