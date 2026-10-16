@@ -218,9 +218,7 @@ def test_two_independent_os_processes_distinct_intents_cas_under_gross_cap(
     assert all(process.exitcode == 0 for process in workers)
     with sqlite3.connect(path) as db:
         assert db.execute("SELECT COUNT(*) FROM intents").fetchone()[0] == 1
-    assert not _reserve(lease, proof, token, intent="third", order="third-order") == (
-        "SIMULATED_ONLY"
-    )
+    assert _reserve(lease, proof, token, intent="third", order="third-order") != "SIMULATED_ONLY"
 
 
 def test_lease_expiry_crash_and_uncertain_do_not_free_reserved_gross(
