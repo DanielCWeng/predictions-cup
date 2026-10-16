@@ -6,7 +6,6 @@ httpx.MockTransport. No service startup, credential, venue, real order or API.
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
@@ -146,7 +145,10 @@ def test_84_fresh_fake_http_ack_partial_fill_identity_and_order(tmp_path: Path) 
         assert sum(k is ObservationKind.REQUEST_DISPATCHED for k in kinds) == 1
         assert sum(k is ObservationKind.PARTIAL_FILL for k in kinds) == 1
         assert sum(k is ObservationKind.FILL for k in kinds) == 0
-        assert any(x.event_type == "FILL_SUMMARY" for x in journal.events(plan.envelope.logical_operation_id))
+        assert any(
+            x.event_type == "FILL_SUMMARY"
+            for x in journal.events(plan.envelope.logical_operation_id)
+        )
     finally:
         emitter.close()
         asyncio.run(client.aclose())
@@ -207,8 +209,12 @@ def test_84_cancellation_during_http_must_emit_uncertain(tmp_path: Path) -> None
             asyncio.run(sink.dispatch(plan))
         emitter.close()
         assert len(wires) == 1
-        assert journal.lifecycle_state(plan.envelope.logical_operation_id) is LifecycleState.UNCERTAIN
-        assert reservations.contains_operation(plan.envelope.logical_operation_id, plan.envelope.intent_ids)
+        assert journal.lifecycle_state(plan.envelope.logical_operation_id) is (
+            LifecycleState.UNCERTAIN
+        )
+        assert reservations.contains_operation(
+            plan.envelope.logical_operation_id, plan.envelope.intent_ids
+        )
         assert any(o.kind is ObservationKind.REQUEST_DISPATCHED for o in collected.observations)
         assert any(
             o.kind is ObservationKind.UNCERTAIN for o in collected.observations
@@ -250,9 +256,12 @@ def test_84_rate_limit_retry_must_emit_each_actual_wire_and_rate_limit(tmp_path:
         kinds = [o.kind for o in collected.observations]
         assert kinds.count(ObservationKind.ACK) == 1
         assert kinds.count(ObservationKind.REQUEST_DISPATCHED) == len(wires), (
-            "Observer misreports per-wire dispatch: internal 429 retry produced 2 actual HTTP attempts"
+            "Observer misreports per-wire dispatch: internal 429 retry "
+            "produced two actual HTTP attempts"
         )
-        assert ObservationKind.RATE_LIMIT in kinds, "429 transient attempt missing RATE_LIMIT observation"
+        assert ObservationKind.RATE_LIMIT in kinds, (
+            "429 transient attempt missing RATE_LIMIT observation"
+        )
     finally:
         emitter.close()
         asyncio.run(client.aclose())
