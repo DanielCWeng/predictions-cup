@@ -18,6 +18,7 @@ from predictions_cup.research.account_terminality_lease import (
     AccountEpochProof,
     OfflineAccountLease,
     OfflineIssuerRegistry,
+    TerminalOrderProof,
 )
 from test_account_terminality_lease import (
     NOW,
@@ -198,7 +199,7 @@ def test_redteam_269_untrusted_terminal_cannot_release_reserve(
         published=NOW+timedelta(seconds=60), positions={"36": 99_300},
     )
     terminal = _signed_terminal(private, status="FILLED", cumulative=300)
-    candidates = (terminal,)
+    candidates: tuple[TerminalOrderProof, ...] = (terminal,)
     if variation == "missing_terminal":
         candidates = ()
     elif variation == "reopened":
