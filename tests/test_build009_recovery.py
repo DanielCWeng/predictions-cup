@@ -1972,7 +1972,9 @@ def test_79_fake_http_errors_do_not_erase_prior_risk(
             reservations=reservations, market_by_exchange={"36": "m1"},
             exchange_ids_by_market={"m1": ("36",)},
         ))
-        assert len(raw_wires) == (1 if response == "timeout" else 3)
+        # #248 treats ambiguous exhausted placement 429 as UNCERTAIN directly.
+        # No extra same-key 429 replay without fresh external authority.
+        assert len(raw_wires) == (1 if response in {"timeout", "429"} else 3)
         assert all(blob == envelope.payload_json.encode() for blob in raw_wires)
         assert result.safe_to_resume_live is False
         assert result.unresolved_operation_ids == (envelope.logical_operation_id,)
