@@ -106,6 +106,8 @@ def _placement_replay_authorised(
         return (
             timedelta(0) <= operation_age <= _MAX_REPLAY_OPERATION_AGE
             and bool(grant.authority_id.strip())
+            and isinstance(envelope.idempotency_key, str)
+            and bool(envelope.idempotency_key.strip())
             and grant.logical_operation_id == envelope.logical_operation_id
             and grant.tournament_id == envelope.tournament_id
             and grant.idempotency_key == envelope.idempotency_key
