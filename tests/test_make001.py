@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -87,6 +88,7 @@ from predictions_cup.runtime.models import (
     RuntimeSnapshot,
 )
 from predictions_cup.sig.errors import SigExecutionUncertainError
+from predictions_cup.sig.trading_client import SigTradingClient
 
 NOW = 1_000_000_000
 TOURNAMENT = "t1"
@@ -2877,3 +2879,98 @@ def test_zero_extra_width_mirrors_polymarket_touch_exactly() -> None:
         assert decision.desired is not None
         assert decision.desired.bid_ticks == round(bid / 0.005)
         assert decision.desired.ask_ticks == round(ask / 0.005)
+
+
+
+@pytest.mark.parametrize(
+    "clock",
+    [
+        lambda: datetime(2026, 11, 4, 16, 59, 55, tzinfo=UTC),
+        lambda: datetime(2026, 11, 4, 16, 59, 54),  # naive: fail closed
+    ],
+)
+def test_live_maker_cutoff_releases_phantom_quote_and_reservation(
+    tmp_path: Path,
+    clock: Callable[[], datetime],
+) -> None:
+    """Real coordinator -> sink -> journal path; never touches the network."""
+    from pydantic import SecretStr
+
+    from predictions_cup.config import AppSettings
+    from predictions_cup.execution.interlocks import assert_live_interlocks
+
+    settings = AppSettings(
+        sig_trade_credential=SecretStr("synthetic-unit-test-only"),
+        tournament_id=TOURNAMENT,
+        tournament_slug="cup",
+        trading_enabled=True,
+        execution_mode="LIVE",
+        global_kill_switch=False,
+        risk_max_order_size=10,
+        risk_max_gross_exposure=100,
+        risk_max_tournament_exposure=100,
+        risk_max_per_market_exposure=100,
+        risk_max_open_order_exposure=100,
+        risk_max_concurrent_open_orders=10,
+        risk_capital_control_enabled=True,
+        risk_session_loss_limit=10,
+        risk_drawdown_limit=10,
+    )
+    permit = assert_live_interlocks(
+        settings,
+        explicit_live_invocation=True,
+        account_trusted=True,
+        capital_state_ready=True,
+    )
+    journal = ExecutionJournal(tmp_path / "cutoff-maker.sqlite3")
+    reservations = ExecutionReservationBook()
+    quotes = QuoteRegistry()
+    sink = SigLiveSink(
+        # Any attempted network dispatch fails by absence of a client.
+        client=cast(SigTradingClient, object()),
+        journal=journal,
+        permit=permit,
+        reservations=reservations,
+        wall_clock=clock,
+    )
+    adapter = LiveMakerExecutionAdapter(sink, journal=journal, quotes=quotes)
+    coordinator = MakerCoordinator(
+        engine=_engine(),
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=quotes,
+        risk_context=RiskContext(
+            mode=ExecutionMode.LIVE,
+            kill_switch=False,
+            limits=RiskLimits(
+                max_order_size=10,
+                max_gross_exposure=100,
+                max_per_market_exposure=100,
+                max_open_order_exposure=100,
+                max_concurrent_open_orders=10,
+            ),
+            max_state_age_ns=1_000_000_000,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+        reservations=reservations,
+    )
+    try:
+        result = asyncio.run(
+            coordinator.on_state_change(
+                MakerStateChange(
+                    event_id="cutoff-maker",
+                    observed_monotonic_ns=NOW,
+                    exchange_ids=frozenset({"36"}),
+                ),
+                {"36": _maker_snapshot()},
+            )
+        )
+        assert len(result.execution_events) == 1
+        assert result.execution_events[0].state is LifecycleState.REJECTED
+        assert journal.unresolved() == ()
+        assert reservations.intent_ids() == frozenset()
+        assert quotes.state("36").bid is None
+        assert quotes.state("36").ask is None
+        assert result.execution_events[0].simulated is False
+    finally:
+        journal.close()
