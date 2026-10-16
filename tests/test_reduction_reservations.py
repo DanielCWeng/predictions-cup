@@ -216,3 +216,32 @@ def test_restarted_engine_cannot_resync_from_open_orders(tmp_path: Path) -> None
         )
     with pytest.raises(ReservationDenied, match="already_seeded_no_implicit_reset"):
         r.seed(epoch="signed-account-03", evidence=ev(), cap=100000, age=5.0)
+
+
+def test_old_intent_and_account_epoch_cannot_be_reused(tmp_path: Path) -> None:
+    r = start(tmp_path)
+    reserve(r, intent="original", qty=500)
+    r.observe(
+        intent_id="original", event_id="terminal-a", kind="TERMINAL", cumulative_filled=0
+    )
+    r.reconcile(
+        prior_epoch="signed-account-01", new_epoch="signed-account-02",
+        evidence=ev(), cap=100000, age=5.0,
+    )
+    with pytest.raises(ReservationDenied, match="logical_intent_id_reused_after_epoch"):
+        r.reserve(
+            epoch="signed-account-02", evidence=ev(), intent_id="original",
+            exchange_id="-1", outcome_side="YES", action="BUY", quantity=500,
+            cap=100000, age=5.0,
+        )
+    r.reserve(
+        epoch="signed-account-02", evidence=ev(), intent_id="second",
+        exchange_id="-1", outcome_side="YES", action="BUY", quantity=500,
+        cap=100000, age=5.0,
+    )
+    r.observe(intent_id="second", event_id="terminal-b", kind="TERMINAL")
+    with pytest.raises(ReservationDenied, match="account_epoch_reuse_denied"):
+        r.reconcile(
+            prior_epoch="signed-account-02", new_epoch="signed-account-01",
+            evidence=ev(), cap=100000, age=5.0,
+        )
