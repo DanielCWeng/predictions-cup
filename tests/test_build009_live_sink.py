@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
@@ -661,4 +663,214 @@ def test_observe_classifies_final_429_503_and_transport_timeout(
             assert ObservationKind.UNCERTAIN in kinds
     finally:
         emitter.close()
+        journal.close()
+
+
+@pytest.mark.parametrize(
+    ("wall_now", "error_code"),
+    [
+        (
+            datetime(2026, 11, 4, 16, 59, 55, tzinfo=UTC),
+            "COMPETITION_CUTOFF_AFTER_DISPATCH",
+        ),
+        (datetime(2026, 11, 4, 16, 59, 54), "COMPETITION_CLOCK_UNTRUSTED"),
+    ],
+)
+def test_recovery_cutoff_preserves_prior_attempt_reservation(
+    tmp_path: Path, wall_now: datetime, error_code: str
+) -> None:
+    from predictions_cup.sig.errors import SigApiError
+
+    intent = _intent()
+    decision = RiskDecision(
+        approved=True,
+        reason="approved",
+        execution_mode=ExecutionMode.LIVE,
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        intents=(intent,),
+        strategy_family="FV-TAKE",
+        strategy_id="fixture",
+        signal_value=0.025,
+        fair_value=0.55,
+        decision_observation_ns=100,
+    )
+    plan = build_execution_plan(
+        decision, logical_operation_id="prior-attempt", created_monotonic_ns=150
+    )
+    journal = ExecutionJournal(tmp_path / "recovery-cutoff.sqlite3")
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    journal.record_before_dispatch(
+        plan.envelope, plan.intents, audit=plan.audit, submitted_monotonic_ns=200
+    )
+    journal.mark_state("prior-attempt", LifecycleState.UNCERTAIN, 250)
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, FakeTradingClient()),
+        journal=journal,
+        permit=_permit(),
+        reservations=reservations,
+        wall_clock=lambda: wall_now,
+    )
+    try:
+        with pytest.raises(SigApiError) as caught:
+            asyncio.run(sink.dispatch_recovery(plan.envelope, plan=plan))
+        assert caught.value.code == error_code
+        assert reservations.contains_operation(
+            plan.envelope.logical_operation_id, plan.envelope.intent_ids
+        )
+        assert len(journal.unresolved()) == 1
+        assert journal.unresolved()[0].logical_operation_id == "prior-attempt"
+    finally:
+        journal.close()
+
+
+@pytest.mark.parametrize(
+    "operation_kind",
+    (
+        OperationKind.SINGLE_PLACEMENT,
+        OperationKind.BEST_EFFORT_BATCH,
+        OperationKind.ATOMIC_MULTI_LEG,
+    ),
+)
+@pytest.mark.parametrize(
+    "wall_now",
+    (
+        datetime(2026, 11, 4, 16, 59, 54, tzinfo=UTC),
+        datetime(2026, 11, 4, 16, 59, 55, tzinfo=UTC),
+        datetime(2026, 11, 4, 17, 0, tzinfo=UTC),
+        datetime(2026, 11, 4, 16, 59, 54),
+    ),
+)
+def test_journaled_uncertain_fresh_reentry_preserves_capital(
+    tmp_path: Path,
+    operation_kind: OperationKind,
+    wall_now: datetime,
+) -> None:
+    """A mistaken fresh retry cannot discard prior possible-fill exposure."""
+    first = _intent()
+    intents: tuple[RuntimeOrderIntent, ...] = (first,)
+    relationship_constraint = None
+    if operation_kind is not OperationKind.SINGLE_PLACEMENT:
+        intents = (
+            first,
+            RuntimeOrderIntent(
+                intent_id="intent-92",
+                exchange_id="37",
+                market_id="m1",
+                tournament_id="t1",
+                outcome_side=OutcomeSide.NO,
+                action=OrderAction.BUY,
+                quantity=1,
+                limit_price_ticks=100,
+                strategy_id="fixture",
+                decision_observation_ns=100,
+            ),
+        )
+    if operation_kind is OperationKind.ATOMIC_MULTI_LEG:
+        relationship_constraint = "22222222-2222-2222-2222-222222222222"
+    decision = RiskDecision(
+        approved=True,
+        reason="approved",
+        execution_mode=ExecutionMode.LIVE,
+        operation_kind=operation_kind,
+        intents=intents,
+        relationship_constraint=relationship_constraint,
+        strategy_family="STRUCT" if relationship_constraint else "FV-TAKE",
+        strategy_id="fixture",
+        signal_value=0.025,
+        fair_value=0.55,
+        decision_observation_ns=100,
+    )
+    plan = build_execution_plan(
+        decision,
+        logical_operation_id="durable-uncertain-reentry",
+        created_monotonic_ns=150,
+    )
+    journal = ExecutionJournal(tmp_path / "durable-uncertain-reentry.sqlite3")
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    journal.record_before_dispatch(
+        plan.envelope, plan.intents, audit=plan.audit, submitted_monotonic_ns=200
+    )
+    journal.mark_state(
+        plan.envelope.logical_operation_id, LifecycleState.UNCERTAIN, 250
+    )
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, FakeUncertainTradingClient()),
+        journal=journal,
+        permit=_permit(),
+        reservations=reservations,
+        wall_clock=lambda: wall_now,
+    )
+    try:
+        with pytest.raises(ValueError, match="journaled placement"):
+            asyncio.run(sink.dispatch(plan))
+        assert journal.lifecycle_state(plan.envelope.logical_operation_id) is (
+            LifecycleState.UNCERTAIN
+        )
+        assert reservations.contains_operation(
+            plan.envelope.logical_operation_id, plan.envelope.intent_ids
+        )
+        # The only network attempt is the one already represented by the
+        # seeded UNCERTAIN operation; this attempted reentry performs none.
+        assert all(
+            event.event_type not in {"NETWORK_DISPATCH", "RESUBMISSION"}
+            for event in journal.events(plan.envelope.logical_operation_id)
+        )
+    finally:
+        journal.close()
+
+
+def test_journaled_operation_id_rejects_changed_payload_without_releasing_risk(
+    tmp_path: Path,
+) -> None:
+    intent = _intent()
+    decision = RiskDecision(
+        approved=True,
+        reason="approved",
+        execution_mode=ExecutionMode.LIVE,
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        intents=(intent,),
+        strategy_family="FV-TAKE",
+        strategy_id="fixture",
+        signal_value=0.025,
+        fair_value=0.55,
+        decision_observation_ns=100,
+    )
+    plan = build_execution_plan(
+        decision, logical_operation_id="durable-conflicting-payload",
+        created_monotonic_ns=150
+    )
+    changed_plan = build_execution_plan(
+        replace(decision, intents=(replace(intent, limit_price_ticks=101),)),
+        logical_operation_id=plan.envelope.logical_operation_id,
+        created_monotonic_ns=150,
+    )
+    assert changed_plan.envelope.payload_sha256 != plan.envelope.payload_sha256
+    journal = ExecutionJournal(tmp_path / "durable-conflicting-payload.sqlite3")
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    journal.record_before_dispatch(plan.envelope, plan.intents)
+    journal.mark_state(plan.envelope.logical_operation_id, LifecycleState.UNCERTAIN, 250)
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, FakeUncertainTradingClient()),
+        journal=journal,
+        permit=_permit(),
+        reservations=reservations,
+        wall_clock=lambda: datetime(2026, 11, 4, 16, 59, 55, tzinfo=UTC),
+    )
+    try:
+        with pytest.raises(ValueError, match="journaled placement"):
+            asyncio.run(sink.dispatch(changed_plan))
+        assert reservations.contains_operation(
+            plan.envelope.logical_operation_id, plan.envelope.intent_ids
+        )
+        assert journal.lifecycle_state(plan.envelope.logical_operation_id) is (
+            LifecycleState.UNCERTAIN
+        )
+        assert all(
+            event.event_type not in {"NETWORK_DISPATCH", "RESUBMISSION"}
+            for event in journal.events(plan.envelope.logical_operation_id)
+        )
+    finally:
         journal.close()
