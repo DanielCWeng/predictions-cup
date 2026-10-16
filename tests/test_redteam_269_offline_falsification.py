@@ -12,6 +12,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from predictions_cup.research.account_terminality_lease import (
@@ -21,14 +22,29 @@ from predictions_cup.research.account_terminality_lease import (
     TerminalOrderProof,
 )
 from test_account_terminality_lease import (
+    ISSUER,
+    KEY_ID,
     NOW,
     _claim,
     _reserve,
     _seed,
     _signed_epoch,
     _signed_terminal,
-    proven,
 )
+
+
+@pytest.fixture()
+def proven() -> tuple[Ed25519PrivateKey, OfflineIssuerRegistry, AccountEpochProof]:
+    """Own ephemeral signing identity; never a venue-trusted issuer."""
+    private = Ed25519PrivateKey.generate()
+    public = private.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+    )
+    registry = OfflineIssuerRegistry(
+        keys={(ISSUER, KEY_ID): public},
+        account_id="fixture-account", tournament_id="fixture-tournament",
+    )
+    return private, registry, _signed_epoch(private)
 
 
 def _racer(
