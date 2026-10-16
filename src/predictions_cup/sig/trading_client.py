@@ -6,7 +6,9 @@ import asyncio
 import json
 import logging
 import random
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from decimal import Decimal
 from types import TracebackType
@@ -41,6 +43,24 @@ from predictions_cup.sig.trading_dto import (
 ModelT = TypeVar("ModelT", bound=BaseModel)
 SleepFn = Callable[[float], Awaitable[None]]
 _BATCH_REQUEST_TIMEOUT_SECONDS = 120.0
+
+# Task-local: an authorised startup recovery must revalidate before EVERY wire.
+# This avoids mutable per-client grants bleeding across independent senders.
+_startup_replay_wire_authorizer: ContextVar[Callable[[], bool] | None] = ContextVar(
+    "sig_startup_replay_wire_authorizer", default=None
+)
+
+
+@contextmanager
+def enforce_startup_replay_wire_authorization(
+    authorizer: Callable[[], bool],
+) -> Iterator[None]:
+    """Scope a fresh-authority check to all placement attempts in this task."""
+    token = _startup_replay_wire_authorizer.set(authorizer)
+    try:
+        yield
+    finally:
+        _startup_replay_wire_authorizer.reset(token)
 
 logger = logging.getLogger(__name__)
 
@@ -329,6 +349,26 @@ class SigTradingClient:
                 assert_competition_placement_open(
                     observed, attempted_network=attempted_network
                 )
+                # P0: #251 checked replay authority only before the outer
+                # dispatch. 429/503/transport retries *inside* this loop must
+                # also revalidate after governor and before each HTTP wire.
+                # An old journalled order may have executed: DENY is UNCERTAIN,
+                # never a conclusive rejection or reservation release.
+                wire_authorizer = _startup_replay_wire_authorizer.get()
+                if wire_authorizer is not None:
+                    try:
+                        authorised = wire_authorizer()
+                    except Exception:
+                        authorised = False
+                    if not authorised:
+                        raise SigExecutionUncertainError(
+                            status_code=None,
+                            code="STARTUP_REPLAY_WIRE_NOT_AUTHORISED",
+                            safe_message=(
+                                "Startup replay grant denied or revoked before HTTP "
+                                "attempt; preserve old order and reserved risk"
+                            ),
+                        )
             try:
                 attempted_network = True
                 if resolved_content is not None:
