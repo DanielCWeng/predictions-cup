@@ -1,0 +1,35 @@
+name: Reviewer #220 Offline 24-Pair Safety
+
+on:
+  push:
+    branches:
+      - review/alpha2-depth220-safety-20261016
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reviewer-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install isolated offline test dependencies
+        run: python -m pip install -e '.[dev]'
+      - name: New independent reviewer regressions
+        run: pytest -q tests/test_alpha2_depth220_independent.py
+      - name: Complete preregistered 24-pair 1000-cycle OFF-ON replay (fake only)
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/research/lane5_randomized_maker_acceptance.py --seed 207220 --pairs 24 --iterations 1000 | tee alpha2_depth220_24pair.jsonl
+      - name: Upload immutable offline reviewer evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha2-depth220-offline-24pair
+          path: alpha2_depth220_24pair.jsonl
