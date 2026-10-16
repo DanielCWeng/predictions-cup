@@ -193,20 +193,23 @@ def test_third_party_probability_is_not_automatically_republican() -> None:
         "p_other": ".10", "settlement_review": "VERIFIED",
         "independent_source": "SYNTHETIC_3WAY",
     }
-    kwargs = {
-        "cash": D("0"),
-        "race_inputs": {"FL-22": race},
-        "competitor_inputs": [{"mean": "0", "sd": "0"}] * 3,
-        "national_logit_sd": 0,
-        "state_logit_sd": 0,
-        "seed": 3,
-        "paths": 12000,
-    }
-    got = tournament_sensitivity(rows, **kwargs)
+    def evaluate() -> dict[str, Any]:
+        return tournament_sensitivity(
+            rows,
+            cash=D("0"),
+            race_inputs={"FL-22": race},
+            competitor_inputs=[{"mean": "0", "sd": "0"}] * 3,
+            national_logit_sd=0,
+            state_logit_sd=0,
+            seed=3,
+            paths=12000,
+        )
+
+    got = evaluate()
     assert 43 < got["expected_final_value"] < 47
     del race["p_other"]
     with pytest.raises(KeyError, match="p_other"):
-        tournament_sensitivity(rows, **kwargs)
+        evaluate()
 
 
 @pytest.mark.parametrize("bid,ask", [(".60", ".40"), (".40", ".40")])
