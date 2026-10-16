@@ -2321,7 +2321,6 @@ def test_direct_recovery_cannot_borrow_another_orders_scoped_grant(
     journal, reservations, trading, rest, sink, envelope = _restart_replay_case(
         tmp_path, LifecycleState.UNCERTAIN
     )
-    now = datetime.now(UTC)
     identity = {
         "logical_operation_id": envelope.logical_operation_id,
         "tournament_id": envelope.tournament_id,
