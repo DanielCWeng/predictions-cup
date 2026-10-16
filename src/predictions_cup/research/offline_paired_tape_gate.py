@@ -85,9 +85,17 @@ def _read(path: Path) -> bytes:
     return data
 
 
+def _reject_nonstandard_json_constant(value: str) -> None:
+    """The default JSON decoder accepts NaN/Infinity, which RFC JSON forbids."""
+    raise SchemaDenied("NONSTANDARD_JSON_CONSTANT")
+
+
 def _json_object(data: bytes) -> dict[str, Any]:
     try:
-        return _object(json.loads(data.decode("utf-8")), "INVALID_JSON_OBJECT")
+        return _object(
+            json.loads(data.decode("utf-8"), parse_constant=_reject_nonstandard_json_constant),
+            "INVALID_JSON_OBJECT",
+        )
     except (UnicodeError, ValueError) as exc:
         raise SchemaDenied("INVALID_JSON_OBJECT") from exc
 
@@ -249,6 +257,13 @@ def validate_offline_tape(manifest_path: Path, mapping_path: Path, sig_path: Pat
         _require(len(sig_rows) == len(pm_rows) == manifest["interval_count"], "PARTIAL_ARCHIVE")
         seen: set[str] = set()
         rejection: list[tuple[str, str]] = []
+        previous_sig_sequence: int | None = None
+        previous_pm_sequence: int | None = None
+        previous_decision: datetime | None = None
+        # The manifest pins one SIG producer run and one PM producer run.
+        # No sequence reset is trusted inside that run, even if a row claims
+        # a new subscription/seed epoch. A genuinely reissued run requires
+        # a separately pinned and verified archive, not a quiet in-tape reset.
         for sig, pm in zip(sig_rows, pm_rows, strict=True):
             label = sig.get("interval_id")
             identity = label if isinstance(label, str) and label else "INVALID_INTERVAL"
@@ -257,6 +272,22 @@ def validate_offline_tape(manifest_path: Path, mapping_path: Path, sig_path: Pat
                          "DUPLICATE_OR_MISSING_INTERVAL")
                 seen.add(identity)
                 _interval(sig, pm, mapping, manifest)
+                sig_sequence = _integer(sig.get("source_sequence"), "MISSING_SIG_NATIVE_REVISION")
+                pm_sequence = _integer(pm.get("ws_sequence"), "MISSING_PM_WS_SEQUENCE")
+                decision = _utc(sig.get("decision_at"))
+                _require(previous_decision is None or decision > previous_decision,
+                         "NONMONOTONIC_INTERVAL_DECISION")
+                _require(
+                    previous_sig_sequence is None or sig_sequence > previous_sig_sequence,
+                    "SIG_NATIVE_SEQUENCE_NOT_INCREASING",
+                )
+                _require(
+                    previous_pm_sequence is None or pm_sequence > previous_pm_sequence,
+                    "PM_WS_SEQUENCE_NOT_INCREASING",
+                )
+                previous_decision = decision
+                previous_sig_sequence = sig_sequence
+                previous_pm_sequence = pm_sequence
             except SchemaDenied as exc:
                 rejection.append((identity, str(exc)))
         if rejection:
