@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from contextlib import AbstractContextManager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -145,7 +146,7 @@ def test_replay_scope_restores_context_after_success_exception_and_cancel() -> N
     """Positive control: new task-bound scope is cleared at all parent exits."""
     from predictions_cup.sig.trading_client import _startup_replay_wire_authorizer
 
-    def scoped():
+    def scoped() -> AbstractContextManager[None]:
         return enforce_startup_replay_wire_authorization(
             lambda: True,
             logical_operation_id="original",
