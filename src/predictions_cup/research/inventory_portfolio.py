@@ -256,7 +256,7 @@ def tournament_sensitivity(
     for _ in range(paths):
         national = rng.gauss(0, national_logit_sd)
         by_state: dict[str, float] = {}
-        wins: dict[str, bool] = {}
+        wins: dict[str, str] = {}
         value = float(cash)
         for p in ledger:
             race = p["race_inferred_from_title"]
@@ -265,12 +265,32 @@ def tournament_sensitivity(
             if state not in by_state:
                 by_state[state] = rng.gauss(0, state_logit_sd)
             if race not in wins:
-                chance = float(dec(assumption["p_democratic"]))
-                if not 0 < chance < 1:
-                    raise ValueError("invalid independent probability")
-                logits = math.log(chance / (1 - chance)) + national + by_state[state]
-                wins[race] = rng.random() < 1 / (1 + math.exp(-logits))
-            true_yes = wins[race] == (p["party_inferred_from_title"] == "Democratic")
+                # Even when a D/R market pair looks exhaustive by title,
+                # independent/third-party/tie outcomes can defeat BOTH Yes
+                # contracts. Do not silently assign all non-D mass to R.
+                # Require explicit independently sourced full settlement support.
+                probs = tuple(
+                    dec(assumption[key])
+                    for key in ("p_democratic", "p_republican", "p_other")
+                )
+                if (
+                    any(not D("0") <= p <= D("1") for p in probs)
+                    or abs(sum(probs) - D("1")) > D("0.000001")
+                ):
+                    raise ValueError("invalid or incomplete three-way probability")
+                shock = national + by_state[state]
+                weights = (
+                    float(probs[0]) * math.exp(shock / 2),
+                    float(probs[1]) * math.exp(-shock / 2),
+                    float(probs[2]),
+                )
+                draw = rng.random() * sum(weights)
+                wins[race] = (
+                    "Democratic" if draw < weights[0]
+                    else "Republican" if draw < weights[0] + weights[1]
+                    else "Other"
+                )
+            true_yes = wins[race] == p["party_inferred_from_title"]
             pays = true_yes == (p["held_side"] == "YES")
             if pays:
                 value += float(abs(dec(p["signed_yes_quantity"])))
