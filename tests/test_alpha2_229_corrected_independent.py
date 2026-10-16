@@ -8,12 +8,15 @@ import json
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from predictions_cup.models.market import OrderBook, OrderBookLevel
 from predictions_cup.research.maker_depth_audit import (
+    Accepted,
     AuditError,
+    Snapshot,
     accepted_specs,
     audit,
     pm_pair_rejections,
@@ -25,7 +28,7 @@ from reviewer_229_fixtures.microstructure_c_bridge import bridge_lane_b
 OBSERVED = datetime(2026, 10, 17, 0, tzinfo=UTC)
 
 
-def _mapping(tmp_path: Path) -> dict[str, object]:
+def _mapping(tmp_path: Path) -> dict[str, Accepted]:
     mapping_path = tmp_path / "exact.json"
     mapping_path.write_text(
         json.dumps(
@@ -79,7 +82,9 @@ def _row(quantity: str = "20") -> dict[str, object]:
     }
 
 
-def _audit(tmp_path: Path, quantity: str = "20", counters: dict[str, int] | None = None):
+def _audit(
+    tmp_path: Path, quantity: str = "20", counters: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[Snapshot]]:
     specs = _mapping(tmp_path)
     raw_path = tmp_path / "source.jsonl"
     raw_path.write_text(json.dumps(_row(quantity)) + "\n", encoding="utf-8")
