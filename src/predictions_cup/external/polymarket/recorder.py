@@ -154,27 +154,42 @@ class PolymarketRecorder:
         return True
 
     async def _before_websocket_connect(self) -> None:
-        # One local attempt epoch for every initial connection or reconnection.
-        # Failed / partial REST seed is NOT a completed epoch.
+        # Capture immutable desired-token identity and generation BEFORE the
+        # awaited REST seed. A refresh may change the universe while it waits.
+        token_ids = self._token_ids
+        desired = frozenset(token_ids)
+        subscription_epoch = self.health.subscription_epoch
         self.health.seed_attempt_epoch += 1
-        self.health.seed_expected_tokens = len(self._token_ids)
+        attempt_epoch = self.health.seed_attempt_epoch
+        self.health.seed_expected_tokens = len(desired)
         self.health.seed_initialized_tokens = 0
         self.health.seed_status = "IN_PROGRESS"
         self.health.seed_completed_at = None
         self.books.invalidate_all()
         try:
-            await self._seed_books(self._token_ids, invalidate=False)
+            await self._seed_books(token_ids, invalidate=False)
+            if (
+                self._token_ids != token_ids
+                or self._subscribed_tokens != desired
+                or self.health.subscription_epoch != subscription_epoch
+            ):
+                # Never certify a seed of A as COMPLETE for newly selected B.
+                # Next ordinary connection retry will seed the current set.
+                self.books.invalidate_all()
+                self.health.seed_status = "STALE"
+                raise RuntimeError("Polymarket subscriptions changed during REST seed")
+            if not desired.issubset(self.books.initialized_tokens):
+                raise RuntimeError("Polymarket seed lost a subscribed token")
         except Exception:
             self.health.seed_initialized_tokens = len(
-                self.books.initialized_tokens.intersection(self._token_ids)
+                self.books.initialized_tokens.intersection(desired)
             )
-            self.health.seed_status = "FAILED"
+            if self.health.seed_status != "STALE":
+                self.health.seed_status = "FAILED"
             raise
-        self.health.seed_initialized_tokens = len(
-            self.books.initialized_tokens.intersection(self._token_ids)
-        )
-        self.health.seed_complete_epoch = self.health.seed_attempt_epoch
-        self.health.seed_subscription_epoch = self.health.subscription_epoch
+        self.health.seed_initialized_tokens = len(desired)
+        self.health.seed_complete_epoch = attempt_epoch
+        self.health.seed_subscription_epoch = subscription_epoch
         self.health.seed_status = "COMPLETE"
         self.health.seed_completed_at = utc_now()
 
