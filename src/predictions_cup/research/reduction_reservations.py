@@ -14,6 +14,7 @@ import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from predictions_cup.research.signed_reduction_screen import (
     SignedInventoryEvidence,
@@ -86,6 +87,8 @@ class OfflineReductionReservations:
                 slot INTEGER PRIMARY KEY CHECK (slot=1), epoch TEXT NOT NULL,
                 digest TEXT NOT NULL, ledger TEXT NOT NULL,
                 gross INTEGER NOT NULL, net INTEGER NOT NULL)""")
+            db.execute("""CREATE TABLE IF NOT EXISTS epoch_history (
+                epoch TEXT PRIMARY KEY)""")
             db.execute("""CREATE TABLE IF NOT EXISTS intents (
                 intent_id TEXT PRIMARY KEY, epoch TEXT NOT NULL,
                 exchange_id TEXT NOT NULL, signed_delta INTEGER NOT NULL,
@@ -110,7 +113,7 @@ class OfflineReductionReservations:
         row = db.execute("SELECT epoch,digest,ledger FROM epochs WHERE slot=1").fetchone()
         if row is None:
             raise ReservationDenied("epoch_not_seeded")
-        return str(row[0]), str(row[1]), json.loads(row[2])
+        return str(row[0]), str(row[1]), cast(dict[str, int], json.loads(row[2]))
 
     def seed(
         self, *, epoch: str, evidence: SignedInventoryEvidence, cap: int, age: float
@@ -123,6 +126,7 @@ class OfflineReductionReservations:
             self._transaction(db)
             if db.execute("SELECT 1 FROM epochs WHERE slot=1").fetchone():
                 raise ReservationDenied("already_seeded_no_implicit_reset")
+            db.execute("INSERT INTO epoch_history(epoch) VALUES(?)", (epoch,))
             db.execute(
                 "INSERT INTO epochs(slot,epoch,digest,ledger,gross,net) VALUES(1,?,?,?,?,?)",
                 (epoch, digest, json.dumps(dict(evidence.signed_by_exchange), sort_keys=True),
@@ -150,13 +154,15 @@ class OfflineReductionReservations:
             if epoch != active or stored_digest != digest or ledger != dict(evidence.signed_by_exchange):
                 raise ReservationDenied("stale_or_changed_ledger_epoch")
             row = db.execute(
-                "SELECT exchange_id,signed_delta,quantity,cumulative,state FROM intents WHERE intent_id=?",
+                "SELECT epoch,exchange_id,signed_delta,quantity,cumulative,state FROM intents WHERE intent_id=?",
                 (intent_id,),
             ).fetchone()
             if row is not None:
-                if (row[0], row[1], row[2]) != (exchange_id, verdict.signed_delta, quantity):
+                if row[0] != active:
+                    raise ReservationDenied("logical_intent_id_reused_after_epoch")
+                if (row[1], row[2], row[3]) != (exchange_id, verdict.signed_delta, quantity):
                     raise ReservationDenied("conflicting_logical_intent_replay")
-                return ReductionReservation(intent_id, row[0], row[1], row[2], row[3], row[4])
+                return ReductionReservation(intent_id, row[1], row[2], row[3], row[4], row[5])
             consumed = int(db.execute(
                 "SELECT COALESCE(SUM(quantity),0) FROM intents WHERE epoch=? AND exchange_id=?",
                 (active, exchange_id),
@@ -247,6 +253,8 @@ class OfflineReductionReservations:
             active, _, old_ledger = self._epoch(db)
             if active != prior_epoch:
                 raise ReservationDenied("epoch_compare_and_swap_failed")
+            if db.execute("SELECT 1 FROM epoch_history WHERE epoch=?", (new_epoch,)).fetchone():
+                raise ReservationDenied("account_epoch_reuse_denied")
             rows = db.execute(
                 "SELECT exchange_id,signed_delta,quantity,cumulative,state "
                 "FROM intents WHERE epoch=?", (active,),
@@ -261,6 +269,7 @@ class OfflineReductionReservations:
             expected = {k: v for k, v in expected.items() if v != 0}
             if expected != dict(evidence.signed_by_exchange):
                 raise ReservationDenied("authoritative_signed_fill_reconciliation_mismatch")
+            db.execute("INSERT INTO epoch_history(epoch) VALUES(?)", (new_epoch,))
             db.execute(
                 "UPDATE epochs SET epoch=?,digest=?,ledger=?,gross=?,net=? WHERE slot=1",
                 (new_epoch, digest, json.dumps(expected, sort_keys=True),
