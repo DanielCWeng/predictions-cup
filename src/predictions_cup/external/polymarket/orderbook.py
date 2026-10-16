@@ -163,7 +163,7 @@ class OrderBookStore:
             normalized_changes.append(
                 BookChangeEvent(
                     market_id=book.market_id,
-                    token_id=token_id,
+                    token_id=book.token_id,
                     side=normalized_side,
                     price=price,
                     size=size,
