@@ -79,3 +79,23 @@ def test_malformed_message_is_counted_without_calling_handler() -> None:
 
     assert health.parse_failures == 1
     assert called is False
+
+
+def test_connection_generation_is_linked_to_completed_seed_epoch() -> None:
+    health = IngestionHealth()
+    transport = MarketWebSocket("wss://example.invalid/ws", health)
+    health.seed_attempt_epoch = 3
+    health.seed_complete_epoch = 2
+    health.seed_status = "FAILED"
+    health.subscription_epoch = 7
+
+    transport._mark_connection_established()
+
+    assert health.connection_epoch == 1
+    assert health.connection_seed_epoch == 2
+    assert health.connection_subscription_epoch == 7
+    assert health.seed_complete_epoch != health.seed_attempt_epoch
+    assert health.research_book_state_accepted is False
+    health.seed_complete_epoch = 4
+    transport._mark_connection_established()
+    assert (health.connection_epoch, health.connection_seed_epoch) == (2, 4)
