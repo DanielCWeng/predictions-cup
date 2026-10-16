@@ -1629,16 +1629,14 @@ def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
                 clock_ns=iter(range(900, 1200)).__next__,
                 observation_emitter=emitter,
                 observation_process_instance_id="recovery-test-process",
-                wall_clock=lambda: datetime(2026, 10, 16, 18, tzinfo=UTC),
+                wall_clock=lambda: datetime.now(UTC),
                 placement_replay_allowed=lambda envelope: PlacementReplayAuthorization(
                     logical_operation_id=envelope.logical_operation_id,
                     tournament_id=envelope.tournament_id,
                     idempotency_key=envelope.idempotency_key,
                     payload_sha256=envelope.payload_sha256,
-                    issued_at_utc=datetime(2026, 10, 16, 18, tzinfo=UTC)
-                    - timedelta(seconds=1),
-                    expires_at_utc=datetime(2026, 10, 16, 18, tzinfo=UTC)
-                    + timedelta(seconds=10),
+                    issued_at_utc=datetime.now(UTC) - timedelta(seconds=1),
+                    expires_at_utc=datetime.now(UTC) + timedelta(seconds=10),
                     authority_id="approved-test-only",
                 ),
             )
