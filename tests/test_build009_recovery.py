@@ -2068,3 +2068,208 @@ def test_79_journal_failure_stops_recovery_before_any_wire(
         assert trading.payloads == []
     finally:
         journal.close()
+
+
+
+# --- #251 independently falsified inner-HTTP retry authority: owner regression ---
+
+class _RevocableReplayGovernor(_79Governor):
+    def __init__(
+        self, on_acquire: Callable[[int], None] | None = None,
+    ) -> None:
+        self.acquires = 0
+        self.on_acquire = on_acquire
+
+    async def acquire(self, priority: object) -> None:
+        del priority
+        self.acquires += 1
+        if self.on_acquire is not None:
+            self.on_acquire(self.acquires)
+
+
+def _revocable_replay_http_client(
+    *,
+    responder: Callable[[httpx.Request], httpx.Response],
+    wall_clock: Callable[[], datetime],
+    governor: _RevocableReplayGovernor,
+) -> SigTradingClient:
+    client = object.__new__(SigTradingClient)
+    client._client = httpx.AsyncClient(
+        transport=httpx.MockTransport(responder), base_url="https://sig.invalid/"
+    )
+    client._governor = cast(SigRestGovernor, governor)
+    client._retry_policy = RetryPolicy(
+        max_attempts=2, base_delay_seconds=0, max_delay_seconds=0, jitter_ratio=0
+    )
+    client._sleep = asyncio.sleep
+    client._timeout_seconds = 0.01
+    client._request_in_flight_wait_seconds = 0.0
+    client._wall_clock = wall_clock
+    return client
+
+
+@pytest.mark.parametrize("first_response", ("429", "503", "lost_ack"))
+def test_251_replay_revoked_during_inner_http_retry_stops_second_wire(
+    tmp_path: Path, first_response: str,
+) -> None:
+    """Red Team #252/#253: never allow a second POST after grant revocation."""
+    journal, reservations, _fake, rest, _old_sink, envelope = _restart_replay_case(
+        tmp_path, LifecycleState.UNCERTAIN
+    )
+    now = datetime.now(UTC)
+    allowed = [True]
+    attempted: list[bytes] = []
+    checks: list[bool] = []
+
+    def grant(item: ExecutionEnvelope) -> PlacementReplayAuthorization | None:
+        checks.append(allowed[0])
+        return _fresh_replay_grant(item, now) if allowed[0] else None
+
+    def respond(req: httpx.Request) -> httpx.Response:
+        attempted.append(req.content)
+        allowed[0] = False
+        if first_response == "lost_ack":
+            raise httpx.ReadTimeout("response lost after possible order", request=req)
+        code = "RATE_LIMITED" if first_response == "429" else "SERVICE_UNAVAILABLE"
+        return httpx.Response(
+            int(first_response),
+            json={"error": {"code": code, "message": "retry"}},
+            headers={"Retry-After": "0"},
+        )
+
+    governor = _RevocableReplayGovernor()
+    client = _revocable_replay_http_client(
+        responder=respond, wall_clock=lambda: now, governor=governor
+    )
+    sink = SigLiveSink(
+        client=client, journal=journal, permit=_recovery_permit(),
+        reservations=reservations,
+    )
+    try:
+        result = asyncio.run(recover_startup(
+            journal=journal, rest=cast(RecoveryRest, rest),
+            live_sink=sink, tournament_id="t1", tournament_slug="cup",
+            wall_clock=lambda: now, placement_replay_allowed=grant,
+            reservations=reservations, market_by_exchange={"36": "m1"},
+            exchange_ids_by_market={"m1": ("36",)},
+        ))
+        assert attempted == [envelope.payload_json.encode()]
+        assert governor.acquires == 2
+        assert checks.count(False) >= 1
+        assert journal.lifecycle_state(envelope.logical_operation_id) is (
+            LifecycleState.UNCERTAIN
+        )
+        assert reservations.contains_operation(
+            envelope.logical_operation_id, envelope.intent_ids
+        )
+        assert result.unresolved_operation_ids == (envelope.logical_operation_id,)
+        assert not result.safe_to_resume_live
+    finally:
+        asyncio.run(client.aclose())
+        journal.close()
+
+
+@pytest.mark.parametrize("failure", ("expiry", "rollback"))
+def test_251_replay_clock_changed_during_governor_blocks_second_wire(
+    tmp_path: Path, failure: str,
+) -> None:
+    journal, reservations, _fake, rest, _old_sink, envelope = _restart_replay_case(
+        tmp_path, LifecycleState.UNCERTAIN
+    )
+    initial = datetime.now(UTC)
+    current = [initial]
+    calls: list[bytes] = []
+
+    def changed(attempt: int) -> None:
+        if attempt == 2:
+            current[0] = (
+                initial + timedelta(seconds=31) if failure == "expiry"
+                else initial - timedelta(milliseconds=500)
+            )
+
+    def respond(req: httpx.Request) -> httpx.Response:
+        calls.append(req.content)
+        return httpx.Response(
+            503, json={"error": {"code": "SERVICE_UNAVAILABLE", "message": "retry"}},
+        )
+
+    client = _revocable_replay_http_client(
+        responder=respond, wall_clock=lambda: current[0],
+        governor=_RevocableReplayGovernor(changed),
+    )
+    sink = SigLiveSink(
+        client=client, journal=journal, permit=_recovery_permit(),
+        reservations=reservations,
+    )
+    try:
+        result = asyncio.run(recover_startup(
+            journal=journal, rest=cast(RecoveryRest, rest),
+            live_sink=sink, tournament_id="t1", tournament_slug="cup",
+            wall_clock=lambda: current[0],
+            placement_replay_allowed=lambda item: _fresh_replay_grant(item, initial),
+            reservations=reservations, market_by_exchange={"36": "m1"},
+        ))
+        assert calls == [envelope.payload_json.encode()]
+        assert journal.lifecycle_state(envelope.logical_operation_id) is (
+            LifecycleState.UNCERTAIN
+        )
+        assert reservations.contains_operation(
+            envelope.logical_operation_id, envelope.intent_ids
+        )
+        assert result.unresolved_operation_ids == (envelope.logical_operation_id,)
+    finally:
+        asyncio.run(client.aclose())
+        journal.close()
+
+
+def test_251_continuously_valid_replay_permission_allows_bounded_original_key_retry(
+    tmp_path: Path,
+) -> None:
+    journal, reservations, _fake, rest, _old_sink, envelope = _restart_replay_case(
+        tmp_path, LifecycleState.UNCERTAIN
+    )
+    now = datetime.now(UTC)
+    calls: list[bytes] = []
+
+    def respond(req: httpx.Request) -> httpx.Response:
+        calls.append(req.content)
+        if len(calls) == 1:
+            return httpx.Response(
+                503,
+                json={"error": {"code": "SERVICE_UNAVAILABLE", "message": "retry"}},
+            )
+        return httpx.Response(
+            200,
+            json={
+                "orderId": 91, "exchangeId": "36", "open": True,
+                "remainingQuantity": "1", "action": "buy", "side": "yes",
+                "price": "0.5", "quantity": 1, "terminalReasonCode": None,
+                "quantityTraded": "0", "totalCost": "0", "fillPrice": None,
+                "all": None,
+            },
+        )
+
+    client = _revocable_replay_http_client(
+        responder=respond, wall_clock=lambda: now,
+        governor=_RevocableReplayGovernor(),
+    )
+    sink = SigLiveSink(
+        client=client, journal=journal, permit=_recovery_permit(),
+        reservations=reservations,
+    )
+    try:
+        asyncio.run(recover_startup(
+            journal=journal, rest=cast(RecoveryRest, rest),
+            live_sink=sink, tournament_id="t1", tournament_slug="cup",
+            wall_clock=lambda: now,
+            placement_replay_allowed=lambda item: _fresh_replay_grant(item, now),
+            reservations=reservations, market_by_exchange={"36": "m1"},
+        ))
+        assert calls == [
+            envelope.payload_json.encode(), envelope.payload_json.encode()
+        ]
+        assert json.loads(calls[0])["idempotencyKey"] == envelope.idempotency_key
+        assert len(journal.events(envelope.logical_operation_id)) > 0
+    finally:
+        asyncio.run(client.aclose())
+        journal.close()
