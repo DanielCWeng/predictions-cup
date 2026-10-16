@@ -165,6 +165,7 @@ class PolymarketRecorder:
         self.health.seed_initialized_tokens = 0
         self.health.seed_status = "IN_PROGRESS"
         self.health.seed_completed_at = None
+        self.websocket._seeded_tokens = frozenset()
         self.books.invalidate_all()
         try:
             await self._seed_books(token_ids, invalidate=False)
@@ -192,6 +193,8 @@ class PolymarketRecorder:
         self.health.seed_subscription_epoch = subscription_epoch
         self.health.seed_status = "COMPLETE"
         self.health.seed_completed_at = utc_now()
+        # Exact identity, not just equal cardinality/epoch, for WS subscribe.
+        self.websocket._seeded_tokens = desired
 
     async def _seed_books(self, token_ids: tuple[str, ...], *, invalidate: bool) -> None:
         if invalidate:
