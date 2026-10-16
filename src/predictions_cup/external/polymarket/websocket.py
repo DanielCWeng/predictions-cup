@@ -84,6 +84,7 @@ class MarketWebSocket:
                         async with self._subscription_lock:
                             tokens = sorted(self._desired_tokens)
                             await ws.send_json({"assets_ids": tokens, "type": "market"})
+                        self._mark_connection_established()
                         self.health.websocket_connected = True
                         has_connected = True
                         attempt = 0
@@ -130,6 +131,13 @@ class MarketWebSocket:
                     if ping_task is not None:
                         ping_task.cancel()
                         await asyncio.gather(ping_task, return_exceptions=True)
+
+    def _mark_connection_established(self) -> None:
+        # Local connection generation, linked to the last completed REST seed.
+        # Never infer that a connected socket proves complete future book state.
+        self.health.connection_epoch += 1
+        self.health.connection_seed_epoch = self.health.seed_complete_epoch
+        self.health.connection_subscription_epoch = self.health.subscription_epoch
 
     async def _ping_loop(self, ws: aiohttp.ClientWebSocketResponse) -> None:
         loop = asyncio.get_running_loop()

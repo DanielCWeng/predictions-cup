@@ -467,3 +467,133 @@ def test_runtime_stop_event_stops_websocket_and_cancels_recorder(
 
     asyncio.run(scenario())
 
+
+def test_missing_book_reasons_count_entries_not_distinct_tokens(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorder = PolymarketRecorder(
+        AppSettings.model_validate(
+            {
+                "polymarket_storage_path": tmp_path / "capture.sqlite3",
+                "polymarket_research_path": tmp_path / "research",
+            }
+        )
+    )
+    recorder._token_ids = ("seeded", "desired-unseeded")
+    recorder._subscribed_tokens = frozenset(recorder._token_ids)
+    observed = datetime(2026, 10, 16, tzinfo=UTC)
+    recorder.books.apply_full_snapshot(_book_payload("seeded"), observed)
+    monkeypatch.setattr(
+        recorder.research_storage,
+        "append_book_changes",
+        lambda changes: len(tuple(changes)),
+    )
+
+    async def scenario() -> None:
+        await recorder.handle_message(
+            {
+                "event_type": "price_change",
+                "timestamp": "1782753358257",
+                "price_changes": [
+                    {"asset_id": "seeded", "side": "BUY", "price": "0.45", "size": "8"},
+                    {
+                        "asset_id": "desired-unseeded",
+                        "side": "BUY",
+                        "price": "0.45",
+                        "size": "8",
+                    },
+                    {
+                        "asset_id": "outside-universe",
+                        "side": "SELL",
+                        "price": "0.46",
+                        "size": "8",
+                    },
+                    {
+                        "asset_id": "desired-unseeded",
+                        "side": "BUY",
+                        "price": "0.45",
+                        "size": "7",
+                    },
+                ],
+            },
+            observed,
+        )
+        await recorder.handle_message(
+            {
+                "event_type": "tick_size_change",
+                "asset_id": "desired-unseeded",
+                "new_tick_size": "0.01",
+            },
+            observed,
+        )
+        await recorder.handle_message(
+            {
+                "event_type": "tick_size_change",
+                "asset_id": "outside-universe",
+                "new_tick_size": "0.01",
+            },
+            observed,
+        )
+
+    asyncio.run(scenario())
+    health = recorder.health
+    assert health.book_uninitialized_delta_count == 5
+    assert health.price_change_missing_subscribed == 2
+    assert health.price_change_missing_other == 1
+    assert health.price_change_missing_unclassified == 0
+    assert health.tick_size_missing_subscribed == 1
+    assert health.tick_size_missing_other == 1
+    assert recorder.books.initialized_tokens == frozenset({"seeded"})
+    assert health.research_book_state_accepted is False
+    assert health.as_record()["price_change_missing_subscribed"] == 2
+
+
+def test_failed_seed_epoch_is_not_recorded_complete(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorder = PolymarketRecorder(
+        AppSettings.model_validate(
+            {
+                "polymarket_storage_path": tmp_path / "capture.sqlite3",
+                "polymarket_research_path": tmp_path / "research",
+            }
+        )
+    )
+    recorder._token_ids = ("token-1", "token-2")
+    recorder._subscribed_tokens = frozenset(recorder._token_ids)
+    recorder.health.subscription_epoch = 4
+    now = datetime(2026, 10, 16, tzinfo=UTC)
+    attempts = 0
+
+    async def fake_batches(token_ids: tuple[str, ...]) -> tuple[ObservedBookBatch, ...]:
+        nonlocal attempts
+        assert token_ids == ("token-1", "token-2")
+        attempts += 1
+        ids = ("token-1",) if attempts == 1 else token_ids
+        return (ObservedBookBatch(tuple(_book_payload(token) for token in ids), now),)
+
+    monkeypatch.setattr(recorder.clob, "fetch_book_batches", fake_batches)
+
+    async def scenario() -> None:
+        with pytest.raises(RuntimeError, match="did not initialize"):
+            await recorder._before_websocket_connect()
+        assert recorder.health.seed_attempt_epoch == 1
+        assert recorder.health.seed_complete_epoch == 0
+        assert recorder.health.seed_status == "FAILED"
+        assert recorder.health.seed_expected_tokens == 2
+        assert recorder.health.seed_initialized_tokens == 1
+        assert recorder.health.seed_completed_at is None
+
+        await recorder._before_websocket_connect()
+        assert recorder.health.seed_attempt_epoch == 2
+        assert recorder.health.seed_complete_epoch == 2
+        assert recorder.health.seed_subscription_epoch == 4
+        assert recorder.health.seed_status == "COMPLETE"
+        assert recorder.health.seed_expected_tokens == 2
+        assert recorder.health.seed_initialized_tokens == 2
+        assert recorder.health.seed_completed_at is not None
+        assert recorder.health.research_book_state_accepted is False
+
+    asyncio.run(scenario())

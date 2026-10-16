@@ -21,6 +21,26 @@ class IngestionHealth:
     parse_failures: int = 0
     unknown_event_count: int = 0
     book_uninitialized_delta_count: int = 0
+    # Bounded per-reason counters; no per-token identifiers or hot-path logs.
+    price_change_missing_subscribed: int = 0
+    price_change_missing_other: int = 0
+    price_change_missing_unclassified: int = 0
+    tick_size_missing_subscribed: int = 0
+    tick_size_missing_other: int = 0
+    # Epochs are local to this recorder process, never external venue clocks.
+    subscription_epoch: int = 0
+    seed_attempt_epoch: int = 0
+    seed_complete_epoch: int = 0
+    seed_subscription_epoch: int = 0
+    seed_expected_tokens: int = 0
+    seed_initialized_tokens: int = 0
+    seed_status: str = "NOT_STARTED"
+    seed_completed_at: datetime | None = None
+    connection_epoch: int = 0
+    connection_seed_epoch: int = 0
+    connection_subscription_epoch: int = 0
+    subscribed_books_initialized: int = 0
+    research_book_state_accepted: bool = False
     gamma_last_refresh_at: datetime | None = None
     gamma_last_status: str | None = None
     snapshot_last_at: datetime | None = None
@@ -45,6 +65,24 @@ class IngestionHealth:
             "parse_failures": self.parse_failures,
             "unknown_event_count": self.unknown_event_count,
             "book_uninitialized_delta_count": self.book_uninitialized_delta_count,
+            "price_change_missing_subscribed": self.price_change_missing_subscribed,
+            "price_change_missing_other": self.price_change_missing_other,
+            "price_change_missing_unclassified": self.price_change_missing_unclassified,
+            "tick_size_missing_subscribed": self.tick_size_missing_subscribed,
+            "tick_size_missing_other": self.tick_size_missing_other,
+            "subscription_epoch": self.subscription_epoch,
+            "seed_attempt_epoch": self.seed_attempt_epoch,
+            "seed_complete_epoch": self.seed_complete_epoch,
+            "seed_subscription_epoch": self.seed_subscription_epoch,
+            "seed_expected_tokens": self.seed_expected_tokens,
+            "seed_initialized_tokens": self.seed_initialized_tokens,
+            "seed_status": self.seed_status,
+            "seed_completed_at": iso(self.seed_completed_at),
+            "connection_epoch": self.connection_epoch,
+            "connection_seed_epoch": self.connection_seed_epoch,
+            "connection_subscription_epoch": self.connection_subscription_epoch,
+            "subscribed_books_initialized": self.subscribed_books_initialized,
+            "research_book_state_accepted": self.research_book_state_accepted,
             "gamma_last_refresh_at": iso(self.gamma_last_refresh_at),
             "gamma_last_status": self.gamma_last_status,
             "snapshot_last_at": iso(self.snapshot_last_at),
