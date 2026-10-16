@@ -4,7 +4,7 @@ import asyncio
 import json
 import sqlite3
 from collections.abc import AsyncIterator, Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
 
@@ -26,6 +26,7 @@ from predictions_cup.execution.models import (
 )
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.recovery import (
+    PlacementReplayAuthorization,
     RecoveryRest,
     recover_in_session_cancellations,
     recover_startup,
@@ -1628,6 +1629,18 @@ def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
                 clock_ns=iter(range(900, 1200)).__next__,
                 observation_emitter=emitter,
                 observation_process_instance_id="recovery-test-process",
+                wall_clock=lambda: datetime(2026, 10, 16, 18, tzinfo=UTC),
+                placement_replay_allowed=lambda envelope: PlacementReplayAuthorization(
+                    logical_operation_id=envelope.logical_operation_id,
+                    tournament_id=envelope.tournament_id,
+                    idempotency_key=envelope.idempotency_key,
+                    payload_sha256=envelope.payload_sha256,
+                    issued_at_utc=datetime(2026, 10, 16, 18, tzinfo=UTC)
+                    - timedelta(seconds=1),
+                    expires_at_utc=datetime(2026, 10, 16, 18, tzinfo=UTC)
+                    + timedelta(seconds=10),
+                    authority_id="approved-test-only",
+                ),
             )
         )
         emitter.close()
