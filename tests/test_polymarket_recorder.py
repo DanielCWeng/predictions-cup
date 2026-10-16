@@ -227,6 +227,8 @@ def test_reconnect_hook_invalidates_old_state_and_reseeds_from_rest(
     new_at = old_at + timedelta(seconds=5)
     recorder.books.apply_full_snapshot(_book_payload("token-1", "old-market"), old_at)
     recorder._token_ids = ("token-1",)
+    recorder._subscribed_tokens = frozenset(recorder._token_ids)
+    recorder.health.subscription_epoch = 1
 
     async def fake_batches(token_ids: tuple[str, ...]) -> tuple[ObservedBookBatch, ...]:
         assert token_ids == ("token-1",)
@@ -597,3 +599,116 @@ def test_failed_seed_epoch_is_not_recorded_complete(
         assert recorder.health.research_book_state_accepted is False
 
     asyncio.run(scenario())
+
+
+def test_subscription_mutation_during_rest_seed_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A paused A seed cannot be certified COMPLETE for a later B universe."""
+    recorder = PolymarketRecorder(
+        AppSettings.model_validate(
+            {
+                "polymarket_storage_path": tmp_path / "capture.sqlite3",
+                "polymarket_research_path": tmp_path / "research",
+            }
+        )
+    )
+    recorder._token_ids = ("A",)
+    recorder._subscribed_tokens = frozenset({"A"})
+    recorder.health.subscription_epoch = 1
+    started = asyncio.Event()
+    resume = asyncio.Event()
+    at = datetime(2026, 10, 16, tzinfo=UTC)
+
+    async def fake_seed(token_ids: tuple[str, ...], *, invalidate: bool) -> None:
+        assert token_ids == ("A",)
+        assert invalidate is False
+        started.set()
+        await resume.wait()
+        recorder.books.apply_full_snapshot(_book_payload("A"), at)
+
+    monkeypatch.setattr(recorder, "_seed_books", fake_seed)
+
+    async def scenario() -> None:
+        task = asyncio.create_task(recorder._before_websocket_connect())
+        await started.wait()
+        recorder._token_ids = ("B",)
+        recorder._subscribed_tokens = frozenset({"B"})
+        recorder.health.subscription_epoch = 2
+        resume.set()
+        with pytest.raises(RuntimeError, match="changed during REST seed"):
+            await task
+
+    asyncio.run(scenario())
+    health = recorder.health
+    assert recorder.books.initialized_tokens == frozenset()
+    assert health.seed_expected_tokens == 1
+    assert health.seed_initialized_tokens == 0
+    assert health.seed_status == "STALE"
+    assert health.seed_complete_epoch == 0
+    assert health.connection_epoch == 0
+    assert recorder.websocket._seeded_tokens == frozenset()
+    assert health.research_book_state_accepted is False
+
+
+def test_real_refresh_during_seed_fails_closed_before_subscribe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refresh for B during in-flight A seed rejects the old epoch."""
+    recorder = PolymarketRecorder(
+        AppSettings.model_validate(
+            {
+                "polymarket_storage_path": tmp_path / "capture.sqlite3",
+                "polymarket_research_path": tmp_path / "research",
+            }
+        )
+    )
+    recorder._token_ids = ("A",)
+    recorder._subscribed_tokens = frozenset({"A"})
+    recorder.health.subscription_epoch = 1
+    started = asyncio.Event()
+    resume = asyncio.Event()
+    sent: list[tuple[str, ...]] = []
+    at = datetime(2026, 10, 16, tzinfo=UTC)
+    fake_market = SimpleNamespace()
+
+    async def discover() -> object:
+        return SimpleNamespace(markets=(fake_market,), parse_failures=0)
+
+    def select(markets: object) -> object:
+        del markets
+        return SimpleNamespace(markets=(fake_market,), token_ids=("B",))
+
+    async def fake_seed(token_ids: tuple[str, ...], *, invalidate: bool) -> None:
+        del invalidate
+        if token_ids == ("A",):
+            started.set()
+            await resume.wait()
+        for token_id in token_ids:
+            recorder.books.apply_full_snapshot(_book_payload(token_id), at)
+
+    async def fake_set_tokens(tokens: tuple[str, ...]) -> None:
+        sent.append(tokens)
+
+    monkeypatch.setattr(recorder.gamma, "discover_active_markets", discover)
+    monkeypatch.setattr(recorder.selector, "select", select)
+    monkeypatch.setattr(recorder.storage, "upsert_markets", lambda *args: None)
+    monkeypatch.setattr(recorder, "_seed_books", fake_seed)
+    monkeypatch.setattr(recorder.websocket, "set_tokens", fake_set_tokens)
+
+    async def scenario() -> None:
+        task = asyncio.create_task(recorder._before_websocket_connect())
+        await started.wait()
+        assert await recorder.refresh_universe() is True
+        assert recorder.health.subscription_epoch == 2
+        assert sent == [("B",)]
+        resume.set()
+        with pytest.raises(RuntimeError, match="changed during REST seed"):
+            await task
+
+    asyncio.run(scenario())
+    assert recorder.health.seed_status == "STALE"
+    assert recorder.health.seed_complete_epoch == 0
+    assert recorder.health.seed_initialized_tokens == 0
+    assert recorder.websocket._seeded_tokens == frozenset()
+    assert recorder.health.research_book_state_accepted is False
