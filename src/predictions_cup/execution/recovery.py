@@ -68,6 +68,7 @@ class PlacementReplayAuthorization:
 
 ReplayPermission = Callable[[ExecutionEnvelope], PlacementReplayAuthorization | None]
 _MAX_REPLAY_GRANT_AGE = timedelta(seconds=30)
+_MAX_REPLAY_OPERATION_AGE = timedelta(minutes=5)
 
 
 def _placement_replay_authorised(
@@ -75,6 +76,7 @@ def _placement_replay_authorised(
     *,
     permission: ReplayPermission | None,
     wall_clock: WallClock,
+    journal: ExecutionJournal,
 ) -> bool:
     """Default DENY, including stale/forged-shape grants and unavailable clocks.
 
@@ -97,8 +99,13 @@ def _placement_replay_authorised(
         issued = grant.issued_at_utc.astimezone(UTC)
         expiry = grant.expires_at_utc.astimezone(UTC)
         instant = now.astimezone(UTC)
+        original_created = journal.operation_created_at(envelope.logical_operation_id)
+        if original_created is None:
+            return False
+        operation_age = instant - original_created
         return (
-            bool(grant.authority_id.strip())
+            timedelta(0) <= operation_age <= _MAX_REPLAY_OPERATION_AGE
+            and bool(grant.authority_id.strip())
             and grant.logical_operation_id == envelope.logical_operation_id
             and grant.tournament_id == envelope.tournament_id
             and grant.idempotency_key == envelope.idempotency_key
@@ -265,6 +272,7 @@ async def recover_startup(
                 current,
                 permission=placement_replay_allowed,
                 wall_clock=wall_clock,
+                journal=journal,
             ):
                 # Never mutate a journaled pending/uncertain obligation simply
                 # because there is no authenticated permission to re-send.
@@ -288,6 +296,7 @@ async def recover_startup(
                     current_envelope,
                     permission=placement_replay_allowed,
                     wall_clock=wall_clock,
+                    journal=journal,
                 ):
                     raise PermissionError("startup placement replay permission denied")
                 return await live_sink.dispatch_recovery(current_envelope)
