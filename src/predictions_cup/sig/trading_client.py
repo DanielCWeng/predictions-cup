@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import random
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from types import TracebackType
@@ -46,17 +48,81 @@ _BATCH_REQUEST_TIMEOUT_SECONDS = 120.0
 
 # Task-local: an authorised startup recovery must revalidate before EVERY wire.
 # This avoids mutable per-client grants bleeding across independent senders.
-_startup_replay_wire_authorizer: ContextVar[Callable[[], bool] | None] = ContextVar(
-    "sig_startup_replay_wire_authorizer", default=None
+@dataclass(frozen=True, slots=True)
+class _StartupReplayWireScope:
+    logical_operation_id: str
+    tournament_id: str
+    idempotency_key: str
+    payload_sha256: str
+    owner_task: asyncio.Task[object]
+    authorizer: Callable[[], bool]
+
+
+_startup_replay_wire_authorizer: ContextVar[_StartupReplayWireScope | None] = (
+    ContextVar("sig_startup_replay_wire_authorizer", default=None)
 )
+
+
+def _replay_scope_valid(scope: _StartupReplayWireScope | None) -> bool:
+    if scope is None or asyncio.current_task() is not scope.owner_task:
+        return False
+    try:
+        return scope.authorizer() is True
+    except Exception:
+        return False
+
+
+def startup_recovery_wire_authorized(
+    *,
+    logical_operation_id: str,
+    tournament_id: str,
+    idempotency_key: str | None,
+    payload_sha256: str,
+) -> bool:
+    """Fail closed for ANY sink recovery entry, including direct calls.
+
+    The caller's ContextVar must carry the *same* durable operation, must have
+    originated in the same asyncio Task, and must freshly pass its callback.
+    This is structural validation, NOT issuer authentication or a global lease.
+    """
+    scope = _startup_replay_wire_authorizer.get()
+    return (
+        scope is not None
+        and scope.logical_operation_id == logical_operation_id
+        and scope.tournament_id == tournament_id
+        and scope.idempotency_key == idempotency_key
+        and scope.payload_sha256 == payload_sha256
+        and _replay_scope_valid(scope)
+    )
 
 
 @contextmanager
 def enforce_startup_replay_wire_authorization(
     authorizer: Callable[[], bool],
+    *,
+    logical_operation_id: str,
+    tournament_id: str,
+    idempotency_key: str,
+    payload_sha256: str,
 ) -> Iterator[None]:
-    """Scope a fresh-authority check to all placement attempts in this task."""
-    token = _startup_replay_wire_authorizer.set(authorizer)
+    """Bind one recovery grant to an exact original identity and calling task.
+
+    Never export permission to concurrent subtasks. Reset on all exits,
+    exceptions and cancellation. This is NOT a production grant issuer.
+    """
+    task = asyncio.current_task()
+    if task is None:
+        raise PermissionError("startup replay requires a running asyncio task")
+    token = _startup_replay_wire_authorizer.set(
+        _StartupReplayWireScope(
+            logical_operation_id=logical_operation_id,
+            tournament_id=tournament_id,
+            idempotency_key=idempotency_key,
+            payload_sha256=payload_sha256,
+            owner_task=task,
+            authorizer=authorizer,
+        )
+    )
     try:
         yield
     finally:
@@ -354,19 +420,24 @@ class SigTradingClient:
                 # also revalidate after governor and before each HTTP wire.
                 # An old journalled order may have executed: DENY is UNCERTAIN,
                 # never a conclusive rejection or reservation release.
-                wire_authorizer = _startup_replay_wire_authorizer.get()
-                if wire_authorizer is not None:
-                    try:
-                        authorised = wire_authorizer()
-                    except Exception:
-                        authorised = False
+                replay_scope = _startup_replay_wire_authorizer.get()
+                if replay_scope is not None:
+                    # Forbid borrowing another operation's grant even in a
+                    # spawned task inheriting ContextVars. Verify exact bytes
+                    # on every client retry, not just sink admission.
+                    authorised = (
+                        resolved_content is not None
+                        and hashlib.sha256(resolved_content).hexdigest()
+                        == replay_scope.payload_sha256
+                        and _replay_scope_valid(replay_scope)
+                    )
                     if not authorised:
                         raise SigExecutionUncertainError(
                             status_code=None,
                             code="STARTUP_REPLAY_WIRE_NOT_AUTHORISED",
                             safe_message=(
-                                "Startup replay grant denied or revoked before HTTP "
-                                "attempt; preserve old order and reserved risk"
+                                "Startup replay grant denied, revoked, or identity "
+                                "mismatched before HTTP placement attempt; preserve risk"
                             ),
                         )
             try:
