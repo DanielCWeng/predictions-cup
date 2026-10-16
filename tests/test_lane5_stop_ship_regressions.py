@@ -14,13 +14,8 @@ import pytest
 from predictions_cup.execution.recovery import recover_startup
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "STOP-SHIP #79 regression: merged #115 required an explicit approving "
-        "placement_replay_allowed predicate; current main lost it"
-    ),
-)
+# #79 source admission check independently verified on #256, so only this
+# obsolete strict XFAIL is reclassified; all other XFAILs remain unchanged.
 def test_recovery_replay_must_have_default_deny_authorization() -> None:
     signature = inspect.signature(recover_startup)
     assert "placement_replay_allowed" in signature.parameters
