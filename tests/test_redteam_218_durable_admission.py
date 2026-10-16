@@ -221,7 +221,8 @@ def test_84_mocked_crash_preserves_unresolved_journal_but_not_observe_delivery(
     assert wire.exists(), "Fake transport did not reach the synthetic wire boundary"
     assert int(accepted.read_text()) > 0, "No queue accepted event pre-wire"
     assert not observed.exists(), "Deferred worker unexpectedly durably wrote observation"
-    with ExecutionJournal(db) as journal:
+    journal = ExecutionJournal(db)
+    try:
         assert journal.lifecycle_state("crash-after-possible-wire") in {
             LifecycleState.PENDING, LifecycleState.UNCERTAIN,
         }
@@ -230,3 +231,5 @@ def test_84_mocked_crash_preserves_unresolved_journal_but_not_observe_delivery(
                 "crash-after-possible-wire"
             )
         )
+    finally:
+        journal.close()
