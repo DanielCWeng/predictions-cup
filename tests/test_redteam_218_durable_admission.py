@@ -30,7 +30,9 @@ from test_build009_live_sink import _permit
 from test_redteam_218_live_observation import _client, _make_plan, _success
 
 
-@pytest.mark.parametrize("failure", ["worker_exception", "blocked_after_enqueue", "queue_full", "closed"])
+@pytest.mark.parametrize(
+    "failure", ["worker_exception", "blocked_after_enqueue", "queue_full", "closed"]
+)
 def test_84_no_first_wire_without_durable_observation_ack(
     tmp_path: Path, failure: str,
 ) -> None:
