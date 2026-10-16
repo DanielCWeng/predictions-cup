@@ -19,6 +19,7 @@ from predictions_cup.execution.live import SigLiveSink
 from predictions_cup.execution.models import ExecutionMode, LifecycleState, OperationKind
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.reservations import ExecutionReservationBook
+from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.observe import (
     BoundedObservationEmitter,
     InMemoryObservationSink,
@@ -49,7 +50,7 @@ class RejectingObserver:
         return False
 
 
-def _make_plan(op: str):
+def _make_plan(op: str) -> ExecutionPlan:
     intent = _intent()
     decision = RiskDecision(
         approved=True, reason="approved",
