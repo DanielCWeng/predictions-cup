@@ -190,3 +190,58 @@ def test_invalid_later_price_change_does_not_partially_mutate_book() -> None:
             observed + timedelta(seconds=1),
         )
     assert store.snapshot("token-1", depth=10) == before
+
+@pytest.mark.parametrize(
+    ("second_token_id", "expected_change_token_ids", "expected_missing"),
+    [
+        ("token-2", ("token-1", "token-2"), 0),
+        ("outside-universe", ("token-1",), 1),
+    ],
+)
+def test_atomic_multitoken_batch_preserves_each_persisted_token_id(
+    second_token_id: str,
+    expected_change_token_ids: tuple[str, ...],
+    expected_missing: int,
+) -> None:
+    store = OrderBookStore()
+    observed = datetime(2026, 10, 16, 12, 0, tzinfo=UTC)
+    for token_id in ("token-1", "token-2"):
+        store.apply_full_snapshot(
+            {
+                "market": f"market-{token_id}",
+                "asset_id": token_id,
+                "bids": [{"price": "0.45", "size": "10"}],
+                "asks": [{"price": "0.46", "size": "10"}],
+            },
+            observed,
+        )
+
+    result = store.apply_price_change(
+        {
+            "event_type": "price_change",
+            "timestamp": "1782753358257",
+            "price_changes": [
+                {"asset_id": "token-1", "price": "0.45", "size": "8", "side": "BUY"},
+                {
+                    "asset_id": second_token_id,
+                    "price": "0.46",
+                    "size": "8",
+                    "side": "SELL",
+                },
+            ],
+        },
+        observed + timedelta(seconds=1),
+    )
+
+    assert result.uninitialized_deltas == expected_missing
+    assert result.uninitialized_token_ids == (
+        frozenset({"outside-universe"}) if expected_missing else frozenset()
+    )
+    assert result.changed_tokens == frozenset(expected_change_token_ids)
+    assert tuple(change.token_id for change in result.changes) == (
+        expected_change_token_ids
+    )
+    assert tuple(change.market_id for change in result.changes) == tuple(
+        f"market-{token_id}" for token_id in expected_change_token_ids
+    )
+    assert store.snapshot("outside-universe", depth=1) is None
