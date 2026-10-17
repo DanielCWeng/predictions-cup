@@ -10,7 +10,7 @@ from dataclasses import replace
 from datetime import timedelta
 from decimal import Decimal
 
-from predictions_cup.research.locked_maker_economics import QuoteMarkout, estimate
+from predictions_cup.research.locked_maker_economics import LockedBundle, QuoteMarkout, estimate
 from test_locked_maker_economics import at, bundle, proof
 
 D = Decimal
@@ -52,7 +52,7 @@ def test_original_native_entry_cash_cannot_precede_filled_share() -> None:
     assert r.realised_net is None
 
 
-def _split_no_exit(early_qty: Decimal) -> object:
+def _split_no_exit(early_qty: Decimal) -> LockedBundle:
     b = bundle()
     original_exit = next(c for c in b.cashflows if c.flow_id == "exit-a")
     half_minute_after_first_fill = at(2, 10, 1) + timedelta(seconds=30)
