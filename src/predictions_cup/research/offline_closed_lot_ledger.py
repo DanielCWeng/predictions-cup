@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from datetime import timedelta, timezone, datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Literal
 
@@ -148,8 +148,7 @@ def _number(n: object, *, nonnegative: bool = True, whole: bool = False) -> bool
 
 
 def _utc(t: datetime) -> bool:
-    return (t.tzinfo is not None and t.utcoffset() == timedelta(0)
-            and t.tzinfo is not None and t.tzinfo != timezone(timedelta(hours=1)))
+    return t.tzinfo is not None and t.utcoffset() == timedelta(0)
 
 
 def audit_offline(bundle: OfflineBundle) -> AuditResult:
@@ -259,7 +258,8 @@ def audit_offline(bundle: OfflineBundle) -> AuditResult:
         if x.key in disposal_keys or not x.key or entry is None:
             errors.add("DUPLICATE_OR_ORPHAN_CLOSURE")
         disposal_keys.add(x.key)
-        entry_at = docs.get(entry.source_key).issuer_at if entry and entry.source_key in docs else None
+        entry_doc = docs.get(entry.source_key) if entry is not None else None
+        entry_at = entry_doc.issuer_at if entry_doc is not None else None
         if exit_at is not None and entry_at is not None and exit_at <= entry_at:
             errors.add("EXIT_BEFORE_OR_AT_FILL")
         if (not _number(x.whole_shares, whole=True) or x.whole_shares <= ZERO):
@@ -295,7 +295,8 @@ def audit_offline(bundle: OfflineBundle) -> AuditResult:
         vals = (a.start_equity_susq, a.external_flows_susq, a.account_realised_susq,
                 a.unrealised_change_susq, a.end_equity_susq)
         if all(_number(v, nonnegative=False) for v in vals):
-            account_pass = vals[0] + vals[1] + vals[2] + vals[3] == vals[4]  # type: ignore[operator]
+            account_pass = (vals[0] + vals[1] + vals[2] + vals[3]
+                            == vals[4])  # type: ignore[operator]
             if not account_pass:
                 errors.add("ACCOUNT_DOUBLE_ENTRY_MISMATCH")
         else:
@@ -351,7 +352,9 @@ def audit_offline(bundle: OfflineBundle) -> AuditResult:
     # Even internally complete positive cash arithmetic is research-only.
     return AuditResult(
         verdict=verdict, reasons=tuple(sorted(errors | holes)),
-        descriptive_closed_lot_net_susq=net if all_cash_known and not errors and not holes else None,
+        descriptive_closed_lot_net_susq=(
+            net if all_cash_known and not errors and not holes else None
+        ),
         gross_share_days=share_days, account_identity_pass=account_pass,
         eligible_attempts_descriptive=len(bundle.attempts) if bundle.kind == "SYNTHETIC" else None,
         maker_closed_lots_descriptive=len(bundle.fills) if verdict == "SCHEMA_ONLY" else 0,
