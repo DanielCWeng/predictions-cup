@@ -3,8 +3,10 @@ Original function bodies/assertions below copied verbatim; #297 remains untouche
 No source/admission/live action.
 """
 from __future__ import annotations
+
 from dataclasses import replace
 from datetime import timedelta
+
 from predictions_cup.research.locked_maker_economics import estimate
 from test_locked_maker_economics import at, bundle
 
