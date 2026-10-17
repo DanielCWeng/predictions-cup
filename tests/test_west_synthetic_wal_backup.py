@@ -7,11 +7,11 @@ This is NOT a backup utility and grants no permission for source acquisition.
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 import shutil
 import sqlite3
 import threading
 import time
-from pathlib import Path
 
 import pytest
 
