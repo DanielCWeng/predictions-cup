@@ -227,7 +227,7 @@ def construct_gap_episodes(
     timestamps = sorted(
         {item.observed_at for item in sig} | {item.observed_at for item in external}
     )
-    active = False
+    active_sign = 0
     output: list[GapTrigger] = []
     for at in timestamps:
         sig_quote = _asof(sig, at, max_age_seconds=max_quote_age_seconds)
@@ -240,7 +240,9 @@ def construct_gap_episodes(
             continue
         gap = external_quote.midpoint - sig_quote.midpoint
         over = abs(gap) >= threshold
-        if over and not active:
+        sign = (1 if gap > 0 else -1) if over else 0
+        # A direct reversal is a new signed shock, even without a quiet tick.
+        if sign and sign != active_sign:
             output.append(
                 GapTrigger(
                     trigger_id=(
@@ -253,7 +255,7 @@ def construct_gap_episodes(
                     signed_gap=gap,
                 )
             )
-        active = over
+        active_sign = sign
     return tuple(output)
 
 
