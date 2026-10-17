@@ -827,6 +827,20 @@ def test_transport_models_ignore_unknown_extra_fields_but_keep_types() -> None:
     }
     book = OrderBookSnapshotDto.model_validate(live)
     assert book.exchange_id == "1077"
+    assert book.as_of is not None
+    assert book.as_of.sequence == 2238285
+    source_at = datetime(2026, 10, 1, 17, 24, 55, 794083, tzinfo=UTC)
+    assert book.as_of.at == source_at
+    observed_at = datetime(2026, 10, 1, 17, 24, 57, tzinfo=UTC)
+    canonical = book.to_canonical(observed_at=observed_at)
+    assert canonical.source == "sig-rest"
+    assert canonical.timestamp == observed_at  # local REST receipt, not source time
+    assert canonical.revision == f"2238285:{source_at.isoformat()}"
+    assert book.model_dump(mode="json", by_alias=True)["asOf"]["sequence"] == 2238285
+    # Versioned source time must not accept naive timestamps.
+    broken_version = dict(live, asOf={"sequence": 1, "at": "2026-10-01T17:24:55"})
+    with pytest.raises(ValidationError):
+        OrderBookSnapshotDto.model_validate(broken_version)
     broken = dict(live, bids=[{"price": "not-a-price", "quantity": 1}])
     with pytest.raises(ValidationError):
         OrderBookSnapshotDto.model_validate(broken)

@@ -325,7 +325,15 @@ class OrderBookLevelDto(TransportModel):
     quantity: WireDecimal
 
 
+class OrderBookVersionDto(TransportModel):
+    """SIG's source-native book version; not a REST receipt timestamp."""
+
+    sequence: int
+    at: WireDateTime
+
+
 class OrderBookSnapshotDto(TransportModel):
+    as_of: OrderBookVersionDto | None = Field(default=None, alias="asOf")
     exchange_id: str = Field(alias="exchangeId")
     market_id: str = Field(alias="marketId")
     depth: int
@@ -356,7 +364,11 @@ class OrderBookSnapshotDto(TransportModel):
             ),
             timestamp=observed_at,
             source="sig-rest",
-            revision=None,
+            revision=(
+                None
+                if self.as_of is None
+                else f"{self.as_of.sequence}:{self.as_of.at.isoformat()}"
+            ),
         )
 
 
