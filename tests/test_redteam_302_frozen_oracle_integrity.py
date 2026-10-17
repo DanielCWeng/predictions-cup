@@ -17,5 +17,5 @@ FROZEN = (
 @pytest.mark.parametrize("name,expected_blob", FROZEN)
 def test_unchanged_frozen_strict_test_blob(name: str, expected_blob: str) -> None:
     data = (Path(__file__).resolve().parent / name).read_bytes()
-    actual = hashlib.sha1(b"blob " + str(len(data)).encode() + b"\\x00" + data).hexdigest()
+    actual = hashlib.sha1(b"blob " + str(len(data)).encode() + b"\x00" + data).hexdigest()
     assert actual == expected_blob
