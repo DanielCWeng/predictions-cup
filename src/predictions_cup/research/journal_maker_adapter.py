@@ -202,6 +202,7 @@ def normalise_journal(
             if (not intent_ids or any(not isinstance(i, str) or not i for i in intent_ids)
                     or len(set(intent_ids)) != len(intent_ids)):
                 raise ValueError("DUPLICATE_OR_MISSING_INTENT")
+            orders: object
             if env.operation_kind == "single_placement":
                 orders = [payload]
             else:
