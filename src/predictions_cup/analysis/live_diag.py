@@ -33,7 +33,12 @@ from predictions_cup.risk.groups import load_exposure_group_provider
 from predictions_cup.runtime.models import SIG_TICK
 from predictions_cup.shadow.replay import load_persisted_snapshots
 
-ANALYSIS_VERSION = "live-diag-001-v1"
+ANALYSIS_VERSION = "live-diag-001-v2"
+SNAPBACK_METHOD_VERSION = "snapback-signed-threshold-episodes-v2"
+EPISODE_RULE_VERSION = "signed-threshold-episodes-v2"
+EPISODE_TRIGGER_RULE = (
+    "signed_threshold_crossing_rearms_on_direct_sign_reversal_or_below_threshold"
+)
 DEFAULT_THRESHOLDS_TICKS = (1, 2, 3, 5)
 DEFAULT_HORIZONS_SECONDS = (1, 5, 15, 30, 60, 300)
 SIG_TICK_SIZE = float(SIG_TICK)
@@ -1281,6 +1286,8 @@ def analyze_live_diagnostics(
     generated_at = datetime.now(UTC)
     config = {
         "analysis_version": ANALYSIS_VERSION,
+        "episode_rule_version": EPISODE_RULE_VERSION,
+        "snapback_method_version": SNAPBACK_METHOD_VERSION,
         "latency_ms": latency_ms,
         "latency_assumption_source": latency_assumption_source,
         "max_quote_age_seconds": max_quote_age_seconds,
@@ -1289,7 +1296,7 @@ def analyze_live_diagnostics(
         "thresholds_ticks": list(thresholds_ticks),
         "horizons_seconds": list(horizons_seconds),
         "tick_size": SIG_TICK_SIZE,
-        "trigger_rule": "threshold_crossing_rearms_only_below_threshold",
+        "trigger_rule": EPISODE_TRIGGER_RULE,
     }
     config_hash = canonical_config_hash(config)
     git_sha = os.environ.get("PREDICTIONS_CUP_GIT_SHA", "UNKNOWN")
@@ -1311,6 +1318,8 @@ def analyze_live_diagnostics(
         snapshot: dict[str, object] = {
             "analysis_id": "LIVE-DIAG-001",
             "analysis_version": ANALYSIS_VERSION,
+        "episode_rule_version": EPISODE_RULE_VERSION,
+        "snapback_method_version": SNAPBACK_METHOD_VERSION,
             "generated_at": generated_at.isoformat(),
             "git_sha": git_sha,
             "config_hash": config_hash,
@@ -1422,6 +1431,17 @@ def analyze_live_diagnostics(
             )
             snapback_rows.append(
                 {
+                    # Version identity travels with standalone snapback.parquet;
+                    # a snapshot sidecar alone cannot protect cross-run joins.
+                    "analysis_version": ANALYSIS_VERSION,
+                    "method_version": SNAPBACK_METHOD_VERSION,
+                    "episode_rule_version": EPISODE_RULE_VERSION,
+                    "trigger_rule": EPISODE_TRIGGER_RULE,
+                    "git_sha": git_sha,
+                    "config_hash": config_hash,
+                    "mapping_hash": mapping_hash,
+                    "tick_size": SIG_TICK_SIZE,
+                    "max_quote_age_seconds": max_quote_age_seconds,
                     "market_id": record.sig_market_id,
                     "exchange_id": record.sig_exchange_id,
                     "polymarket_token_id": identity.mapped_token_id,
@@ -1482,7 +1502,7 @@ def analyze_live_diagnostics(
                         metric_name=f"fraction_gap_closed_{horizon}s",
                         metric_value=metric,
                         uncertainty=_bootstrap_median(values),
-                        denominator="independent_gap_episodes",
+                        denominator="independent_signed_gap_episodes",
                         status=(
                             ResearchStatus.INSUFFICIENT_EVIDENCE.value
                             if event_count < 5
@@ -1506,9 +1526,10 @@ def analyze_live_diagnostics(
                         ),
                         horizon_seconds=horizon,
                         metric_unit="fraction",
-                        method_version="snapback-threshold-episodes-v1",
+                        method_version=SNAPBACK_METHOD_VERSION,
                         source_versions=(
                             ("mapping", str(document.schema_version)),
+                            ("episode_rule", EPISODE_RULE_VERSION),
                         ),
                     )
                 )
@@ -1557,6 +1578,8 @@ def analyze_live_diagnostics(
     snapshot = {
         "analysis_id": "LIVE-DIAG-001",
         "analysis_version": ANALYSIS_VERSION,
+        "episode_rule_version": EPISODE_RULE_VERSION,
+        "snapback_method_version": SNAPBACK_METHOD_VERSION,
         "generated_at": generated_at.isoformat(),
         "git_sha": git_sha,
         "config_hash": config_hash,
@@ -1570,6 +1593,7 @@ def analyze_live_diagnostics(
             "latency_ms": latency_ms,
         },
         "snapback": snapback_rows,
+        "trigger_rule": EPISODE_TRIGGER_RULE,
         "lead_lag": lead_lag_rows,
         "maker_economics": maker_summary,
         "opponent_venue_ecology": ecology_rows,
