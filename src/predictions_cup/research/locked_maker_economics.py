@@ -83,6 +83,8 @@ class InventoryCashflow:
     issuer_at: datetime
     received_at: datetime
     source_reference: str | None
+    source_class: Literal["PAID_ACTUAL", "MIDPOINT_MARKOUT", "SIMULATED"] = "SIMULATED"
+    resolution_rules_reference: str | None = None
 
 
 @dataclass(frozen=True)
@@ -255,6 +257,8 @@ def estimate(bundle: LockedBundle) -> Estimate:
         if (attempt is None or not _clock(c.issuer_at, c.received_at)
                 or c.issuer_at < attempt.issuer_at or not _amount(c.position_delta)
                 or not c.source_reference
+                or c.source_class != "PAID_ACTUAL"
+                or (c.kind == "SETTLEMENT" and not c.resolution_rules_reference)
                 or (c.fill_id is not None and c.fill_id not in fill_ids)):
             return _fail("INVALID_CASHFLOW_OR_ORPHAN_FILL", n)
         if c.fill_id is not None and all(
@@ -324,6 +328,8 @@ def estimate(bundle: LockedBundle) -> Estimate:
                 or any(c.position_delta != ZERO for c in cf if c.kind not in
                        {"ENTRY", "EXIT", "SETTLEMENT"})
                 or any(c.fill_id is None for c in entry)
+                or any(c.amount_susq != -f.quantity * f.price * direction
+                       for f in fs for c in entry if c.fill_id == f.fill_id)
                 or any(c.position_delta * direction <= ZERO for c in entry)
                 or any(c.position_delta * direction >= ZERO for c in endflows)):
             return _fail("POSITION_OR_PARTIAL_FILL_CASH_CONSERVATION_FAIL", n)
@@ -382,8 +388,8 @@ def estimate(bundle: LockedBundle) -> Estimate:
                 or not _amount(m.executable_ask)
                 or not _amount(m.executable_bid_size)
                 or not _amount(m.executable_ask_size)
-                or m.executable_bid_size <= ZERO
-                or m.executable_ask_size <= ZERO
+                or m.executable_bid_size < mark_fill.quantity
+                or m.executable_ask_size < mark_fill.quantity
                 or not ZERO <= m.executable_bid <= m.executable_ask <= Decimal("1")
                 or not ZERO <= (m.issuer_at - mark_fill.issuer_at).total_seconds()
                 - m.horizon_seconds <= 2
