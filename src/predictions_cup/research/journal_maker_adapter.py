@@ -211,7 +211,9 @@ def normalise_journal(
                 not isinstance(o, dict) for o in orders
             ):
                 raise ValueError("BATCH_INTENT_CARDINALITY_UNKNOWN")
-            own_events = [ev for ev in events if ev.logical_operation_id == env.logical_operation_id]
+            own_events = [
+                ev for ev in events if ev.logical_operation_id == env.logical_operation_id
+            ]
             if any(ev.logical_intent_id is not None
                    and ev.logical_intent_id not in intent_ids for ev in own_events):
                 raise ValueError("EVENT_INTENT_CROSS_JOIN")
@@ -287,7 +289,8 @@ def invented_fixture_locked_bundle() -> LockedBundle:
     independently returns SYNTHETIC_OR_STRUCTURAL_ONLY_NOT_SOURCE_ADMISSION.
     """
     at = datetime(2026, 10, 5, 10, tzinfo=UTC)
-    after = lambda seconds: at + timedelta(seconds=seconds)
+    def after(seconds: int) -> datetime:
+        return at + timedelta(seconds=seconds)
     def proof(name: str) -> SourceProof:
         raw = ("TEST_FIXTURE_ONLY:" + name).encode()
         return SourceProof(name, raw, hashlib.sha256(raw).hexdigest(),
