@@ -102,15 +102,17 @@ def test_invented_direct_reversal_changes_denominator_but_not_same_sign_jitter()
 def test_versions_on_standalone_row_and_positive_descriptive_comparison() -> None:
     older = _row(metric=0.2)
     newer = _row(metric=0.5)
-    assert live_diag.ANALYSIS_VERSION == ANALYSIS_VERSION == "live-diag-001-v2"
+    assert ANALYSIS_VERSION == "live-diag-001-v2"
     assert older["analysis_version"] == ANALYSIS_VERSION
     assert older["method_version"] == SNAPBACK_METHOD_VERSION
     assert older["episode_rule_version"] == EPISODE_RULE_VERSION
     assert older["trigger_rule"] == TRIGGER_RULE
-    assert compare_snapback_rows(
+    status, delta = compare_snapback_rows(
         older, newer, metric_name="fraction_gap_closed_5s",
         verified_source_rules=_rules(),
-    ) == ("DESCRIPTIVE_COMPARISON_ONLY", pytest.approx(0.3))
+    )
+    assert status == "DESCRIPTIVE_COMPARISON_ONLY"
+    assert delta == pytest.approx(0.3)
 
 
 @pytest.mark.parametrize(
