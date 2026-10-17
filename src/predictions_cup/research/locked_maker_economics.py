@@ -140,8 +140,11 @@ class Estimate:
     holdout_net: Decimal | None
     holdout_cluster_ci95: tuple[Decimal, Decimal] | None
     taker_reference_difference: Decimal | None
-    realised_capital_share_days: Decimal | None
+    observed_position_share_days: Decimal | None
     descriptive_markout_count: int
+    observed_cash_turnover_susq: Decimal | None = None
+    capital_reservation_susq_days: Decimal | None = None
+    descriptive_executable_markouts: tuple[tuple[int, Decimal], ...] = ()
 
 
 def _fail(reason: str, count: int = 0) -> Estimate:
@@ -255,7 +258,7 @@ def estimate(bundle: LockedBundle) -> Estimate:
 
     full = partial = zero = censored = rejected = 0
     gross = fees = rebates = net = total_qty = outstanding = ZERO
-    capital_share_days = ZERO
+    position_share_days = ZERO
     training = holdout = ZERO
     clusters: dict[tuple[str, str], Decimal] = defaultdict(lambda: ZERO)
     per_attempt_net: dict[str, Decimal] = {}
@@ -339,7 +342,7 @@ def estimate(bundle: LockedBundle) -> Estimate:
         net += per
         per_attempt_net[a.attempt_id] = per
         last_exit = max(c.issuer_at for c in endflows)
-        capital_share_days += qty * Decimal(
+        position_share_days += qty * Decimal(
             str((last_exit - a.issuer_at).total_seconds())
         ) / Decimal("86400")
         if a.issuer_at < bundle.holdout_start:
@@ -358,13 +361,28 @@ def estimate(bundle: LockedBundle) -> Estimate:
                         None, None, 0)
     if len(per_attempt_net) != full + partial:
         return _fail("INCOMPLETE_FILL_TO_SETTLED_CASH_LEDGER", n)
-    if any(not m.valid_native_reference or not _clock(m.issuer_at, m.received_at)
-           or m.decision_at.tzinfo is None or m.issuer_at > m.received_at
-           or m.fill_id not in fill_ids or not _amount(m.executable_bid)
-           or not _amount(m.executable_ask)
-           or not ZERO <= m.executable_bid <= m.executable_ask <= Decimal("1")
-           for m in bundle.markouts):
-        return _fail("UNVERIFIED_CAUSAL_EXECUTABLE_MARKOUT", n)
+    by_fill_id = {f.fill_id: f for f in bundle.fills}
+    descriptive_marks: dict[int, Decimal] = defaultdict(lambda: ZERO)
+    for m in bundle.markouts:
+        f = by_fill_id.get(m.fill_id)
+        if (f is None or not m.valid_native_reference
+                or not _clock(m.issuer_at, m.received_at)
+                or m.decision_at.tzinfo is None
+                or m.decision_at.utcoffset() != timedelta(0)
+                or m.decision_at > f.issuer_at
+                or m.horizon_seconds not in {5, 30, 300, 3600}
+                or not _amount(m.executable_bid)
+                or not _amount(m.executable_ask)
+                or not ZERO <= m.executable_bid <= m.executable_ask <= Decimal("1")
+                or not ZERO <= (m.issuer_at - f.issuer_at).total_seconds()
+                - m.horizon_seconds <= 2
+                or m.received_at > f.issuer_at
+                + timedelta(seconds=m.horizon_seconds + 2)):
+            return _fail("UNVERIFIED_CAUSAL_EXECUTABLE_MARKOUT", n)
+        a = amap[f.attempt_id]
+        exit_px = m.executable_bid if a.action == "BUY" else m.executable_ask
+        per_share = exit_px - f.price if a.action == "BUY" else f.price - exit_px
+        descriptive_marks[m.horizon_seconds] += per_share * f.quantity
     taker_diff: Decimal | None = None
     if bundle.taker_controls:
         control_by_attempt = {t.attempt_id: t for t in bundle.taker_controls}
@@ -390,5 +408,9 @@ def estimate(bundle: LockedBundle) -> Estimate:
         n, full, partial, zero, 0, rejected, len(bundle.fills),
         total_qty, gross, net, fees, rebates, outstanding,
         training, holdout, _ci95(list(clusters.values())), taker_diff,
-        capital_share_days, len(bundle.markouts),
+        position_share_days, len(bundle.markouts),
+        sum((abs(c.amount_susq) for c in bundle.cashflows
+             if c.kind in {"ENTRY", "EXIT", "SETTLEMENT"}
+             and c.amount_susq is not None), ZERO),
+        None, tuple(sorted(descriptive_marks.items())),
     )
