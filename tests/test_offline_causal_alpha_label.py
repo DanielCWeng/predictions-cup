@@ -39,9 +39,10 @@ def _book(
 def _candidate(side: str = "YES") -> DecisionCandidate:
     minutes = tuple(
         CompletedMinute(
-            datetime(2026, 10, 16, 11, 55 + i, tzinfo=timezone.utc),
-            datetime(2026, 10, 16, 11, 55 + i, tzinfo=timezone.utc)
-            + timedelta(milliseconds=50),
+            datetime(2026, 10, 16, 11, 55, tzinfo=timezone.utc)
+            + timedelta(minutes=i),
+            datetime(2026, 10, 16, 11, 55, tzinfo=timezone.utc)
+            + timedelta(minutes=i, milliseconds=50),
             True,
         )
         for i in range(6)
