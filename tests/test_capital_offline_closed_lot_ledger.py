@@ -38,7 +38,7 @@ def example() -> OfflineBundle:
     exit_at = START + timedelta(hours=1)
     asof = START + timedelta(days=1)
     docs = (doc("entry", enter), doc("closed", exit_at), doc("account", asof))
-    attempts = (
+    attempts: tuple[MakerAttempt, ...] = (
         MakerAttempt("att-a", "order-a", "T-1", "E-1", "M-YES", "YES", D("2"),
                      "MAKER", "FAKE-ROLE", "TERMINAL", "FAKE-TERMINAL", D("0"), "entry"),
         MakerAttempt("att-b", "order-b", "T-1", "E-1", "M-NO", "NO", D("3"),
