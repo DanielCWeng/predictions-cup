@@ -364,25 +364,25 @@ def estimate(bundle: LockedBundle) -> Estimate:
     by_fill_id = {f.fill_id: f for f in bundle.fills}
     descriptive_marks: dict[int, Decimal] = defaultdict(lambda: ZERO)
     for m in bundle.markouts:
-        f = by_fill_id.get(m.fill_id)
-        if (f is None or not m.valid_native_reference
+        mark_fill = by_fill_id.get(m.fill_id)
+        if (mark_fill is None or not m.valid_native_reference
                 or not _clock(m.issuer_at, m.received_at)
                 or m.decision_at.tzinfo is None
                 or m.decision_at.utcoffset() != timedelta(0)
-                or m.decision_at > f.issuer_at
+                or m.decision_at > mark_fill.issuer_at
                 or m.horizon_seconds not in {5, 30, 300, 3600}
                 or not _amount(m.executable_bid)
                 or not _amount(m.executable_ask)
                 or not ZERO <= m.executable_bid <= m.executable_ask <= Decimal("1")
-                or not ZERO <= (m.issuer_at - f.issuer_at).total_seconds()
+                or not ZERO <= (m.issuer_at - mark_fill.issuer_at).total_seconds()
                 - m.horizon_seconds <= 2
-                or m.received_at > f.issuer_at
+                or m.received_at > mark_fill.issuer_at
                 + timedelta(seconds=m.horizon_seconds + 2)):
             return _fail("UNVERIFIED_CAUSAL_EXECUTABLE_MARKOUT", n)
-        a = amap[f.attempt_id]
+        a = amap[mark_fill.attempt_id]
         exit_px = m.executable_bid if a.action == "BUY" else m.executable_ask
-        per_share = exit_px - f.price if a.action == "BUY" else f.price - exit_px
-        descriptive_marks[m.horizon_seconds] += per_share * f.quantity
+        per_share = exit_px - mark_fill.price if a.action == "BUY" else mark_fill.price - exit_px
+        descriptive_marks[m.horizon_seconds] += per_share * mark_fill.quantity
     taker_diff: Decimal | None = None
     if bundle.taker_controls:
         control_by_attempt = {t.attempt_id: t for t in bundle.taker_controls}
