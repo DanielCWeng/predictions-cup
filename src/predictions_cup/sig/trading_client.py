@@ -17,6 +17,7 @@ from pydantic import BaseModel, ValidationError
 
 from predictions_cup.config import AppSettings
 from predictions_cup.sig.client import RetryPolicy
+from predictions_cup.sig.competition_deadline import assert_competition_placement_open
 from predictions_cup.sig.errors import (
     SigApiError,
     SigConflictError,
@@ -77,6 +78,7 @@ class SigTradingClient:
         keepalive_expiry_seconds: float = 60.0,
         transport: httpx.AsyncBaseTransport | None = None,
         sleep: SleepFn = asyncio.sleep,
+        wall_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         credential = settings.sig_trade_credential
         if credential is None:
@@ -92,6 +94,7 @@ class SigTradingClient:
         self._request_in_flight_wait_seconds = request_in_flight_wait_seconds
         self._timeout_seconds = timeout_seconds
         self._sleep = sleep
+        self._wall_clock = wall_clock
         self._client = httpx.AsyncClient(
             base_url=str(settings.sig_api_base_url).rstrip("/") + "/",
             headers={
@@ -299,9 +302,35 @@ class SigTradingClient:
             if resume_incomplete_batch
             else self._timeout_seconds
         )
+        placement_route = method == "POST" and route_template in {
+            "/orders", "/orders/batch", "/orders/multi-leg"
+        }
+        attempted_network = False
         for attempt in range(1, policy.max_attempts + 1):
             await self._governor.acquire(RestPriority.HIGH)
+            if placement_route:
+                # After governor admission, immediately before every HTTP attempt.
+                # An in-process clock regression fails closed. A reboot into a
+                # falsely early clock still requires a separate durable trust gate.
+                observed = self._wall_clock()
+                if observed.tzinfo is not None and observed.utcoffset() is not None:
+                    observed_utc = observed.astimezone(UTC)
+                    prior = getattr(self, "_last_placement_wallclock_utc", None)
+                    if prior is not None and observed_utc < prior:
+                        error_type = (
+                            SigExecutionUncertainError if attempted_network else SigApiError
+                        )
+                        raise error_type(
+                            status_code=None,
+                            code="COMPETITION_CLOCK_ROLLBACK",
+                            safe_message="Placement clock moved backwards; stop and reconcile",
+                        )
+                    self._last_placement_wallclock_utc = observed_utc
+                assert_competition_placement_open(
+                    observed, attempted_network=attempted_network
+                )
             try:
+                attempted_network = True
                 if resolved_content is not None:
                     response = await self._client.request(
                         method,
@@ -350,6 +379,12 @@ class SigTradingClient:
             try:
                 payload = self._decode_json(response, route_template)
             except SigMalformedResponseError as exc:
+                if placement_route and response.status_code == 429:
+                    raise SigExecutionUncertainError(
+                        status_code=429,
+                        code="RATE_LIMIT_OUTCOME_UNKNOWN",
+                        safe_message="Unparseable placement rate limit; retain reservation",
+                    ) from exc
                 if execution_can_be_uncertain and (
                     response.status_code in accepted_statuses
                     or response.status_code >= 500
@@ -431,6 +466,16 @@ class SigTradingClient:
             if self._retryable(error) and attempt < policy.max_attempts:
                 await self._sleep(self._retry_delay(attempt))
                 continue
+
+            if placement_route and response.status_code == 429:
+                # No definitive confirmation of no economic effect was obtained
+                # from a placement attempt. Preserve original identity/capital.
+                raise SigExecutionUncertainError(
+                    status_code=429,
+                    code=error.code,
+                    safe_message="Placement rate limit: retain reservation and reconcile",
+                    details=error.details,
+                )
 
             if execution_can_be_uncertain and response.status_code >= 500:
                 # A structured server error after POST does not prove the request

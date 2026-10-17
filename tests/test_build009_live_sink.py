@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
@@ -661,4 +663,449 @@ def test_observe_classifies_final_429_503_and_transport_timeout(
             assert ObservationKind.UNCERTAIN in kinds
     finally:
         emitter.close()
+        journal.close()
+
+
+@pytest.mark.parametrize(
+    ("wall_now", "error_code"),
+    [
+        (
+            datetime(2026, 11, 4, 16, 59, 55, tzinfo=UTC),
+            "COMPETITION_CUTOFF_AFTER_DISPATCH",
+        ),
+        (datetime(2026, 11, 4, 16, 59, 54), "COMPETITION_CLOCK_UNTRUSTED"),
+    ],
+)
+def test_recovery_cutoff_preserves_prior_attempt_reservation(
+    tmp_path: Path, wall_now: datetime, error_code: str
+) -> None:
+    from predictions_cup.sig.errors import SigApiError
+
+    intent = _intent()
+    decision = RiskDecision(
+        approved=True,
+        reason="approved",
+        execution_mode=ExecutionMode.LIVE,
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        intents=(intent,),
+        strategy_family="FV-TAKE",
+        strategy_id="fixture",
+        signal_value=0.025,
+        fair_value=0.55,
+        decision_observation_ns=100,
+    )
+    plan = build_execution_plan(
+        decision, logical_operation_id="prior-attempt", created_monotonic_ns=150
+    )
+    journal = ExecutionJournal(tmp_path / "recovery-cutoff.sqlite3")
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    journal.record_before_dispatch(
+        plan.envelope, plan.intents, audit=plan.audit, submitted_monotonic_ns=200
+    )
+    journal.mark_state("prior-attempt", LifecycleState.UNCERTAIN, 250)
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, FakeTradingClient()),
+        journal=journal,
+        permit=_permit(),
+        reservations=reservations,
+        wall_clock=lambda: wall_now,
+    )
+    try:
+        with pytest.raises(SigApiError) as caught:
+            asyncio.run(sink.dispatch_recovery(plan.envelope, plan=plan))
+        assert caught.value.code == error_code
+        assert reservations.contains_operation(
+            plan.envelope.logical_operation_id, plan.envelope.intent_ids
+        )
+        assert len(journal.unresolved()) == 1
+        assert journal.unresolved()[0].logical_operation_id == "prior-attempt"
+    finally:
+        journal.close()
+
+
+@pytest.mark.parametrize(
+    "operation_kind",
+    (
+        OperationKind.SINGLE_PLACEMENT,
+        OperationKind.BEST_EFFORT_BATCH,
+        OperationKind.ATOMIC_MULTI_LEG,
+    ),
+)
+@pytest.mark.parametrize(
+    "wall_now",
+    (
+        datetime(2026, 11, 4, 16, 59, 54, tzinfo=UTC),
+        datetime(2026, 11, 4, 16, 59, 55, tzinfo=UTC),
+        datetime(2026, 11, 4, 17, 0, tzinfo=UTC),
+        datetime(2026, 11, 4, 16, 59, 54),
+    ),
+)
+def test_journaled_uncertain_fresh_reentry_preserves_capital(
+    tmp_path: Path,
+    operation_kind: OperationKind,
+    wall_now: datetime,
+) -> None:
+    """A mistaken fresh retry cannot discard prior possible-fill exposure."""
+    first = _intent()
+    intents: tuple[RuntimeOrderIntent, ...] = (first,)
+    relationship_constraint = None
+    if operation_kind is not OperationKind.SINGLE_PLACEMENT:
+        intents = (
+            first,
+            RuntimeOrderIntent(
+                intent_id="intent-92",
+                exchange_id="37",
+                market_id="m1",
+                tournament_id="t1",
+                outcome_side=OutcomeSide.NO,
+                action=OrderAction.BUY,
+                quantity=1,
+                limit_price_ticks=100,
+                strategy_id="fixture",
+                decision_observation_ns=100,
+            ),
+        )
+    if operation_kind is OperationKind.ATOMIC_MULTI_LEG:
+        relationship_constraint = "22222222-2222-2222-2222-222222222222"
+    decision = RiskDecision(
+        approved=True,
+        reason="approved",
+        execution_mode=ExecutionMode.LIVE,
+        operation_kind=operation_kind,
+        intents=intents,
+        relationship_constraint=relationship_constraint,
+        strategy_family="STRUCT" if relationship_constraint else "FV-TAKE",
+        strategy_id="fixture",
+        signal_value=0.025,
+        fair_value=0.55,
+        decision_observation_ns=100,
+    )
+    plan = build_execution_plan(
+        decision,
+        logical_operation_id="durable-uncertain-reentry",
+        created_monotonic_ns=150,
+    )
+    journal = ExecutionJournal(tmp_path / "durable-uncertain-reentry.sqlite3")
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    journal.record_before_dispatch(
+        plan.envelope, plan.intents, audit=plan.audit, submitted_monotonic_ns=200
+    )
+    journal.mark_state(
+        plan.envelope.logical_operation_id, LifecycleState.UNCERTAIN, 250
+    )
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, FakeUncertainTradingClient()),
+        journal=journal,
+        permit=_permit(),
+        reservations=reservations,
+        wall_clock=lambda: wall_now,
+    )
+    try:
+        with pytest.raises(ValueError, match="journaled placement"):
+            asyncio.run(sink.dispatch(plan))
+        assert journal.lifecycle_state(plan.envelope.logical_operation_id) is (
+            LifecycleState.UNCERTAIN
+        )
+        assert reservations.contains_operation(
+            plan.envelope.logical_operation_id, plan.envelope.intent_ids
+        )
+        # The only network attempt is the one already represented by the
+        # seeded UNCERTAIN operation; this attempted reentry performs none.
+        assert all(
+            event.event_type not in {"NETWORK_DISPATCH", "RESUBMISSION"}
+            for event in journal.events(plan.envelope.logical_operation_id)
+        )
+    finally:
+        journal.close()
+
+
+def test_journaled_operation_id_rejects_changed_payload_without_releasing_risk(
+    tmp_path: Path,
+) -> None:
+    intent = _intent()
+    decision = RiskDecision(
+        approved=True,
+        reason="approved",
+        execution_mode=ExecutionMode.LIVE,
+        operation_kind=OperationKind.SINGLE_PLACEMENT,
+        intents=(intent,),
+        strategy_family="FV-TAKE",
+        strategy_id="fixture",
+        signal_value=0.025,
+        fair_value=0.55,
+        decision_observation_ns=100,
+    )
+    plan = build_execution_plan(
+        decision, logical_operation_id="durable-conflicting-payload",
+        created_monotonic_ns=150
+    )
+    changed_plan = build_execution_plan(
+        replace(decision, intents=(replace(intent, limit_price_ticks=101),)),
+        logical_operation_id=plan.envelope.logical_operation_id,
+        created_monotonic_ns=150,
+    )
+    assert changed_plan.envelope.payload_sha256 != plan.envelope.payload_sha256
+    journal = ExecutionJournal(tmp_path / "durable-conflicting-payload.sqlite3")
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    journal.record_before_dispatch(plan.envelope, plan.intents)
+    journal.mark_state(plan.envelope.logical_operation_id, LifecycleState.UNCERTAIN, 250)
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, FakeUncertainTradingClient()),
+        journal=journal,
+        permit=_permit(),
+        reservations=reservations,
+        wall_clock=lambda: datetime(2026, 11, 4, 16, 59, 55, tzinfo=UTC),
+    )
+    try:
+        with pytest.raises(ValueError, match="journaled placement"):
+            asyncio.run(sink.dispatch(changed_plan))
+        assert reservations.contains_operation(
+            plan.envelope.logical_operation_id, plan.envelope.intent_ids
+        )
+        assert journal.lifecycle_state(plan.envelope.logical_operation_id) is (
+            LifecycleState.UNCERTAIN
+        )
+        assert all(
+            event.event_type not in {"NETWORK_DISPATCH", "RESUBMISSION"}
+            for event in journal.events(plan.envelope.logical_operation_id)
+        )
+    finally:
+        journal.close()
+
+
+@pytest.mark.parametrize(
+    "operation_kind",
+    (
+        OperationKind.SINGLE_PLACEMENT,
+        OperationKind.BEST_EFFORT_BATCH,
+        OperationKind.ATOMIC_MULTI_LEG,
+    ),
+)
+def test_concurrent_fresh_reentry_cannot_duplicate_economic_dispatch(
+    tmp_path: Path, operation_kind: OperationKind,
+) -> None:
+    """First request may be in flight; second must never get to any wire route."""
+    first_intent = _intent()
+    intents: tuple[RuntimeOrderIntent, ...] = (first_intent,)
+    relationship_constraint = None
+    if operation_kind is not OperationKind.SINGLE_PLACEMENT:
+        intents = (
+            first_intent,
+            replace(first_intent, intent_id="second-intent", exchange_id="37"),
+        )
+    if operation_kind is OperationKind.ATOMIC_MULTI_LEG:
+        relationship_constraint = "33333333-3333-3333-3333-333333333333"
+    decision = RiskDecision(
+        approved=True,
+        reason="approved",
+        execution_mode=ExecutionMode.LIVE,
+        operation_kind=operation_kind,
+        intents=intents,
+        relationship_constraint=relationship_constraint,
+        strategy_family="STRUCT" if relationship_constraint else "FV-TAKE",
+        strategy_id="fixture",
+        signal_value=0.025,
+        fair_value=0.55,
+        decision_observation_ns=100,
+    )
+    plan = build_execution_plan(
+        decision, logical_operation_id="concurrent-unique-dispatch",
+        created_monotonic_ns=150,
+    )
+
+    class BlockingUncertainClient(FakeUncertainTradingClient):
+        def __init__(self) -> None:
+            self.calls = 0
+            self.entered = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def _send(self, payload_json: str) -> None:
+            self.calls += 1
+            self.entered.set()
+            await self.release.wait()
+            self._raise_uncertain(payload_json)
+
+        async def place_order_payload(self, payload_json: str) -> SingleOrderResponseDto:
+            await self._send(payload_json)
+            raise AssertionError("unreachable")
+
+        async def place_batch_payload(self, payload_json: str) -> BatchOrderResponseDto:
+            await self._send(payload_json)
+            raise AssertionError("unreachable")
+
+        async def place_multi_leg_payload(self, payload_json: str) -> MultiLegResponseDto:
+            await self._send(payload_json)
+            raise AssertionError("unreachable")
+
+    journal = ExecutionJournal(tmp_path / "concurrent-unique.sqlite3")
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    fake = BlockingUncertainClient()
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, fake),
+        journal=journal,
+        permit=_permit(),
+        reservations=reservations,
+        wall_clock=lambda: datetime(2026, 11, 4, 16, 59, 50, tzinfo=UTC),
+    )
+
+    async def run() -> None:
+        pending = asyncio.create_task(sink.dispatch(plan))
+        await fake.entered.wait()
+        try:
+            with pytest.raises(ValueError, match="journaled placement"):
+                await sink.dispatch(plan)
+        finally:
+            fake.release.set()
+        with pytest.raises(SigExecutionUncertainError):
+            await pending
+
+    try:
+        asyncio.run(run())
+        assert fake.calls == 1
+        assert journal.lifecycle_state(plan.envelope.logical_operation_id) is (
+            LifecycleState.UNCERTAIN
+        )
+        assert reservations.contains_operation(
+            plan.envelope.logical_operation_id, plan.envelope.intent_ids
+        )
+        assert sum(
+            event.event_type == "NETWORK_DISPATCH"
+            for event in journal.events(plan.envelope.logical_operation_id)
+        ) == 1
+    finally:
+        journal.close()
+
+
+@pytest.mark.parametrize(
+    "operation_kind",
+    (
+        OperationKind.SINGLE_PLACEMENT,
+        OperationKind.BEST_EFFORT_BATCH,
+        OperationKind.ATOMIC_MULTI_LEG,
+    ),
+)
+def test_atomic_fresh_journal_claim_denies_byte_identical_duplicate(
+    tmp_path: Path, operation_kind: OperationKind,
+) -> None:
+    intent = _intent()
+    intents = (
+        (intent,) if operation_kind is OperationKind.SINGLE_PLACEMENT
+        else (intent, replace(intent, intent_id="other", exchange_id="37"))
+    )
+    relationship_constraint = (
+        "33333333-3333-3333-3333-333333333333"
+        if operation_kind is OperationKind.ATOMIC_MULTI_LEG else None
+    )
+    decision = RiskDecision(
+        approved=True, reason="approved", execution_mode=ExecutionMode.LIVE,
+        operation_kind=operation_kind, intents=intents,
+        relationship_constraint=relationship_constraint,
+        strategy_family="STRUCT" if relationship_constraint else "FV-TAKE",
+        strategy_id="fixture", signal_value=0.025, fair_value=0.55,
+        decision_observation_ns=100,
+    )
+    plan = build_execution_plan(
+        decision, logical_operation_id="unique-journal-claim", created_monotonic_ns=150,
+    )
+    journal = ExecutionJournal(tmp_path / "atomic-claim.sqlite3")
+    try:
+        journal.record_before_dispatch(
+            plan.envelope, plan.intents, fresh_only=True,
+        )
+        with pytest.raises(ValueError, match="journaled placement"):
+            journal.record_before_dispatch(
+                plan.envelope, plan.intents, fresh_only=True,
+            )
+        assert len(journal.events(plan.envelope.logical_operation_id)) == len(intents)
+    finally:
+        journal.close()
+
+
+@pytest.mark.parametrize(
+    "operation_kind",
+    (
+        OperationKind.SINGLE_PLACEMENT,
+        OperationKind.BEST_EFFORT_BATCH,
+        OperationKind.ATOMIC_MULTI_LEG,
+    ),
+)
+def test_recovery_governor_cutoff_does_not_clear_prior_uncertain_order(
+    tmp_path: Path, operation_kind: OperationKind,
+) -> None:
+    """The recovery's *first* new attempt can be blocked, but old risk persists."""
+    from predictions_cup.sig.errors import SigApiError
+
+    class FirstAttemptCutoff(FakeUncertainTradingClient):
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def _blocked(self, payload_json: str) -> None:
+            del payload_json
+            self.calls += 1
+            raise SigApiError(
+                status_code=None,
+                code="COMPETITION_ORDER_CLOSED",
+                safe_message="fixture post-governor per-attempt cutoff",
+            )
+
+        async def place_order_payload(self, payload_json: str) -> SingleOrderResponseDto:
+            self._blocked(payload_json)
+            raise AssertionError("unreachable")
+
+        async def place_batch_payload(self, payload_json: str) -> BatchOrderResponseDto:
+            self._blocked(payload_json)
+            raise AssertionError("unreachable")
+
+        async def place_multi_leg_payload(self, payload_json: str) -> MultiLegResponseDto:
+            self._blocked(payload_json)
+            raise AssertionError("unreachable")
+
+    first = _intent()
+    intents = (
+        (first,) if operation_kind is OperationKind.SINGLE_PLACEMENT
+        else (first, replace(first, intent_id="second", exchange_id="37"))
+    )
+    constraint = (
+        "33333333-3333-3333-3333-333333333333"
+        if operation_kind is OperationKind.ATOMIC_MULTI_LEG else None
+    )
+    decision = RiskDecision(
+        approved=True, reason="approved", execution_mode=ExecutionMode.LIVE,
+        operation_kind=operation_kind, intents=intents,
+        relationship_constraint=constraint,
+        strategy_family="STRUCT" if constraint else "FV-TAKE",
+        strategy_id="fixture", signal_value=0.025, fair_value=0.55,
+        decision_observation_ns=100,
+    )
+    plan = build_execution_plan(
+        decision, logical_operation_id="prior-possible-wire", created_monotonic_ns=150
+    )
+    journal = ExecutionJournal(tmp_path / "recovery-queued.sqlite3")
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+    journal.record_before_dispatch(plan.envelope, plan.intents)
+    journal.mark_state(plan.envelope.logical_operation_id, LifecycleState.UNCERTAIN, 250)
+    fake = FirstAttemptCutoff()
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, fake),
+        journal=journal, reservations=reservations, permit=_permit(),
+        wall_clock=lambda: datetime(2026, 11, 4, 16, 59, 50, tzinfo=UTC),
+    )
+    try:
+        with pytest.raises(
+            SigExecutionUncertainError, match="Prior journaled placement"
+        ):
+            asyncio.run(sink.dispatch_recovery(plan.envelope, plan=plan))
+        assert fake.calls == 1
+        assert journal.lifecycle_state(plan.envelope.logical_operation_id) is (
+            LifecycleState.UNCERTAIN
+        )
+        assert reservations.contains_operation(
+            plan.envelope.logical_operation_id, plan.envelope.intent_ids
+        )
+    finally:
         journal.close()
