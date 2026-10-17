@@ -46,8 +46,14 @@ def test_redteam_x1_post_arrival_recovery_cannot_restore_executable_depth() -> N
     after_arrival = impulse + timedelta(milliseconds=600)
     quotes = (
         Quote(start, 0.40, 0.50, bid_depth=50, ask_depth=50, depth_observed_at=start),
-        Quote(no_depth, 0.40, 0.50, bid_depth=0, ask_depth=0, depth_observed_at=no_depth),
-        Quote(after_arrival, 0.40, 0.50, bid_depth=50, ask_depth=50, depth_observed_at=after_arrival),
+        Quote(
+            no_depth, 0.40, 0.50, bid_depth=0, ask_depth=0,
+            depth_observed_at=no_depth,
+        ),
+        Quote(
+            after_arrival, 0.40, 0.50, bid_depth=50, ask_depth=50,
+            depth_observed_at=after_arrival,
+        ),
     )
     external = (
         Quote(start, 0.48, 0.52),
