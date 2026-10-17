@@ -10,8 +10,11 @@ from decimal import Decimal
 import pytest
 
 from predictions_cup.research.journal_maker_adapter import (
-    EnvelopeRow, EventRow, FillDedupeRow,
-    invented_fixture_locked_bundle, normalise_journal,
+    EnvelopeRow,
+    EventRow,
+    FillDedupeRow,
+    invented_fixture_locked_bundle,
+    normalise_journal,
 )
 from predictions_cup.research.locked_maker_economics import estimate
 
