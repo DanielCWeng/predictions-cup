@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 from decimal import ROUND_DOWN, Decimal
 from pathlib import Path
+from typing import Any
 
 from predictions_cup.replay.economic_005i import evaluate
 from predictions_cup.replay.model import BookLevel
@@ -24,7 +25,7 @@ def test_original_alpha1_303_strict_test_byte_identical() -> None:
     assert digest == ORIGINAL_303_TEST_GIT_BLOB
 
 
-def _two_level_result(displayed_per_level: str) -> dict[str, object]:
+def _two_level_result(displayed_per_level: str) -> dict[str, Any]:
     levels = (
         BookLevel(D("0.40"), D(displayed_per_level)),
         BookLevel(D("0.50"), D(displayed_per_level)),
