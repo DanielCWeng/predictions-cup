@@ -178,9 +178,22 @@ def _economic(quotes: Sequence[Quote]) -> tuple[Quote, ...]:
     for item in sorted(quotes, key=lambda quote: quote.observed_at):
         if not item.trusted or item.best_ask < item.best_bid:
             continue
-        if result and (result[-1].best_bid, result[-1].best_ask) == (
+        # Identical BBO prices are NOT an identical executable book. A new
+        # size (including zero) or depth-source timestamp replaces the prior
+        # as-of depth even when neither price changed. Price-only dedup used to
+        # carry fictitious 50-share liquidity across a later zero-size update.
+        if result and (
+            result[-1].best_bid,
+            result[-1].best_ask,
+            result[-1].bid_depth,
+            result[-1].ask_depth,
+            result[-1].depth_observed_at,
+        ) == (
             item.best_bid,
             item.best_ask,
+            item.bid_depth,
+            item.ask_depth,
+            item.depth_observed_at,
         ):
             continue
         result.append(item)
@@ -460,16 +473,17 @@ def analyze_lead_lag(
             else (response_at - current.observed_at).total_seconds()
         )
         gross_edge, _, trigger_depth = _active_edge(current.midpoint, trigger)
-        if (
-            trigger_depth is not None
-            and (
-                trigger.depth_observed_at is None
-                or (
-                    current.observed_at - trigger.depth_observed_at
-                ).total_seconds() > max_depth_age_seconds
-            )
-        ):
-            trigger_depth = None
+        # Source depth cannot arrive after the local receipt or decision.
+        # Unknown, future or stale depth is not executable even if prices match.
+        if trigger_depth is not None:
+            source_at = trigger.depth_observed_at
+            if (
+                source_at is None
+                or source_at > trigger.observed_at
+                or not 0 <= (current.observed_at - source_at).total_seconds()
+                <= max_depth_age_seconds
+            ):
+                trigger_depth = None
         delayed_at = current.observed_at + timedelta(milliseconds=latency_ms)
         delayed = _asof(
             sig,
@@ -484,16 +498,15 @@ def analyze_lead_lag(
                 current.midpoint,
                 delayed,
             )
-            if (
-                delayed_depth is not None
-                and (
-                    delayed.depth_observed_at is None
-                    or (
-                        delayed_at - delayed.depth_observed_at
-                    ).total_seconds() > max_depth_age_seconds
-                )
-            ):
-                delayed_depth = None
+            if delayed_depth is not None:
+                source_at = delayed.depth_observed_at
+                if (
+                    source_at is None
+                    or source_at > delayed.observed_at
+                    or not 0 <= (delayed_at - source_at).total_seconds()
+                    <= max_depth_age_seconds
+                ):
+                    delayed_depth = None
         depth = (
             min(trigger_depth, delayed_depth)
             if trigger_depth is not None and delayed_depth is not None
