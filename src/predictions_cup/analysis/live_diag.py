@@ -27,12 +27,10 @@ from predictions_cup.analysis.evidence import (
     write_evidence,
 )
 from predictions_cup.analysis.snapback_version_gate import (
-    TRIGGER_RULE as EPISODE_TRIGGER_RULE,
-)
-from predictions_cup.analysis.snapback_version_gate import (
     ANALYSIS_VERSION,
     EPISODE_RULE_VERSION,
     SNAPBACK_METHOD_VERSION,
+    TRIGGER_RULE,
 )
 from predictions_cup.live_learn.contracts import OutcomeStatus, outcome_from_record
 from predictions_cup.mapping.crosswalk import load_document
@@ -1267,7 +1265,7 @@ def _signed_snapback_row_metadata(
         "analysis_version": ANALYSIS_VERSION,
         "method_version": SNAPBACK_METHOD_VERSION,
         "episode_rule_version": EPISODE_RULE_VERSION,
-        "trigger_rule": EPISODE_TRIGGER_RULE,
+        "trigger_rule": TRIGGER_RULE,
         "git_sha": git_sha,
         "config_hash": config_hash,
         "mapping_hash": mapping_hash,
@@ -1320,7 +1318,7 @@ def analyze_live_diagnostics(
         "thresholds_ticks": list(thresholds_ticks),
         "horizons_seconds": list(horizons_seconds),
         "tick_size": SIG_TICK_SIZE,
-        "trigger_rule": EPISODE_TRIGGER_RULE,
+        "trigger_rule": TRIGGER_RULE,
     }
     config_hash = canonical_config_hash(config)
     git_sha = os.environ.get("PREDICTIONS_CUP_GIT_SHA", "UNKNOWN")
@@ -1613,7 +1611,7 @@ def analyze_live_diagnostics(
             "latency_ms": latency_ms,
         },
         "snapback": snapback_rows,
-        "trigger_rule": EPISODE_TRIGGER_RULE,
+        "trigger_rule": TRIGGER_RULE,
         "lead_lag": lead_lag_rows,
         "maker_economics": maker_summary,
         "opponent_venue_ecology": ecology_rows,
