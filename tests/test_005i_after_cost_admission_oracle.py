@@ -264,8 +264,16 @@ def test_no_uses_same_exchange_yes_bid_and_complementary_yes_ask() -> None:
     "pm_original_sha", "sig_original_sha", "rule_info_sha", "mapping_sha",
 ])
 def test_missing_original_provenance_censors_net(field: str) -> None:
-    assert evaluate_invented_trial(replace(invented_trial(),
-                                          **{field: None})).status == "NET_NOT_ESTIMABLE"
+    trial = invented_trial()
+    if field == "pm_original_sha":
+        trial = replace(trial, pm_original_sha=None)
+    elif field == "sig_original_sha":
+        trial = replace(trial, sig_original_sha=None)
+    elif field == "rule_info_sha":
+        trial = replace(trial, rule_info_sha=None)
+    else:
+        trial = replace(trial, mapping_sha=None)
+    assert evaluate_invented_trial(trial).status == "NET_NOT_ESTIMABLE"
 
 
 def test_missing_native_fee_or_issuer_clock_is_not_zero_cost() -> None:
@@ -297,6 +305,7 @@ def test_midpoint_illusion_cannot_hide_negative_crossed_book_exit() -> None:
                           asks=(Level(D("0.75"), 40),)) for b in t.exits)
     result = evaluate_invented_trial(replace(t, arrival=arr, exits=exits))
     assert result.status == "SYNTHETIC_SCENARIO_ONLY"
+    assert result.after_cost_quote_scenario is not None
     assert result.after_cost_quote_scenario < 0
     assert result.realised_net_pnl is None
 
