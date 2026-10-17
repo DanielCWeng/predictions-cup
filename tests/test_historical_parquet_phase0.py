@@ -77,7 +77,8 @@ def _decimal(value: object) -> Decimal | None:
         result = Decimal(value)
     except InvalidOperation as exc:
         raise ValueError("INVALID_DECIMAL") from exc
-    if not result.is_finite() or result.as_tuple().exponent < -8:
+    exponent = result.as_tuple().exponent
+    if not result.is_finite() or not isinstance(exponent, int) or exponent < -8:
         raise ValueError("NONFINITE_OR_PRECISION_LOSS")
     return result
 
