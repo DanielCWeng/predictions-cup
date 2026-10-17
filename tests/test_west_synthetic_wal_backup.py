@@ -15,7 +15,6 @@ import time
 
 import pytest
 
-
 SOURCE_NAME = "invented_source.sqlite3"
 SNAPSHOT_NAME = "invented_snapshot.sqlite3"
 
@@ -246,7 +245,9 @@ def test_writer_restart_keeps_complete_atomic_generation(tmp_path: pathlib.Path)
     assert _validate_frozen_snapshot(frozen, _sha(frozen))["snapshot_clock"] == 9
 
 
-def test_frozen_copy_sha_corruption_and_logical_incompleteness_rejected(tmp_path: pathlib.Path) -> None:
+def test_frozen_copy_sha_corruption_and_logical_incompleteness_rejected(
+    tmp_path: pathlib.Path,
+) -> None:
     source = tmp_path / SOURCE_NAME
     frozen = tmp_path / SNAPSHOT_NAME
     with _invented_source(source) as writer:
