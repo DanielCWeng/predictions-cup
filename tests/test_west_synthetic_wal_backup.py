@@ -213,7 +213,9 @@ def test_concurrent_writer_delayed_checkpoint_consistent_snapshot(tmp_path: path
         assert checkpoint[1] > checkpoint[2]
         _snapshot(source, frozen)
         receipt = _validate_frozen_snapshot(frozen, _sha(frozen))
-        assert 30 <= receipt["snapshot_clock"] <= 140
+        snapshot_clock = receipt["snapshot_clock"]
+        assert isinstance(snapshot_clock, int)
+        assert 30 <= snapshot_clock <= 140
         assert receipt["operations"] == receipt["snapshot_clock"]
         assert receipt["events"] == 2 * receipt["snapshot_clock"]
     finally:
@@ -297,7 +299,7 @@ def test_simulated_lock_disk_deadline_and_target_guard_fail_closed(tmp_path: pat
         {"deadline_seconds": 0.0},
     ):
         with pytest.raises(SnapshotRejected, match="guard"):
-            _snapshot(source, frozen, **guard)  # type: ignore[arg-type]
+            _snapshot(source, frozen, **guard)
         assert not frozen.exists()
     with pytest.raises(SnapshotRejected, match="not an invented"):
         _snapshot(tmp_path / "execution_journal.sqlite3", frozen)
