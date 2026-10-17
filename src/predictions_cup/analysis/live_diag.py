@@ -173,7 +173,11 @@ def _asof(
     return quote
 
 
-def _economic(quotes: Sequence[Quote]) -> tuple[Quote, ...]:
+def _economic(
+    quotes: Sequence[Quote],
+    *,
+    preserve_depth_updates: bool = False,
+) -> tuple[Quote, ...]:
     result: list[Quote] = []
     for item in sorted(quotes, key=lambda quote: quote.observed_at):
         if not item.trusted or item.best_ask < item.best_bid:
@@ -182,20 +186,20 @@ def _economic(quotes: Sequence[Quote]) -> tuple[Quote, ...]:
         # size (including zero) or depth-source timestamp replaces the prior
         # as-of depth even when neither price changed. Price-only dedup used to
         # carry fictitious 50-share liquidity across a later zero-size update.
-        if result and (
-            result[-1].best_bid,
-            result[-1].best_ask,
-            result[-1].bid_depth,
-            result[-1].ask_depth,
-            result[-1].depth_observed_at,
-        ) == (
+        if result and (result[-1].best_bid, result[-1].best_ask) == (
             item.best_bid,
             item.best_ask,
-            item.bid_depth,
-            item.ask_depth,
-            item.depth_observed_at,
         ):
-            continue
+            if not preserve_depth_updates or (
+                result[-1].bid_depth,
+                result[-1].ask_depth,
+                result[-1].depth_observed_at,
+            ) == (
+                item.bid_depth,
+                item.ask_depth,
+                item.depth_observed_at,
+            ):
+                continue
         result.append(item)
     return tuple(result)
 
@@ -422,7 +426,9 @@ def analyze_lead_lag(
         raise ValueError("latency_ms must be non-negative")
     if max_response_seconds <= 0:
         raise ValueError("max_response_seconds must be positive")
-    sig = _economic(sig_quotes)
+    # Preserve size-only and zero-depth updates for executable as-of replay.
+    # Other descriptive BBO consumers retain their original price-only dedup.
+    sig = _economic(sig_quotes, preserve_depth_updates=True)
     external = _economic(external_quotes)
     output: list[LeadLagObservation] = []
     for index, current in enumerate(external[1:], start=1):
