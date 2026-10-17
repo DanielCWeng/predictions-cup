@@ -165,6 +165,9 @@ class RuntimeHealth:
     last_valid_batch: datetime | None = None
     last_rest_reconciliation: datetime | None = None
     revision_gap_count: int = 0
+    # Counts every scoped or whole-universe recovery, including semantically
+    # invalid but syntactically parseable batches with no trade/dirty rows.
+    recovery_count: int = 0
     reconnect_count: int = 0
     reconciliation_failure_count: int = 0
     bounded_book_refresh_count: int = 0
@@ -190,6 +193,9 @@ class SigRealtimeStateEngine:
         governed_rate_per_second: float = 2.0,
         periodic_bulk_refresh_enabled: bool = True,
         bulk_prices_tracked_only: bool = False,
+        capture_untracked_dirty_books: bool = True,
+        tracked_dirty_priority: RestPriority = RestPriority.HIGH,
+        eager_tracked_depth_bootstrap: bool = True,
         extra_bulk_price_exchange_ids: Iterable[str] = (),
         governor_snapshot: GovernorSnapshotFn | None = None,
         clock: Clock = lambda: datetime.now(UTC),
@@ -226,6 +232,15 @@ class SigRealtimeStateEngine:
         # MAKE quotes a handful of exchanges; sweeping every tournament price
         # through the shared REST governor starves its account/mark refreshes.
         self._bulk_prices_tracked_only = bulk_prices_tracked_only and bool(tracked)
+        self._capture_untracked_dirty_books = capture_untracked_dirty_books
+        # Depth is advisory for maker configurations that do not require
+        # trusted depth. Keep dirty invalidation fail-closed but prevent its
+        # REST depth reads from starving NORMAL scalar BBO refresh.
+        self._tracked_dirty_priority = RestPriority(tracked_dirty_priority)
+        # A scalar-only maker may reconnect before optional depth has finished;
+        # default-on preserves mandatory full-depth recovery in capture/strategies
+        # that require trusted depth before subscription.
+        self._eager_tracked_depth_bootstrap = eager_tracked_depth_bootstrap
         self._bulk_price_exchange_ids = tracked | frozenset(extra_bulk_price_exchange_ids)
         self._book_depth = book_depth
         self._open_book_max_trusted_age = timedelta(
@@ -361,13 +376,14 @@ class SigRealtimeStateEngine:
             TrustTransition.UNTRUSTED_INITIAL_SUBSCRIBE,
             revision=None,
         )
-        await self._reconcile_many(
-            tracked,
-            reason=SubscriptionReason.INITIAL_SUBSCRIBE.value,
-            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
-            triggering_revision=None,
-            priority=RestPriority.NORMAL,
-        )
+        if self._eager_tracked_depth_bootstrap:
+            await self._reconcile_many(
+                tracked,
+                reason=SubscriptionReason.INITIAL_SUBSCRIBE.value,
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=None,
+                priority=RestPriority.NORMAL,
+            )
 
     async def refresh_universe(
         self,
@@ -399,6 +415,11 @@ class SigRealtimeStateEngine:
         self.health.connected = False
         self.last_accepted_revision = None
         self.topic_revisions.clear()
+        # Source-native book asOf sequence/time belongs to the prior socket
+        # epoch. Keeping its watermark can silently discard the first books
+        # after token refresh or reconnect if venue sequences restart.
+        # Within the new epoch the ordinary monotone/dedup check still applies.
+        self.book_versions.clear()
         transition = {
             SubscriptionReason.INITIAL_SUBSCRIBE: TrustTransition.UNTRUSTED_INITIAL_SUBSCRIBE,
             SubscriptionReason.RECONNECT: TrustTransition.UNTRUSTED_RECONNECT,
@@ -419,16 +440,23 @@ class SigRealtimeStateEngine:
             priority=RestPriority.HIGH,
         )
         self._validate_tracked_configuration()
-        await self._reconcile_many(
-            self.tracked_depth_exchange_ids,
-            reason=reason.value,
-            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
-            triggering_revision=None,
-            priority=RestPriority.HIGH,
-        )
+        if self._eager_tracked_depth_bootstrap:
+            await self._reconcile_many(
+                self.tracked_depth_exchange_ids,
+                reason=reason.value,
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=None,
+                priority=RestPriority.HIGH,
+            )
+        # The scalar-only maker must restore a validated BBO before subscribing,
+        # without blocking behind all optional 76-deep depth reconciliations.
         await self.refresh_bulk_prices(
             reason=reason.value,
-            priority=RestPriority.BACKGROUND,
+            priority=(
+                RestPriority.BACKGROUND
+                if self._eager_tracked_depth_bootstrap
+                else RestPriority.NORMAL
+            ),
         )
         self._observe(
             ObservationKind.RECONNECT_RESOLVED,
@@ -543,12 +571,18 @@ class SigRealtimeStateEngine:
             # Targeted refetch only. Trust is kept: an expired foreign order
             # leaves at most one vanished level for about one request, and
             # flipping trust would make MAKE cancel/requote on every expiry.
+            # Optional maker depth must not compete at NORMAL with the scalar
+            # BBO sweep; strict trusted-depth mode retains its old priority.
             await self._reconcile_many(
                 expired,
                 reason="order_expiry_refresh",
                 final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                 triggering_revision=self.last_accepted_revision,
-                priority=RestPriority.NORMAL,
+                priority=(
+                    RestPriority.NORMAL
+                    if self._eager_tracked_depth_bootstrap
+                    else RestPriority.BACKGROUND
+                ),
                 wait=wait,
             )
 
@@ -674,7 +708,12 @@ class SigRealtimeStateEngine:
                 source="sig-realtime",
                 revision=f"{book.as_of.sequence}:{book.as_of.at.isoformat()}",
             )
-            state.orderbook = canonical
+            # Keep source-native pushed depth as independent RESEARCH evidence,
+            # not a replacement for a tracked REST-certified execution book.
+            # Leaving TRACKED_TRUSTED unchanged while installing an unverified
+            # websocket book would silently promote it to maker-eligible depth.
+            if not state.tracked:
+                state.orderbook = canonical
             state.last_realtime_observed_at = observed_at
             state.last_accepted_revision = revision
             self.book_versions[book.exchange_id] = version
@@ -889,14 +928,21 @@ class SigRealtimeStateEngine:
                 reason="book_dirty",
                 final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                 triggering_revision=delivery.revision,
-                priority=RestPriority.HIGH,
+                priority=self._tracked_dirty_priority,
                 wait=False,
             )
 
         if revision_gap_recovered and market_id is None:
+            # Following a tournament revision gap, the scalar maker needs a
+            # fresh BBO ahead of optional depth maintenance. Full-depth
+            # capture retains the existing background refresh priority.
             await self.refresh_bulk_prices(
                 reason="revision_gap",
-                priority=RestPriority.BACKGROUND,
+                priority=(
+                    RestPriority.BACKGROUND
+                    if self._eager_tracked_depth_bootstrap
+                    else RestPriority.NORMAL
+                ),
             )
 
     async def handle_tournament_batches(
@@ -956,12 +1002,16 @@ class SigRealtimeStateEngine:
             )
             state = self.states.get(dirty_event.exchange_id)
             if state is None or state.market_id != dirty_event.market_id:
-                self._schedule_untracked_book_refetch(
-                    dirty_event.exchange_id,
-                    reason="book_dirty",
-                    triggering_revision=revision,
-                    market_id=dirty_event.market_id,
-                )
+                # A maker using scalar BBOs must not spend HIGH-priority REST
+                # capacity fetching unknown/untracked full-depth books.
+                # Preserve full capture behaviour by default.
+                if self._capture_untracked_dirty_books:
+                    self._schedule_untracked_book_refetch(
+                        dirty_event.exchange_id,
+                        reason="book_dirty",
+                        triggering_revision=revision,
+                        market_id=dirty_event.market_id,
+                    )
                 return {
                     exchange_id
                     for exchange_id, item in self.states.items()
@@ -980,10 +1030,10 @@ class SigRealtimeStateEngine:
                     reason="book_dirty",
                     final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                     triggering_revision=revision,
-                    priority=RestPriority.HIGH,
+                    priority=self._tracked_dirty_priority,
                     wait=False,
                 )
-            else:
+            elif self._capture_untracked_dirty_books:
                 self._schedule_untracked_book_refetch(
                     dirty_event.exchange_id,
                     reason="book_dirty",
@@ -1218,6 +1268,7 @@ class SigRealtimeStateEngine:
         triggering_revision: int | None,
         refresh_bulk_prices: bool,
     ) -> None:
+        self.health.recovery_count += 1
         self._mark_untrusted(
             self.tracked_depth_exchange_ids,
             transition,
@@ -1229,17 +1280,22 @@ class SigRealtimeStateEngine:
             priority=RestPriority.HIGH,
         )
         self._validate_tracked_configuration()
-        await self._reconcile_many(
-            self.tracked_depth_exchange_ids,
-            reason=reason,
-            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
-            triggering_revision=triggering_revision,
-            priority=RestPriority.HIGH,
-        )
+        if self._eager_tracked_depth_bootstrap:
+            await self._reconcile_many(
+                self.tracked_depth_exchange_ids,
+                reason=reason,
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=triggering_revision,
+                priority=RestPriority.HIGH,
+            )
         if refresh_bulk_prices:
             await self.refresh_bulk_prices(
                 reason=reason,
-                priority=RestPriority.BACKGROUND,
+                priority=(
+                    RestPriority.BACKGROUND
+                    if self._eager_tracked_depth_bootstrap
+                    else RestPriority.NORMAL
+                ),
             )
 
     async def _ensure_known_exchanges(self, batch: MarketBatchDto) -> None:
@@ -1297,6 +1353,16 @@ class SigRealtimeStateEngine:
             raise ValueError("market topic bookDirty marketId mismatch")
         if any(item.market_id != market_id for item in batch.market_settled):
             raise ValueError("market topic marketSettled marketId mismatch")
+        # Versioned books identify their exchange but omit marketId. Check
+        # against the authoritative exchange->market mapping before applying:
+        # accepting a book carried by a different market topic would poison
+        # the wrong contract's local depth and its research provenance.
+        if any(
+            state is not None and state.market_id != market_id
+            for book in batch.books
+            if (state := self.states.get(book.exchange_id)) is not None
+        ):
+            raise ValueError("market topic book exchange marketId mismatch")
 
     async def _resync_market(
         self,
@@ -1307,6 +1373,7 @@ class SigRealtimeStateEngine:
         triggering_revision: int | None,
     ) -> None:
         """Topic-scoped authoritative recovery for one tournament market."""
+        self.health.recovery_count += 1
         exchange_ids = {
             exchange_id
             for exchange_id, state in self.states.items()
@@ -1324,19 +1391,35 @@ class SigRealtimeStateEngine:
             for exchange_id, state in self.states.items()
             if state.market_id == market_id
         }
+        if not reconciled:
+            # Never revive a scalar BBO while authoritative market status is
+            # unknown; maker market-status eligibility must fail closed.
+            return
         if reconciled:
+            # Market identity/status recovery is mandatory and stays HIGH.
+            # Scalar-BBO makers must not stall the Realtime consumer while
+            # optional depth books reconcile before a fresh price read.
             await self._reconcile_many(
                 exchange_ids,
                 reason=reason,
                 final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                 triggering_revision=triggering_revision,
-                priority=RestPriority.HIGH,
+                priority=(
+                    RestPriority.HIGH
+                    if self._eager_tracked_depth_bootstrap
+                    else RestPriority.BACKGROUND
+                ),
+                wait=self._eager_tracked_depth_bootstrap,
             )
         try:
             await self.refresh_exchange_prices(
                 exchange_ids,
                 reason=reason,
-                priority=RestPriority.BACKGROUND,
+                priority=(
+                    RestPriority.BACKGROUND
+                    if self._eager_tracked_depth_bootstrap
+                    else RestPriority.NORMAL
+                ),
             )
         except Exception as exc:
             self.health.reconciliation_failure_count += 1
@@ -1521,6 +1604,12 @@ class SigRealtimeStateEngine:
             )
         except Exception as exc:
             self.health.reconciliation_failure_count += 1
+            # A cached "open" market is not an authoritative status after a
+            # failed recovery. The maker bridge rejects unknown market status
+            # even if a previously read scalar BBO is still within its TTL.
+            known_market = self.market_states.get(market_id)
+            if known_market is not None:
+                known_market.status = "unknown"
             logger.warning(
                 "SIG REST market reconciliation failed market=%s error=%s",
                 market_id,
@@ -1679,7 +1768,13 @@ class SigRealtimeStateEngine:
             state.orderbook = None
             state.last_rest_observed_at = observed_at
             state.last_reconciliation_at = observed_at
-            if await self._generation_is_current(exchange_id, generation):
+            # A verified settled/closed market needs no further depth.
+            # An *unknown* status (for example failed get_market REST)
+            # cannot certify depth merely because we skipped its book.
+            if (
+                market_state.status != "unknown"
+                and await self._generation_is_current(exchange_id, generation)
+            ):
                 state.depth_state = DepthState.TRACKED_TRUSTED
                 if triggering_revision is not None:
                     state.last_accepted_revision = triggering_revision
@@ -1695,6 +1790,7 @@ class SigRealtimeStateEngine:
 
         try:
             self.health.full_book_refresh_count += 1
+            request_started_at = self._clock()
             async with self._rest.priority(priority):
                 snapshot = await self._rest.get_orderbook(
                     exchange_id,
@@ -1715,6 +1811,20 @@ class SigRealtimeStateEngine:
                 exchange_id,
                 type(exc).__name__,
             )
+            return
+
+        # Cached REST books can be up to one second old. Do not certify
+        # execution depth when the exchange received a newer websocket touch
+        # after the request began, nor after its market left OPEN during the
+        # request. Existing depth stays UNTRUSTED; periodic maintenance may
+        # attempt a new bounded reconciliation, without polling from here.
+        latest_market = self.market_states.get(state.market_id)
+        if (
+            (state.last_realtime_observed_at is not None
+             and state.last_realtime_observed_at > request_started_at)
+            or latest_market is None
+            or latest_market.status != "open"
+        ):
             return
 
         state.orderbook = book

@@ -146,7 +146,7 @@ def test_maker_freshness_defaults_cover_sig_refresh_intervals(
     del clean_config_env
     settings = AppSettings()
 
-    assert settings.maker_max_bbo_age_ms >= int(
+    assert settings.maker_max_bbo_age_ms > int(
         settings.sig_realtime_bulk_price_refresh_seconds * 1_000
     )
     assert settings.maker_max_depth_age_ms >= int(
@@ -158,13 +158,20 @@ def test_maker_rejects_freshness_windows_shorter_than_sig_refresh_contracts(
     clean_config_env: None,
 ) -> None:
     del clean_config_env
-    with pytest.raises(ValidationError):
-        AppSettings.model_validate(
-            {
-                "maker_max_bbo_age_ms": 1_000,
-                "sig_realtime_bulk_price_refresh_seconds": 10.0,
-            }
-        )
+    # A period equal to the expiry is not viable: normal scheduling jitter
+    # makes every BBO stale before the next refresh.
+    for max_age_ms, refresh_seconds in ((1_000, 10.0), (15_000, 15.0)):
+        with pytest.raises(ValidationError):
+            AppSettings.model_validate(
+                {
+                    "maker_max_bbo_age_ms": max_age_ms,
+                    "sig_realtime_bulk_price_refresh_seconds": refresh_seconds,
+                }
+            )
+    valid = AppSettings.model_validate(
+        {"maker_max_bbo_age_ms": 15_000, "sig_realtime_bulk_price_refresh_seconds": 10.0}
+    )
+    assert valid.maker_max_bbo_age_ms == 15_000
     with pytest.raises(ValidationError):
         AppSettings.model_validate(
             {

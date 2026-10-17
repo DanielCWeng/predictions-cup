@@ -423,16 +423,31 @@ class MakerService:
                 open_book_max_trusted_age_seconds=(
                     self.settings.sig_realtime_open_book_refresh_seconds
                 ),
-                # This engine polls only held/tracked exchanges, so a 15-second
-                # fallback is enough alongside realtime last-trade marks and
-                # leaves the shared SIG budget for execution/account reads.
-                bulk_price_refresh_seconds=max(
-                    15.0, self.settings.sig_realtime_bulk_price_refresh_seconds
+                # Honor the validated maker bulk-price interval. A hidden
+                # 15-second floor can equal the 15-second BBO expiry, leaving
+                # zero scheduling margin even when the REST feed is healthy.
+                # Shared SIG quota/governor and NORMAL priority still apply.
+                bulk_price_refresh_seconds=(
+                    self.settings.sig_realtime_bulk_price_refresh_seconds
                 ),
                 periodic_bulk_price_priority=RestPriority.NORMAL,
                 governed_rate_per_second=(self.settings.sig_rest_governor_rate_per_second),
                 governor_snapshot=rest.governor_snapshot,
                 bulk_prices_tracked_only=True,
+                # Trade from governed scalar BBO; untracked full-depth dirty
+                # refetches would otherwise preempt NORMAL scalar refreshes.
+                capture_untracked_dirty_books=False,
+                # When trusted depth is not a requirement, preserve book_dirty
+                # invalidation but let NORMAL scalar BBO reads outrank advisory
+                # tracked-depth refetch. Full-depth-required LIVE keeps HIGH.
+                tracked_dirty_priority=(
+                    RestPriority.HIGH
+                    if self.settings.maker_require_trusted_depth
+                    else RestPriority.BACKGROUND
+                ),
+                # In scalar-BBO mode, subscribing must not wait for 76 optional
+                # REST depth snapshots. Maintenance recovers depth in BACKGROUND.
+                eager_tracked_depth_bootstrap=self.settings.maker_require_trusted_depth,
                 extra_bulk_price_exchange_ids=tuple(
                     value.strip()
                     for value in self.settings.maker_mark_only_exchange_ids.split(",")
@@ -1562,14 +1577,31 @@ class MakerService:
 
                         affected: set[str] = set()
                         malformed = False
+                        global_recheck_required = False
                         for delivery_topic, batch_payload in deliveries:
                             try:
                                 parsed = MarketBatchDto.model_validate(batch_payload)
                             except ValidationError:
                                 parsed = None
+                            previous_recovery_count = (
+                                sig_state.health.recovery_count
+                                if parsed is not None
+                                else 0
+                            )
                             await sig_state.handle_raw_batch(
                                 delivery_topic, batch_payload, observed_at
                             )
+                            # Scoped and whole-universe recovery can
+                            # invalidate sibling resting quotes even when a
+                            # syntactically valid batch has no affected rows.
+                            # This also covers semantic validation failures
+                            # where a parsed batch triggers authoritative
+                            # recovery but has no trade/bookDirty entries.
+                            if parsed is not None and (
+                                sig_state.health.recovery_count > previous_recovery_count
+                                or parsed.resync_required
+                            ):
+                                global_recheck_required = True
                             if parsed is None:
                                 malformed = True
                                 continue
@@ -1593,10 +1625,13 @@ class MakerService:
                             source=risk_context_source,
                             service=risk_service,
                         )
-                        runtime.notify_sig(
-                            affected,
-                            observed_monotonic_ns=monotonic_ns(),
-                        )
+                        if global_recheck_required:
+                            runtime.notify_global(observed_monotonic_ns=monotonic_ns())
+                        else:
+                            runtime.notify_sig(
+                                affected,
+                                observed_monotonic_ns=monotonic_ns(),
+                            )
                     except SigApiError:
                         sig_state.mark_disconnected()
                         runtime.notify_global(observed_monotonic_ns=monotonic_ns())

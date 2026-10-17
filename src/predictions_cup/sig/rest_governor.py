@@ -121,6 +121,11 @@ class SigRestGovernor:
         self._monotonic = monotonic
         self._random = random_fn
         self._queue_max = queue_max
+        # Leave admission room for critical execution and current scalar BBO
+        # when advisory depth floods the bounded queue. Priority scheduling
+        # alone cannot protect requests rejected before enqueue.
+        self._execution_queue_reserve = min(8, queue_max // 8)
+        self._scalar_queue_reserve = min(8, queue_max // 8)
         self._shared_budget = shared_budget
 
         self._queue: asyncio.PriorityQueue[
@@ -149,7 +154,14 @@ class SigRestGovernor:
     async def acquire(self, priority: RestPriority = RestPriority.NORMAL) -> None:
         if self._closed:
             raise RuntimeError("SIG REST governor is closed")
-        if self._queue.full():
+        occupancy = self._queue.qsize()
+        non_execution_limit = self._queue_max - self._execution_queue_reserve
+        background_limit = non_execution_limit - self._scalar_queue_reserve
+        if (
+            self._queue.full()
+            or (priority is RestPriority.NORMAL and occupancy >= non_execution_limit)
+            or (priority is RestPriority.BACKGROUND and occupancy >= background_limit)
+        ):
             raise RestGovernorQueueFullError(
                 f"SIG REST governor backlog is full (capacity={self._queue_max})"
             )

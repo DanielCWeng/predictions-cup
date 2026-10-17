@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sqlite3
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
@@ -30,6 +31,7 @@ from predictions_cup.sig.realtime_state import (
     DepthState,
     SigRealtimeStateEngine,
     SubscriptionReason,
+    TrustTransition,
 )
 from predictions_cup.sig.realtime_storage import SigRealtimeRecorder
 from predictions_cup.sig.rest_governor import RestPriority
@@ -620,6 +622,354 @@ def test_untracked_book_dirty_coalesces_without_waiting_for_slow_rest(
     asyncio.run(scenario())
 
 
+def test_maker_skips_untracked_dirty_book_rest_but_retains_tracked_recovery(
+    tmp_path: Path,
+) -> None:
+    """Only capture workers should consume HIGH priority REST for untracked depth."""
+    async def scenario() -> None:
+        rest = FakeRest()
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            tracked_depth_exchange_ids={"36"},
+            capture_untracked_dirty_books=False,
+        )
+        await engine.initialize()
+        observed = datetime(2026, 10, 1, 16, 10, 28, tzinfo=UTC)
+        initial_calls = tuple(rest.calls)
+
+        await engine.handle_tournament_event(
+            "book_dirty",
+            {
+                "exchangeId": "37",
+                "marketId": "27",
+                "tournamentId": "cup",
+                "at": "2026-10-01T16:10:28Z",
+            },
+            observed,
+        )
+        assert tuple(rest.calls) == initial_calls
+        assert not engine._untracked_refetch_tasks
+        assert engine.states["37"].last_realtime_observed_at == observed
+
+        await engine.handle_tournament_event(
+            "book_dirty",
+            {
+                "exchangeId": "36",
+                "marketId": "26",
+                "tournamentId": "cup",
+                "at": "2026-10-01T16:10:28Z",
+            },
+            observed,
+        )
+        await asyncio.gather(*engine._reconcile_tasks.values())
+        assert rest.calls.count("36") == initial_calls.count("36") + 1
+        assert rest.orderbook_priorities[-1] == RestPriority.HIGH
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_advisory_maker_dirty_depth_yields_priority_to_scalar_prices(
+    tmp_path: Path,
+) -> None:
+    """Maker depth invalidation stays fail-closed while optional REST is BACKGROUND."""
+    async def scenario() -> None:
+        rest = FakeRest()
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            tracked_depth_exchange_ids={"36"},
+            capture_untracked_dirty_books=False,
+            tracked_dirty_priority=RestPriority.BACKGROUND,
+        )
+        await engine.initialize()
+        initial_calls = rest.calls.count("36")
+        rest.block_exchange = "36"
+        rest.block_release.clear()
+
+        await engine.handle_tournament_event(
+            "book_dirty",
+            {
+                "exchangeId": "36",
+                "marketId": "26",
+                "tournamentId": "cup",
+                "at": "2026-10-01T16:10:28Z",
+            },
+            datetime(2026, 10, 1, 16, 10, 28, tzinfo=UTC),
+        )
+        await rest.block_started.wait()
+        assert engine.states["36"].depth_state == DepthState.TRACKED_UNTRUSTED
+        assert not engine.states["36"].trusted
+        assert rest.orderbook_priorities[-1] == RestPriority.BACKGROUND
+        rest.block_release.set()
+        await asyncio.gather(*engine._reconcile_tasks.values())
+        assert rest.calls.count("36") == initial_calls + 1
+        assert engine.states["36"].trusted
+
+        await engine.handle_raw_batch(
+            engine.topic,
+            _batch(
+                revision=1,
+                previous=0,
+                source_from=1,
+                source_through=1,
+                dirty=True,
+            ),
+            datetime(2026, 10, 1, 16, 10, 29, tzinfo=UTC),
+        )
+        await asyncio.gather(*engine._reconcile_tasks.values())
+        assert rest.orderbook_priorities[-1] == RestPriority.BACKGROUND
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_scalar_maker_reconnect_does_not_block_on_76_optional_depth_reads(
+    tmp_path: Path,
+) -> None:
+    """Restore fresh scalar prices before optional depth when the maker does not require it."""
+    async def scenario() -> None:
+        rest = FakeRest(market_count=76)
+        tracked = {exchange_id for _, exchange_id in rest.pairs}
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            tracked_depth_exchange_ids=tracked,
+            bulk_prices_tracked_only=True,
+            eager_tracked_depth_bootstrap=False,
+            tracked_dirty_priority=RestPriority.BACKGROUND,
+            open_book_max_trusted_age_seconds=180.0,
+            governed_rate_per_second=1.0,
+        )
+        await engine.initialize()
+        assert len(engine.states) == 76
+        assert not rest.calls
+        assert rest.bulk_calls
+        assert not any(state.trusted for state in engine.states.values())
+
+        before_bulk = len(rest.bulk_calls)
+        await engine.prepare_subscription(SubscriptionReason.RECONNECT)
+        assert not rest.calls
+        assert len(rest.bulk_calls) == before_bulk + 1
+        assert rest.bulk_priorities[-1] == RestPriority.NORMAL
+        assert not any(state.trusted for state in engine.states.values())
+
+        await engine.refresh_stale_open_books(
+            datetime.now(UTC), wait=True,
+        )
+        assert len(rest.calls) == 76
+        assert all(p == RestPriority.BACKGROUND for p in rest.orderbook_priorities)
+        assert all(state.trusted for state in engine.states.values())
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_scalar_market_resync_refreshes_prices_before_optional_depth(
+    tmp_path: Path,
+) -> None:
+    """A market gap must not hold the scalar maker behind advisory book REST."""
+    async def scenario() -> None:
+        rest = FakeRest()
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            tracked_depth_exchange_ids={"36"},
+            eager_tracked_depth_bootstrap=False,
+            tracked_dirty_priority=RestPriority.BACKGROUND,
+        )
+        await engine.initialize()
+        rest.block_exchange = "36"
+        rest.block_release.clear()
+        initial_bulk = len(rest.bulk_calls)
+
+        await asyncio.wait_for(
+            engine._resync_market(
+                "26",
+                transition=TrustTransition.UNTRUSTED_REVISION_GAP,
+                reason="revision_gap",
+                triggering_revision=2,
+            ),
+            timeout=1.0,
+        )
+        assert rest.market_calls == ["26"]
+        assert len(rest.bulk_calls) == initial_bulk + 1
+        assert rest.bulk_priorities[-1] == RestPriority.NORMAL
+        assert engine.states["36"].depth_state == DepthState.TRACKED_UNTRUSTED
+
+        await asyncio.wait_for(rest.block_started.wait(), timeout=1.0)
+        assert rest.orderbook_priorities[-1] == RestPriority.BACKGROUND
+        assert not engine.states["36"].trusted
+        rest.block_release.set()
+        await asyncio.gather(*engine._reconcile_tasks.values())
+        assert engine.states["36"].trusted
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_trusted_depth_market_resync_still_waits_for_high_priority_book(
+    tmp_path: Path,
+) -> None:
+    """Full-depth-required capture retains authoritative blocking recovery."""
+    async def scenario() -> None:
+        rest = FakeRest()
+        engine, recorder = _engine(tmp_path, rest, tracked={"36"})
+        await engine.initialize()
+        rest.block_exchange = "36"
+        rest.block_release.clear()
+        rest.block_started.clear()
+        initial_bulk = len(rest.bulk_calls)
+
+        pending = asyncio.create_task(
+            engine._resync_market(
+                "26",
+                transition=TrustTransition.UNTRUSTED_REVISION_GAP,
+                reason="revision_gap",
+                triggering_revision=2,
+            )
+        )
+        await asyncio.wait_for(rest.block_started.wait(), timeout=1.0)
+        assert not pending.done()
+        assert rest.orderbook_priorities[-1] == RestPriority.HIGH
+        assert len(rest.bulk_calls) == initial_bulk
+        rest.block_release.set()
+        await pending
+        assert len(rest.bulk_calls) == initial_bulk + 1
+        assert rest.bulk_priorities[-1] == RestPriority.BACKGROUND
+        assert engine.states["36"].trusted
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_failed_market_status_resync_cannot_reauthorise_cached_scalar_bbo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Loss of authoritative market status must block maker eligibility."""
+    async def scenario() -> None:
+        rest = FakeRest()
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            tracked_depth_exchange_ids={"36"},
+            eager_tracked_depth_bootstrap=False,
+            tracked_dirty_priority=RestPriority.BACKGROUND,
+        )
+        await engine.initialize()
+        assert engine.market_states["26"].status == "open"
+        assert engine.states["36"].scalar_best_bid == Decimal("0.4")
+        original_get_market = rest.get_market
+
+        async def rejected_market(
+            market_id: str, *, tournament_id: str | None = None,
+        ) -> MarketDto:
+            del market_id, tournament_id
+            raise RuntimeError("synthetic status lookup unavailable")
+
+        monkeypatch.setattr(rest, "get_market", rejected_market)
+        before_bulk = len(rest.bulk_calls)
+        await engine._resync_market(
+            "26",
+            transition=TrustTransition.UNTRUSTED_REVISION_GAP,
+            reason="revision_gap",
+            triggering_revision=2,
+        )
+        assert engine.market_states["26"].status == "unknown"
+        assert engine.states["36"].depth_state == DepthState.TRACKED_UNTRUSTED
+        assert len(rest.bulk_calls) == before_bulk
+
+        monkeypatch.setattr(rest, "get_market", original_get_market)
+        await engine._resync_market(
+            "26",
+            transition=TrustTransition.UNTRUSTED_REVISION_GAP,
+            reason="recovered_revision_gap",
+            triggering_revision=3,
+        )
+        assert engine.market_states["26"].status == "open"
+        assert len(rest.bulk_calls) == before_bulk + 1
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_scalar_maker_revision_gap_refreshes_bbo_at_normal_priority(
+    tmp_path: Path,
+) -> None:
+    """Tournament gap recovery keeps scalar BBO ahead of advisory book reads."""
+    async def scenario() -> None:
+        rest = FakeRest(market_count=76)
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            tracked_depth_exchange_ids={
+                exchange_id for _, exchange_id in rest.pairs
+            },
+            bulk_prices_tracked_only=True,
+            eager_tracked_depth_bootstrap=False,
+            tracked_dirty_priority=RestPriority.BACKGROUND,
+            open_book_max_trusted_age_seconds=180.0,
+            governed_rate_per_second=1.0,
+        )
+        await engine.initialize()
+        observed = datetime(2026, 10, 15, 16, 0, tzinfo=UTC)
+        initial_books = len(rest.calls)
+
+        await engine.handle_raw_batch(
+            engine.topic,
+            _batch(
+                revision=10,
+                previous=9,
+                source_from=1,
+                source_through=1,
+                exchange_id="e-0",
+                market_id="m-0",
+            ),
+            observed,
+        )
+        before_gap_bulk = len(rest.bulk_calls)
+        await engine.handle_raw_batch(
+            engine.topic,
+            _batch(
+                revision=12,
+                previous=11,
+                source_from=2,
+                source_through=2,
+                exchange_id="e-0",
+                market_id="m-0",
+            ),
+            observed + timedelta(seconds=1),
+        )
+        assert engine.health.revision_gap_count == 1
+        assert len(rest.bulk_calls) == before_gap_bulk + 1
+        assert rest.bulk_priorities[-1] == RestPriority.NORMAL
+        assert len(rest.calls) == initial_books
+        assert not any(state.trusted for state in engine.states.values())
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
 def test_reconciliation_coalesces_dirty_signal_arriving_in_flight(tmp_path: Path) -> None:
     async def scenario() -> None:
         rest = FakeRest()
@@ -737,6 +1087,51 @@ def test_lifecycle_recovery_only_reseeds_tracked_depth(tmp_path: Path) -> None:
         assert len(rest.calls) == initial_calls + 3
         assert engine.states["36"].trusted
         assert engine.states["37"].depth_state == DepthState.UNTRACKED_DEPTH
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_unknown_market_status_cannot_make_missing_depth_trusted(
+    tmp_path: Path,
+) -> None:
+    """Skipped book REST on an unverified status must remain UNTRUSTED."""
+    async def scenario() -> None:
+        rest = FakeRest()
+        engine, recorder = _engine(tmp_path, rest, tracked={"36"})
+        await engine.initialize()
+        state = engine.states["36"]
+        assert state.trusted
+        initial_books = len(rest.calls)
+
+        engine.market_states["26"].status = "unknown"
+        await engine._queue_reconciliation(
+            "36",
+            reason="unverified_market_status",
+            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+            triggering_revision=2,
+            priority=RestPriority.BACKGROUND,
+            wait=True,
+        )
+        assert len(rest.calls) == initial_books
+        assert state.orderbook is None
+        assert state.depth_state == DepthState.TRACKED_UNTRUSTED
+
+        # A separately authoritative terminal market is allowed to complete
+        # its depth lifecycle without a pointless order-book REST request.
+        engine.market_states["26"].status = "settled"
+        await engine._queue_reconciliation(
+            "36",
+            reason="verified_market_settlement",
+            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+            triggering_revision=3,
+            priority=RestPriority.BACKGROUND,
+            wait=True,
+        )
+        assert len(rest.calls) == initial_books
+        assert state.trusted
+        assert state.orderbook is None
         await engine.aclose()
         recorder.close()
 
@@ -1096,6 +1491,53 @@ def test_live_market_topic_batch_shape_validates() -> None:
     assert compact.trades == () and compact.books == ()
 
 
+def test_versioned_realtime_books_persist_without_extra_rest_depth(
+    tmp_path: Path,
+) -> None:
+    """Existing tournament websocket books can be research evidence, not live depth trust."""
+    async def scenario() -> None:
+        rest = FakeRest()
+        engine, recorder = _engine(tmp_path, rest)
+        await engine.initialize()
+        assert rest.calls == []
+        initial_bulk = list(rest.bulk_calls)
+        # The native observed market_batch shape carries bookDirty alongside
+        # its versioned full book. Capture should record that invalidation
+        # without launching a redundant untracked REST book request.
+        payload = _live_market_batch(revision=11, previous=10, with_trade=False)
+        observed_at = datetime(2026, 10, 1, 16, 10, 29, tzinfo=UTC)
+        await engine.handle_tournament_batches(
+            {"markets": [{"marketId": "26", "batch": payload}]}, observed_at
+        )
+        assert rest.calls == []
+        assert rest.market_calls == []
+        assert rest.bulk_calls == initial_bulk
+        assert engine.book_versions["36"] == (
+            1854301,
+            datetime(2026, 10, 1, 16, 10, 28, 600000, tzinfo=UTC),
+        )
+        assert not engine.states["36"].trusted  # untracked != maker-certified depth
+        await engine.aclose()
+        recorder.close()
+
+        connection = sqlite3.connect(tmp_path / "sig.sqlite3")
+        rows = connection.execute(
+            "SELECT reason, book_json FROM book_observations ORDER BY id"
+        ).fetchall()
+        connection.close()
+        assert len(rows) == 1
+        reason, encoded = rows[0]
+        assert reason == "realtime_book"
+        book = json.loads(encoded)
+        assert book["source"] == "sig-realtime"
+        assert book["revision"] == "1854301:2026-10-01T16:10:28.600000+00:00"
+        assert book["exchange_id"] == "36"
+        assert book["bids"][0]["price"] == "0.06"
+        assert book["asks"][0]["price"] == "0.08"
+
+    asyncio.run(scenario())
+
+
 def test_engine_subscribes_per_market_topics_not_tournament_topic(
     tmp_path: Path,
 ) -> None:
@@ -1442,6 +1884,45 @@ def test_tournament_unbatched_hints_resync_the_named_exchange_or_market(
         assert connection.execute("SELECT COUNT(*) FROM book_dirty_events").fetchone() == (2,)
         assert connection.execute("SELECT COUNT(*) FROM market_settled_events").fetchone() == (1,)
         connection.close()
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    ("depth_required", "expected_priority"),
+    (
+        (False, RestPriority.BACKGROUND),
+        (True, RestPriority.NORMAL),
+    ),
+)
+def test_maker_optional_book_expiry_cannot_preempt_scalar_bbo_refresh(
+    tmp_path: Path, depth_required: bool, expected_priority: RestPriority,
+) -> None:
+    """Expiry-driven full-depth REST is advisory unless quotes require depth."""
+    async def scenario() -> None:
+        rest = FakeRest()
+        recorder = SigRealtimeRecorder(tmp_path / "sig.sqlite3")
+        engine = SigRealtimeStateEngine(
+            rest=rest,
+            recorder=recorder,
+            tournament_id="cup",
+            tracked_depth_exchange_ids={"36"},
+            eager_tracked_depth_bootstrap=depth_required,
+            tracked_dirty_priority=(
+                RestPriority.HIGH if depth_required else RestPriority.BACKGROUND
+            ),
+        )
+        await engine.initialize()
+        before = len(rest.calls)
+        now = datetime.now(UTC)
+        state = engine.states["36"]
+        state.next_expiry_at = now - timedelta(seconds=2)
+        await engine.refresh_stale_open_books(now)
+        assert len(rest.calls) == before + 1
+        assert rest.orderbook_priorities[-1] == expected_priority
+        assert state.trusted
         await engine.aclose()
         recorder.close()
 
