@@ -339,6 +339,28 @@ def estimate(bundle: LockedBundle) -> Estimate:
                (c.amount_susq >= ZERO if c.position_delta * direction > ZERO
                 else c.amount_susq <= ZERO) for c in cf):
             return _fail("INCONSISTENT_SIGNED_CASH_OR_HELD_NO_BASIS", n)
+        # A position can only be disposed of after the native fill and its
+        # matched paid entry have occurred. Use original issuer UTC, not
+        # attempt or local receipt clocks; ambiguous simultaneous events deny.
+        openings: list[tuple[datetime, Decimal]] = []
+        for f in fs:
+            matched = [c for c in entry if c.fill_id == f.fill_id]
+            if len(matched) != 1 or matched[0].issuer_at < f.issuer_at:
+                return _fail("ENTRY_BEFORE_NATIVE_FILL_OR_AMBIGUOUS_LOT", n)
+            openings.append((matched[0].issuer_at, f.quantity))
+        openings.sort(key=lambda item: item[0])
+        available = ZERO
+        opened = 0
+        for disposal in sorted(endflows, key=lambda c: (c.issuer_at, c.flow_id)):
+            # No publisher sequence is supplied for same-clock transactions:
+            # conservatively require strictly earlier native opened inventory.
+            while opened < len(openings) and openings[opened][0] < disposal.issuer_at:
+                available += openings[opened][1]
+                opened += 1
+            closing_qty = -direction * disposal.position_delta
+            if closing_qty <= ZERO or closing_qty > available:
+                return _fail("DISPOSAL_PRECEDES_AVAILABLE_NATIVE_FILLED_LOT", n)
+            available -= closing_qty
         # Filled entry/exit position quantities are signed; native NO is held
         # directly, never converted to YES by a guessed complement price.
         g = sum((c.amount_susq for c in cf if c.kind in
@@ -377,7 +399,14 @@ def estimate(bundle: LockedBundle) -> Estimate:
         return _fail("INCOMPLETE_FILL_TO_SETTLED_CASH_LEDGER", n)
     by_fill_id = {f.fill_id: f for f in bundle.fills}
     descriptive_marks: dict[int, Decimal] = defaultdict(lambda: ZERO)
+    markout_keys: set[tuple[str, int]] = set()
     for m in bundle.markouts:
+        # QuoteMarkout carries no independent publisher sequence/version.
+        # Replayed or conflicting copies for a fill+horizon cannot be summed.
+        key = (m.fill_id, m.horizon_seconds)
+        if key in markout_keys:
+            return _fail("DUPLICATE_FILL_HORIZON_MARKOUT", n)
+        markout_keys.add(key)
         mark_fill = by_fill_id.get(m.fill_id)
         if (mark_fill is None or not m.valid_native_reference
                 or not _clock(m.issuer_at, m.received_at)
