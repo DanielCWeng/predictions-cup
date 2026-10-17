@@ -91,7 +91,11 @@ def bundle() -> LockedBundle:
     )
     return LockedBundle(tuple(proof(t) for t in (
         "venue_fills", "order_lifecycle", "inventory_cashflows",
-    )), attempts, events, fills, flows)
+    )), attempts, events, fills, tuple(
+        replace(c, source_class="PAID_ACTUAL",
+                resolution_rules_reference="SYNTHETIC-RULES"
+                if c.kind == "SETTLEMENT" else None) for c in flows
+    ))
 
 
 def test_synthetic_realised_gross_net_fees_split_and_late_settlement() -> None:
@@ -231,7 +235,7 @@ def test_markouts_are_separate_from_actual_cash_and_require_original_source() ->
     b = bundle()
     horizon = at(2, 10, 1) + timedelta(seconds=5)
     m = QuoteMarkout("fill-a1", 5, horizon, horizon, at(2, 10, 1),
-                     D("0.60"), D("0.70"), "SYNTHETIC")
+                     D("0.60"), D("0.70"), "SYNTHETIC", D("2"), D("2"))
     b2 = replace(b, markouts=(m,))
     assert estimate(b2).reason == "UNATTESTED_MARKOUT_SOURCE"
     b3 = replace(b2, proofs=(*b.proofs, proof("quote_markouts")))
@@ -250,3 +254,84 @@ def test_missing_denominator_or_unclear_eligibility_fails_closed() -> None:
     assert estimate(replace(b, attempts=(a, *b.attempts[1:]))).reason == (
         "INCOMPLETE_MAKER_DENOMINATOR_OR_CLOCK"
     )
+
+
+def test_redteam_midpoint_exit_cannot_be_realised_cash() -> None:
+    b = bundle()
+    cash = tuple(replace(c, source_class="MIDPOINT_MARKOUT")
+                 if c.flow_id == "exit-a" else c for c in b.cashflows)
+    r = estimate(replace(b, cashflows=cash))
+    assert r.reason == "INVALID_CASHFLOW_OR_ORPHAN_FILL"
+    assert r.realised_net is None
+    assert r.verified_eligible_maker_denominator is None
+    assert r.verified_conservative_alpha_lower_bound is None
+
+
+def test_redteam_missing_settlement_rules_must_deny() -> None:
+    b = bundle()
+    cash = tuple(replace(c, resolution_rules_reference=None)
+                 if c.flow_id == "settlement-b" else c for c in b.cashflows)
+    r = estimate(replace(b, cashflows=cash))
+    assert r.reason == "INVALID_CASHFLOW_OR_ORPHAN_FILL"
+    assert r.realised_net is None
+
+
+@pytest.mark.parametrize("bid_depth,ask_depth", [
+    ("0", "2"), ("2", "0"), ("0.10", "2"), ("2", "0.10"),
+])
+def test_redteam_same_price_zero_or_insufficient_depth_not_executable(
+    bid_depth: str, ask_depth: str
+) -> None:
+    b = bundle()
+    horizon = at(2, 10, 1) + timedelta(seconds=5)
+    m = QuoteMarkout("fill-a1", 5, horizon, horizon, at(2, 10, 1),
+                     D("0.60"), D("0.70"), "SYNTHETIC", D(bid_depth), D(ask_depth))
+    r = estimate(replace(b, markouts=(m,), proofs=(*b.proofs, proof("quote_markouts"))))
+    assert r.reason == "UNVERIFIED_CAUSAL_EXECUTABLE_MARKOUT"
+    assert r.realised_net is None
+
+
+def test_redteam_forged_source_claim_is_not_data_or_alpha_admission() -> None:
+    b = bundle()
+    # Even a hash-consistent self-asserted issuer/custodian string is not an
+    # independently verified issuer signature, legal licence, or native role.
+    fake = replace(b.proofs[0], issuer_reference="FORGED-TRUSTED-ISSUER")
+    r = estimate(replace(b, proofs=(fake, *b.proofs[1:])))
+    assert r.verdict == "SYNTHETIC_OR_STRUCTURAL_ONLY_NOT_SOURCE_ADMISSION"
+    assert r.source_admitted is False and r.paper_admitted is False
+    assert r.verified_eligible_maker_denominator is None
+    assert r.verified_conservative_alpha_lower_bound is None
+    assert r.network_requests == 0
+
+
+def test_redteam_wrong_market_or_order_mapping_rejected() -> None:
+    b = bundle()
+    first = b.fills[0]
+    for replacement in (replace(first, market_id="WRONG-MARKET"),
+                        replace(first, order_id="WRONG-ORDER")):
+        r = estimate(replace(b, fills=(replacement, *b.fills[1:])))
+        assert r.reason == "NATIVE_MAKER_ROLE_OR_FILL_IDENTITY_NOT_PROVEN"
+        assert r.realised_net is None
+
+
+def test_redteam_cash_price_not_invented_from_fill_fails() -> None:
+    b = bundle()
+    cash = tuple(replace(c, amount_susq=D("-0.10"))
+                 if c.flow_id == "entry-a1" else c for c in b.cashflows)
+    r = estimate(replace(b, cashflows=cash))
+    assert r.reason == "POSITION_OR_PARTIAL_FILL_CASH_CONSERVATION_FAIL"
+    assert r.realised_net is None
+
+
+def test_redteam_no_sockets_even_on_structural_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    import socket
+
+    def deny(*args: object, **kwargs: object) -> None:
+        raise AssertionError("network access forbidden")
+
+    monkeypatch.setattr(socket.socket, "connect", deny)
+    monkeypatch.setattr(socket, "create_connection", deny)
+    result = estimate(bundle())
+    assert result.network_requests == 0
+    assert result.source_admitted is False
+    assert result.paper_admitted is False
