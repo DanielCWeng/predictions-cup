@@ -1,0 +1,589 @@
+"""LANE-3 offline 005I economic bridge. No order sender or network dependency.
+
+Input is a causally produced, completed-minute 005I feature tape plus accepted
+replay capture events. This is an execution *scenario*, not evidence of fills.
+"""
+from __future__ import annotations
+
+import bisect
+import hashlib
+import math
+import random
+from collections import defaultdict
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from typing import Any
+
+from predictions_cup.replay.model import (
+    BookLevel,
+    HealthPayload,
+    InstrumentView,
+    QuotePayload,
+    ReplayEvent,
+    ReplaySource,
+    TrustPayload,
+)
+from predictions_cup.replay.runner import ReplayRunner
+
+D = Decimal
+HORIZONS = (5, 30, 300, 3600)
+STRATEGIES = (
+    "NO_TRADE", "REVERSAL", "PERSISTENCE", "OFI_BASELINE",
+    "OFI_CHALLENGER", "DIRECT_PM_FV", "RANDOM_TIME",
+)
+FEATURES = (
+    "mid", "relative_spread", "depth_total5", "quote_events",
+    "rv_5m", "imbalance1", "ret_1m", "ret_5m", "ofi_depth_norm",
+)
+
+
+@dataclass(frozen=True)
+class ExactPair:
+    """One reviewed PM token linked to ONE binary SIG exchange.
+
+    PM token may itself be a NO token. mapping_direction is the relationship
+    between that token's economic payoff and the SIG exchange's YES payoff.
+    """
+
+    market_id: str  # PM market ID (feature tape key)
+    pm_yes: str  # specific MAPPING-001 aligned PM token (may be outcome NO)
+    sig_exchange_id: str
+    sig_market_id: str
+    mapping_direction: str
+
+    def __post_init__(self) -> None:
+        if not all((self.market_id, self.pm_yes,
+                    self.sig_exchange_id, self.sig_market_id)):
+            raise ValueError("accepted pair identity is incomplete")
+        if self.mapping_direction not in ("SAME", "COMPLEMENT"):
+            raise ValueError("unreviewed SAME/COMPLEMENT mapping direction")
+
+
+@dataclass(frozen=True)
+class MinuteFeature:
+    market_id: str
+    pm_yes: str
+    minute_end: datetime
+    available_at: datetime
+    values: Mapping[str, float]
+    provenance: str
+
+    def __post_init__(self) -> None:
+        if self.provenance != "005I_V3_CAUSAL_COMPLETED_MINUTE":
+            raise ValueError("unverified 005I feature provenance")
+        for ts in (self.minute_end, self.available_at):
+            if ts.tzinfo is None or ts.utcoffset() is None:
+                raise ValueError("feature clocks must include timezone")
+        if self.minute_end.second != 0 or self.minute_end.microsecond != 0:
+            raise ValueError("minute_end must be a minute boundary")
+        if self.available_at < self.minute_end:
+            raise ValueError("feature available before its minute completed")
+        if set(self.values) != set(FEATURES):
+            raise ValueError("features must equal the frozen 005I causal set")
+        if any(not math.isfinite(float(v)) for v in self.values.values()):
+            raise ValueError("nonfinite or missing feature")
+
+
+@dataclass(frozen=True)
+class EconomicConfig:
+    fee_bps_per_side: Decimal
+    latency_ms: int
+    min_edge: Decimal
+    quantity: Decimal
+    capital_limit: Decimal  # actual cash in SUSQies, not share count
+    gross_share_limit: Decimal  # inventory/gross quantity cap
+    max_quote_age_ms: int = 2000
+    max_feature_delay_ms: int = 5000
+    max_arrival_wait_ms: int = 1000
+    max_exit_wait_ms: int = 2000
+    depth_haircut: Decimal = D("0.5")
+    cooldown_seconds: int = 300
+
+    def __post_init__(self) -> None:
+        if any(x < 0 for x in (
+            self.fee_bps_per_side, self.latency_ms, self.min_edge,
+            self.max_quote_age_ms, self.max_feature_delay_ms,
+            self.max_arrival_wait_ms, self.max_exit_wait_ms, self.cooldown_seconds,
+        )):
+            raise ValueError("negative cost or timing assumption")
+        if self.quantity <= 0 or self.capital_limit <= 0 or self.gross_share_limit <= 0:
+            raise ValueError("quantity and capital must be positive")
+        if self.quantity != self.quantity.to_integral_value():
+            raise ValueError("SIG order quantity must be whole shares")
+        if not D("0") < self.depth_haircut <= D("1"):
+            raise ValueError("depth haircut must be in (0, 1]")
+        if self.cooldown_seconds < 300:
+            raise ValueError("must purge overlapping 005I 5-minute events")
+
+
+def frozen_probability(values: Mapping[str, float], model: Mapping[str, Any]) -> float:
+    features = model["features"]
+    if not set(features).issubset(values):
+        raise ValueError("missing frozen model input")
+    logit = float(model["intercept"])
+    for i, key in enumerate(features):
+        x = float(values[key])
+        # The frozen TRAIN medians, standard-scaler means and scales are immutable.
+        if not math.isfinite(x) or float(model["scaler_scale"][i]) <= 0:
+            raise ValueError("invalid frozen model input")
+        z = (x - float(model["scaler_mean"][i])) / float(model["scaler_scale"][i])
+        logit += z * float(model["coef"][i])
+    return 1.0 / (1.0 + math.exp(-max(-30.0, min(30.0, logit))))
+
+
+def _valid(view: InstrumentView | None, at: datetime, age_ms: int, *, sig: bool) -> bool:
+    if view is None or view.quote_observed_at is None or not view.book_valid:
+        return False
+    if not view.source_available or (sig and not view.trusted):
+        return False
+    if not timedelta(0) <= at - view.quote_observed_at <= timedelta(milliseconds=age_ms):
+        return False
+    if view.best_bid is None or view.best_ask is None:
+        return False
+    if not (D(0) <= view.best_bid < view.best_ask <= D(1)):
+        return False
+    if not view.bids or not view.asks:
+        return False
+    return max(x.price for x in view.bids) == view.best_bid and min(
+        x.price for x in view.asks
+    ) == view.best_ask
+
+
+def _walk(
+    levels: Iterable[Any], qty: Decimal, *, buy: bool,
+    haircut: Decimal, max_buy_price: Decimal | None = None,
+) -> Decimal | None:
+    """Executable VWAP, no top-of-book price used for quantity beyond actual depth."""
+    remaining = qty
+    paid = D(0)
+    sorted_levels = sorted(levels, key=lambda x: x.price, reverse=not buy)
+    previous = None
+    for level in sorted_levels:
+        if level.quantity < 0 or level.price <= 0 or level.price >= 1:
+            return None
+        if previous is not None and level.price == previous:
+            return None
+        if buy and max_buy_price is not None and level.price > max_buy_price:
+            return None
+        previous = level.price
+        take = min(remaining, level.quantity * haircut)
+        if take > 0:
+            paid += take * level.price
+            remaining -= take
+        if remaining <= 0:
+            return paid
+    return None
+
+
+def _walk_partial_close(
+    levels: Iterable[BookLevel], qty: Decimal, *,
+    haircut: Decimal,
+) -> tuple[Decimal, Decimal]:
+    """Hypothetical sale; partial fills never masquerade as a closed lot.
+
+    Return the quantity and actual visible proceeds of the matched part.
+    Any remaining quantity is carried at unverified value and capital-locked.
+    """
+    done, proceeds = D(0), D(0)
+    previous: Decimal | None = None
+    for level in sorted(levels, key=lambda x: x.price, reverse=True):
+        if not D(0) < level.price < D(1) or level.quantity < 0:
+            return D(0), D(0)
+        if previous == level.price:
+            return D(0), D(0)
+        previous = level.price
+        amount = min(qty - done, level.quantity * haircut)
+        if amount > 0:
+            done += amount
+            proceeds += amount * level.price
+        if done >= qty:
+            break
+    return done, proceeds
+
+
+def _outcome_levels(book: InstrumentView, *, side: str, buy: bool) -> tuple[BookLevel, ...]:
+    """SIG order wire: exchangeId SAME, side='yes'/'no', action='buy'/'sell'.
+
+    Binary SIG depth is YES-denominated. NO buy crosses YES bids at 1-bid;
+    NO sell crosses YES asks at 1-ask. Nothing is sourced from a sibling
+    party's separate exchange or its unrelated outcome semantics.
+    """
+    if side not in ("YES", "NO"):
+        raise ValueError("invalid binary SIG order side")
+    if side == "YES":
+        return book.asks if buy else book.bids
+    levels = book.bids if buy else book.asks
+    return tuple(BookLevel(D(1) - x.price, x.quantity) for x in levels)
+
+
+def _sig_yes_delta(side: str, qty: Decimal) -> Decimal:
+    """BUY NO carries negative YES-equivalent inventory on same exchange."""
+    return qty if side == "YES" else -qty
+
+
+def _signal(strategy: str, feature: MinuteFeature, pair: ExactPair,
+            frozen: Mapping[str, Any]) -> str | None:
+    v = feature.values
+    if strategy == "NO_TRADE":
+        return None
+    if strategy == "REVERSAL":
+        return "YES" if v["ret_5m"] < 0 else "NO" if v["ret_5m"] > 0 else None
+    if strategy == "PERSISTENCE":
+        return "NO" if v["ret_5m"] < 0 else "YES" if v["ret_5m"] > 0 else None
+    if strategy in ("OFI_BASELINE", "OFI_CHALLENGER"):
+        key = "baseline" if strategy == "OFI_BASELINE" else "ofi_challenger"
+        return "YES" if frozen_probability(v, frozen["models"][key]) > 0.5 else "NO"
+    if strategy == "RANDOM_TIME":
+        h = hashlib.sha256(
+            (pair.market_id + "|" + feature.minute_end.isoformat()).encode()
+        ).digest()[0]
+        return ("YES" if h & 1 else "NO") if h < 128 else None
+    if strategy == "DIRECT_PM_FV":
+        return "BOTH"
+    raise ValueError("unknown strategy")
+
+
+def _quote_at(points: list[tuple[datetime, InstrumentView]],
+              times: list[datetime], when: datetime, age_ms: int,
+              *, sig: bool) -> InstrumentView | None:
+    if not points:
+        return None
+    idx = bisect.bisect_right(times, when) - 1
+    if idx < 0:
+        return None
+    v = points[idx][1]
+    return v if _valid(v, when, age_ms, sig=sig) else None
+
+
+def _next_quote(
+    points: list[tuple[datetime, InstrumentView]],
+    times: list[datetime], book_ticks: set[datetime],
+    when: datetime, wait_ms: int, age_ms: int,
+) -> tuple[datetime, InstrumentView] | None:
+    i = bisect.bisect_left(times, when)
+    while i < len(points) and points[i][0] <= when + timedelta(milliseconds=wait_ms):
+        t, v = points[i]
+        # Fresh actual book observation after the simulated transport latency.
+        if (
+            t in book_ticks
+            and v.quote_observed_at is not None
+            and v.quote_observed_at >= when
+            and _valid(v, t, age_ms, sig=True)
+        ):
+            return t, v
+        i += 1
+    return None
+
+
+def _as_float(v: Decimal | None) -> float | None:
+    return None if v is None else float(v)
+
+
+def evaluate(
+    events: Iterable[ReplayEvent],
+    rows: Iterable[MinuteFeature],
+    pairs: Iterable[ExactPair],
+    config: EconomicConfig,
+    freeze: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Offline scenario; every strategy gets its own identical capital budget."""
+    pair_list = tuple(pairs)
+    by_pair = {(p.market_id, p.pm_yes): p for p in pair_list}
+    if len(by_pair) != len(pair_list):
+        raise ValueError("duplicate market/polymarket pair")
+    if set(freeze["models"]) != {"baseline", "ofi_challenger"}:
+        raise ValueError("unexpected frozen model set")
+    tapes: dict[tuple[ReplaySource, str], list[tuple[datetime, InstrumentView]]] = defaultdict(list)
+    book_ticks: dict[tuple[ReplaySource, str], set[datetime]] = defaultdict(set)
+    frame_times: list[datetime] = []
+    needed = {(ReplaySource.POLYMARKET, p.pm_yes) for p in pair_list}
+    needed |= {(ReplaySource.SIG, p.sig_exchange_id) for p in pair_list}
+
+    def snapshot(frame: Any) -> None:
+        frame_times.append(frame.observed_at)
+        touched = {(e.source, e.instrument_id) for e in frame.events}
+        for e in frame.events:
+            key = (e.source, e.instrument_id)
+            if key in needed and isinstance(e.payload, QuotePayload):
+                book_ticks[key].add(frame.observed_at)
+            if e.instrument_id == "*" and isinstance(
+                e.payload, (HealthPayload, TrustPayload)
+            ):
+                touched.update(k for k in needed if k[0] == e.source)
+        for key in touched & needed:
+            v = frame.state.view(*key)
+            if v is not None:
+                tapes[key].append((frame.observed_at, v))
+
+    ReplayRunner(events).run(snapshot)
+    tape_times = {key: [point[0] for point in value] for key, value in tapes.items()}
+    if not frame_times:
+        return {"status": "NO_ACCEPTED_OBSERVATIONS", "promotion": "BLOCKED", "results": {}}
+
+    seen = set()
+    feature_list = sorted(rows, key=lambda r: (r.available_at, r.market_id, r.pm_yes))
+    for row in feature_list:
+        key = (row.market_id, row.pm_yes)
+        if key not in by_pair:
+            raise ValueError("feature row lacks accepted EXACT mapping")
+        uid = (key, row.minute_end)
+        if uid in seen:
+            raise ValueError("duplicate feature minute")
+        seen.add(uid)
+    fee = config.fee_bps_per_side / D(10000)
+    results: dict[str, Any] = {}
+    for strategy in STRATEGIES:
+        attempts = 0
+        qualified = 0
+        fills_touch_upper = 0
+        exited = 0
+        rejected: dict[str, int] = defaultdict(int)
+        outcomes: list[dict[str, Any]] = []
+        active_until: dict[str, datetime] = {}
+        market_last: dict[str, datetime] = {}
+        active_capital: list[tuple[datetime | None, Decimal, Decimal]] = []
+        for row in feature_list:
+            pair = by_pair[(row.market_id, row.pm_yes)]
+            side = _signal(strategy, row, pair, freeze)
+            if side is None:
+                continue
+            attempts += 1
+            di = bisect.bisect_right(frame_times, row.available_at)
+            if di >= len(frame_times):
+                rejected["no_decision_frame"] += 1
+                continue
+            decision = frame_times[di]
+            if decision - row.available_at > timedelta(milliseconds=config.max_feature_delay_ms):
+                rejected["delayed_feature"] += 1
+                continue
+            if decision <= row.minute_end:
+                rejected["early_decision"] += 1
+                continue
+            pm_key = (ReplaySource.POLYMARKET, pair.pm_yes)
+            pm = _quote_at(tapes[pm_key], tape_times.get(pm_key, []),
+                           decision, config.max_quote_age_ms, sig=False)
+            if pm is None or pm.midpoint is None:
+                rejected["pm_stale_untrusted_or_depth_missing"] += 1
+                continue
+            # Reorient the frozen PM-token prediction into SIG YES inventory.
+            pm_mid = pm.midpoint
+            sig_fair = pm_mid if pair.mapping_direction == "SAME" else D(1) - pm_mid
+            if side in ("YES", "NO") and pair.mapping_direction == "COMPLEMENT":
+                side = "NO" if side == "YES" else "YES"
+            options = ("YES", "NO") if side == "BOTH" else (side,)
+            proposals = []
+            for choice in options:
+                contract = pair.sig_exchange_id
+                sig_key = (ReplaySource.SIG, contract)
+                book = _quote_at(tapes[sig_key], tape_times.get(sig_key, []),
+                                 decision, config.max_quote_age_ms, sig=True)
+                if book is None:
+                    continue
+                entry_cost = _walk(
+                    _outcome_levels(book, side=choice, buy=True),
+                    config.quantity, buy=True, haircut=config.depth_haircut,
+                )
+                if entry_cost is None:
+                    continue
+                fair_per_share = sig_fair if choice == "YES" else D(1) - sig_fair
+                # Conservative round-trip fee reserve; direction score is NOT fair value.
+                net_estimate = fair_per_share - entry_cost / config.quantity - (
+                    fair_per_share + entry_cost / config.quantity
+                ) * fee
+                if net_estimate >= config.min_edge:
+                    proposals.append((net_estimate, choice, contract, entry_cost))
+            if not proposals:
+                rejected["no_positive_crossing_edge_or_depth"] += 1
+                continue
+            _, choice, contract, expected_cost = max(proposals)
+            if pair.sig_exchange_id in market_last and (
+                decision - market_last[pair.sig_exchange_id]
+                < timedelta(seconds=config.cooldown_seconds)
+            ):
+                rejected["overlap_purge"] += 1
+                continue
+            if active_until.get(pair.sig_exchange_id, datetime.min.replace(
+                tzinfo=UTC
+            )) > decision:
+                rejected["inventory_locked"] += 1
+                continue
+            # Release only exposures whose predetermined 5m horizon has elapsed.
+            active_capital = [
+                (until, cash, gross) for until, cash, gross in active_capital
+                if until is None or until > decision
+            ]
+            proposed_cash = expected_cost * (D(1) + fee)
+            if sum((c for _, c, _ in active_capital), D(0)) + proposed_cash > (
+                config.capital_limit
+            ):
+                rejected["capital_exhausted"] += 1
+                continue
+            if sum((g for _, _, g in active_capital), D(0)) + config.quantity > (
+                config.gross_share_limit
+            ):
+                rejected["gross_share_limit"] += 1
+                continue
+            qualified += 1
+            market_last[pair.sig_exchange_id] = decision
+            limit = expected_cost / config.quantity
+            arrival_at = decision + timedelta(milliseconds=config.latency_ms)
+            sig_key = (ReplaySource.SIG, contract)
+            arrival = _next_quote(
+                                  tapes[sig_key], tape_times.get(sig_key, []),
+                                  book_ticks.get(sig_key, set()),
+                                  arrival_at, config.max_arrival_wait_ms,
+                                  config.max_quote_age_ms)
+            if arrival is None:
+                rejected["no_latency_safe_arrival"] += 1
+                continue
+            fill_time, fill_book = arrival
+            filled_cost = _walk(
+                _outcome_levels(fill_book, side=choice, buy=True),
+                config.quantity, buy=True,
+                haircut=config.depth_haircut, max_buy_price=limit,
+            )
+            if filled_cost is None or filled_cost / config.quantity > limit:
+                rejected["ioc_limit_or_depth_no_fill"] += 1
+                continue
+            fills_touch_upper += 1
+            entry_fee = filled_cost * fee
+            marks: dict[str, float | None] = {}
+            pnl_5m: Decimal | None = None
+            close_time: datetime | None = None
+            primary_close_qty = D(0)
+            primary_close_proceeds = D(0)
+            for seconds in HORIZONS:
+                target = fill_time + timedelta(seconds=seconds)
+                exit_snapshot = _next_quote(
+                                            tapes[sig_key], tape_times.get(sig_key, []),
+                                            book_ticks.get(sig_key, set()),
+                                            target, config.max_exit_wait_ms,
+                                            config.max_quote_age_ms)
+                proceeds = None
+                close_qty, partial_proceeds = D(0), D(0)
+                if exit_snapshot is not None:
+                    levels = _outcome_levels(
+                        exit_snapshot[1], side=choice, buy=False
+                    )
+                    close_qty, partial_proceeds = _walk_partial_close(
+                        levels, config.quantity, haircut=config.depth_haircut
+                    )
+                    if close_qty >= config.quantity:
+                        proceeds = partial_proceeds
+                pnl = (
+                    None if proceeds is None
+                    else proceeds - filled_cost - entry_fee - proceeds * fee
+                )
+                marks[str(seconds)] = _as_float(pnl)
+                if seconds == 300:
+                    primary_close_qty = close_qty
+                    primary_close_proceeds = partial_proceeds
+                    pnl_5m = pnl
+                    close_time = (
+                        exit_snapshot[0]
+                        if pnl is not None and exit_snapshot is not None
+                        else None
+                    )
+            exited += int(pnl_5m is not None)
+            # Partial NO/YES closes consume same binary exchange inventory.
+            # Unclosed residuals remain locked indefinitely in this fixed-window
+            # scenario; avoid borrowing their unobserved eventual liquidation.
+            remaining_qty = config.quantity - primary_close_qty
+            if close_time is None:
+                reserve_cash = (
+                    filled_cost + entry_fee
+                ) * remaining_qty / config.quantity
+                active_capital.append((None, reserve_cash, remaining_qty))
+                active_until[pair.sig_exchange_id] = datetime.max.replace(tzinfo=UTC)
+            else:
+                active_capital.append((close_time, D(0), D(0)))
+                active_until[pair.sig_exchange_id] = close_time
+            partial_realised = (
+                primary_close_proceeds
+                - (filled_cost + entry_fee) * primary_close_qty / config.quantity
+                - primary_close_proceeds * fee
+            )
+            stress_zero_salvage = (
+                primary_close_proceeds - filled_cost - entry_fee
+                - primary_close_proceeds * fee
+            )
+            outcomes.append({
+                "market": pair.sig_market_id,
+                "pm_market": pair.market_id, "exchange_id": pair.sig_exchange_id,
+                "day": decision.date().isoformat(),
+                "decision_at": decision.isoformat(), "filled_at": fill_time.isoformat(),
+                "side": choice, "action": "buy",
+                "signed_yes_entry_delta": float(_sig_yes_delta(choice, config.quantity)),
+                "signed_yes_full_close_delta": (
+                    float(-_sig_yes_delta(choice, config.quantity))
+                    if pnl_5m is not None else None
+                ),
+                "signed_yes_partial_close_delta": float(
+                    -_sig_yes_delta(choice, primary_close_qty)
+                ),
+                "remaining_signed_yes_quantity": float(
+                    _sig_yes_delta(choice, remaining_qty)
+                ),
+                "qty": float(config.quantity),
+                "liquidated_quantity_5m": float(primary_close_qty),
+                "partial_realised_5m_pnl_proxy": (
+                    float(partial_realised) if primary_close_qty > 0 else None
+                ),
+                "entry_cost": float(filled_cost), "entry_fee": float(entry_fee),
+                "markouts_net_5s_30s_5m_1h": marks,
+                "net_pnl_5m": _as_float(pnl_5m),
+                "unresolved_liquidation_zero_bound": float(stress_zero_salvage),
+            })
+        net_known = sum(o["net_pnl_5m"] for o in outcomes if o["net_pnl_5m"] is not None)
+        pessimistic = sum(
+            o["net_pnl_5m"] if o["net_pnl_5m"] is not None else
+            o["unresolved_liquidation_zero_bound"] for o in outcomes
+        )
+        day_pnls: dict[str, float] = defaultdict(float)
+        for o in outcomes:
+            day_pnls[o["day"]] += (
+                o["net_pnl_5m"] if o["net_pnl_5m"] is not None else
+                o["unresolved_liquidation_zero_bound"]
+            )
+        lower = None
+        if len(day_pnls) >= 5:
+            daily = list(day_pnls.values())
+            rng = random.Random(205)
+            boots = sorted(sum(rng.choices(daily, k=len(daily))) for _ in range(2000))
+            lower = boots[49]
+        results[strategy] = {
+            "signals": attempts, "qualified_orders": qualified,
+            "touch_fill_upper_bound": fills_touch_upper,
+            "filled_with_5m_depth_exit": exited,
+            "empirically_calibrated_fill_probability": None,
+            "net_pnl_known_exits": net_known,
+            "net_pnl_liquidation_zero_stress": pessimistic,
+            "lower_95pct_day_bootstrap_stress": lower,
+            "independent_days": len(day_pnls),
+            "rejections": dict(sorted(rejected.items())),
+            "trades": outcomes,
+        }
+    return {
+        "schema_version": 1,
+        "status": "SCENARIO_ONLY_UNCALIBRATED_FILLS",
+        "promotion": "BLOCKED_PENDING_PROSPECTIVE_FILL_AND_ECONOMIC_EVIDENCE",
+        "parameters": {
+            "fee_bps_per_side": str(config.fee_bps_per_side),
+            "latency_ms": config.latency_ms, "min_edge": str(config.min_edge),
+            "quantity": str(config.quantity),
+            "cash_capital_limit_susqies": str(config.capital_limit),
+            "gross_share_limit": str(config.gross_share_limit),
+            "depth_haircut": str(config.depth_haircut),
+            "five_minute_purge_seconds": config.cooldown_seconds,
+        },
+        "input_counts": {"events": len(frame_times), "feature_minutes": len(feature_list),
+                         "accepted_pairs": len(pair_list)},
+        "results": results,
+        "claim_boundary": (
+            "Latency-safe top/depth crossing is a hypothetical touch upper bound, "
+            "not an observed fill; missing executable exits are not silently imputed. "
+            "No strategy can be promoted from this output alone."
+        ),
+    }
