@@ -7,7 +7,7 @@ This is NOT a backup utility and grants no permission for source acquisition.
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
+import pathlib
 import shutil
 import sqlite3
 import threading
@@ -24,7 +24,7 @@ class SnapshotRejected(RuntimeError):
     """Fail-closed simulated preflight or frozen-copy validation rejection."""
 
 
-def _invented_source(path: Path) -> sqlite3.Connection:
+def _invented_source(path: pathlib.Path) -> sqlite3.Connection:
     assert path.name == SOURCE_NAME
     conn = sqlite3.connect(path, isolation_level=None, timeout=0.2)
     conn.execute("PRAGMA journal_mode=WAL")
@@ -83,8 +83,8 @@ def _invented_commit(conn: sqlite3.Connection, number: int) -> None:
 
 
 def _snapshot(
-    source: Path,
-    destination: Path,
+    source: pathlib.Path,
+    destination: pathlib.Path,
     *,
     available_bytes: int = 1_000_000,
     minimum_bytes: int = 100_000,
@@ -123,11 +123,11 @@ def _snapshot(
         raise SnapshotRejected("backup deadline exceeded")
 
 
-def _sha(path: Path) -> str:
+def _sha(path: pathlib.Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _validate_frozen_snapshot(path: Path, expected_sha: str) -> dict[str, int | str]:
+def _validate_frozen_snapshot(path: pathlib.Path, expected_sha: str) -> dict[str, int | str]:
     """Only a closed, standalone frozen copy may be validated."""
     if path.name == SOURCE_NAME or not path.is_file() or _sha(path) != expected_sha:
         raise SnapshotRejected("missing frozen snapshot or SHA256 mismatch")
@@ -173,7 +173,7 @@ def _validate_frozen_snapshot(path: Path, expected_sha: str) -> dict[str, int | 
     }
 
 
-def test_concurrent_writer_delayed_checkpoint_consistent_snapshot(tmp_path: Path) -> None:
+def test_concurrent_writer_delayed_checkpoint_consistent_snapshot(tmp_path: pathlib.Path) -> None:
     source = tmp_path / SOURCE_NAME
     frozen = tmp_path / SNAPSHOT_NAME
     connection = _invented_source(source)
@@ -231,7 +231,7 @@ def test_concurrent_writer_delayed_checkpoint_consistent_snapshot(tmp_path: Path
         assert live_synthetic.execute("SELECT COUNT(*) FROM operations").fetchone() == (140,)
 
 
-def test_writer_restart_keeps_complete_atomic_generation(tmp_path: Path) -> None:
+def test_writer_restart_keeps_complete_atomic_generation(tmp_path: pathlib.Path) -> None:
     source = tmp_path / SOURCE_NAME
     frozen = tmp_path / SNAPSHOT_NAME
     first = _invented_source(source)
@@ -246,7 +246,7 @@ def test_writer_restart_keeps_complete_atomic_generation(tmp_path: Path) -> None
     assert _validate_frozen_snapshot(frozen, _sha(frozen))["snapshot_clock"] == 9
 
 
-def test_frozen_copy_sha_corruption_and_logical_incompleteness_rejected(tmp_path: Path) -> None:
+def test_frozen_copy_sha_corruption_and_logical_incompleteness_rejected(tmp_path: pathlib.Path) -> None:
     source = tmp_path / SOURCE_NAME
     frozen = tmp_path / SNAPSHOT_NAME
     with _invented_source(source) as writer:
@@ -285,7 +285,7 @@ def test_frozen_copy_sha_corruption_and_logical_incompleteness_rejected(tmp_path
         _validate_frozen_snapshot(incomplete, _sha(incomplete))
 
 
-def test_simulated_lock_disk_deadline_and_target_guard_fail_closed(tmp_path: Path) -> None:
+def test_simulated_lock_disk_deadline_and_target_guard_fail_closed(tmp_path: pathlib.Path) -> None:
     source = tmp_path / SOURCE_NAME
     frozen = tmp_path / SNAPSHOT_NAME
     with _invented_source(source) as writer:
