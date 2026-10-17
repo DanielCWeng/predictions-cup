@@ -166,6 +166,10 @@ def _asof(
     if index < 0:
         return None
     quote = quotes[index]
+    # In the depth-sensitive tape, invalidated frames are causal boundaries.
+    # Never skip back to an older apparently fresh executable book.
+    if not quote.trusted or quote.best_ask < quote.best_bid:
+        return None
     if max_age_seconds is not None:
         age = (at - quote.observed_at).total_seconds()
         if age < 0.0 or age > max_age_seconds:
@@ -181,6 +185,17 @@ def _economic(
     result: list[Quote] = []
     for item in sorted(quotes, key=lambda quote: quote.observed_at):
         if not item.trusted or item.best_ask < item.best_bid:
+            if preserve_depth_updates:
+                # Preserve untrusted receipt as a tombstone for X1. Default
+                # descriptive BBO and X2 paths still ignore this event.
+                result.append(
+                    Quote(
+                        observed_at=item.observed_at,
+                        best_bid=item.best_bid,
+                        best_ask=item.best_ask,
+                        trusted=False,
+                    )
+                )
             continue
         # Identical BBO prices are NOT an identical executable book. A new
         # size (including zero) or depth-source timestamp replaces the prior
@@ -195,10 +210,12 @@ def _economic(
             and (
                 not preserve_depth_updates
                 or (
+                    result[-1].trusted,
                     result[-1].bid_depth,
                     result[-1].ask_depth,
                     result[-1].depth_observed_at,
                 ) == (
+                    item.trusted,
                     item.bid_depth,
                     item.ask_depth,
                     item.depth_observed_at,
@@ -408,6 +425,8 @@ def _first_response(
     if baseline is None:
         return None, None
     for quote in sig_quotes:
+        if not quote.trusted:
+            continue
         if quote.observed_at < at:
             continue
         if (quote.observed_at - at).total_seconds() > max_response_seconds:
@@ -790,6 +809,10 @@ def _load_quotes(
         str,
         list[tuple[datetime, float, float, float | None, float | None]],
     ] = defaultdict(list)
+    # Track the arrival clock of every depth frame, not only full trusted
+    # rows that can be joined to a same-time BBO. Unpaired frames must revoke
+    # prior size rather than leave a fictitious as-of executable quote.
+    depth_events: dict[str, list[tuple[datetime, bool]]] = defaultdict(list)
     for batch in scanner.to_batches():
         for row in batch.to_pylist():
             if row.get("book_valid") is False:
@@ -810,13 +833,15 @@ def _load_quotes(
                 except (TypeError, ValueError):
                     depth_bid = math.nan
                     depth_ask = math.nan
-                if (
+                valid_depth = (
                     parsed_depth is not None
                     and trusted
                     and math.isfinite(depth_bid)
                     and math.isfinite(depth_ask)
                     and depth_ask >= depth_bid
-                ):
+                )
+                depth_events[identity].append((observed, valid_depth))
+                if valid_depth and parsed_depth is not None:
                     bid_size, ask_size = parsed_depth
                     depths[identity].append(
                         (observed, depth_bid, depth_ask, bid_size, ask_size)
@@ -893,6 +918,32 @@ def _load_quotes(
                         ask_depth=ask_depth,
                         depth_observed_at=depth_at,
                         trusted=quote.trusted,
+                    )
+                )
+            # A DEPTH_SNAPSHOT without an aligned BBO receipt is NOT proof of
+            # an updated executable BBO. Insert a depth-unknown timestamped
+            # invalidation (not an invented positive size) until a subsequent
+            # aligned BBO is available. This survives X1 size-sensitive dedup
+            # but leaves price-only ecology/X2 aggregation unchanged.
+            ordered_bbo = sorted(quotes, key=lambda item: item.observed_at)
+            bbo_times = [item.observed_at for item in ordered_bbo]
+            bbo_receipts = set(bbo_times)
+            for depth_at, valid_depth in depth_events.get(identity, ()):
+                if valid_depth and depth_at in bbo_receipts:
+                    continue
+                index = bisect.bisect_right(bbo_times, depth_at) - 1
+                if index < 0:
+                    continue
+                last_bbo = ordered_bbo[index]
+                enriched.append(
+                    Quote(
+                        observed_at=depth_at,
+                        best_bid=last_bbo.best_bid,
+                        best_ask=last_bbo.best_ask,
+                        bid_depth=None,
+                        ask_depth=None,
+                        depth_observed_at=None,
+                        trusted=True,
                     )
                 )
             result[identity] = enriched
