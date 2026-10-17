@@ -386,6 +386,8 @@ def estimate(bundle: LockedBundle) -> Estimate:
                 or m.horizon_seconds not in {5, 30, 300, 3600}
                 or not _amount(m.executable_bid)
                 or not _amount(m.executable_ask)
+                or m.executable_bid_size is None
+                or m.executable_ask_size is None
                 or not _amount(m.executable_bid_size)
                 or not _amount(m.executable_ask_size)
                 or m.executable_bid_size < mark_fill.quantity
