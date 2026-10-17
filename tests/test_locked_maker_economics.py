@@ -109,7 +109,9 @@ def test_synthetic_realised_gross_net_fees_split_and_late_settlement() -> None:
     assert result.outstanding_quantity == D("0")
     assert result.holdout_cluster_ci95 is None
     assert result.taker_reference_difference is None
-    assert result.realised_capital_share_days is not None
+    assert result.observed_position_share_days is not None
+    assert result.observed_cash_turnover_susq == D("3.10")
+    assert result.capital_reservation_susq_days is None
 
 
 def test_zero_fill_versus_never_filled_and_censored_terminal() -> None:
@@ -227,14 +229,19 @@ def test_control_references_need_original_market_day_and_quantity_match() -> Non
 
 def test_markouts_are_separate_from_actual_cash_and_require_original_source() -> None:
     b = bundle()
-    m = QuoteMarkout("fill-a1", 5, at(2, 10, 2), at(2, 10, 2),
-                     at(2, 10, 1), D("0.60"), D("0.70"), "SYNTHETIC")
+    horizon = at(2, 10, 1) + timedelta(seconds=5)
+    m = QuoteMarkout("fill-a1", 5, horizon, horizon, at(2, 10, 1),
+                     D("0.60"), D("0.70"), "SYNTHETIC")
     b2 = replace(b, markouts=(m,))
     assert estimate(b2).reason == "UNATTESTED_MARKOUT_SOURCE"
     b3 = replace(b2, proofs=(*b.proofs, proof("quote_markouts")))
     r = estimate(b3)
     assert r.descriptive_markout_count == 1
+    assert r.descriptive_executable_markouts == ((5, D("-0.0125")),)
     assert r.realised_net == estimate(b).realised_net
+    assert estimate(replace(b3, markouts=(replace(m, issuer_at=at(2, 10, 2)),))).reason == (
+        "UNVERIFIED_CAUSAL_EXECUTABLE_MARKOUT"
+    )
 
 
 def test_missing_denominator_or_unclear_eligibility_fails_closed() -> None:
