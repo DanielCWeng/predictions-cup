@@ -1333,15 +1333,20 @@ def test_fill_seeking_inventory_skew_cuts_opening_size_above_150() -> None:
 
 
 @pytest.mark.parametrize(
-    ("fill_seeking_enabled", "deep_ladder_enabled", "max_inventory"),
-    # Fill-seeking binds on the configured maker cap; the deep ladder also
-    # binds on its own (default 200) projected-position cap.
-    [(True, False, 200.0), (False, True, 500.0)],
+    ("fill_seeking_enabled", "deep_ladder_enabled", "max_inventory", "ladder_cap"),
+    # All modes retain the HARD 200-share ceiling, even when configuration is
+    # larger. A smaller deep-ladder ceiling must continue to win.
+    [
+        (False, False, 500.0, 500),
+        (True, False, 500.0, 500),
+        (False, True, 500.0, 500),
+    ],
 )
-def test_aggressive_maker_modes_enforce_configured_projected_position_cap(
+def test_maker_modes_enforce_hard_projected_position_cap(
     fill_seeking_enabled: bool,
     deep_ladder_enabled: bool,
     max_inventory: float,
+    ladder_cap: int,
 ) -> None:
     snapshot = _maker_snapshot(
         signed_inventory=190.0,
@@ -1363,6 +1368,7 @@ def test_aggressive_maker_modes_enforce_configured_projected_position_cap(
         base_size=100,
         fill_seeking_enabled=fill_seeking_enabled,
         deep_ladder_enabled=deep_ladder_enabled,
+        deep_ladder_position_cap=ladder_cap,
     ).quote(snapshot)
 
     assert decision.desired is not None
@@ -1372,6 +1378,69 @@ def test_aggressive_maker_modes_enforce_configured_projected_position_cap(
         else decision.desired.bid_size
     )
     assert 190 + bid_size <= 200
+
+
+def test_deep_ladder_hard_cap_retains_more_restrictive_custom_limit() -> None:
+    snapshot = _maker_snapshot(
+        signed_inventory=70.0,
+        external={"token-yes": _external(bid=0.48, ask=0.52)},
+    )
+    book = RuntimeBook(
+        exchange_id="36",
+        market_id="m1",
+        tournament_id=TOURNAMENT,
+        bids=(RuntimeLevel(price_ticks=90, quantity=20.0),),
+        asks=(RuntimeLevel(price_ticks=110, quantity=20.0),),
+        trusted_depth=True,
+        observed_monotonic_ns=NOW,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, books=(book,)))
+    result = _engine(
+        max_inventory=500.0,
+        deep_ladder_enabled=True,
+        deep_ladder_position_cap=75,
+    ).quote(snapshot)
+    assert result.desired is not None
+    assert 70 + sum(x.size for x in result.desired.bid_levels) <= 75
+    assert 70 - sum(x.size for x in result.desired.ask_levels) >= -75
+
+
+@pytest.mark.parametrize(
+    ("fill_seeking_enabled", "deep_ladder_enabled"),
+    [(False, False), (True, False), (False, True)],
+)
+def test_hard_maker_cap_does_not_block_reduce_only_ask(
+    fill_seeking_enabled: bool,
+    deep_ladder_enabled: bool,
+) -> None:
+    snapshot = _maker_snapshot(
+        signed_inventory=210.0,
+        external={"token-yes": _external(bid=0.48, ask=0.52)},
+    )
+    book = RuntimeBook(
+        exchange_id="36",
+        market_id="m1",
+        tournament_id=TOURNAMENT,
+        bids=(RuntimeLevel(price_ticks=90, quantity=20.0),),
+        asks=(RuntimeLevel(price_ticks=110, quantity=20.0),),
+        trusted_depth=True,
+        observed_monotonic_ns=NOW,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, books=(book,)))
+    result = _engine(
+        max_inventory=500.0,
+        deep_ladder_enabled=deep_ladder_enabled,
+        fill_seeking_enabled=fill_seeking_enabled,
+        deep_ladder_position_cap=500,
+        base_size=100,
+    ).quote(snapshot)
+    assert result.desired is not None
+    if deep_ladder_enabled:
+        assert sum(x.size for x in result.desired.bid_levels) == 0
+        assert sum(x.size for x in result.desired.ask_levels) > 0
+    else:
+        assert result.desired.bid_size == 0
+        assert result.desired.ask_size > 0
 
 
 def test_deep_ladder_joins_sig_touch_and_caps_all_resting_levels() -> None:
