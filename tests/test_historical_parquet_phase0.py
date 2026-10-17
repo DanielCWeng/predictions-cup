@@ -9,7 +9,7 @@ import hashlib
 import json
 import re
 import socket
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -18,7 +18,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-UTC = timezone.utc
 CAP = 256 * 1024 * 1024  # Self-imposed planning threshold; NOT a Kaggle limit.
 START = datetime(2026, 10, 1, tzinfo=UTC)
 END = datetime(2026, 10, 7, tzinfo=UTC)
