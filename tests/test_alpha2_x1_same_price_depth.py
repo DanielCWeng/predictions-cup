@@ -10,7 +10,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from predictions_cup.analysis.live_diag import Quote, ResearchStatus, analyze_lead_lag
+from predictions_cup.analysis.live_diag import (
+    LeadLagObservation,
+    Quote,
+    ResearchStatus,
+    analyze_lead_lag,
+)
 
 START = datetime(2026, 11, 4, 1, tzinfo=UTC)
 IMPULSE = START + timedelta(seconds=1)
@@ -33,7 +38,7 @@ def _external(up: bool = True) -> tuple[Quote, Quote]:
 
 def _run(sig: tuple[Quote, ...], *, latency_ms: float = 500,
          max_quote_age_seconds: float = 15,
-         max_depth_age_seconds: float = 60, up: bool = True):
+         max_depth_age_seconds: float = 60, up: bool = True) -> LeadLagObservation:
     result = analyze_lead_lag(
         sig_quotes=sig, external_quotes=_external(up), latency_ms=latency_ms,
         max_quote_age_seconds=max_quote_age_seconds,
