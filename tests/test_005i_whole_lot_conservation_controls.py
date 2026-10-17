@@ -18,7 +18,13 @@ from predictions_cup.replay.economic_005i import (
 )
 from predictions_cup.replay.model import BookLevel, QuotePayload, ReplayEvent, ReplaySource
 from test_economic_005i import (
-    T, _multilevel_tape, cfg, feature, freeze, pair, tape,
+    T,
+    _multilevel_tape,
+    cfg,
+    feature,
+    freeze,
+    pair,
+    tape,
 )
 
 D = Decimal
