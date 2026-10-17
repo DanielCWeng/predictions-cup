@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from predictions_cup.research.locked_maker_economics import (
+    Estimate,
     InventoryCashflow,
     LockedBundle,
     MakerAttempt,
@@ -95,12 +96,12 @@ def _bundle() -> LockedBundle:
     )
 
 
-def _assert_never_certified(result: object) -> None:
+def _assert_never_certified(result: Estimate) -> None:
     # Local structural output is intentionally not an issuer admission.
-    assert getattr(result, "source_admitted") is False
-    assert getattr(result, "paper_admitted") is False
-    assert getattr(result, "verified_eligible_maker_denominator") is None
-    assert getattr(result, "verified_conservative_alpha_lower_bound") is None
+    assert result.source_admitted is False
+    assert result.paper_admitted is False
+    assert result.verified_eligible_maker_denominator is None
+    assert result.verified_conservative_alpha_lower_bound is None
 
 
 def test_forged_source_hash_issuer_rights_role_and_cash_are_only_structural() -> None:
