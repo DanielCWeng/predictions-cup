@@ -23,6 +23,7 @@ from predictions_cup.execution.models import (
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.observe.contracts import ObservationEmitter, ObservationKind, VenueObservation
+from predictions_cup.sig.competition_deadline import assert_competition_placement_open
 from predictions_cup.sig.errors import SigApiError, SigExecutionUncertainError
 from predictions_cup.sig.trading_client import SigTradingClient
 
@@ -94,6 +95,7 @@ class SigLiveSink:
     ) -> ExecutionEvent:
         """Redispatch one durable unresolved placement with the same identity."""
         recovery_state = self._assert_recovery_authority(envelope)
+        assert_competition_placement_open(self._wall_clock(), attempted_network=True)
         if recovery_state is not LifecycleState.RECONCILING:
             self._journal.mark_state(
                 envelope.logical_operation_id,
@@ -184,6 +186,23 @@ class SigLiveSink:
             OperationKind.ATOMIC_MULTI_LEG,
         }:
             raise ValueError("placement dispatch requires a placement operation kind")
+
+        # This check precedes the durable journal and *all* network attempts.
+        # MakerCoordinator has already reserved/marked the quote submitted.
+        # Release only a fresh, provably unsent operation so its SigApiError
+        # handler clears the local quote instead of manufacturing UNCERTAIN risk.
+        # Never release a recovery reservation: earlier economic effects may exist.
+        try:
+            assert_competition_placement_open(
+                self._wall_clock(), attempted_network=not require_reservation
+            )
+        except SigApiError as exc:
+            if require_reservation and exc.code in {
+                "COMPETITION_ORDER_CLOSED",
+                "COMPETITION_CLOCK_UNTRUSTED",
+            }:
+                self._reservations.release_operation(envelope.logical_operation_id)
+            raise
 
         if plan.audit is not None:
             self._observe(

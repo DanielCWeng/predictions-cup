@@ -17,6 +17,7 @@ from pydantic import BaseModel, ValidationError
 
 from predictions_cup.config import AppSettings
 from predictions_cup.sig.client import RetryPolicy
+from predictions_cup.sig.competition_deadline import assert_competition_placement_open
 from predictions_cup.sig.errors import (
     SigApiError,
     SigConflictError,
@@ -77,6 +78,7 @@ class SigTradingClient:
         keepalive_expiry_seconds: float = 60.0,
         transport: httpx.AsyncBaseTransport | None = None,
         sleep: SleepFn = asyncio.sleep,
+        wall_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         credential = settings.sig_trade_credential
         if credential is None:
@@ -92,6 +94,7 @@ class SigTradingClient:
         self._request_in_flight_wait_seconds = request_in_flight_wait_seconds
         self._timeout_seconds = timeout_seconds
         self._sleep = sleep
+        self._wall_clock = wall_clock
         self._client = httpx.AsyncClient(
             base_url=str(settings.sig_api_base_url).rstrip("/") + "/",
             headers={
@@ -299,9 +302,17 @@ class SigTradingClient:
             if resume_incomplete_batch
             else self._timeout_seconds
         )
+        attempted_network = False
         for attempt in range(1, policy.max_attempts + 1):
             await self._governor.acquire(RestPriority.HIGH)
+            if method == "POST" and route_template in {
+                "/orders", "/orders/batch", "/orders/multi-leg"
+            }:
+                assert_competition_placement_open(
+                    self._wall_clock(), attempted_network=attempted_network
+                )
             try:
+                attempted_network = True
                 if resolved_content is not None:
                     response = await self._client.request(
                         method,
