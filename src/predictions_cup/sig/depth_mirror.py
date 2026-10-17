@@ -7,6 +7,7 @@ supplies no exchange event timestamp or source revision.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from dataclasses import dataclass
@@ -62,6 +63,8 @@ class MakerDepthMirror:
         self.producer_rejected = 0
         self.writer_lost = 0
         self.errors = 0
+        # A mere successful write() is not a file-durability certificate.
+        self._file_synced = False
 
     def start(self) -> None:
         if self._thread is not None:
@@ -160,7 +163,11 @@ class MakerDepthMirror:
                         raise
                     finally:
                         self._queue.task_done()
-                # No unbounded flush/fsync on shutdown: writer is daemonised.
+                # Durability work runs ONLY in the research worker, never maker.
+                # Do not certify a complete run if close or fsync later fails.
+                stream.flush()
+                os.fsync(stream.fileno())
+                self._file_synced = True
         except Exception:
             # Research loss must never interrupt maker's execution path.
             self.errors += 1
@@ -188,6 +195,16 @@ class MakerDepthMirror:
         if self._thread is not None:
             self._thread.join(timeout=max(0.0, timeout))
 
+    async def aclose(self, *, timeout: float = 0.2) -> None:
+        """Request stop immediately and join off-loop so risk tasks can run.
+
+        A timed-out join is NOT terminal evidence. Inspect writer_alive in the
+        snapshot and quarantine an incomplete research file if still running.
+        """
+        self._stop.set()
+        if self._thread is not None:
+            await asyncio.to_thread(self._thread.join, max(0.0, timeout))
+
     def snapshot(self) -> dict[str, int | bool]:
         return {
             "accepted": self.accepted,
@@ -199,4 +216,18 @@ class MakerDepthMirror:
             "errors": self.errors,
             "disabled": self._disabled,
             "queue_pending": self._queue.qsize(),
+            "writer_alive": self._thread is not None and self._thread.is_alive(),
+            "file_synced": self._file_synced,
+            # Internal terminal consistency, not independent provenance/attestation.
+            "terminal_complete": (
+                self._thread is not None
+                and not self._thread.is_alive()
+                and self._file_synced
+                and self.errors == 0
+                and self.dropped == 0
+                and self.producer_rejected == 0
+                and self.writer_lost == 0
+                and self._queue.empty()
+                and self.accepted == self.written
+            ),
         }
