@@ -177,8 +177,16 @@ def normalise_journal(
         return _fail("DUPLICATE_EVENT_ID")
     event_by_id = {e.event_id: e for e in events}
     if (len({a.dedupe_key for a in fill_aliases}) != len(fill_aliases)
-            or any(not a.dedupe_key or a.event_id not in event_by_id
-                   for a in fill_aliases)):
+            or any(
+                not alias.dedupe_key
+                or alias.event_id not in event_by_id
+                or event_by_id[alias.event_id].event_type
+                not in {"REALTIME_FILL", "AUTHORITATIVE_FILL"}
+                or not event_by_id[alias.event_id].fill_id
+                for alias in fill_aliases
+            )):
+        # Aliases must point to an original fill observation, not SUBMISSION,
+        # ACK, FILL_SUMMARY or a mutable status event.
         return _fail("INVALID_ALIAS_REFERENCE")
     if any(ev.logical_operation_id not in env_by_id
            or env_by_id[ev.logical_operation_id].tournament_id != ev.tournament_id
@@ -187,8 +195,11 @@ def normalise_journal(
 
     candidates: list[JournalCandidate] = []
     rejected: list[str] = []
-    seen_native_orders: dict[tuple[str, str], str] = {}
-    seen_fill_ids: dict[tuple[str, str], tuple[str, str, str | None, str | None]] = {}
+    seen_native_orders: dict[tuple[str, str], tuple[str, str, str]] = {}
+    seen_fill_ids: dict[
+        tuple[str, str],
+        tuple[tuple[str, str, str], str, str, str | None, str | None],
+    ] = {}
     for env in envelopes:
         if env.sink_mode != "LIVE" or env.operation_kind not in PLACEMENTS:
             continue  # SHADOW/cancellations are never maker submission denominator
@@ -227,7 +238,12 @@ def normalise_journal(
                 info = _parse_json(submission.detail_json or "{}")
                 if not isinstance(info, dict):
                     raise ValueError("INVALID_SUBMISSION_DETAIL")
-                # Detail is local, not a native issuer assertion. Guard batch mapping.
+                # Event detail is a mutable local claim. All four essential
+                # order fields MUST be present in the hashed original envelope;
+                # no event field may repair a missing envelope order identity.
+                required_order_fields = ("market_id", "action", "outcome_side", "quantity")
+                if any(field not in order for field in required_order_fields):
+                    raise ValueError("MISSING_IMMUTABLE_ENVELOPE_ORDER_FIELDS")
                 market = info.get("market_id")
                 action = info.get("action")
                 outcome = info.get("outcome_side")
@@ -235,20 +251,22 @@ def normalise_journal(
                 if (not isinstance(market, str) or not market
                         or action not in ("BUY", "SELL")
                         or outcome not in ("YES", "NO") or qty is None
-                        or (order.get("market_id") not in (None, market))
-                        or (order.get("action") not in (None, action))
-                        or (order.get("outcome_side") not in (None, outcome))
-                        or (order.get("quantity") not in (None, submission.quantity))):
+                        or order["market_id"] != market
+                        or order["action"] != action
+                        or order["outcome_side"] != outcome
+                        or order["quantity"] != submission.quantity
+                        or _positive_decimal(order["quantity"]) != qty):
                     raise ValueError("UNPROVEN_PER_INTENT_ORDER_MAPPING")
                 acks = [ev.exchange_order_id for ev in own
                         if ev.event_type == "ACK" and ev.exchange_order_id]
                 native_order = acks[0] if len(set(acks)) == 1 and acks else None
                 if len(set(acks)) > 1:
                     raise ValueError("CONFLICTING_NATIVE_ACK_IDS")
+                composite_intent = (env.tournament_id, env.logical_operation_id, intent_id)
                 if native_order is not None:
                     native_key = (env.tournament_id, native_order)
-                    prior = seen_native_orders.setdefault(native_key, intent_id)
-                    if prior != intent_id:
+                    prior = seen_native_orders.setdefault(native_key, composite_intent)
+                    if prior != composite_intent:
                         raise ValueError("NATIVE_ORDER_SHARED_BY_DISTINCT_INTENTS")
                 ids: set[str] = set()
                 for ev in own:
@@ -257,8 +275,14 @@ def normalise_journal(
                     if not ev.fill_id:
                         rejected.append("MISSING_ORIGINAL_FILL_ID")
                         continue
+                    if (native_order is None or not ev.exchange_order_id
+                            or ev.exchange_order_id != native_order):
+                        raise ValueError("FILL_NATIVE_ORDER_NOT_MATCHED_TO_ACK")
+                    # Distinct operations cannot share a native fill, even if
+                    # the visible price and quantity are otherwise identical.
                     identity = (env.tournament_id, ev.fill_id)
-                    signature = (native_order or "", market, ev.quantity, ev.price)
+                    signature = (composite_intent, native_order, market,
+                                 ev.quantity, ev.price)
                     previous = seen_fill_ids.setdefault(identity, signature)
                     if previous != signature:
                         raise ValueError("CONFLICTING_NATIVE_FILL_ALIAS")
