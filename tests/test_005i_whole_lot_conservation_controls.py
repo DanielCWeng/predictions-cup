@@ -16,7 +16,7 @@ from predictions_cup.replay.economic_005i import (
     _walk_partial_close,
     evaluate,
 )
-from predictions_cup.replay.model import BookLevel, QuotePayload, ReplaySource
+from predictions_cup.replay.model import BookLevel, QuotePayload, ReplayEvent, ReplaySource
 from test_economic_005i import (
     T, _multilevel_tape, cfg, feature, freeze, pair, tape,
 )
@@ -78,7 +78,7 @@ def test_yes_decision_and_arrival_books_each_gate_whole_lot() -> None:
 
 def _no_books(
     decision_qty: str, arrival_qty: str,
-) -> tuple:
+) -> tuple[ReplayEvent, ...]:
     """Same exchange YES bids become held-NO buy asks via 1 - YES bid."""
     events = list(tape(pm_no_favoured=True))
     targets = {
