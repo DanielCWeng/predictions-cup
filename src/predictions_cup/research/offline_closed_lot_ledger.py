@@ -51,6 +51,10 @@ class MakerAttempt:
     native_terminal_reference: str | None
     reserved_gross_shares: Decimal
     source_key: str
+    settlement_contract_reference: str | None = None
+    trading_cutoff_at_utc: datetime | None = None
+    multi_leg_group_id: str | None = None
+    multi_leg_expected_legs: int | None = None
 
 
 @dataclass(frozen=True)
@@ -66,6 +70,7 @@ class NativeEntryFill:
     rebate_susq: Decimal | None
     fee_currency: str | None
     source_key: str
+    signed_yes_whole_shares: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -190,6 +195,7 @@ def audit_offline(bundle: OfflineBundle) -> AuditResult:
     if len(attempts) != len(bundle.attempts):
         errors.add("DUPLICATE_ATTEMPT")
     native_orders: dict[str, MakerAttempt] = {}
+    multi_groups: dict[str, list[MakerAttempt]] = {}
     for a in bundle.attempts:
         issuer(a.source_key)
         if not a.key or not a.native_order_id or not all(
@@ -209,6 +215,17 @@ def audit_offline(bundle: OfflineBundle) -> AuditResult:
             holes.add("NATIVE_MAKER_ROLE_UNPROVEN")
         if a.terminal_state != "TERMINAL" or not a.native_terminal_reference:
             holes.add("UNCERTAIN_OR_UNATTESTED_TERMINAL_STATE")
+        if not a.settlement_contract_reference:
+            holes.add("MISSING_ORIGINAL_OUTCOME_SETTLEMENT_CONTRACT")
+        at = issuer(a.source_key)
+        if a.trading_cutoff_at_utc is None or not _utc(a.trading_cutoff_at_utc):
+            holes.add("MISSING_AUTHENTICATED_TOURNAMENT_CUTOFF")
+        elif at is not None and at > a.trading_cutoff_at_utc:
+            errors.add("ORDER_AFTER_TRADING_CUTOFF")
+        if a.multi_leg_group_id is not None:
+            multi_groups.setdefault(a.multi_leg_group_id, []).append(a)
+            if a.multi_leg_expected_legs is None or a.multi_leg_expected_legs < 2:
+                holes.add("MULTI_LEG_EXPECTED_LEGS_UNVERIFIED")
 
     fills = {f.key: f for f in bundle.fills}
     lots = {f.lot_key: f for f in bundle.fills}
@@ -228,6 +245,14 @@ def audit_offline(bundle: OfflineBundle) -> AuditResult:
             errors.add("INVALID_WHOLE_FILL_SIZE")
         if _number(f.original_side_price) and f.original_side_price > Decimal("1"):
             errors.add("INVALID_NATIVE_PRICE")
+        if f.signed_yes_whole_shares is None:
+            holes.add("MISSING_SIGNED_YES_NO_WHOLE_SHARES")
+        elif not _number(abs(f.signed_yes_whole_shares), whole=True):
+            errors.add("INVALID_SIGNED_WHOLE_SHARES")
+        elif parent_attempt is not None:
+            signed = f.whole_shares if parent_attempt.outcome == "YES" else -f.whole_shares
+            if f.signed_yes_whole_shares != signed:
+                errors.add("WRONG_YES_NO_SIGN_OR_COMPLEMENT")
         if not _number(f.original_cash_paid):
             holes.add("MISSING_ORIGINAL_ENTRY_CASH")
         elif (_number(f.whole_shares) and _number(f.original_side_price)
@@ -281,6 +306,12 @@ def audit_offline(bundle: OfflineBundle) -> AuditResult:
         if (closure.settlement_rule_version and original_doc is not None
                 and closure.settlement_rule_version != original_doc.issuer_rule_version):
             errors.add("SETTLEMENT_RULE_VERSION_MISMATCH")
+        if entry is not None:
+            parent_attempt = attempts.get(entry.attempt_key)
+            if (parent_attempt is not None and closure.settlement_rule_version
+                    and closure.settlement_rule_version
+                    != parent_attempt.settlement_contract_reference):
+                errors.add("CLOSURE_DOES_NOT_MATCH_ORIGINAL_SETTLEMENT_CONTRACT")
         if not closure.final or not closure.issuer_terminal_reference:
             holes.add("UNCLOSED_VOID_RECOUNT_OR_UNCERTAIN_EXIT")
         paid = closure.original_cash_received
@@ -305,6 +336,22 @@ def audit_offline(bundle: OfflineBundle) -> AuditResult:
             holes.add("OPEN_OR_PARTIALLY_CLOSED_OR_OVERFILLED_LOT")
         if exits_by_lot.get(f.lot_key, ZERO) > f.whole_shares:
             errors.add("EXIT_EXCEEDS_OPEN_LOT")
+
+    for group, members in multi_groups.items():
+        expected = {a.multi_leg_expected_legs for a in members}
+        if len(expected) != 1 or len(members) not in expected:
+            holes.add("MULTI_LEG_ORPHAN_OR_INCOMPLETE_GROUP")
+        if len({a.tournament for a in members}) != 1:
+            errors.add("MULTI_LEG_CROSS_TOURNAMENT")
+        if (any(a.terminal_state != "TERMINAL" for a in members)
+                or any(qty_by_attempt.get(a.key, ZERO) == ZERO for a in members)
+                or any(
+                    exits_by_lot.get(f.lot_key, ZERO) != f.whole_shares
+                    for f in bundle.fills if f.attempt_key in {a.key for a in members}
+                )):
+            holes.add("MULTI_LEG_ORPHAN_UNRESOLVED")
+        if not group:
+            errors.add("BLANK_MULTI_LEG_GROUP_ID")
 
     account_pass: bool | None = None
     account = bundle.account
