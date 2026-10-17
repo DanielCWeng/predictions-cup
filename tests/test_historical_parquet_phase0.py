@@ -192,7 +192,7 @@ def _compile_synthetic(tmp_path: Path) -> dict[str, Any]:
     fixtures = _fixtures()
     reports: dict[str, dict[str, Any]] = {}
     total_size = 0
-    joined: set[str] = set()
+    joined: set[str] = {str(row["order_key"]) for row in fixtures["order_lifecycle"]}
     for name in ("venue_fills", "order_lifecycle", "inventory_cashflows", "quote_markouts"):
         rows = fixtures[name]
         table = _validate(name, rows)
