@@ -84,6 +84,11 @@ def _reject(reason: str) -> Verdict:
     return Verdict("NET_NOT_ESTIMABLE", reason)
 
 
+def _aware_clock(value: datetime) -> bool:
+    """Do not compare untrusted naive issuer/receipt clocks to UTC clocks."""
+    return value.tzinfo is not None and value.utcoffset() is not None
+
+
 def _price_for_shares(
     book: Book, side: str, entering: bool, quantity: int,
 ) -> Decimal | None:
@@ -120,8 +125,22 @@ def _price_for_shares(
 
 def evaluate_invented_trial(trial: InventedTrial) -> Verdict:
     """Fail closed on absent provenance; never infer realised PnL from quotes."""
-    if trial.decision_at.tzinfo is None or trial.decision_at.utcoffset() is None:
+    if not _aware_clock(trial.decision_at):
         return _reject("NO_UTC_DECISION_CLOCK")
+    # Validate every untrusted clock BEFORE order, freshness or publisher
+    # comparisons. Python refuses naive-versus-aware datetime ordering.
+    if any(
+        not _aware_clock(ts)
+        for minute in trial.minutes
+        for ts in (minute.ended_at, minute.received_at)
+    ):
+        return _reject("PM_SEED_EPOCH_SEQUENCE_OR_FUTURE_LEAK")
+    if any(
+        not _aware_clock(ts)
+        for book in (trial.decision_book, trial.arrival, *trial.exits)
+        for ts in (book.received_at, book.published_at)
+    ):
+        return _reject("SIG_ISSUER_RECEIPT_REVISION_OR_EXCHANGE_NOT_PROVEN")
     if trial.holdout_reused or TRAIN_START <= trial.decision_at <= SEALED_END:
         return _reject("SEALED_005I_HOLDOUT_NOT_AN_ECONOMIC_TEST")
     if (
@@ -274,6 +293,47 @@ def test_missing_original_provenance_censors_net(field: str) -> None:
     else:
         trial = replace(trial, mapping_sha=None)
     assert evaluate_invented_trial(trial).status == "NET_NOT_ESTIMABLE"
+
+
+@pytest.mark.parametrize("position", ["decision_book", "arrival", "exit_300"])
+def test_naive_sig_publisher_clock_fails_closed(position: str) -> None:
+    """Red Team #294: no datetime TypeError and never any realised profit."""
+    trial = invented_trial()
+    if position == "exit_300":
+        last = replace(trial.exits[-1],
+                       published_at=trial.exits[-1].published_at.replace(tzinfo=None))
+        trial = replace(trial, exits=(*trial.exits[:-1], last))
+    else:
+        book = getattr(trial, position)
+        trial = replace(trial, **{
+            position: replace(book, published_at=book.published_at.replace(tzinfo=None)),
+        })
+    verdict = evaluate_invented_trial(trial)
+    assert verdict.status == "NET_NOT_ESTIMABLE"
+    assert verdict.reason == "SIG_ISSUER_RECEIPT_REVISION_OR_EXCHANGE_NOT_PROVEN"
+    assert verdict.realised_net_pnl is None
+
+
+@pytest.mark.parametrize("field", ["ended_at", "received_at"])
+def test_naive_pm_minute_clock_fails_closed(field: str) -> None:
+    trial = invented_trial()
+    first = trial.minutes[0]
+    altered = replace(first, **{field: getattr(first, field).replace(tzinfo=None)})
+    verdict = evaluate_invented_trial(replace(trial, minutes=(altered, *trial.minutes[1:])))
+    assert verdict.status == "NET_NOT_ESTIMABLE"
+    assert verdict.reason == "PM_SEED_EPOCH_SEQUENCE_OR_FUTURE_LEAK"
+    assert verdict.realised_net_pnl is None
+
+
+def test_naive_sig_receipt_clock_fails_closed() -> None:
+    trial = invented_trial()
+    arrival = replace(trial.arrival, received_at=trial.arrival.received_at.replace(
+        tzinfo=None,
+    ))
+    verdict = evaluate_invented_trial(replace(trial, arrival=arrival))
+    assert verdict.status == "NET_NOT_ESTIMABLE"
+    assert verdict.reason == "SIG_ISSUER_RECEIPT_REVISION_OR_EXCHANGE_NOT_PROVEN"
+    assert verdict.realised_net_pnl is None
 
 
 def test_missing_native_fee_or_issuer_clock_is_not_zero_cost() -> None:
