@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -21,7 +21,7 @@ from predictions_cup.research.offline_causal_alpha_label import (
 from test_offline_paired_tape_gate import _sample
 
 D = Decimal
-T = datetime(2026, 10, 16, 12, 0, 0, 500000, tzinfo=timezone.utc)
+T = datetime(2026, 10, 16, 12, 0, 0, 500000, tzinfo=UTC)
 
 
 def _book(
@@ -39,9 +39,9 @@ def _book(
 def _candidate(side: str = "YES") -> DecisionCandidate:
     minutes = tuple(
         CompletedMinute(
-            datetime(2026, 10, 16, 11, 55, tzinfo=timezone.utc)
+            datetime(2026, 10, 16, 11, 55, tzinfo=UTC)
             + timedelta(minutes=i),
-            datetime(2026, 10, 16, 11, 55, tzinfo=timezone.utc)
+            datetime(2026, 10, 16, 11, 55, tzinfo=UTC)
             + timedelta(minutes=i, milliseconds=50),
             True,
         )
