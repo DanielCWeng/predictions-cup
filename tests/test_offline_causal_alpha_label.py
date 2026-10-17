@@ -160,8 +160,10 @@ def test_adversarial_causal_rejections(
         elif case == "partial_pm":
             mins[1] = replace(mins[1], complete=False)
         else:
-            mins[3] = replace(mins[3], ended_at=mins[3].ended_at
-                              + timedelta(seconds=1))
+            mins[3] = replace(
+                mins[3], ended_at=mins[3].ended_at + timedelta(seconds=1),
+                received_at=mins[3].received_at + timedelta(seconds=1),
+            )
         c = replace(c, pm_minutes=tuple(mins))
     elif case == "naive_clock":
         c = replace(c, decision_book=replace(
@@ -193,8 +195,11 @@ def test_missing_native_fees_not_backfilled_with_zero(tmp_path: Path) -> None:
 
 def test_second_overlapping_episode_refused(tmp_path: Path) -> None:
     first = _candidate()
-    second = replace(first, candidate_id="candidate-2", episode_id="episode-2",
-                     decision_at=T + timedelta(seconds=1))
+    second = replace(
+        first, candidate_id="candidate-2", episode_id="episode-2",
+        decision_at=T + timedelta(seconds=1),
+        exit_at=first.exit_at + timedelta(seconds=1),
+    )
     result = _run(tmp_path, first, second)
     assert result.candidates[0].status == "SCHEMA_ONLY/PAPER_NOT_ADMITTED"
     assert result.candidates[1].rejection == "OVERLAPPING_EVENT_EPISODE"
