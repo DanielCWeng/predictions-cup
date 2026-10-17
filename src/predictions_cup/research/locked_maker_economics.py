@@ -261,7 +261,7 @@ def estimate(bundle: LockedBundle) -> Estimate:
     per_attempt_net: dict[str, Decimal] = {}
     for a in attempts:
         seq = sorted(events[a.attempt_id], key=lambda x: (x.issuer_at, x.event_id))
-        if not seq or seq[0].status not in {"INTENT", "SUBMISSION", "ACK"}:
+        if not seq or seq[0].status not in {"INTENT", "SUBMISSION", "ACK", "REJECTED"}:
             return _fail("MISSING_INITIAL_INTENT_OR_ACK", n)
         seen_ack = any(e.status == "ACK" for e in seq)
         end = seq[-1]
@@ -283,6 +283,8 @@ def estimate(bundle: LockedBundle) -> Estimate:
             return _fail("FILLED_OR_TERMINAL_WITHOUT_NATIVE_ACK", n)
         fs = fills[a.attempt_id]
         qty = sum((f.quantity for f in fs), ZERO)
+        if fs and max(f.issuer_at for f in fs) > end.issuer_at:
+            return _fail("FILL_OCCURS_AFTER_NATIVE_TERMINAL", n)
         if qty > a.requested_qty:
             return _fail("PARTIAL_FILL_EXCEEDS_ORDER", n)
         if qty == ZERO:
@@ -304,6 +306,9 @@ def estimate(bundle: LockedBundle) -> Estimate:
         if not charged or not entry or not endflows:
             return _fail("MISSING_REAL_FEE_ENTRY_OR_DISPOSAL", n)
         direction = Decimal("1") if a.action == "BUY" else Decimal("-1")
+        if any(sum((c.position_delta for c in entry if c.fill_id == f.fill_id),
+                   ZERO) != direction * f.quantity for f in fs):
+            return _fail("PER_FILL_ENTRY_CASH_NOT_RECONCILED", n)
         if (sum((c.position_delta for c in entry), ZERO) != direction * qty
                 or sum((c.position_delta for c in endflows), ZERO) != -direction * qty
                 or any(c.position_delta != ZERO for c in cf if c.kind not in
@@ -347,7 +352,10 @@ def estimate(bundle: LockedBundle) -> Estimate:
     if censored:
         # The sample includes unresolved eligible maker attempts; this must
         # not silently become a zero-fill or closed-position profitable cohort.
-        return _fail("CENSORED_MAKER_ATTEMPTS_NOT_RESOLVED", n)
+        return Estimate("NOT_ESTIMABLE", "CENSORED_MAKER_ATTEMPTS_NOT_RESOLVED",
+                        n, full, partial, zero, censored, rejected, len(bundle.fills),
+                        total_qty, None, None, None, None, None, None, None, None,
+                        None, None, 0)
     if len(per_attempt_net) != full + partial:
         return _fail("INCOMPLETE_FILL_TO_SETTLED_CASH_LEDGER", n)
     if any(not m.valid_native_reference or not _clock(m.issuer_at, m.received_at)
