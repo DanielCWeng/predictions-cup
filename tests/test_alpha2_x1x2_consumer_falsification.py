@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -58,13 +59,19 @@ def test_untrusted_same_price_zero_depth_must_invalidate_previous_liquidity() ->
 
 
 def test_depth_only_zero_snapshot_must_invalidate_asof_without_new_bbo(
-    tmp_path,
+    tmp_path: Path,
 ) -> None:
     """A DEPTH_SNAPSHOT with no BBO_SNAPSHOT must revoke old 50-share depth."""
     impulse = START + timedelta(seconds=1)
     zero_at = impulse + timedelta(milliseconds=200)
 
-    def row(at, kind, bid, ask, quantity=None):
+    def row(
+        at: datetime,
+        kind: str,
+        bid: float,
+        ask: float,
+        quantity: int | None = None,
+    ) -> dict[str, object]:
         payload = (
             None
             if quantity is None
