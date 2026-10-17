@@ -6,6 +6,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import Literal
 
 import pytest
 
@@ -16,6 +17,7 @@ from predictions_cup.research.offline_causal_alpha_label import (
     FeeRecord,
     FrozenDecision,
     Level,
+    LabelBatch,
     label_offline_candidates,
 )
 from test_offline_paired_tape_gate import _sample
@@ -36,7 +38,7 @@ def _book(
     )
 
 
-def _candidate(side: str = "YES") -> DecisionCandidate:
+def _candidate(side: Literal["YES", "NO"] = "YES") -> DecisionCandidate:
     minutes = tuple(
         CompletedMinute(
             datetime(2026, 10, 16, 11, 55, tzinfo=UTC)
@@ -65,7 +67,9 @@ def _candidate(side: str = "YES") -> DecisionCandidate:
     )
 
 
-def _run(tmp_path: Path, *candidates: DecisionCandidate, bad_gate: bool = False):
+def _run(
+    tmp_path: Path, *candidates: DecisionCandidate, bad_gate: bool = False,
+) -> LabelBatch:
     def corrupt(_mapping: object, sig: dict[str, object],
                 _pm: object, _manifest: object) -> None:
         sig["publisher_clock_attested"] = False
