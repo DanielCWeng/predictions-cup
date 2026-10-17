@@ -154,6 +154,7 @@ class Estimate:
     source_admitted: bool = False
     paper_admitted: bool = False
     network_requests: int = 0
+    no_quote_incremental_new_order_cash_susq: Decimal = ZERO
 
 
 def _fail(reason: str, count: int = 0) -> Estimate:
