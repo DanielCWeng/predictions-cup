@@ -88,7 +88,9 @@ def test_invented_yes_no_closures_fees_and_double_entry_remain_unadmitted() -> N
     assert r.real_alpha is None
     assert r.source_admitted is False and r.paper_admitted is False
     # Account realised=8, invented closed maker arithmetic=3.2; never relabel.
-    assert example().account is not None and example().account.account_realised_susq == D("8")
+    account = example().account
+    assert account is not None
+    assert account.account_realised_susq == D("8")
 
 
 def test_partial_exit_uncertain_void_censors_lot_and_total_net() -> None:
