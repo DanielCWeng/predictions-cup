@@ -217,11 +217,12 @@ def audit_offline(bundle: OfflineBundle) -> AuditResult:
     qty_by_attempt: dict[str, Decimal] = {}
     for f in bundle.fills:
         issuer(f.source_key)
-        a = attempts.get(f.attempt_key)
-        if a is None or not f.key or not f.lot_key or f.native_order_id != a.native_order_id:
+        parent_attempt = attempts.get(f.attempt_key)
+        if (parent_attempt is None or not f.key or not f.lot_key
+                or f.native_order_id != parent_attempt.native_order_id):
             errors.add("FILL_NOT_JOINED_TO_ORIGINAL_ORDER")
-        for x in (f.whole_shares, f.original_side_price):
-            if not _number(x):
+        for numeric in (f.whole_shares, f.original_side_price):
+            if not _number(numeric):
                 errors.add("INVALID_NATIVE_FILL_DECIMAL")
         if not _number(f.whole_shares, whole=True) or f.whole_shares <= ZERO:
             errors.add("INVALID_WHOLE_FILL_SIZE")
@@ -232,52 +233,73 @@ def audit_offline(bundle: OfflineBundle) -> AuditResult:
         elif (_number(f.whole_shares) and _number(f.original_side_price)
               and f.original_cash_paid != f.whole_shares * f.original_side_price):
             errors.add("ORIGINAL_PAID_CASH_PRICE_QTY_MISMATCH")
+        if (f.paid_fee_susq is not None and f.paid_fee_susq < ZERO
+                or f.rebate_susq is not None and f.rebate_susq < ZERO):
+            errors.add("NEGATIVE_NATIVE_FEE_OR_REBATE")
         if not (_number(f.paid_fee_susq) and _number(f.rebate_susq)
                 and f.fee_currency == "SUSQ"):
             holes.add("MISSING_NATIVE_PAID_FEE_REBATE_OR_CURRENCY")
         if _number(f.whole_shares):
             qty_by_attempt[f.attempt_key] = qty_by_attempt.get(f.attempt_key, ZERO) + f.whole_shares
     for key, q in qty_by_attempt.items():
-        a = attempts.get(key)
-        if a is not None and _number(a.requested_whole_shares) and q > a.requested_whole_shares:
+        parent_attempt = attempts.get(key)
+        if (parent_attempt is not None and _number(parent_attempt.requested_whole_shares)
+                and q > parent_attempt.requested_whole_shares):
             errors.add("FILL_EXCEEDS_REQUESTED_WHOLE_SHARES")
 
     exits_by_lot: dict[str, Decimal] = {}
     disposal_keys: set[str] = set()
     net = ZERO
     all_cash_known = bool(bundle.fills) and bool(bundle.closures)
-    for f in bundle.fills:
-        if (_number(f.original_cash_paid) and _number(f.paid_fee_susq)
-                and _number(f.rebate_susq)):
-            net += -f.original_cash_paid - f.paid_fee_susq + f.rebate_susq
+    for fill in bundle.fills:
+        paid = fill.original_cash_paid
+        fee = fill.paid_fee_susq
+        rebate = fill.rebate_susq
+        if (isinstance(paid, Decimal) and isinstance(fee, Decimal)
+                and isinstance(rebate, Decimal)
+                and all(_number(n) for n in (paid, fee, rebate))):
+            net += -paid - fee + rebate
         else:
             all_cash_known = False
-    for x in bundle.closures:
-        exit_at = issuer(x.source_key)
-        entry = lots.get(x.lot_key)
-        if x.key in disposal_keys or not x.key or entry is None:
+    for closure in bundle.closures:
+        exit_at = issuer(closure.source_key)
+        entry = lots.get(closure.lot_key)
+        if closure.key in disposal_keys or not closure.key or entry is None:
             errors.add("DUPLICATE_OR_ORPHAN_CLOSURE")
-        disposal_keys.add(x.key)
+        disposal_keys.add(closure.key)
         entry_doc = docs.get(entry.source_key) if entry is not None else None
         entry_at = entry_doc.issuer_at if entry_doc is not None else None
         if exit_at is not None and entry_at is not None and exit_at <= entry_at:
             errors.add("EXIT_BEFORE_OR_AT_FILL")
-        if (not _number(x.whole_shares, whole=True) or x.whole_shares <= ZERO):
+        if not _number(closure.whole_shares, whole=True) or closure.whole_shares <= ZERO:
             errors.add("INVALID_WHOLE_EXIT_SIZE")
-        if x.kind in ("SETTLEMENT", "VOID", "RECOUNT") and (
-            not x.settlement_rule_version or not x.issuer_terminal_reference
+        if closure.kind in ("SETTLEMENT", "VOID", "RECOUNT") and (
+            not closure.settlement_rule_version or not closure.issuer_terminal_reference
         ):
             holes.add("MISSING_VOID_RECOUNT_SETTLEMENT_ORIGINAL_RULE")
-        if not x.final or not x.issuer_terminal_reference:
+        original_doc = docs.get(closure.source_key)
+        if (closure.settlement_rule_version and original_doc is not None
+                and closure.settlement_rule_version != original_doc.issuer_rule_version):
+            errors.add("SETTLEMENT_RULE_VERSION_MISMATCH")
+        if not closure.final or not closure.issuer_terminal_reference:
             holes.add("UNCLOSED_VOID_RECOUNT_OR_UNCERTAIN_EXIT")
-        if not (_number(x.original_cash_received) and _number(x.paid_fee_susq)
-                and _number(x.rebate_susq) and x.fee_currency == "SUSQ"):
+        paid = closure.original_cash_received
+        fee = closure.paid_fee_susq
+        rebate = closure.rebate_susq
+        if (fee is not None and fee < ZERO) or (rebate is not None and rebate < ZERO):
+            errors.add("NEGATIVE_NATIVE_FEE_OR_REBATE")
+        if (isinstance(paid, Decimal) and isinstance(fee, Decimal)
+                and isinstance(rebate, Decimal)
+                and all(_number(n) for n in (paid, fee, rebate))
+                and closure.fee_currency == "SUSQ"):
+            net += paid - fee + rebate
+        else:
             holes.add("MISSING_ORIGINAL_EXIT_CASH_FEE_REBATE_OR_CURRENCY")
             all_cash_known = False
-        else:
-            net += x.original_cash_received - x.paid_fee_susq + x.rebate_susq
-        if _number(x.whole_shares):
-            exits_by_lot[x.lot_key] = exits_by_lot.get(x.lot_key, ZERO) + x.whole_shares
+        if _number(closure.whole_shares):
+            exits_by_lot[closure.lot_key] = (
+                exits_by_lot.get(closure.lot_key, ZERO) + closure.whole_shares
+            )
     for f in bundle.fills:
         if exits_by_lot.get(f.lot_key, ZERO) != f.whole_shares:
             holes.add("OPEN_OR_PARTIALLY_CLOSED_OR_OVERFILLED_LOT")
@@ -285,27 +307,29 @@ def audit_offline(bundle: OfflineBundle) -> AuditResult:
             errors.add("EXIT_EXCEEDS_OPEN_LOT")
 
     account_pass: bool | None = None
-    a = bundle.account
-    if a is None:
+    account = bundle.account
+    if account is None:
         holes.add("MISSING_SAME_CLOCK_ACCOUNT_EQUITY")
     else:
-        stamp = issuer(a.source_key)
-        if stamp is not None and (a.asof_utc != stamp or not _utc(a.asof_utc)):
+        stamp = issuer(account.source_key)
+        if stamp is not None and (account.asof_utc != stamp or not _utc(account.asof_utc)):
             errors.add("ACCOUNT_ASOF_NOT_ISSUER_SNAPSHOT_CLOCK")
-        vals = (a.start_equity_susq, a.external_flows_susq, a.account_realised_susq,
-                a.unrealised_change_susq, a.end_equity_susq)
+        vals = (account.start_equity_susq, account.external_flows_susq,
+                account.account_realised_susq, account.unrealised_change_susq,
+                account.end_equity_susq)
         if all(_number(v, nonnegative=False) for v in vals):
-            account_pass = (vals[0] + vals[1] + vals[2] + vals[3]
-                            == vals[4])  # type: ignore[operator]
+            account_pass = sum((v for v in vals[:4] if isinstance(v, Decimal)), ZERO) == vals[4]
             if not account_pass:
                 errors.add("ACCOUNT_DOUBLE_ENTRY_MISMATCH")
         else:
             holes.add("MISSING_ACCOUNT_PNL_OR_EXTERNAL_FLOW")
-        if not all(_number(v, whole=True) for v in (a.gross_shares, a.reserved_shares)):
+        gross, reserved, limit = (
+            account.gross_shares, account.reserved_shares, account.gross_limit
+        )
+        if gross is None or reserved is None:
             holes.add("MISSING_SAME_CLOCK_GROSS_RESERVED_CAPITAL")
-        elif not _number(a.gross_limit, whole=True) or (
-            a.gross_shares + a.reserved_shares > a.gross_limit  # type: ignore[operator]
-        ):
+        elif (not _number(gross, whole=True) or not _number(reserved, whole=True)
+              or not _number(limit, whole=True) or gross + reserved > limit):
             errors.add("GROSS_CAP_OR_RESERVATION_BREACH")
 
     share_days: Decimal | None = None
