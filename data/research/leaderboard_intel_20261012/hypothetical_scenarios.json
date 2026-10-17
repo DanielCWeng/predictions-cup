@@ -1,0 +1,70 @@
+{
+  "description": "ILLUSTRATIVE ONLY: independently chosen terminal distributions, not calibrated probabilities or executable returns",
+  "third_place_thresholds": [
+    {
+      "value": 300000,
+      "probability": "0.10"
+    },
+    {
+      "value": 700000,
+      "probability": "0.25"
+    },
+    {
+      "value": 900000,
+      "probability": "0.35"
+    },
+    {
+      "value": 1400000,
+      "probability": "0.30"
+    }
+  ],
+  "strategies": [
+    {
+      "name": "capital_preservation_hypothetical",
+      "final_bankroll_outcomes": [
+        {
+          "value": 80000,
+          "probability": "0.15"
+        },
+        {
+          "value": 115000,
+          "probability": "0.65"
+        },
+        {
+          "value": 170000,
+          "probability": "0.20"
+        }
+      ]
+    },
+    {
+      "name": "higher_expected_bankroll_hypothetical",
+      "final_bankroll_outcomes": [
+        {
+          "value": 100000,
+          "probability": "0.30"
+        },
+        {
+          "value": 500000,
+          "probability": "0.40"
+        },
+        {
+          "value": 900000,
+          "probability": "0.30"
+        }
+      ]
+    },
+    {
+      "name": "podium_lottery_hypothetical_UNVALIDATED",
+      "final_bankroll_outcomes": [
+        {
+          "value": 0,
+          "probability": "0.76"
+        },
+        {
+          "value": 1250000,
+          "probability": "0.24"
+        }
+      ]
+    }
+  ]
+}
