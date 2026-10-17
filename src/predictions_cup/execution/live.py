@@ -302,6 +302,22 @@ class SigLiveSink:
             )
             raise
         except SigApiError as exc:
+            if not require_reservation:
+                # An earlier journalled dispatch can already have executed even
+                # if this recovery HTTP attempt receives 429, 422 or another
+                # non-authoritative rejection. Never release that economic risk
+                # from an error on a subsequent original-key retry.
+                observed = self._clock_ns()
+                self._mark_uncertain_unless_resolved(envelope, observed)
+                self._journal.record_event(
+                    logical_operation_id=envelope.logical_operation_id,
+                    tournament_id=envelope.tournament_id,
+                    event_type="UNCERTAIN",
+                    observed_monotonic_ns=observed,
+                    terminal_status=LifecycleState.UNCERTAIN.value,
+                    detail_json=json.dumps({"reason": "recovery_response_not_authoritative"}),
+                )
+                raise
             observed = self._clock_ns()
             self._observe_error(exc, envelope, observed, plan=plan)
             self._observe(
