@@ -186,20 +186,26 @@ def _economic(
         # size (including zero) or depth-source timestamp replaces the prior
         # as-of depth even when neither price changed. Price-only dedup used to
         # carry fictitious 50-share liquidity across a later zero-size update.
-        if result and (result[-1].best_bid, result[-1].best_ask) == (
-            item.best_bid,
-            item.best_ask,
+        if (
+            result
+            and (result[-1].best_bid, result[-1].best_ask) == (
+                item.best_bid,
+                item.best_ask,
+            )
+            and (
+                not preserve_depth_updates
+                or (
+                    result[-1].bid_depth,
+                    result[-1].ask_depth,
+                    result[-1].depth_observed_at,
+                ) == (
+                    item.bid_depth,
+                    item.ask_depth,
+                    item.depth_observed_at,
+                )
+            )
         ):
-            if not preserve_depth_updates or (
-                result[-1].bid_depth,
-                result[-1].ask_depth,
-                result[-1].depth_observed_at,
-            ) == (
-                item.bid_depth,
-                item.ask_depth,
-                item.depth_observed_at,
-            ):
-                continue
+            continue
         result.append(item)
     return tuple(result)
 
