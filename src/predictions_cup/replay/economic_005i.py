@@ -13,7 +13,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 from typing import Any
 
 from predictions_cup.replay.model import (
@@ -151,11 +151,21 @@ def _valid(view: InstrumentView | None, at: datetime, age_ms: int, *, sig: bool)
     ) == view.best_ask
 
 
+def _conservative_whole_level_depth(quantity: Decimal, haircut: Decimal) -> Decimal:
+    """Conservative per-price-level WHOLE-share depth for research scenarios.
+
+    This flooring rule is a frozen synthetic admission convention (#291/#303),
+    NOT evidence of the SIG issuer's matching granularity or actual fills.
+    Never pool fractions across distinct levels to qualify a whole-share IOC.
+    """
+    return (quantity * haircut).to_integral_value(rounding=ROUND_DOWN)
+
+
 def _walk(
     levels: Iterable[Any], qty: Decimal, *, buy: bool,
     haircut: Decimal, max_buy_price: Decimal | None = None,
 ) -> Decimal | None:
-    """Executable VWAP, no top-of-book price used for quantity beyond actual depth."""
+    """Hypothetical whole-share VWAP after per-level conservative depth flooring."""
     remaining = qty
     paid = D(0)
     sorted_levels = sorted(levels, key=lambda x: x.price, reverse=not buy)
@@ -168,7 +178,7 @@ def _walk(
         if buy and max_buy_price is not None and level.price > max_buy_price:
             return None
         previous = level.price
-        take = min(remaining, level.quantity * haircut)
+        take = min(remaining, _conservative_whole_level_depth(level.quantity, haircut))
         if take > 0:
             paid += take * level.price
             remaining -= take
@@ -193,7 +203,7 @@ def _marginal_buy_limit(
         if previous is not None and level.price == previous:
             return None
         previous = level.price
-        take = min(remaining, level.quantity * haircut)
+        take = min(remaining, _conservative_whole_level_depth(level.quantity, haircut))
         if take > 0:
             remaining -= take
         if remaining <= 0:
@@ -205,7 +215,7 @@ def _walk_partial_close(
     levels: Iterable[BookLevel], qty: Decimal, *,
     haircut: Decimal,
 ) -> tuple[Decimal, Decimal]:
-    """Hypothetical sale; partial fills never masquerade as a closed lot.
+    """Hypothetical whole-lot sale; partial fills never masquerade as a closed lot.
 
     Return the quantity and actual visible proceeds of the matched part.
     Any remaining quantity is carried at unverified value and capital-locked.
@@ -218,7 +228,7 @@ def _walk_partial_close(
         if previous == level.price:
             return D(0), D(0)
         previous = level.price
-        amount = min(qty - done, level.quantity * haircut)
+        amount = min(qty - done, _conservative_whole_level_depth(level.quantity, haircut))
         if amount > 0:
             done += amount
             proceeds += amount * level.price
