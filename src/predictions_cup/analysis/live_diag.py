@@ -27,10 +27,12 @@ from predictions_cup.analysis.evidence import (
     write_evidence,
 )
 from predictions_cup.analysis.snapback_version_gate import (
+    TRIGGER_RULE as EPISODE_TRIGGER_RULE,
+)
+from predictions_cup.analysis.snapback_version_gate import (
     ANALYSIS_VERSION,
     EPISODE_RULE_VERSION,
     SNAPBACK_METHOD_VERSION,
-    TRIGGER_RULE as EPISODE_TRIGGER_RULE,
 )
 from predictions_cup.live_learn.contracts import OutcomeStatus, outcome_from_record
 from predictions_cup.mapping.crosswalk import load_document
