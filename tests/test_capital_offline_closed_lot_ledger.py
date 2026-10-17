@@ -51,6 +51,13 @@ def example() -> OfflineBundle:
         NativeEntryFill("fill-b", "att-b", "order-b", "lot-b", D("3"), D(".3"),
                         D(".9"), D(".03"), D("0"), "SUSQ", "entry"),
     )
+    attempts = tuple(
+        replace(a, settlement_contract_reference="FAKE-CONTRACT-1",
+                trading_cutoff_at_utc=START + timedelta(days=1))
+        for a in attempts
+    )
+    fills = (replace(fills[0], signed_yes_whole_shares=D("2")),
+             replace(fills[1], signed_yes_whole_shares=D("-3")))
     closures = (
         NativeLotClosure("close-a", "lot-a", D("2"), "SETTLEMENT", D("2"),
                          D(".02"), D("0"), "SUSQ", "FAKE-CONTRACT-1",
@@ -189,3 +196,36 @@ def test_unverified_original_caller_strings_do_not_authenticate_source() -> None
     agg = audit_offline(replace(b, kind="AGGREGATE"))
     assert "AGGREGATE_IS_NOT_ORIGINAL_LOT_EVIDENCE" in agg.reasons
     assert agg.realised_maker_net_susq is None
+
+
+def test_signed_no_basis_cutoff_and_multi_leg_orphan_are_fail_closed() -> None:
+    b = example()
+    bad_sign = audit_offline(replace(
+        b, fills=(b.fills[0], replace(b.fills[1], signed_yes_whole_shares=D("3")))
+    ))
+    assert bad_sign.verdict == "REJECTED"
+    assert "WRONG_YES_NO_SIGN_OR_COMPLEMENT" in bad_sign.reasons
+    assert bad_sign.descriptive_closed_lot_net_susq is None
+
+    expired = audit_offline(replace(
+        b, attempts=(replace(b.attempts[0],
+                             trading_cutoff_at_utc=START - timedelta(seconds=1)),
+                     b.attempts[1]),
+    ))
+    assert expired.verdict == "REJECTED"
+    assert "ORDER_AFTER_TRADING_CUTOFF" in expired.reasons
+
+    orphan = audit_offline(replace(
+        b, attempts=(replace(b.attempts[0], multi_leg_group_id="FAKE-ATOMIC",
+                             multi_leg_expected_legs=2), b.attempts[1]),
+    ))
+    assert orphan.verdict == "INCOMPLETE"
+    assert "MULTI_LEG_ORPHAN_OR_INCOMPLETE_GROUP" in orphan.reasons
+    assert orphan.realised_maker_net_susq is None and not orphan.source_admitted
+
+    complete_group = audit_offline(replace(
+        b, attempts=tuple(replace(a, multi_leg_group_id="FAKE-ATOMIC",
+                                  multi_leg_expected_legs=2) for a in b.attempts),
+    ))
+    assert complete_group.verdict == "SCHEMA_ONLY"
+    assert complete_group.source_admitted is False and complete_group.real_alpha is None
