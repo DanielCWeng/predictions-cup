@@ -26,6 +26,12 @@ from predictions_cup.analysis.evidence import (
     sha256_file,
     write_evidence,
 )
+from predictions_cup.analysis.snapback_version_gate import (
+    ANALYSIS_VERSION,
+    EPISODE_RULE_VERSION,
+    SNAPBACK_METHOD_VERSION,
+    TRIGGER_RULE as EPISODE_TRIGGER_RULE,
+)
 from predictions_cup.live_learn.contracts import OutcomeStatus, outcome_from_record
 from predictions_cup.mapping.crosswalk import load_document
 from predictions_cup.mapping.models import MappingDirection
@@ -33,12 +39,6 @@ from predictions_cup.risk.groups import load_exposure_group_provider
 from predictions_cup.runtime.models import SIG_TICK
 from predictions_cup.shadow.replay import load_persisted_snapshots
 
-ANALYSIS_VERSION = "live-diag-001-v2"
-SNAPBACK_METHOD_VERSION = "snapback-signed-threshold-episodes-v2"
-EPISODE_RULE_VERSION = "signed-threshold-episodes-v2"
-EPISODE_TRIGGER_RULE = (
-    "signed_threshold_crossing_rearms_on_direct_sign_reversal_or_below_threshold"
-)
 DEFAULT_THRESHOLDS_TICKS = (1, 2, 3, 5)
 DEFAULT_HORIZONS_SECONDS = (1, 5, 15, 30, 60, 300)
 SIG_TICK_SIZE = float(SIG_TICK)
@@ -1252,6 +1252,28 @@ def analyze_market_selection(
     }, output
 
 
+
+def _signed_snapback_row_metadata(
+    *,
+    git_sha: str,
+    config_hash: str,
+    mapping_hash: str | None,
+    max_quote_age_seconds: float,
+) -> dict[str, object]:
+    """Emit self-contained, but NOT automatically authenticated, row version tags."""
+    return {
+        "analysis_version": ANALYSIS_VERSION,
+        "method_version": SNAPBACK_METHOD_VERSION,
+        "episode_rule_version": EPISODE_RULE_VERSION,
+        "trigger_rule": EPISODE_TRIGGER_RULE,
+        "git_sha": git_sha,
+        "config_hash": config_hash,
+        "mapping_hash": mapping_hash,
+        "tick_size": SIG_TICK_SIZE,
+        "max_quote_age_seconds": max_quote_age_seconds,
+    }
+
+
 def _write_rows(path: Path, rows: list[dict[str, object]]) -> None:
     if rows:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -1431,17 +1453,13 @@ def analyze_live_diagnostics(
             )
             snapback_rows.append(
                 {
-                    # Version identity travels with standalone snapback.parquet;
-                    # a snapshot sidecar alone cannot protect cross-run joins.
-                    "analysis_version": ANALYSIS_VERSION,
-                    "method_version": SNAPBACK_METHOD_VERSION,
-                    "episode_rule_version": EPISODE_RULE_VERSION,
-                    "trigger_rule": EPISODE_TRIGGER_RULE,
-                    "git_sha": git_sha,
-                    "config_hash": config_hash,
-                    "mapping_hash": mapping_hash,
-                    "tick_size": SIG_TICK_SIZE,
-                    "max_quote_age_seconds": max_quote_age_seconds,
+                    # A standalone row must retain its own version identity.
+                    **_signed_snapback_row_metadata(
+                        git_sha=git_sha,
+                        config_hash=config_hash,
+                        mapping_hash=mapping_hash,
+                        max_quote_age_seconds=max_quote_age_seconds,
+                    ),
                     "market_id": record.sig_market_id,
                     "exchange_id": record.sig_exchange_id,
                     "polymarket_token_id": identity.mapped_token_id,
