@@ -116,6 +116,7 @@ def test_synthetic_realised_gross_net_fees_split_and_late_settlement() -> None:
     assert result.observed_position_share_days is not None
     assert result.observed_cash_turnover_susq == D("3.10")
     assert result.capital_reservation_susq_days is None
+    assert result.no_quote_incremental_new_order_cash_susq == D('0')
 
 
 def test_zero_fill_versus_never_filled_and_censored_terminal() -> None:
@@ -166,7 +167,7 @@ def test_held_no_signed_cash_and_share_conservation() -> None:
     cash = tuple(replace(c, amount_susq=D("0.1625")) if c.flow_id == "entry-a1" else c
                  for c in b.cashflows)
     r = estimate(replace(b, cashflows=cash))
-    assert r.reason == "INCONSISTENT_SIGNED_CASH_OR_HELD_NO_BASIS"
+    assert r.reason == "POSITION_OR_PARTIAL_FILL_CASH_CONSERVATION_FAIL"
     assert r.realised_net is None
 
 
