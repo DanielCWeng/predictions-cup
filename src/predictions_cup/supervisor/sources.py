@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import socket
 import sqlite3
@@ -198,6 +199,10 @@ class SupervisorSources:
             "main_pid": main_pid,
             "query_ok": False,
             "kill_latched": None,
+            "outcomes_sampled": 0,
+            "bbo_rejections_sampled": 0,
+            "bbo_rejection_fraction": None,
+            "gross_cap_rejections_sampled": 0,
             "last_outcome_at": None,
             "last_outcome_age_seconds": None,
         }
@@ -271,6 +276,33 @@ class SupervisorSources:
                 and "MAKE outcome" in str(event.get("MESSAGE"))
             ]
             latest = outcome_events[-1] if outcome_events else None
+            if latest is not None:
+                # Reuse the already bounded, PID-scoped journal probe. A live
+                # process producing outcomes is not necessarily trading with
+                # executable prices: sustained BBO rejection is feed starvation.
+                reasons = [
+                    match.group(1)
+                    for event in outcome_events
+                    if (
+                        match := re.search(
+                            r"\breason=([a-z0-9_]+)\b",
+                            str(event.get("MESSAGE", "")),
+                        )
+                    )
+                ]
+                bbo_rejected = sum(
+                    reason in {"sig_bbo_stale", "sig_bbo_untrusted"}
+                    for reason in reasons
+                )
+                # Sample all MAKE outcomes, including successful/held paths
+                # that have no reason=. Otherwise a few rejected decisions
+                # can look like majority starvation and incorrectly HOLD LIVE.
+                base["outcomes_sampled"] = len(outcome_events)
+                base["bbo_rejections_sampled"] = bbo_rejected
+                base["gross_cap_rejections_sampled"] = reasons.count(
+                    "max_gross_exposure"
+                )
+                base["bbo_rejection_fraction"] = bbo_rejected / len(outcome_events)
             if latest is None:
                 base["query_ok"] = False
                 base["query_error"] = "journal_result_missing_make_outcome"
