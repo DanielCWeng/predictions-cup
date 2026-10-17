@@ -10,7 +10,7 @@ import hashlib
 import random
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Literal
 
@@ -151,7 +151,7 @@ def _fail(reason: str, count: int = 0) -> Estimate:
 
 def _clock(issuer: datetime, received: datetime) -> bool:
     return (issuer.tzinfo is not None and received.tzinfo is not None
-            and issuer.utcoffset() == received.utcoffset() == ZERO
+            and issuer.utcoffset() == received.utcoffset() == timedelta(0)
             and issuer <= received)
 
 
