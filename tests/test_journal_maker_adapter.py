@@ -23,7 +23,7 @@ def envelope(kind: str = "single_placement", ids: tuple[str, ...] = ("a",),
              mode: str = "LIVE") -> EnvelopeRow:
     order = {"market_id": "m", "action": "BUY",
              "outcome_side": "NO", "quantity": "2"}
-    payload = order if kind == "single_placement" else {
+    payload: dict[str, object] = order if kind == "single_placement" else {
         ("orders" if kind == "best_effort_batch" else "legs"): [order] * len(ids)
     }
     raw = json.dumps(payload)
