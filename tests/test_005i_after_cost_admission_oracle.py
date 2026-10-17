@@ -120,10 +120,10 @@ def _price_for_shares(
 
 def evaluate_invented_trial(trial: InventedTrial) -> Verdict:
     """Fail closed on absent provenance; never infer realised PnL from quotes."""
-    if trial.holdout_reused or TRAIN_START <= trial.decision_at <= SEALED_END:
-        return _reject("SEALED_005I_HOLDOUT_NOT_AN_ECONOMIC_TEST")
     if trial.decision_at.tzinfo is None or trial.decision_at.utcoffset() is None:
         return _reject("NO_UTC_DECISION_CLOCK")
+    if trial.holdout_reused or TRAIN_START <= trial.decision_at <= SEALED_END:
+        return _reject("SEALED_005I_HOLDOUT_NOT_AN_ECONOMIC_TEST")
     if (
         not trial.mapping_sha or not trial.rule_info_sha
         or not trial.pm_original_sha or not trial.sig_original_sha
@@ -145,7 +145,7 @@ def evaluate_invented_trial(trial: InventedTrial) -> Verdict:
         return _reject("NOT_SIX_COMPLETED_PM_MINUTES")
     ends = [m.ended_at for m in trial.minutes]
     if any(right - left != timedelta(minutes=1) for left, right in zip(
-        ends, ends[1:], strict=True,
+        ends[:-1], ends[1:], strict=True,
     )):
         return _reject("NONCONTIGUOUS_COMPLETED_PM_MINUTES")
     if (
@@ -157,7 +157,7 @@ def evaluate_invented_trial(trial: InventedTrial) -> Verdict:
                for m in trial.minutes)
         or len({(m.epoch, m.seed_hash) for m in trial.minutes}) != 1
         or any(right.source_sequence <= left.source_sequence
-               for left, right in zip(trial.minutes, trial.minutes[1:], strict=True))
+               for left, right in zip(trial.minutes[:-1], trial.minutes[1:], strict=True))
     ):
         return _reject("PM_SEED_EPOCH_SEQUENCE_OR_FUTURE_LEAK")
     if len(trial.exits) != len(HORIZONS):
@@ -170,7 +170,7 @@ def evaluate_invented_trial(trial: InventedTrial) -> Verdict:
         or any(not b.revision or not b.raw_sha for b in books)
         or any(b.published_at > b.received_at for b in books)
         or any(right.source_sequence <= left.source_sequence
-               for left, right in zip(books, books[1:], strict=True))
+               for left, right in zip(books[:-1], books[1:], strict=True))
     ):
         return _reject("SIG_ISSUER_RECEIPT_REVISION_OR_EXCHANGE_NOT_PROVEN")
     if not (
@@ -304,8 +304,10 @@ def test_midpoint_illusion_cannot_hide_negative_crossed_book_exit() -> None:
 def test_same_price_depth_50_to_zero_invalidates_arrival_x1_negative() -> None:
     t = invented_trial()
     # A newer receipt supersedes the prior book despite UNCHANGED prices.
-    arrival = replace(t.arrival, bids=(Level(D("0.40"), 0),),
-                      asks=(Level(D("0.42"), 0),))
+    arrival = replace(t.arrival, bids=t.decision_book.bids[:1],
+                      asks=t.decision_book.asks[:1])
+    arrival = replace(arrival, bids=(Level(D("0.40"), 0),),
+                      asks=(Level(D("0.50"), 0),))
     result = evaluate_invented_trial(replace(t, arrival=arrival))
     assert result.reason == "ARRIVAL_ZERO_DEPTH_OR_UNEXECUTABLE"
     assert result.realised_net_pnl is None
@@ -381,3 +383,12 @@ def test_serial_duplicates_and_missing_controls_do_not_fake_holdout_power() -> N
     assert clustered_holdout_gate(serial, frozenset({"REVERSAL"})) == (
         "NET_NOT_ESTIMABLE"
     )
+
+def test_synthetic_cluster_shape_is_not_real_profit() -> None:
+    base = datetime(2026, 10, 17, 12, tzinfo=UTC)
+    events = tuple(
+        (f"event_{day}_{i}", "market_1",
+         base + timedelta(days=day, seconds=300 * i))
+        for day in range(5) for i in range(20)
+    )
+    assert clustered_holdout_gate(events, CONTROLS) == "SYNTHETIC_SAMPLE_GATE_ONLY"
