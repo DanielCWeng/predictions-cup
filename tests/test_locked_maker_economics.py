@@ -5,6 +5,7 @@ import hashlib
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import Literal, cast
 
 import pytest
 
@@ -93,10 +94,6 @@ def bundle() -> LockedBundle:
     )), attempts, events, fills, flows)
 
 
-def updated(b: LockedBundle, **kwargs: object) -> LockedBundle:
-    return replace(b, **kwargs)
-
-
 def test_synthetic_realised_gross_net_fees_split_and_late_settlement() -> None:
     result = estimate(bundle())
     assert result.verdict == "SYNTHETIC_OR_STRUCTURAL_ONLY_NOT_SOURCE_ADMISSION"
@@ -182,7 +179,8 @@ def test_duplicate_native_fill_ids() -> None:
 @pytest.mark.parametrize("role,reference", [("TAKER", "NATIVE-SYNTHETIC"), ("MAKER", None)])
 def test_maker_label_cannot_substitute_native_role(role: str, reference: str | None) -> None:
     b = bundle()
-    f = replace(b.fills[0], native_role=role, native_role_reference=reference)
+    f = replace(b.fills[0], native_role=cast(Literal["MAKER", "TAKER", "UNKNOWN"], role),
+                native_role_reference=reference)
     assert estimate(replace(b, fills=(f, *b.fills[1:]))).reason == (
         "NATIVE_MAKER_ROLE_OR_FILL_IDENTITY_NOT_PROVEN"
     )
