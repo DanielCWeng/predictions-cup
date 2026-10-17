@@ -227,10 +227,11 @@ def estimate(bundle: LockedBundle) -> Estimate:
     fills: dict[str, list[VenueFill]] = defaultdict(list)
     fill_ids = {f.fill_id for f in bundle.fills}
     for f in bundle.fills:
-        a = amap.get(f.attempt_id)
-        if (a is None or f.order_id != a.order_id or f.market_id != a.market_id
+        attempt = amap.get(f.attempt_id)
+        if (attempt is None or f.order_id != attempt.order_id
+                or f.market_id != attempt.market_id
                 or not _clock(f.issuer_at, f.received_at)
-                or f.issuer_at < a.issuer_at or not _amount(f.quantity)
+                or f.issuer_at < attempt.issuer_at or not _amount(f.quantity)
                 or not _amount(f.price) or f.quantity <= ZERO
                 or not ZERO <= f.price <= Decimal("1")
                 or f.native_role != "MAKER" or not f.native_role_reference):
@@ -240,9 +241,9 @@ def estimate(bundle: LockedBundle) -> Estimate:
         return _fail("DUPLICATE_CASHFLOW", n)
     flows: dict[str, list[InventoryCashflow]] = defaultdict(list)
     for c in bundle.cashflows:
-        a = amap.get(c.attempt_id)
-        if (a is None or not _clock(c.issuer_at, c.received_at)
-                or c.issuer_at < a.issuer_at or not _amount(c.position_delta)
+        attempt = amap.get(c.attempt_id)
+        if (attempt is None or not _clock(c.issuer_at, c.received_at)
+                or c.issuer_at < attempt.issuer_at or not _amount(c.position_delta)
                 or not c.source_reference
                 or (c.fill_id is not None and c.fill_id not in fill_ids)):
             return _fail("INVALID_CASHFLOW_OR_ORPHAN_FILL", n)
