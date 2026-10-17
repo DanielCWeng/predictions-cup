@@ -26,6 +26,12 @@ from predictions_cup.analysis.evidence import (
     sha256_file,
     write_evidence,
 )
+from predictions_cup.analysis.snapback_version_gate import (
+    ANALYSIS_VERSION,
+    EPISODE_RULE_VERSION,
+    SNAPBACK_METHOD_VERSION,
+    TRIGGER_RULE,
+)
 from predictions_cup.live_learn.contracts import OutcomeStatus, outcome_from_record
 from predictions_cup.mapping.crosswalk import load_document
 from predictions_cup.mapping.models import MappingDirection
@@ -33,7 +39,6 @@ from predictions_cup.risk.groups import load_exposure_group_provider
 from predictions_cup.runtime.models import SIG_TICK
 from predictions_cup.shadow.replay import load_persisted_snapshots
 
-ANALYSIS_VERSION = "live-diag-001-v1"
 DEFAULT_THRESHOLDS_TICKS = (1, 2, 3, 5)
 DEFAULT_HORIZONS_SECONDS = (1, 5, 15, 30, 60, 300)
 SIG_TICK_SIZE = float(SIG_TICK)
@@ -1247,6 +1252,28 @@ def analyze_market_selection(
     }, output
 
 
+
+def _signed_snapback_row_metadata(
+    *,
+    git_sha: str,
+    config_hash: str,
+    mapping_hash: str | None,
+    max_quote_age_seconds: float,
+) -> dict[str, object]:
+    """Emit self-contained, but NOT automatically authenticated, row version tags."""
+    return {
+        "analysis_version": ANALYSIS_VERSION,
+        "method_version": SNAPBACK_METHOD_VERSION,
+        "episode_rule_version": EPISODE_RULE_VERSION,
+        "trigger_rule": TRIGGER_RULE,
+        "git_sha": git_sha,
+        "config_hash": config_hash,
+        "mapping_hash": mapping_hash,
+        "tick_size": SIG_TICK_SIZE,
+        "max_quote_age_seconds": max_quote_age_seconds,
+    }
+
+
 def _write_rows(path: Path, rows: list[dict[str, object]]) -> None:
     if rows:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -1281,6 +1308,8 @@ def analyze_live_diagnostics(
     generated_at = datetime.now(UTC)
     config = {
         "analysis_version": ANALYSIS_VERSION,
+        "episode_rule_version": EPISODE_RULE_VERSION,
+        "snapback_method_version": SNAPBACK_METHOD_VERSION,
         "latency_ms": latency_ms,
         "latency_assumption_source": latency_assumption_source,
         "max_quote_age_seconds": max_quote_age_seconds,
@@ -1289,7 +1318,7 @@ def analyze_live_diagnostics(
         "thresholds_ticks": list(thresholds_ticks),
         "horizons_seconds": list(horizons_seconds),
         "tick_size": SIG_TICK_SIZE,
-        "trigger_rule": "threshold_crossing_rearms_only_below_threshold",
+        "trigger_rule": TRIGGER_RULE,
     }
     config_hash = canonical_config_hash(config)
     git_sha = os.environ.get("PREDICTIONS_CUP_GIT_SHA", "UNKNOWN")
@@ -1311,6 +1340,8 @@ def analyze_live_diagnostics(
         snapshot: dict[str, object] = {
             "analysis_id": "LIVE-DIAG-001",
             "analysis_version": ANALYSIS_VERSION,
+        "episode_rule_version": EPISODE_RULE_VERSION,
+        "snapback_method_version": SNAPBACK_METHOD_VERSION,
             "generated_at": generated_at.isoformat(),
             "git_sha": git_sha,
             "config_hash": config_hash,
@@ -1422,6 +1453,13 @@ def analyze_live_diagnostics(
             )
             snapback_rows.append(
                 {
+                    # A standalone row must retain its own version identity.
+                    **_signed_snapback_row_metadata(
+                        git_sha=git_sha,
+                        config_hash=config_hash,
+                        mapping_hash=mapping_hash,
+                        max_quote_age_seconds=max_quote_age_seconds,
+                    ),
                     "market_id": record.sig_market_id,
                     "exchange_id": record.sig_exchange_id,
                     "polymarket_token_id": identity.mapped_token_id,
@@ -1482,7 +1520,7 @@ def analyze_live_diagnostics(
                         metric_name=f"fraction_gap_closed_{horizon}s",
                         metric_value=metric,
                         uncertainty=_bootstrap_median(values),
-                        denominator="independent_gap_episodes",
+                        denominator="independent_signed_gap_episodes",
                         status=(
                             ResearchStatus.INSUFFICIENT_EVIDENCE.value
                             if event_count < 5
@@ -1506,9 +1544,10 @@ def analyze_live_diagnostics(
                         ),
                         horizon_seconds=horizon,
                         metric_unit="fraction",
-                        method_version="snapback-threshold-episodes-v1",
+                        method_version=SNAPBACK_METHOD_VERSION,
                         source_versions=(
                             ("mapping", str(document.schema_version)),
+                            ("episode_rule", EPISODE_RULE_VERSION),
                         ),
                     )
                 )
@@ -1557,6 +1596,8 @@ def analyze_live_diagnostics(
     snapshot = {
         "analysis_id": "LIVE-DIAG-001",
         "analysis_version": ANALYSIS_VERSION,
+        "episode_rule_version": EPISODE_RULE_VERSION,
+        "snapback_method_version": SNAPBACK_METHOD_VERSION,
         "generated_at": generated_at.isoformat(),
         "git_sha": git_sha,
         "config_hash": config_hash,
@@ -1570,6 +1611,7 @@ def analyze_live_diagnostics(
             "latency_ms": latency_ms,
         },
         "snapback": snapback_rows,
+        "trigger_rule": TRIGGER_RULE,
         "lead_lag": lead_lag_rows,
         "maker_economics": maker_summary,
         "opponent_venue_ecology": ecology_rows,
