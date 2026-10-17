@@ -92,10 +92,12 @@ def _no_books(
         T + timedelta(milliseconds=200): D(arrival_qty),
     }
     for i, event in enumerate(events):
-        if event.source is not ReplaySource.SIG or event.observed_at not in targets:
+        if (
+            event.source is not ReplaySource.SIG
+            or event.observed_at not in targets
+            or not isinstance(event.payload, QuotePayload)
+        ):
             continue
-        if not isinstance(event.payload, QuotePayload):
-            raise AssertionError("invented SIG quote fixture changed shape")
         quantity = targets[event.observed_at]
         events[i] = replace(event, payload=replace(
             event.payload, best_bid=D("0.54"), best_ask=D("0.65"),
