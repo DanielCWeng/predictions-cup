@@ -16,8 +16,8 @@ from predictions_cup.research.offline_causal_alpha_label import (
     DecisionCandidate,
     FeeRecord,
     FrozenDecision,
-    Level,
     LabelBatch,
+    Level,
     label_offline_candidates,
 )
 from test_offline_paired_tape_gate import _sample
