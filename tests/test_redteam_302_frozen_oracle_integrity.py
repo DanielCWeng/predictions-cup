@@ -3,8 +3,10 @@ Original RED #293/#298 and passing X1/X2 #292 file blobs must remain unmodified.
 Review branch runs existing original assertions via normal CI; no rewrites.
 """
 from __future__ import annotations
+
 import hashlib
 from pathlib import Path
+
 import pytest
 
 FROZEN = (
