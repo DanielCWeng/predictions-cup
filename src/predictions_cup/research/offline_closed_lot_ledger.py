@@ -329,7 +329,8 @@ def audit_offline(bundle: OfflineBundle) -> AuditResult:
         if gross is None or reserved is None:
             holes.add("MISSING_SAME_CLOCK_GROSS_RESERVED_CAPITAL")
         elif (not _number(gross, whole=True) or not _number(reserved, whole=True)
-              or not _number(limit, whole=True) or gross + reserved > limit):
+              or limit is None or not _number(limit, whole=True)
+              or gross + reserved > limit):
             errors.add("GROSS_CAP_OR_RESERVATION_BREACH")
 
     share_days: Decimal | None = None
