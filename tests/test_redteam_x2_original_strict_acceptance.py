@@ -36,7 +36,9 @@ def test_redteam_x2_negative_to_positive_direct_sign_reversal() -> None:
         Quote(t0 + timedelta(seconds=1), 0.19, 0.21),
         Quote(t0 + timedelta(seconds=2), 0.79, 0.81),
     )
-    episodes = construct_gap_episodes(sig_quotes=sig, external_quotes=ext, threshold_ticks=2)
+    episodes = construct_gap_episodes(
+        sig_quotes=sig, external_quotes=ext, threshold_ticks=2
+    )
     assert len(episodes) == 2
     assert [item.signed_gap > 0 for item in episodes] == [False, True]
     assert episodes[0].trigger_id != episodes[1].trigger_id
