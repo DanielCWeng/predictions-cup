@@ -144,7 +144,11 @@ def test_missing_fee_not_zero(fee: str | None) -> None:
         for c in b.cashflows
         if not (c.flow_id == "fee-b" and fee == "DROP")
     )
-    assert estimate(replace(b, cashflows=cash)).reason == "MISSING_ACTUAL_FEE_OR_EXIT_CASHFLOW" if fee is None else "MISSING_REAL_FEE_ENTRY_OR_DISPOSAL"
+    expected = (
+        "MISSING_ACTUAL_FEE_OR_EXIT_CASHFLOW" if fee is None
+        else "MISSING_REAL_FEE_ENTRY_OR_DISPOSAL"
+    )
+    assert estimate(replace(b, cashflows=cash)).reason == expected
 
 
 def test_unsettled_inventory_is_censored_not_realised_profit() -> None:
