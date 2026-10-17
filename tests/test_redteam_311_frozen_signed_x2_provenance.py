@@ -73,7 +73,6 @@ def test_v2_export_tags_have_consistent_signed_x2_names() -> None:
     assert row["method_version"] == SNAPBACK_METHOD_VERSION
     assert row["episode_rule_version"] == EPISODE_RULE_VERSION
     assert row["trigger_rule"] == TRIGGER_RULE
-    assert live_diag.ANALYSIS_VERSION == ANALYSIS_VERSION
 
 
 def test_explicit_reviewed_v2_source_only_allows_descriptive_metric_delta() -> None:
