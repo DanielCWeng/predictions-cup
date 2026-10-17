@@ -95,6 +95,8 @@ class QuoteMarkout:
     executable_bid: Decimal
     executable_ask: Decimal
     valid_native_reference: str | None
+    executable_bid_size: Decimal | None = None
+    executable_ask_size: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -145,6 +147,11 @@ class Estimate:
     observed_cash_turnover_susq: Decimal | None = None
     capital_reservation_susq_days: Decimal | None = None
     descriptive_executable_markouts: tuple[tuple[int, Decimal], ...] = ()
+    verified_eligible_maker_denominator: int | None = None
+    verified_conservative_alpha_lower_bound: Decimal | None = None
+    source_admitted: bool = False
+    paper_admitted: bool = False
+    network_requests: int = 0
 
 
 def _fail(reason: str, count: int = 0) -> Estimate:
@@ -373,6 +380,10 @@ def estimate(bundle: LockedBundle) -> Estimate:
                 or m.horizon_seconds not in {5, 30, 300, 3600}
                 or not _amount(m.executable_bid)
                 or not _amount(m.executable_ask)
+                or not _amount(m.executable_bid_size)
+                or not _amount(m.executable_ask_size)
+                or m.executable_bid_size <= ZERO
+                or m.executable_ask_size <= ZERO
                 or not ZERO <= m.executable_bid <= m.executable_ask <= Decimal("1")
                 or not ZERO <= (m.issuer_at - mark_fill.issuer_at).total_seconds()
                 - m.horizon_seconds <= 2
