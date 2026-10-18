@@ -36,7 +36,9 @@ _HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 _HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 _SAFE_RUN_ID = re.compile(r"[a-z][a-z0-9_-]{0,31}\Z")
 _SAFE_RELEASE_ID = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,63}\Z")
-_SENSITIVE_METADATA = re.compile(r"secret|password|token|api.?key|private|credential|bearer|email|@", re.I)
+_SENSITIVE_METADATA = re.compile(
+    r"secret|password|token|api.?key|private|credential|bearer|email|@", re.I
+)
 _MAX_RAW = 65_536
 _MAX_OUTPUT = 8_388_608
 _MAX_RECORDS = 20_000
@@ -285,8 +287,8 @@ class OfflinePairObserver:
                       "PM_WS_RECONNECT_DROP_OR_NONCONTIGUOUS_LOCAL_ORDINAL")
                 _need(observed > _utc(prior_pm["received_at"]),
                       "PM_RECEIVE_NONMONOTONIC")
-                _need(row["bids"] != prior_pm["bids"]
-                      or row["asks"] != prior_pm["asks"], "PM_NOT_A_PRICE_BOOK_INNOVATION")
+                _need(bids != prior_pm["bids"] or asks != prior_pm["asks"],
+                      "PM_NOT_A_PRICE_BOOK_INNOVATION")
             self._pm[exchange] = snapshot
         return snapshot
 
