@@ -57,7 +57,9 @@ def test_only_completed_six_minutes_signed_reversal_and_no_lookahead() -> None:
         ("912", "YES", T), ("913", "NO", T)]
     assert counts["n_signed_signal"] == 2
     for row in rows:
-        row["recorded_at"] = row["recorded_at"] - timedelta(seconds=9)
+        stamp = row["recorded_at"]
+        assert isinstance(stamp, datetime)
+        row["recorded_at"] = stamp - timedelta(seconds=9)
     assert not completed_reversal(rows, Counter())
 
 
