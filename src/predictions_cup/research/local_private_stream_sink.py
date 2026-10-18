@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 _HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 _HEX64 = re.compile(r"[0-9a-f]{64}\Z")
@@ -85,7 +85,8 @@ def _utc(value: object) -> datetime:
 
 def _integer(value: object, min_value: int = 0, max_value: int = 2**63 - 1) -> int:
     _require(type(value) is int and min_value <= value <= max_value, "INVALID_COUNTER")
-    return int(value)
+    assert type(value) is int
+    return value
 
 
 def _levels(value: object, desc: bool) -> list[list[str]]:
@@ -243,6 +244,7 @@ class PrivateStreamingSink:
                  "DEFAULT_OFF_OR_ABORTED")
         _require(time.monotonic() - self._start_monotonic < 86400,
                  "24H_RUNTIME_EXPIRED")
+        assert self.permit is not None
         _require(datetime.now(UTC) < _utc(self.permit.expires_utc), "PERMIT_EXPIRED")
 
     def _validate(self, item: Mapping[str, Any]) -> dict[str, Any]:
@@ -405,6 +407,7 @@ class PrivateStreamingSink:
         _require(type(value) is dict and set(value) ==
                  {"bids", "asks", "complete_source_claim"} and
                  value["complete_source_claim"] is True, "BAD_FULL_BOOK_SHAPE")
+        assert isinstance(value, dict)
         bids = _levels(value["bids"], True)
         asks = _levels(value["asks"], False)
         _require(Decimal(bids[0][0]) < Decimal(asks[0][0]), "CROSSED_BOOK")
@@ -416,7 +419,8 @@ class PrivateStreamingSink:
                  all(type(token) is str and token in BRIDGE_PM_TOKENS.values()
                      for token in value) and len(value) == len(set(value)),
                  "NONFROZEN_TOKEN_OR_DUPLICATE")
-        return list(value)
+        assert isinstance(value, list)
+        return cast(list[str], value)
 
     def _validate_bridge(
         self, row: Mapping[str, Any]
@@ -594,7 +598,10 @@ class PrivateStreamingSink:
             self._abi_mode = "bridge"
             tag, state = update
             if tag == "SIG":
-                ex, sig_state, last_native = state
+                ex, sig_state, last_native = cast(
+                    tuple[str, tuple[int, int, int, datetime],
+                          tuple[int, datetime, int] | None], state
+                )
                 self._bridge_sig[ex] = sig_state
                 if last_native is not None:
                     self._bridge_last_native[ex] = last_native
@@ -603,11 +610,11 @@ class PrivateStreamingSink:
                 if not clean["full_books"]:
                     self._bridge_nonbook += 1
             elif tag == "PM_SEED":
-                epoch, token = state
+                epoch, token = cast(tuple[int, str], state)
                 self._bridge_pm_epoch = epoch
                 self._bridge_pm_seeded.add(token)
             elif tag == "PM_WS":
-                self._bridge_pm_ordinal = state
+                self._bridge_pm_ordinal = cast(int, state)
                 if not clean["affected_tokens"]:
                     self._bridge_unchanged_ws += 1
             elif tag == "PM_DISCONNECT":
@@ -667,6 +674,7 @@ class PrivateStreamingSink:
     def purge_after_deadline(self, now: datetime | None = None) -> bool:
         """Explicit caller-invoked purge, NOT a scheduler or proven retention enforcement."""
         _require(self.permit is not None and not self.enabled, "CLOSE_BEFORE_PURGE")
+        assert self.permit is not None
         _require((now or datetime.now(UTC)) >= _utc(self.permit.purge_utc),
                  "PURGE_NOT_DUE")
         shutil.rmtree(self.root)
