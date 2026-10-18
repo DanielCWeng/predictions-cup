@@ -700,7 +700,11 @@ def test_ordered_two_pm_changes_and_native_sig_remain_reference_only() -> None:
 
 def test_unknown_or_ambiguous_source_clock_cannot_make_reference_gap() -> None:
     o = observer()
-    append(o, book("PM_FULL_SEED"))
+    seed = book("PM_FULL_SEED")
+    # Keep the seed→change clock intervals strictly ordered, then separately
+    # make the cross-venue PM-vs-SIG source clock intervals ambiguous.
+    seed["publisher_at"] = "2026-10-17T23:59:59Z"
+    append(o, seed)
     pm = book("PM_BOOK_CHANGE")
     pm["clock_uncertainty_ms"] = 1000
     append(o, pm)
