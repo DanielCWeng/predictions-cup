@@ -144,7 +144,7 @@ def snapshot(at: datetime, b: dict[str, list[tuple[Decimal, Decimal]]],
 def sig_original(rows: list[dict[str, Any]], counters: dict[str, int],
                  uncertainty: timedelta) -> dict[str, list[dict[str, Any]]]:
     output: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    prior: dict[str, tuple[str, int, int, datetime]] = {}
+    prior: dict[str, tuple[str, int, int, datetime, int]] = {}
     native: dict[str, tuple[str, int, int, datetime]] = {}
     dirty: dict[str, tuple[str, int]] = {}
     ordered = sorted(rows, key=lambda x: utc(x["local_receive_at"]))
@@ -194,14 +194,14 @@ def sig_original(rows: list[dict[str, Any]], counters: dict[str, int],
             dirty.pop(market, None)  # a genuine new session/epoch boundary
         old = prior.get(market)
         clean = (old is not None and old[0] == session and old[1] == epoch
-                 and old[2] == prev and rev > prev and
+                 and old[2] == prev and rev > prev and seq_from >= old[4] and
                  receive > old[3] + uncertainty * 2 and
                  frame.get("resyncRequired") is not True)
         if not clean:
             counters["sig_gaps_or_unanchored"] += 1
             if old is not None and old[:2] == (session, epoch):
                 dirty[market] = (session, epoch)
-        prior[market] = (session, epoch, rev, receive)
+        prior[market] = (session, epoch, rev, receive, seq_to)
         books = frame.get("books", [])
         if not isinstance(books, list):
             counters["sig_invalid"] += 1
