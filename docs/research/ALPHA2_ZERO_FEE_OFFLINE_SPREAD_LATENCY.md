@@ -53,3 +53,28 @@ Observed archived target `books=[]` rows **0** in this bounded scan. **N_SIG_NAT
 Already-existing supervisor records spanning ~16:49–18:49 UTC showed **>=718,763** PM uninitialised deltas and **>=331** SIG revision-gap increments after segmenting counter resets; these are lower bounds, not all-four-target counts. A 24h **file inventory** found 1,405 SIG and 1,398 PM archive shards but its sampled row scan timed out, so there is **no measured 24h native-book total**. The lowest-cost next step is running this CLI locally only if an already recorded genuine PM REST-seed/WS bridge log exists; otherwise #199 can extract additional small *aggregate* native continuity and #205 can explicitly analyse NONEXECUTABLE scalar/directional sensitivity without promoting it. No collector restart, extra venue read or raw upload is implied.
 
 Directives: [#206/6253691001](https://github.com/DanielCWeng/predictions-cup/issues/206#issuecomment-6253691001), [#201/6253638952](https://github.com/DanielCWeng/predictions-cup/issues/201#issuecomment-6253638952). No new PR, #318 untouched, no West service/collector change, no maker order/transfer, no off-machine source upload. #207 LIVE STOP-SHIP absolute.
+
+
+## New directive #206/6254067762: GENUINE archived prices in a separate NONEXECUTABLE_PROXY mode
+
+The strict `--pm-events` original REST seed/ordered WS path is **unchanged** and remains distinct. For locally recorded SIG native full books plus Polymarket **periodic** `depth_snapshots` (not REST-seed proof), run a bounded read-only per-market numeric bid/ask reference screen:
+
+```bash
+# This must run on the machine with BOTH real archived roots, not against invented fixtures.
+# Paths below are OPERATOR placeholders; stdout aggregate JSON only, no file writes.
+timeout 180s nice -n 15 ionice -c3 .venv/bin/python -B -m \
+  predictions_cup.research.zero_fee_spread_latency \
+  --periodic-depth-proxy \
+  --sig-root /OWNER_LOCAL_SIG_ARCHIVE \
+  --pm-root /OWNER_LOCAL_PM_ARCHIVE \
+  --start 2026-10-18T16:50:00Z --end 2026-10-18T18:50:00Z
+```
+
+This invokes `archived_depth_proxy.analyze_archived_proxy`, isolated from `analyze` / `pm_original` / `ranked`: it **cannot increment admitted pair counts**. It reads only archived SIG `raw_events` and PM `depth_snapshots`, scans only overlapping UTC date/hour buckets, projects needed Parquet columns and keeps only four pinned market/token records in memory. Caps: **160 shards and 90 compressed MiB per stream**, 210,000 input rows per stream, maximum **3-hour** UTC request; exceeded budgets fail explicitly without retry/unbounded scan. Operator should split windows if needed. No venue requests, no maker/journal/WAL, no capture setup or service/config changes and no raw upload.
+
+The output has four `per_market` rows with measured `n_raw_native_two_sided`, `n_pm_two_sided_periodic`, screened unique publisher revisions, rejected missing/stale/native-reversed clock counts and deduplicated publisher asOf, two nearest-earlier PM periodic matching bins **0–2 seconds** and **(2–5] seconds**, and `n_feasible` at n=1/5/10/20 in both BUY_SIG_SELL_PM_YES and BUY_PM_SELL_SIG_YES directions. Exact quantity is floored **per level** before depth VWAP (no fractional aggregation or invented partial fill). `gap_extremes_per_share` reports **max and min observed signed other-bid−buy-ask** on the price-only reference; n-feasible captures both positive and negative gaps. `top_five_measured_positive_depth_proxies` ranks distinct market/direction/n by maximum observed *n × positive price gap*; **NULL** if no positive fully-priced row. Tail fields are hypothetical -25c/share and isolated long-leg premium-loss stress, with empirical observed-loss tail and fill **NULL**. `wrong_market_placebo` deliberately swaps same-event partisan YES tokens; it is never considered tradable.
+
+**Every field is `NONEXECUTABLE_PROXY_ONLY_NO_ADMISSION`** because PM periodic snapshots are not guaranteed complete original post-seed book innovations, clock uncertainty has not been attested, a recorded SIG native publisher frame is not evidence a quote survives the 0–5 second gap, and no order/ACK/queue/size-fill evidence has been observed. 250ms/1s/2s adverse markouts are literal **NULL**: periodic snapshots are not continuous book histories. Zero SIG platform fees do **not** remove paid spread, latency loss or queue risk. Real executable after-cost PnL stays NULL.
+
+**Real baseline from #199/6253925938** remains the independently scanned **3,533** SIG native raw two-sided frames, **464** target periodic PM two-sided rows, and **≥278** simple prior-within-5s overlaps on 2026-10-18 16:50–18:50 UTC. These were not whole-share repriced; they are *counts only*, not an observed price gap. Until this new command runs locally against those same original private archives, every requested **genuine observed numeric gap/VWAP/top-five price rank remains NULL**. Do not invent prices from aggregate counts or from the deterministic unit tests. Coordinating with West #199 for one resource-limited on-host execution is the narrow remaining dependency.
+
