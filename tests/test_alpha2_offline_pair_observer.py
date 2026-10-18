@@ -1,0 +1,329 @@
+"""Invented OFFLINE records only; no venue, filesystem, host, cloud or trade path."""
+
+from __future__ import annotations
+
+import copy
+import hashlib
+from typing import Any
+
+import pytest
+
+from predictions_cup.research import offline_pair_observer as ob
+
+_SHA = "a" * 40
+_SIG = "2026-10-18T00:00:02Z"
+_PM_SEED = "2026-10-18T00:00:00Z"
+_PM_CHANGE = "2026-10-18T00:00:01Z"
+_TOURNAMENT = "bda92870-621e-47b0-bc3c-3602c5c26f55"
+_MAP = {
+    "912": ("223", "0xe0fbb3e61e61b14f5fef15ffdd0e2a0c6cf4336bb5b15877fe3e3c9fdcc6bc7f",
+            "94033987553817825990709512567031751048276730850154145976615728913102874968691"),
+    "913": ("224", "0xf207d480dde3add509a4b1a355d4f3b06195f917de37ff94f7814d9277df0cdd",
+            "70720420928389492978842914190430712299346582376255109200751838945374631181994"),
+    "959": ("270", "0x66bbf6d55e0296278858b3147689f3df9259374f158f9f028b608baa322a639c",
+            "7589880081658059374445882095611024032084645048848237404312287942463647821549"),
+    "960": ("271", "0x2c00cb09722a0f0501c5e49131b898ed57bb5c075db4dc2bcbc14908f45b8c48",
+            "2142948285506077695096498341598672159464223074468931276310105532825810210121"),
+}
+
+
+def observer(*, approved: bool = True) -> ob.OfflinePairObserver:
+    # Test-only fake verifier is NOT a real operator authorisation.
+    return ob.OfflinePairObserver(
+        ob.OperatorRelease("FAKE-TEST-NOT-A-PERMIT", "0" * 64, "2027-01-01T00:00:00Z"),
+        lambda release: approved and release.release_id.startswith("FAKE-TEST"),
+    )
+
+
+def book(
+    kind: str, *, exchange: str = "912", received: str | None = None
+) -> dict[str, Any]:
+    m, condition, token = _MAP[exchange]
+    when = received or (
+        _PM_SEED if kind == "PM_FULL_SEED"
+        else _PM_CHANGE if kind == "PM_BOOK_CHANGE"
+        else "2026-10-18T00:00:03Z"
+    )
+    publisher = (
+        _PM_SEED if kind == "PM_FULL_SEED"
+        else _PM_CHANGE if kind == "PM_BOOK_CHANGE"
+        else _SIG
+    )
+    row: dict[str, Any] = {
+        "kind": kind,
+        "source": {
+            "SIG_FULL_BOOK": "SIG_REALTIME_NATIVE_FULL_BOOK",
+            "PM_FULL_SEED": "PM_REST_SEED_FULL_BOOK",
+            "PM_BOOK_CHANGE": "PM_WS_RECONSTRUCTED_FULL_BOOK",
+        }[kind],
+        "producer_git_sha": _SHA,
+        "producer_run_id": "synthetic-run",
+        "exchange_id": exchange,
+        "market_id": m,
+        "condition_id": condition,
+        "token_id": token,
+        "tournament_id": _TOURNAMENT,
+        "outcome": "YES",
+        "raw_source_sha256": "",
+        "clock_uncertainty_ms": 0,
+        "received_at": when,
+        "publisher_at": publisher,
+        "bids": [["0.42", "25"]],
+        "asks": [["0.66", "25"]],
+    }
+    if kind == "SIG_FULL_BOOK":
+        row.update({
+            "connection_epoch": 1,
+            "native_asof_sequence": 4,
+            "native_asof_at": _SIG,
+            "delivery_revision": 7,
+            "previous_revision": 6,
+            "source_sequence_from": 10,
+            "source_sequence_through": 11,
+            "resync_required": False,
+            "has_full_book": True,
+        })
+        row["bids"] = [["0.40", "25"]]
+        row["asks"] = [["0.60", "25"]]
+    else:
+        row.update({
+            "connection_epoch": 1,
+            "seed_epoch": 1,
+            "local_receive_ordinal": 0 if kind == "PM_FULL_SEED" else 1,
+            "local_drop_total": 0,
+            "seed_complete": True,
+        })
+        if kind == "PM_BOOK_CHANGE":
+            row["bids"] = [["0.65", "25"]]
+            row["asks"] = [["0.67", "25"]]
+    return row
+
+
+def append(o: ob.OfflinePairObserver, row: dict[str, Any], payload: bytes = b"FAKE-BYTES") -> str:
+    row["raw_source_sha256"] = hashlib.sha256(payload).hexdigest()
+    return o.ingest(row, payload)
+
+
+def full_pair(o: ob.OfflinePairObserver, exchange: str = "912") -> None:
+    append(o, book("PM_FULL_SEED", exchange=exchange))
+    append(o, book("PM_BOOK_CHANGE", exchange=exchange))
+    append(o, book("SIG_FULL_BOOK", exchange=exchange))
+
+
+def assert_nulls(s: ob.Screen) -> None:
+    assert s.native_fill_rate is None
+    assert s.authentic_fees is None
+    assert s.after_cost_pnl is None
+    assert s.source_admitted is False
+    assert s.paper_admitted is False
+    assert s.certifies_250ms_survival is False
+
+
+def test_default_disabled_and_release_must_be_verified() -> None:
+    assert not ob.OfflinePairObserver().enabled
+    with pytest.raises(ob.OfflineDenied, match="DEFAULT_DISABLED"):
+        append(ob.OfflinePairObserver(), book("PM_FULL_SEED"))
+    x = observer(approved=False)
+    assert not x.enabled
+
+
+def test_valid_offline_sequence_frozen_four_contracts_are_only_descriptive() -> None:
+    for exchange in ("912", "913", "959", "960"):
+        o = observer()
+        full_pair(o, exchange)
+        s = o.screen(exchange, "2026-10-18T00:00:04Z", 5)
+        assert s.verdict == "REFERENCE_ONLY_2S_5S_NOT_RESTING_PROOF"
+        assert s.yes_reference_gap == "0.05"
+        assert s.no_reference_gap == "-0.27"
+        assert_nulls(s)
+        assert len(o.journal_bytes().splitlines()) == 3
+
+
+def test_tiny_and_large_whole_lot_ladder_and_insufficient_depth() -> None:
+    o = observer()
+    full_pair(o)
+    for n in (1, 5, 10, 20):
+        assert_nulls(o.screen("912", "2026-10-18T00:00:04Z", n))
+    assert o.screen("912", "2026-10-18T00:00:04Z", 20).yes_reference_gap == "0.05"
+    with pytest.raises(ob.OfflineDenied, match="WHOLE_LOT"):
+        o.screen("912", "2026-10-18T00:00:04Z", 2)
+    z = observer()
+    append(z, book("PM_FULL_SEED"))
+    append(z, book("PM_BOOK_CHANGE"))
+    a = book("SIG_FULL_BOOK")
+    a["asks"] = [["0.60", "3"]]
+    append(z, a)
+    assert z.screen("912", "2026-10-18T00:00:04Z", 5).verdict == "WHOLE_DEPTH_INSUFFICIENT"
+
+
+def test_no_unseeded_pm_delta() -> None:
+    o = observer()
+    with pytest.raises(ob.OfflineDenied, match="PM_DELTA_BEFORE_SEED"):
+        append(o, book("PM_BOOK_CHANGE"))
+    assert o.aborted
+
+
+def test_reconnect_and_local_loss_do_not_imply_global_exchange_sequence() -> None:
+    o = observer()
+    append(o, book("PM_FULL_SEED"))
+    changed = book("PM_BOOK_CHANGE")
+    changed["connection_epoch"] = 2
+    with pytest.raises(ob.OfflineDenied, match="PM_WS_RECONNECT_DROP"):
+        append(o, changed)
+    assert o.aborted
+
+    z = observer()
+    append(z, book("PM_FULL_SEED"))
+    dropped = book("PM_BOOK_CHANGE")
+    dropped["local_drop_total"] = 1
+    with pytest.raises(ob.OfflineDenied, match="PM_DROPPED_WS_MESSAGES"):
+        append(z, dropped)
+
+
+def test_pm_duplicate_ordinal_and_unchanged_rebuild_fail() -> None:
+    o = observer()
+    append(o, book("PM_FULL_SEED"))
+    append(o, book("PM_BOOK_CHANGE"))
+    duplicate = book("PM_BOOK_CHANGE", received="2026-10-18T00:00:02Z")
+    with pytest.raises(ob.OfflineDenied, match="PM_WS_RECONNECT_DROP"):
+        append(o, duplicate)
+
+    z = observer()
+    append(z, book("PM_FULL_SEED"))
+    same = book("PM_BOOK_CHANGE")
+    same["bids"] = [["0.42", "25"]]
+    same["asks"] = [["0.66", "25"]]
+    with pytest.raises(ob.OfflineDenied, match="PM_NOT_A_PRICE"):
+        append(z, same)
+
+
+def test_sig_bookdirty_rest_mirror_or_resync_rejected() -> None:
+    for change in (
+        {"source": "SIG_REST_AUTHORITATIVE"},
+        {"has_full_book": False},
+        {"resync_required": True},
+    ):
+        o = observer()
+        row = book("SIG_FULL_BOOK")
+        row.update(change)
+        with pytest.raises(ob.OfflineDenied, match="(SOURCE_IS_NOT|BOOK_DIRTY)"):
+            append(o, row)
+
+
+def test_sig_native_asof_revision_gap_duplicate_and_reconnect_rejected() -> None:
+    for change, marker in (
+        ({"native_asof_sequence": 4, "delivery_revision": 8, "previous_revision": 7},
+         "SIG_ASOF_NONMONOTONIC"),
+        ({"native_asof_sequence": 5, "delivery_revision": 9, "previous_revision": 8},
+         "SIG_REVISION_GAP"),
+        ({"connection_epoch": 2, "native_asof_sequence": 5,
+          "delivery_revision": 8, "previous_revision": 7},
+         "SIG_RECONNECT"),
+    ):
+        o = observer()
+        append(o, book("SIG_FULL_BOOK"))
+        next_row = book("SIG_FULL_BOOK", received="2026-10-18T00:00:05Z")
+        next_row["native_asof_at"] = "2026-10-18T00:00:04Z"
+        next_row["publisher_at"] = "2026-10-18T00:00:04Z"
+        next_row.update(change)
+        with pytest.raises(ob.OfflineDenied, match=marker):
+            append(o, next_row)
+
+
+def test_wrong_market_outcome_and_party_yes_substitution_denied() -> None:
+    for change in ({"market_id": "224"}, {"outcome": "NO"},
+                   {"condition_id": _MAP["913"][1]},
+                   {"token_id": _MAP["913"][2]}):
+        o = observer()
+        row = book("PM_FULL_SEED")
+        row.update(change)
+        with pytest.raises(ob.OfflineDenied, match="FROZEN_EXACT_SAME"):
+            append(o, row)
+
+
+def test_missing_clock_uncertainty_and_future_source_denied() -> None:
+    o = observer()
+    row = book("PM_FULL_SEED")
+    row["clock_uncertainty_ms"] = None
+    with pytest.raises(ob.OfflineDenied, match="CLOCK_UNCERTAINTY_UNKNOWN"):
+        append(o, row)
+    z = observer()
+    future = book("PM_FULL_SEED")
+    future["publisher_at"] = "2026-10-18T00:00:09Z"
+    with pytest.raises(ob.OfflineDenied, match="SOURCE_FUTURE"):
+        append(z, future)
+
+
+def test_stale_or_after_decision_data_not_used_to_make_a_screen() -> None:
+    o = observer()
+    full_pair(o)
+    assert o.screen("912", "2026-10-18T00:00:01Z", 1).verdict == "NONCAUSAL_OR_STALE"
+    assert o.screen("912", "2026-10-18T00:00:12Z", 1).verdict == "NONCAUSAL_OR_STALE"
+
+
+def test_hash_of_actual_original_supplied_bytes_required() -> None:
+    o = observer()
+    row = book("PM_FULL_SEED")
+    row["raw_source_sha256"] = "f" * 64
+    with pytest.raises(ob.OfflineDenied, match="ORIGINAL_BYTES_HASH_MISMATCH"):
+        o.ingest(row, b"DIFFERENT")
+    assert o.aborted
+
+
+def test_bounded_output_and_abort_are_irreversible(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ob, "_MAX_OUTPUT", 80)
+    o = observer()
+    with pytest.raises(ob.OfflineDenied, match="BOUNDED_OUTPUT_EXCEEDED"):
+        append(o, book("PM_FULL_SEED"))
+    assert o.aborted
+    with pytest.raises(ob.OfflineDenied, match="DEFAULT_DISABLED"):
+        append(o, book("PM_FULL_SEED"))
+
+
+def test_24_hour_limit_enforced_even_with_valid_row_shape() -> None:
+    o = observer()
+    append(o, book("SIG_FULL_BOOK"))
+    too_late = book("SIG_FULL_BOOK", received="2026-10-19T00:00:04Z")
+    with pytest.raises(ob.OfflineDenied, match="24H_WINDOW"):
+        append(o, too_late)
+
+
+def test_deterministic_chain_does_not_emit_original_raw_payload_or_secrets() -> None:
+    a, b = observer(), observer()
+    sample = b"SECRET-SHOULD-NOT-BE-WRITTEN"
+    aa = append(a, book("PM_FULL_SEED"), sample)
+    bb = append(b, book("PM_FULL_SEED"), sample)
+    assert aa == bb
+    assert a.journal_bytes() == b.journal_bytes()
+    assert sample not in a.journal_bytes()
+    assert b"raw_source_sha256" in a.journal_bytes()
+
+
+def test_unexpected_credentials_or_pii_field_fails_closed() -> None:
+    o = observer()
+    row = book("PM_FULL_SEED")
+    row["access_token"] = "NOT_REAL"
+    with pytest.raises(ob.OfflineDenied, match="UNEXPECTED_OR_MISSING_FIELDS"):
+        append(o, row)
+
+
+def test_ladders_sorted_and_uncrossed() -> None:
+    for change in (
+        {"bids": [["0.40", "1"], ["0.41", "1"]]},
+        {"asks": [["0.60", "1"], ["0.60", "1"]]},
+        {"bids": [["0.80", "1"]]},
+    ):
+        o = observer()
+        row = book("SIG_FULL_BOOK")
+        row.update(change)
+        with pytest.raises(ob.OfflineDenied, match="(UNSORTED|CROSSED)"):
+            append(o, row)
+
+
+def test_synthetic_raw_book_cannot_be_promoted_to_real_pnl() -> None:
+    o = observer()
+    full_pair(o)
+    s = o.screen("912", "2026-10-18T00:00:04Z", 1)
+    assert s.yes_reference_gap == "0.05"
+    assert_nulls(s)
+    assert s.verdict != "EXECUTABLE" and not s.certifies_250ms_survival
