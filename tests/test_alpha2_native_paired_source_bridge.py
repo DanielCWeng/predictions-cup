@@ -208,6 +208,39 @@ def test_multiple_shares_floor_per_level_and_no_fee_imputation() -> None:
                                after_shock_verified=True) == (None, None)
 
 
+
+def test_rejected_sig_book_does_not_advance_native_delivery_continuity() -> None:
+    b, records = bridge()
+    b.sig_batch(topic_market_id="223", batch=sig(1),
+                received_at="2026-10-18T10:00:01Z", connection_epoch=1)
+    with pytest.raises(SourceRejected, match="SIG_NATIVE_ASOF_MISSING"):
+        b.sig_batch(
+            topic_market_id="223",
+            batch=sig(2, previous=1,
+                      books=[{"exchangeId": "912", "bids": BIDS, "asks": ASKS}]),
+            received_at="2026-10-18T10:00:02Z", connection_epoch=1,
+        )
+    assert b.sig_state["223"][1] == 1
+    b.sig_batch(topic_market_id="223", batch=sig(3, previous=2),
+                received_at="2026-10-18T10:00:03Z", connection_epoch=1)
+    assert records[-1]["gap_or_unanchored"] is True
+
+
+def test_rejected_pm_frame_does_not_advance_ws_ordinal() -> None:
+    b, records = bridge()
+    b.pm_rest_seed(token_id=PM["223"], epoch=1, bids=BIDS, asks=ASKS,
+                   received_at="2026-10-18T10:00:01Z")
+    with pytest.raises(SourceRejected, match="RAW_BYTES_CAP"):
+        b.pm_ws_event(epoch=1, ordinal=1, received_at="2026-10-18T10:00:02Z",
+                      affected_token_ids=[], reconstructed_books={},
+                      raw_frame=cast(bytes, "not original bytes"))
+    assert b.pm_ordinal == 0
+    b.pm_ws_event(epoch=1, ordinal=2, received_at="2026-10-18T10:00:03Z",
+                  affected_token_ids=[PM["223"]], reconstructed_books={})
+    assert records[-1]["gap_or_unanchored"] is True
+    assert records[-1]["abstain_tokens"] == [PM["223"]]
+
+
 def test_bounded_24hour_equivalent_one_hz_no_buffer_and_measured_synthetic_rate() -> None:
     """86,400 invented 1-Hz deliveries; sinks do not store source book bytes."""
     count = 0
@@ -220,8 +253,15 @@ def test_bounded_24hour_equivalent_one_hz_no_buffer_and_measured_synthetic_rate(
 
     b, _ = bridge(emit=drop_after_accounting)
     start = datetime(2026, 10, 18, tzinfo=UTC)
-    tracemalloc.start()
+    import sys
     import time
+
+    starting_rss_kib = None
+    if sys.platform == "linux":
+        import resource
+
+        starting_rss_kib = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    tracemalloc.start()
 
     tick = time.perf_counter()
     for i in range(86_400):
@@ -231,9 +271,17 @@ def test_bounded_24hour_equivalent_one_hz_no_buffer_and_measured_synthetic_rate(
     seconds = time.perf_counter() - tick
     _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
+    if starting_rss_kib is not None:
+        import resource
+
+        rss_delta_kib = (
+            resource.getrusage(resource.RUSAGE_SELF).ru_maxrss - starting_rss_kib
+        )
+        assert rss_delta_kib < 32 * 1024
     print(f" SYNTHETIC_24H_1HZ records={count} bytes={bytes_total}"
           f" peak_tracemalloc={peak} elapsed_s={seconds:.3f}"
           f" throughput_records_s={count / seconds:.1f}")
+    assert count / seconds > 1000
     assert count == 86_400
     assert b.records_emitted == count
     assert peak < 8_000_000  # bridge: O(4) state, not a storage-capacity claim
