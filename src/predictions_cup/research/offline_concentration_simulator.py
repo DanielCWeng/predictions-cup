@@ -9,9 +9,9 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_FLOOR
-from typing import Mapping
 
 D = Decimal
 Z = D("0")
@@ -98,7 +98,7 @@ def _valid(c: Capital, candidates: tuple[Candidate, ...],
         if (not Z < x.ask_vwap <= ONE or not Z <= x.bid_exit_vwap <= ONE
                 or not Z <= x.pretrade_mid <= ONE or x.latency_slippage < Z
                 or x.ask_vwap + x.latency_slippage > ONE
-                or not 0 <= x.arrived_depth_shares
+                or x.arrived_depth_shares < 0
                 or not Z <= x.fill_if_win <= ONE
                 or not Z <= x.fill_if_lose <= ONE):
             raise ValueError("INVALID_PRICE_DEPTH_OR_FILL")
@@ -271,13 +271,18 @@ def report_demo() -> dict[str, object]:
             "name": r.strategy, "allocations": dict(r.allocations),
             "max_paid_cash": str(r.cash_reserved_max), "gross_shares": r.gross_increment,
             "paid_spread_vs_mid_each": {k: str(v) for k, v in r.paid_spread_per_share},
-            "quoted_entry_to_exit_spread_each": {k: str(v) for k, v in r.roundtrip_spread_per_share},
+            "quoted_entry_to_exit_spread_each": {
+                k: str(v) for k, v in r.roundtrip_spread_per_share
+            },
             "expected_net_susq_ASSUMED": str(r.expected_net_susq),
             "P_terminal_at_least_125k_ASSUMED": str(r.prob_beat_target),
             "P_terminal_at_most_40k_ASSUMED": str(r.prob_bust),
             "worst_terminal_susq_ASSUMED": str(r.worst_terminal_susq),
             "p05_terminal_susq_ASSUMED": str(r.p05_terminal_susq),
-            "P_actual_first": None if r.first_place_probability is None else str(r.first_place_probability),
+            "P_actual_first": (
+                None if r.first_place_probability is None
+                else str(r.first_place_probability)
+            ),
             "realised_net_susq": None,
         } for r in res],
         "source_admitted": False, "paper_admitted": False, "live_authorised": False,
@@ -289,7 +294,7 @@ def main() -> None:
     ap.add_argument("--demo", action="store_true", help="invented scenarios only")
     args = ap.parse_args()
     if not args.demo:
-        ap.error("No empirically admitted whole-share source inputs; use --demo for invented scenario")
+        ap.error("No admitted market source inputs; --demo runs invented scenarios only")
     print(json.dumps(report_demo(), sort_keys=True, indent=2))
 
 
