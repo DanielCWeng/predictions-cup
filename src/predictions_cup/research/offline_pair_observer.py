@@ -73,7 +73,7 @@ def _utc(value: object) -> datetime:
 def _decimal(value: object, *, price: bool = False) -> Decimal:
     _need(isinstance(value, str), "DECIMAL_STRING_REQUIRED")
     try:
-        d = Decimal(value)
+        d = Decimal(cast(str, value))
     except InvalidOperation as exc:
         raise OfflineDenied("INVALID_DECIMAL") from exc
     _need(d.is_finite() and (Decimal(0) < d < Decimal(1) if price else d > 0),
@@ -185,7 +185,7 @@ class OfflinePairObserver:
             "SIG_FULL_BOOK": "SIG_REALTIME_NATIVE_FULL_BOOK",
             "PM_FULL_SEED": "PM_REST_SEED_FULL_BOOK",
             "PM_BOOK_CHANGE": "PM_WS_RECONSTRUCTED_FULL_BOOK",
-        }[kind], "SOURCE_IS_NOT_NATIVE_FULL_BOOK_OR_SEEDED_PM")
+        }[cast(str, kind)], "SOURCE_IS_NOT_NATIVE_FULL_BOOK_OR_SEEDED_PM")
         _need(_HEX40.fullmatch(_text(row.get("producer_git_sha"), "PRODUCER_MISSING"))
               is not None, "PRODUCER_SHA_INVALID")
         _text(row.get("producer_run_id"), "PRODUCER_RUN_MISSING")
@@ -238,7 +238,8 @@ class OfflinePairObserver:
                 _need(row.get("seed_complete") is True and ordinal == 0
                       and seed == epoch and prior_pm is None, "INCOMPLETE_OR_REUSED_PM_SEED")
             else:
-                _need(prior_pm is not None, "PM_DELTA_BEFORE_SEED")
+                if prior_pm is None:
+                    raise OfflineDenied("PM_DELTA_BEFORE_SEED")
                 _need(row.get("seed_complete") is True
                       and epoch == prior_pm["connection_epoch"]
                       and seed == prior_pm["seed_epoch"]
