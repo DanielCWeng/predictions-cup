@@ -26,8 +26,8 @@ from predictions_cup.research.native_paired_source_bridge import (
 
 SIZES = (1, 5, 10, 20)
 HORIZONS_MS = (250, 1000, 2000)
-MAX_FILES = 4000
-MAX_ROWS = 2_000_000
+MAX_FILES = 1000
+MAX_ROWS = 250_000
 MAX_LAG_MS = 2000
 MAX_TARGET_BRACKET_MS = 100
 
@@ -366,7 +366,7 @@ def compare(sig: dict[str, Any], pm: dict[str, Any], size: int,
 def ranked(sig: dict[str, list[dict[str, Any]]],
            pm: dict[str, list[dict[str, Any]]], uncertainty: timedelta,
            counters: dict[str, int]) -> tuple[list[dict[str, object]], int]:
-    candidates: list[dict[str, object]] = []
+    candidates: dict[tuple[str, str, int], dict[str, object]] = {}
     matched = 0
     for market in SIG_MARKETS:
         token = PM_EXACT_SAME_YES[market][2]
@@ -405,7 +405,7 @@ def ranked(sig: dict[str, list[dict[str, Any]]],
                                     else None)
                         markouts[str(ms) + "ms_gap_delta"] = (
                             fmt(measured[2] - gap) if measured is not None else None)
-                    candidates.append({
+                    candidate: dict[str, object] = {
                         "market": market,
                         "exchange": SIG_MARKETS[market],
                         "pm_yes_token": token,
@@ -425,20 +425,52 @@ def ranked(sig: dict[str, list[dict[str, Any]]],
                         "observed_tail_p05": None,
                         "markout": markouts,
                         "evidence": "CONDITIONAL_UNAUTHENTICATED_DEPTH_REFERENCE",
-                    })
-    candidates.sort(key=lambda c: Decimal(str(c["conditional_upside_zero_fee"])),
-                    reverse=True)
-    unique: set[tuple[str, str, int]] = set()
-    top: list[dict[str, object]] = []
-    for candidate in candidates:
-        key = (str(candidate["market"]), str(candidate["direction"]), int(candidate["n"]))
-        if key in unique:
-            continue
-        unique.add(key)
-        top.append(candidate)
-        if len(top) == 5:
-            break
+                    }
+                    counters["positive_size_dislocations"] += 1
+                    key = (market, direction, size)
+                    old_best = candidates.get(key)
+                    if old_best is None or Decimal(
+                        str(candidate["conditional_upside_zero_fee"])
+                    ) > Decimal(str(old_best["conditional_upside_zero_fee"])):
+                        candidates[key] = candidate
+    top = sorted(
+        candidates.values(),
+        key=lambda c: Decimal(str(c["conditional_upside_zero_fee"])),
+        reverse=True,
+    )[:5]
     return top, matched
+
+
+def wrong_market_placebo(sig: dict[str, list[dict[str, Any]]],
+                         pm: dict[str, list[dict[str, Any]]],
+                         uncertainty: timedelta) -> dict[str, object]:
+    """Deliberately WRONG-contract, non-executable negative control."""
+    controls = {"223": "224", "224": "223", "270": "271", "271": "270"}
+    count = 0
+    best: Decimal | None = None
+    for market, other_market in controls.items():
+        other_token = PM_EXACT_SAME_YES[other_market][2]
+        wrong = sorted(pm.get(other_token, []),
+                       key=lambda item: cast(datetime, item["at"]))
+        for sig_book in sig.get(market, []):
+            at = cast(datetime, sig_book["at"])
+            partner = latest_before(wrong, at)
+            if partner is None:
+                continue
+            receipt = cast(datetime, partner["at"])
+            if (receipt + uncertainty >= at - uncertainty or
+                    at - receipt > timedelta(milliseconds=MAX_LAG_MS)):
+                continue
+            count += 1
+            for direction in ("BUY_SIG_SELL_PM_YES", "BUY_PM_SELL_SIG_YES"):
+                gap = compare(sig_book, partner, 1, direction)
+                if gap is not None:
+                    best = max(best, gap[2]) if best is not None else gap[2]
+    return {
+        "wrong_contract_pairs": count,
+        "max_wrong_contract_gap_1share": fmt(best),
+        "label": "INVALID_MARKET_NEGATIVE_CONTROL_NOT_TRADABLE",
+    }
 
 
 def proxy(sig_rows: list[dict[str, Any]], pm_rows: list[dict[str, Any]],
@@ -516,6 +548,8 @@ def analyze(sig_root: Path | None, pm_root: Path | None, pm_events: Path | None,
     ss = sig_original(sr, counters, uncertainty)
     pp = pm_original(pm_events, counters, start, end, uncertainty)
     top, n_matched = ranked(ss, pp, uncertainty, counters)
+    scalar = proxy(sn, po, counters)
+    placebo = wrong_market_placebo(ss, pp, uncertainty)
     observed = [utc(x["local_receive_at"]) for x in sr if x.get("local_receive_at")]
     observed.extend(utc(x["observed_at"]) for x in po if x.get("observed_at"))
     observed.extend(utc(x["recorded_at"]) for x in pd if x.get("recorded_at"))
@@ -523,6 +557,7 @@ def analyze(sig_root: Path | None, pm_root: Path | None, pm_events: Path | None,
     return {
         "schema": "alpha2-zero-fee-offline-v1",
         "input": {
+            "sig_root_exists": bool(sig_root is not None and sig_root.is_dir()),
             "sig_raw_shards": counters["raw_events_shards"],
             "pm_bridge_present": bool(pm_events is not None and pm_events.is_file()),
             "pm_periodic_depth_shards": counters["depth_snapshots_shards"],
@@ -540,8 +575,8 @@ def analyze(sig_root: Path | None, pm_root: Path | None, pm_events: Path | None,
         "n_fill_observed": None,
         "fees_sig": "0",
         "top_five_conditional_upside": top,
-        "scalar_proxy": proxy(sn, po, counters),
-        "placebo": "WRONG_CONTRACT_NOT_CERTIFIED_UNLESS_COMPLETE_BOTH_SIDES",
+        "scalar_proxy": scalar,
+        "placebo": placebo,
         "status": "CONDITIONAL_REFERENCE_ONLY" if n_matched else "DATA_GAP_NO_VERIFIED_PAIRS",
         "operator_boundaries": "NO_TRADES_NO_NETWORK_NO_SERVICE_CHANGES_NO_OFFHOST_UPLOAD",
     }
