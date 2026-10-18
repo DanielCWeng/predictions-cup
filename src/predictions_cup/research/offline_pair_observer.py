@@ -12,9 +12,9 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Mapping, cast
 
 # Frozen 2026 EXACT/SAME YES-token crosswalk (public registry, main Git blob
 # 14823ac7043a451c587c6b7a0d3b684dbf7bb5d6).
@@ -55,7 +55,7 @@ def _text(value: object, reason: str) -> str:
 
 def _integer(value: object, reason: str, *, low: int = 0) -> int:
     _need(type(value) is int and value >= low, reason)
-    return int(value)
+    return cast(int, value)
 
 
 def _utc(value: object) -> datetime:
@@ -81,14 +81,15 @@ def _decimal(value: object, *, price: bool = False) -> Decimal:
 
 
 def _levels(raw: object, side: str) -> tuple[tuple[Decimal, Decimal], ...]:
-    _need(isinstance(raw, list) and 0 < len(raw) <= 100, "INCOMPLETE_FULL_DEPTH")
+    if not isinstance(raw, list) or not 0 < len(raw) <= 100:
+        raise OfflineDenied("INCOMPLETE_FULL_DEPTH")
     parsed: list[tuple[Decimal, Decimal]] = []
     for level in raw:
         _need(isinstance(level, list) and len(level) == 2, "INVALID_LEVEL")
         parsed.append((_decimal(level[0], price=True), _decimal(level[1])))
     prices = [p for p, _ in parsed]
     _need(all((a > b if side == "bids" else a < b)
-              for a, b in zip(prices, prices[1:])), "UNSORTED_OR_DUPLICATE_DEPTH")
+              for a, b in zip(prices, prices[1:], strict=True)), "UNSORTED_OR_DUPLICATE_DEPTH")
     return tuple(parsed)
 
 
@@ -154,7 +155,7 @@ class OfflinePairObserver:
         if release is not None and independent_verify is not None:
             _need(bool(_HEX64.fullmatch(release.signature_sha256)), "BAD_RELEASE_DIGEST")
             _text(release.release_id, "RELEASE_ID_MISSING")
-            _need(_utc(release.expires_at) > datetime.now(timezone.utc),
+            _need(_utc(release.expires_at) > datetime.now(UTC),
                   "RELEASE_EXPIRED")
             self._enabled = independent_verify(release) is True
         self._rows: list[bytes] = []
@@ -209,6 +210,7 @@ class OfflinePairObserver:
                   "SIG_NATIVE_ASOF_PUBLISHER_MISMATCH")
             revision = _integer(row.get("delivery_revision"), "REVISION_MISSING", low=1)
             prev_rev = _integer(row.get("previous_revision"), "PREVIOUS_REV_MISSING")
+            _need(prev_rev < revision, "INVALID_REVISION_ORDER")
             _integer(row.get("source_sequence_from"), "SRC_SEQ_MISSING")
             _need(_integer(row.get("source_sequence_through"), "SRC_SEQ_MISSING")
                   >= row["source_sequence_from"], "SRC_SEQ_INVERTED")
@@ -274,7 +276,7 @@ class OfflinePairObserver:
             if self._start is None:
                 self._start = received
             _need(received >= self._start
-                  and received - self._start <= _MAX_AGE, "24H_WINDOW_EXCEEDED")
+                  and received - self._start < _MAX_AGE, "24H_WINDOW_EXCEEDED")
             _need(self._last_at is None or received >= self._last_at,
                   "GLOBAL_RECEIVE_CLOCK_BACKWARDS")
             self._validate(row)
