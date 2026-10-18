@@ -541,3 +541,173 @@ def test_untrusted_producer_run_metadata_injection_denied(run_id: str) -> None:
     with pytest.raises(ob.OfflineDenied, match="(PRODUCER_RUN_INVALID|SENSITIVE_METADATA_DENIED)"):
         append(o, row)
     assert o.aborted
+
+# Focused 18-Oct publisher source-clock replay regressions. Do not weaken
+# the 19 original or the earlier independently accepted adversarial tests.
+
+
+def test_pm_one_hour_backdated_publisher_change_denied_on_ingest() -> None:
+    o = observer()
+    append(o, book("PM_FULL_SEED"))
+    replay = book("PM_BOOK_CHANGE")
+    # Exact Red Team #207 synthetic proof: fresh receipt and ordinal but
+    # publisher from ONE HOUR before the complete PM seed.
+    replay["publisher_at"] = "2026-10-17T23:00:00Z"
+    with pytest.raises(
+        ob.OfflineDenied, match="SOURCE_PUBLISHER_RECEIPT_STALE_OR_UNATTESTED"
+    ):
+        append(o, replay)
+    assert o.aborted
+    assert len(o.journal_bytes().splitlines()) == 1
+
+
+def test_pm_publisher_regression_with_recent_receipts_and_valid_epoch_denied() -> None:
+    o = observer()
+    append(o, book("PM_FULL_SEED"))
+    append(o, book("PM_BOOK_CHANGE"))
+    replay = book("PM_BOOK_CHANGE", received="2026-10-18T00:00:02Z")
+    replay.update({
+        "local_receive_ordinal": 2,
+        "publisher_at": "2026-10-18T00:00:00.500Z",
+        "bids": [["0.63", "25"]],
+        "asks": [["0.68", "25"]],
+    })
+    with pytest.raises(ob.OfflineDenied, match="PM_SOURCE_CLOCK_NONMONOTONIC"):
+        append(o, replay)
+    assert o.aborted
+
+
+@pytest.mark.parametrize(
+    ("previous_uncertainty", "next_uncertainty", "second_publisher"),
+    [
+        (0, 0, "2026-10-18T00:00:00Z"),  # equal source timestamps
+        (600, 600, "2026-10-18T00:00:01Z"),  # overlapping ±UTC intervals
+    ],
+)
+def test_pm_seed_source_equal_or_uncertain_overlap_denied(
+    previous_uncertainty: int,
+    next_uncertainty: int,
+    second_publisher: str,
+) -> None:
+    o = observer()
+    seed = book("PM_FULL_SEED")
+    seed["clock_uncertainty_ms"] = previous_uncertainty
+    append(o, seed)
+    change = book("PM_BOOK_CHANGE")
+    change["clock_uncertainty_ms"] = next_uncertainty
+    change["publisher_at"] = second_publisher
+    with pytest.raises(ob.OfflineDenied, match="PM_SOURCE_CLOCK_NONMONOTONIC"):
+        append(o, change)
+    assert o.aborted
+
+
+def test_sig_increasing_native_revision_with_older_native_asof_denied() -> None:
+    o = observer()
+    append(o, book("SIG_FULL_BOOK"))
+    prior = book("SIG_FULL_BOOK", received="2026-10-18T00:00:04Z")
+    prior.update({
+        "native_asof_sequence": 5,
+        "native_asof_at": "2026-10-18T00:00:01Z",
+        "publisher_at": "2026-10-18T00:00:01Z",
+        "delivery_revision": 8,
+        "previous_revision": 7,
+        "source_sequence_from": 12,
+        "source_sequence_through": 13,
+    })
+    with pytest.raises(ob.OfflineDenied, match="SIG_SOURCE_CLOCK_NONMONOTONIC"):
+        append(o, prior)
+    assert o.aborted
+
+
+def test_sig_native_source_uncertain_overlap_rejected_despite_adjacency() -> None:
+    o = observer()
+    first = book("SIG_FULL_BOOK")
+    first["clock_uncertainty_ms"] = 750
+    append(o, first)
+    following = book("SIG_FULL_BOOK", received="2026-10-18T00:00:04Z")
+    following.update({
+        "clock_uncertainty_ms": 750,
+        "publisher_at": "2026-10-18T00:00:03Z",
+        "native_asof_at": "2026-10-18T00:00:03Z",
+        "native_asof_sequence": 5,
+        "delivery_revision": 8,
+        "previous_revision": 7,
+        "source_sequence_from": 12,
+        "source_sequence_through": 13,
+    })
+    with pytest.raises(ob.OfflineDenied, match="SIG_SOURCE_CLOCK_NONMONOTONIC"):
+        append(o, following)
+    assert o.aborted
+
+
+@pytest.mark.parametrize("venue", ["PM", "SIG"])
+def test_source_old_despite_local_receipt_fresh_denied_at_ingest(
+    venue: str,
+) -> None:
+    o = observer()
+    if venue == "PM":
+        append(o, book("PM_FULL_SEED"))
+        delayed = book("PM_BOOK_CHANGE", received="2026-10-18T00:00:08Z")
+        delayed["publisher_at"] = "2026-10-18T00:00:01Z"
+    else:
+        delayed = book("SIG_FULL_BOOK", received="2026-10-18T00:00:10Z")
+        delayed["publisher_at"] = "2026-10-18T00:00:02Z"
+    with pytest.raises(
+        ob.OfflineDenied, match="SOURCE_PUBLISHER_RECEIPT_STALE_OR_UNATTESTED"
+    ):
+        append(o, delayed)
+    assert o.aborted
+
+
+def test_source_publisher_age_at_decision_nulls_newly_received_book() -> None:
+    o = observer()
+    append(o, book("PM_FULL_SEED"))
+    delayed_pm = book("PM_BOOK_CHANGE", received="2026-10-18T00:00:05Z")
+    delayed_pm["publisher_at"] = "2026-10-18T00:00:01Z"
+    append(o, delayed_pm)  # source→receipt exactly four seconds, permitted
+    sig = book("SIG_FULL_BOOK", received="2026-10-18T00:00:06Z")
+    sig["publisher_at"] = "2026-10-18T00:00:05.500Z"
+    sig["native_asof_at"] = sig["publisher_at"]
+    append(o, sig)
+    result = o.screen("912", "2026-10-18T00:00:07Z", 5)
+    assert result.verdict == "NONCAUSAL_OR_STALE"
+    assert result.yes_reference_gap is None and result.no_reference_gap is None
+    assert_nulls(result)
+
+
+def test_ordered_two_pm_changes_and_native_sig_remain_reference_only() -> None:
+    o = observer()
+    append(o, book("PM_FULL_SEED"))
+    append(o, book("PM_BOOK_CHANGE"))
+    new_pm = book("PM_BOOK_CHANGE", received="2026-10-18T00:00:02Z")
+    new_pm.update({
+        "local_receive_ordinal": 2,
+        "publisher_at": "2026-10-18T00:00:02Z",
+        "bids": [["0.64", "25"]],
+        "asks": [["0.68", "25"]],
+    })
+    append(o, new_pm)
+    sig = book("SIG_FULL_BOOK", received="2026-10-18T00:00:04Z")
+    sig["publisher_at"] = "2026-10-18T00:00:03Z"
+    sig["native_asof_at"] = sig["publisher_at"]
+    append(o, sig)
+    result = o.screen("912", "2026-10-18T00:00:05Z", 5)
+    assert result.verdict == "REFERENCE_ONLY_2S_5S_NOT_RESTING_PROOF"
+    assert result.yes_reference_gap == "0.04"
+    assert result.no_reference_gap == "-0.28"
+    assert_nulls(result)
+
+
+def test_unknown_or_ambiguous_source_clock_cannot_make_reference_gap() -> None:
+    o = observer()
+    append(o, book("PM_FULL_SEED"))
+    pm = book("PM_BOOK_CHANGE")
+    pm["clock_uncertainty_ms"] = 1000
+    append(o, pm)
+    sig = book("SIG_FULL_BOOK")
+    sig["clock_uncertainty_ms"] = 1000
+    append(o, sig)
+    result = o.screen("912", "2026-10-18T00:00:04Z", 1)
+    assert result.verdict == "NONCAUSAL_OR_STALE"
+    assert result.yes_reference_gap is None and result.no_reference_gap is None
+    assert_nulls(result)
