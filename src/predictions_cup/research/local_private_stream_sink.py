@@ -12,11 +12,12 @@ import os
 import re
 import shutil
 import time
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal, InvalidOperation, ROUND_DOWN
+from decimal import ROUND_DOWN, Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 
 _HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 _HEX64 = re.compile(r"[0-9a-f]{64}\Z")

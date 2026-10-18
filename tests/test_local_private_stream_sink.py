@@ -3,21 +3,23 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable
 import json
 import time
 import tracemalloc
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
 from predictions_cup.research.local_private_stream_sink import (
+    BRIDGE_PM_TOKENS,
     LocalRunPermit,
     PrivateStreamingSink,
     SinkDenied,
+    _whole_vwap,
     verify_sealed_archive,
 )
 
@@ -250,8 +252,6 @@ def test_fake_verifier_and_unsafe_parent_rejected(tmp_path: Path) -> None:
 
 # Versioned PR319 SourceBridge.emit(dict) ABI, intentionally invented events.
 # These are private-sink shape tests, NOT original issuer packet authentication.
-from predictions_cup.research.local_private_stream_sink import BRIDGE_PM_TOKENS
-
 
 def bridge_sig(
     sec: int = 0, *, revision: int = 1, previous_revision: int = 0,
@@ -404,7 +404,8 @@ def test_bridge_disconnect_recorded_then_poisoned(tmp_path: Path) -> None:
     with pytest.raises(SinkDenied, match="PM_DISCONNECT_ABORT"):
         s.append_bridge(row)
     assert s.rows == 2 and s.aborted and verify_sealed_archive(s.root)
-    assert json.loads((s.root / "records.jsonl").read_text().splitlines()[-1])["row"]["kind"] == "DISCONNECT"
+    final_row = json.loads((s.root / "records.jsonl").read_text().splitlines()[-1])
+    assert final_row["row"]["kind"] == "DISCONNECT"
 
 
 @pytest.mark.parametrize("field,value,reason", [
@@ -462,3 +463,67 @@ def test_bridge_bounded_burst_synthetic(tmp_path: Path) -> None:
     assert s.rows == 4000 and peak < 8 * 1024 * 1024
     print(f"SYNTH_BRIDGE_BURST count={s.rows} bytes={s.written_bytes} "
           f"elapsed_s={elapsed:.3f} throughput={s.rows/elapsed:.1f} peak_py={peak}")
+
+
+def test_offline_source_to_sink_smoke(tmp_path: Path) -> None:
+    """Synthetic PR319-v1 emit(dict)->sink contract and zero-fee sized references.
+
+    This intentionally uses the PR319-shaped event factories because PR319 is
+    a separate unmerged PR, NOT an import available on PR320's base branch.
+    It is an ABI smoke, not an issuer-authenticated live bridge integration.
+    """
+    sink = new(tmp_path)
+    emit: Callable[[dict[str, object]], None] = sink.append_bridge
+    sig_book = {
+        "bids": [["0.49", "9"], ["0.47", "20"]],
+        "asks": [["0.51", "9"], ["0.53", "20"]],
+        "complete_source_claim": True,
+    }
+    pm_book = {
+        "bids": [["0.55", "9"], ["0.54", "20"]],
+        "asks": [["0.57", "9"], ["0.58", "20"]],
+        "complete_source_claim": True,
+    }
+    seed = bridge_seed(0)
+    seed["full_depth"] = pm_book
+    emit(seed)
+    change = bridge_ws(1)
+    change["full_books"] = {BRIDGE_PM_TOKENS["912"]: pm_book}
+    emit(change)
+    emit(bridge_ws(2, 2, changed=False))
+    emit(bridge_sig(3, native=False))
+    sig_full = bridge_sig(4, revision=2, previous_revision=1, gap=False)
+    cast(list[dict[str, object]], sig_full["full_books"])[0]["full_depth"] = sig_book
+    emit(sig_full)
+    # Synthetic reference gaps are diagnostic only, NOT executable at-arrival
+    # venue observations. Source/PAPER/real-net remain unadmitted and NULL.
+    assert all(row.real_net is None and row.yes_reference_gap is None
+               for row in sink.reference_economic_rows("912"))
+    sink.close()
+    assert verify_sealed_archive(sink.root)
+    receipt = json.loads((sink.root / "receipt.json").read_text())
+    stored = [json.loads(line)["row"] for line in
+              (sink.root / "records.jsonl").read_text().splitlines()]
+    assert receipt["rows"] == 5 and receipt["rejected"] == 0
+    assert receipt["bridge_unanchored"] == 1
+    assert receipt["bridge_nonbook"] == 1 and receipt["bridge_unchanged_ws"] == 1
+    assert all(not row["issuer_authenticated"] and not row["source_admitted"]
+               and not row["paper_admitted"] for row in stored)
+    observed_pm = stored[1]["full_books"][BRIDGE_PM_TOKENS["912"]]
+    observed_sig = stored[4]["full_books"][0]["full_depth"]
+    expected = {1: ("0.04", "-0.08"), 5: ("0.04", "-0.08"),
+                10: ("0.037", "-0.083"), 20: ("0.0235", "-0.0965")}
+    print(f"OFFLINE_SOURCE_SINK rows={receipt['rows']} rejected={receipt['rejected']} "
+          f"gap={receipt['bridge_unanchored']} unchanging_ws={receipt['bridge_unchanged_ws']}")
+    print("shares yes_bid_minus_sig_ask sig_bid_minus_pm_ask sig_fee real_net")
+    for n, expected_pair in expected.items():
+        sig_bid = _whole_vwap(observed_sig["bids"], n)
+        sig_ask = _whole_vwap(observed_sig["asks"], n)
+        pm_bid = _whole_vwap(observed_pm["bids"], n)
+        pm_ask = _whole_vwap(observed_pm["asks"], n)
+        assert sig_bid is not None and sig_ask is not None
+        assert pm_bid is not None and pm_ask is not None
+        yes = str(pm_bid - sig_ask)
+        no = str(sig_bid - pm_ask)
+        assert (yes, no) == expected_pair
+        print(f"{n} {yes} {no} 0 NULL")
