@@ -236,6 +236,10 @@ def replay(signals: Iterable[Signal], source: dict[str, list[Native]], *,
     outcomes: dict[int, list[Decimal]] = defaultdict(list)
     wrong: dict[int, list[Decimal]] = defaultdict(list)
     latency: dict[int, list[Decimal]] = defaultdict(list)
+    paid_spreads: dict[int, list[Decimal]] = defaultdict(list)
+    zero_salvage: dict[int, list[Decimal]] = defaultdict(list)
+    wrong_exchange: dict[int, list[Decimal]] = defaultdict(list)
+    wrong_contract = {"912": "913", "913": "912", "959": "960", "960": "959"}
     rows: list[dict[str, object]] = []
     for signal in signals:
         counts["n_signal"] += 1
@@ -258,12 +262,26 @@ def replay(signals: Iterable[Signal], source: dict[str, list[Native]], *,
                 counts[f"n_{size}_entry_depth_unknown"] += 1
                 continue
             counts[f"n_{size}_entry_feasible"] += 1
+            zero_salvage[size].append(-ask)  # hypothetical bound, NOT realised loss
+            immediate_bid = quote(entry, signal.side, size, buy=False)
+            if immediate_bid is not None:
+                paid_spreads[size].append(ask - immediate_bid)
             bid = quote(exit_book, signal.side, size, buy=False) if exit_book else None
             if bid is None:
                 counts[f"n_{size}_exit_depth_unknown"] += 1
                 continue
             counts[f"n_{size}_feasible"] += 1
             outcomes[size].append(bid - ask)
+            other = wrong_contract[signal.exchange]
+            other_ask_book = after(series.get(other, []), ticks.get(other, []),
+                                   signal.end + timedelta(milliseconds=latency_ms), FRESH)
+            other_exit_book = after(series.get(other, []), ticks.get(other, []),
+                                    entry.received + timedelta(minutes=5), EXIT_WAIT)
+            if other_ask_book is not None and other_exit_book is not None:
+                opposite_ask = quote(other_ask_book, signal.side, size, buy=True)
+                opposite_bid = quote(other_exit_book, signal.side, size, buy=False)
+                if opposite_ask is not None and opposite_bid is not None:
+                    wrong_exchange[size].append(opposite_bid - opposite_ask)
             flip_ask = quote(entry, opposite, size, buy=True)
             flip_bid = quote(exit_book, opposite, size, buy=False)
             if flip_ask is not None and flip_bid is not None:
@@ -285,6 +303,10 @@ def replay(signals: Iterable[Signal], source: dict[str, list[Native]], *,
                 "mean": str(sum(items) / len(items)) if items else None,
                 "worst": str(min(items)) if items else None,
                 "best": str(max(items)) if items else None}
+    for name in ("n_signal", "n_sig_entry", "n_sig_exit"):
+        counts.setdefault(name, 0)
+    for size in SIZES:
+        counts.setdefault(f"n_{size}_feasible", 0)
     shifted = None
     if not placebo:
         shifted_output = replay(
@@ -301,6 +323,9 @@ def replay(signals: Iterable[Signal], source: dict[str, list[Native]], *,
             str(size): {
                 "ask_to_bid_proxy": describe(outcomes[size]),
                 "opposite_side_placebo": describe(wrong[size]),
+                "WRONG_CONTRACT_placebo": describe(wrong_exchange[size]),
+                "observed_immediate_paid_spread": describe(paid_spreads[size]),
+                "hypothetical_zero_salvage_loss": describe(zero_salvage[size]),
                 "observed_arrival_ask_deterioration": describe(latency[size]),
             } for size in SIZES
         },
@@ -309,7 +334,7 @@ def replay(signals: Iterable[Signal], source: dict[str, list[Native]], *,
         "source_admitted_pairs": 0,
         "real_fill_count": None, "fill_rate": None,
         "real_net_pnl": None, "true_executable_opportunity_count": None,
-        "adverse_zero_salvage_bound": None,
+        "NO_TRADE_incremental_new_order_pnl": "0",
         "claim_boundary": "Native quotes are real raw book claims but sequence "
                           "continuity, PM seed/WS, queue, fill and surviving "
                           "available liquidity are not certified.",
