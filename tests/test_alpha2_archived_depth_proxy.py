@@ -44,14 +44,16 @@ def sig(ms: int, seq: int, bid: str = "0.4", ask: str = "0.45") -> dict[str, obj
 
 def pm(ms: int, bid: str = "0.61", ask: str = "0.65",
        token: str | None = None) -> dict[str, object]:
+    next_bid = str(Decimal(bid) - Decimal("0.01"))
+    next_ask = str(Decimal(ask) + Decimal("0.01"))
     return {"token_id": token or PM_EXACT_SAME_YES["223"][2],
             "recorded_at": at(ms),
             "source_timestamp": at(ms - 100),
             "state_observed_at": at(ms - 100),
             "bids": [{"price": bid, "size": "3.5"},
-                     {"price": "0.60", "size": "20.2"}],
+                     {"price": next_bid, "size": "20.2"}],
             "asks": [{"price": ask, "size": "3.5"},
-                     {"price": "0.66", "size": "20.2"}]}
+                     {"price": next_ask, "size": "20.2"}]}
 
 
 def write(root: Path, stream: str, rows: list[dict[str, object]]) -> None:
@@ -90,8 +92,12 @@ def test_real_shaped_periodic_proxy_bins_whole_share_vwap_and_no_admission(
 
 def test_duplicate_asof_and_reversed_native_dont_double_count(tmp_path: Path) -> None:
     sr, pr = tmp_path / "sig", tmp_path / "pm"
+    duplicated = sig(1200, 91)
+    duplicate_body = json.loads(str(duplicated["raw_json"]))
+    duplicate_body["books"][0]["asOf"]["at"] = at(900).isoformat()
+    duplicated["raw_json"] = json.dumps(duplicate_body)
     write(sr, "raw_events", [
-        sig(1000, 91), sig(1200, 91),
+        sig(1000, 91), duplicated,
         sig(1500, 90), sig(2500, 92),
     ])
     write(pr, "depth_snapshots", [pm(500)])
