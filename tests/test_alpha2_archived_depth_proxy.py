@@ -83,7 +83,7 @@ def test_real_shaped_periodic_proxy_bins_whole_share_vwap_and_no_admission(
     assert out["n_actual_executable_fills"] is None
     assert first["250ms_markout"] is None
     top = cast(list[dict[str, object]], out["top_five_measured_positive_depth_proxies"])
-    assert top[0]["label"] == "NONEXECUTABLE_PROXY_NOT_ADMITTED"
+    assert top[0]["label"] == "PUBLISHER_FRESH_NONEXECUTABLE_PROXY_NOT_ADMITTED"
     assert top[0]["market"] == "223"
     assert Decimal(str(top[0]["maximum_positive_proxy_total"])) > 0
     placebo = cast(dict[str, object], out["wrong_market_placebo"])
@@ -168,8 +168,8 @@ def test_proxy_cli_uses_existing_archive_without_seed_proof(
     main()
     result = json.loads(capsys.readouterr().out)
     assert result["n_admitted_pairs"] == 0
-    assert result["top_five_measured_positive_depth_proxies"][0]["label"].startswith(
-        "NONEXECUTABLE"
+    assert result["top_five_measured_positive_depth_proxies"][0]["label"] == (
+        "PUBLISHER_FRESH_NONEXECUTABLE_PROXY_NOT_ADMITTED"
     )
 
 
