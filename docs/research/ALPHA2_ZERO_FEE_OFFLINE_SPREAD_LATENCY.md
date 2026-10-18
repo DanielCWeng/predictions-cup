@@ -36,4 +36,20 @@ For each candidate, `markout.250ms_gap_delta`, `1000ms_gap_delta` and `2000ms_ga
 
 This is a *real measured capture-health baseline*, not a new archived-data scan, a 0/4 original raw event claim, a retrospective 24h window, or a verified edge. Separately #205/6218927375 observed that some genuine-looking original SIG full ladders exist in West `raw_events` despite zero normalised resident book rows. That source is not currently exposed through this chat's GitHub files, and no West host inspection is made by Alpha2. **Cheapest next step**: #199 runs this CLI or a narrower read-only aggregate on the already-authorised local original archive and reports UTC/shard/row/eligible counts **without transferring raw**; #205 then tests economics for any measured pairs. If PM REST-seed+ordered WS original archive is absent, the measured native count and scalar proxy are useful, but rank stays empty until actual paired depth is available.
 
+## First genuinely measured 2h archive table — West #199 (NOT CLI replay)
+
+West Ops separately read **existing local SIG/PM Parquet, no raw upload** in two completed bounded windows totaling **2026-10-18T16:50:00Z to 2026-10-18T18:50:00Z**. Exact reproducibility/evidence: [#199/6253925938](https://github.com/DanielCWeng/predictions-cup/issues/199#issuecomment-6253925938). The SIG input contained **163,293 decoded raw-event rows / 115 Parquet shards** across all exchanges; **3,533** target native FULL two-sided book frames with real original-formatted asOf sequence/UTC. PM input contained **16,240 periodic depth rows / 117 shards** across all 140 subscribed tokens; **464** target YES-token two-sided depth snapshot rows. Those PM snapshots are not original continuously seeded WS books.
+
+| Frozen SIG market/exchange | Original SIG FULL books observed | PM two-sided periodic token snapshots | Within-segment earlier PM snapshot <=5s (**UNTRUSTED NONEXECUTABLE_PROXY**) |
+|---|---:|---:|---:|
+| 223 / 912 MT-01 Dem | 547 | 116 | 47 |
+| 224 / 913 MT-01 Rep | 1,344 | 116 | 99 |
+| 270 / 959 Maine Dem | 1,004 | 116 | 82 |
+| 271 / 960 Maine Rep | 638 | 116 | 50 |
+| **TOTAL** | **3,533** | **464** | **>=278** |
+
+Observed archived target `books=[]` rows **0** in this bounded scan. **N_SIG_NATIVE_CONTINUITY=UNKNOWN; N_PM_ORIGINAL_REST_SEED=UNKNOWN; N_PM_CONTIGUOUS_WS_ORDINAL=UNKNOWN; N_QUALIFIED_PAIRS_FOR_EXECUTABLE_ADMISSION=0 (evidence decision); TRUE_REAL_FILLABLE_PAIR_COUNT=NULL.** The >=278 overlap count is not the output of the strict two-second clock-separated join in this new CLI, and not a proxy for fill probability, 250ms survival or fee-free realised PnL. No n=1/5/10/20 original two-venue depth economics can be honestly computed from current PM periodic archive without real seed/WS provenance.
+
+Already-existing supervisor records spanning ~16:49–18:49 UTC showed **>=718,763** PM uninitialised deltas and **>=331** SIG revision-gap increments after segmenting counter resets; these are lower bounds, not all-four-target counts. A 24h **file inventory** found 1,405 SIG and 1,398 PM archive shards but its sampled row scan timed out, so there is **no measured 24h native-book total**. The lowest-cost next step is running this CLI locally only if an already recorded genuine PM REST-seed/WS bridge log exists; otherwise #199 can extract additional small *aggregate* native continuity and #205 can explicitly analyse NONEXECUTABLE scalar/directional sensitivity without promoting it. No collector restart, extra venue read or raw upload is implied.
+
 Directives: [#206/6253691001](https://github.com/DanielCWeng/predictions-cup/issues/206#issuecomment-6253691001), [#201/6253638952](https://github.com/DanielCWeng/predictions-cup/issues/201#issuecomment-6253638952). No new PR, #318 untouched, no West service/collector change, no maker order/transfer, no off-machine source upload. #207 LIVE STOP-SHIP absolute.
