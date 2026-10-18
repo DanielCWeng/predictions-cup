@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import hashlib
 import re
-from contextlib import contextmanager
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Final, cast
