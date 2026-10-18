@@ -195,8 +195,8 @@ def test_pm_seed_loss_invalidates_earlier_quote_for_later_sig(tmp_path: Path) ->
     orphan = ws_event(2000, 2)
     orphan["uninitialized_tokens"] = [PM_EXACT_SAME_YES["223"][2]]
     orphan["full_books"] = {}
-    pm_file.write_text("\\n".join(json.dumps(x) for x in
-                       (seed_event(100), ws_event(1100, 1), orphan)) + "\\n",
+    pm_file.write_text("\n".join(json.dumps(x) for x in
+                       (seed_event(100), ws_event(1100, 1), orphan)) + "\n",
                        encoding="utf-8")
     result = analyze(root, None, pm_file)
     assert result["n_sig_valid_full"] == 2
@@ -219,7 +219,7 @@ def test_sig_delivery_gap_quarantines_later_native_books(tmp_path: Path) -> None
     result = analyze(root, None, None)
     counts = cast(dict[str, int], result["source_counts"])
     assert counts["sig_quarantined_books"] == 2
-    assert counts["sig_eligible_full"] == 0
+    assert counts.get("sig_eligible_full", 0) == 0
     assert result["n_sig_full_native_claims"] == 1
     assert result["n_matched_pairs"] == 0
 
