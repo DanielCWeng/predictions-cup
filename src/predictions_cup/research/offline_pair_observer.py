@@ -165,6 +165,7 @@ class OfflinePairObserver:
         self._sig: dict[str, dict[str, Any]] = {}
         self._pm: dict[str, dict[str, Any]] = {}
         self._chain = "0" * 64
+        self._seen_raw_digests: set[str] = set()
         self.aborted = False
 
     @property
@@ -272,6 +273,7 @@ class OfflinePairObserver:
             ), "UNEXPECTED_OR_MISSING_FIELDS_PII_DEFENSE")
             digest = hashlib.sha256(original_payload).hexdigest()
             _need(row.get("raw_source_sha256") == digest, "ORIGINAL_BYTES_HASH_MISMATCH")
+            _need(digest not in self._seen_raw_digests, "DUPLICATE_ORIGINAL_PAYLOAD")
             received = _utc(row.get("received_at"))
             if self._start is None:
                 self._start = received
@@ -291,6 +293,7 @@ class OfflinePairObserver:
                   and self._size + len(line) <= _MAX_OUTPUT,
                   "BOUNDED_OUTPUT_EXCEEDED")
             self._rows.append(line)
+            self._seen_raw_digests.add(digest)
             self._size += len(line)
             self._chain = chain
             self._last_at = received
