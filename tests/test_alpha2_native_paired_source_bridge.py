@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import tracemalloc
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 
@@ -189,14 +190,14 @@ def test_sink_exhaustion_irreversibly_poisoned_never_silent_sampling() -> None:
 
 def test_multiple_shares_floor_per_level_and_no_fee_imputation() -> None:
     levels = [["0.40", "1.9"], ["0.39", "4.9"], ["0.38", "15.9"]]
-    assert whole_lot_vwap(levels, 1) == 0.40
-    assert whole_lot_vwap(levels, 5) == (0.40 + 4 * 0.39) / 5
+    assert whole_lot_vwap(levels, 1) == Decimal('0.40')
+    assert whole_lot_vwap(levels, 5) == (Decimal('0.40') + 4 * Decimal('0.39')) / 5
     assert whole_lot_vwap(levels, 20) is None
     sig_book = {"bids": [["0.40", "10"]], "asks": [["0.60", "10"]]}
     pm_book = {"bids": [["0.62", "10"]], "asks": [["0.64", "10"]]}
     assert reference_only_gaps(sig=sig_book, pm=pm_book, size=5) == (None, None)
     assert reference_only_gaps(sig=sig_book, pm=pm_book, size=5,
-                               after_shock_verified=True) == (0.02, -0.24)
+                               after_shock_verified=True) == (Decimal('0.02'), Decimal('-0.24'))
     assert reference_only_gaps(sig=sig_book, pm=pm_book, size=20,
                                after_shock_verified=True) == (None, None)
 
