@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import copy
 import hashlib
+import json
 from typing import Any
 
 import pytest
@@ -99,7 +99,13 @@ def book(
     return row
 
 
-def append(o: ob.OfflinePairObserver, row: dict[str, Any], payload: bytes = b"FAKE-BYTES") -> str:
+def append(
+    o: ob.OfflinePairObserver, row: dict[str, Any], payload: bytes | None = None
+) -> str:
+    # The non-identity source payload varies across fabricated events; reuse
+    # across two distinct events is prohibited by the validator.
+    if payload is None:
+        payload = json.dumps(row, sort_keys=True).encode("ascii")
     row["raw_source_sha256"] = hashlib.sha256(payload).hexdigest()
     return o.ingest(row, payload)
 
@@ -286,6 +292,14 @@ def test_24_hour_limit_enforced_even_with_valid_row_shape() -> None:
     too_late = book("SIG_FULL_BOOK", received="2026-10-19T00:00:04Z")
     with pytest.raises(ob.OfflineDenied, match="24H_WINDOW"):
         append(o, too_late)
+
+
+def test_duplicate_claimed_original_bytes_abort_instead_of_double_spend() -> None:
+    o = observer()
+    append(o, book("PM_FULL_SEED"), b"UNIQUE-BUT-REUSED")
+    with pytest.raises(ob.OfflineDenied, match="DUPLICATE_ORIGINAL_PAYLOAD"):
+        append(o, book("SIG_FULL_BOOK"), b"UNIQUE-BUT-REUSED")
+    assert o.aborted
 
 
 def test_deterministic_chain_does_not_emit_original_raw_payload_or_secrets() -> None:
