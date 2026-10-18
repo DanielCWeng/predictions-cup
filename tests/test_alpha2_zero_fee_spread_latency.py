@@ -123,6 +123,12 @@ def test_real_shaped_raw_parquet_plus_pm_seeded_ws_and_size_aware_rank(
     assert cast(dict[str, int], result["source_counts"])["sig_eligible_full"] == 1
     assert result["n_pm_complete_seed"] == 1
     assert result["n_matched_pairs"] == 1
+    market_rows = cast(list[dict[str, object]], result["per_market"])
+    assert len(market_rows) == 4
+    assert market_rows[0]["n_sig_full_claims"] == 2
+    assert market_rows[0]["n_pm_proven_seed"] == 1
+    assert market_rows[0]["n_pairs"] == 1
+    assert all(r["n_pairs"] == 0 for r in market_rows[1:])
     top = cast(list[dict[str, object]], result["top_five_conditional_upside"])
     assert top
     assert top[0]["market"] == "223"
@@ -226,6 +232,25 @@ def test_50ms_actual_observation_bracket_supports_named_horizon() -> None:
     observed = horizon(rows, ts(200), 250)
     assert observed is not None
     assert observed["at"] == ts(450)
+
+
+def test_cli_help_and_empty_local_archive_stdout(
+    tmp_path: Path, monkeypatch: object, capsys: object,
+) -> None:
+    from predictions_cup.research import zero_fee_spread_latency as module
+    import sys
+    from _pytest.capture import CaptureFixture
+    from _pytest.monkeypatch import MonkeyPatch
+
+    patch = cast(MonkeyPatch, monkeypatch)
+    capture = cast(CaptureFixture[str], capsys)
+    patch.setattr(sys, "argv", [
+        "zero_fee_spread_latency", "--sig-root", str(tmp_path / "absent")])
+    module.main()
+    output = json.loads(capture.readouterr().out)
+    assert output["status"] == "DATA_GAP_NO_VERIFIED_PAIRS"
+    assert len(output["per_market"]) == 4
+    assert output["n_attempted"] is None
 
 
 def test_proxy_scalar_not_ranked(tmp_path: Path) -> None:
