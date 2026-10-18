@@ -26,7 +26,9 @@ BIDS = [{"price": "0.40", "quantity": "11"}, {"price": "0.39", "quantity": "12"}
 ASKS = [{"price": "0.60", "quantity": "11"}, {"price": "0.61", "quantity": "12"}]
 
 
-def bridge(emit: Callable[[dict[str, object]], None] | None = None) -> tuple[SourceBridge, list[dict[str, object]]]:
+def bridge(
+    emit: Callable[[dict[str, object]], None] | None = None,
+) -> tuple[SourceBridge, list[dict[str, object]]]:
     records: list[dict[str, object]] = []
     sender = records.append if emit is None else emit
     return SourceBridge(emit=sender, producer_sha=PRODUCER,
@@ -116,7 +118,8 @@ def test_sig_wrong_exchange_no_book_revision_or_future_publisher_rejected() -> N
     ]:
         b, _ = bridge()
         with pytest.raises(SourceRejected, match=reason):
-            b.sig_batch(topic_market_id="223", batch=sig(books=[cast(dict[str, object], bad_book)]),
+            b.sig_batch(topic_market_id="223",
+                        batch=sig(books=[cast(dict[str, object], bad_book)]),
                         received_at="2026-10-18T10:00:01Z", connection_epoch=1)
 
 
@@ -132,7 +135,8 @@ def test_pm_seed_epoch_and_local_ordinal_without_global_sequence_claim() -> None
                   reconstructed_books={PM["223"]: {"bids": BIDS, "asks": ASKS}})
     assert records[0]["kind"] == "REST_SEED_COMPLETE"
     assert records[-1]["ws_local_ordinal"] == 1
-    assert cast(dict[str, dict[str, object]], records[-1]["full_books"])[PM["223"]]["complete_source_claim"] is True
+    full_books = cast(dict[str, dict[str, object]], records[-1]["full_books"])
+    assert full_books[PM["223"]]["complete_source_claim"] is True
     assert records[-1]["issuer_authenticated"] is False
 
 
