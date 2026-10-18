@@ -12,7 +12,7 @@ import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from typing import Any, Final
+from typing import Any, Final, cast
 
 SIG_TOURNAMENT: Final = "bda92870-621e-47b0-bc3c-3602c5c26f55"
 SIG_MARKETS: Final = {"223": "912", "224": "913", "270": "959", "271": "960"}
@@ -44,12 +44,12 @@ def _utc(value: str) -> datetime:
 
 def _int(value: object, reason: str, *, min_value: int = 0) -> int:
     _require(type(value) is int and value >= min_value, reason)
-    return value
+    return cast(int, value)
 
 
 def _text(value: object, reason: str) -> str:
     _require(isinstance(value, str) and bool(value.strip()), reason)
-    return value
+    return cast(str, value)
 
 
 def _digest(raw: bytes | None) -> str | None:
@@ -77,7 +77,7 @@ def _levels(raw: object, side: str) -> list[list[str]]:
              "FULL_LADDER_UNAVAILABLE")
     result: list[list[str]] = []
     previous: Decimal | None = None
-    for item in raw:
+    for item in cast(Sequence[object], raw):
         if isinstance(item, Mapping):
             price = _decimal(item.get("price"), price=True)
             qty = _decimal(item.get("quantity", item.get("size")), price=False)
@@ -166,6 +166,7 @@ class SourceBridge:
         epoch = _int(connection_epoch, "SIG_EPOCH_MISSING", min_value=1)
         delivery = batch.get("delivery")
         _require(isinstance(delivery, Mapping), "SIG_DELIVERY_MISSING")
+        delivery = cast(Mapping[str, Any], delivery)
         rev = _int(delivery.get("revision"), "SIG_REVISION_MISSING")
         prev = _int(delivery.get("previousRevision"), "SIG_PREVIOUS_MISSING")
         first = _int(delivery.get("sourceSequenceFrom"), "SIG_SOURCE_FROM_MISSING")
@@ -203,10 +204,12 @@ class SourceBridge:
         _require(isinstance(native_books, (tuple, list)), "SIG_BOOKS_INVALID")
         for item in native_books:
             _require(isinstance(item, Mapping), "SIG_BOOK_INVALID")
+            item = cast(Mapping[str, Any], item)
             exchange = str(item.get("exchangeId", ""))
             _require(exchange == SIG_MARKETS[topic_market_id], "SIG_EXCHANGE_MISMATCH")
             asof = item.get("asOf")
             _require(isinstance(asof, Mapping), "SIG_NATIVE_ASOF_MISSING")
+            asof = cast(Mapping[str, Any], asof)
             native_at = _text(asof.get("at"), "SIG_NATIVE_CLOCK_MISSING")
             self._clock(native_at, received_at)
             native_seq = _int(asof.get("sequence"), "SIG_NATIVE_SEQUENCE_MISSING")
@@ -325,10 +328,10 @@ def reference_only_gaps(
     pm_asks = pm.get("asks")
     if not all(isinstance(x, list) for x in (sig_bids, sig_asks, pm_bids, pm_asks)):
         return None, None
-    sig_ask = whole_lot_vwap(sig_asks, size)
-    sig_bid = whole_lot_vwap(sig_bids, size)
-    pm_bid = whole_lot_vwap(pm_bids, size)
-    pm_ask = whole_lot_vwap(pm_asks, size)
+    sig_ask = whole_lot_vwap(cast(list[list[str]], sig_asks), size)
+    sig_bid = whole_lot_vwap(cast(list[list[str]], sig_bids), size)
+    pm_bid = whole_lot_vwap(cast(list[list[str]], pm_bids), size)
+    pm_ask = whole_lot_vwap(cast(list[list[str]], pm_asks), size)
     yes = pm_bid - sig_ask if pm_bid is not None and sig_ask is not None else None
     no = sig_bid - pm_ask if sig_bid is not None and pm_ask is not None else None
     return yes, no
