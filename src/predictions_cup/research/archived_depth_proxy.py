@@ -103,6 +103,21 @@ def _stream(root: Path | None, name: str, start: datetime,
                 if name == "depth_snapshots":
                     if str(row.get("token_id")) not in REVERSE_TOKEN:
                         continue
+                else:
+                    raw = row.get("raw_json")
+                    if not isinstance(raw, str) or '"books"' not in raw:
+                        continue
+                    try:
+                        parsed = json.loads(raw)
+                        levels = parsed.get("books", [])
+                        if not isinstance(levels, list) or not any(
+                            isinstance(level, dict)
+                            and str(level.get("exchangeId")) in REVERSE_EXCHANGE
+                            for level in levels
+                        ):
+                            continue
+                    except (TypeError, ValueError, AttributeError):
+                        continue
                 result.append(row)
     return result
 
