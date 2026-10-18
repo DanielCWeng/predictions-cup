@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -504,13 +506,13 @@ def test_sig_contiguous_original_source_ranges_remain_schema_only() -> None:
 
 def test_release_expiry_rechecked_on_each_ingest_and_screen() -> None:
     o = observer()
-    o._release_expires_at = ob.datetime.now(ob.UTC) - ob.timedelta(seconds=1)
+    o._release_expires_at = datetime.now(UTC) - timedelta(seconds=1)
     with pytest.raises(ob.OfflineDenied, match="RELEASE_EXPIRED"):
         append(o, book("PM_FULL_SEED"))
     assert o.aborted
     z = observer()
     full_pair(z)
-    z._release_expires_at = ob.datetime.now(ob.UTC) - ob.timedelta(seconds=1)
+    z._release_expires_at = datetime.now(UTC) - timedelta(seconds=1)
     with pytest.raises(ob.OfflineDenied, match="RELEASE_EXPIRED"):
         z.screen("912", "2026-10-18T00:00:04Z", 1)
     assert z.aborted
@@ -518,7 +520,7 @@ def test_release_expiry_rechecked_on_each_ingest_and_screen() -> None:
 
 def test_monotonic_24_hour_offline_runtime_guard_is_not_collector_release() -> None:
     o = observer()
-    o._runtime_started_at = ob.time.monotonic() - 86_401
+    o._runtime_started_at = time.monotonic() - 86_401
     with pytest.raises(ob.OfflineDenied, match="OFFLINE_RUNTIME_EXPIRED"):
         append(o, book("PM_FULL_SEED"))
     assert o.aborted
