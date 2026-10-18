@@ -171,3 +171,163 @@ def test_proxy_cli_uses_existing_archive_without_seed_proof(
     assert result["top_five_measured_positive_depth_proxies"][0]["label"].startswith(
         "NONEXECUTABLE"
     )
+
+
+def _proxy_for_single_pair(tmp_path: Path, *,
+                           publisher_age_ms: int | None,
+                           recorded_ms: int = 1000,
+                           sig_ms: int = 2200,
+                           bid: str = "0.61",
+                           ask: str = "0.65",
+                           source_override_ms: int | None = None
+                           ) -> dict[str, object]:
+    sig_root, pm_root = tmp_path / "sig", tmp_path / "pm"
+    write(sig_root, "raw_events", [sig(sig_ms, 91)])
+    periodic = pm(recorded_ms, bid=bid, ask=ask)
+    if source_override_ms is not None:
+        periodic["source_timestamp"] = at(source_override_ms)
+    elif publisher_age_ms is None:
+        periodic["source_timestamp"] = None
+    else:
+        periodic["source_timestamp"] = at(recorded_ms - publisher_age_ms)
+    write(pm_root, "depth_snapshots", [periodic])
+    return analyze_archived_proxy(sig_root, pm_root, BASE, at(sig_ms + 100))
+
+
+@pytest.mark.parametrize("stale_at_pm_record_ms", [9218, 13593])
+def test_real_reported_pm_source_ages_poison_positive_rank_despite_1200ms_receipt(
+    tmp_path: Path, stale_at_pm_record_ms: int,
+) -> None:
+    # Ages are West's real measured numbers, books here are invented test data.
+    result = _proxy_for_single_pair(
+        tmp_path, publisher_age_ms=stale_at_pm_record_ms,
+    )
+    first = cast(list[dict[str, object]], result["per_market"])[0]
+    assert first["n_matched_0_2s"] == 1
+    assert result["top_five_all_age_nonexecutable_diagnostic"] is not None
+    assert result["top_five_measured_positive_depth_proxies"] is None
+    assert result["top_five_publisher_fresh_reference_proxies"] is None
+    fresh = cast(dict[str, object], first["fresh_reference_proxy"])
+    assert fresh["n_matched"] == 0
+    rejected = cast(dict[str, int], fresh["rejected_matched_receipts"])
+    assert rejected["stale_effective_pm_publisher_age"] == 1
+    assert result["n_admitted_pairs"] == 0
+    assert result["n_actual_executable_fills"] is None
+
+
+@pytest.mark.parametrize(
+    ("effective_age_ms", "should_pass"), [(5000, True), (5001, False)],
+)
+def test_apparent_pm_effective_publisher_age_exact_5s_boundary(
+    tmp_path: Path, effective_age_ms: int, should_pass: bool,
+) -> None:
+    result = _proxy_for_single_pair(
+        tmp_path, publisher_age_ms=effective_age_ms - 1200,
+    )
+    fresh_top = result["top_five_measured_positive_depth_proxies"]
+    assert (fresh_top is not None) is should_pass
+    first = cast(list[dict[str, object]], result["per_market"])[0]
+    fresh = cast(dict[str, object], first["fresh_reference_proxy"])
+    assert fresh["n_matched"] == (1 if should_pass else 0)
+    assert result["n_publisher_fresh_matched_reference_pairs"] == (
+        1 if should_pass else 0
+    )
+
+
+@pytest.mark.parametrize(
+    ("publisher_ms", "expected_reason"),
+    [(None, "missing_pm_publisher"), (1500, "future_pm_publisher")],
+)
+def test_missing_or_future_pm_publisher_cannot_enter_fresh_rank(
+    tmp_path: Path, publisher_ms: int | None, expected_reason: str,
+) -> None:
+    result = _proxy_for_single_pair(
+        tmp_path, publisher_age_ms=None,
+        source_override_ms=publisher_ms,
+    )
+    first = cast(list[dict[str, object]], result["per_market"])[0]
+    assert first["n_matched_total"] == 1
+    assert result["top_five_all_age_nonexecutable_diagnostic"] is not None
+    assert result["top_five_measured_positive_depth_proxies"] is None
+    fresh = cast(dict[str, object], first["fresh_reference_proxy"])
+    rejected = cast(dict[str, int], fresh["rejected_matched_receipts"])
+    assert rejected[expected_reason] == 1
+    assert fresh["n_matched"] == 0
+
+
+def test_fresh_positive_and_negative_gap_size_price_extremes_stay_distinct(
+    tmp_path: Path,
+) -> None:
+    # Positive correct-direction synthetic fixture: result is STILL only a
+    # fresh *reference*, never an admitted live/source/fill economics result.
+    positive = _proxy_for_single_pair(tmp_path / "positive",
+                                      publisher_age_ms=1000)
+    first = cast(list[dict[str, object]], positive["per_market"])[0]
+    fresh = cast(dict[str, object], first["fresh_reference_proxy"])
+    n = cast(dict[str, dict[str, int]], fresh["n_feasible"])
+    assert n["BUY_SIG_SELL_PM_YES"]["20"] == 1
+    assert n["BUY_PM_SELL_SIG_YES"]["20"] == 1
+    positive_top = cast(list[dict[str, object]],
+                        positive["top_five_measured_positive_depth_proxies"])
+    assert positive_top[0]["label"] == (
+        "PUBLISHER_FRESH_NONEXECUTABLE_PROXY_NOT_ADMITTED"
+    )
+    assert positive_top[0]["size_whole_shares"] == 20
+    assert positive["source_admitted"] is False
+    assert positive["n_admitted_pairs"] == 0
+
+    negative = _proxy_for_single_pair(
+        tmp_path / "negative", publisher_age_ms=500,
+        bid="0.42", ask="0.70",
+    )
+    assert negative["top_five_measured_positive_depth_proxies"] is None
+    neg_row = cast(list[dict[str, object]], negative["per_market"])[0]
+    n_ref = cast(dict[str, object], neg_row["fresh_reference_proxy"])
+    limits = cast(dict[str, dict[str, dict[str, str | None]]],
+                  n_ref["gap_extremes_per_share"])
+    totals = cast(dict[str, dict[str, dict[str, str | None]]],
+                  n_ref["gap_extremes_total"])
+    assert Decimal(str(limits["BUY_SIG_SELL_PM_YES"]["1"]["min"])) < 0
+    assert Decimal(str(totals["BUY_SIG_SELL_PM_YES"]["20"]["min"])) < 0
+
+
+def test_depth_infeasible_fresh_rows_do_not_rank_size_5_and_20(
+    tmp_path: Path,
+) -> None:
+    sr, pr = tmp_path / "sig", tmp_path / "pm"
+    sparse = sig(2000, 91)
+    source = json.loads(str(sparse["raw_json"]))
+    for side, price in (("bids", "0.40"), ("asks", "0.45")):
+        source["books"][0][side] = [{"price": price, "quantity": "1.9"}]
+    sparse["raw_json"] = json.dumps(source)
+    write(sr, "raw_events", [sparse])
+    write(pr, "depth_snapshots", [pm(1000)])
+    result = analyze_archived_proxy(sr, pr, BASE, at(2500))
+    row = cast(list[dict[str, object]], result["per_market"])[0]
+    fresh = cast(dict[str, object], row["fresh_reference_proxy"])
+    n = cast(dict[str, dict[str, int]], fresh["n_feasible"])
+    infeasible = cast(dict[str, dict[str, int]], fresh["n_infeasible"])
+    assert n["BUY_SIG_SELL_PM_YES"]["1"] == 1
+    assert n["BUY_SIG_SELL_PM_YES"]["5"] == 0
+    assert n["BUY_SIG_SELL_PM_YES"]["20"] == 0
+    assert infeasible["BUY_SIG_SELL_PM_YES"]["20"] == 1
+
+
+def test_both_placebos_apply_effective_publisher_freshness(
+    tmp_path: Path,
+) -> None:
+    sr, pr = tmp_path / "sig", tmp_path / "pm"
+    write(sr, "raw_events", [sig(62000, 91)])
+    other = pm(61000, token=PM_EXACT_SAME_YES["224"][2])
+    shifted = pm(1000)
+    for row in (other, shifted):
+        row["source_timestamp"] = at(-10000)
+    write(pr, "depth_snapshots", [other, shifted])
+    result = analyze_archived_proxy(sr, pr, BASE, at(63000))
+    wrong = cast(dict[str, object], result["wrong_market_placebo"])
+    shifted_control = cast(dict[str, object], result["time_shift_placebo"])
+    assert wrong["wrong_market_swapped_yes_pairs"] == 1
+    assert shifted_control["shifted_60s_same_market_pairs"] == 1
+    assert wrong["publisher_fresh_pairs"] == 0
+    assert shifted_control["publisher_fresh_pairs"] == 0
+    assert result["top_five_measured_positive_depth_proxies"] is None
