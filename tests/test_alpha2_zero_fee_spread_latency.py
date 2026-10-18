@@ -170,6 +170,64 @@ def test_integer_floor_at_each_level_no_fraction_pooling() -> None:
     assert vwap(b["asks"], 23) is None
 
 
+def test_pm_seed_loss_invalidates_earlier_quote_for_later_sig(tmp_path: Path) -> None:
+    root = tmp_path / "sig"
+    write_parquet(root / "raw_events" / "part.parquet", [
+        {"session_id": "invented", "connection_epoch": 1,
+         "tournament_id": SIG_TOURNAMENT,
+         "topic": f"tournament:{SIG_TOURNAMENT}:market:223",
+         "local_receive_at": ts(1000), "raw_json": sig_payload(1, 900)},
+        {"session_id": "invented", "connection_epoch": 1,
+         "tournament_id": SIG_TOURNAMENT,
+         "topic": f"tournament:{SIG_TOURNAMENT}:market:223",
+         "local_receive_at": ts(2200), "raw_json": sig_payload(2, 2100)},
+    ])
+    pm_file = tmp_path / "pm.jsonl"
+    orphan = ws_event(2000, 2)
+    orphan["uninitialized_tokens"] = [PM_EXACT_SAME_YES["223"][2]]
+    orphan["full_books"] = {}
+    pm_file.write_text("\\n".join(json.dumps(x) for x in
+                       (seed_event(100), ws_event(1100, 1), orphan)) + "\\n",
+                       encoding="utf-8")
+    result = analyze(root, None, pm_file)
+    assert result["n_sig_valid_full"] == 2
+    assert result["n_pm_complete_seed"] == 1
+    assert result["n_matched_pairs"] == 0
+    assert result["top_five_conditional_upside"] == []
+
+
+def test_sig_delivery_gap_quarantines_later_native_books(tmp_path: Path) -> None:
+    root = tmp_path / "sig"
+    def row(rev: int, ms: int, previous: int) -> dict[str, object]:
+        payload = json.loads(sig_payload(rev, ms - 100))
+        payload["delivery"]["previousRevision"] = previous
+        return {"session_id": "invented", "connection_epoch": 1,
+                "tournament_id": SIG_TOURNAMENT,
+                "topic": f"tournament:{SIG_TOURNAMENT}:market:223",
+                "local_receive_at": ts(ms), "raw_json": json.dumps(payload)}
+    write_parquet(root / "raw_events" / "part.parquet",
+                  [row(1, 1000, 0), row(3, 2000, 2), row(4, 3000, 3)])
+    result = analyze(root, None, None)
+    counts = cast(dict[str, int], result["source_counts"])
+    assert counts["sig_quarantined_books"] == 2
+    assert counts["sig_eligible_full"] == 0
+    assert result["n_sig_full_native_claims"] == 1
+    assert result["n_matched_pairs"] == 0
+
+
+def test_50ms_actual_observation_bracket_supports_named_horizon() -> None:
+    from predictions_cup.research.zero_fee_spread_latency import horizon
+
+    b = book(ladders())
+    rows: list[dict[str, object]] = [
+        {"at": ts(i * 50), "book": b, "epoch": 1, "revision": i}
+        for i in range(50)
+    ]
+    observed = horizon(rows, ts(200), 250)
+    assert observed is not None
+    assert observed["at"] == ts(450)
+
+
 def test_proxy_scalar_not_ranked(tmp_path: Path) -> None:
     sig_root, pm_root = tmp_path / "sig", tmp_path / "pm"
     write_parquet(sig_root / "normalized_events" / "part.parquet", [
