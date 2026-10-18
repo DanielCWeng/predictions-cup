@@ -135,7 +135,8 @@ def _sig_books(rows: list[dict[str, Any]], counts: dict[str, int]
             counts["sig_raw_invalid"] += 1
             continue
         try:
-            body = json.loads(raw)
+            # Pilot parsed exact-market rows once; full reader remains unchanged.
+            body = row["_pilot_decoded"] if "_pilot_decoded" in row else json.loads(raw)
         except (TypeError, ValueError):
             counts["sig_raw_invalid"] += 1
             continue
@@ -561,4 +562,199 @@ def analyze_archived_proxy(sig_root: Path | None, pm_root: Path | None,
         ),
         "input_counts": dict(sorted(counts.items())),
         "label": "NONEXECUTABLE_PROXY_ONLY_NO_ADMISSION",
+    }
+
+
+# Prospective West pilot was precommitted BEFORE sampling any publisher-fresh
+# prices: take the aligned ten minutes starting 30min into the previous 2h scan.
+PILOT_FIXED_START_UTC = "2026-10-18T17:20:00Z"
+PILOT_FIXED_END_UTC = "2026-10-18T17:30:00Z"
+PILOT_MAX_DURATION = timedelta(minutes=10)
+PILOT_MAX_SHARDS_PER_STREAM = 14
+PILOT_MAX_ROWS_PER_STREAM = 35_000
+
+
+def _pilot_files(root: Path | None, stream: str, start: datetime,
+                 end: datetime) -> list[Path]:
+    """Prune exact minute-named shards BEFORE opening their Parquet metadata.
+
+    Single flat-file test fixtures are supported only when there is NO archive
+    dated hierarchy. Never silently fall back to an entire dated archive.
+    """
+    if root is None:
+        return []
+    directory = root / stream
+    if not directory.is_dir():
+        return []
+    paths: list[Path] = []
+    hour = (start - timedelta(minutes=1)).replace(
+        minute=0, second=0, microsecond=0,
+    )
+    while hour < end:
+        bucket = directory / hour.strftime("%Y/%m/%d/%H")
+        if bucket.is_dir():
+            for path in bucket.glob("*.parquet"):
+                try:
+                    stamp = datetime.strptime(
+                        path.name[:16], "%Y%m%dT%H%M%SZ",
+                    ).replace(tzinfo=start.tzinfo)
+                except ValueError as exc:
+                    raise ValueError("PILOT_UNPRUNABLE_NAMED_SHARD") from exc
+                if start - timedelta(minutes=1) <= stamp < end:
+                    paths.append(path)
+        hour += timedelta(hours=1)
+    if not paths and not (directory / start.strftime("%Y")).exists():
+        # Only named direct flat fixtures, never recursive historical globbing.
+        paths = sorted(directory.glob("*.parquet"))
+    paths.sort()
+    if len(paths) > PILOT_MAX_SHARDS_PER_STREAM:
+        raise ValueError("PILOT_SHARD_CAP_EXCEEDED")
+    if sum(path.stat().st_size for path in paths) > 12 * 1024 * 1024:
+        raise ValueError("PILOT_BYTES_CAP_EXCEEDED")
+    return paths
+
+
+def _pilot_stream(root: Path | None, stream: str, start: datetime,
+                  end: datetime, counters: dict[str, int]
+                  ) -> list[dict[str, Any]]:
+    """Stream batches and retain ONLY four exact mapped books, not raw universe.
+
+    Off-WEST pilot deliberately avoids CPU sleeps: contention reduction by
+    sleeping has not been experimentally proven, so no invented CPU cap.
+    """
+    retained: list[dict[str, Any]] = []
+    paths = _pilot_files(root, stream, start, end)
+    counters[stream + "_shards"] = len(paths)
+    columns = (
+        ("local_receive_at", "raw_json", "connection_epoch", "session_id")
+        if stream == "raw_events" else
+        ("token_id", "recorded_at", "source_timestamp", "bids", "asks")
+    )
+    for path in paths:
+        reader = pq.ParquetFile(path)
+        projected = [key for key in columns if key in reader.schema_arrow.names]
+        for batch in reader.iter_batches(batch_size=64, columns=projected):
+            for row in batch.to_pylist():
+                counters[stream + "_scanned"] += 1
+                if counters[stream + "_scanned"] > PILOT_MAX_ROWS_PER_STREAM:
+                    raise ValueError("PILOT_ROWS_CAP_EXCEEDED")
+                at_raw = row.get(
+                    "local_receive_at" if stream == "raw_events" else "recorded_at"
+                )
+                try:
+                    at = utc(at_raw)
+                except (ValueError, TypeError):
+                    counters[stream + "_invalid_utc"] += 1
+                    continue
+                if not start <= at < end:
+                    continue
+                if stream == "depth_snapshots":
+                    if str(row.get("token_id")) not in REVERSE_TOKEN:
+                        continue
+                else:
+                    raw = row.get("raw_json")
+                    if not isinstance(raw, str) or '"books"' not in raw:
+                        continue
+                    try:
+                        decoded = json.loads(raw)
+                        originals = decoded.get("books", [])
+                        if not isinstance(originals, list) or not any(
+                            isinstance(item, dict)
+                            and str(item.get("exchangeId")) in REVERSE_EXCHANGE
+                            for item in originals
+                        ):
+                            continue
+                    except (ValueError, TypeError, AttributeError):
+                        continue
+                    row["_pilot_decoded"] = decoded
+                retained.append(row)
+                counters[stream + "_retained_exact_rows"] += 1
+                if len(retained) > 4_000:
+                    raise ValueError("PILOT_TARGET_ROWS_CAP_EXCEEDED")
+    return retained
+
+
+def _pilot_strip_candidate(candidate: dict[str, object]) -> dict[str, object]:
+    # Stdout is aggregate-only, without original token IDs or per-tick times.
+    private_keys = {
+        "sample_receive_utc", "sig_native_publisher_utc",
+        "pm_periodic_recorded_utc", "pm_publisher_utc",
+    }
+    return {key: value for key, value in candidate.items()
+            if key not in private_keys}
+
+
+def analyze_short_window_pilot(sig_root: Path | None, pm_root: Path | None,
+                               start: datetime, end: datetime
+                               ) -> dict[str, object]:
+    """One completed <=10m slice, bounded. No inference for unseen history."""
+    if start >= end or end - start > PILOT_MAX_DURATION:
+        raise ValueError("PILOT_REQUIRES_SINGLE_MAX_10MIN_UTC_SEGMENT")
+    if start.tzinfo is None or end.tzinfo is None:
+        raise ValueError("PILOT_REQUIRES_AWARE_UTC_TIMESTAMPS")
+    counts: dict[str, int] = defaultdict(int)
+    sr = _pilot_stream(sig_root, "raw_events", start, end, counts)
+    pd = _pilot_stream(pm_root, "depth_snapshots", start, end, counts)
+    data = _sig_books(sr, counts)
+    pm = _pm_books(pd, counts)
+    fresh_top, all_top, metrics = _evaluate(data, pm, counts)
+    # No PM before start is queried; SIG in first 5s without an earlier
+    # in-window PM sample cannot be called a measured absence of opportunity.
+    boundary_unknown = 0
+    boundary_by_market: dict[str, int] = {}
+    for market in MARKETS:
+        earliest_pm = min(
+            (cast(datetime, item["at"]) for item in pm[market]),
+            default=None,
+        )
+        uncertain = sum(
+            1 for item in data[market]
+            if cast(datetime, item["at"]) < start + timedelta(seconds=5)
+            and (earliest_pm is None
+                 or cast(datetime, item["at"]) < earliest_pm)
+        )
+        boundary_by_market[market] = uncertain
+        boundary_unknown += uncertain
+    if not counts["raw_events_shards"] or not counts["depth_snapshots_shards"]:
+        status = "UNKNOWN_ARCHIVE_INPUT_INCOMPLETE"
+    elif boundary_unknown:
+        status = "WINDOW_COMPLETE_WITH_UNKNOWN_PRESTART_PM_CONTEXT"
+    else:
+        status = "WINDOW_COMPLETE_OBSERVED_ONLY"
+    market_rows = []
+    for market in MARKETS:
+        output = {
+            k: v for k, v in metrics[market].items()
+            if k != "pm_yes_token"
+        }
+        output["n_boundary_prior_pm_context_unknown"] = boundary_by_market[market]
+        market_rows.append(output)
+    def safe_top(items: list[dict[str, object]]) -> list[dict[str, object]] | None:
+        return ([_pilot_strip_candidate(row) for row in items] if items else None)
+    return {
+        "schema": "alpha2-short-window-pilot-v1",
+        "classification": "WINDOW_LIMITED_ONLY_NONEXECUTABLE",
+        "selected_window_rule": "2026-10-18 PRECOMMITTED_START_16:50Z_PLUS_30MIN_10MIN",
+        "utc_completed_start": start.isoformat(),
+        "utc_completed_end_exclusive": end.isoformat(),
+        "other_unseen_intervals": "UNKNOWN_NOT_SCANNED",
+        "status": status,
+        "n_boundary_prior_pm_context_unknown": boundary_unknown,
+        "n_publisher_fresh_matched_reference_pairs": sum(
+            cast(int, cast(dict[str, Any],
+                           metrics[market]["fresh_reference_proxy"])["n_matched"])
+            for market in MARKETS
+        ),
+        "per_market": market_rows,
+        "top_five_publisher_fresh_reference_proxies": safe_top(fresh_top),
+        "top_five_all_age_nonexecutable_diagnostic": safe_top(all_top),
+        "wrong_market_placebo": _placebo(data, pm),
+        "time_shift_placebo": _placebo(data, pm, shift_seconds=60),
+        "input_counts": dict(sorted(counts.items())),
+        "n_admitted_pairs": 0,
+        "source_admitted": False,
+        "n_actual_executable_fills": None,
+        "real_after_spread_fill_pnl": None,
+        "pm_seed_ws_and_clock_proof": "UNKNOWN",
+        "label": "NONEXECUTABLE_NOT_A_FULL_WINDOW_RESULT",
     }
