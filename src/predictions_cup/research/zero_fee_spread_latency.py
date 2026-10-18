@@ -146,6 +146,7 @@ def sig_original(rows: list[dict[str, Any]], counters: dict[str, int],
     output: dict[str, list[dict[str, Any]]] = defaultdict(list)
     prior: dict[str, tuple[str, int, int, datetime]] = {}
     native: dict[str, tuple[str, int, int, datetime]] = {}
+    dirty: dict[str, tuple[str, int]] = {}
     ordered = sorted(rows, key=lambda x: utc(x["local_receive_at"]))
     for row in ordered:
         raw = row.get("raw_json")
@@ -189,6 +190,8 @@ def sig_original(rows: list[dict[str, Any]], counters: dict[str, int],
             prior.pop(market, None)
             native.pop(market, None)
             continue
+        if dirty.get(market) not in (None, (session, epoch)):
+            dirty.pop(market, None)  # a genuine new session/epoch boundary
         old = prior.get(market)
         clean = (old is not None and old[0] == session and old[1] == epoch
                  and old[2] == prev and rev > prev and
@@ -196,6 +199,8 @@ def sig_original(rows: list[dict[str, Any]], counters: dict[str, int],
                  frame.get("resyncRequired") is not True)
         if not clean:
             counters["sig_gaps_or_unanchored"] += 1
+            if old is not None and old[:2] == (session, epoch):
+                dirty[market] = (session, epoch)
         prior[market] = (session, epoch, rev, receive)
         books = frame.get("books", [])
         if not isinstance(books, list):
@@ -205,6 +210,9 @@ def sig_original(rows: list[dict[str, Any]], counters: dict[str, int],
         if not books:
             counters["sig_nonbook"] += 1
         for item in books:
+            if dirty.get(market) == (session, epoch):
+                counters["sig_quarantined_books"] += 1
+                continue
             if not isinstance(item, dict) or str(item.get("exchangeId")) != SIG_MARKETS[market]:
                 counters["sig_invalid"] += 1
                 continue
@@ -227,11 +235,12 @@ def sig_original(rows: list[dict[str, Any]], counters: dict[str, int],
                     raise ValueError("native source regression or stale")
             except (ValueError, TypeError, KeyError):
                 counters["sig_rejected_books"] += 1
+                dirty[market] = (session, epoch)
                 native.pop(market, None)
                 continue
             native[market] = (session, epoch, seq, publisher)
             counters["sig_valid_full"] += 1
-            if clean:
+            if clean and dirty.get(market) != (session, epoch):
                 output[market].append(snapshot(receive, b, epoch, seq))
                 counters["sig_eligible_full"] += 1
             else:
@@ -250,12 +259,19 @@ def pm_original(path: Path | None, counters: dict[str, int],
     last_at: datetime | None = None
     seeded: set[str] = set()
     active = False
+
+    def invalidate(at: datetime) -> None:
+        for token in seeded:
+            if output.get(token):
+                output[token][-1]["valid_until"] = at
+
     tokens = {triple[2] for triple in PM_EXACT_SAME_YES.values()}
     with path.open("r", encoding="utf-8") as stream:
         for line_index, line in enumerate(stream):
             if line_index >= MAX_ROWS:
                 raise ValueError("PM NDJSON row budget exceeded")
             counters["pm_events_scanned"] += 1
+            event_at: datetime | None = None
             try:
                 item = json.loads(line)
                 if not isinstance(item, dict) or item.get("schema") != "alpha2-source-bridge-v1":
@@ -269,10 +285,13 @@ def pm_original(path: Path | None, counters: dict[str, int],
                 ):
                     raise ValueError("unsupported provenance")
                 at = utc(item["received_at"])
+                event_at = at
                 epoch = int(item["connection_epoch"])
                 if epoch < 1 or (last_epoch is not None and epoch < last_epoch):
                     raise ValueError("epoch reversal")
                 if last_epoch != epoch:
+                    if last_at is not None:
+                        invalidate(last_at)
                     last_epoch = epoch
                     last_ordinal = 0
                     last_at = None
@@ -301,6 +320,8 @@ def pm_original(path: Path | None, counters: dict[str, int],
                     if not isinstance(missing, list):
                         raise ValueError("malformed uninitialized")
                     for token in missing:
+                        if token in seeded and output.get(token):
+                            output[token][-1]["valid_until"] = at
                         seeded.discard(token)
                     depths = item.get("full_books")
                     if not isinstance(depths, dict):
@@ -316,11 +337,16 @@ def pm_original(path: Path | None, counters: dict[str, int],
                             output[token].append(snapshot(at, b, epoch, ordinal))
                     counters["pm_ws_events"] += 1
                 else:
+                    invalidate(at)
                     active = False
                     seeded.clear()
                     counters["pm_disconnects"] += 1
                 last_at = at
             except (ValueError, KeyError, TypeError, OverflowError):
+                if event_at is not None:
+                    invalidate(event_at)
+                elif last_at is not None:
+                    invalidate(last_at)
                 counters["pm_gaps_or_unseeded"] += 1
                 active = False
                 seeded.clear()
@@ -375,7 +401,10 @@ def ranked(sig: dict[str, list[dict[str, Any]]],
         for snap in ss:
             at = cast(datetime, snap["at"])
             partner = latest_before(pp, at)
-            if partner is None or at - cast(datetime, partner["at"]) > (
+            if partner is None or (
+                partner.get("valid_until") is not None
+                and at >= cast(datetime, partner["valid_until"])
+            ) or at - cast(datetime, partner["at"]) > (
                 timedelta(milliseconds=MAX_LAG_MS)
             ) or cast(datetime, partner["at"]) + uncertainty >= at - uncertainty:
                 counters["pair_unmatched"] += 1
@@ -455,7 +484,10 @@ def wrong_market_placebo(sig: dict[str, list[dict[str, Any]]],
         for sig_book in sig.get(market, []):
             at = cast(datetime, sig_book["at"])
             partner = latest_before(wrong, at)
-            if partner is None:
+            if partner is None or (
+                partner.get("valid_until") is not None
+                and at >= cast(datetime, partner["valid_until"])
+            ):
                 continue
             receipt = cast(datetime, partner["at"])
             if (receipt + uncertainty >= at - uncertainty or
