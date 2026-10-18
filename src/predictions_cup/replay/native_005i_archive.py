@@ -270,6 +270,7 @@ def replay(signals: Iterable[Signal], source: dict[str, list[Native]], *,
             if bid is None:
                 counts[f"n_{size}_exit_depth_unknown"] += 1
                 continue
+            assert exit_book is not None
             counts[f"n_{size}_feasible"] += 1
             outcomes[size].append(bid - ask)
             other = wrong_contract[signal.exchange]
