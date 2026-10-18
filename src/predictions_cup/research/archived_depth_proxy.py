@@ -223,35 +223,127 @@ def _pm_books(rows: list[dict[str, Any]], counts: dict[str, int]
         source_at = row.get("source_timestamp")
         try:
             source_time = utc(source_at) if source_at is not None else None
-        except ValueError:
+        except (TypeError, ValueError):
             source_time = None
         if source_time is None:
             counts["pm_missing_publisher_clock_m" + market] += 1
             source_age: int | None = None
         else:
             source_age = int((receive - source_time).total_seconds() * 1000)
-            if source_age < 0:
+            if source_time > receive:
                 counts["pm_future_publisher_clock_m" + market] += 1
-            if source_age > SOURCE_AGE_MAX_MS:
+            if receive - source_time > timedelta(milliseconds=SOURCE_AGE_MAX_MS):
                 counts["pm_stale_publisher_clock_m" + market] += 1
+        # Deliberately retain every price-valid periodic row for ALL_AGE diagnostics.
+        # Fresh reference admission is decided independently at the SIG receipt.
         counts["pm_usable_periodic_m" + market] += 1
         output[market].append({
-            "at": receive, "book": depth,
+            "at": receive, "book": depth, "publisher_at": source_time,
             "source_age_ms": source_age, "epoch": None,
             "input_uncertainty_ms": None,
         })
     return output
 
 
+def _fresh_reason(sig_at: datetime, pm: dict[str, Any]) -> str | None:
+    """Apparent source-age screen only, NEVER certified quote/WS admission."""
+    publisher = pm.get("publisher_at")
+    if not isinstance(publisher, datetime):
+        return "missing_pm_publisher"
+    recorded = cast(datetime, pm["at"])
+    if publisher > recorded or publisher > sig_at:
+        return "future_pm_publisher"
+    if sig_at - publisher > timedelta(milliseconds=SOURCE_AGE_MAX_MS):
+        return "stale_effective_pm_publisher_age"
+    return None
+
+
+def _blank_extremes() -> dict[str, dict[str, dict[str, str | None]]]:
+    return {
+        direction: {str(n): {"max": None, "min": None} for n in SIZES}
+        for direction in DIRECTIONS
+    }
+
+
+def _blank_counts() -> dict[str, dict[str, int]]:
+    return {direction: {str(n): 0 for n in SIZES} for direction in DIRECTIONS}
+
+
+def _extreme(extremes: dict[str, dict[str, dict[str, str | None]]],
+             direction: str, size: int, gap: Decimal) -> None:
+    limits = extremes[direction][str(size)]
+    amount = fmt(gap)
+    if limits["max"] is None or gap > Decimal(str(limits["max"])):
+        limits["max"] = amount
+    if limits["min"] is None or gap < Decimal(str(limits["min"])):
+        limits["min"] = amount
+
+
+def _candidate(market: str, item: dict[str, Any], partner: dict[str, Any],
+               direction: str, size: int, buy: Decimal, sell: Decimal,
+               gap: Decimal, label: str) -> dict[str, object]:
+    at = cast(datetime, item["at"])
+    recorded = cast(datetime, partner["at"])
+    publisher = partner.get("publisher_at")
+    return {
+        "market": market, "direction": direction, "size_whole_shares": size,
+        "sample_receive_utc": at.isoformat(),
+        "sig_native_publisher_utc":
+            cast(datetime, item["publisher_at"]).isoformat(),
+        "pm_periodic_recorded_utc": recorded.isoformat(),
+        "pm_publisher_utc": (
+            publisher.isoformat() if isinstance(publisher, datetime) else None
+        ),
+        "snapshot_age_ms": int((at - recorded).total_seconds() * 1000),
+        "sig_source_age_ms": item["source_age_ms"],
+        "pm_source_age_ms": partner["source_age_ms"],
+        "pm_effective_publisher_age_ms": (
+            int((at - publisher).total_seconds() * 1000)
+            if isinstance(publisher, datetime) else None
+        ),
+        "sig_input_clock_uncertainty_ms": None,
+        "pm_input_clock_uncertainty_ms": None,
+        "buy_ask_vwap": fmt(buy), "sell_bid_vwap": fmt(sell),
+        "maximum_positive_proxy_per_share": fmt(gap),
+        "maximum_positive_proxy_total": fmt(gap * size),
+        "severe_25c_per_share_adverse_stress_total":
+            fmt(-Decimal("0.25") * size),
+        "unhedged_buy_premium_total_loss_stress": fmt(-buy * size),
+        "observed_tail_loss": None, "observed_fill_count": None,
+        "label": label,
+    }
+
+
 def _evaluate(sig: dict[str, list[dict[str, Any]]],
               pm: dict[str, list[dict[str, Any]]],
-              counts: dict[str, int]) -> tuple[list[dict[str, object]],
-                                                dict[str, dict[str, object]]]:
+              counts: dict[str, int]) -> tuple[
+                  list[dict[str, object]], list[dict[str, object]],
+                  dict[str, dict[str, object]],
+              ]:
     metrics: dict[str, dict[str, object]] = {}
-    maxima: dict[tuple[str, str, int], dict[str, object]] = {}
+    all_age_top: dict[tuple[str, str, int], dict[str, object]] = {}
+    fresh_top: dict[tuple[str, str, int], dict[str, object]] = {}
     for market in MARKETS:
-        p = pm[market]
+        p = sorted(pm[market], key=lambda x: cast(datetime, x["at"]))
         stamps = [cast(datetime, row["at"]) for row in p]
+        all_age_feasible = _blank_counts()
+        all_age_ext = _blank_extremes()
+        all_age_total = _blank_extremes()
+        fresh_feasible = _blank_counts()
+        fresh_ext = _blank_extremes()
+        fresh_total = _blank_extremes()
+        fresh_positive = _blank_counts()
+        fresh_infeasible = _blank_counts()
+        all_age_infeasible = _blank_counts()
+        rejects = {
+            "missing_pm_publisher": 0,
+            "future_pm_publisher": 0,
+            "stale_effective_pm_publisher_age": 0,
+            "native_clock_or_depth_rejected":
+                counts["sig_native_clock_or_depth_rejected_m" + market],
+            "native_revision_reversed": counts["sig_native_reversal_m" + market],
+            "native_duplicate_asof": counts["sig_duplicate_asof_m" + market],
+        }
         per: dict[str, object] = {
             "market": market, "exchange": SIG_MARKETS[market],
             "pm_yes_token": PM_EXACT_SAME_YES[market][2],
@@ -268,14 +360,30 @@ def _evaluate(sig: dict[str, list[dict[str, Any]]],
             "n_pm_stale_publisher": counts["pm_stale_publisher_clock_m" + market],
             "n_pm_missing_publisher_clock":
                 counts["pm_missing_publisher_clock_m" + market],
+            "n_pm_future_publisher_clock":
+                counts["pm_future_publisher_clock_m" + market],
             "n_matched_0_2s": 0, "n_matched_2_5s": 0,
             "n_matched_total": 0,
-            "n_feasible": {
-                direction: {str(n): 0 for n in SIZES} for direction in DIRECTIONS
+            # Backward-compatible fields are explicitly ALL_AGE diagnostics;
+            # never consult them when deciding the PRIMARY top-five.
+            "n_feasible": all_age_feasible,
+            "gap_extremes_per_share": all_age_ext,
+            "gap_extremes_total": all_age_total,
+            "all_age_nonexecutable_diagnostic": {
+                "n_feasible": all_age_feasible,
+                "n_infeasible": all_age_infeasible,
+                "gap_extremes_per_share": all_age_ext,
+                "gap_extremes_total": all_age_total,
+                "classification": "ALL_AGE_NONEXECUTABLE_DIAGNOSTIC",
             },
-            "gap_extremes_per_share": {
-                direction: {str(n): {"max": None, "min": None} for n in SIZES}
-                for direction in DIRECTIONS
+            "fresh_reference_proxy": {
+                "n_matched": 0, "n_matched_0_2s": 0, "n_matched_2_5s": 0,
+                "n_feasible": fresh_feasible, "n_infeasible": fresh_infeasible,
+                "n_positive": fresh_positive,
+                "gap_extremes_per_share": fresh_ext,
+                "gap_extremes_total": fresh_total,
+                "rejected_matched_receipts": rejects,
+                "classification": "PUBLISHER_FRESH_UNCERTIFIED_NONEXECUTABLE",
             },
             "source_clock_uncertainty_ms": None,
             "pm_seed_ws_proven": False,
@@ -284,6 +392,7 @@ def _evaluate(sig: dict[str, list[dict[str, Any]]],
             "n_admitted_pairs": 0,
             "classification": "NONEXECUTABLE_PROXY_PERIODIC_PM",
         }
+        fresh = cast(dict[str, Any], per["fresh_reference_proxy"])
         for item in sig[market]:
             at = cast(datetime, item["at"])
             idx = bisect.bisect_right(stamps, at) - 1
@@ -296,90 +405,115 @@ def _evaluate(sig: dict[str, list[dict[str, Any]]],
             band = "n_matched_0_2s" if lag_ms <= 2000 else "n_matched_2_5s"
             per[band] = cast(int, per[band]) + 1
             per["n_matched_total"] = cast(int, per["n_matched_total"]) + 1
+            rejection = _fresh_reason(at, partner)
+            if rejection is not None:
+                rejects[rejection] += 1
+            else:
+                fresh["n_matched"] += 1
+                fresh[band] += 1
             for direction in DIRECTIONS:
-                feasible = cast(dict[str, dict[str, int]], per["n_feasible"])
-                ext = cast(dict[str, dict[str, dict[str, str | None]]],
-                           per["gap_extremes_per_share"])
                 for size in SIZES:
                     outcome = compare(item, partner, size, direction)
                     if outcome is None:
+                        all_age_infeasible[direction][str(size)] += 1
+                        if rejection is None:
+                            fresh_infeasible[direction][str(size)] += 1
                         continue
                     buy, sell, gap = outcome
-                    feasible[direction][str(size)] += 1
-                    limits = ext[direction][str(size)]
-                    value = fmt(gap)
-                    if value is None:
+                    all_age_feasible[direction][str(size)] += 1
+                    _extreme(all_age_ext, direction, size, gap)
+                    _extreme(all_age_total, direction, size, gap * size)
+                    if gap > 0:
+                        key = (market, direction, size)
+                        candidate = _candidate(
+                            market, item, partner, direction, size,
+                            buy, sell, gap, "ALL_AGE_NONEXECUTABLE_DIAGNOSTIC",
+                        )
+                        old = all_age_top.get(key)
+                        if old is None or gap * size > Decimal(
+                            str(old["maximum_positive_proxy_total"])
+                        ):
+                            all_age_top[key] = candidate
+                    if rejection is not None:
                         continue
-                    if limits["max"] is None or gap > Decimal(str(limits["max"])):
-                        limits["max"] = value
-                    if limits["min"] is None or gap < Decimal(str(limits["min"])):
-                        limits["min"] = value
+                    fresh_feasible[direction][str(size)] += 1
+                    _extreme(fresh_ext, direction, size, gap)
+                    _extreme(fresh_total, direction, size, gap * size)
                     if gap <= 0:
                         continue
+                    fresh_positive[direction][str(size)] += 1
                     key = (market, direction, size)
-                    value_total = fmt(gap * size)
-                    prior = maxima.get(key)
-                    if prior is None or Decimal(str(value_total)) > Decimal(
-                        str(prior["maximum_positive_proxy_total"])
+                    candidate = _candidate(
+                        market, item, partner, direction, size,
+                        buy, sell, gap,
+                        "PUBLISHER_FRESH_NONEXECUTABLE_PROXY_NOT_ADMITTED",
+                    )
+                    old = fresh_top.get(key)
+                    if old is None or gap * size > Decimal(
+                        str(old["maximum_positive_proxy_total"])
                     ):
-                        maxima[key] = {
-                            "market": market, "direction": direction,
-                            "size_whole_shares": size,
-                            "sample_receive_utc": at.isoformat(),
-                            "sig_native_publisher_utc":
-                                cast(datetime, item["publisher_at"]).isoformat(),
-                            "pm_periodic_recorded_utc":
-                                cast(datetime, partner["at"]).isoformat(),
-                            "snapshot_age_ms": lag_ms,
-                            "sig_source_age_ms": item["source_age_ms"],
-                            "pm_source_age_ms": partner["source_age_ms"],
-                            "sig_input_clock_uncertainty_ms": None,
-                            "pm_input_clock_uncertainty_ms": None,
-                            "buy_ask_vwap": fmt(buy),
-                            "sell_bid_vwap": fmt(sell),
-                            "maximum_positive_proxy_per_share": value,
-                            "maximum_positive_proxy_total": value_total,
-                            "severe_25c_per_share_adverse_stress_total":
-                                fmt(-Decimal("0.25") * size),
-                            "unhedged_buy_premium_total_loss_stress":
-                                fmt(-buy * size),
-                            "observed_tail_loss": None,
-                            "observed_fill_count": None,
-                            "label": "NONEXECUTABLE_PROXY_NOT_ADMITTED",
-                        }
+                        fresh_top[key] = candidate
         metrics[market] = per
-    top = sorted(
-        maxima.values(),
-        key=lambda r: Decimal(str(r["maximum_positive_proxy_total"])),
-        reverse=True,
-    )[:5]
-    return top, metrics
+
+    def sorted_top(candidates: dict[tuple[str, str, int], dict[str, object]]
+                   ) -> list[dict[str, object]]:
+        return sorted(
+            candidates.values(),
+            key=lambda row: Decimal(str(row["maximum_positive_proxy_total"])),
+            reverse=True,
+        )[:5]
+
+    return sorted_top(fresh_top), sorted_top(all_age_top), metrics
 
 
 def _placebo(sig: dict[str, list[dict[str, Any]]],
-             pm: dict[str, list[dict[str, Any]]]) -> dict[str, object]:
+             pm: dict[str, list[dict[str, Any]]],
+             shift_seconds: int = 0) -> dict[str, object]:
+    """Wrong-contract or 60s time-shift controls with IDENTICAL age rules."""
     wrong = {"223": "224", "224": "223", "270": "271", "271": "270"}
     count = 0
-    positive = 0
-    for market, counterpart in wrong.items():
-        p = pm[counterpart]
+    fresh_count = 0
+    positive_all = 0
+    positive_fresh = 0
+    for market in MARKETS:
+        other = market if shift_seconds else wrong[market]
+        original = pm[other]
+        shift = timedelta(seconds=shift_seconds)
+        p = [{
+            **row, "at": cast(datetime, row["at"]) + shift,
+            "publisher_at": (
+                cast(datetime, row["publisher_at"]) + shift
+                if isinstance(row.get("publisher_at"), datetime) else None
+            ),
+        } for row in original]
         stamps = [cast(datetime, row["at"]) for row in p]
         for item in sig[market]:
             at = cast(datetime, item["at"])
             idx = bisect.bisect_right(stamps, at) - 1
             if idx < 0:
                 continue
-            lag = (at - stamps[idx]).total_seconds() * 1000
+            partner = p[idx]
+            lag = (at - cast(datetime, partner["at"])).total_seconds() * 1000
             if lag < 0 or lag > PAIR_WINDOW_MS:
                 continue
             count += 1
+            is_fresh = _fresh_reason(at, partner) is None
+            if is_fresh:
+                fresh_count += 1
             for direction in DIRECTIONS:
-                outcome = compare(item, p[idx], 1, direction)
-                if outcome is not None and outcome[2] > 0:
-                    positive += 1
-    return {"wrong_market_swapped_yes_pairs": count,
-            "wrong_market_positive_1_share_directions": positive,
-            "classification": "PLACEBO_WRONG_CONTRACT_NOT_TRADABLE"}
+                result = compare(item, partner, 1, direction)
+                if result is not None and result[2] > 0:
+                    positive_all += 1
+                    if is_fresh:
+                        positive_fresh += 1
+    return {
+        "wrong_market_swapped_yes_pairs" if not shift_seconds
+            else "shifted_60s_same_market_pairs": count,
+        "all_age_positive_1share_directions": positive_all,
+        "publisher_fresh_pairs": fresh_count,
+        "publisher_fresh_positive_1share_directions": positive_fresh,
+        "classification": "PLACEBO_INVALID_NOT_TRADABLE",
+    }
 
 
 def analyze_archived_proxy(sig_root: Path | None, pm_root: Path | None,
@@ -396,7 +530,7 @@ def analyze_archived_proxy(sig_root: Path | None, pm_root: Path | None,
                   "state_observed_at", "bids", "asks"), counts)
     sig = _sig_books(sr, counts)
     pm = _pm_books(pd, counts)
-    top, metrics = _evaluate(sig, pm, counts)
+    top, all_age_top, metrics = _evaluate(sig, pm, counts)
     return {
         "schema": "alpha2-nonexecutable-periodic-depth-proxy-v1",
         "utc_window_start": start.isoformat(),
@@ -405,14 +539,25 @@ def analyze_archived_proxy(sig_root: Path | None, pm_root: Path | None,
         "sig_platform_fee": "0",
         "per_market": [metrics[market] for market in MARKETS],
         "top_five_measured_positive_depth_proxies": top if top else None,
+        "top_five_publisher_fresh_reference_proxies": top if top else None,
+        "top_five_all_age_nonexecutable_diagnostic": all_age_top or None,
         "wrong_market_placebo": _placebo(sig, pm),
+        "time_shift_placebo": _placebo(sig, pm, shift_seconds=60),
+        "n_publisher_fresh_matched_reference_pairs": sum(
+            cast(int, metrics[m]["fresh_reference_proxy"]["n_matched"])
+            for m in MARKETS
+        ),
+        "source_admitted": False,
         "n_admitted_pairs": 0,
         "n_actual_executable_fills": None,
         "true_after_spread_latency_fill_pnl": None,
         "source_gap_uncertainty": (
             "SIG per-epoch native seq/publisher screened for repeat/regression; "
             "PM original REST seed+each WS ordinal and source clock uncertainty UNKNOWN. "
-            "Periodic PM snapshot may be truncated or stale; no quote survival proof."
+            "Primary price rank only requires apparent PM publisher age <=5s at SIG "
+            "receipt, with nonfuture publisher timestamp at PM recording. "
+            "ALL_AGE diagnostics may be stale and MUST NOT be ranked as opportunity. "
+            "Periodic PM snapshot may be truncated; no quote survival proof."
         ),
         "input_counts": dict(sorted(counts.items())),
         "label": "NONEXECUTABLE_PROXY_ONLY_NO_ADMISSION",
