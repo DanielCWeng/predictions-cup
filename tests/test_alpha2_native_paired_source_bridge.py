@@ -394,7 +394,7 @@ def test_pm_gap_accounted_and_unchanged_sequential_ordinals_preserved() -> None:
     assert records[-1]["gap_or_unanchored"] is True
     assert records[-1]["abstain_tokens"] == [PM["223"]]
     assert b.health_snapshot()["lost_lower_bound"] == 1
-    assert b.health_snapshot()["gap_events_total"] >= 1
+    assert cast(int, b.health_snapshot()["gap_events_total"]) >= 1
     assert not b.poisoned
 
 
