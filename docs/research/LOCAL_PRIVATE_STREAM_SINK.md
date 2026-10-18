@@ -90,3 +90,21 @@ perf FAIL. Prospective PM original data 24h on-host retention basis is still
 UNKNOWN. GitHub publishing was safety-blocked; do not bypass it with other
 GitHub tooling, another person/identity or Alpha2 PR #319. No merge, launch,
 upload, service change, venue/source read or trade. #207 LIVE STOP-SHIP.
+
+### PM receipt-interval chronology (Red Team #207/6254170919)
+
+In the PR319 v1 ABI the sink independently enforces STRICT receipt chronology
+for **all PM tokens combined in one connection epoch**, including each
+`REST_SEED_COMPLETE`, changing/unchanged `WS_EVENT`, and `DISCONNECT`.
+For consecutive PM events A then B require
+`A.received_at + A.uncertainty_ms < B.received_at - B.uncertainty_ms`.
+Equal timestamps, overlapping uncertainty windows, stale/reordered receipts,
+and epoch mismatch fail closed with
+`PM_RECEIPT_NONMONOTONIC_OR_AMBIGUOUS` **before the row is written**.
+The terminal `DISCONNECT` row has no uncertainty field in v1, so it uses
+the last durable PM event's declared uncertainty from that pinned epoch
+(PR319's one-uncertainty-per-bridge convention); never silently treat it as
+zero. The PM interval state advances **only after write+fsync succeeds**,
+not on validation failure. SIG delivery batches retain their independent
+non-decreasing global receipt check and are allowed to have equal receive
+timestamps. This is synthetic contract checking, not issuer clock attestation.

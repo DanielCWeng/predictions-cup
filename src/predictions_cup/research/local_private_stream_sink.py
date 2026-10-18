@@ -194,6 +194,8 @@ class PrivateStreamingSink:
         self._bridge_sig: dict[str, tuple[int, int, int, datetime]] = {}
         self._bridge_last_native: dict[str, tuple[int, datetime, int]] = {}
         self._bridge_pm_epoch: int | None = None
+        # Last DURABLY committed PM receive interval, across all tokens in the epoch.
+        self._bridge_pm_receipt: tuple[int, datetime, int] | None = None
         self._bridge_pm_ordinal = 0
         self._bridge_pm_seeded: set[str] = set()
         self._bridge_unanchored = 0
@@ -424,7 +426,8 @@ class PrivateStreamingSink:
 
     def _validate_bridge(
         self, row: Mapping[str, Any]
-    ) -> tuple[dict[str, Any], tuple[str, object], str | None]:
+    ) -> tuple[dict[str, Any], tuple[str, object], str | None,
+               tuple[int, datetime, int] | None]:
         """Fail-closed adapter for exact PR319 emit(dict), with O(4) state.
 
         State change is returned and applied only AFTER the synchronous fsync.
@@ -452,6 +455,7 @@ class PrivateStreamingSink:
         epoch = _integer(row["connection_epoch"], 1)
         clean = dict(row)
         terminal: str | None = None
+        pending_pm_receipt: tuple[int, datetime, int] | None = None
         if venue == "SIG":
             exchange = row["exchange_id"]
             _require(type(exchange) is str and exchange in _EXCHANGES and
@@ -508,10 +512,30 @@ class PrivateStreamingSink:
             update: tuple[str, object] = ("SIG", (str(exchange),
                          (epoch, revision, through, received), last))
         else:
+            # Independently verify STRICT non-overlapping PM receipt intervals.
+            # PR319 uses one fixed uncertainty per bridge instance; DISCONNECT
+            # omits the field, so conservatively INHERIT the last pinned PM
+            # uncertainty for that epoch, never assume zero. SIG receipt equality
+            # remains permitted by the separate global receipt check above.
+            previous_pm_receipt = self._bridge_pm_receipt
+            if kind == "DISCONNECT":
+                _require(previous_pm_receipt is not None and
+                         previous_pm_receipt[0] == epoch,
+                         "PM_RECEIPT_NONMONOTONIC_OR_AMBIGUOUS")
+                assert previous_pm_receipt is not None
+                uncertainty = previous_pm_receipt[2]
+            else:
+                uncertainty = _integer(row["clock_uncertainty_ms"], 0, 1000)
+            if previous_pm_receipt is not None:
+                previous_epoch, previous_received, previous_uncertainty = previous_pm_receipt
+                _require(previous_epoch == epoch and
+                         previous_received + timedelta(milliseconds=previous_uncertainty)
+                         < received - timedelta(milliseconds=uncertainty),
+                         "PM_RECEIPT_NONMONOTONIC_OR_AMBIGUOUS")
+            pending_pm_receipt = (epoch, received, uncertainty)
             # PM source bridge exports receive-ordered snapshots, NOT issuer
             # publisher_at or a venue-global WS sequence. NEVER create them.
             if kind == "REST_SEED_COMPLETE":
-                _integer(row["clock_uncertainty_ms"], 0, 1000)
                 _require(row["wire_bytes_verified"] is False,
                          "WIRE_VERIFICATION_UNPROVEN")
                 self._bridge_digest(row["raw_response_sha256"])
@@ -527,7 +551,6 @@ class PrivateStreamingSink:
                 clean["full_depth"] = self._bridge_full_book(row["full_depth"])
                 update = "PM_SEED", (epoch, str(token))
             elif kind == "WS_EVENT":
-                _integer(row["clock_uncertainty_ms"], 0, 1000)
                 _require(row["wire_bytes_verified"] is False,
                          "WIRE_VERIFICATION_UNPROVEN")
                 self._bridge_digest(row["raw_frame_sha256"])
@@ -563,7 +586,7 @@ class PrivateStreamingSink:
                          "PM_DISCONNECT_SHAPE_INVALID")
                 update = "PM_DISCONNECT", epoch
                 terminal = "PM_DISCONNECT_ABORT"
-        return clean, update, terminal
+        return clean, update, terminal, pending_pm_receipt
 
     def append_bridge(self, record: dict[str, object]) -> None:
         """PR319 SourceBridge(emit=sink.append_bridge); no original wire required.
@@ -575,7 +598,7 @@ class PrivateStreamingSink:
         try:
             self._active()
             _require(self._abi_mode in (None, "bridge"), "MIXED_ABI_DENIED")
-            clean, update, terminal = self._validate_bridge(record)
+            clean, update, terminal, pending_pm_receipt = self._validate_bridge(record)
             # Computed locally, explicitly NOT original wire provenance.
             encoded = json.dumps(clean, sort_keys=True, separators=(",", ":"),
                                  ensure_ascii=True, allow_nan=False).encode("ascii")
@@ -596,6 +619,9 @@ class PrivateStreamingSink:
             self._records_sha.update(line)
             self._last_receipt = _utc(clean["received_at"])
             self._abi_mode = "bridge"
+            # Only fsync success may advance the independent PM interval ledger.
+            if pending_pm_receipt is not None:
+                self._bridge_pm_receipt = pending_pm_receipt
             tag, state = update
             if tag == "SIG":
                 ex, sig_state, last_native = cast(

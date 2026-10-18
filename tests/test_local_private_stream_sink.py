@@ -529,3 +529,131 @@ def test_offline_source_to_sink_smoke(tmp_path: Path) -> None:
         no = str(sig_bid - pm_ask)
         assert (yes, no) == expected_pair
         print(f"{n} {yes} {no} 0 NULL")
+
+
+def test_bridge_pm_equal_or_ambiguous_receipt_must_abort(tmp_path: Path) -> None:
+    s = new(tmp_path)
+    seed = bridge_seed(0)
+    seed["clock_uncertainty_ms"] = 100
+    unchanged = bridge_ws(0, 1, changed=False)
+    unchanged["clock_uncertainty_ms"] = 100
+    s.append_bridge(seed)
+    with pytest.raises(SinkDenied, match="PM_RECEIPT_NONMONOTONIC_OR_AMBIGUOUS"):
+        s.append_bridge(unchanged)
+    assert s.aborted and s.rows == 1
+    assert verify_sealed_archive(s.root)
+    receipt = json.loads((s.root / "receipt.json").read_text())
+    assert receipt["abort_reason"] == "PM_RECEIPT_NONMONOTONIC_OR_AMBIGUOUS"
+
+
+@pytest.mark.parametrize("changed", [False, True])
+def test_bridge_pm_equal_receipt_changed_or_unchanged_fails(
+    tmp_path: Path, changed: bool
+) -> None:
+    s = new(tmp_path)
+    seed = bridge_seed(0)
+    seed["clock_uncertainty_ms"] = 100
+    s.append_bridge(seed)
+    event = bridge_ws(0, 1, changed=changed)
+    event["clock_uncertainty_ms"] = 100
+    with pytest.raises(SinkDenied, match="PM_RECEIPT_NONMONOTONIC_OR_AMBIGUOUS"):
+        s.append_bridge(event)
+    assert s.aborted and s.rows == 1 and verify_sealed_archive(s.root)
+
+
+def test_bridge_pm_overlap_increasing_timestamp_fails(tmp_path: Path) -> None:
+    s = new(tmp_path)
+    seed = bridge_seed(0)
+    seed["clock_uncertainty_ms"] = 100
+    s.append_bridge(seed)
+    event = bridge_ws(1)
+    event["clock_uncertainty_ms"] = 100
+    event["received_at"] = (T + timedelta(milliseconds=150)).isoformat()
+    with pytest.raises(SinkDenied, match="PM_RECEIPT_NONMONOTONIC_OR_AMBIGUOUS"):
+        s.append_bridge(event)
+    assert s.rows == 1 and s.aborted and verify_sealed_archive(s.root)
+
+
+def test_bridge_pm_two_seeds_overlapping_rejected(tmp_path: Path) -> None:
+    s = new(tmp_path)
+    seed = bridge_seed(0)
+    seed["clock_uncertainty_ms"] = 100
+    s.append_bridge(seed)
+    second = bridge_seed(0)
+    second["token_id"] = BRIDGE_PM_TOKENS["913"]
+    second["clock_uncertainty_ms"] = 100
+    with pytest.raises(SinkDenied, match="PM_RECEIPT_NONMONOTONIC_OR_AMBIGUOUS"):
+        s.append_bridge(second)
+    assert s.rows == 1 and s.aborted and verify_sealed_archive(s.root)
+
+
+def test_bridge_pm_ws_to_ws_ambiguous_receipt_rejected(tmp_path: Path) -> None:
+    s = new(tmp_path)
+    seed = bridge_seed(0)
+    seed["clock_uncertainty_ms"] = 100
+    s.append_bridge(seed)
+    first = bridge_ws(1, 1, changed=False)
+    first["clock_uncertainty_ms"] = 100
+    s.append_bridge(first)
+    second = bridge_ws(1, 2, changed=False)
+    second["clock_uncertainty_ms"] = 100
+    with pytest.raises(SinkDenied, match="PM_RECEIPT_NONMONOTONIC_OR_AMBIGUOUS"):
+        s.append_bridge(second)
+    assert s.rows == 2 and s.aborted and verify_sealed_archive(s.root)
+
+
+def test_bridge_pm_ambiguous_disconnect_fails_before_terminal_write(tmp_path: Path) -> None:
+    s = new(tmp_path)
+    seed = bridge_seed(0)
+    seed["clock_uncertainty_ms"] = 100
+    s.append_bridge(seed)
+    disconnect = {
+        "schema": "alpha2-source-bridge-v1", "venue": "PM", "kind": "DISCONNECT",
+        "producer_sha": P, "issuer_authenticated": False,
+        "source_admitted": False, "paper_admitted": False,
+        "connection_epoch": 1, "received_at": stamp(0),
+        "ws_local_ordinal": 0, "full_books": {}, "gap_or_unanchored": True,
+    }
+    with pytest.raises(SinkDenied, match="PM_RECEIPT_NONMONOTONIC_OR_AMBIGUOUS"):
+        s.append_bridge(disconnect)
+    assert s.rows == 1 and s.aborted and verify_sealed_archive(s.root)
+    assert "DISCONNECT" not in (s.root / "records.jsonl").read_text()
+
+
+def test_bridge_pm_strict_separation_all_events_and_equal_sig_allowed(tmp_path: Path) -> None:
+    s = new(tmp_path)
+    first = bridge_seed(0)
+    first["clock_uncertainty_ms"] = 100
+    s.append_bridge(first)
+    # SIG equal global timestamp is allowed; PM strictness is independent.
+    s.append_bridge(bridge_sig(0, native=False))
+    second = bridge_seed(1)
+    second["token_id"] = BRIDGE_PM_TOKENS["913"]
+    second["clock_uncertainty_ms"] = 100
+    s.append_bridge(second)
+    unchanged = bridge_ws(2, 1, changed=False)
+    unchanged["clock_uncertainty_ms"] = 100
+    s.append_bridge(unchanged)
+    changed = bridge_ws(3, 2)
+    changed["clock_uncertainty_ms"] = 100
+    s.append_bridge(changed)
+    disconnect = {
+        "schema": "alpha2-source-bridge-v1", "venue": "PM", "kind": "DISCONNECT",
+        "producer_sha": P, "issuer_authenticated": False,
+        "source_admitted": False, "paper_admitted": False,
+        "connection_epoch": 1, "received_at": stamp(4),
+        "ws_local_ordinal": 2, "full_books": {}, "gap_or_unanchored": True,
+    }
+    with pytest.raises(SinkDenied, match="PM_DISCONNECT_ABORT"):
+        s.append_bridge(disconnect)
+    assert s.rows == 6 and s.aborted and verify_sealed_archive(s.root)
+    receipt = json.loads((s.root / "receipt.json").read_text())
+    assert receipt["bridge_unchanged_ws"] == 1
+
+
+def test_bridge_pm_zero_uncertainty_requires_strict_order(tmp_path: Path) -> None:
+    s = new(tmp_path)
+    s.append_bridge(bridge_seed(0))
+    s.append_bridge(bridge_ws(1, 1, changed=False))
+    s.close()
+    assert s.rows == 2 and verify_sealed_archive(s.root)
