@@ -12,11 +12,11 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
+from predictions_cup.research import zero_fee_spread_latency as module
 from predictions_cup.research.native_paired_source_bridge import (
     PM_EXACT_SAME_YES,
     SIG_TOURNAMENT,
 )
-from predictions_cup.research import zero_fee_spread_latency as module
 from predictions_cup.research.zero_fee_spread_latency import analyze, book, vwap
 
 
