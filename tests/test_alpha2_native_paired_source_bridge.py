@@ -20,8 +20,14 @@ from predictions_cup.research.native_paired_source_bridge import (
 )
 
 PRODUCER = "a" * 40
-PM = {"223": "fake-mt-dem", "224": "fake-mt-rep",
-      "270": "fake-me-dem", "271": "fake-me-rep"}
+# Invented payload fixtures use ONLY the four frozen, independent real identity IDs.
+# IDs are public registry pins, not an issuer-authentication or production admission.
+PM = {
+    "223": "94033987553817825990709512567031751048276730850154145976615728913102874968691",
+    "224": "70720420928389492978842914190430712299346582376255109200751838945374631181994",
+    "270": "7589880081658059374445882095611024032084645048848237404312287942463647821549",
+    "271": "2142948285506077695096498341598672159464223074468931276310105532825810210121",
+}
 BIDS = [{"price": "0.40", "quantity": "11"}, {"price": "0.39", "quantity": "12"}]
 ASKS = [{"price": "0.60", "quantity": "11"}, {"price": "0.61", "quantity": "12"}]
 
@@ -48,8 +54,9 @@ def sig(seq: int = 1, *, previous: int = 0,
 
 
 def book(*, exchange: str = "912", native_at: str = "2026-10-18T10:00:00Z",
-         bids: object = BIDS, asks: object = ASKS) -> dict[str, object]:
-    return {"exchangeId": exchange, "asOf": {"sequence": 91, "at": native_at},
+         native_seq: int = 91, bids: object = BIDS,
+         asks: object = ASKS) -> dict[str, object]:
+    return {"exchangeId": exchange, "asOf": {"sequence": native_seq, "at": native_at},
             "bids": bids, "asks": asks}
 
 
@@ -103,9 +110,13 @@ def test_sig_epoch_reconnect_is_gap_and_clock_regression_denied() -> None:
     with pytest.raises(SourceRejected, match="SIG_EPOCH_REGRESSION"):
         b.sig_batch(topic_market_id="223", batch=sig(3, previous=2),
                     received_at="2026-10-18T10:00:03Z", connection_epoch=1)
+    assert b.poisoned
+    b2, _ = bridge()
+    b2.sig_batch(topic_market_id="223", batch=sig(), received_at="2026-10-18T10:00:02Z",
+                 connection_epoch=2)
     with pytest.raises(SourceRejected, match="SIG_RECEIVE_REGRESSION"):
-        b.sig_batch(topic_market_id="223", batch=sig(3, previous=2),
-                    received_at="2026-10-18T10:00:01Z", connection_epoch=2)
+        b2.sig_batch(topic_market_id="223", batch=sig(2, previous=1),
+                     received_at="2026-10-18T10:00:01Z", connection_epoch=2)
 
 
 def test_sig_wrong_exchange_no_book_revision_or_future_publisher_rejected() -> None:
@@ -128,6 +139,8 @@ def test_pm_seed_epoch_and_local_ordinal_without_global_sequence_claim() -> None
     with pytest.raises(SourceRejected, match="PM_UNSEEDED_EPOCH"):
         b.pm_ws_event(epoch=1, ordinal=1, received_at="2026-10-18T10:00:01Z",
                       affected_token_ids=[PM["223"]], reconstructed_books={})
+    assert b.poisoned
+    b, records = bridge()  # rejected fixture cannot become a continued tape
     b.pm_rest_seed(token_id=PM["223"], epoch=1, bids=BIDS, asks=ASKS,
                    received_at="2026-10-18T10:00:01Z")
     b.pm_ws_event(epoch=1, ordinal=1, received_at="2026-10-18T10:00:02Z",
@@ -221,9 +234,16 @@ def test_rejected_sig_book_does_not_advance_native_delivery_continuity() -> None
             received_at="2026-10-18T10:00:02Z", connection_epoch=1,
         )
     assert b.sig_state["223"][1] == 1
-    b.sig_batch(topic_market_id="223", batch=sig(3, previous=2),
-                received_at="2026-10-18T10:00:03Z", connection_epoch=1)
-    assert records[-1]["gap_or_unanchored"] is True
+    health = b.health_snapshot()
+    assert health["poisoned"] is True
+    assert health["rejected_total"] == 1
+    assert health["lost_lower_bound"] == 1
+    assert cast(dict[str, dict[str, object]], health["last_good_sig"])["223"]["revision"] == 1
+    assert len(records) == 1
+    with pytest.raises(SourceRejected, match="BRIDGE_POISONED"):
+        b.sig_batch(topic_market_id="223", batch=sig(3, previous=2),
+                    received_at="2026-10-18T10:00:03Z", connection_epoch=1)
+    assert len(records) == 1
 
 
 def test_rejected_pm_frame_does_not_advance_ws_ordinal() -> None:
@@ -235,10 +255,165 @@ def test_rejected_pm_frame_does_not_advance_ws_ordinal() -> None:
                       affected_token_ids=[], reconstructed_books={},
                       raw_frame=cast(bytes, "not original bytes"))
     assert b.pm_ordinal == 0
-    b.pm_ws_event(epoch=1, ordinal=2, received_at="2026-10-18T10:00:03Z",
+    assert b.poisoned
+    assert b.health_snapshot()["last_good_pm_ordinal"] == 0
+    assert b.health_snapshot()["rejected_total"] == 1
+    assert len(records) == 1
+    with pytest.raises(SourceRejected, match="BRIDGE_POISONED"):
+        b.pm_ws_event(epoch=1, ordinal=2, received_at="2026-10-18T10:00:03Z",
+                      affected_token_ids=[PM["223"]], reconstructed_books={})
+    assert len(records) == 1
+
+
+
+
+@pytest.mark.parametrize(
+    ("second_seq", "second_publisher", "expected"),
+    [
+        (90, "2026-10-18T10:00:01Z", "SIG_NATIVE_SEQUENCE_REGRESSION"),
+        (92, "2026-10-18T09:59:59Z", "SIG_NATIVE_PUBLISHER_NONMONOTONIC_OR_AMBIGUOUS"),
+        (92, "2026-10-18T10:00:00.150Z",
+         "SIG_NATIVE_PUBLISHER_NONMONOTONIC_OR_AMBIGUOUS"),
+        (90, "2026-10-18T09:00:00Z", "SOURCE_PUBLISHER_RECEIPT_STALE_OR_UNATTESTED"),
+    ],
+)
+def test_sig_native_reversed_seq_publisher_overlap_and_hour_old_depth_denied(
+    second_seq: int, second_publisher: str, expected: str,
+) -> None:
+    """INVENTED test: delivery rev +1 cannot certify an older native full book."""
+    b, records = bridge()
+    b.sig_batch(topic_market_id="223", batch=sig(1, books=[book()]),
+                received_at="2026-10-18T10:00:01Z", connection_epoch=1)
+    old_native = b.sig_native_state["223"]
+    with pytest.raises(SourceRejected, match=expected):
+        b.sig_batch(topic_market_id="223",
+                    batch=sig(2, previous=1, books=[
+                        book(native_seq=second_seq, native_at=second_publisher)]),
+                    received_at="2026-10-18T10:00:02Z", connection_epoch=1)
+    assert b.poisoned and b.sig_native_state["223"] == old_native
+    assert b.sig_state["223"][1] == 1
+    assert len(records) == 1
+    assert b.health_snapshot()["lost_lower_bound"] == 1
+    with pytest.raises(SourceRejected, match="BRIDGE_POISONED"):
+        b.sig_batch(topic_market_id="223", batch=sig(3, previous=2),
+                    received_at="2026-10-18T10:00:03Z", connection_epoch=1)
+
+
+def test_sig_nonbook_delivery_never_advances_native_book_clock() -> None:
+    b, records = bridge()
+    b.sig_batch(topic_market_id="223", batch=sig(1, books=[book()]),
+                received_at="2026-10-18T10:00:01Z", connection_epoch=1)
+    b.sig_batch(topic_market_id="223", batch=sig(2, previous=1),
+                received_at="2026-10-18T10:00:02Z", connection_epoch=1)
+    assert b.sig_native_state["223"][1] == 91
+    b.sig_batch(topic_market_id="223",
+                batch=sig(3, previous=2, books=[
+                    book(native_seq=92, native_at="2026-10-18T10:00:03Z")]),
+                received_at="2026-10-18T10:00:04Z", connection_epoch=1)
+    assert len(records) == 3
+    assert records[1]["full_books"] == []
+    assert records[1]["gap_or_unanchored"] is False
+    assert b.sig_native_state["223"][1] == 92
+    assert b.health_snapshot()["rejected_total"] == 0
+
+
+@pytest.mark.parametrize("second_received", [
+    "2026-10-18T10:00:02Z", "2026-10-18T10:00:03Z",
+    "2026-10-18T10:00:03.150Z",
+])
+def test_pm_seed_to_ws_receipt_reversal_equal_or_uncertain_collision_denied(
+    second_received: str,
+) -> None:
+    """INVENTED epoch1: seed 01, ordinal1 03, ordinal2 02/equal/overlap."""
+    b, records = bridge()
+    b.pm_rest_seed(token_id=PM["223"], epoch=1, bids=BIDS, asks=ASKS,
+                   received_at="2026-10-18T10:00:01Z")
+    b.pm_ws_event(epoch=1, ordinal=1, received_at="2026-10-18T10:00:03Z",
+                  affected_token_ids=[], reconstructed_books={})
+    assert records[-1]["full_books"] == {}  # unchanged event retained
+    with pytest.raises(SourceRejected, match="PM_RECEIPT_NONMONOTONIC_OR_AMBIGUOUS"):
+        b.pm_ws_event(epoch=1, ordinal=2, received_at=second_received,
+                      affected_token_ids=[PM["223"]],
+                      reconstructed_books={PM["223"]: {"bids": BIDS, "asks": ASKS}})
+    assert b.pm_ordinal == 1 and len(records) == 2
+    assert b.health_snapshot()["last_good_pm_ordinal"] == 1
+    assert b.health_snapshot()["lost_lower_bound"] == 1 and b.poisoned
+
+
+def test_pm_seed_first_ws_clock_overlap_denied_and_real_new_epoch_required() -> None:
+    b, records = bridge()
+    b.pm_rest_seed(token_id=PM["223"], epoch=1, bids=BIDS, asks=ASKS,
+                   received_at="2026-10-18T10:00:01Z")
+    with pytest.raises(SourceRejected, match="PM_RECEIPT_NONMONOTONIC_OR_AMBIGUOUS"):
+        b.pm_ws_event(epoch=1, ordinal=1, received_at="2026-10-18T10:00:01.100Z",
+                      affected_token_ids=[], reconstructed_books={})
+    assert b.poisoned and b.pm_ordinal == 0 and len(records) == 1
+
+    clean, _ = bridge()
+    clean.pm_rest_seed(token_id=PM["223"], epoch=1, bids=BIDS, asks=ASKS,
+                       received_at="2026-10-18T10:00:01Z")
+    clean.pm_disconnect(epoch=1, received_at="2026-10-18T10:00:02Z")
+    with pytest.raises(SourceRejected, match="PM_RECONNECT_REQUIRES_NEW_EPOCH"):
+        clean.pm_rest_seed(token_id=PM["223"], epoch=1, bids=BIDS, asks=ASKS,
+                           received_at="2026-10-18T10:00:03Z")
+    assert clean.poisoned
+
+
+def test_exact_frozen_yes_tokens_positive_and_swapped_fake_wrong_denied() -> None:
+    real, records = bridge()
+    assert real.tokens == PM
+    real.pm_rest_seed(token_id=PM["223"], epoch=1, bids=BIDS, asks=ASKS,
+                      received_at="2026-10-18T10:00:01Z")
+    assert len(records) == 1 and records[0]["source_admitted"] is False
+    assert records[0]["paper_admitted"] is False
+    assert records[0]["issuer_authenticated"] is False
+    for fake in (
+        {**PM, "223": PM["224"], "224": PM["223"]},
+        {**PM, "223": "999999999999999999999999999999999999"},
+        {"223": "fake-mt-dem", "224": "fake-mt-rep",
+         "270": "fake-me-dem", "271": "fake-me-rep"},
+    ):
+        with pytest.raises(SourceRejected, match="PM_EXACT_SAME_YES_TOKEN_REQUIRED"):
+            SourceBridge(emit=records.append, producer_sha=PRODUCER,
+                         allowed_pm_tokens=fake, max_clock_uncertainty_ms=100)
+    with pytest.raises(SourceRejected, match="FOUR_EXACT_MARKETS_REQUIRED"):
+        SourceBridge(emit=records.append, producer_sha=PRODUCER,
+                     allowed_pm_tokens={"223": PM["223"]}, max_clock_uncertainty_ms=100)
+
+
+def test_pm_gap_accounted_and_unchanged_sequential_ordinals_preserved() -> None:
+    b, records = bridge()
+    b.pm_rest_seed(token_id=PM["223"], epoch=1, bids=BIDS, asks=ASKS,
+                   received_at="2026-10-18T10:00:01Z")
+    b.pm_ws_event(epoch=1, ordinal=1, received_at="2026-10-18T10:00:02Z",
+                  affected_token_ids=[], reconstructed_books={})
+    b.pm_ws_event(epoch=1, ordinal=3, received_at="2026-10-18T10:00:03Z",
                   affected_token_ids=[PM["223"]], reconstructed_books={})
+    assert [r["kind"] for r in records] == [
+        "REST_SEED_COMPLETE", "WS_EVENT", "WS_EVENT"]
     assert records[-1]["gap_or_unanchored"] is True
     assert records[-1]["abstain_tokens"] == [PM["223"]]
+    assert b.health_snapshot()["lost_lower_bound"] == 1
+    assert b.health_snapshot()["gap_events_total"] >= 1
+    assert not b.poisoned
+
+
+def test_sink_exception_and_subsequent_denial_account_without_error_payload() -> None:
+    def fails(_record: dict[str, object]) -> None:
+        raise RuntimeError("PRIVATE_VALUE_MUST_NOT_LEAK")
+
+    b, _ = bridge(emit=fails)
+    with pytest.raises(RuntimeError):
+        b.sig_batch(topic_market_id="223", batch=sig(),
+                    received_at="2026-10-18T10:00:01Z", connection_epoch=1)
+    health = b.health_snapshot()
+    assert health["rejected_total"] == health["lost_lower_bound"] == 1
+    assert health["last_failure_reason"] == "SINK_OR_HANDLER_EXCEPTION"
+    assert "PRIVATE_VALUE" not in json.dumps(health)
+    with pytest.raises(SourceRejected, match="BRIDGE_POISONED"):
+        b.sig_batch(topic_market_id="223", batch=sig(2, previous=1),
+                    received_at="2026-10-18T10:00:02Z", connection_epoch=1)
+    assert b.health_snapshot()["rejected_total"] == 2
 
 
 def test_bounded_24hour_equivalent_one_hz_no_buffer_and_measured_synthetic_rate() -> None:
