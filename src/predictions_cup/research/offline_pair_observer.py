@@ -11,10 +11,11 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_DOWN, Decimal, InvalidOperation
 from itertools import pairwise
 from typing import Any, cast
 
@@ -33,6 +34,9 @@ _PAIRS = {
 }
 _HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 _HEX40 = re.compile(r"[0-9a-f]{40}\Z")
+_SAFE_RUN_ID = re.compile(r"[a-z][a-z0-9_-]{0,31}\Z")
+_SAFE_RELEASE_ID = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,63}\Z")
+_SENSITIVE_METADATA = re.compile(r"secret|password|token|api.?key|private|credential|bearer|email|@", re.I)
 _MAX_RAW = 65_536
 _MAX_OUTPUT = 8_388_608
 _MAX_RECORDS = 20_000
@@ -53,6 +57,13 @@ def _need(ok: bool, reason: str) -> None:
 def _text(value: object, reason: str) -> str:
     _need(isinstance(value, str) and bool(value.strip()), reason)
     return str(value)
+
+
+def _safe_id(value: object, pattern: re.Pattern[str], reason: str) -> str:
+    ident = _text(value, reason)
+    _need(pattern.fullmatch(ident) is not None, reason)
+    _need(_SENSITIVE_METADATA.search(ident) is None, "SENSITIVE_METADATA_DENIED")
+    return ident
 
 
 def _integer(value: object, reason: str, *, low: int = 0) -> int:
@@ -108,7 +119,10 @@ def _vwap(levels: tuple[tuple[Decimal, Decimal], ...], whole: int) -> Decimal | 
     remaining = Decimal(whole)
     total = Decimal(0)
     for price, qty in levels:
-        take = min(remaining, qty)
+        # Floor at EACH venue level. Pooling fractional displays invents
+        # whole-share IOC capacity, even when aggregate decimals sum to n.
+        available = qty.to_integral_value(rounding=ROUND_DOWN)
+        take = min(remaining, available)
         total += take * price
         remaining -= take
         if remaining == 0:
@@ -154,12 +168,17 @@ class OfflinePairObserver:
         independent_verify: Callable[[OperatorRelease], bool] | None = None,
     ) -> None:
         self._enabled = False
+        self._release_expires_at: datetime | None = None
+        self._runtime_started_at: float | None = None
         if release is not None and independent_verify is not None:
             _need(bool(_HEX64.fullmatch(release.signature_sha256)), "BAD_RELEASE_DIGEST")
-            _text(release.release_id, "RELEASE_ID_MISSING")
-            _need(_utc(release.expires_at) > datetime.now(UTC),
-                  "RELEASE_EXPIRED")
+            _safe_id(release.release_id, _SAFE_RELEASE_ID, "RELEASE_ID_INVALID")
+            expiry = _utc(release.expires_at)
+            _need(expiry > datetime.now(UTC), "RELEASE_EXPIRED")
             self._enabled = independent_verify(release) is True
+            if self._enabled:
+                self._release_expires_at = expiry
+                self._runtime_started_at = time.monotonic()
         self._rows: list[bytes] = []
         self._size = 0
         self._start: datetime | None = None
@@ -178,7 +197,18 @@ class OfflinePairObserver:
         self.aborted = True
         self._enabled = False
 
-    def _validate(self, row: Mapping[str, Any]) -> None:
+    def _require_active(self) -> None:
+        _need(self.enabled, "DEFAULT_DISABLED_OR_ABORTED")
+        if (self._release_expires_at is not None
+                and datetime.now(UTC) >= self._release_expires_at):
+            self.abort()
+            raise OfflineDenied("RELEASE_EXPIRED")
+        if (self._runtime_started_at is not None
+                and time.monotonic() - self._runtime_started_at >= _MAX_AGE.total_seconds()):
+            self.abort()
+            raise OfflineDenied("OFFLINE_RUNTIME_EXPIRED")
+
+    def _validate(self, row: Mapping[str, Any]) -> dict[str, Any]:
         kind = row.get("kind")
         _need(kind in {"SIG_FULL_BOOK", "PM_FULL_SEED", "PM_BOOK_CHANGE"},
               "UNSUPPORTED_SOURCE_KIND")
@@ -189,7 +219,7 @@ class OfflinePairObserver:
         }[cast(str, kind)], "SOURCE_IS_NOT_NATIVE_FULL_BOOK_OR_SEEDED_PM")
         _need(_HEX40.fullmatch(_text(row.get("producer_git_sha"), "PRODUCER_MISSING"))
               is not None, "PRODUCER_SHA_INVALID")
-        _text(row.get("producer_run_id"), "PRODUCER_RUN_MISSING")
+        _safe_id(row.get("producer_run_id"), _SAFE_RUN_ID, "PRODUCER_RUN_INVALID")
         exchange = _text(row.get("exchange_id"), "EXCHANGE_MISSING")
         _need(exchange in _PAIRS and row.get("market_id") == _PAIRS[exchange][0]
               and row.get("condition_id") == _PAIRS[exchange][1]
@@ -205,7 +235,10 @@ class OfflinePairObserver:
         issuer = _utc(row.get("publisher_at"))
         _need(issuer <= observed + timedelta(milliseconds=clock_ms),
               "SOURCE_FUTURE_OF_OBSERVER")
-        _book(row)
+        bids, asks = _book(row)
+        # Deep-normalize the ONLY nested metadata into immutable values.
+        snapshot = dict(row)
+        snapshot["bids"], snapshot["asks"] = bids, asks
         if kind == "SIG_FULL_BOOK":
             _integer(row.get("connection_epoch"), "SIG_EPOCH_MISSING", low=1)
             seq = _integer(row.get("native_asof_sequence"), "NATIVE_ASOF_MISSING", low=1)
@@ -227,7 +260,11 @@ class OfflinePairObserver:
                       and revision > prev_rev, "SIG_REVISION_GAP_OR_DUPLICATE")
                 _need(seq > prior["native_asof_sequence"], "SIG_ASOF_NONMONOTONIC")
                 _need(observed > _utc(prior["received_at"]), "SIG_RECEIVE_NONMONOTONIC")
-            self._sig[exchange] = dict(row)
+                _need(
+                    row["source_sequence_from"] == prior["source_sequence_through"] + 1,
+                    "SIG_SOURCE_SEQUENCE_GAP_OR_UNVERIFIED_RANGE",
+                )
+            self._sig[exchange] = snapshot
         else:
             epoch = _integer(row.get("connection_epoch"), "PM_EPOCH_MISSING", low=1)
             seed = _integer(row.get("seed_epoch"), "PM_SEED_EPOCH_MISSING", low=1)
@@ -250,11 +287,12 @@ class OfflinePairObserver:
                       "PM_RECEIVE_NONMONOTONIC")
                 _need(row["bids"] != prior_pm["bids"]
                       or row["asks"] != prior_pm["asks"], "PM_NOT_A_PRICE_BOOK_INNOVATION")
-            self._pm[exchange] = dict(row)
+            self._pm[exchange] = snapshot
+        return snapshot
 
     def ingest(self, row: Mapping[str, Any], original_payload: bytes) -> str:
         """Consume a supplied OFFLINE full-state record; never connect to a source."""
-        _need(self.enabled, "DEFAULT_DISABLED_OR_ABORTED")
+        self._require_active()
         try:
             _need(isinstance(original_payload, bytes)
                   and 0 < len(original_payload) <= _MAX_RAW, "RAW_BYTES_LIMIT")
@@ -284,14 +322,21 @@ class OfflinePairObserver:
                   and received - self._start < _MAX_AGE, "24H_WINDOW_EXCEEDED")
             _need(self._last_at is None or received >= self._last_at,
                   "GLOBAL_RECEIVE_CLOCK_BACKWARDS")
-            self._validate(row)
-            # Persist only allowlisted numeric metadata, never raw input bytes.
-            canonical = json.dumps(dict(row), sort_keys=True, separators=(",", ":"),
-                                   ensure_ascii=True, allow_nan=False).encode("ascii")
+            snapshot = self._validate(row)
+            # Hash and journal the SAME validated books used for later screens.
+            serialized = dict(snapshot)
+            serialized["bids"] = [[str(p), str(q)] for p, q in snapshot["bids"]]
+            serialized["asks"] = [[str(p), str(q)] for p, q in snapshot["asks"]]
+            canonical = json.dumps(
+                serialized, sort_keys=True, separators=(",", ":"),
+                ensure_ascii=True, allow_nan=False,
+            ).encode("ascii")
             chain = hashlib.sha256(bytes.fromhex(self._chain) + canonical).hexdigest()
-            line = json.dumps({"record": row, "chain_sha256": chain},
-                              sort_keys=True, separators=(",", ":"),
-                              ensure_ascii=True, allow_nan=False).encode("ascii") + b"\n"
+            line = json.dumps(
+                {"record": serialized, "chain_sha256": chain},
+                sort_keys=True, separators=(",", ":"),
+                ensure_ascii=True, allow_nan=False,
+            ).encode("ascii") + b"\n"
             _need(len(self._rows) < _MAX_RECORDS
                   and self._size + len(line) <= _MAX_OUTPUT,
                   "BOUNDED_OUTPUT_EXCEEDED")
@@ -313,7 +358,7 @@ class OfflinePairObserver:
 
     def screen(self, exchange_id: str, decision_at: str, whole_shares: int) -> Screen:
         """Descriptive signed PM-bid/ask vs SIG full-depth; NEVER executable alpha."""
-        _need(self.enabled, "DEFAULT_DISABLED_OR_ABORTED")
+        self._require_active()
         _need(exchange_id in _PAIRS and whole_shares in _WHOLE_LOTS,
               "INVALID_EXCHANGE_OR_WHOLE_LOT")
         decision = _utc(decision_at)
@@ -324,18 +369,33 @@ class OfflinePairObserver:
                           None, None)
         sig_at = _utc(sig["received_at"])
         pm_at = _utc(pm["received_at"])
-        if (not pm_at < sig_at <= decision
-            or decision - pm_at > _MAX_STALENESS
-            or decision - sig_at > _MAX_STALENESS):
+        sig_u = timedelta(milliseconds=sig["clock_uncertainty_ms"])
+        pm_u = timedelta(milliseconds=pm["clock_uncertainty_ms"])
+        sig_source = _utc(sig["publisher_at"])
+        pm_source = _utc(pm["publisher_at"])
+        # Overlapping source OR receipt uncertainty intervals cannot establish
+        # PM shock before SIG arrived book before offline decision.
+        if (not (
+            pm_at + pm_u < sig_at - sig_u
+            and pm_source + pm_u < sig_source - sig_u
+            and sig_at + sig_u <= decision
+            and sig_source + sig_u <= decision
+        )
+            or decision - (pm_at - pm_u) > _MAX_STALENESS
+            or decision - (sig_at - sig_u) > _MAX_STALENESS):
             return Screen("NONCAUSAL_OR_STALE", exchange_id, whole_shares, None, None)
-        sig_bid, sig_ask = _book(sig)
-        pm_bid, pm_ask = _book(pm)
+        sig_bid, sig_ask = sig["bids"], sig["asks"]
+        pm_bid, pm_ask = pm["bids"], pm["asks"]
         yes_ask = _vwap(sig_ask, whole_shares)
         yes_bid = _vwap(sig_bid, whole_shares)
-        if yes_ask is None or yes_bid is None:
+        sized_pm_bid = _vwap(pm_bid, whole_shares)
+        sized_pm_ask = _vwap(pm_ask, whole_shares)
+        if any(x is None for x in (yes_ask, yes_bid, sized_pm_bid, sized_pm_ask)):
             return Screen("WHOLE_DEPTH_INSUFFICIENT", exchange_id, whole_shares,
                           None, None)
-        yes_gap = pm_bid[0][0] - yes_ask
-        no_gap = yes_bid - pm_ask[0][0]  # NO ask = 1 - same-market YES bid.
+        assert yes_ask is not None and yes_bid is not None
+        assert sized_pm_bid is not None and sized_pm_ask is not None
+        yes_gap = sized_pm_bid - yes_ask
+        no_gap = yes_bid - sized_pm_ask  # Same-market NO ask = 1 - YES bid.
         return Screen("REFERENCE_ONLY_2S_5S_NOT_RESTING_PROOF", exchange_id,
                       whole_shares, str(yes_gap), str(no_gap))
