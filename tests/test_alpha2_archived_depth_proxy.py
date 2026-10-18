@@ -491,3 +491,88 @@ def test_pilot_cli_stdout_is_aggregate_only(
     assert PM_EXACT_SAME_YES["223"][2] not in out
     assert "sample_receive_utc" not in out
     assert str(sr) not in out
+
+
+def test_off_west_synthetic_full_versus_10min_cpu_wall_rss_shards(
+    tmp_path: Path,
+) -> None:
+    """CI synthetic-only benchmark, separate child peak RSS/CPU per mode.
+
+    Emits measured Linux CI counters as a pytest warning; does NOT predict
+    West CPU PSI or grant any host action permission.
+    """
+    import subprocess
+    import warnings
+
+    if sys.platform != "linux":
+        pytest.skip("Linux process CPU and peak RSS benchmark")
+    sr, pr = tmp_path / "sig", tmp_path / "pm"
+    # Pre-price rule: take [17:20, 17:30) 30min after BASE 16:50Z.
+    # 60 one-minute shards over original 2h horizon, 48 unrelated SIG
+    # events per shard; ensures both readers scan genuine file metadata.
+    for minute in range(60):
+        offset = minute * 60000
+        instant = at(offset)
+        active = sig(offset + 3000, minute + 1)
+        junk = [{
+            "raw_json": json.dumps(
+                {"books": [{"exchangeId": 123456, "bids": [], "asks": []}]}
+            ),
+            "local_receive_at": at(offset + 4000 + j),
+            "connection_epoch": 1,
+            "session_id": "irrelevant-native-topic",
+            "topic": "irrelevant:other",
+        } for j in range(48)]
+        _dated(sr, "raw_events", instant, [active, *junk])
+        _dated(pr, "depth_snapshots", instant, [pm(offset + 1000)])
+    worker = """
+import json, resource, sys, time
+from pathlib import Path
+from predictions_cup.research.archived_depth_proxy import (
+    analyze_archived_proxy, analyze_short_window_pilot,
+)
+from predictions_cup.research.zero_fee_spread_latency import utc
+sig, pm, mode = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
+begin = time.perf_counter()
+cpu = time.process_time()
+if mode == 'full':
+    result = analyze_archived_proxy(
+        sig, pm, utc('2026-10-18T16:50:00Z'), utc('2026-10-18T18:50:00Z'),
+    )
+else:
+    result = analyze_short_window_pilot(
+        sig, pm, utc('2026-10-18T17:20:00Z'), utc('2026-10-18T17:30:00Z'),
+    )
+c = result['input_counts']
+print(json.dumps({
+    'mode': mode,
+    'cpu_s': round(time.process_time() - cpu, 5),
+    'wall_s': round(time.perf_counter() - begin, 5),
+    'peak_rss_kib': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+    'sig_shards': c['raw_events_shards'],
+    'pm_shards': c['depth_snapshots_shards'],
+    'sig_rows_scanned': c['raw_events_scanned'],
+    'pm_rows_scanned': c['depth_snapshots_scanned'],
+    'sig_target_rows': c.get('raw_events_retained_exact_rows'),
+    'fresh_matched': result['n_publisher_fresh_matched_reference_pairs'],
+}))
+"""
+    measurements = []
+    for mode in ("full", "pilot"):
+        completed = subprocess.run(
+            [sys.executable, "-c", worker, str(sr), str(pr), mode],
+            check=True, capture_output=True, text=True, timeout=30,
+        )
+        measurements.append(json.loads(completed.stdout))
+    full, pilot = measurements
+    assert pilot["sig_shards"] < full["sig_shards"]
+    assert pilot["pm_shards"] < full["pm_shards"]
+    assert pilot["sig_rows_scanned"] < full["sig_rows_scanned"]
+    assert pilot["pm_rows_scanned"] < full["pm_rows_scanned"]
+    assert pilot["sig_target_rows"] is not None
+    # Emit actual runner measurements only; no threshold/ratio as if West.
+    warnings.warn(
+        "ALPHA2_OFF_WEST_SYNTHETIC_RESOURCE_REPORT "
+        + json.dumps(measurements, sort_keys=True),
+        RuntimeWarning, stacklevel=2,
+    )
