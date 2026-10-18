@@ -448,9 +448,17 @@ def test_uncertainty_overlap_source_and_receive_returns_null() -> None:
         pm = book("PM_BOOK_CHANGE")
         sig = book("SIG_FULL_BOOK")
         if venue == "PM":
+            # NEW stronger protection: uncertain PM source interval overlaps
+            # its own seed, so reject and abort BEFORE cache/journal acceptance.
             pm["clock_uncertainty_ms"] = 1000
-        else:
-            sig["clock_uncertainty_ms"] = 1000
+            with pytest.raises(
+                ob.OfflineDenied, match="PM_SOURCE_CLOCK_NONMONOTONIC_OR_AMBIGUOUS"
+            ):
+                append(o, pm)
+            assert o.aborted
+            assert len(o.journal_bytes().splitlines()) == 1
+            continue
+        sig["clock_uncertainty_ms"] = 1000
         append(o, pm)
         append(o, sig)
         s = o.screen("912", "2026-10-18T00:00:04Z", 5)
