@@ -15,6 +15,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from itertools import pairwise
 from typing import Any, cast
 
 # Frozen 2026 EXACT/SAME YES-token crosswalk (public registry, main Git blob
@@ -90,7 +91,7 @@ def _levels(raw: object, side: str) -> tuple[tuple[Decimal, Decimal], ...]:
         parsed.append((_decimal(level[0], price=True), _decimal(level[1])))
     prices = [p for p, _ in parsed]
     _need(all((a > b if side == "bids" else a < b)
-              for a, b in zip(prices, prices[1:], strict=True)), "UNSORTED_OR_DUPLICATE_DEPTH")
+              for a, b in pairwise(prices)), "UNSORTED_OR_DUPLICATE_DEPTH")
     return tuple(parsed)
 
 
