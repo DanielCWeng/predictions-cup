@@ -11,10 +11,11 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from typing import Any, Callable, Mapping, cast
+from typing import Any, cast
 
 # Frozen 2026 EXACT/SAME YES-token crosswalk (public registry, main Git blob
 # 14823ac7043a451c587c6b7a0d3b684dbf7bb5d6).
