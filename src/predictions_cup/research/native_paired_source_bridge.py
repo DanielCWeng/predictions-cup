@@ -292,7 +292,8 @@ class SourceBridge:
             native_books = batch.get("books", ())
             native_candidate = self.sig_native_state.get(topic_market_id)
             if native_candidate is not None and native_candidate[0] != epoch:
-                native_candidate = None  # reconnect resets native comparison, never invents continuity
+                # Epoch boundary discards comparison, never invents continuity.
+                native_candidate = None
             _require(isinstance(native_books, (tuple, list)), "SIG_BOOKS_INVALID")
             for item in native_books:
                 _require(isinstance(item, Mapping), "SIG_BOOK_INVALID")
@@ -397,7 +398,7 @@ class SourceBridge:
                 try:
                     snapshots[token] = _book(item.get("bids"), item.get("asks"))
                 except SourceRejected:
-                    self.pm_seeded.discard(token)
+                    seeded.discard(token)
             self._emit({
                 "venue": "PM", "kind": "WS_EVENT", "connection_epoch": eid,
                 "ws_local_ordinal": number, "received_at": received_at,
