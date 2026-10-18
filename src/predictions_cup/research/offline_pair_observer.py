@@ -44,6 +44,8 @@ _MAX_OUTPUT = 8_388_608
 _MAX_RECORDS = 20_000
 _MAX_AGE = timedelta(hours=24)
 _MAX_STALENESS = timedelta(seconds=5)
+# Research-only age screen, NOT an independently attested venue latency SLA.
+_MAX_SOURCE_LAG = _MAX_STALENESS
 _WHOLE_LOTS = (1, 5, 10, 20)
 
 
@@ -237,6 +239,13 @@ class OfflinePairObserver:
         issuer = _utc(row.get("publisher_at"))
         _need(issuer <= observed + timedelta(milliseconds=clock_ms),
               "SOURCE_FUTURE_OF_OBSERVER")
+        uncertainty = timedelta(milliseconds=clock_ms)
+        # Old publisher clocks cannot be refreshed by a newer local receipt.
+        # These bounds are conservative research screening, not venue SLA proof.
+        _need(
+            observed - (issuer - uncertainty) <= _MAX_SOURCE_LAG,
+            "SOURCE_PUBLISHER_RECEIPT_STALE_OR_UNATTESTED",
+        )
         bids, asks = _book(row)
         # Deep-normalize the ONLY nested metadata into immutable values.
         snapshot = dict(row)
@@ -266,6 +275,14 @@ class OfflinePairObserver:
                     row["source_sequence_from"] == prior["source_sequence_through"] + 1,
                     "SIG_SOURCE_SEQUENCE_GAP_OR_UNVERIFIED_RANGE",
                 )
+                prior_uncertainty = timedelta(
+                    milliseconds=prior["clock_uncertainty_ms"]
+                )
+                _need(
+                    _utc(prior["publisher_at"]) + prior_uncertainty
+                    < issuer - uncertainty,
+                    "SIG_SOURCE_CLOCK_NONMONOTONIC_OR_AMBIGUOUS",
+                )
             self._sig[exchange] = snapshot
         else:
             epoch = _integer(row.get("connection_epoch"), "PM_EPOCH_MISSING", low=1)
@@ -289,6 +306,14 @@ class OfflinePairObserver:
                       "PM_RECEIVE_NONMONOTONIC")
                 _need(bids != prior_pm["bids"] or asks != prior_pm["asks"],
                       "PM_NOT_A_PRICE_BOOK_INNOVATION")
+                prior_uncertainty = timedelta(
+                    milliseconds=prior_pm["clock_uncertainty_ms"]
+                )
+                _need(
+                    _utc(prior_pm["publisher_at"]) + prior_uncertainty
+                    < issuer - uncertainty,
+                    "PM_SOURCE_CLOCK_NONMONOTONIC_OR_AMBIGUOUS",
+                )
             self._pm[exchange] = snapshot
         return snapshot
 
@@ -384,7 +409,11 @@ class OfflinePairObserver:
             and sig_source + sig_u <= decision
         )
             or decision - (pm_at - pm_u) > _MAX_STALENESS
-            or decision - (sig_at - sig_u) > _MAX_STALENESS):
+            or decision - (sig_at - sig_u) > _MAX_STALENESS
+            or pm_at - (pm_source - pm_u) > _MAX_SOURCE_LAG
+            or sig_at - (sig_source - sig_u) > _MAX_SOURCE_LAG
+            or decision - (pm_source - pm_u) > _MAX_STALENESS
+            or decision - (sig_source - sig_u) > _MAX_STALENESS):
             return Screen("NONCAUSAL_OR_STALE", exchange_id, whole_shares, None, None)
         sig_bid, sig_ask = sig["bids"], sig["asks"]
         pm_bid, pm_ask = pm["bids"], pm["asks"]
