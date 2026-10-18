@@ -403,7 +403,7 @@ def test_pilot_equals_full_parser_and_freshness_exactly(
             assert b[i][key] == a[i][key]
     assert pilot["wrong_market_placebo"] == full["wrong_market_placebo"]
     assert pilot["time_shift_placebo"] == full["time_shift_placebo"]
-    assert cast(list[dict[str, object]], b)[0]["fresh_reference_proxy"] == (
+    assert b[0]["fresh_reference_proxy"] == (
         a[0]["fresh_reference_proxy"]
     )
     assert pilot["n_admitted_pairs"] == 0
@@ -469,8 +469,9 @@ def test_pilot_prunes_dated_shards_before_parquet_open_and_no_network(
         return real(path, *args, **kwargs)
     monkeypatch.setattr(pq, "ParquetFile", only_selected)
     result = analyze_short_window_pilot(sr, pr, start, end)
-    assert result["input_counts"]["raw_events_shards"] == 1
-    assert result["input_counts"]["depth_snapshots_shards"] == 1
+    scan = cast(dict[str, int], result["input_counts"])
+    assert scan["raw_events_shards"] == 1
+    assert scan["depth_snapshots_shards"] == 1
     assert len(paths) == 2
 
 
