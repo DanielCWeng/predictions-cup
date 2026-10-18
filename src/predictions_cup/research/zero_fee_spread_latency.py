@@ -660,7 +660,26 @@ def main() -> None:
         help="Bounded archived native SIG vs PM PERIODIC full-depth numeric table; "
              "NEVER admitted or executable; window <=3h required",
     )
+    parser.add_argument(
+        "--short-window-pilot", action="store_true",
+        help="Single <=10-minute minute-shard-pruned publisher-fresh proxy pilot; "
+             "aggregates only, no pre-window quotes or other window inference",
+    )
     args = parser.parse_args()
+    if args.short_window_pilot:
+        if args.periodic_depth_proxy or args.pm_events is not None:
+            parser.error("pilot excludes other proxy mode and strict PM events")
+        if args.start is None or args.end is None or args.pm_root is None:
+            parser.error("pilot requires --start, --end and --pm-root")
+        from predictions_cup.research.archived_depth_proxy import (
+            analyze_short_window_pilot,
+        )
+
+        result = analyze_short_window_pilot(
+            args.sig_root, args.pm_root, utc(args.start), utc(args.end),
+        )
+        print(json.dumps(result, indent=2, sort_keys=True, ensure_ascii=True))
+        return
     if args.periodic_depth_proxy:
         if args.start is None or args.end is None:
             parser.error("--periodic-depth-proxy requires --start and --end UTC")
