@@ -655,7 +655,22 @@ def main() -> None:
     parser.add_argument("--start", default=None, help="UTC lower bound inclusive")
     parser.add_argument("--end", default=None, help="UTC upper bound inclusive")
     parser.add_argument("--uncertainty-ms", type=int, default=100)
+    parser.add_argument(
+        "--periodic-depth-proxy", action="store_true",
+        help="Bounded archived native SIG vs PM PERIODIC full-depth numeric table; "
+             "NEVER admitted or executable; window <=3h required",
+    )
     args = parser.parse_args()
+    if args.periodic_depth_proxy:
+        if args.start is None or args.end is None:
+            parser.error("--periodic-depth-proxy requires --start and --end UTC")
+        from predictions_cup.research.archived_depth_proxy import analyze_archived_proxy
+
+        result = analyze_archived_proxy(
+            args.sig_root, args.pm_root, utc(args.start), utc(args.end),
+        )
+        print(json.dumps(result, indent=2, sort_keys=True, ensure_ascii=True))
+        return
     summary = analyze(args.sig_root, args.pm_root, args.pm_events,
                       utc(args.start) if args.start else None,
                       utc(args.end) if args.end else None,
