@@ -9,11 +9,12 @@ import argparse
 import bisect
 import json
 from collections import Counter, defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_FLOOR, Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from predictions_cup.replay.economic_005i import _marginal_buy_limit, _outcome_levels, _walk
 from predictions_cup.replay.mapping_005i import load_accepted_005i_pairs
