@@ -169,6 +169,7 @@ def sig_original(rows: list[dict[str, Any]], counters: dict[str, int],
         if market not in SIG_MARKETS:
             continue
         counters["sig_batches"] += 1
+        counters["sig_batches_m" + market] += 1
         receive = utc(row["local_receive_at"])
         epoch = int(row.get("connection_epoch") or 0)
         session = str(row.get("session_id") or "")
@@ -199,6 +200,7 @@ def sig_original(rows: list[dict[str, Any]], counters: dict[str, int],
                  frame.get("resyncRequired") is not True)
         if not clean:
             counters["sig_gaps_or_unanchored"] += 1
+            counters["sig_gaps_m" + market] += 1
             if old is not None and old[:2] == (session, epoch):
                 dirty[market] = (session, epoch)
         prior[market] = (session, epoch, rev, receive, seq_to)
@@ -209,6 +211,7 @@ def sig_original(rows: list[dict[str, Any]], counters: dict[str, int],
             continue
         if not books:
             counters["sig_nonbook"] += 1
+            counters["sig_nonbook_m" + market] += 1
         for item in books:
             if dirty.get(market) == (session, epoch):
                 counters["sig_quarantined_books"] += 1
@@ -217,6 +220,7 @@ def sig_original(rows: list[dict[str, Any]], counters: dict[str, int],
                 counters["sig_invalid"] += 1
                 continue
             counters["sig_full_claims"] += 1
+            counters["sig_full_claims_m" + market] += 1
             try:
                 asof = item["asOf"]
                 publisher = utc(asof["at"])
@@ -240,9 +244,11 @@ def sig_original(rows: list[dict[str, Any]], counters: dict[str, int],
                 continue
             native[market] = (session, epoch, seq, publisher)
             counters["sig_valid_full"] += 1
+            counters["sig_valid_full_m" + market] += 1
             if clean and dirty.get(market) != (session, epoch):
                 output[market].append(snapshot(receive, b, epoch, seq))
                 counters["sig_eligible_full"] += 1
+                counters["sig_eligible_full_m" + market] += 1
             else:
                 counters["sig_unanchored_full"] += 1
     return output
@@ -266,6 +272,7 @@ def pm_original(path: Path | None, counters: dict[str, int],
                 output[token][-1]["valid_until"] = at
 
     tokens = {triple[2] for triple in PM_EXACT_SAME_YES.values()}
+    token_market = {triple[2]: market for market, triple in PM_EXACT_SAME_YES.items()}
     with path.open("r", encoding="utf-8") as stream:
         for line_index, line in enumerate(stream):
             if line_index >= MAX_ROWS:
@@ -309,6 +316,7 @@ def pm_original(path: Path | None, counters: dict[str, int],
                     b = book(item["full_depth"])
                     seeded.add(token)
                     counters["pm_seeded_complete"] += 1
+                    counters["pm_seeded_complete_m" + token_market[token]] += 1
                     if (start is None or at >= start) and (end is None or at <= end):
                         output[token].append(snapshot(at, b, epoch, 0))
                 elif kind == "WS_EVENT":
@@ -333,6 +341,7 @@ def pm_original(path: Path | None, counters: dict[str, int],
                             raise ValueError("unseeded token")
                         b = book(data)
                         counters["pm_ws_complete"] += 1
+                        counters["pm_ws_complete_m" + token_market[token]] += 1
                         if (start is None or at >= start) and (end is None or at <= end):
                             output[token].append(snapshot(at, b, epoch, ordinal))
                     counters["pm_ws_events"] += 1
@@ -410,6 +419,7 @@ def ranked(sig: dict[str, list[dict[str, Any]]],
                 counters["pair_unmatched"] += 1
                 continue
             matched += 1
+            counters["matched_m" + market] += 1
             for direction in ("BUY_SIG_SELL_PM_YES", "BUY_PM_SELL_SIG_YES"):
                 for size in SIZES:
                     original = compare(snap, partner, size, direction)
@@ -586,6 +596,8 @@ def analyze(sig_root: Path | None, pm_root: Path | None, pm_events: Path | None,
     observed.extend(utc(x["observed_at"]) for x in po if x.get("observed_at"))
     observed.extend(utc(x["recorded_at"]) for x in pd if x.get("recorded_at"))
     observed.extend(utc(x["observed_at"]) for x in sn if x.get("observed_at"))
+    observed.extend(cast(datetime, quote["at"])
+                    for quotes in pp.values() for quote in quotes)
     return {
         "schema": "alpha2-zero-fee-offline-v1",
         "input": {
@@ -598,6 +610,24 @@ def analyze(sig_root: Path | None, pm_root: Path | None, pm_events: Path | None,
             "clock_uncertainty_ms": uncertainty_ms,
         },
         "four_exact_markets": list(SIG_MARKETS),
+        "per_market": [
+            {
+                "sig_market": market,
+                "sig_exchange": SIG_MARKETS[market],
+                "pm_condition": PM_EXACT_SAME_YES[market][1],
+                "pm_yes_token": PM_EXACT_SAME_YES[market][2],
+                "n_sig_batches": counters["sig_batches_m" + market],
+                "n_sig_nonbook": counters["sig_nonbook_m" + market],
+                "n_sig_full_claims": counters["sig_full_claims_m" + market],
+                "n_sig_valid_full": counters["sig_valid_full_m" + market],
+                "n_sig_eligible_full": counters["sig_eligible_full_m" + market],
+                "n_sig_gaps": counters["sig_gaps_m" + market],
+                "n_pm_proven_seed": counters["pm_seeded_complete_m" + market],
+                "n_pm_ws_complete": counters["pm_ws_complete_m" + market],
+                "n_pairs": counters["matched_m" + market],
+            }
+            for market in SIG_MARKETS
+        ],
         "source_counts": dict(sorted(counters.items())),
         "n_sig_full_native_claims": counters["sig_full_claims"],
         "n_sig_valid_full": counters["sig_valid_full"],
