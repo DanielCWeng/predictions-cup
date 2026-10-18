@@ -129,7 +129,6 @@ class SourceBridge:
         self.pm_seeded: set[str] = set()
         self.poisoned = False
         self.records_emitted = 0
-        self.rejected = 0
 
     def _emit(self, record: dict[str, object]) -> None:
         _require(not self.poisoned, "BRIDGE_POISONED")
@@ -187,7 +186,6 @@ class SourceBridge:
                 gap = True  # reconnect is not a continuous native book proof
         else:
             gap = True  # first packet has no proved start-of-stream chain
-        self.sig_state[topic_market_id] = (epoch, rev, through, _utc(received_at))
         raw_digest = _digest(raw_frame)
         base: dict[str, object] = {
             "venue": "SIG", "kind": "BATCH", "market_id": topic_market_id,
@@ -220,6 +218,8 @@ class SourceBridge:
                 "full_depth": _book(item.get("bids"), item.get("asks")),
             })
         self._emit(base)
+        # Commit local continuity only AFTER all original levels and sink acceptance.
+        self.sig_state[topic_market_id] = (epoch, rev, through, _utc(received_at))
 
     def pm_rest_seed(self, *, token_id: str, epoch: int,
                      bids: object, asks: object, received_at: str,
@@ -235,7 +235,6 @@ class SourceBridge:
             self.pm_seeded.clear()
         self._clock(None, received_at)
         full = _book(bids, asks)
-        self.pm_seeded.add(token_id)
         self._emit({
             "venue": "PM", "kind": "REST_SEED_COMPLETE", "token_id": token_id,
             "connection_epoch": eid, "received_at": received_at,
@@ -243,6 +242,7 @@ class SourceBridge:
             "raw_response_sha256": _digest(raw_response),
             "wire_bytes_verified": False, "full_depth": full,
         })
+        self.pm_seeded.add(token_id)
 
     def pm_ws_event(self, *, epoch: int, ordinal: int, received_at: str,
                     affected_token_ids: Sequence[str],
@@ -260,7 +260,6 @@ class SourceBridge:
         _require(eid == self.pm_epoch, "PM_UNSEEDED_EPOCH")
         self._clock(None, received_at)
         gap = number != self.pm_ordinal + 1
-        self.pm_ordinal = number
         if gap:
             self.pm_seeded.clear()
         uninitialized = set(uninitialized_tokens).intersection(self.pm_tokens)
@@ -288,6 +287,7 @@ class SourceBridge:
             "full_books": snapshots,
             "abstain_tokens": sorted(affected.difference(snapshots)),
         })
+        self.pm_ordinal = number
 
     def pm_disconnect(self, *, epoch: int, received_at: str) -> None:
         _require(epoch == self.pm_epoch, "PM_EPOCH_MISMATCH")
