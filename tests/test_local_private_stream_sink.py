@@ -414,7 +414,9 @@ def test_bridge_disconnect_recorded_then_poisoned(tmp_path: Path) -> None:
     ("issuer_authenticated", True, "UNSUPPORTED_TRUST_PROMOTION"),
     ("raw_frame_sha256", "raw-not-original", "UNVERIFIED_RAW_DIGEST_FORMAT"),
     ("full_books", [{"asof_at": stamp(-100), "asof_sequence": 1,
-                     "full_depth": cast(list[dict[str, object]], bridge_sig()["full_books"])[0]["full_depth"]}],
+                     "full_depth": (
+                         cast(list[dict[str, object]], bridge_sig()["full_books"])[0]["full_depth"]
+                     )}],
      "SIG_NATIVE_SOURCE_CLOCK_STALE_OR_FUTURE"),
 ])
 def test_bridge_strict_privacy_wire_clock(tmp_path: Path, field: str, value: object,
