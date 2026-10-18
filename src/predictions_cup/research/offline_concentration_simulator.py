@@ -11,7 +11,7 @@ import itertools
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_FLOOR
+from decimal import ROUND_FLOOR, Decimal
 
 D = Decimal
 Z = D("0")
