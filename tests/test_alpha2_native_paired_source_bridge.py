@@ -398,6 +398,20 @@ def test_pm_gap_accounted_and_unchanged_sequential_ordinals_preserved() -> None:
     assert not b.poisoned
 
 
+def test_malformed_pm_full_depth_is_counted_loss_not_silent_abstain() -> None:
+    b, records = bridge()
+    b.pm_rest_seed(token_id=PM["223"], epoch=1, bids=BIDS, asks=ASKS,
+                   received_at="2026-10-18T10:00:01Z")
+    with pytest.raises(SourceRejected, match="FULL_LADDER_UNAVAILABLE"):
+        b.pm_ws_event(epoch=1, ordinal=1, received_at="2026-10-18T10:00:02Z",
+                      affected_token_ids=[PM["223"]],
+                      reconstructed_books={PM["223"]: {"bids": [], "asks": ASKS}})
+    assert len(records) == 1
+    assert b.pm_ordinal == 0 and b.pm_seeded == {PM["223"]}
+    assert b.poisoned and b.health_snapshot()["lost_lower_bound"] == 1
+    assert b.health_snapshot()["last_failure_reason"] == "FULL_LADDER_UNAVAILABLE"
+
+
 def test_sink_exception_and_subsequent_denial_account_without_error_payload() -> None:
     def fails(_record: dict[str, object]) -> None:
         raise RuntimeError("PRIVATE_VALUE_MUST_NOT_LEAK")
