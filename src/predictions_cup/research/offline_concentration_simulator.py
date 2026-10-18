@@ -242,11 +242,12 @@ def demo() -> tuple[Capital, tuple[Candidate, ...], tuple[Scenario, ...]]:
 
 def report_demo() -> dict[str, object]:
     c, assets, s = demo()
-    params = dict(exceed_susq=D("125000"), bust_at_or_below_susq=D("40000"))
     res = [
-        simulate(c, assets, s, "CONCENTRATED_A", {"INVENTED_A": ONE}, **params),
+        simulate(c, assets, s, "CONCENTRATED_A", {"INVENTED_A": ONE},
+                 exceed_susq=D("125000"), bust_at_or_below_susq=D("40000")),
         simulate(c, assets, s, "DIVERSIFIED_50_50",
-                 {"INVENTED_A": D("0.5"), "INVENTED_B": D("0.5")}, **params),
+                 {"INVENTED_A": D("0.5"), "INVENTED_B": D("0.5")},
+                 exceed_susq=D("125000"), bust_at_or_below_susq=D("40000")),
     ]
     return {
         "status": "SYNTHETIC_SENSITIVITY_ONLY_REAL_EXECUTABLE_CANDIDATES_NOT_AVAILABLE",
