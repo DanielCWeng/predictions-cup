@@ -84,7 +84,7 @@ def test_real_shaped_periodic_proxy_bins_whole_share_vwap_and_no_admission(
     assert top[0]["label"] == "NONEXECUTABLE_PROXY_NOT_ADMITTED"
     assert top[0]["market"] == "223"
     assert Decimal(str(top[0]["maximum_positive_proxy_total"])) > 0
-    assert out["wrong_market_placebo"]["wrong_market_swapped_yes_pairs"] == 0
+    assert cast(dict[str, object], out["wrong_market_placebo"])["wrong_market_swapped_yes_pairs"] == 0
 
 
 def test_duplicate_asof_and_reversed_native_dont_double_count(tmp_path: Path) -> None:
