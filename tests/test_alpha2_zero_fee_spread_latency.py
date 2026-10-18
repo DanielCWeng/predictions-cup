@@ -120,7 +120,7 @@ def test_real_shaped_raw_parquet_plus_pm_seeded_ws_and_size_aware_rank(
     result = analyze(root, None, pm_file)
     assert result["n_sig_full_native_claims"] == 2
     assert result["n_sig_valid_full"] == 2
-    assert result["source_counts"]["sig_eligible_full"] == 1
+    assert cast(dict[str, int], result["source_counts"])["sig_eligible_full"] == 1
     assert result["n_pm_complete_seed"] == 1
     assert result["n_matched_pairs"] == 1
     top = cast(list[dict[str, object]], result["top_five_conditional_upside"])
@@ -144,7 +144,7 @@ def test_pm_periodic_depth_never_proves_seeding_or_pairing(tmp_path: Path) -> No
          "asks": [{"price": "0.65", "size": "3"}]},
     ])
     result = analyze(None, pm_root, None)
-    assert result["source_counts"]["pm_periodic_two_sided_unproven"] == 1
+    assert cast(dict[str, int], result["source_counts"])["pm_periodic_two_sided_unproven"] == 1
     assert result["n_pm_complete_seed"] == 0
     assert result["n_matched_pairs"] == 0
 
