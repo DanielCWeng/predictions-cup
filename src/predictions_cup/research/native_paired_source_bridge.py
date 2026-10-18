@@ -10,10 +10,10 @@ from __future__ import annotations
 import hashlib
 import re
 from contextlib import contextmanager
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from typing import Any, Final, Iterator, cast
+from typing import Any, Final, cast
 
 SIG_TOURNAMENT: Final = "bda92870-621e-47b0-bc3c-3602c5c26f55"
 SIG_MARKETS: Final = {"223": "912", "224": "913", "270": "959", "271": "960"}
@@ -395,10 +395,9 @@ class SourceBridge:
                 if not isinstance(item, Mapping):
                     seeded.discard(token)
                     continue
-                try:
-                    snapshots[token] = _book(item.get("bids"), item.get("asks"))
-                except SourceRejected:
-                    seeded.discard(token)
+                # A supplied malformed full-depth claim is rejection, NOT an
+                # ordinary missing/uninitialised book: poison and account it.
+                snapshots[token] = _book(item.get("bids"), item.get("asks"))
             self._emit({
                 "venue": "PM", "kind": "WS_EVENT", "connection_epoch": eid,
                 "ws_local_ordinal": number, "received_at": received_at,
