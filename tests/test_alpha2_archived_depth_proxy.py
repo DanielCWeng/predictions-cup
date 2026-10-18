@@ -12,7 +12,10 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
-from predictions_cup.research.archived_depth_proxy import analyze_archived_proxy
+from predictions_cup.research.archived_depth_proxy import (
+    analyze_archived_proxy,
+    analyze_short_window_pilot,
+)
 from predictions_cup.research.native_paired_source_bridge import (
     PM_EXACT_SAME_YES,
     SIG_TOURNAMENT,
@@ -331,3 +334,160 @@ def test_both_placebos_apply_effective_publisher_freshness(
     assert wrong["publisher_fresh_pairs"] == 0
     assert shifted_control["publisher_fresh_pairs"] == 0
     assert result["top_five_measured_positive_depth_proxies"] is None
+
+
+# PILOT fixtures use the EXACT Parquet schema, quote parser, frozen tokens,
+# source publisher timestamps and n-lot VWAP machinery of the full reader.
+def _dated(root: Path, stream: str, timestamp: datetime,
+           rows: list[dict[str, object]]) -> None:
+    directory = root / stream / timestamp.strftime("%Y/%m/%d/%H")
+    directory.mkdir(parents=True, exist_ok=True)
+    name = timestamp.strftime("%Y%m%dT%H%M%SZ") + ".parquet"
+    pq.write_table(pa.Table.from_pylist(rows), directory / name)
+
+
+def _pilot_fixture(tmp_path: Path) -> tuple[Path, Path, datetime, datetime]:
+    sr, pr = tmp_path / "sig", tmp_path / "pm"
+    start, end = at(0), at(9 * 60000)
+    # 5.000s inclusive at SIG receipt, PM recorded <=2s before SIG.
+    # Native monotonic sequences and same-market orientation stay the same.
+    sig_rows = [
+        sig(4000, 21), sig(10000, 22), sig(16000, 23),
+        sig(22000, 24), sig(28000, 25), sig(64000, 26),
+    ]
+    sig_rows.append(sig(66000, 26))  # publisher/sequence regression
+    bad = sig(70000, 27)
+    badframe = json.loads(str(bad["raw_json"]))
+    badframe["books"][0]["asOf"]["at"] = at(59000).isoformat()
+    bad["raw_json"] = json.dumps(badframe)
+    sig_rows.append(bad)  # stale native publisher
+    pm_rows = [
+        pm(2500), pm(8500), pm(14500), pm(20500), pm(26500),
+        pm(63000), pm(65000),
+        pm(2500, token=PM_EXACT_SAME_YES["224"][2]),
+        pm(8500, token=PM_EXACT_SAME_YES["224"][2]),
+    ]
+    pm_rows[0]["source_timestamp"] = at(-1000)  # effective 5.000s exact
+    pm_rows[1]["source_timestamp"] = at(4999)  # effective 5.001s
+    pm_rows[2]["source_timestamp"] = at(14000)  # fresh
+    pm_rows[3]["source_timestamp"] = at(20501)  # future publisher
+    pm_rows[4]["source_timestamp"] = None  # missing original publisher
+    pm_rows[5]["source_timestamp"] = at(62600)  # fresh
+    pm_rows[6]["source_timestamp"] = at(56000)  # newest is stale
+    # Deliberately place an older fresh PM at 63s to confirm no fallback.
+    # Wrong-market and time-shift placebos reuse identical freshness logic.
+    _dated(sr, "raw_events", start, sig_rows)
+    _dated(pr, "depth_snapshots", start, pm_rows)
+    return sr, pr, start, end
+
+
+def test_pilot_equals_full_parser_and_freshness_exactly(
+    tmp_path: Path,
+) -> None:
+    sr, pr, start, end = _pilot_fixture(tmp_path)
+    full = analyze_archived_proxy(sr, pr, start, end)
+    pilot = analyze_short_window_pilot(sr, pr, start, end)
+    assert pilot["classification"] == "WINDOW_LIMITED_ONLY_NONEXECUTABLE"
+    assert pilot["n_publisher_fresh_matched_reference_pairs"] == (
+        full["n_publisher_fresh_matched_reference_pairs"]
+    )
+    a = cast(list[dict[str, object]], full["per_market"])
+    b = cast(list[dict[str, object]], pilot["per_market"])
+    for i in range(4):
+        for key in ("n_sig_unique_native", "n_sig_native_reversal",
+                    "n_sig_clock_or_depth_rejected", "n_matched_total"):
+            assert b[i][key] == a[i][key]
+        # Includes EXACT 1/5/10/20 sizes, both venue orientations,
+        # positive/negative n×gap, and rejected source-clock reasons.
+        for key in ("fresh_reference_proxy", "all_age_nonexecutable_diagnostic"):
+            assert b[i][key] == a[i][key]
+    assert pilot["wrong_market_placebo"] == full["wrong_market_placebo"]
+    assert pilot["time_shift_placebo"] == full["time_shift_placebo"]
+    assert cast(list[dict[str, object]], b)[0]["fresh_reference_proxy"] == (
+        a[0]["fresh_reference_proxy"]
+    )
+    assert pilot["n_admitted_pairs"] == 0
+    assert pilot["real_after_spread_fill_pnl"] is None
+    assert pilot["other_unseen_intervals"] == "UNKNOWN_NOT_SCANNED"
+    assert pilot["top_five_publisher_fresh_reference_proxies"] is not None
+    # stdout never includes exact raw identifiers or per-event timestamps
+    serialized = json.dumps(pilot)
+    assert PM_EXACT_SAME_YES["223"][2] not in serialized
+    assert '"sample_receive_utc"' not in serialized
+
+
+def test_pilot_never_rescues_stale_latest_pm_or_trades_on_missing_proof(
+    tmp_path: Path,
+) -> None:
+    sr, pr = tmp_path / "sig", tmp_path / "pm"
+    write(sr, "raw_events", [sig(6200, 11)])
+    earlier = pm(1000)
+    stale_nearest = pm(5500)
+    stale_nearest["source_timestamp"] = at(-10000)
+    write(pr, "depth_snapshots", [earlier, stale_nearest])
+    pilot = analyze_short_window_pilot(sr, pr, at(0), at(9000))
+    row = cast(list[dict[str, object]], pilot["per_market"])[0]
+    fresh = cast(dict[str, object], row["fresh_reference_proxy"])
+    rejected = cast(dict[str, int], fresh["rejected_matched_receipts"])
+    assert row["n_matched_total"] == 1
+    assert rejected["stale_effective_pm_publisher_age"] == 1
+    assert fresh["n_matched"] == 0
+    assert pilot["top_five_publisher_fresh_reference_proxies"] is None
+
+
+def test_pilot_single_window_cap_and_unknown_prestart_pm_context(
+    tmp_path: Path,
+) -> None:
+    sr, pr = tmp_path / "sig", tmp_path / "pm"
+    write(sr, "raw_events", [sig(1000, 1)])
+    write(pr, "depth_snapshots", [pm(6000)])
+    observed = analyze_short_window_pilot(sr, pr, at(0), at(9000))
+    assert observed["n_boundary_prior_pm_context_unknown"] == 1
+    assert observed["status"] == "WINDOW_COMPLETE_WITH_UNKNOWN_PRESTART_PM_CONTEXT"
+    assert observed["other_unseen_intervals"] == "UNKNOWN_NOT_SCANNED"
+    with pytest.raises(ValueError, match="MAX_10MIN"):
+        analyze_short_window_pilot(sr, pr, at(0), at(600001))
+
+
+def test_pilot_prunes_dated_shards_before_parquet_open_and_no_network(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sr, pr = tmp_path / "sig", tmp_path / "pm"
+    start, end = at(300000), at(360000)
+    _dated(sr, "raw_events", at(300000), [sig(305000, 1)])
+    _dated(pr, "depth_snapshots", at(300000), [pm(301000)])
+    for i in (0, 600000, 1200000):
+        _dated(sr, "raw_events", at(i), [sig(i + 2000, 2)])
+        _dated(pr, "depth_snapshots", at(i), [pm(i + 1000)])
+    real = pq.ParquetFile
+    paths: list[str] = []
+    def only_selected(path: str | Path, *args: object,
+                      **kwargs: object) -> pq.ParquetFile:
+        paths.append(str(path))
+        if "20261018T" in str(path) and "T1655" not in str(path):
+            raise AssertionError("pilot opened a nonselected minute Parquet")
+        return real(path, *args, **kwargs)
+    monkeypatch.setattr(pq, "ParquetFile", only_selected)
+    result = analyze_short_window_pilot(sr, pr, start, end)
+    assert result["input_counts"]["raw_events_shards"] == 1
+    assert result["input_counts"]["depth_snapshots_shards"] == 1
+    assert len(paths) == 2
+
+
+def test_pilot_cli_stdout_is_aggregate_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sr, pr, start, end = _pilot_fixture(tmp_path)
+    monkeypatch.setattr(sys, "argv", [
+        "zero_fee_spread_latency", "--sig-root", str(sr), "--pm-root", str(pr),
+        "--short-window-pilot", "--start", start.isoformat(),
+        "--end", end.isoformat(),
+    ])
+    main()
+    out = capsys.readouterr().out
+    assert "WINDOW_LIMITED_ONLY" in out
+    assert "UNKNOWN_NOT_SCANNED" in out
+    assert PM_EXACT_SAME_YES["223"][2] not in out
+    assert "sample_receive_utc" not in out
+    assert str(sr) not in out
