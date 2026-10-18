@@ -544,7 +544,7 @@ def analyze_archived_proxy(sig_root: Path | None, pm_root: Path | None,
         "wrong_market_placebo": _placebo(sig, pm),
         "time_shift_placebo": _placebo(sig, pm, shift_seconds=60),
         "n_publisher_fresh_matched_reference_pairs": sum(
-            cast(int, metrics[m]["fresh_reference_proxy"]["n_matched"])
+            cast(int, cast(dict[str, Any], metrics[m]["fresh_reference_proxy"])["n_matched"])
             for m in MARKETS
         ),
         "source_admitted": False,
