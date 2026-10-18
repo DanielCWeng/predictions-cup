@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -341,3 +342,200 @@ def test_synthetic_raw_book_cannot_be_promoted_to_real_pnl() -> None:
     assert s.yes_reference_gap == "0.05"
     assert_nulls(s)
     assert s.verdict != "EXECUTABLE" and not s.certifies_250ms_survival
+
+
+@pytest.mark.parametrize(
+    ("whole", "available"),
+    [
+        (1, (("0.50", "0.5"), ("0.90", "0.5"))),
+        (5, (("0.50", "2.5"), ("0.90", "2.5"))),
+        (10, (("0.50", "5.5"), ("0.90", "4.5"))),
+        (20, (("0.50", "10.5"), ("0.90", "9.5"))),
+    ],
+)
+def test_fractional_levels_must_not_pool_to_whole_ioc(
+    whole: int, available: tuple[tuple[str, str], ...]
+) -> None:
+    # Old code incorrectly combined separate fractions to make entire shares.
+    levels = tuple((Decimal(p), Decimal(q)) for p, q in available)
+    assert ob._vwap(levels, whole) is None
+
+
+def test_integer_ladders_vwap_and_actual_sig_screening() -> None:
+    levels = ((Decimal("0.50"), Decimal("2")),
+              (Decimal("0.90"), Decimal("3")))
+    assert ob._vwap(levels, 5) == Decimal("0.74")
+    o = observer()
+    append(o, book("PM_FULL_SEED"))
+    append(o, book("PM_BOOK_CHANGE"))
+    sig = book("SIG_FULL_BOOK")
+    sig["asks"] = [["0.50", "0.5"], ["0.90", "0.5"]]
+    append(o, sig)
+    assert o.screen("912", "2026-10-18T00:00:04Z", 1).verdict == "WHOLE_DEPTH_INSUFFICIENT"
+
+
+def test_pm_unsized_high_best_bid_cannot_create_yes_edge() -> None:
+    o = observer()
+    append(o, book("PM_FULL_SEED"))
+    pm = book("PM_BOOK_CHANGE")
+    pm["bids"] = [["0.95", "0.1"], ["0.20", "10"]]
+    pm["asks"] = [["0.99", "25"]]
+    append(o, pm)
+    sig = book("SIG_FULL_BOOK")
+    sig["asks"] = [["0.60", "5"]]
+    append(o, sig)
+    s = o.screen("912", "2026-10-18T00:00:04Z", 5)
+    assert s.yes_reference_gap == "-0.40"
+    assert s.yes_reference_gap != "0.35"
+    assert_nulls(s)
+
+
+def test_pm_unsized_cheap_best_ask_cannot_create_no_edge() -> None:
+    o = observer()
+    append(o, book("PM_FULL_SEED"))
+    pm = book("PM_BOOK_CHANGE")
+    pm["bids"] = [["0.40", "25"]]
+    pm["asks"] = [["0.45", "0.1"], ["0.80", "20"]]
+    append(o, pm)
+    sig = book("SIG_FULL_BOOK")
+    sig["bids"] = [["0.70", "25"]]
+    sig["asks"] = [["0.90", "25"]]
+    append(o, sig)
+    s = o.screen("912", "2026-10-18T00:00:04Z", 5)
+    assert s.no_reference_gap == "-0.10"
+    assert s.no_reference_gap != "0.25"
+    assert_nulls(s)
+
+
+def test_pm_insufficient_sized_ladder_nulls_both_reference_gaps() -> None:
+    o = observer()
+    append(o, book("PM_FULL_SEED"))
+    pm = book("PM_BOOK_CHANGE")
+    pm["bids"] = [["0.65", "0.5"]]
+    append(o, pm)
+    append(o, book("SIG_FULL_BOOK"))
+    s = o.screen("912", "2026-10-18T00:00:04Z", 1)
+    assert s.verdict == "WHOLE_DEPTH_INSUFFICIENT"
+    assert s.yes_reference_gap is None and s.no_reference_gap is None
+    assert_nulls(s)
+
+
+def test_post_ingest_nested_caller_mutation_cannot_change_journal_or_gap() -> None:
+    o = observer()
+    seed, change, sig = book("PM_FULL_SEED"), book("PM_BOOK_CHANGE"), book("SIG_FULL_BOOK")
+    append(o, seed)
+    append(o, change)
+    append(o, sig)
+    original_journal = o.journal_bytes()
+    original_screen = o.screen("912", "2026-10-18T00:00:04Z", 5)
+    for row in (seed, change, sig):
+        row["bids"][0][0] = "0.01"
+        row["bids"][0][1] = "9000"
+        row["asks"][0][0] = "0.99"
+        row["asks"][0][1] = "0.01"
+        row["received_at"] = "2026-12-30T00:00:00Z"
+    assert o.journal_bytes() == original_journal
+    assert o.screen("912", "2026-10-18T00:00:04Z", 5) == original_screen
+    assert_nulls(original_screen)
+
+
+def test_uncertainty_overlap_source_and_receive_returns_null() -> None:
+    for venue in ("PM", "SIG"):
+        o = observer()
+        append(o, book("PM_FULL_SEED"))
+        pm = book("PM_BOOK_CHANGE")
+        sig = book("SIG_FULL_BOOK")
+        if venue == "PM":
+            pm["clock_uncertainty_ms"] = 1000
+        else:
+            sig["clock_uncertainty_ms"] = 1000
+        append(o, pm)
+        append(o, sig)
+        s = o.screen("912", "2026-10-18T00:00:04Z", 5)
+        assert s.verdict == "NONCAUSAL_OR_STALE"
+        assert s.yes_reference_gap is None and s.no_reference_gap is None
+        assert_nulls(s)
+
+
+def test_clock_uncertain_sig_receive_after_decision_abstains() -> None:
+    o = observer()
+    append(o, book("PM_FULL_SEED"))
+    append(o, book("PM_BOOK_CHANGE"))
+    sig = book("SIG_FULL_BOOK")
+    sig["clock_uncertainty_ms"] = 250
+    append(o, sig)
+    s = o.screen("912", "2026-10-18T00:00:03Z", 1)
+    assert s.verdict == "NONCAUSAL_OR_STALE"
+    assert_nulls(s)
+
+
+def test_sig_original_source_sequence_gap_rejected_even_when_revision_is_contiguous() -> None:
+    o = observer()
+    append(o, book("SIG_FULL_BOOK"))
+    sig = book("SIG_FULL_BOOK", received="2026-10-18T00:00:05Z")
+    sig.update({
+        "publisher_at": "2026-10-18T00:00:04Z",
+        "native_asof_at": "2026-10-18T00:00:04Z",
+        "native_asof_sequence": 5,
+        "delivery_revision": 8, "previous_revision": 7,
+        "source_sequence_from": 14, "source_sequence_through": 15,
+    })
+    with pytest.raises(ob.OfflineDenied, match="SIG_SOURCE_SEQUENCE_GAP"):
+        append(o, sig)
+    assert o.aborted
+
+
+def test_sig_contiguous_original_source_ranges_remain_schema_only() -> None:
+    o = observer()
+    full_pair(o)
+    sig = book("SIG_FULL_BOOK", received="2026-10-18T00:00:05Z")
+    sig.update({
+        "publisher_at": "2026-10-18T00:00:04Z",
+        "native_asof_at": "2026-10-18T00:00:04Z",
+        "native_asof_sequence": 5,
+        "delivery_revision": 8, "previous_revision": 7,
+        "source_sequence_from": 12, "source_sequence_through": 13,
+    })
+    append(o, sig)
+    s = o.screen("912", "2026-10-18T00:00:06Z", 5)
+    assert s.verdict == "REFERENCE_ONLY_2S_5S_NOT_RESTING_PROOF"
+    assert_nulls(s)
+
+
+def test_release_expiry_rechecked_on_each_ingest_and_screen() -> None:
+    o = observer()
+    o._release_expires_at = ob.datetime.now(ob.UTC) - ob.timedelta(seconds=1)
+    with pytest.raises(ob.OfflineDenied, match="RELEASE_EXPIRED"):
+        append(o, book("PM_FULL_SEED"))
+    assert o.aborted
+    z = observer()
+    full_pair(z)
+    z._release_expires_at = ob.datetime.now(ob.UTC) - ob.timedelta(seconds=1)
+    with pytest.raises(ob.OfflineDenied, match="RELEASE_EXPIRED"):
+        z.screen("912", "2026-10-18T00:00:04Z", 1)
+    assert z.aborted
+
+
+def test_monotonic_24_hour_offline_runtime_guard_is_not_collector_release() -> None:
+    o = observer()
+    o._runtime_started_at = ob.time.monotonic() - 86_401
+    with pytest.raises(ob.OfflineDenied, match="OFFLINE_RUNTIME_EXPIRED"):
+        append(o, book("PM_FULL_SEED"))
+    assert o.aborted
+
+
+@pytest.mark.parametrize(
+    "run_id",
+    [
+        "me@example.com", "secret-token", "api_key_credentials",
+        "a" * 33, "CLIENT_TOKEN_123", "my password",
+        "../../private", "owner/desk",
+    ],
+)
+def test_untrusted_producer_run_metadata_injection_denied(run_id: str) -> None:
+    o = observer()
+    row = book("PM_FULL_SEED")
+    row["producer_run_id"] = run_id
+    with pytest.raises(ob.OfflineDenied, match="(PRODUCER_RUN_INVALID|SENSITIVE_METADATA_DENIED)"):
+        append(o, row)
+    assert o.aborted
