@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -9,11 +10,13 @@ from typing import cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pytest
 
 from predictions_cup.research.native_paired_source_bridge import (
     PM_EXACT_SAME_YES,
     SIG_TOURNAMENT,
 )
+from predictions_cup.research import zero_fee_spread_latency as module
 from predictions_cup.research.zero_fee_spread_latency import analyze, book, vwap
 
 
@@ -235,19 +238,13 @@ def test_50ms_actual_observation_bracket_supports_named_horizon() -> None:
 
 
 def test_cli_help_and_empty_local_archive_stdout(
-    tmp_path: Path, monkeypatch: object, capsys: object,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    from predictions_cup.research import zero_fee_spread_latency as module
-    import sys
-    from _pytest.capture import CaptureFixture
-    from _pytest.monkeypatch import MonkeyPatch
-
-    patch = cast(MonkeyPatch, monkeypatch)
-    capture = cast(CaptureFixture[str], capsys)
-    patch.setattr(sys, "argv", [
+    monkeypatch.setattr(sys, "argv", [
         "zero_fee_spread_latency", "--sig-root", str(tmp_path / "absent")])
     module.main()
-    output = json.loads(capture.readouterr().out)
+    output = json.loads(capsys.readouterr().out)
     assert output["status"] == "DATA_GAP_NO_VERIFIED_PAIRS"
     assert len(output["per_market"]) == 4
     assert output["n_attempted"] is None
