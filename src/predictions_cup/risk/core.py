@@ -16,7 +16,12 @@ from predictions_cup.risk.swing import (
     SwingRiskDiagnostics,
     evaluate_swing_cap,
 )
-from predictions_cup.runtime.models import AccountTrustGrade, OrderAction, OutcomeSide, RuntimeSnapshot
+from predictions_cup.runtime.models import (
+    AccountTrustGrade,
+    OrderAction,
+    OutcomeSide,
+    RuntimeSnapshot,
+)
 from predictions_cup.strategy.core import NoTrade, Opportunity, StrategyResult
 
 MAX_SIG_QUANTITY = 2_147_483_647
