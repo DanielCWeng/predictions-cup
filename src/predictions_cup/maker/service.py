@@ -145,6 +145,15 @@ _ACCOUNT_RESYNC_RETRY_POLICY = RetryPolicy(
 )
 
 
+def _maker_bulk_price_refresh_seconds(configured_seconds: float) -> float:
+    """Preserve the shared REST budget while allowing freshness headroom.
+
+    A 15s minimum refresh with a 15s BBO admission age forces periodic
+    quote withdrawal even on a perfectly healthy feed.
+    """
+    return max(10.0, configured_seconds)
+
+
 def _is_transient_sig_error(error: SigApiError) -> bool:
     return (
         isinstance(
@@ -413,8 +422,8 @@ class MakerService:
                 # (default 10s) refresh, with a conservative 10s floor to avoid
                 # unexpectedly increasing REST load for faster custom settings.
                 # Do not widen freshness/trust eligibility or skip the governor.
-                bulk_price_refresh_seconds=max(
-                    10.0, self.settings.sig_realtime_bulk_price_refresh_seconds
+                bulk_price_refresh_seconds=_maker_bulk_price_refresh_seconds(
+                    self.settings.sig_realtime_bulk_price_refresh_seconds
                 ),
                 periodic_bulk_price_priority=RestPriority.NORMAL,
                 governed_rate_per_second=(self.settings.sig_rest_governor_rate_per_second),
