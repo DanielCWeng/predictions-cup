@@ -33,6 +33,7 @@ from predictions_cup.risk import (
     ReconciliationError,
     RiskContext,
     RiskContextSource,
+    RiskDecision,
     RiskExposureSnapshot,
     RiskFill,
     RiskLimits,
@@ -268,6 +269,169 @@ def test_exact_gross_boundary_and_one_unit_beyond() -> None:
         evaluate_risk(_opportunity(quantity=3), snapshot, _context(limits)).reason
         == "max_gross_exposure"
     )
+
+
+def _reduce_risk_case(
+    *,
+    signed: float = 8.0,
+    outcome_side: OutcomeSide = OutcomeSide.YES,
+    action: OrderAction = OrderAction.SELL,
+    quantity: int = 2,
+    positions: tuple[RuntimePosition, ...] | None = None,
+    orders: tuple[RuntimeOrderState, ...] = (),
+    capital_gross: float = 8.0,
+    capital_net: float | None = None,
+    open_exposure: float = 0.0,
+    uncertain_exposure: float = 0.0,
+    account_trusted: bool = True,
+    extra_limits: dict[str, float | int | None] | None = None,
+) -> RiskDecision:
+    positions = positions if positions is not None else (
+        RuntimePosition("1", "m1", "t1", gross_exposure=8.0, signed_quantity=signed),
+    )
+    snapshot = _snapshot(positions=positions, orders=orders, trusted=account_trusted)
+    risk_positions = tuple(
+        ExposureBucket(p.market_id, abs(p.gross_exposure)) for p in positions
+    )
+    capital = _capital(
+        gross=capital_gross,
+        by_market=risk_positions,
+        by_tournament=(ExposureBucket("t1", capital_gross),),
+    )
+    capital = replace(
+        capital,
+        exposure=replace(
+            capital.exposure,
+            net_directional_exposure=(
+                sum(p.signed_quantity for p in positions)
+                if capital_net is None else capital_net
+            ),
+            open_order_exposure=open_exposure,
+            uncertain_order_exposure=uncertain_exposure,
+        ),
+    )
+    op = _opportunity(quantity=quantity)
+    op = replace(
+        op,
+        legs=(replace(op.legs[0], outcome_side=outcome_side, action=action),),
+    )
+    caps: dict[str, float | int | None] = {
+        "max_gross_exposure": 8.0,
+        "max_per_market_exposure": 8.0,
+        "max_tournament_exposure": 8.0,
+    }
+    caps.update(extra_limits or {})
+    return evaluate_risk(op, snapshot, _context(_limits(**caps), capital=capital))
+
+
+@pytest.mark.parametrize(
+    ("signed", "outcome_side", "action", "approved"),
+    (
+        (8.0, OutcomeSide.YES, OrderAction.SELL, True),
+        (8.0, OutcomeSide.NO, OrderAction.BUY, True),
+        (-8.0, OutcomeSide.YES, OrderAction.BUY, True),
+        (-8.0, OutcomeSide.NO, OrderAction.SELL, True),
+        (8.0, OutcomeSide.YES, OrderAction.BUY, False),
+        (8.0, OutcomeSide.NO, OrderAction.SELL, False),
+        (-8.0, OutcomeSide.YES, OrderAction.SELL, False),
+        (-8.0, OutcomeSide.NO, OrderAction.BUY, False),
+    ),
+)
+def test_full_cap_only_signed_inventory_reductions_are_admitted(
+    signed: float,
+    outcome_side: OutcomeSide,
+    action: OrderAction,
+    approved: bool,
+) -> None:
+    decision = _reduce_risk_case(
+        signed=signed, outcome_side=outcome_side, action=action,
+    )
+    assert decision.approved is approved
+    if not approved:
+        assert decision.reason == "max_gross_exposure"
+
+
+@pytest.mark.parametrize("quantity", (1, 4, 8))
+def test_partial_and_full_closes_cannot_overshoot(quantity: int) -> None:
+    assert _reduce_risk_case(quantity=quantity).approved
+
+
+def test_inventory_reduction_overshoot_stays_blocked() -> None:
+    decision = _reduce_risk_case(
+        quantity=9,
+        extra_limits={"max_order_size": 10},
+    )
+    assert decision.reason == "max_gross_exposure"
+
+
+def test_inventory_reduction_never_ignores_open_order_cap() -> None:
+    decision = _reduce_risk_case(
+        quantity=2, extra_limits={"max_open_order_exposure": 1.0},
+    )
+    assert decision.reason == "max_open_order_exposure"
+
+
+def test_inventory_reduction_never_ignores_order_size_cap() -> None:
+    decision = _reduce_risk_case(
+        quantity=2, extra_limits={"max_order_size": 1},
+    )
+    assert decision.reason == "max_order_size"
+
+
+@pytest.mark.parametrize("pending", ((True, False), (False, True)))
+def test_inventory_reduction_with_pending_or_uncertain_order_stays_blocked(
+    pending: tuple[bool, bool],
+) -> None:
+    existing = RuntimeOrderState(
+        "old", "1", "m1", "t1", 1.0, pending[0], pending[1],
+        signed_quantity=-1.0,
+    )
+    decision = _reduce_risk_case(orders=(existing,))
+    assert decision.reason == "max_gross_exposure"
+
+
+@pytest.mark.parametrize(
+    ("capital_gross", "capital_net", "signed"),
+    (
+        (7.0, None, 8.0),
+        (8.0, 7.0, 8.0),
+        (8.0, None, 0.0),
+        (8.0, None, 7.0),
+    ),
+)
+def test_inventory_reduction_requires_exact_signed_capital_parity(
+    capital_gross: float, capital_net: float | None, signed: float,
+) -> None:
+    decision = _reduce_risk_case(
+        capital_gross=capital_gross, capital_net=capital_net, signed=signed,
+    )
+    assert decision.reason == "max_gross_exposure"
+
+
+def test_inventory_reduction_requires_trusted_account() -> None:
+    decision = _reduce_risk_case(account_trusted=False)
+    assert decision.reason == "account_state_untrusted"
+
+
+def test_inventory_reduction_rejects_even_one_unreconciled_reservation() -> None:
+    decision = _reduce_risk_case(uncertain_exposure=1.0)
+    assert decision.reason == "max_gross_exposure"
+
+
+def test_inventory_reduction_cannot_override_group_classification_gate() -> None:
+    decision = _reduce_risk_case(
+        extra_limits={"max_event_group_exposure": 8.0},
+    )
+    assert decision.reason == "exposure_group_unclassified"
+
+
+def test_inventory_reduction_requires_unique_issuer_lots() -> None:
+    duplicate = (
+        RuntimePosition("1", "m1", "t1", 4.0, 4.0),
+        RuntimePosition("1", "m1", "t1", 4.0, 4.0),
+    )
+    decision = _reduce_risk_case(positions=duplicate)
+    assert decision.reason == "max_gross_exposure"
 
 
 def test_proxy_worst_case_respects_global_and_market_caps() -> None:
