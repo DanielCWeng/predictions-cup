@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 
 from predictions_cup.execution.models import (
     ExecutionMode,
@@ -15,7 +16,7 @@ from predictions_cup.risk.swing import (
     SwingRiskDiagnostics,
     evaluate_swing_cap,
 )
-from predictions_cup.runtime.models import RuntimeSnapshot
+from predictions_cup.runtime.models import AccountTrustGrade, OrderAction, OutcomeSide, RuntimeSnapshot
 from predictions_cup.strategy.core import NoTrade, Opportunity, StrategyResult
 
 MAX_SIG_QUANTITY = 2_147_483_647
@@ -130,6 +131,98 @@ def _group_lookup(
     memberships: tuple[MarketExposureGroup, ...],
 ) -> dict[tuple[str, str], tuple[str, ...]]:
     return {(item.market_id, item.tournament_id): item.group_ids for item in memberships}
+
+
+def _verified_strict_inventory_reduction(
+    intents: tuple[RuntimeOrderIntent, ...],
+    snapshot: RuntimeSnapshot,
+    capital: CapitalRiskState | None,
+) -> bool:
+    """Admit only an issuer-reconciled, one-sided reduction of *existing* holdings.
+
+    The potential fill must reduce gross in every partial-fill state, including
+    no fill.  A resting/UNCERTAIN order, proxy account, unsigned lot or stale
+    capital state is never grounds for netting risk.  This is an accounting
+    proof, not an order sender or a bypass of other risk gates.
+    """
+    if len(intents) != 1 or capital is None:
+        return False
+    portfolio = snapshot.portfolio
+    exposure = capital.exposure
+    if (
+        not portfolio.account_trusted
+        or portfolio.trust_grade is not AccountTrustGrade.TRUSTED
+        or portfolio.account_proxy_uncertainty != 0.0
+        or any(order.open or order.uncertain for order in portfolio.orders)
+        or not capital.account_trusted
+        or not capital.reconciliation_complete
+        or not exposure.trusted
+        or exposure.open_order_exposure != 0.0
+        or exposure.uncertain_order_exposure != 0.0
+        or not exposure.by_market
+        or not exposure.by_tournament
+    ):
+        return False
+
+    # A single net signed number is insufficient proof.  Reconcile every
+    # canonical signed holding against the separately checkpointed gross,
+    # market and tournament buckets, rejecting duplicates and opaque lots.
+    seen: set[tuple[str, str]] = set()
+    by_market: dict[str, float] = {}
+    by_tournament: dict[str, float] = {}
+    signed_net = 0.0
+    held = None
+    for position in portfolio.positions:
+        key = (position.exchange_id, position.tournament_id)
+        signed = position.signed_quantity
+        gross = position.gross_exposure
+        if (
+            key in seen
+            or not math.isfinite(signed)
+            or not math.isfinite(gross)
+            or signed != math.trunc(signed)
+            or abs(signed) != abs(gross)
+            or signed == 0.0
+        ):
+            return False
+        seen.add(key)
+        by_market[position.market_id] = by_market.get(position.market_id, 0.0) + abs(gross)
+        by_tournament[position.tournament_id] = (
+            by_tournament.get(position.tournament_id, 0.0) + abs(gross)
+        )
+        signed_net += signed
+        if (
+            position.exchange_id == intents[0].exchange_id
+            and position.market_id == intents[0].market_id
+            and position.tournament_id == intents[0].tournament_id
+        ):
+            held = position
+
+    if (
+        held is None
+        or sum(by_market.values()) != exposure.gross_exposure
+        or signed_net != exposure.net_directional_exposure
+        or by_market != {bucket.key: bucket.exposure for bucket in exposure.by_market}
+        or by_tournament
+        != {bucket.key: bucket.exposure for bucket in exposure.by_tournament}
+    ):
+        return False
+
+    intent = intents[0]
+    delta = float(intent.quantity)
+    if intent.outcome_side is OutcomeSide.NO:
+        delta = -delta
+    if intent.action is OrderAction.SELL:
+        delta = -delta
+
+    # Existing worst-case helper forbids overshoot and checks both sides of
+    # outstanding reservations.  Our stricter zero-pending gate is deliberate:
+    # concurrency/restart ambiguity must not double-spend the same inventory.
+    return portfolio.is_inventory_reducing(
+        exchange_id=intent.exchange_id,
+        tournament_id=intent.tournament_id,
+        signed_delta=delta,
+    )
 
 
 def evaluate_risk(
@@ -279,7 +372,19 @@ def evaluate_risk(
             leg.market_id, 0.0
         ) + float(leg.quantity)
 
-    new_gross = sum(new_exposure_by_market.values())
+    new_order_exposure = sum(float(intent.quantity) for intent in intents)
+    new_gross = new_order_exposure
+    if (
+        context.mode is ExecutionMode.LIVE
+        and not opportunity.atomic
+        and _verified_strict_inventory_reduction(tuple(intents), snapshot, capital)
+    ):
+        # A partial or absent fill cannot increase existing signed exposure.
+        # Reserve the actual order size for order-count/open-order limits, but
+        # do not double-count it as new market/gross/tournament exposure.
+        new_gross = 0.0
+        new_exposure_by_market = {market_id: 0.0 for market_id in new_exposure_by_market}
+
     for limits in limit_sets:
         denial = _evaluate_limit_set(
             limits=limits,
@@ -288,6 +393,7 @@ def evaluate_risk(
             intents=tuple(intents),
             new_exposure_by_market=new_exposure_by_market,
             new_gross=new_gross,
+            new_order_exposure=new_order_exposure,
             snapshot=snapshot,
             capital=capital,
             exposure_groups=context.exposure_groups,
@@ -333,6 +439,7 @@ def _evaluate_limit_set(
     intents: tuple[RuntimeOrderIntent, ...],
     new_exposure_by_market: dict[str, float],
     new_gross: float,
+    new_order_exposure: float,
     snapshot: RuntimeSnapshot,
     capital: CapitalRiskState | None,
     exposure_groups: tuple[MarketExposureGroup, ...],
@@ -377,7 +484,7 @@ def _evaluate_limit_set(
     if (
         snapshot.portfolio.open_order_exposure
         + snapshot.portfolio.account_proxy_uncertainty
-        + new_gross
+        + new_order_exposure
         > limits.max_open_order_exposure
     ):
         return "max_open_order_exposure"
