@@ -146,6 +146,15 @@ _ACCOUNT_RESYNC_RETRY_POLICY = RetryPolicy(
 )
 
 
+def _maker_bulk_price_refresh_seconds(configured_seconds: float) -> float:
+    """Keep BBO refresh ahead of the LIVE quote freshness cutoff.
+
+    A forced 15s REST interval with a 15s BBO maximum age causes stale
+    quotes on normal governor and scheduling jitter.
+    """
+    return max(10.0, configured_seconds)
+
+
 def _is_transient_sig_error(error: SigApiError) -> bool:
     return (
         isinstance(
@@ -423,11 +432,11 @@ class MakerService:
                 open_book_max_trusted_age_seconds=(
                     self.settings.sig_realtime_open_book_refresh_seconds
                 ),
-                # This engine polls only held/tracked exchanges, so a 15-second
-                # fallback is enough alongside realtime last-trade marks and
-                # leaves the shared SIG budget for execution/account reads.
-                bulk_price_refresh_seconds=max(
-                    15.0, self.settings.sig_realtime_bulk_price_refresh_seconds
+                # Keep default 10s refresh ahead of the 15s LIVE BBO cutoff.
+                # Continue honoring a slower configured cadence and the shared
+                # REST governor: no fabricated freshness or trust relaxation.
+                bulk_price_refresh_seconds=_maker_bulk_price_refresh_seconds(
+                    self.settings.sig_realtime_bulk_price_refresh_seconds
                 ),
                 periodic_bulk_price_priority=RestPriority.NORMAL,
                 governed_rate_per_second=(self.settings.sig_rest_governor_rate_per_second),
