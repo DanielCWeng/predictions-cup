@@ -2931,6 +2931,7 @@ def test_full_gross_maker_filters_two_sided_quote_to_strict_reduction(
         ),
         placement_dispatch=adapter.place,
         cancel_dispatch=adapter.cancel,
+        reservations=ExecutionReservationBook(),
     )
     result = asyncio.run(
         coordinator.on_state_change(
@@ -2993,6 +2994,7 @@ def test_full_gross_maker_refuses_two_sided_quote_on_wrong_signed_ledger() -> No
         ),
         placement_dispatch=adapter.place,
         cancel_dispatch=adapter.cancel,
+        reservations=ExecutionReservationBook(),
     )
     result = asyncio.run(
         coordinator.on_state_change(
