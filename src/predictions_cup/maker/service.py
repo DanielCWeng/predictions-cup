@@ -407,11 +407,14 @@ class MakerService:
                 open_book_max_trusted_age_seconds=(
                     self.settings.sig_realtime_open_book_refresh_seconds
                 ),
-                # This engine polls only held/tracked exchanges, so a 15-second
-                # fallback is enough alongside realtime last-trade marks and
-                # leaves the shared SIG budget for execution/account reads.
+                # The maker rejects BBOs older than 15s by configuration. A
+                # forced 15s polling *minimum* makes stale BBO periods inevitable
+                # under normal scheduler/governor jitter. Keep the configured
+                # (default 10s) refresh, with a conservative 10s floor to avoid
+                # unexpectedly increasing REST load for faster custom settings.
+                # Do not widen freshness/trust eligibility or skip the governor.
                 bulk_price_refresh_seconds=max(
-                    15.0, self.settings.sig_realtime_bulk_price_refresh_seconds
+                    10.0, self.settings.sig_realtime_bulk_price_refresh_seconds
                 ),
                 periodic_bulk_price_priority=RestPriority.NORMAL,
                 governed_rate_per_second=(self.settings.sig_rest_governor_rate_per_second),
