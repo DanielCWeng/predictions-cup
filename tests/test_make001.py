@@ -3005,3 +3005,11 @@ def test_full_gross_maker_refuses_two_sided_quote_on_wrong_signed_ledger() -> No
     assert len(result.risk_decisions) == 1
     assert result.risk_decisions[0].reason == "max_gross_exposure"
     assert not result.execution_events
+
+def test_live_bulk_price_refresh_has_headroom_inside_configured_bbo_age() -> None:
+    from predictions_cup.maker.service import _maker_bulk_price_refresh_seconds
+
+    assert _maker_bulk_price_refresh_seconds(10.0) == 10.0
+    assert _maker_bulk_price_refresh_seconds(5.0) == 10.0
+    assert _maker_bulk_price_refresh_seconds(14.0) == 14.0
+    assert _maker_bulk_price_refresh_seconds(20.0) == 20.0
