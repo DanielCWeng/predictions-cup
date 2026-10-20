@@ -414,29 +414,6 @@ class MakerCoordinator:
                         self._log_outcome(exchange_id, "strict_reducing_only")
             risk_decisions.append(risk)
             if not risk.approved:
-                if risk.reason == "max_gross_exposure":
-                    portfolio = risk_snapshot.portfolio
-                    reducing_count = sum(
-                        portfolio.is_inventory_reducing(
-                            exchange_id=exchange_id,
-                            tournament_id=snapshot.tournament_id,
-                            signed_delta=float(action.desired_size)
-                            * (1.0 if action.side is QuoteSide.BID else -1.0),
-                        )
-                        for action in place_actions
-                    )
-                    capital = risk_context.capital_state
-                    self._log_outcome(
-                        exchange_id,
-                        "gross_cap_diagnostic "
-                        f"candidate_legs={len(place_actions)} "
-                        f"reducing_legs={reducing_count} "
-                        f"positions={len(portfolio.positions)} "
-                        f"portfolio_gross={portfolio.gross_exposure} "
-                        f"capital_gross={None if capital is None else capital.exposure.gross_exposure} "
-                        f"portfolio_signed={portfolio.signed_inventory(exchange_id, snapshot.tournament_id)} "
-                        f"candidate_sides={','.join(action.side.value for action in place_actions)}",
-                    )
                 self._log_outcome(exchange_id, f"risk_denied reason={risk.reason}")
                 continue
             self._log_outcome(exchange_id, "risk_approved placing")
