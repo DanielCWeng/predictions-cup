@@ -712,3 +712,81 @@ def test_real_refresh_during_seed_fails_closed_before_subscribe(
     assert recorder.health.seed_initialized_tokens == 0
     assert recorder.websocket._seeded_tokens == frozenset()
     assert recorder.health.research_book_state_accepted is False
+
+def test_panel_only_materialises_top_of_book_until_depth_due(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No reduction in persisted full-depth rows or panel timestamp semantics."""
+    settings = AppSettings.model_validate(
+        {
+            "polymarket_storage_path": tmp_path / "panel.sqlite3",
+            "polymarket_research_path": tmp_path / "research",
+            "polymarket_book_depth": 3,
+            "polymarket_depth_snapshot_interval_seconds": 60,
+        }
+    )
+    recorder = PolymarketRecorder(settings)
+    recorder.storage.initialize()
+    recorder.research_storage.initialize()
+    start = datetime(2026, 10, 21, 8, 0, tzinfo=UTC)
+    recorder.books.apply_full_snapshot(
+        {
+            "market": "market-A",
+            "asset_id": "token-A",
+            "timestamp": "1792569540000",
+            "hash": "full-source-hash",
+            "bids": [
+                {"price": "0.49", "size": "11"},
+                {"price": "0.48", "size": "12"},
+                {"price": "0.47", "size": "13"},
+            ],
+            "asks": [
+                {"price": "0.51", "size": "21"},
+                {"price": "0.52", "size": "22"},
+                {"price": "0.53", "size": "23"},
+            ],
+        },
+        start,
+    )
+    sampled = (start, start + timedelta(seconds=5), start + timedelta(seconds=65))
+    times = iter(sampled)
+    monkeypatch.setattr(
+        "predictions_cup.external.polymarket.recorder.utc_now", lambda: next(times)
+    )
+    original = recorder.books.snapshots
+    depths: list[int] = []
+
+    def spy(depth: int) -> object:
+        depths.append(depth)
+        return original(depth)
+
+    monkeypatch.setattr(recorder.books, "snapshots", spy)
+    for _ in range(3):
+        assert asyncio.run(recorder.record_snapshot_once()) == 1
+    recorder.research_storage.flush_all()
+    assert depths == [3, 1, 3]
+    panel_files = sorted((settings.polymarket_research_path / "observations").rglob("*.parquet"))
+    depth_files = sorted(
+        (settings.polymarket_research_path / "depth_snapshots").rglob("*.parquet")
+    )
+    panels = [row for path in panel_files for row in pq.read_table(path).to_pylist()]
+    depths_saved = [row for path in depth_files for row in pq.read_table(path).to_pylist()]
+    assert len(panels) == 3
+    assert len(depths_saved) == 2
+    assert [row["observed_at"] for row in panels] == list(sampled)
+    assert [row["recorded_at"] for row in depths_saved] == [sampled[0], sampled[2]]
+    for row in panels:
+        assert row["best_bid"] == "0.49"
+        assert row["best_ask"] == "0.51"
+        assert row["midpoint"] == "0.50"
+        assert row["spread"] == "0.02"
+        assert row["state_observed_at"] == start
+    for row in depths_saved:
+        assert [level["price"] for level in row["bids"]] == [
+            "0.49", "0.48", "0.47"
+        ]
+        assert [level["price"] for level in row["asks"]] == [
+            "0.51", "0.52", "0.53"
+        ]
+        assert row["book_hash"] == "full-source-hash"
