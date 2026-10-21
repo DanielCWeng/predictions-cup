@@ -316,3 +316,157 @@ def test_valid_uninitialized_tokens_still_count_every_entry_after_validation() -
     assert result.uninitialized_deltas == 2
     assert result.uninitialized_token_ids == frozenset({"C"})
     assert store.snapshot("C", depth=2) is None
+
+
+
+@pytest.mark.parametrize("depth", [1, 20, 256, 2_000])
+def test_large_snapshot_sorted_price_keys_match_full_tuple_sort(
+    depth: int,
+) -> None:
+    """Exact top-level price/size ordering, including partial and full depth."""
+    observed = datetime(2026, 10, 21, 8, tzinfo=UTC)
+    store = OrderBookStore()
+    # An intentionally mixed insertion order reproduces the slow case of
+    # the old full-item sort without introducing any lossy float conversion.
+    values = [Decimal(index) / Decimal(10_000) for index in range(1, 1_025)]
+    bid_prices = values[::2] + values[1::2]
+    ask_prices = list(reversed(values))
+    store.apply_full_snapshot(
+        {
+            "market": "deep-market",
+            "asset_id": "deep-token",
+            "hash": "initial",
+            "bids": [
+                {"price": str(price), "size": str(index + 1)}
+                for index, price in enumerate(bid_prices)
+            ],
+            "asks": [
+                {"price": str(price), "size": str(index + 2)}
+                for index, price in enumerate(ask_prices)
+            ],
+        },
+        observed,
+    )
+    book = store._books["deep-token"]
+    snapshot = store.snapshot("deep-token", depth)
+    assert snapshot is not None
+    assert snapshot.book_hash == "initial"
+    assert tuple((level.price, level.size) for level in snapshot.bids) == tuple(
+        sorted(book.bids.items(), reverse=True)[:depth]
+    )
+    assert tuple((level.price, level.size) for level in snapshot.asks) == tuple(
+        sorted(book.asks.items())[:depth]
+    )
+
+    # Delta insertion, existing-level replacement and deletion must remain
+    # visible at the precise next snapshot, with the same original provenance.
+    result = store.apply_price_change(
+        {
+            "timestamp": "1792573200000",
+            "price_changes": [
+                {"asset_id": "deep-token", "side": "BUY",
+                 "price": "0.999999999999999999", "size": "1.2345", "hash": "next"},
+                {"asset_id": "deep-token", "side": "SELL",
+                 "price": "0.000001", "size": "7"},
+                {"asset_id": "deep-token", "side": "SELL",
+                 "price": str(ask_prices[-1]), "size": "0"},
+            ],
+        },
+        observed + timedelta(milliseconds=1),
+    )
+    assert result.uninitialized_deltas == 0
+    current = store.snapshot("deep-token", depth)
+    assert current is not None
+    assert current.book_hash == "next"
+    assert current.observed_at == observed + timedelta(milliseconds=1)
+    assert tuple((level.price, level.size) for level in current.bids) == tuple(
+        sorted(book.bids.items(), reverse=True)[:depth]
+    )
+    assert tuple((level.price, level.size) for level in current.asks) == tuple(
+        sorted(book.asks.items())[:depth]
+    )
+    assert current.bids[0].price == Decimal("0.999999999999999999")
+    assert current.asks[0].price == Decimal("0.000001")
+
+
+
+def test_resident_level_counts_track_delta_delete_and_invalidation() -> None:
+    store = OrderBookStore()
+    observed = datetime(2026, 10, 21, 9, tzinfo=UTC)
+    assert store.resident_level_counts() == (0, 0)
+    store.apply_full_snapshot(
+        {
+            "market": "m",
+            "asset_id": "A",
+            "bids": [{"price": "0.42", "size": "10"},
+                     {"price": "0.41", "size": "5"}],
+            "asks": [{"price": "0.45", "size": "3"}],
+        },
+        observed,
+    )
+    store.apply_full_snapshot(
+        {
+            "market": "m",
+            "asset_id": "B",
+            "bids": [{"price": "0.35", "size": "10"}],
+            "asks": [{"price": "0.37", "size": "4"}],
+        },
+        observed,
+    )
+    assert store.resident_level_counts() == (3, 2)
+    store.apply_price_change(
+        {
+            "price_changes": [
+                {"asset_id": "A", "side": "BUY", "price": "0.42", "size": "0"},
+                {"asset_id": "B", "side": "SELL", "price": "0.38", "size": "1"},
+            ]
+        },
+        observed + timedelta(seconds=1),
+    )
+    assert store.resident_level_counts() == (2, 3)
+    store.invalidate({"A"})
+    assert store.resident_level_counts() == (1, 2)
+    store.invalidate_all()
+    assert store.resident_level_counts() == (0, 0)
+
+def test_unseeded_price_deltas_validate_without_polluting_price_caches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reject malformed unknown deltas but never intern valid unused levels."""
+    from predictions_cup.external.polymarket import orderbook as orderbook_module
+
+    store = OrderBookStore()
+    observed = datetime(2026, 10, 21, 12, tzinfo=UTC)
+
+    def forbidden(value: Decimal) -> Decimal:
+        raise AssertionError(f"unseeded delta must not intern {value}")
+
+    monkeypatch.setattr(orderbook_module, "_shared_price", forbidden)
+    monkeypatch.setattr(orderbook_module, "_shared_size", forbidden)
+    valid = store.apply_price_change(
+        {
+            "price_changes": [
+                {"asset_id": "unknown-A", "side": "BUY",
+                 "price": "0.450000000000001", "size": "1234.56789"},
+                {"asset_id": "unknown-B", "side": "SELL",
+                 "price": "0.50", "size": "0"},
+            ]
+        },
+        observed,
+    )
+    assert valid.uninitialized_deltas == 2
+    assert valid.uninitialized_token_ids == frozenset({"unknown-A", "unknown-B"})
+    assert not valid.changes
+    with pytest.raises(PayloadError, match="outside valid range"):
+        store.apply_price_change(
+            {
+                "price_changes": [
+                    {"asset_id": "unknown-A", "side": "BUY",
+                     "price": "0.45", "size": "1"},
+                    {"asset_id": "unknown-B", "side": "SELL",
+                     "price": "1.01", "size": "1"},
+                ]
+            },
+            observed,
+        )
+    assert store.resident_level_counts() == (0, 0)

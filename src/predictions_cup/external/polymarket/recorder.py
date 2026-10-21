@@ -286,22 +286,27 @@ class PolymarketRecorder:
 
     async def record_snapshot_once(self) -> int:
         recorded_at = utc_now()
-        snapshots = self.books.snapshots(self.settings.polymarket_book_depth)
+        depth_due = (
+            self._last_depth_snapshot_at is None
+            or (recorded_at - self._last_depth_snapshot_at).total_seconds()
+            >= self.settings.polymarket_depth_snapshot_interval_seconds
+        )
+        # The 5-second panel stores only best bid/ask, midpoint and spread.
+        # Do not materialise all 20 levels unless the full-depth research
+        # snapshot is due. Both outputs retain exact timestamp provenance.
+        depth = self.settings.polymarket_book_depth if depth_due else 1
+        snapshots = self.books.snapshots(depth)
+        recorded_text = recorded_at.isoformat()
         depth_rows = 0
         try:
             panel_rows = await asyncio.to_thread(
-                self.research_storage.append_observations, snapshots, recorded_at.isoformat()
-            )
-            depth_due = (
-                self._last_depth_snapshot_at is None
-                or (recorded_at - self._last_depth_snapshot_at).total_seconds()
-                >= self.settings.polymarket_depth_snapshot_interval_seconds
+                self.research_storage.append_observations, snapshots, recorded_text
             )
             if depth_due:
                 depth_rows = await asyncio.to_thread(
                     self.research_storage.append_snapshots,
                     snapshots,
-                    recorded_at.isoformat(),
+                    recorded_text,
                 )
                 self._last_depth_snapshot_at = recorded_at
             await asyncio.to_thread(self.research_storage.flush_due, recorded_at)
@@ -354,6 +359,13 @@ class PolymarketRecorder:
                 self.health.storage_failures += 1
                 raise
             _LOG.info("Polymarket capture health=%s", self.health.as_record())
+            bid_levels, ask_levels = self.books.resident_level_counts()
+            _LOG.info(
+                "Polymarket resident books tokens=%d bids=%d asks=%d",
+                len(self.books.initialized_tokens),
+                bid_levels,
+                ask_levels,
+            )
 
 
 async def _run_recorder_until_stopped(

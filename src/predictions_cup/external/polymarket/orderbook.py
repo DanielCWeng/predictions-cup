@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from functools import lru_cache
+from heapq import nlargest, nsmallest
 from typing import Any
 
 from predictions_cup.external.polymarket.models import (
@@ -54,6 +55,16 @@ class OrderBookStore:
     @property
     def initialized_tokens(self) -> frozenset[str]:
         return frozenset(self._books)
+
+    def resident_level_counts(self) -> tuple[int, int]:
+        """Cheap O(number of books) cardinalities; no ladder data is copied."""
+        books = self._books.values()
+        bids = 0
+        asks = 0
+        for book in books:
+            bids += len(book.bids)
+            asks += len(book.asks)
+        return bids, asks
 
     def invalidate_all(self) -> None:
         self._books.clear()
@@ -138,8 +149,6 @@ class OrderBookStore:
             price = parse_decimal(change.get("price"), "price")
             size = parse_decimal(change.get("size"), "size")
             assert price is not None and size is not None
-            price = _shared_price(price)
-            size = _shared_size(size)
             if price < 0 or price > 1 or size < 0:
                 raise PayloadError("price_change price/size outside valid range")
             book = self._books.get(token_id)
@@ -147,6 +156,12 @@ class OrderBookStore:
                 missing += 1
                 missing_token_ids.add(token_id)
                 continue
+            # Unknown tokens can dominate a shared-market WebSocket (tens of
+            # millions of discarded deltas). Validate each one fail-closed,
+            # but never churn the persistent Decimal intern caches for data
+            # that cannot be applied or recorded against a seeded book.
+            price = _shared_price(price)
+            size = _shared_size(size)
             validated.append(
                 (book, normalized_side, price, size, optional_text(change.get("hash")))
             )
@@ -222,13 +237,16 @@ class OrderBookStore:
         book = self._books.get(token_id)
         if book is None:
             return None
+        # Sort only Decimal price keys, not temporary (price, size) tuples.
+        # This preserves the exact depth, ordering and Decimal values while
+        # reducing the transient allocations made on every capture snapshot.
         bids = tuple(
-            BookLevel(price=price, size=size)
-            for price, size in sorted(book.bids.items(), reverse=True)[:depth]
+            BookLevel(price=price, size=book.bids[price])
+            for price in _top_prices(book.bids, depth, reverse=True)
         )
         asks = tuple(
-            BookLevel(price=price, size=size)
-            for price, size in sorted(book.asks.items())[:depth]
+            BookLevel(price=price, size=book.asks[price])
+            for price in _top_prices(book.asks, depth, reverse=False)
         )
         return BookSnapshot(
             market_id=book.market_id,
@@ -251,6 +269,28 @@ class OrderBookStore:
             if snapshot is not None:
                 result.append(snapshot)
         return tuple(result)
+
+
+def _top_prices(
+    levels: dict[Decimal, Decimal],
+    depth: int,
+    *,
+    reverse: bool,
+) -> list[Decimal]:
+    """Select exact best prices with bounded temporary allocations.
+
+    A single best price needs no sort. For a small requested depth relative
+    to a large full ladder, a bounded heap avoids constructing and sorting
+    thousands of price references on every 5-second panel snapshot. For
+    shallow books or full-depth requests, the built-in sort remains faster.
+    """
+    if not levels:
+        return []
+    if depth == 1:
+        return [max(levels) if reverse else min(levels)]
+    if len(levels) >= 512 and depth * 8 <= len(levels):
+        return nlargest(depth, levels) if reverse else nsmallest(depth, levels)
+    return sorted(levels, reverse=reverse)[:depth]
 
 
 def _levels(raw: object, *, side: str) -> dict[Decimal, Decimal]:
