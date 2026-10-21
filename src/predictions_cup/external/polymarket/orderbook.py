@@ -222,13 +222,16 @@ class OrderBookStore:
         book = self._books.get(token_id)
         if book is None:
             return None
+        # Sort only Decimal price keys, not temporary (price, size) tuples.
+        # This preserves the exact depth, ordering and Decimal values while
+        # reducing the transient allocations made on every capture snapshot.
         bids = tuple(
-            BookLevel(price=price, size=size)
-            for price, size in sorted(book.bids.items(), reverse=True)[:depth]
+            BookLevel(price=price, size=book.bids[price])
+            for price in sorted(book.bids, reverse=True)[:depth]
         )
         asks = tuple(
-            BookLevel(price=price, size=size)
-            for price, size in sorted(book.asks.items())[:depth]
+            BookLevel(price=price, size=book.asks[price])
+            for price in sorted(book.asks)[:depth]
         )
         return BookSnapshot(
             market_id=book.market_id,
