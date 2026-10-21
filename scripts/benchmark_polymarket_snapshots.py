@@ -14,10 +14,10 @@ import random
 import statistics
 import time
 import tracemalloc
+from collections.abc import Callable
 from datetime import UTC, datetime
 from decimal import Decimal
 from functools import partial
-from typing import Callable
 
 from predictions_cup.external.polymarket.models import BookLevel, BookSnapshot
 from predictions_cup.external.polymarket.orderbook import OrderBookStore
