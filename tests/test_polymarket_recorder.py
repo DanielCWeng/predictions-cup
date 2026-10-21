@@ -127,13 +127,33 @@ def test_one_second_panel_is_lean_and_depth_uses_slower_cadence(
             "polymarket_storage_path": tmp_path / "capture.sqlite3",
             "polymarket_research_path": tmp_path / "research",
             "polymarket_depth_snapshot_interval_seconds": 60,
+            "polymarket_book_depth": 3,
         }
     )
     recorder = PolymarketRecorder(settings)
     recorder.storage.initialize()
     recorder.research_storage.initialize()
     start = datetime(2026, 9, 25, 0, 0, 0, tzinfo=UTC)
-    recorder.books.apply_full_snapshot(_book_payload("token-1"), start)
+    recorder.books.apply_full_snapshot(
+        {
+            "asset_id": "token-1", "market": "0xmarket",
+            "bids": [{"price": "0.45", "size": "10"},
+                     {"price": "0.44", "size": "11"},
+                     {"price": "0.43", "size": "12"}],
+            "asks": [{"price": "0.46", "size": "10"},
+                     {"price": "0.47", "size": "11"},
+                     {"price": "0.48", "size": "12"}],
+        },
+        start,
+    )
+    original_snapshots = recorder.books.snapshots
+    requested_depths: list[int] = []
+
+    def spy(depth: int) -> object:
+        requested_depths.append(depth)
+        return original_snapshots(depth)
+
+    monkeypatch.setattr(recorder.books, "snapshots", spy)
     times = iter((start, start + timedelta(seconds=1)))
     monkeypatch.setattr(
         "predictions_cup.external.polymarket.recorder.utc_now",
@@ -143,6 +163,7 @@ def test_one_second_panel_is_lean_and_depth_uses_slower_cadence(
     assert asyncio.run(recorder.record_snapshot_once()) == 1
     assert asyncio.run(recorder.record_snapshot_once()) == 1
     recorder.research_storage.flush_all()
+    assert requested_depths == [3, 1]
 
     panel_files = list((settings.polymarket_research_path / "observations").rglob("*.parquet"))
     depth_files = list(
@@ -150,6 +171,14 @@ def test_one_second_panel_is_lean_and_depth_uses_slower_cadence(
     )
     assert sum(pq.ParquetFile(path).metadata.num_rows for path in panel_files) == 2
     assert sum(pq.ParquetFile(path).metadata.num_rows for path in depth_files) == 1
+    depth_rows = [row for path in depth_files for row in pq.read_table(path).to_pylist()]
+    assert [level["price"] for level in depth_rows[0]["bids"]] == [
+        "0.45", "0.44", "0.43"
+    ]
+    panel_rows = [row for path in panel_files for row in pq.read_table(path).to_pylist()]
+    assert all(row["best_bid"] == "0.45" and row["best_ask"] == "0.46"
+               for row in panel_rows)
+    assert all(row["state_observed_at"] == start for row in panel_rows)
 
 
 def test_price_changes_are_durably_persisted_with_event_and_observation_time(
