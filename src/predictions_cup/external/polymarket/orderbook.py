@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from functools import lru_cache
+from heapq import nlargest, nsmallest
 from typing import Any
 
 from predictions_cup.external.polymarket.models import (
@@ -54,6 +55,15 @@ class OrderBookStore:
     @property
     def initialized_tokens(self) -> frozenset[str]:
         return frozenset(self._books)
+
+    def resident_level_counts(self) -> tuple[int, int]:
+        """Count resident bid/ask levels without copying market data."""
+        bids = 0
+        asks = 0
+        for book in self._books.values():
+            bids += len(book.bids)
+            asks += len(book.asks)
+        return bids, asks
 
     def invalidate_all(self) -> None:
         self._books.clear()
@@ -208,12 +218,12 @@ class OrderBookStore:
         if book is None:
             return None
         bids = tuple(
-            BookLevel(price=price, size=size)
-            for price, size in sorted(book.bids.items(), reverse=True)[:depth]
+            BookLevel(price=price, size=book.bids[price])
+            for price in _top_prices(book.bids, depth, reverse=True)
         )
         asks = tuple(
-            BookLevel(price=price, size=size)
-            for price, size in sorted(book.asks.items())[:depth]
+            BookLevel(price=price, size=book.asks[price])
+            for price in _top_prices(book.asks, depth, reverse=False)
         )
         return BookSnapshot(
             market_id=book.market_id,
@@ -236,6 +246,22 @@ class OrderBookStore:
             if snapshot is not None:
                 result.append(snapshot)
         return tuple(result)
+
+
+def _top_prices(
+    levels: dict[Decimal, Decimal],
+    depth: int,
+    *,
+    reverse: bool,
+) -> list[Decimal]:
+    """Pick exact Decimal prices without sorting complete deep-book tuples."""
+    if not levels:
+        return []
+    if depth == 1:
+        return [max(levels) if reverse else min(levels)]
+    if len(levels) >= 512 and depth * 8 <= len(levels):
+        return nlargest(depth, levels) if reverse else nsmallest(depth, levels)
+    return sorted(levels, reverse=reverse)[:depth]
 
 
 def _levels(raw: object, *, side: str) -> dict[Decimal, Decimal]:
