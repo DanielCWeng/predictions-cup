@@ -55,6 +55,16 @@ class OrderBookStore:
     def initialized_tokens(self) -> frozenset[str]:
         return frozenset(self._books)
 
+    def resident_level_counts(self) -> tuple[int, int]:
+        """Cheap O(number of books) cardinalities; no ladder data is copied."""
+        books = self._books.values()
+        bids = 0
+        asks = 0
+        for book in books:
+            bids += len(book.bids)
+            asks += len(book.asks)
+        return bids, asks
+
     def invalidate_all(self) -> None:
         self._books.clear()
 
