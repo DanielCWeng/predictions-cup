@@ -354,6 +354,13 @@ class PolymarketRecorder:
                 self.health.storage_failures += 1
                 raise
             _LOG.info("Polymarket capture health=%s", self.health.as_record())
+            bid_levels, ask_levels = self.books.resident_level_counts()
+            _LOG.info(
+                "Polymarket resident books tokens=%d bids=%d asks=%d",
+                len(self.books.initialized_tokens),
+                bid_levels,
+                ask_levels,
+            )
 
 
 async def _run_recorder_until_stopped(
