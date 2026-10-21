@@ -2877,3 +2877,139 @@ def test_zero_extra_width_mirrors_polymarket_touch_exactly() -> None:
         assert decision.desired is not None
         assert decision.desired.bid_ticks == round(bid / 0.005)
         assert decision.desired.ask_ticks == round(ask / 0.005)
+
+
+@pytest.mark.parametrize(
+    ("signed_inventory", "expected_action", "expected_side"),
+    (
+        (8.0, OrderAction.SELL, QuoteSide.ASK),
+        (-8.0, OrderAction.BUY, QuoteSide.BID),
+    ),
+)
+def test_full_gross_maker_filters_two_sided_quote_to_strict_reduction(
+    signed_inventory: float,
+    expected_action: OrderAction,
+    expected_side: QuoteSide,
+) -> None:
+    """A full gross book may quote the reducing side, never a mixed batch."""
+    engine = _engine(max_inventory=10.0)
+    snapshot = _maker_snapshot(signed_inventory=signed_inventory)
+    desired = engine.quote(snapshot).desired
+    assert desired is not None
+    assert desired.bid_size > 0 and desired.ask_size > 0
+
+    cap = _maker_capital()
+    cap = replace(
+        cap,
+        exposure=replace(
+            cap.exposure,
+            gross_exposure=8.0,
+            net_directional_exposure=signed_inventory,
+            by_market=(ExposureBucket("m1", 8.0),),
+            by_tournament=(ExposureBucket(TOURNAMENT, 8.0),),
+        ),
+    )
+    adapter = ShadowMakerExecutionAdapter()
+    coordinator = MakerCoordinator(
+        engine=engine,
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=QuoteRegistry(),
+        risk_context=RiskContext(
+            mode=ExecutionMode.LIVE,
+            kill_switch=False,
+            limits=RiskLimits(
+                max_order_size=10,
+                max_gross_exposure=8.0,
+                max_per_market_exposure=8.0,
+                max_open_order_exposure=8.0,
+                max_concurrent_open_orders=10,
+                max_tournament_exposure=8.0,
+            ),
+            max_state_age_ns=100_000_000,
+            capital_state=cap,
+            require_capital_state=True,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+        reservations=ExecutionReservationBook(),
+    )
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange(
+                event_id=f"full-cap-{signed_inventory}",
+                observed_monotonic_ns=NOW,
+                exchange_ids=frozenset({"36"}),
+            ),
+            {"36": snapshot},
+        )
+    )
+    assert len(result.risk_decisions) == 1
+    risk = result.risk_decisions[0]
+    assert risk.approved
+    assert len(risk.intents) == 1
+    assert risk.intents[0].action is expected_action
+    assert risk.intents[0].outcome_side is OutcomeSide.YES
+    assert 0 < risk.intents[0].quantity <= abs(signed_inventory)
+    submitted = tuple(
+        action for action in result.lifecycle_actions
+        if action.kind is QuoteLifecycleActionKind.PLACE
+    )
+    assert len(submitted) == 1
+    assert submitted[0].side is expected_side
+    assert len(result.execution_events) == 1
+
+
+def test_full_gross_maker_refuses_two_sided_quote_on_wrong_signed_ledger() -> None:
+    """The coordinator cannot override a rejecting central risk decision."""
+    snapshot = _maker_snapshot(signed_inventory=8.0)
+    cap = _maker_capital()
+    cap = replace(
+        cap,
+        exposure=replace(
+            cap.exposure,
+            gross_exposure=8.0,
+            net_directional_exposure=7.0,
+            by_market=(ExposureBucket("m1", 8.0),),
+            by_tournament=(ExposureBucket(TOURNAMENT, 8.0),),
+        ),
+    )
+    adapter = ShadowMakerExecutionAdapter()
+    coordinator = MakerCoordinator(
+        engine=_engine(max_inventory=10.0),
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=QuoteRegistry(),
+        risk_context=RiskContext(
+            mode=ExecutionMode.LIVE,
+            kill_switch=False,
+            limits=RiskLimits(
+                max_order_size=10,
+                max_gross_exposure=8.0,
+                max_per_market_exposure=8.0,
+                max_open_order_exposure=8.0,
+                max_concurrent_open_orders=10,
+            ),
+            max_state_age_ns=100_000_000,
+            capital_state=cap,
+            require_capital_state=True,
+        ),
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+        reservations=ExecutionReservationBook(),
+    )
+    result = asyncio.run(
+        coordinator.on_state_change(
+            MakerStateChange("bad-signed-ledger", NOW, frozenset({"36"})),
+            {"36": snapshot},
+        )
+    )
+    assert len(result.risk_decisions) == 1
+    assert result.risk_decisions[0].reason == "max_gross_exposure"
+    assert not result.execution_events
+
+def test_live_bulk_price_refresh_has_headroom_inside_configured_bbo_age() -> None:
+    from predictions_cup.maker.service import _maker_bulk_price_refresh_seconds
+
+    assert _maker_bulk_price_refresh_seconds(10.0) == 10.0
+    assert _maker_bulk_price_refresh_seconds(5.0) == 10.0
+    assert _maker_bulk_price_refresh_seconds(14.0) == 14.0
+    assert _maker_bulk_price_refresh_seconds(20.0) == 20.0

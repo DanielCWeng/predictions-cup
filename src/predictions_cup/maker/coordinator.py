@@ -375,6 +375,43 @@ class MakerCoordinator:
                 kill_switch=self._kill_switch.active,
             )
             risk = evaluate_risk(opportunity, risk_snapshot, risk_context)
+            # At a full gross cap, two-sided MAKE placement can combine one
+            # reducing side with an exposure-increasing side. Re-evaluate only
+            # a strictly reducing single side through the SAME central Risk
+            # gate; never dispatch both sides or treat a multi-leg batch as a
+            # reduction. Existing orders/reservations are already overlaid.
+            if (
+                not risk.approved
+                and risk.reason == "max_gross_exposure"
+                and risk_context.mode is ExecutionMode.LIVE
+                and len(place_actions) > 1
+            ):
+                reducing = tuple(
+                    action
+                    for action in place_actions
+                    if risk_snapshot.portfolio.is_inventory_reducing(
+                        exchange_id=exchange_id,
+                        tournament_id=snapshot.tournament_id,
+                        signed_delta=float(action.desired_size)
+                        * (1.0 if action.side is QuoteSide.BID else -1.0),
+                    )
+                )
+                if reducing:
+                    candidate = (reducing[0],)
+                    single = self._opportunity(decision, snapshot, candidate)
+                    retried = evaluate_risk(single, risk_snapshot, risk_context)
+                    if retried.approved:
+                        opportunity = single
+                        place_actions = candidate
+                        risk = retried
+                        # Do not report filtered, unsubmitted sides as actual
+                        # PLACE lifecycle actions.
+                        actions[-len(side_actions):] = [
+                            item for item in side_actions
+                            if item.kind is not QuoteLifecycleActionKind.PLACE
+                            or item in place_actions
+                        ]
+                        self._log_outcome(exchange_id, "strict_reducing_only")
             risk_decisions.append(risk)
             if not risk.approved:
                 self._log_outcome(exchange_id, f"risk_denied reason={risk.reason}")
