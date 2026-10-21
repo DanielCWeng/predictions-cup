@@ -387,3 +387,44 @@ def test_large_snapshot_sorted_price_keys_match_full_tuple_sort(
     )
     assert current.bids[0].price == Decimal("0.999999999999999999")
     assert current.asks[0].price == Decimal("0.000001")
+
+
+
+def test_resident_level_counts_track_delta_delete_and_invalidation() -> None:
+    store = OrderBookStore()
+    observed = datetime(2026, 10, 21, 9, tzinfo=UTC)
+    assert store.resident_level_counts() == (0, 0)
+    store.apply_full_snapshot(
+        {
+            "market": "m",
+            "asset_id": "A",
+            "bids": [{"price": "0.42", "size": "10"},
+                     {"price": "0.41", "size": "5"}],
+            "asks": [{"price": "0.45", "size": "3"}],
+        },
+        observed,
+    )
+    store.apply_full_snapshot(
+        {
+            "market": "m",
+            "asset_id": "B",
+            "bids": [{"price": "0.35", "size": "10"}],
+            "asks": [{"price": "0.37", "size": "4"}],
+        },
+        observed,
+    )
+    assert store.resident_level_counts() == (3, 2)
+    store.apply_price_change(
+        {
+            "price_changes": [
+                {"asset_id": "A", "side": "BUY", "price": "0.42", "size": "0"},
+                {"asset_id": "B", "side": "SELL", "price": "0.38", "size": "1"},
+            ]
+        },
+        observed + timedelta(seconds=1),
+    )
+    assert store.resident_level_counts() == (2, 3)
+    store.invalidate({"A"})
+    assert store.resident_level_counts() == (1, 2)
+    store.invalidate_all()
+    assert store.resident_level_counts() == (0, 0)
