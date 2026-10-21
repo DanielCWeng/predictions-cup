@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from functools import lru_cache
+from heapq import nlargest, nsmallest
 from typing import Any
 
 from predictions_cup.external.polymarket.models import (
@@ -237,11 +238,11 @@ class OrderBookStore:
         # reducing the transient allocations made on every capture snapshot.
         bids = tuple(
             BookLevel(price=price, size=book.bids[price])
-            for price in sorted(book.bids, reverse=True)[:depth]
+            for price in _top_prices(book.bids, depth, reverse=True)
         )
         asks = tuple(
             BookLevel(price=price, size=book.asks[price])
-            for price in sorted(book.asks)[:depth]
+            for price in _top_prices(book.asks, depth, reverse=False)
         )
         return BookSnapshot(
             market_id=book.market_id,
@@ -264,6 +265,28 @@ class OrderBookStore:
             if snapshot is not None:
                 result.append(snapshot)
         return tuple(result)
+
+
+def _top_prices(
+    levels: dict[Decimal, Decimal],
+    depth: int,
+    *,
+    reverse: bool,
+) -> list[Decimal]:
+    """Select exact best prices with bounded temporary allocations.
+
+    A single best price needs no sort. For a small requested depth relative
+    to a large full ladder, a bounded heap avoids constructing and sorting
+    thousands of price references on every 5-second panel snapshot. For
+    shallow books or full-depth requests, the built-in sort remains faster.
+    """
+    if not levels:
+        return []
+    if depth == 1:
+        return [max(levels) if reverse else min(levels)]
+    if len(levels) >= 512 and depth * 8 <= len(levels):
+        return nlargest(depth, levels) if reverse else nsmallest(depth, levels)
+    return sorted(levels, reverse=reverse)[:depth]
 
 
 def _levels(raw: object, *, side: str) -> dict[Decimal, Decimal]:
