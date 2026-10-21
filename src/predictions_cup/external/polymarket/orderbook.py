@@ -149,8 +149,6 @@ class OrderBookStore:
             price = parse_decimal(change.get("price"), "price")
             size = parse_decimal(change.get("size"), "size")
             assert price is not None and size is not None
-            price = _shared_price(price)
-            size = _shared_size(size)
             if price < 0 or price > 1 or size < 0:
                 raise PayloadError("price_change price/size outside valid range")
             book = self._books.get(token_id)
@@ -158,6 +156,12 @@ class OrderBookStore:
                 missing += 1
                 missing_token_ids.add(token_id)
                 continue
+            # Unknown tokens can dominate a shared-market WebSocket (tens of
+            # millions of discarded deltas). Validate each one fail-closed,
+            # but never churn the persistent Decimal intern caches for data
+            # that cannot be applied or recorded against a seeded book.
+            price = _shared_price(price)
+            size = _shared_size(size)
             validated.append(
                 (book, normalized_side, price, size, optional_text(change.get("hash")))
             )
