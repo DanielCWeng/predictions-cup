@@ -1709,14 +1709,46 @@ class MakerService:
                 await asyncio.sleep(delay)
 
     async def _seed_polymarket_books(self) -> None:
+        # The shared WebSocket requires the *exact* REST-seeded token identity
+        # and generation before it may subscribe. The standalone recorder
+        # maintains this handshake; the maker must do so as well.
+        desired = frozenset(self._pm_token_ids)
+        health = self.pm_health
+        health.seed_attempt_epoch += 1
+        attempt_epoch = health.seed_attempt_epoch
+        subscription_epoch = health.subscription_epoch
+        health.seed_expected_tokens = len(desired)
+        health.seed_initialized_tokens = 0
+        health.seed_status = "IN_PROGRESS"
+        health.seed_completed_at = None
+        self.pm_ws._seeded_tokens = frozenset()
         self.pm_books.invalidate_all()
-        batches = await self.pm_clob.fetch_book_batches(self._pm_token_ids)
-        for batch in batches:
-            for payload in batch.books:
-                self.pm_books.apply_full_snapshot(payload, batch.observed_at)
-        missing = set(self._pm_token_ids).difference(self.pm_books.initialized_tokens)
-        if missing:
-            raise RuntimeError(f"Polymarket CLOB seed missing {len(missing)} mapped tokens")
+        try:
+            batches = await self.pm_clob.fetch_book_batches(self._pm_token_ids)
+            for batch in batches:
+                for payload in batch.books:
+                    self.pm_books.apply_full_snapshot(payload, batch.observed_at)
+            initialized = self.pm_books.initialized_tokens
+            health.seed_initialized_tokens = len(initialized.intersection(desired))
+            missing = desired.difference(initialized)
+            if missing:
+                raise RuntimeError(
+                    f"Polymarket CLOB seed missing {len(missing)} mapped tokens"
+                )
+            # Startup calls this before set_tokens; retries must still reject
+            # a changed desired subscription while REST was in flight.
+            if self.pm_ws._desired_tokens and self.pm_ws._desired_tokens != desired:
+                raise RuntimeError("Polymarket desired universe changed during REST seed")
+            if health.subscription_epoch != subscription_epoch:
+                raise RuntimeError("Polymarket subscription epoch changed during REST seed")
+        except BaseException:
+            health.seed_status = "FAILED"
+            raise
+        health.seed_complete_epoch = attempt_epoch
+        health.seed_subscription_epoch = subscription_epoch
+        health.seed_status = "COMPLETE"
+        health.seed_completed_at = datetime.now(UTC)
+        self.pm_ws._seeded_tokens = desired
 
     def _observe_005f_books(
         self,
