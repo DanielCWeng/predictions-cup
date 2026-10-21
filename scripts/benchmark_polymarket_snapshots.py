@@ -16,6 +16,7 @@ import time
 import tracemalloc
 from datetime import UTC, datetime
 from decimal import Decimal
+from functools import partial
 from typing import Callable
 
 from predictions_cup.external.polymarket.models import BookLevel, BookSnapshot
@@ -107,8 +108,8 @@ def main() -> None:
         (9_000, 20),
     ):
         store = _book(count)
-        old = lambda: _original_snapshot(store, depth)
-        new = lambda: store.snapshot(TOKEN, depth)
+        old = partial(_original_snapshot, store, depth)
+        new = partial(store.snapshot, TOKEN, depth)
         # The book is always seeded, so snapshot(...) is never None.
         assert old() == new()
         n = 100 if count <= 1_000 else 25
