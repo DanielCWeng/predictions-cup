@@ -428,3 +428,45 @@ def test_resident_level_counts_track_delta_delete_and_invalidation() -> None:
     assert store.resident_level_counts() == (1, 2)
     store.invalidate_all()
     assert store.resident_level_counts() == (0, 0)
+
+def test_unseeded_price_deltas_validate_without_polluting_price_caches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reject malformed unknown deltas but never intern valid unused levels."""
+    from predictions_cup.external.polymarket import orderbook as orderbook_module
+
+    store = OrderBookStore()
+    observed = datetime(2026, 10, 21, 12, tzinfo=UTC)
+
+    def forbidden(value: Decimal) -> Decimal:
+        raise AssertionError(f"unseeded delta must not intern {value}")
+
+    monkeypatch.setattr(orderbook_module, "_shared_price", forbidden)
+    monkeypatch.setattr(orderbook_module, "_shared_size", forbidden)
+    valid = store.apply_price_change(
+        {
+            "price_changes": [
+                {"asset_id": "unknown-A", "side": "BUY",
+                 "price": "0.450000000000001", "size": "1234.56789"},
+                {"asset_id": "unknown-B", "side": "SELL",
+                 "price": "0.50", "size": "0"},
+            ]
+        },
+        observed,
+    )
+    assert valid.uninitialized_deltas == 2
+    assert valid.uninitialized_token_ids == frozenset({"unknown-A", "unknown-B"})
+    assert not valid.changes
+    with pytest.raises(PayloadError, match="outside valid range"):
+        store.apply_price_change(
+            {
+                "price_changes": [
+                    {"asset_id": "unknown-A", "side": "BUY",
+                     "price": "0.45", "size": "1"},
+                    {"asset_id": "unknown-B", "side": "SELL",
+                     "price": "1.01", "size": "1"},
+                ]
+            },
+            observed,
+        )
+    assert store.resident_level_counts() == (0, 0)
