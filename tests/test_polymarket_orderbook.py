@@ -151,3 +151,30 @@ def test_reconnect_invalidation_discards_old_books() -> None:
     store.invalidate_all()
 
     assert store.initialized_tokens == frozenset()
+
+
+def test_adaptive_depth_matches_full_sort_and_level_accounting() -> None:
+    store = OrderBookStore()
+    observed = datetime(2026, 10, 21, 10, tzinfo=UTC)
+    # Realistically deep synthetic book exercises both heap and sort paths.
+    bids = [{"price": str(Decimal(i) / 10000), "size": str(i + 1)}
+            for i in range(1, 1001)]
+    asks = list(reversed(bids))
+    store.apply_full_snapshot(
+        {"asset_id": "deep", "market": "market", "bids": bids, "asks": asks},
+        observed,
+    )
+    assert store.resident_level_counts() == (1000, 1000)
+    book = store._books["deep"]
+    for depth in (1, 20, 256, 2000):
+        snapshot = store.snapshot("deep", depth)
+        assert snapshot is not None
+        assert [(x.price, x.size) for x in snapshot.bids] == sorted(
+            book.bids.items(), reverse=True
+        )[:depth]
+        assert [(x.price, x.size) for x in snapshot.asks] == sorted(
+            book.asks.items()
+        )[:depth]
+        assert snapshot.observed_at == observed
+    store.invalidate({"deep"})
+    assert store.resident_level_counts() == (0, 0)
