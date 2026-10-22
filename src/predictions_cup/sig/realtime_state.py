@@ -46,6 +46,10 @@ class SubscriptionReason(StrEnum):
 # Refetch shortly after nextExpiryAt so SIG has removed the expired order.
 _EXPIRY_REFETCH_GRACE = timedelta(milliseconds=500)
 
+# Routine depth GETs share a low-concurrency admission gate BEFORE the REST
+# governor; critical HIGH market recovery bypasses this routine gate.
+_MAX_ROUTINE_BOOK_FETCHES = 4
+
 
 class DepthState(StrEnum):
     UNTRACKED_DEPTH = "UNTRACKED_DEPTH"
@@ -256,6 +260,8 @@ class SigRealtimeStateEngine:
         self._last_bulk_price_refresh_at: datetime | None = None
 
         self._reconcile_registry_lock = asyncio.Lock()
+        self._routine_book_slots = asyncio.Semaphore(_MAX_ROUTINE_BOOK_FETCHES)
+        self._urgent_reconciliations: dict[str, asyncio.Event] = {}
         self._reconcile_tasks: dict[str, asyncio.Task[None]] = {}
         self._reconcile_generation: dict[str, int] = {}
         self._reconcile_priority: dict[str, RestPriority] = {}
@@ -1607,6 +1613,11 @@ class SigRealtimeStateEngine:
                 if triggering_revision is not None:
                     self._reconcile_revision[exchange_id] = triggering_revision
 
+            # An urgent reconnect / settlement arriving while a routine
+            # request waits for a slot must wake that worker immediately.
+            if priority == RestPriority.HIGH:
+                self._urgent_reconciliations.setdefault(exchange_id, asyncio.Event()).set()
+
             task = self._reconcile_tasks.get(exchange_id)
             if task is not None and not task.done():
                 self.book_refetch_coalesced_count += 1
@@ -1618,10 +1629,42 @@ class SigRealtimeStateEngine:
                     ),
                     name=f"sig-book-reconcile-{exchange_id}",
                 )
+                self._urgent_reconciliations.setdefault(exchange_id, asyncio.Event())
                 self._reconcile_tasks[exchange_id] = task
 
         if wait:
             await task
+
+    async def _wait_for_routine_book_slot(self, exchange_id: str) -> bool:
+        """Return True with a held slot, or False when urgent work supersedes it.
+
+        Waiting tasks consume neither a REST-governor slot nor an HTTP request.
+        A reconnect/settlement HIGH upgrade interrupts the wait, preserving
+        the reserved lane rather than forcing safety recovery behind all books.
+        """
+        slot = asyncio.create_task(self._routine_book_slots.acquire())
+        urgent = asyncio.create_task(self._urgent_reconciliations[exchange_id].wait())
+        keep_slot = False
+        try:
+            done, _ = await asyncio.wait(
+                {slot, urgent}, return_when=asyncio.FIRST_COMPLETED
+            )
+            keep_slot = slot in done and urgent not in done
+            return keep_slot
+        finally:
+            for task in (slot, urgent):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(slot, urgent, return_exceptions=True)
+            # If urgent won (or the parent was cancelled), return a slot
+            # that may have been acquired concurrently with the urgent flag.
+            if (
+                slot.done()
+                and not slot.cancelled()
+                and slot.exception() is None
+                and not keep_slot
+            ):
+                self._routine_book_slots.release()
 
     async def _reconcile_loop(
         self,
@@ -1632,24 +1675,42 @@ class SigRealtimeStateEngine:
         while True:
             await asyncio.sleep(0)
             async with self._reconcile_registry_lock:
-                generation = self._reconcile_generation[exchange_id]
-                priority = self._reconcile_priority[exchange_id]
-                reason = self._reconcile_reason[exchange_id]
-                triggering_revision = self._reconcile_revision[exchange_id]
-                # Consume the priority for THIS generation. The next dirty
-                # event must not inherit HIGH from an earlier startup/recovery
-                # request, or a permanently hot book monopolises the reserved
-                # execution/account lane across thousands of requeues.
-                self._reconcile_priority[exchange_id] = RestPriority.BACKGROUND
+                # A normal dirty task can be upgraded by a later critical
+                # reconnect. Never force that request through the routine gate.
+                urgent = self._reconcile_priority[exchange_id] == RestPriority.HIGH
 
-            await self._reconcile_exchange_once(
-                exchange_id,
-                reason=reason,
-                final_transition=final_transition,
-                triggering_revision=triggering_revision,
-                priority=priority,
-                generation=generation,
-            )
+            held_slot = False
+            if not urgent:
+                if not self._routine_book_slots.locked():
+                    # No congestion: acquire inline with no extra scheduling
+                    # tick, retaining synchronous fast-path event semantics.
+                    await self._routine_book_slots.acquire()
+                    held_slot = True
+                else:
+                    held_slot = await self._wait_for_routine_book_slot(exchange_id)
+            try:
+                async with self._reconcile_registry_lock:
+                    # Read the latest generation AFTER queued admission. Dirty
+                    # arrivals during a long wait become ONE fresh GET instead
+                    # of a series of obsolete queued requests.
+                    generation = self._reconcile_generation[exchange_id]
+                    priority = self._reconcile_priority[exchange_id]
+                    reason = self._reconcile_reason[exchange_id]
+                    triggering_revision = self._reconcile_revision[exchange_id]
+                    self._reconcile_priority[exchange_id] = RestPriority.BACKGROUND
+                    self._urgent_reconciliations[exchange_id].clear()
+
+                await self._reconcile_exchange_once(
+                    exchange_id,
+                    reason=reason,
+                    final_transition=final_transition,
+                    triggering_revision=triggering_revision,
+                    priority=priority,
+                    generation=generation,
+                )
+            finally:
+                if held_slot:
+                    self._routine_book_slots.release()
 
             async with self._reconcile_registry_lock:
                 if self._reconcile_generation.get(exchange_id) == generation:
@@ -1658,6 +1719,7 @@ class SigRealtimeStateEngine:
                     self._reconcile_priority.pop(exchange_id, None)
                     self._reconcile_reason.pop(exchange_id, None)
                     self._reconcile_revision.pop(exchange_id, None)
+                    self._urgent_reconciliations.pop(exchange_id, None)
                     return
 
     async def _reconcile_exchange_once(
