@@ -1046,7 +1046,9 @@ class SigRealtimeStateEngine:
             return
         try:
             self.health.full_book_refresh_count += 1
-            async with self._rest.priority(RestPriority.HIGH):
+            # Untracked dirty hints are routine data maintenance, not account or
+            # order-safety recovery. Do not consume reserved HIGH REST capacity.
+            async with self._rest.priority(RestPriority.NORMAL):
                 snapshot = await self._rest.get_orderbook(
                     exchange_id,
                     depth=self._book_depth,

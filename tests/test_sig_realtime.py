@@ -616,6 +616,9 @@ def test_untracked_book_dirty_coalesces_without_waiting_for_slow_rest(
         rest.block_release.set()
         await asyncio.gather(*engine._untracked_refetch_tasks.values())
         assert rest.calls.count("36") == 2
+        # Routine untracked hints cannot consume reserved account/exec HIGH.
+        assert rest.orderbook_priorities == [RestPriority.NORMAL, RestPriority.NORMAL]
+        assert engine.states["36"].depth_state == DepthState.UNTRACKED_DEPTH
         assert engine.refetch_metrics() == (0, 1)
         await engine.aclose()
         recorder.close()
@@ -1469,6 +1472,7 @@ def test_tournament_unbatched_hints_resync_the_named_exchange_or_market(
         )
         await asyncio.gather(*engine._untracked_refetch_tasks.values())
         assert rest.calls.count("37") == 1
+        assert rest.orderbook_priorities[-1] == RestPriority.NORMAL
 
         affected = await engine.handle_tournament_event(
             "market_settled",
