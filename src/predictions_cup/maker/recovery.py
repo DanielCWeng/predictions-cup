@@ -69,9 +69,19 @@ def reconcile_maker_quote_registry(
     if observed_monotonic_ns < 0:
         raise ValueError("observed_monotonic_ns must be non-negative")
     if envelopes is None:
-        maker_envelopes = maker_placement_envelopes(
-            journal,
+        # Query the indexed venue ACK identities rather than rebuilding every
+        # historical placement on each periodic authoritative account refresh.
+        # Include in-memory quotes for safe clearing when an order disappears.
+        active_ids = {
+            active.logical_operation_id
+            for exchange_id in quotes.exchange_ids
+            if exchange_ids is None or exchange_id in exchange_ids
+            for active in quotes.state(exchange_id).all_quotes()
+        }
+        maker_envelopes = journal.maker_placement_candidates(
             strategy_id=strategy_id,
+            exchange_order_ids=(str(order.id) for order in authoritative.open_orders if order.open),
+            active_operation_ids=active_ids,
         )
     else:
         maker_envelopes = tuple(

@@ -984,7 +984,9 @@ class SigRealtimeStateEngine:
                     reason="book_dirty",
                     final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                     triggering_revision=revision,
-                    priority=RestPriority.HIGH,
+                    # Unbatched dirty hints are routine book recovery, just
+                    # like batched dirty messages; preserve account/exec HIGH.
+                    priority=RestPriority.NORMAL,
                     wait=False,
                 )
             else:

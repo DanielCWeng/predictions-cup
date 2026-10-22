@@ -1453,6 +1453,9 @@ def test_tournament_unbatched_hints_resync_the_named_exchange_or_market(
         assert affected == {"36"}
         await asyncio.gather(*engine._reconcile_tasks.values())
         assert rest.calls.count("36") == 2
+        # This unbatched tournament hint is the LIVE path; it must not
+        # compete with execution/account reads in the governor HIGH lane.
+        assert rest.orderbook_priorities[-1] == RestPriority.NORMAL
 
         await engine.handle_tournament_event(
             "book_dirty",
