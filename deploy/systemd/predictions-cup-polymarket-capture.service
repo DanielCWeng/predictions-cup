@@ -4,8 +4,8 @@ Description=Predictions Cup read-only Polymarket capture
 Wants=network-online.target
 After=network-online.target
 OnFailure=predictions-cup-alert@%n.service
-StartLimitIntervalSec=120
-StartLimitBurst=4
+StartLimitIntervalSec=900
+StartLimitBurst=3
 
 [Service]
 Type=simple
@@ -17,12 +17,22 @@ UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL
 ExecCondition=@@PYTHON_BIN@@ -m predictions_cup.fullstack check polymarket-capture --runtime-env-only
 ExecStart=@@PYTHON_BIN@@ -m predictions_cup.external.polymarket.recorder --runtime-env-only --require-explicit-universe
 Restart=on-failure
-RestartSec=30s
+RestartSec=60s
 KillSignal=SIGTERM
 TimeoutStopSec=30s
 StandardOutput=journal
 StandardError=journal
 UMask=0077
+# Apply cgroup-v2 reclaim pressure before memory reaches host-wide OOM.
+# These are per-capture budgets; do not apply to the maker or risk engine.
+MemoryAccounting=yes
+MemoryHigh=550M
+MemoryMax=700M
+MemorySwapMax=0
+CPUAccounting=yes
+CPUQuota=70%
+IOAccounting=yes
+OOMPolicy=stop
 NoNewPrivileges=true
 
 [Install]
