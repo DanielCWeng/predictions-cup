@@ -972,12 +972,12 @@ class ExecutionJournal:
         for offset in range(0, len(order_ids), 400):
             batch = order_ids[offset : offset + 400]
             placeholders = ", ".join("?" for _ in batch)
-            rows = self._connection.execute(
+            ack_rows = self._connection.execute(
                 "SELECT logical_operation_id FROM execution_events "
                 "WHERE event_type = 'ACK' AND exchange_order_id IN (" + placeholders + ")",
                 batch,
             )
-            candidate_ids.update(str(row[0]) for row in rows)
+            candidate_ids.update(str(row[0]) for row in ack_rows)
         if not candidate_ids:
             return ()
 
