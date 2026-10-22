@@ -960,12 +960,19 @@ class ExecutionJournal:
         ).fetchall()
         return self._decode_envelopes(rows)
 
-    def unresolved(self) -> tuple[ExecutionEnvelope, ...]:
+    def unresolved(
+        self, *, logical_operation_id: str | None = None
+    ) -> tuple[ExecutionEnvelope, ...]:
+        """Unresolved operations, optionally scoped to one indexed identity."""
         terminal = (
             LifecycleState.FILLED.value,
             LifecycleState.CANCELLED.value,
             LifecycleState.RECONCILED.value,
             LifecycleState.REJECTED.value,
+        )
+        scope = " AND logical_operation_id = ?" if logical_operation_id is not None else ""
+        parameters = terminal + (
+            (logical_operation_id,) if logical_operation_id is not None else ()
         )
         rows = self._connection.execute(
             """
@@ -975,9 +982,8 @@ class ExecutionJournal:
                    relationship_constraint
             FROM execution_envelopes
             WHERE lifecycle_state NOT IN (?, ?, ?, ?)
-            ORDER BY created_monotonic_ns, logical_operation_id
-            """,
-            terminal,
+            """ + scope + " ORDER BY created_monotonic_ns, logical_operation_id",
+            parameters,
         ).fetchall()
         return self._decode_envelopes(rows)
 

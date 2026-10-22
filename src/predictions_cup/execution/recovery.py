@@ -1288,6 +1288,7 @@ async def recover_in_session_cancellations(
     rest: RecoveryRest,
     live_sink: SigLiveSink,
     tournament_id: str,
+    logical_operation_id: str | None = None,
     clock_ns: ClockNs = monotonic_ns,
 ) -> tuple[str, ...]:
     """Resolve/retry only existing cancellation risk during a live session.
@@ -1296,7 +1297,7 @@ async def recover_in_session_cancellations(
     authoritative order/fill check and at most one same-envelope cancel retry.
     """
     resolved: list[str] = []
-    for envelope in tuple(journal.unresolved()):
+    for envelope in journal.unresolved(logical_operation_id=logical_operation_id):
         if envelope.tournament_id != tournament_id:
             continue
         if envelope.operation_kind not in {
@@ -1334,10 +1335,7 @@ async def recover_in_session_cancellations(
         except SigExecutionUncertainError:
             continue
 
-        unresolved_ids = {
-            item.logical_operation_id for item in journal.unresolved()
-        }
-        if envelope.logical_operation_id not in unresolved_ids:
+        if not journal.unresolved(logical_operation_id=envelope.logical_operation_id):
             resolved.append(envelope.logical_operation_id)
     return tuple(resolved)
 

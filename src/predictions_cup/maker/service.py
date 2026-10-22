@@ -1020,16 +1020,17 @@ class MakerService:
 
             if isinstance(adapter, LiveMakerExecutionAdapter):
 
-                async def reconcile_uncertain_cancels() -> None:
+                async def reconcile_uncertain_cancels(logical_operation_id: str) -> None:
                     assert journal is not None and live_sink is not None
-                    # A closed-order 409 needs one order/fill check. A full
-                    # account and capital refresh can fail under SIG REST load
-                    # before reaching that targeted recovery.
+                    # Maker cancels are on the single-worker quote hot path.
+                    # A venue 409 must recover only its own journal operation;
+                    # sweeping unrelated uncertainty can stop all evaluations.
                     await recover_in_session_cancellations(
                         journal=journal,
                         rest=rest,
                         live_sink=live_sink,
                         tournament_id=tournament_id,
+                        logical_operation_id=logical_operation_id,
                     )
 
                 adapter.set_cancel_uncertainty_resolver(reconcile_uncertain_cancels)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -22,6 +24,9 @@ from predictions_cup.maker.lifecycle import ActiveQuote, QuoteRegistry
 from predictions_cup.observe.contracts import ObservationEmitter, ObservationKind, VenueObservation
 from predictions_cup.runtime.models import OrderAction
 from predictions_cup.sig.errors import SigExecutionUncertainError
+
+_LOG = logging.getLogger(__name__)
+_CANCEL_RECOVERY_TIMEOUT_SECONDS = 8.0
 
 
 class ShadowMakerExecutionAdapter:
@@ -69,7 +74,7 @@ class LiveMakerExecutionAdapter:
         self._sink = sink
         self._journal = journal
         self._quotes = quotes
-        self._cancel_uncertainty_resolver: Callable[[], Awaitable[object]] | None = None
+        self._cancel_uncertainty_resolver: Callable[[str], Awaitable[object]] | None = None
         self._observation_emitter = observation_emitter
         self._observation_process_instance_id = (
             uuid4().hex
@@ -82,7 +87,7 @@ class LiveMakerExecutionAdapter:
 
     def set_cancel_uncertainty_resolver(
         self,
-        resolver: Callable[[], Awaitable[object]],
+        resolver: Callable[[str], Awaitable[object]],
     ) -> None:
         """Install the existing account reconciliation path as rare cancel recovery."""
         self._cancel_uncertainty_resolver = resolver
@@ -131,16 +136,17 @@ class LiveMakerExecutionAdapter:
                 except SigExecutionUncertainError:
                     pass
             if self._cancel_uncertainty_resolver is not None:
-                await self._cancel_uncertainty_resolver()
-                resolved = next(
-                    (
-                        item
-                        for item in self._journal.envelopes()
-                        if item.logical_operation_id == logical_operation_id
-                    ),
-                    None,
-                )
-                if resolved is not None and resolved.lifecycle_state in {
+                try:
+                    async with asyncio.timeout(_CANCEL_RECOVERY_TIMEOUT_SECONDS):
+                        await self._cancel_uncertainty_resolver(logical_operation_id)
+                except TimeoutError:
+                    # Keep the journal operation and local quote UNCERTAIN;
+                    # normal account recovery may resolve it later. Never
+                    # block the maker worker or invent a completed cancel.
+                    _LOG.warning("MAKE targeted cancel recovery timed out")
+                    raise exc from None
+                resolved_state = self._journal.lifecycle_state(logical_operation_id)
+                if resolved_state in {
                     LifecycleState.CANCELLED,
                     LifecycleState.FILLED,
                     LifecycleState.RECONCILED,
@@ -154,7 +160,7 @@ class LiveMakerExecutionAdapter:
                     )
                     return ExecutionEvent(
                         logical_operation_id=logical_operation_id,
-                        state=resolved.lifecycle_state,
+                        state=resolved_state,
                         observed_monotonic_ns=observed,
                         simulated=False,
                         detail="targeted_cancel_reconcile",
