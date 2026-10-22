@@ -626,6 +626,175 @@ def test_untracked_book_dirty_coalesces_without_waiting_for_slow_rest(
     asyncio.run(scenario())
 
 
+def test_routine_books_bounded_before_governor(tmp_path: Path) -> None:
+    class CountedRest(FakeRest):
+        def __init__(self) -> None:
+            super().__init__(market_count=20)
+            self.current = 0
+            self.peak = 0
+            self.orderbook_delay_seconds = 0.01
+
+        async def get_orderbook(
+            self,
+            exchange_id: str,
+            *,
+            depth: int = 20,
+            tournament_id: str | None = None,
+        ) -> OrderBookSnapshotDto:
+            self.current += 1
+            self.peak = max(self.current, self.peak)
+            try:
+                return await super().get_orderbook(
+                    exchange_id, depth=depth, tournament_id=tournament_id
+                )
+            finally:
+                self.current -= 1
+
+    async def scenario() -> None:
+        rest = CountedRest()
+        tracked = {f"e-{i}" for i in range(20)}
+        engine, recorder = _engine(tmp_path, rest, tracked=tracked, max_age=180)
+        await engine.initialize()
+        initial = len(rest.calls)
+        rest.peak = 0
+        await engine._reconcile_many(
+            tracked,
+            reason="book_dirty",
+            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+            triggering_revision=1,
+            priority=RestPriority.NORMAL,
+        )
+        assert len(rest.calls) - initial == len(tracked)
+        assert 0 < rest.peak <= 4
+        assert all(engine.states[key].trusted for key in tracked)
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_queued_dirty_generations_collapse_to_latest(tmp_path: Path) -> None:
+    class HeldRest(FakeRest):
+        def __init__(self) -> None:
+            super().__init__(market_count=8)
+            self.hold = False
+            self.started = 0
+            self.four_started = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def get_orderbook(
+            self,
+            exchange_id: str,
+            *,
+            depth: int = 20,
+            tournament_id: str | None = None,
+        ) -> OrderBookSnapshotDto:
+            if self.hold:
+                self.started += 1
+                if self.started == 4:
+                    self.four_started.set()
+                await self.release.wait()
+            return await super().get_orderbook(
+                exchange_id, depth=depth, tournament_id=tournament_id
+            )
+
+    async def scenario() -> None:
+        rest = HeldRest()
+        tracked = {f"e-{i}" for i in range(8)}
+        engine, recorder = _engine(tmp_path, rest, tracked=tracked, max_age=180)
+        await engine.initialize()
+        rest.hold = True
+        initial_calls = len(rest.calls)
+        await engine._reconcile_many(
+            tracked, reason="book_dirty",
+            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+            triggering_revision=1, priority=RestPriority.NORMAL, wait=False,
+        )
+        await asyncio.wait_for(rest.four_started.wait(), timeout=2)
+        # e-7 is waiting before the REST governor, not executing a stale GET.
+        assert "e-7" not in rest.calls[initial_calls:]
+        for revision in range(2, 12):
+            await engine._queue_reconciliation(
+                "e-7", reason="book_dirty",
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=revision,
+                priority=RestPriority.NORMAL,
+                wait=False,
+            )
+        # At most the four admitted requests have reached the REST client.
+        assert len(rest.calls) - initial_calls <= 4
+        rest.release.set()
+        await asyncio.wait_for(
+            asyncio.gather(*engine._reconcile_tasks.values()), timeout=5
+        )
+        assert rest.calls[initial_calls:].count("e-7") == 1
+        assert engine.states["e-7"].last_accepted_revision == 11
+        assert engine.states["e-7"].trusted
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_high_priority_upgrade_bypasses_routine_slots(tmp_path: Path) -> None:
+    class HeldRest(FakeRest):
+        def __init__(self) -> None:
+            super().__init__(market_count=8)
+            self.hold = False
+            self.started: set[str] = set()
+            self.four_started = asyncio.Event()
+            self.high_started = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def get_orderbook(
+            self,
+            exchange_id: str,
+            *,
+            depth: int = 20,
+            tournament_id: str | None = None,
+        ) -> OrderBookSnapshotDto:
+            if self.hold:
+                self.started.add(exchange_id)
+                if len(self.started) >= 4:
+                    self.four_started.set()
+                if exchange_id == "e-7":
+                    self.high_started.set()
+                await self.release.wait()
+            return await super().get_orderbook(
+                exchange_id, depth=depth, tournament_id=tournament_id
+            )
+
+    async def scenario() -> None:
+        rest = HeldRest()
+        tracked = {f"e-{i}" for i in range(8)}
+        engine, recorder = _engine(tmp_path, rest, tracked=tracked, max_age=180)
+        await engine.initialize()
+        rest.hold = True
+        await engine._reconcile_many(
+            tracked, reason="book_dirty",
+            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+            triggering_revision=1, priority=RestPriority.NORMAL, wait=False,
+        )
+        await asyncio.wait_for(rest.four_started.wait(), timeout=2)
+        assert "e-7" not in rest.started
+        # Critical recovery must not sit behind four blocked NORMAL requests.
+        await engine._queue_reconciliation(
+            "e-7", reason="reconnect",
+            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+            triggering_revision=2, priority=RestPriority.HIGH, wait=False,
+        )
+        await asyncio.wait_for(rest.high_started.wait(), timeout=2)
+        rest.release.set()
+        await asyncio.wait_for(
+            asyncio.gather(*engine._reconcile_tasks.values()), timeout=5
+        )
+        assert engine.states["e-7"].trusted
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
 def test_reconciliation_coalesces_dirty_signal_arriving_in_flight(tmp_path: Path) -> None:
     async def scenario() -> None:
         rest = FakeRest()
