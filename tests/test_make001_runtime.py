@@ -258,6 +258,47 @@ def test_recovery_accepts_sig_canonical_no_buy_for_maker_ask(
         journal.close()
 
 
+def test_periodic_registry_lookup_uses_only_open_ack_and_active_quote_identities(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    journal = _journal_with_open_maker(tmp_path / "indexed-registry.sqlite3")
+    quotes = QuoteRegistry()
+    # A missing venue OPEN order must still clear a previously known maker
+    # quote, even if its original placement lifecycle is terminal.
+    quotes.apply_authoritative(
+        exchange_id="36", side=QuoteSide.BID, price_ticks=99, size=2,
+        remaining_size=2, logical_operation_id="maker-op-1", exchange_order_id=91,
+        lifecycle_state=LifecycleState.OPEN, observed_monotonic_ns=1,
+    )
+    try:
+        assert [e.logical_operation_id for e in journal.maker_placement_candidates(
+            strategy_id="make-direct-pm", exchange_order_ids=["91"]
+        )] == ["maker-op-1"]
+        assert not journal.maker_placement_candidates(
+            strategy_id="unrelated-strategy", exchange_order_ids=["91"]
+        )
+        assert not journal.maker_placement_candidates(
+            strategy_id="make-direct-pm", exchange_order_ids=["99999"]
+        )
+
+        def forbid_history_scan(*args: object, **kwargs: object) -> None:
+            raise AssertionError("periodic registry recovery scanned the entire journal")
+
+        monkeypatch.setattr(journal, "envelopes_for_strategy", forbid_history_scan)
+        reconcile_maker_quote_registry(
+            journal=journal, authoritative=_authoritative(), quotes=quotes,
+            observed_monotonic_ns=300,
+        )
+        assert quotes.state("36").bid is not None
+        reconcile_maker_quote_registry(
+            journal=journal, authoritative=_authoritative(open_order=False),
+            quotes=quotes, observed_monotonic_ns=400,
+        )
+        assert quotes.state("36").bid is None
+    finally:
+        journal.close()
+
+
 def test_reconciled_journal_history_still_tracks_resting_maker_quote(
     tmp_path: Path,
 ) -> None:

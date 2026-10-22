@@ -884,12 +884,16 @@ class SigRealtimeStateEngine:
                 TrustTransition.UNTRUSTED_BOOK_DIRTY,
                 revision=delivery.revision,
             )
+            # Book-dirty recovery can produce a request for every tracked
+            # exchange. Keep books untrusted until each authoritative refetch,
+            # but do not let this recurring flood occupy the execution/account
+            # safety lane reserved by the shared REST governor.
             await self._reconcile_many(
                 tracked_dirty_exchange_ids,
                 reason="book_dirty",
                 final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                 triggering_revision=delivery.revision,
-                priority=RestPriority.HIGH,
+                priority=RestPriority.NORMAL,
                 wait=False,
             )
 
@@ -980,7 +984,9 @@ class SigRealtimeStateEngine:
                     reason="book_dirty",
                     final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                     triggering_revision=revision,
-                    priority=RestPriority.HIGH,
+                    # Unbatched dirty hints are routine book recovery, just
+                    # like batched dirty messages; preserve account/exec HIGH.
+                    priority=RestPriority.NORMAL,
                     wait=False,
                 )
             else:
@@ -1628,6 +1634,11 @@ class SigRealtimeStateEngine:
                 priority = self._reconcile_priority[exchange_id]
                 reason = self._reconcile_reason[exchange_id]
                 triggering_revision = self._reconcile_revision[exchange_id]
+                # Consume the priority for THIS generation. The next dirty
+                # event must not inherit HIGH from an earlier startup/recovery
+                # request, or a permanently hot book monopolises the reserved
+                # execution/account lane across thousands of requeues.
+                self._reconcile_priority[exchange_id] = RestPriority.BACKGROUND
 
             await self._reconcile_exchange_once(
                 exchange_id,

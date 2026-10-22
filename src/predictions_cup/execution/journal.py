@@ -6,7 +6,7 @@ import hashlib
 import json
 import logging
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
@@ -589,8 +589,7 @@ class ExecutionJournal:
         if observed_monotonic_ns < 0:
             raise ValueError("observed_monotonic_ns must be non-negative")
         envelope = self._connection.execute(
-            "SELECT tournament_id FROM execution_envelopes "
-            "WHERE logical_operation_id = ?",
+            "SELECT tournament_id FROM execution_envelopes WHERE logical_operation_id = ?",
             (logical_operation_id,),
         ).fetchone()
         if envelope is None:
@@ -793,8 +792,7 @@ class ExecutionJournal:
     def lifecycle_state(self, logical_operation_id: str) -> LifecycleState:
         """Return the current lifecycle state for one durable operation."""
         row = self._connection.execute(
-            "SELECT lifecycle_state FROM execution_envelopes "
-            "WHERE logical_operation_id = ?",
+            "SELECT lifecycle_state FROM execution_envelopes WHERE logical_operation_id = ?",
             (logical_operation_id,),
         ).fetchone()
         if row is None:
@@ -946,6 +944,81 @@ class ExecutionJournal:
         ).fetchall()
         return self._decode_envelopes(rows)
 
+    def maker_placement_candidates(
+        self,
+        *,
+        strategy_id: str,
+        exchange_order_ids: Iterable[str],
+        active_operation_ids: Iterable[str] = (),
+    ) -> tuple[ExecutionEnvelope, ...]:
+        """Get only MAKE placements relevant to venue-open or locally active quotes.
+
+        Venue-open orders can belong to journal operations already marked
+        RECONCILED. Neither lifecycle nor created_at is a safe filter here.
+        Candidate order IDs use the durable ACK exchange-order index, and
+        locally active operation IDs use the envelope primary key. Only
+        proven strategy submissions are returned; no journal data is edited.
+        """
+        if not strategy_id.strip():
+            raise ValueError("strategy_id must not be blank")
+        order_ids = tuple(sorted(set(exchange_order_ids)))
+        operation_ids = tuple(sorted(set(active_operation_ids)))
+        if not order_ids and not operation_ids:
+            return ()
+        # SQLite builds in different environments can have different variable
+        # limits. Bound each IN clause and merge identities without broadening
+        # the query into a scan of historical placement operations.
+        candidate_ids: set[str] = set(operation_ids)
+        for offset in range(0, len(order_ids), 400):
+            batch = order_ids[offset : offset + 400]
+            placeholders = ", ".join("?" for _ in batch)
+            ack_rows = self._connection.execute(
+                "SELECT logical_operation_id FROM execution_events "
+                "WHERE event_type = 'ACK' AND exchange_order_id IN (" + placeholders + ")",
+                batch,
+            )
+            candidate_ids.update(str(row[0]) for row in ack_rows)
+        if not candidate_ids:
+            return ()
+
+        result: list[ExecutionEnvelope] = []
+        sorted_candidate_ids = tuple(sorted(candidate_ids))
+        for offset in range(0, len(sorted_candidate_ids), 400):
+            batch = sorted_candidate_ids[offset : offset + 400]
+            placeholders = ", ".join("?" for _ in batch)
+            rows = self._connection.execute(
+                """
+                SELECT envelope.logical_operation_id, envelope.tournament_id,
+                       envelope.idempotency_key, envelope.operation_kind,
+                       envelope.sink_mode, envelope.payload_json,
+                       envelope.payload_sha256, envelope.intent_ids_json,
+                       envelope.lifecycle_state, envelope.created_monotonic_ns,
+                       envelope.relationship_constraint
+                FROM execution_envelopes AS envelope
+                WHERE envelope.logical_operation_id IN ("""
+                + placeholders
+                + """)
+                  AND envelope.operation_kind IN (?, ?, ?)
+                  AND EXISTS (
+                      SELECT 1 FROM execution_events AS submission
+                      WHERE submission.logical_operation_id = envelope.logical_operation_id
+                        AND submission.event_type = 'SUBMISSION'
+                        AND submission.strategy_id = ?
+                  )
+                """,
+                (
+                    *batch,
+                    OperationKind.SINGLE_PLACEMENT.value,
+                    OperationKind.BEST_EFFORT_BATCH.value,
+                    OperationKind.ATOMIC_MULTI_LEG.value,
+                    strategy_id,
+                ),
+            ).fetchall()
+            result.extend(self._decode_envelopes(rows))
+        return tuple(
+            sorted(result, key=lambda env: (env.created_monotonic_ns, env.logical_operation_id))
+        )
+
     def envelopes(self) -> tuple[ExecutionEnvelope, ...]:
         """Return all durable execution envelopes, including terminal history."""
         rows = self._connection.execute(
@@ -960,12 +1033,19 @@ class ExecutionJournal:
         ).fetchall()
         return self._decode_envelopes(rows)
 
-    def unresolved(self) -> tuple[ExecutionEnvelope, ...]:
+    def unresolved(
+        self, *, logical_operation_id: str | None = None
+    ) -> tuple[ExecutionEnvelope, ...]:
+        """Unresolved operations, optionally scoped to one indexed identity."""
         terminal = (
             LifecycleState.FILLED.value,
             LifecycleState.CANCELLED.value,
             LifecycleState.RECONCILED.value,
             LifecycleState.REJECTED.value,
+        )
+        scope = " AND logical_operation_id = ?" if logical_operation_id is not None else ""
+        parameters = terminal + (
+            (logical_operation_id,) if logical_operation_id is not None else ()
         )
         rows = self._connection.execute(
             """
@@ -975,9 +1055,10 @@ class ExecutionJournal:
                    relationship_constraint
             FROM execution_envelopes
             WHERE lifecycle_state NOT IN (?, ?, ?, ?)
-            ORDER BY created_monotonic_ns, logical_operation_id
-            """,
-            terminal,
+            """
+            + scope
+            + " ORDER BY created_monotonic_ns, logical_operation_id",
+            parameters,
         ).fetchall()
         return self._decode_envelopes(rows)
 

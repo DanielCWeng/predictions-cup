@@ -520,6 +520,39 @@ def test_taker_liveness_recheck_logs_completed_evaluation(
     assert "TAKE heartbeat evaluated=1 input_ready=1 signals=1 cycles=1" in caplog.text
 
 
+def test_taker_liveness_recovers_from_one_slow_evaluation(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(residual_live_module, "_LIVENESS_INTERVAL_SECONDS", 0.005)
+    harness = _Harness()
+    stop_event = asyncio.Event()
+    rechecks = 0
+    change = MakerStateChange(
+        event_id="liveness-retry",
+        observed_monotonic_ns=NOW,
+        exchange_ids=frozenset({EXCHANGE}),
+    )
+
+    async def evaluate() -> None:
+        await harness.coordinator.on_state_change(
+            change, datetime(2026, 10, 1, tzinfo=UTC), {EXCHANGE: _snapshot()}
+        )
+        stop_event.set()
+
+    def recheck() -> None:
+        nonlocal rechecks
+        rechecks += 1
+        if rechecks == 2:
+            asyncio.create_task(evaluate())
+
+    with caplog.at_level(logging.WARNING):
+        asyncio.run(harness.coordinator.run_liveness(stop_event=stop_event, recheck=recheck))
+    assert rechecks == 2
+    assert harness.coordinator.evaluation_cycles == 1
+    assert "TAKE liveness delayed; forcing one bounded recheck" in caplog.text
+
+
 def test_taker_liveness_fails_loudly_when_recheck_never_evaluates(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,

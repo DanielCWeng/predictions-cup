@@ -45,6 +45,7 @@ from predictions_cup.maker import (
     QuoteSide,
     ShadowMakerExecutionAdapter,
 )
+from predictions_cup.maker import adapters as maker_adapters_module
 from predictions_cup.maker.contracts import FairValueResult
 from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
 from predictions_cup.maker.sources import MakerSourceBridge
@@ -681,8 +682,9 @@ def test_uncertain_cancel_directly_triggers_bounded_reconciliation(
     )
     resolver_calls = 0
 
-    async def resolver() -> object:
+    async def resolver(operation_id: str) -> object:
         nonlocal resolver_calls
+        assert operation_id == "cancel-op"
         resolver_calls += 1
         journal.mark_state("cancel-op", LifecycleState.RECONCILING, NOW + 12)
         journal.record_event(
@@ -709,6 +711,36 @@ def test_uncertain_cancel_directly_triggers_bounded_reconciliation(
         assert resolver_calls == 1
         assert event.state is LifecycleState.CANCELLED
         assert journal.unresolved() == ()
+    finally:
+        journal.close()
+
+
+def test_cancel_recovery_timeout_keeps_uncertainty_and_allows_worker_progress(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    journal = ExecutionJournal(tmp_path / "timeout-cancel.sqlite3")
+    live = _AlwaysUncertainCancelLiveSink(journal)
+    adapter = LiveMakerExecutionAdapter(
+        cast(SigLiveSink, live), journal=journal, quotes=QuoteRegistry()
+    )
+    monkeypatch.setattr(maker_adapters_module, "_CANCEL_RECOVERY_TIMEOUT_SECONDS", 0.005)
+
+    async def stalled_recovery(operation_id: str) -> None:
+        assert operation_id == "cancel-op"
+        await asyncio.Event().wait()
+
+    adapter.set_cancel_uncertainty_resolver(stalled_recovery)
+    try:
+        with pytest.raises(SigExecutionUncertainError):
+            asyncio.run(adapter.cancel(
+                _active(QuoteSide.BID, ticks=99, order_id=91),
+                "cancel-op", TOURNAMENT
+            ))
+        assert live.cancel_calls == 2
+        assert journal.lifecycle_state("cancel-op") is LifecycleState.UNCERTAIN
+        assert tuple(item.logical_operation_id for item in journal.unresolved()) == (
+            "cancel-op",
+        )
     finally:
         journal.close()
 

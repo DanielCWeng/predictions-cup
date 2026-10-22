@@ -16,7 +16,7 @@ from contextlib import suppress
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
-from time import monotonic_ns
+from time import monotonic, monotonic_ns
 from typing import cast
 
 from pydantic import ValidationError
@@ -385,7 +385,8 @@ class MakerService:
             initial_cash_balance = None
             if self.settings.account_proxy_enabled:
                 try:
-                    async with rest.priority(RestPriority.NORMAL):
+                    # Cash baseline is part of the startup LIVE trust fence.
+                    async with rest.priority(RestPriority.HIGH):
                         initial_cash_balance = (await rest.get_account()).balance
                 except Exception as exc:
                     _LOG.warning(
@@ -393,14 +394,18 @@ class MakerService:
                         "proxy trust will wait for a clean account resync",
                         type(exc).__name__,
                     )
+            async def initial_account_reconciliation() -> AccountAuthoritativeSnapshot:
+                # Startup account and position reads gate all LIVE activity.
+                async with rest.priority(RestPriority.HIGH):
+                    return await reconcile_account(
+                        rest,
+                        tournament_id=tournament_id,
+                        tournament_slug=tournament_slug,
+                        cash_balance=initial_cash_balance,
+                    )
+
             initial_account = await _retry_startup_sig_operation(
-                "initial_account_reconciliation",
-                lambda: reconcile_account(
-                    rest,
-                    tournament_id=tournament_id,
-                    tournament_slug=tournament_slug,
-                    cash_balance=initial_cash_balance,
-                ),
+                "initial_account_reconciliation", initial_account_reconciliation
             )
             account_state.apply_authoritative(initial_account)
             authoritative_account = initial_account
@@ -438,7 +443,7 @@ class MakerService:
                 bulk_price_refresh_seconds=_maker_bulk_price_refresh_seconds(
                     self.settings.sig_realtime_bulk_price_refresh_seconds
                 ),
-                periodic_bulk_price_priority=RestPriority.NORMAL,
+                periodic_bulk_price_priority=RestPriority.BACKGROUND,
                 governed_rate_per_second=(self.settings.sig_rest_governor_rate_per_second),
                 governor_snapshot=rest.governor_snapshot,
                 bulk_prices_tracked_only=True,
@@ -907,8 +912,12 @@ class MakerService:
 
             async def account_resync() -> AccountAuthoritativeSnapshot:
                 nonlocal capital_refresh_task
+                resync_started = monotonic()
+                # An authoritative account snapshot is a LIVE safety prerequisite.
+                # Use reserved governor capacity rather than competing with bulk
+                # market reads, without changing total REST rate or trust limits.
                 async with (
-                    rest.priority(RestPriority.NORMAL),
+                    rest.priority(RestPriority.HIGH),
                     rest.request_policy(
                         timeout_seconds=_ACCOUNT_RESYNC_TIMEOUT_SECONDS,
                         retry_policy=_ACCOUNT_RESYNC_RETRY_POLICY,
@@ -922,6 +931,7 @@ class MakerService:
                         tournament_slug=tournament_slug,
                         cash_balance_reader=rest.get_account,
                     )
+                    snapshot_finished = monotonic()
                     if (
                         journal is not None
                         and live_sink is not None
@@ -957,6 +967,7 @@ class MakerService:
                                 tournament_slug=tournament_slug,
                                 cash_balance_reader=rest.get_account,
                             )
+                recovery_finished = monotonic()
                 if journal is not None:
                     reconcile_maker_quote_registry(
                         journal=journal,
@@ -964,6 +975,7 @@ class MakerService:
                         quotes=self.core.quotes,
                         observed_monotonic_ns=monotonic_ns(),
                     )
+                registry_finished = monotonic()
                 if (
                     risk_context_source is not None
                     and risk_service is not None
@@ -972,32 +984,53 @@ class MakerService:
                     # RISK's ~5 extra reads run outside the account trust
                     # window: account activity from our own orders during them
                     # otherwise invalidated almost every account resync.
+                    # asyncio tasks inherit ContextVars at creation time: do
+                    # not let five optional capital refresh reads inherit the
+                    # account snapshot's reserved HIGH priority.
+                    async def refresh_capital_at_normal_priority() -> None:
+                        async with rest.priority(RestPriority.NORMAL):
+                            await self._refresh_capital_control(
+                                rest=rest,
+                                account=authoritative,
+                                journal=journal,
+                                service=risk_service,
+                                source=risk_context_source,
+                                tournament_id=tournament_id,
+                                tournament_slug=tournament_slug,
+                            )
+
                     capital_refresh_task = asyncio.create_task(
-                        self._refresh_capital_control(
-                            rest=rest,
-                            account=authoritative,
-                            journal=journal,
-                            service=risk_service,
-                            source=risk_context_source,
-                            tournament_id=tournament_id,
-                            tournament_slug=tournament_slug,
-                        )
+                        refresh_capital_at_normal_priority()
                     )
                     capital_refresh_task.add_done_callback(_log_capital_refresh_failure)
+                governor_state = rest.governor_snapshot()
+                _LOG.info(
+                    "MAKE account resync timings snapshot_ms=%.1f recovery_ms=%.1f "
+                    "registry_ms=%.1f total_ms=%.1f pending_high=%d "
+                    "pending_normal=%d pending_background=%d",
+                    (snapshot_finished - resync_started) * 1_000,
+                    (recovery_finished - snapshot_finished) * 1_000,
+                    (registry_finished - recovery_finished) * 1_000,
+                    (monotonic() - resync_started) * 1_000,
+                    governor_state.pending_high_priority_reads,
+                    governor_state.pending_normal_reads,
+                    governor_state.pending_background_reads,
+                )
                 return authoritative
 
             if isinstance(adapter, LiveMakerExecutionAdapter):
 
-                async def reconcile_uncertain_cancels() -> None:
+                async def reconcile_uncertain_cancels(logical_operation_id: str) -> None:
                     assert journal is not None and live_sink is not None
-                    # A closed-order 409 needs one order/fill check. A full
-                    # account and capital refresh can fail under SIG REST load
-                    # before reaching that targeted recovery.
+                    # Maker cancels are on the single-worker quote hot path.
+                    # A venue 409 must recover only its own journal operation;
+                    # sweeping unrelated uncertainty can stop all evaluations.
                     await recover_in_session_cancellations(
                         journal=journal,
                         rest=rest,
                         live_sink=live_sink,
                         tournament_id=tournament_id,
+                        logical_operation_id=logical_operation_id,
                     )
 
                 adapter.set_cancel_uncertainty_resolver(reconcile_uncertain_cancels)

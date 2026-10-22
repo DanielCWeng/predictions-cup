@@ -756,6 +756,46 @@ def test_in_session_recovery_resolves_uncertain_cancel_without_restart(
         journal.close()
 
 
+def test_targeted_cancel_recovery_does_not_scan_or_modify_other_uncertainty(
+    tmp_path: Path,
+) -> None:
+    journal = ExecutionJournal(tmp_path / "targeted-cancel.sqlite3")
+    for op, order_id in (("target-cancel", 91), ("unrelated-cancel", 92)):
+        envelope = ExecutionEnvelope.cancellation(
+            logical_operation_id=op,
+            operation_kind=OperationKind.SINGLE_CANCELLATION,
+            sink_mode=ExecutionMode.LIVE,
+            created_monotonic_ns=100 + order_id,
+            order_id=order_id,
+            tournament_id="t1",
+        )
+        journal.record_before_dispatch(envelope, submitted_monotonic_ns=200 + order_id)
+        journal.mark_state(op, LifecycleState.UNCERTAIN, 300 + order_id)
+
+    trading = _RecoveryTradingFixture()
+    rest = _OpenOrderRecoveryRest()
+    trading.on_cancel = lambda order_id: setattr(rest, "order_open", False)
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, trading),
+        journal=journal,
+        permit=_recovery_permit(),
+        reservations=ExecutionReservationBook(),
+        clock_ns=iter(range(500, 800)).__next__,
+    )
+    try:
+        resolved = asyncio.run(recover_in_session_cancellations(
+            journal=journal, rest=cast(RecoveryRest, rest), live_sink=sink,
+            tournament_id="t1", logical_operation_id="target-cancel",
+            clock_ns=iter(range(800, 1100)).__next__,
+        ))
+        assert resolved == ("target-cancel",)
+        assert trading.cancelled_order_ids == [91]
+        assert journal.lifecycle_state("unrelated-cancel") is LifecycleState.UNCERTAIN
+        assert [e.logical_operation_id for e in journal.unresolved()] == ["unrelated-cancel"]
+    finally:
+        journal.close()
+
+
 def test_cancel_recovery_keeps_operation_unresolved_on_incomplete_fill_coverage(
     tmp_path: Path,
 ) -> None:
