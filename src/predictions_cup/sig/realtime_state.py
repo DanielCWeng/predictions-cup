@@ -1681,7 +1681,13 @@ class SigRealtimeStateEngine:
 
             held_slot = False
             if not urgent:
-                held_slot = await self._wait_for_routine_book_slot(exchange_id)
+                if not self._routine_book_slots.locked():
+                    # No congestion: acquire inline with no extra scheduling
+                    # tick, retaining synchronous fast-path event semantics.
+                    await self._routine_book_slots.acquire()
+                    held_slot = True
+                else:
+                    held_slot = await self._wait_for_routine_book_slot(exchange_id)
             try:
                 async with self._reconcile_registry_lock:
                     # Read the latest generation AFTER queued admission. Dirty
