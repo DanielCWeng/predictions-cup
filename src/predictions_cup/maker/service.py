@@ -385,7 +385,8 @@ class MakerService:
             initial_cash_balance = None
             if self.settings.account_proxy_enabled:
                 try:
-                    async with rest.priority(RestPriority.NORMAL):
+                    # Cash baseline is part of the startup LIVE trust fence.
+                    async with rest.priority(RestPriority.HIGH):
                         initial_cash_balance = (await rest.get_account()).balance
                 except Exception as exc:
                     _LOG.warning(
@@ -393,14 +394,18 @@ class MakerService:
                         "proxy trust will wait for a clean account resync",
                         type(exc).__name__,
                     )
+            async def initial_account_reconciliation() -> AccountAuthoritativeSnapshot:
+                # Startup account and position reads gate all LIVE activity.
+                async with rest.priority(RestPriority.HIGH):
+                    return await reconcile_account(
+                        rest,
+                        tournament_id=tournament_id,
+                        tournament_slug=tournament_slug,
+                        cash_balance=initial_cash_balance,
+                    )
+
             initial_account = await _retry_startup_sig_operation(
-                "initial_account_reconciliation",
-                lambda: reconcile_account(
-                    rest,
-                    tournament_id=tournament_id,
-                    tournament_slug=tournament_slug,
-                    cash_balance=initial_cash_balance,
-                ),
+                "initial_account_reconciliation", initial_account_reconciliation
             )
             account_state.apply_authoritative(initial_account)
             authoritative_account = initial_account
@@ -438,7 +443,7 @@ class MakerService:
                 bulk_price_refresh_seconds=_maker_bulk_price_refresh_seconds(
                     self.settings.sig_realtime_bulk_price_refresh_seconds
                 ),
-                periodic_bulk_price_priority=RestPriority.NORMAL,
+                periodic_bulk_price_priority=RestPriority.BACKGROUND,
                 governed_rate_per_second=(self.settings.sig_rest_governor_rate_per_second),
                 governor_snapshot=rest.governor_snapshot,
                 bulk_prices_tracked_only=True,
@@ -907,8 +912,11 @@ class MakerService:
 
             async def account_resync() -> AccountAuthoritativeSnapshot:
                 nonlocal capital_refresh_task
+                # An authoritative account snapshot is a LIVE safety prerequisite.
+                # Use reserved governor capacity rather than competing with bulk
+                # market reads, without changing total REST rate or trust limits.
                 async with (
-                    rest.priority(RestPriority.NORMAL),
+                    rest.priority(RestPriority.HIGH),
                     rest.request_policy(
                         timeout_seconds=_ACCOUNT_RESYNC_TIMEOUT_SECONDS,
                         retry_policy=_ACCOUNT_RESYNC_RETRY_POLICY,
@@ -972,16 +980,23 @@ class MakerService:
                     # RISK's ~5 extra reads run outside the account trust
                     # window: account activity from our own orders during them
                     # otherwise invalidated almost every account resync.
+                    # asyncio tasks inherit ContextVars at creation time: do
+                    # not let five optional capital refresh reads inherit the
+                    # account snapshot's reserved HIGH priority.
+                    async def refresh_capital_at_normal_priority() -> None:
+                        async with rest.priority(RestPriority.NORMAL):
+                            await self._refresh_capital_control(
+                                rest=rest,
+                                account=authoritative,
+                                journal=journal,
+                                service=risk_service,
+                                source=risk_context_source,
+                                tournament_id=tournament_id,
+                                tournament_slug=tournament_slug,
+                            )
+
                     capital_refresh_task = asyncio.create_task(
-                        self._refresh_capital_control(
-                            rest=rest,
-                            account=authoritative,
-                            journal=journal,
-                            service=risk_service,
-                            source=risk_context_source,
-                            tournament_id=tournament_id,
-                            tournament_slug=tournament_slug,
-                        )
+                        refresh_capital_at_normal_priority()
                     )
                     capital_refresh_task.add_done_callback(_log_capital_refresh_failure)
                 return authoritative
