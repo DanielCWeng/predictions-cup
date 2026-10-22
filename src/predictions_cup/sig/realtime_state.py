@@ -1658,9 +1658,13 @@ class SigRealtimeStateEngine:
             await asyncio.gather(slot, urgent, return_exceptions=True)
             # If urgent won (or the parent was cancelled), return a slot
             # that may have been acquired concurrently with the urgent flag.
-            if slot.done() and not slot.cancelled() and slot.exception() is None:
-                if not keep_slot:
-                    self._routine_book_slots.release()
+            if (
+                slot.done()
+                and not slot.cancelled()
+                and slot.exception() is None
+                and not keep_slot
+            ):
+                self._routine_book_slots.release()
 
     async def _reconcile_loop(
         self,
