@@ -283,6 +283,69 @@ def test_tournament_market_filter_drops_irrelevant_burst_before_queueing(
     asyncio.run(scenario())
 
 
+def test_subscriber_emits_per_path_processing_metrics(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    async def scenario() -> None:
+        client = _install_fake_client(monkeypatch, follow_up_status=None)
+        stop_event = asyncio.Event()
+        monkeypatch.setattr(subscriber_module, "_METRICS_INTERVAL_SECONDS", 0.01)
+        caplog.set_level("INFO", logger="predictions_cup.sig.realtime_subscriber")
+
+        async def stop_later() -> None:
+            await asyncio.sleep(0.08)
+            stop_event.set()
+
+        def publish_once() -> None:
+            callback_batch = client.fake_channel.broadcast_callbacks["markets_batch"]
+            callback_event = client.fake_channel.broadcast_callbacks["book_dirty"]
+            callback_batch({"payload": {"markets": [{"marketId": "26", "batch": {}}]}})
+            callback_event({"payload": {"exchangeId": "36"}})
+            asyncio.create_task(stop_later())
+
+        async def on_batch(topic: str, payload: object, at: datetime) -> None:
+            del topic, payload, at
+            await asyncio.sleep(0.015)
+
+        async def on_event(
+            topic: str, event_name: str, payload: object, at: datetime
+        ) -> None:
+            del topic, event_name, payload, at
+            await asyncio.sleep(0.01)
+
+        async def on_maintenance(observed_at: datetime) -> None:
+            del observed_at
+            await asyncio.sleep(0.005)
+
+        subscriber = SupabaseTournamentSubscriber(
+            topic="tournament:cup:markets",
+            token=_token(expires_at=datetime.now(UTC) + timedelta(hours=2)),
+            event_name="markets_batch",
+            event_names=("book_dirty",),
+            maintenance_interval_seconds=0.01,
+        )
+        outcome = await subscriber.run(
+            on_batch=on_batch,
+            on_event=on_event,
+            on_connected=publish_once,
+            stop_event=stop_event,
+            on_maintenance=on_maintenance,
+        )
+        assert outcome == SubscriberExit.STOPPED
+
+    asyncio.run(scenario())
+    assert any(
+        "payload_processing_batch_p50_ms=" in record.message
+        and "payload_processing_event_p50_ms=" in record.message
+        and "maintenance_processing_p50_ms=" in record.message
+        and "payload_processing_batch_samples=" in record.message
+        and "payload_processing_event_samples=" in record.message
+        and "maintenance_processing_samples=" in record.message
+        for record in caplog.records
+    )
+
+
 def test_subscriber_follow_up_error_exits_as_socket_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
