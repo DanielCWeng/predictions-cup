@@ -547,7 +547,7 @@ def test_untracked_book_dirty_is_persisted_without_full_book_fetch(tmp_path: Pat
     asyncio.run(scenario())
 
 
-def test_tracked_book_dirty_schedules_high_priority_reconciliation(tmp_path: Path) -> None:
+def test_tracked_book_dirty_schedules_normal_priority_reconciliation(tmp_path: Path) -> None:
     async def scenario() -> None:
         rest = FakeRest()
         engine, recorder = _engine(tmp_path, rest, tracked={"36"})
@@ -575,7 +575,7 @@ def test_tracked_book_dirty_schedules_high_priority_reconciliation(tmp_path: Pat
         rest.block_release.set()
         await asyncio.gather(*engine._reconcile_tasks.values())
         assert len(rest.calls) == initial_calls + 1
-        assert rest.orderbook_priorities[-1] == RestPriority.HIGH
+        assert rest.orderbook_priorities[-1] == RestPriority.NORMAL
         assert engine.states["36"].trusted
         await engine.aclose()
         recorder.close()
@@ -667,6 +667,57 @@ def test_reconciliation_coalesces_dirty_signal_arriving_in_flight(tmp_path: Path
         assert engine.book_refetch_coalesced_count == 1
         assert engine.states["36"].trusted
         assert engine.states["36"].last_accepted_revision == 2
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_duplicate_book_dirty_delivery_same_revision_stays_singleflight(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        rest = FakeRest()
+        engine, recorder = _engine(tmp_path, rest, tracked={"36"})
+        await engine.initialize()
+        initial_calls = len(rest.calls)
+        rest.block_exchange = "36"
+        rest.block_release.clear()
+        rest.block_started.clear()
+        observed = datetime(2026, 9, 25, 14, 0, tzinfo=UTC)
+
+        first = asyncio.create_task(
+            engine.handle_raw_batch(
+                engine.market_topic("26"),
+                _batch(
+                    revision=1,
+                    previous=0,
+                    source_from=1,
+                    source_through=1,
+                    dirty=True,
+                ),
+                observed,
+            )
+        )
+        await rest.block_started.wait()
+        await engine.handle_tournament_event(
+            "book_dirty",
+            {
+                "exchangeId": "36",
+                "marketId": "26",
+                "tournamentId": "cup",
+                "at": "2026-09-25T14:00:00Z",
+            },
+            observed + timedelta(milliseconds=1),
+        )
+        rest.block_release.set()
+        await first
+        await asyncio.gather(*engine._reconcile_tasks.values())
+
+        assert len(rest.calls) == initial_calls + 1
+        assert engine.book_refetch_coalesced_count == 1
+        assert engine.states["36"].trusted
+        assert engine.states["36"].last_accepted_revision == 1
         await engine.aclose()
         recorder.close()
 
@@ -1412,6 +1463,7 @@ def test_tournament_unbatched_hints_resync_the_named_exchange_or_market(
         assert affected == {"36"}
         await asyncio.gather(*engine._reconcile_tasks.values())
         assert rest.calls.count("36") == 2
+        assert rest.orderbook_priorities[-1] == RestPriority.NORMAL
 
         await engine.handle_tournament_event(
             "book_dirty",

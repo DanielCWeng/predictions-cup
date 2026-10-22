@@ -125,39 +125,78 @@ class SupabaseTournamentSubscriber:
         )
         queue_depth_max = 0
         processing_seconds: deque[float] = deque(maxlen=_PROCESSING_SAMPLE_LIMIT)
+        batch_processing_seconds: deque[float] = deque(maxlen=_PROCESSING_SAMPLE_LIMIT)
+        event_processing_seconds: deque[float] = deque(maxlen=_PROCESSING_SAMPLE_LIMIT)
+        maintenance_processing_seconds: deque[float] = deque(maxlen=_PROCESSING_SAMPLE_LIMIT)
         status_queue: asyncio.Queue[
             tuple[str, RealtimeSubscribeStates, Exception | None]
         ] = asyncio.Queue(
             maxsize=min(_MAX_PENDING_STATUSES, max(32, len(self._topics) * 2))
         )
         queue_overflow = asyncio.Event()
+        batch_processing_samples = 0
+        event_processing_samples = 0
+        maintenance_processing_samples = 0
         connections: list[tuple[Any, list[Any]]] = []
         metrics_task: asyncio.Task[None] | None = None
         metrics_at = time.monotonic() + _METRICS_INTERVAL_SECONDS
 
         def emit_metrics_if_due(now_monotonic: float) -> None:
-            nonlocal queue_depth_max, metrics_at
+            nonlocal queue_depth_max
+            nonlocal metrics_at
+            nonlocal batch_processing_samples
+            nonlocal event_processing_samples
+            nonlocal maintenance_processing_samples
             if now_monotonic < metrics_at:
                 return
             samples = sorted(processing_seconds)
+            batch_samples = sorted(batch_processing_seconds)
+            event_samples = sorted(event_processing_seconds)
+            maintenance_samples = sorted(maintenance_processing_seconds)
             p50 = _percentile(samples, 0.50)
             p99 = _percentile(samples, 0.99)
+            batch_p50 = _percentile(batch_samples, 0.50)
+            batch_p99 = _percentile(batch_samples, 0.99)
+            event_p50 = _percentile(event_samples, 0.50)
+            event_p99 = _percentile(event_samples, 0.99)
+            maintenance_p50 = _percentile(maintenance_samples, 0.50)
+            maintenance_p99 = _percentile(maintenance_samples, 0.99)
             in_flight, coalesced = (
                 (0, 0) if refetch_metrics is None else refetch_metrics()
             )
             logger.info(
                 "SIG Realtime consumer metrics queue_depth_max=%s "
                 "payload_processing_p50_ms=%.3f payload_processing_p99_ms=%.3f "
-                "refetch_in_flight=%s refetch_coalesced=%s samples=%s",
+                "payload_processing_batch_p50_ms=%.3f payload_processing_batch_p99_ms=%.3f "
+                "payload_processing_event_p50_ms=%.3f payload_processing_event_p99_ms=%.3f "
+                "maintenance_processing_p50_ms=%.3f maintenance_processing_p99_ms=%.3f "
+                "refetch_in_flight=%s refetch_coalesced=%s samples=%s "
+                "payload_processing_batch_samples=%s payload_processing_event_samples=%s "
+                "maintenance_processing_samples=%s",
                 queue_depth_max,
                 p50 * 1_000,
                 p99 * 1_000,
+                batch_p50 * 1_000,
+                batch_p99 * 1_000,
+                event_p50 * 1_000,
+                event_p99 * 1_000,
+                maintenance_p50 * 1_000,
+                maintenance_p99 * 1_000,
                 in_flight,
                 coalesced,
                 len(samples),
+                batch_processing_samples,
+                event_processing_samples,
+                maintenance_processing_samples,
             )
             queue_depth_max = payload_queue.qsize()
             processing_seconds.clear()
+            batch_processing_seconds.clear()
+            event_processing_seconds.clear()
+            maintenance_processing_seconds.clear()
+            batch_processing_samples = 0
+            event_processing_samples = 0
+            maintenance_processing_samples = 0
             metrics_at = now_monotonic + _METRICS_INTERVAL_SECONDS
 
         def broadcast_handler(
@@ -306,7 +345,12 @@ class SupabaseTournamentSubscriber:
                 if now >= refresh_at:
                     return SubscriberExit.TOKEN_REFRESH
                 if on_maintenance is not None and now >= next_maintenance_at:
+                    processing_started = time.monotonic()
                     await on_maintenance(now)
+                    maintenance_processing_seconds.append(
+                        time.monotonic() - processing_started
+                    )
+                    maintenance_processing_samples += 1
                     next_maintenance_at = now + self._maintenance_interval
                     if stop_event.is_set():
                         return SubscriberExit.STOPPED
@@ -348,9 +392,15 @@ class SupabaseTournamentSubscriber:
                 processing_started = time.monotonic()
                 try:
                     if event_name == self._event_name:
+                        path_started = time.monotonic()
                         await on_batch(topic, payload, observed_at)
+                        batch_processing_seconds.append(time.monotonic() - path_started)
+                        batch_processing_samples += 1
                     elif on_event is not None:
+                        path_started = time.monotonic()
                         await on_event(topic, event_name, payload, observed_at)
+                        event_processing_seconds.append(time.monotonic() - path_started)
+                        event_processing_samples += 1
                 finally:
                     processing_seconds.append(time.monotonic() - processing_started)
                 emit_metrics_if_due(time.monotonic())

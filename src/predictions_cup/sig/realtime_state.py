@@ -191,6 +191,7 @@ class SigRealtimeStateEngine:
         periodic_bulk_refresh_enabled: bool = True,
         bulk_prices_tracked_only: bool = False,
         extra_bulk_price_exchange_ids: Iterable[str] = (),
+        tracked_book_dirty_priority: RestPriority = RestPriority.NORMAL,
         governor_snapshot: GovernorSnapshotFn | None = None,
         clock: Clock = lambda: datetime.now(UTC),
         observation_emitter: ObservationEmitter | None = None,
@@ -233,6 +234,7 @@ class SigRealtimeStateEngine:
         )
         self._bulk_price_refresh_interval = timedelta(seconds=bulk_price_refresh_seconds)
         self._periodic_bulk_price_priority = periodic_bulk_price_priority
+        self._tracked_book_dirty_priority = tracked_book_dirty_priority
         self._governed_rate_per_second = governed_rate_per_second
         self._periodic_bulk_refresh_enabled = periodic_bulk_refresh_enabled
         self._governor_snapshot = governor_snapshot
@@ -889,7 +891,7 @@ class SigRealtimeStateEngine:
                 reason="book_dirty",
                 final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                 triggering_revision=delivery.revision,
-                priority=RestPriority.HIGH,
+                priority=self._tracked_book_dirty_priority,
                 wait=False,
             )
 
@@ -980,7 +982,7 @@ class SigRealtimeStateEngine:
                     reason="book_dirty",
                     final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                     triggering_revision=revision,
-                    priority=RestPriority.HIGH,
+                    priority=self._tracked_book_dirty_priority,
                     wait=False,
                 )
             else:
@@ -1586,8 +1588,20 @@ class SigRealtimeStateEngine:
         wait: bool,
     ) -> None:
         async with self._reconcile_registry_lock:
-            generation = self._reconcile_generation.get(exchange_id, 0) + 1
-            self._reconcile_generation[exchange_id] = generation
+            task = self._reconcile_tasks.get(exchange_id)
+            in_flight = task is not None and not task.done()
+            duplicate_in_flight_book_dirty = (
+                in_flight
+                and reason == "book_dirty"
+                and self._reconcile_reason.get(exchange_id) == "book_dirty"
+                and self._reconcile_revision.get(exchange_id) == triggering_revision
+            )
+            if duplicate_in_flight_book_dirty:
+                generation = self._reconcile_generation.get(exchange_id, 0)
+                self.book_refetch_coalesced_count += 1
+            else:
+                generation = self._reconcile_generation.get(exchange_id, 0) + 1
+                self._reconcile_generation[exchange_id] = generation
 
             existing_priority = self._reconcile_priority.get(exchange_id)
             if existing_priority is None or priority < existing_priority:
@@ -1599,8 +1613,7 @@ class SigRealtimeStateEngine:
                 if triggering_revision is not None:
                     self._reconcile_revision[exchange_id] = triggering_revision
 
-            task = self._reconcile_tasks.get(exchange_id)
-            if task is not None and not task.done():
+            if in_flight and not duplicate_in_flight_book_dirty:
                 self.book_refetch_coalesced_count += 1
             if task is None or task.done():
                 task = asyncio.create_task(
