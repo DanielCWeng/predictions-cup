@@ -30,6 +30,7 @@ from predictions_cup.sig.realtime_state import (
     DepthState,
     SigRealtimeStateEngine,
     SubscriptionReason,
+    TrustTransition,
 )
 from predictions_cup.sig.realtime_storage import SigRealtimeRecorder
 from predictions_cup.sig.rest_governor import RestPriority
@@ -547,7 +548,7 @@ def test_untracked_book_dirty_is_persisted_without_full_book_fetch(tmp_path: Pat
     asyncio.run(scenario())
 
 
-def test_tracked_book_dirty_schedules_high_priority_reconciliation(tmp_path: Path) -> None:
+def test_tracked_book_dirty_preserves_reserved_account_priority(tmp_path: Path) -> None:
     async def scenario() -> None:
         rest = FakeRest()
         engine, recorder = _engine(tmp_path, rest, tracked={"36"})
@@ -575,7 +576,9 @@ def test_tracked_book_dirty_schedules_high_priority_reconciliation(tmp_path: Pat
         rest.block_release.set()
         await asyncio.gather(*engine._reconcile_tasks.values())
         assert len(rest.calls) == initial_calls + 1
-        assert rest.orderbook_priorities[-1] == RestPriority.HIGH
+        # Dirty book refetches cannot compete in the reserved HIGH lane that
+        # carries execution and authoritative account reconciliation.
+        assert rest.orderbook_priorities[-1] == RestPriority.NORMAL
         assert engine.states["36"].trusted
         await engine.aclose()
         recorder.close()
@@ -667,6 +670,44 @@ def test_reconciliation_coalesces_dirty_signal_arriving_in_flight(tmp_path: Path
         assert engine.book_refetch_coalesced_count == 1
         assert engine.states["36"].trusted
         assert engine.states["36"].last_accepted_revision == 2
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_book_dirty_followup_drops_prior_high_priority(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        rest = FakeRest()
+        engine, recorder = _engine(tmp_path, rest, tracked={"36"})
+        await engine.initialize()
+        rest.orderbook_priorities.clear()
+        rest.block_exchange = "36"
+        rest.block_release.clear()
+        rest.block_started.clear()
+
+        first = asyncio.create_task(
+            engine._queue_reconciliation(
+                "36", reason="initial_recovery",
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=1, priority=RestPriority.HIGH, wait=True,
+            )
+        )
+        await rest.block_started.wait()
+        # The initial HIGH request is already in flight when a common bookDirty
+        # arrives. The follow-up must use NORMAL, never inherit HIGH forever.
+        second = asyncio.create_task(
+            engine._queue_reconciliation(
+                "36", reason="book_dirty",
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=2, priority=RestPriority.NORMAL, wait=True,
+            )
+        )
+        await asyncio.sleep(0)
+        rest.block_release.set()
+        await asyncio.gather(first, second)
+        assert rest.orderbook_priorities == [RestPriority.HIGH, RestPriority.NORMAL]
+        assert engine.states["36"].trusted
         await engine.aclose()
         recorder.close()
 

@@ -16,7 +16,7 @@ from contextlib import suppress
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
-from time import monotonic_ns
+from time import monotonic, monotonic_ns
 from typing import cast
 
 from pydantic import ValidationError
@@ -912,6 +912,7 @@ class MakerService:
 
             async def account_resync() -> AccountAuthoritativeSnapshot:
                 nonlocal capital_refresh_task
+                resync_started = monotonic()
                 # An authoritative account snapshot is a LIVE safety prerequisite.
                 # Use reserved governor capacity rather than competing with bulk
                 # market reads, without changing total REST rate or trust limits.
@@ -930,6 +931,7 @@ class MakerService:
                         tournament_slug=tournament_slug,
                         cash_balance_reader=rest.get_account,
                     )
+                    snapshot_finished = monotonic()
                     if (
                         journal is not None
                         and live_sink is not None
@@ -965,6 +967,7 @@ class MakerService:
                                 tournament_slug=tournament_slug,
                                 cash_balance_reader=rest.get_account,
                             )
+                recovery_finished = monotonic()
                 if journal is not None:
                     reconcile_maker_quote_registry(
                         journal=journal,
@@ -972,6 +975,7 @@ class MakerService:
                         quotes=self.core.quotes,
                         observed_monotonic_ns=monotonic_ns(),
                     )
+                registry_finished = monotonic()
                 if (
                     risk_context_source is not None
                     and risk_service is not None
@@ -999,6 +1003,19 @@ class MakerService:
                         refresh_capital_at_normal_priority()
                     )
                     capital_refresh_task.add_done_callback(_log_capital_refresh_failure)
+                governor_state = rest.governor_snapshot()
+                _LOG.info(
+                    "MAKE account resync timings snapshot_ms=%.1f recovery_ms=%.1f "
+                    "registry_ms=%.1f total_ms=%.1f pending_high=%d "
+                    "pending_normal=%d pending_background=%d",
+                    (snapshot_finished - resync_started) * 1_000,
+                    (recovery_finished - snapshot_finished) * 1_000,
+                    (registry_finished - recovery_finished) * 1_000,
+                    (monotonic() - resync_started) * 1_000,
+                    governor_state.pending_high_priority_reads,
+                    governor_state.pending_normal_reads,
+                    governor_state.pending_background_reads,
+                )
                 return authoritative
 
             if isinstance(adapter, LiveMakerExecutionAdapter):

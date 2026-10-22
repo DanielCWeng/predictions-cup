@@ -167,23 +167,36 @@ class ResidualTakerLiveCoordinator:
             except TimeoutError:
                 pass
 
-            previous_cycles = self._evaluation_cycles
-            self.log_heartbeat()
-            recheck()
-            try:
-                await asyncio.wait_for(
-                    self.wait_for_evaluation_after(previous_cycles),
-                    timeout=_LIVENESS_INTERVAL_SECONDS,
-                )
-            except TimeoutError as exc:
-                _LOG.critical(
-                    "TAKE liveness stalled evaluated=%d input_ready=%d signals=%d cycles=%d",
-                    self._evaluated_markets,
-                    self._input_ready_markets,
-                    self._signals,
-                    self._evaluation_cycles,
-                )
-                raise RuntimeError("residual taker coordinator stopped evaluating") from exc
+            # A busy LIVE runtime intentionally evaluates only one exchange per
+            # cycle. A temporary backlog must not restart the entire maker on
+            # the first missed heartbeat; force one more bounded evaluation.
+            # A genuinely stuck coordinator still fails closed on the retry.
+            for attempt in range(2):
+                if stop_event.is_set():
+                    return
+                previous_cycles = self._evaluation_cycles
+                self.log_heartbeat()
+                recheck()
+                try:
+                    await asyncio.wait_for(
+                        self.wait_for_evaluation_after(previous_cycles),
+                        timeout=_LIVENESS_INTERVAL_SECONDS,
+                    )
+                    break
+                except TimeoutError as exc:
+                    if stop_event.is_set():
+                        return
+                    if attempt == 0:
+                        _LOG.warning("TAKE liveness delayed; forcing one bounded recheck")
+                        continue
+                    _LOG.critical(
+                        "TAKE liveness stalled evaluated=%d input_ready=%d signals=%d cycles=%d",
+                        self._evaluated_markets,
+                        self._input_ready_markets,
+                        self._signals,
+                        self._evaluation_cycles,
+                    )
+                    raise RuntimeError("residual taker coordinator stopped evaluating") from exc
 
     async def on_state_change(
         self,
