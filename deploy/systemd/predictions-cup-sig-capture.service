@@ -4,8 +4,8 @@ Description=Predictions Cup read-only SIG capture
 Wants=network-online.target
 After=network-online.target
 OnFailure=predictions-cup-alert@%n.service
-StartLimitIntervalSec=60
-StartLimitBurst=5
+StartLimitIntervalSec=900
+StartLimitBurst=3
 
 [Service]
 Type=simple
@@ -16,12 +16,22 @@ Environment=PYTHONUNBUFFERED=1
 UnsetEnvironment=PREDICTIONS_CUP_SIG_TRADE_CREDENTIAL
 ExecStart=@@PYTHON_BIN@@ -m predictions_cup.sig.capture --runtime-env-only
 Restart=on-failure
-RestartSec=5s
+RestartSec=60s
 KillSignal=SIGTERM
 TimeoutStopSec=30s
 StandardOutput=journal
 StandardError=journal
 UMask=0077
+# Apply cgroup-v2 reclaim pressure before memory reaches host-wide OOM.
+# These are per-capture budgets; do not apply to the maker or risk engine.
+MemoryAccounting=yes
+MemoryHigh=420M
+MemoryMax=580M
+MemorySwapMax=0
+CPUAccounting=yes
+CPUQuota=70%
+IOAccounting=yes
+OOMPolicy=stop
 NoNewPrivileges=true
 
 [Install]
