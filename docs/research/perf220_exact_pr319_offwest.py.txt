@@ -1,0 +1,267 @@
+#!/usr/bin/env python3
+"""OFF-WEST ONLY: exact-blob, original-Parquet-schema PR319 parity and performance.
+
+Usage: python perf220_exact_pr319_offwest.py /path/to/LOCAL/cloned/predictions-cup
+Requires installed pyarrow, git objects for BOTH SHAs, no Internet, no venue access.
+Creates only synthetic scratch data. Does NOT interact with West or maker.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import resource
+import statistics
+import subprocess
+import sys
+import tempfile
+import time
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+OLD = "3c66758dbfd6dfbb6cbd1ed577cd49fc80adbed6"
+NEW = "f736204035baf08c24bc84525f7406f25ad2b7ba"
+ARCHIVE_PATH = "src/predictions_cup/research/archived_depth_proxy.py"
+BLOBS = {OLD: "dc6c144b0f9d7af9fb838e3df02e9331744f44dd",
+         NEW: "88d3e0cbb074b24280b2841068381e369fc7ff88"}
+FILES = [ARCHIVE_PATH, "src/predictions_cup/research/native_paired_source_bridge.py",
+         "src/predictions_cup/research/zero_fee_spread_latency.py"]
+BASE = datetime(2026, 10, 18, 16, 50, tzinfo=UTC)
+PILOT_START = BASE + timedelta(minutes=30)
+PILOT_END = PILOT_START + timedelta(minutes=10)
+
+
+def require(condition: bool, reason: str) -> None:
+    if not condition:
+        raise RuntimeError(reason)
+
+
+def git_file(repo: Path, commit: str, path: str) -> bytes:
+    return subprocess.check_output(
+        ["git", "-C", str(repo), "show", f"{commit}:{path}"], timeout=20
+    )
+
+
+def git_blob_sha(payload: bytes) -> str:
+    return hashlib.sha1(f"blob {len(payload)}\0".encode() + payload).hexdigest()
+
+
+def extract_exact(repo: Path, destination: Path, ref: str) -> None:
+    for file in FILES:
+        contents = git_file(repo, ref, file)
+        if file == ARCHIVE_PATH:
+            require(git_blob_sha(contents) == BLOBS[ref], "EXACT_BLOB_SHA_MISMATCH")
+        target = destination / file.removeprefix("src/")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(contents)
+    for package in (destination / "predictions_cup", destination / "predictions_cup" / "research"):
+        (package / "__init__.py").write_text("", encoding="utf-8")
+
+
+def sig_event(ms: int, seq: int, tournament: str, *, stale_native: bool = False) -> dict:
+    receive = BASE + timedelta(milliseconds=ms)
+    publisher = receive - timedelta(milliseconds=100 if not stale_native else 10_000)
+    frame = {"delivery": {"revision": seq, "previousRevision": seq - 1,
+            "sourceSequenceFrom": seq, "sourceSequenceThrough": seq},
+             "books": [{"exchangeId": 912,
+             "asOf": {"sequence": seq, "at": publisher.isoformat()},
+             "bids": [{"price": "0.40", "quantity": "2.9"},
+                      {"price": "0.39", "quantity": "20.5"}],
+             "asks": [{"price": "0.45", "quantity": "2.9"},
+                      {"price": "0.46", "quantity": "20.5"}]}]}
+    return {"raw_json": json.dumps(frame, separators=(",", ":")),
+            "local_receive_at": receive,
+            "topic": f"tournament:{tournament}:market:223",
+            "connection_epoch": 1, "session_id": "offline-synthetic-1"}
+
+
+def pm_event(ms: int, token: str, *, source_lag_to_sig: int = 3000,
+             bad_future: bool = False, bid: str = "0.61") -> dict:
+    recorded = BASE + timedelta(milliseconds=ms)
+    # SIG received at minute +4000ms. source_lag_to_sig=5000/5001 probe.
+    publisher = recorded + timedelta(milliseconds=3000-source_lag_to_sig)
+    if bad_future:
+        publisher = recorded + timedelta(seconds=1)
+    return {"token_id": token, "recorded_at": recorded,
+            "source_timestamp": publisher, "state_observed_at": publisher,
+            "bids": [{"price": bid, "size": "3.5"},
+                     {"price": "0.59" if bid == "0.61" else "0.35", "size": "20.2"}],
+            "asks": [{"price": "0.65", "size": "3.5"},
+                     {"price": "0.66", "size": "20.2"}]}
+
+
+def generate_fixture(root: Path, package_root: Path) -> None:
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    sys.path.insert(0, str(package_root))
+    from predictions_cup.research.native_paired_source_bridge import PM_EXACT_SAME_YES, SIG_TOURNAMENT
+    token = PM_EXACT_SAME_YES["223"][2]
+    wrong_token = PM_EXACT_SAME_YES["224"][2]
+    for minute in range(120):
+        base_ms = minute * 60_000
+        ts = BASE + timedelta(minutes=minute)
+        raw = [sig_event(base_ms+4000, minute+1, SIG_TOURNAMENT,
+                         stale_native=(minute == 36))]
+        for j in range(48):
+            raw.append({"raw_json": '{"books":[{"exchangeId":999999}]}',
+                        "local_receive_at": ts + timedelta(milliseconds=4100+j),
+                        "topic": "synthetic-unrelated", "connection_epoch": 1,
+                        "session_id": "synthetic-unrelated"})
+        lag = 5000 if minute == 31 else 5001 if minute == 32 else 3000
+        pm = [pm_event(base_ms+1000, token, source_lag_to_sig=lag,
+                       bad_future=(minute == 33),
+                       bid="0.42" if minute == 34 else "0.61")]
+        if minute in (30, 31, 40):
+            pm.append(pm_event(base_ms+1000, wrong_token))
+        if minute == 35:
+            # Nearest PM at +3.5s has stale publisher: old +1s cannot rescue it.
+            latest = pm_event(base_ms+3500, token)
+            latest["source_timestamp"] = ts - timedelta(seconds=20)
+            pm.append(latest)
+        for src, stream, rows in (("sig", "raw_events", raw),
+                                  ("pm", "depth_snapshots", pm)):
+            folder = root/src/stream/ts.strftime("%Y/%m/%d/%H")
+            folder.mkdir(parents=True, exist_ok=True)
+            shard = folder/(ts.strftime("%Y%m%dT%H%M%SZ") + ".parquet")
+            pq.write_table(pa.Table.from_pylist(rows), shard, compression="zstd")
+
+
+WORKER = r'''
+import json, resource, sys, time
+from pathlib import Path
+root, source, mode = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
+sys.path.insert(0, str(source))
+from predictions_cup.research import archived_depth_proxy as module
+from datetime import UTC, datetime
+start = datetime(2026, 10, 18, 16, 50, tzinfo=UTC)
+pilot_start = datetime(2026, 10, 18, 17, 20, tzinfo=UTC)
+pilot_end = datetime(2026, 10, 18, 17, 30, tzinfo=UTC)
+import pyarrow.parquet as pq
+open_files = []
+original = pq.ParquetFile
+def observed_open(path, *args, **kwargs):
+    open_files.append(str(path))
+    return original(path, *args, **kwargs)
+pq.ParquetFile = observed_open
+cpu = time.process_time()
+wall = time.perf_counter()
+if mode == 'pilot':
+    out = module.analyze_short_window_pilot(root/'sig',root/'pm',pilot_start,pilot_end)
+elif mode == 'full_slice':
+    out = module.analyze_archived_proxy(root/'sig',root/'pm',pilot_start,pilot_end)
+else:
+    out = module.analyze_archived_proxy(root/'sig',root/'pm',start,start.replace(hour=18, minute=50))
+wall_s = time.perf_counter()-wall
+cpu_s = time.process_time()-cpu
+stats = out['input_counts']
+source_shards = {'raw_events': [], 'depth_snapshots': []}
+for item in open_files:
+    p=Path(item)
+    source_shards[p.parent.parent.parent.parent.parent.name if False else ('raw_events' if 'raw_events' in p.parts else 'depth_snapshots')].append(p.name)
+per_market = []
+for market in out['per_market']:
+    per_market.append({k:v for k,v in market.items() if k not in ('pm_yes_token', 'n_boundary_prior_pm_context_unknown')})
+# Deterministic parity fields. Excludes per-tick private details/top-five as source shaped.
+contract = {'fresh_matches': out['n_publisher_fresh_matched_reference_pairs'],
+  'per_market': per_market,
+  'wrong_market_placebo': out['wrong_market_placebo'],
+  'time_shift_placebo': out['time_shift_placebo']}
+print(json.dumps({
+ 'mode': mode,
+ 'wall_s': wall_s, 'cpu_s': cpu_s,
+ 'peak_rss_kib': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+ 'shards_opened': {k:len(v) for k,v in source_shards.items()},
+ 'opened_minute_stamps': {k: sorted(v) for k,v in source_shards.items()},
+ 'bytes_opened': sum(Path(p).stat().st_size for p in open_files),
+ 'counts': stats,
+ 'contract': contract,
+ 'status': out.get('status'),
+ 'source_admitted': out['source_admitted'],
+ 'n_admitted_pairs': out['n_admitted_pairs'],
+ 'real_net': out.get('real_after_spread_fill_pnl', out.get('true_after_spread_latency_fill_pnl')),
+ }, default=str))
+'''
+
+
+def run(root: Path, source: Path, mode: str) -> dict:
+    job = subprocess.run([sys.executable, "-c", WORKER, str(root), str(source), mode],
+                         capture_output=True, text=True, timeout=50,
+                         env={**os.environ, "PYTHONNOUSERSITE": "1"})
+    if job.returncode:
+        raise RuntimeError(f"BENCH_CHILD_FAILED mode={mode} returncode={job.returncode} stderr={job.stderr[-2000:]}")
+    return json.loads(job.stdout)
+
+
+def main() -> None:
+    require(len(sys.argv) == 2, "USAGE: script.py /path/to/existing/off-West/repo")
+    repo = Path(sys.argv[1]).resolve()
+    require((repo/".git").exists(), "OFFLINE_GIT_CHECKOUT_REQUIRED")
+    try:
+        import pyarrow  # noqa: F401
+    except ImportError as exc:
+        raise RuntimeError("BLOCKER: PYARROW_REQUIRED_NO_PSEUDO_PARQUET") from exc
+    with tempfile.TemporaryDirectory(prefix="perf220-offwest-") as directory:
+        scratch = Path(directory)
+        oldsrc, newsrc = scratch/"old", scratch/"new"
+        extract_exact(repo, oldsrc, OLD)
+        extract_exact(repo, newsrc, NEW)
+        fixture = scratch/"synthetic_archive"
+        generate_fixture(fixture, newsrc)
+        print("SOURCE_SHA_VERIFIED", json.dumps(BLOBS))
+        observations = []
+        for round_id in range(4):
+            for ref, source, mode in ((OLD,oldsrc,"full_slice"),
+                                      (NEW,newsrc,"full_slice"),
+                                      (NEW,newsrc,"pilot"),
+                                      (OLD,oldsrc,"full_2h")) if round_id%2==0 else (
+                                      (NEW,newsrc,"pilot"),
+                                      (NEW,newsrc,"full_slice"),
+                                      (OLD,oldsrc,"full_slice"),
+                                      (OLD,oldsrc,"full_2h")):
+                measure = run(fixture, source, mode)
+                measure["source_sha"] = ref
+                measure["round"] = round_id
+                observations.append(measure)
+        # All full versus pilot 10m results compare exact arithmetic, not just scalar count.
+        canon = [x["contract"] for x in observations if x["mode"] != "full_2h"]
+        require(all(x == canon[0] for x in canon), "FAIL_NUMERICAL_OR_PLACEBO_PARITY")
+        pilots = [x for x in observations if x["mode"] == "pilot"]
+        for row in pilots:
+            counts = row["counts"]
+            require(row["shards_opened"]["raw_events"] <= 14 and
+                    row["shards_opened"]["depth_snapshots"] <= 14,
+                    "PILOT_SHARD_CAP_VIOLATED")
+            require(counts["raw_events_scanned"] <= 35_000 and
+                    counts["depth_snapshots_scanned"] <= 35_000,
+                    "PILOT_SCAN_CAP_VIOLATED")
+            require(row["bytes_opened"] <= 24*1024*1024,
+                    "PILOT_BOTH_STREAM_BYTES_CAP_VIOLATED")
+            for names in row["opened_minute_stamps"].values():
+                require(all("20261018T1719" <= name[:13] < "20261018T1730"
+                            for name in names), "PILOT_OPENED_OUTSIDE_PRUNED_HOUR")
+            require(row["source_admitted"] is False and row["n_admitted_pairs"]==0
+                    and row["real_net"] is None, "ACCIDENTAL_TRUST_PROMOTION")
+        summaries = {}
+        for ref, mode in ((OLD,"full_slice"),(NEW,"full_slice"),
+                          (NEW,"pilot"),(OLD,"full_2h")):
+            entries = [x for x in observations if x["source_sha"]==ref and x["mode"]==mode]
+            summaries[f"{ref[:8]}/{mode}"] = {
+                "n": len(entries),
+                "cpu_median_s": round(statistics.median(x["cpu_s"] for x in entries),6),
+                "cpu_minmax_s": [round(min(x["cpu_s"] for x in entries),6),
+                                 round(max(x["cpu_s"] for x in entries),6)],
+                "wall_median_s": round(statistics.median(x["wall_s"] for x in entries),6),
+                "peak_rss_max_kib": max(x["peak_rss_kib"] for x in entries),
+                "sig_shards": entries[0]["shards_opened"]["raw_events"],
+                "pm_shards": entries[0]["shards_opened"]["depth_snapshots"],
+                "sig_scanned": entries[0]["counts"]["raw_events_scanned"],
+                "pm_scanned": entries[0]["counts"]["depth_snapshots_scanned"],
+                "cpu_s_per_1000_scanned": round(statistics.median(x["cpu_s"] for x in entries)*1000/
+                                             max(1,entries[0]["counts"]["raw_events_scanned"]+
+                                                     entries[0]["counts"]["depth_snapshots_scanned"]),6),
+            }
+        print("PASS_EXACT_SLICE_PARITY_AND_PILOT_BOUNDARIES")
+        print(json.dumps(summaries, indent=2, sort_keys=True))
+
+if __name__ == "__main__":
+    main()

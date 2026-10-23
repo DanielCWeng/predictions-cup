@@ -26,6 +26,11 @@ jobs:
       - name: Install project and development tools
         run: python -m pip install -e '.[dev]'
 
+      - name: Independent PR319 exact-source Parquet perf #220 (synthetic only)
+        run: |
+          echo '376b29e77b4983514602c386e23b2a73fa68a509b7171b902ba0b8b31f61748e  docs/research/perf220_exact_pr319_offwest.py.txt' | sha256sum -c -
+          python docs/research/perf220_exact_pr319_offwest.py.txt "$GITHUB_WORKSPACE"
+
       - name: Lint
         run: ruff check .
 
