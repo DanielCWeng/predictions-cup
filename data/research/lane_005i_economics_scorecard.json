@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "lane": "LANE-3",
+  "issue": 205,
+  "status": "NOT_RUN_NO_ACCEPTED_PAIRED_PROSPECTIVE_CAPTURE_IN_SESSION",
+  "strategy_family": "EXPERIMENT-005I_REVERSAL_AND_DEPTH_NORMALISED_OFI",
+  "historical_direction_only": {
+    "reversal_rate": 0.6726,
+    "dependent_observations": 55340,
+    "ofi_logloss_increment": 0.004165
+  },
+  "measured_prospective_opportunities": null,
+  "estimated_executable_net_pnl": null,
+  "net_pnl_95pct_day_cluster_lower_bound": null,
+  "actual_fill_probability": null,
+  "execution_fee_observed": null,
+  "latency_distribution_observed": null,
+  "allowed_modes": [
+    "DEV_BEFORE_2026-09-21",
+    "PROSPECTIVE_PAPER_ON_OR_AFTER_2026-10-12"
+  ],
+  "sealed_holdout_tuned": false,
+  "live_orders_sent": 0,
+  "live_controls_changed": false,
+  "promotion": "BLOCKED_NO_ECONOMIC_EVIDENCE",
+  "notes": "Null values are unmeasured, not zero. Frozen signal direction cannot be translated to executable profitability from the old 005I sealed holdout."
+}
