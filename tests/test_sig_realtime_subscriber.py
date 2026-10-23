@@ -407,6 +407,47 @@ def test_broadcast_queue_overflow_exits_for_authoritative_resync(
     asyncio.run(scenario())
 
 
+def test_queued_old_broadcast_causes_safe_reconnect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        client = _install_fake_client(monkeypatch, follow_up_status=None)
+        processed: list[int] = []
+
+        def enqueue_two() -> None:
+            assert client.fake_channel.broadcast_callback is not None
+            for index in (1, 2):
+                client.fake_channel.broadcast_callback({"payload": {"index": index}})
+
+        async def slow_first_batch(
+            topic: str, payload: object, observed_at: datetime
+        ) -> None:
+            del topic, observed_at
+            assert isinstance(payload, dict)
+            processed.append(payload["index"])
+            await asyncio.sleep(0.04)
+
+        subscriber = SupabaseTournamentSubscriber(
+            topic="tournament:cup",
+            token=_token(expires_at=datetime.now(UTC) + timedelta(hours=2)),
+            max_queued_payload_age_seconds=0.015,
+        )
+        outcome = await asyncio.wait_for(
+            subscriber.run(
+                on_batch=slow_first_batch,
+                on_connected=enqueue_two,
+                stop_event=asyncio.Event(),
+            ),
+            timeout=2.0,
+        )
+
+        assert outcome == SubscriberExit.DISCONNECTED
+        assert processed == [1]  # Never feed the stale second event to the maker.
+        assert client.realtime.removed is True
+
+    asyncio.run(scenario())
+
+
 def test_relevant_dirty_and_trade_burst_drains_while_rest_is_slow(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -495,7 +536,7 @@ def test_relevant_dirty_and_trade_burst_drains_while_rest_is_slow(
             await rest_task
 
         assert outcome == SubscriberExit.STOPPED
-        assert processed == _MAX_PENDING_BROADCASTS == 4096
+        assert processed == _MAX_PENDING_BROADCASTS == 512
         assert coalesced > 0
         assert rest_calls >= 1
         assert client.realtime.removed is True
