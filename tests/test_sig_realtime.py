@@ -1429,6 +1429,104 @@ def test_market_topic_batches_record_trades_with_topic_local_revisions(
     asyncio.run(scenario())
 
 
+def test_market_revision_gap_does_not_block_fifo_on_slow_rest(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        rest = FakeRest()
+        engine, recorder = _engine(tmp_path, rest, tracked={"36"}, max_age=180.0)
+        await engine.initialize()
+        topic = engine.market_topic("26")
+        now = datetime.now(UTC)
+        payload = _batch(revision=1, previous=0, source_from=1, source_through=1)
+        await engine.handle_raw_batch(topic, payload, now)
+
+        rest.block_exchange = "36"
+        rest.block_started.clear()
+        rest.block_release.clear()
+        gap = _batch(revision=3, previous=2, source_from=2, source_through=2)
+        await asyncio.wait_for(engine.handle_raw_batch(topic, gap, now), timeout=0.5)
+        assert engine.states["36"].depth_state == DepthState.TRACKED_UNTRUSTED
+        await asyncio.wait_for(rest.block_started.wait(), timeout=0.5)
+        # The next message on the same stream must progress without awaiting
+        # a blocked authoritative GET. There is no invented trust in the gap.
+        await asyncio.wait_for(
+            engine.handle_raw_batch(
+                topic,
+                _batch(revision=4, previous=3, source_from=3, source_through=3),
+                now,
+            ),
+            timeout=0.5,
+        )
+        assert engine.topic_revisions[topic] == 4
+        assert engine.states["36"].depth_state == DepthState.TRACKED_UNTRUSTED
+        rest.block_release.set()
+        await asyncio.wait_for(
+            asyncio.gather(*tuple(engine._market_resync_tasks.values())),
+            timeout=3,
+        )
+        assert engine.states["36"].trusted
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_hundred_revision_gaps_coalesce_without_fifo_rest_wait(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        rest = FakeRest(market_count=76)
+        tracked = {f"e-{index}" for index in range(76)}
+        engine, recorder = _engine(tmp_path, rest, tracked=tracked, max_age=180.0)
+        await engine.initialize()
+        topic = engine.market_topic("m-0")
+        observed = datetime.now(UTC)
+        await engine.handle_raw_batch(
+            topic,
+            _batch(
+                revision=1, previous=0, source_from=1, source_through=1,
+                exchange_id="e-0", market_id="m-0",
+            ),
+            observed,
+        )
+        rest.block_exchange = "e-0"
+        rest.block_release.clear()
+        rest.block_started.clear()
+        started = asyncio.get_running_loop().time()
+        for index in range(100):
+            revision = 3 + 2 * index
+            await engine.handle_raw_batch(
+                topic,
+                _batch(
+                    revision=revision, previous=revision - 1,
+                    source_from=revision, source_through=revision,
+                    exchange_id="e-0", market_id="m-0",
+                ),
+                observed,
+            )
+            if index % 20 == 0:
+                await asyncio.sleep(0)
+        elapsed = asyncio.get_running_loop().time() - started
+        assert elapsed < 4.0
+        assert len(engine._market_resync_tasks) == 1
+        assert engine.states["e-0"].depth_state == DepthState.TRACKED_UNTRUSTED
+        assert engine.topic_revisions[topic] == 201
+        await asyncio.wait_for(rest.block_started.wait(), timeout=3.0)
+        rest.block_release.set()
+        await asyncio.wait_for(
+            asyncio.gather(*tuple(engine._market_resync_tasks.values())),
+            timeout=5.0,
+        )
+        assert engine.states["e-0"].trusted
+        assert rest.market_calls.count("m-0") <= 3
+        assert "e-1" not in rest.calls[len(tracked):]
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
 def test_market_topic_gap_and_resync_required_recover_only_that_market(
     tmp_path: Path,
 ) -> None:
@@ -1458,6 +1556,7 @@ def test_market_topic_gap_and_resync_required_recover_only_that_market(
         await engine.handle_raw_batch(topic, batch(10, 9), observed)
         books_before = len(rest.calls)
         await engine.handle_raw_batch(topic, batch(12, 11), observed)
+        await asyncio.gather(*tuple(engine._market_resync_tasks.values()))
 
         assert engine.health.revision_gap_count == 1
         assert rest.market_calls == ["m-0"]
@@ -1470,6 +1569,7 @@ def test_market_topic_gap_and_resync_required_recover_only_that_market(
             {"resyncRequired": True, "delivery": batch(13, 12)["delivery"]},
             observed,
         )
+        await asyncio.gather(*tuple(engine._market_resync_tasks.values()))
         assert engine.topic_revisions[topic] == 13
         assert rest.market_calls == ["m-0", "m-0"]
         assert engine.health.revision_gap_count == 1
@@ -1637,6 +1737,7 @@ def test_tournament_markets_batch_dispatches_split_markets_and_suppresses_duplic
             },
             observed,
         )
+        await asyncio.gather(*tuple(engine._market_resync_tasks.values()))
         assert engine.health.revision_gap_count == 1
         assert rest.market_calls == ["27"]
         assert engine.topic_revisions[engine.market_topic("26")] == 11
