@@ -1501,6 +1501,7 @@ def test_market_topic_gap_and_resync_required_recover_only_that_market(
         await engine.handle_raw_batch(topic, batch(10, 9), observed)
         books_before = len(rest.calls)
         await engine.handle_raw_batch(topic, batch(12, 11), observed)
+        await asyncio.gather(*tuple(engine._market_resync_tasks.values()))
 
         assert engine.health.revision_gap_count == 1
         assert rest.market_calls == ["m-0"]
@@ -1513,6 +1514,7 @@ def test_market_topic_gap_and_resync_required_recover_only_that_market(
             {"resyncRequired": True, "delivery": batch(13, 12)["delivery"]},
             observed,
         )
+        await asyncio.gather(*tuple(engine._market_resync_tasks.values()))
         assert engine.topic_revisions[topic] == 13
         assert rest.market_calls == ["m-0", "m-0"]
         assert engine.health.revision_gap_count == 1
