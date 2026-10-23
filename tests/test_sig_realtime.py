@@ -1841,3 +1841,49 @@ def test_lane5_depth_capture_rejects_rest_identity_mismatch(tmp_path: Path) -> N
             recorder.close()
 
     asyncio.run(scenario())
+
+
+
+def test_lane5_off_on_existing_rest_book_requests_are_identical(tmp_path: Path) -> None:
+    """Instrument the real reconciliation hook, not recorder-only import counts.
+
+    Both instances use fake offline REST and the same book reads. No SIG API,
+    client credentials, network, active WAL or production maker are touched.
+    """
+    from predictions_cup.sig.depth_mirror import MakerDepthMirror
+    from predictions_cup.sig.realtime_state import TrustTransition
+
+    async def run(enabled: bool) -> tuple[list[str], int]:
+        label = "on" if enabled else "off"
+        rest = FakeRest()
+        journal = SigRealtimeRecorder(tmp_path / f"{label}-realtime.sqlite3")
+        mirror = (
+            MakerDepthMirror(tmp_path / f"{label}-mirror.jsonl")
+            if enabled else None
+        )
+        if mirror is not None:
+            mirror.start()
+        engine = SigRealtimeStateEngine(
+            rest=rest, recorder=journal, tournament_id="cup",
+            tracked_depth_exchange_ids={"36"},
+            depth_capture=None if mirror is None else mirror.record,
+        )
+        try:
+            await engine.initialize()
+            await engine._queue_reconciliation(
+                "36", reason="offline-identical-replay",
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=1, priority=RestPriority.HIGH, wait=True,
+            )
+            return list(rest.calls), 0 if mirror is None else mirror.snapshot()["accepted"]
+        finally:
+            await engine.aclose()
+            journal.close()
+            if mirror is not None:
+                mirror.close(timeout=2)
+
+    off, off_count = asyncio.run(run(False))
+    on, on_count = asyncio.run(run(True))
+    assert off == ["36", "36"] == on, "capture added unexpected REST reads"
+    assert off_count == 0
+    assert on_count == 2
