@@ -425,16 +425,21 @@ class SigRealtimeStateEngine:
             priority=RestPriority.HIGH,
         )
         self._validate_tracked_configuration()
+        # Never block the market subscription behind 76 per-book HIGH reads:
+        # at 1 REST request/second the old reconnect fence took >=76 seconds
+        # and starved 15-second executable BBO freshness. Books stay untrusted
+        # until their individual authoritative refresh completes.
+        await self.refresh_bulk_prices(
+            reason=reason.value,
+            priority=RestPriority.NORMAL,
+        )
         await self._reconcile_many(
             self.tracked_depth_exchange_ids,
             reason=reason.value,
             final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
             triggering_revision=None,
-            priority=RestPriority.HIGH,
-        )
-        await self.refresh_bulk_prices(
-            reason=reason.value,
             priority=RestPriority.BACKGROUND,
+            wait=False,
         )
         self._observe(
             ObservationKind.RECONNECT_RESOLVED,
