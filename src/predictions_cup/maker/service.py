@@ -746,6 +746,11 @@ class MakerService:
                         journal=journal,
                         permit=permit,
                         reservations=self.core.reservations,
+                        # Keep ACK/uncertain/fill observation parity with the
+                        # startup recovery-only sink; adapter-level quote
+                        # telemetry does not replace sink wire observations.
+                        observation_emitter=observation_emitter,
+                        observation_process_instance_id=observe_recorder.session_id,
                     )
                 # Under a durable matching halt retain the recovery-only sink:
                 # cancels/reconciliation remain legal, fresh placement is
