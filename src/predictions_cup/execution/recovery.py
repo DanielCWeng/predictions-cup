@@ -7,7 +7,7 @@ import json
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from time import monotonic_ns
 from typing import Protocol
@@ -47,6 +47,77 @@ from predictions_cup.sig.trading_dto import (
 
 ClockNs = Callable[[], int]
 WallClock = Callable[[], datetime]
+
+
+@dataclass(frozen=True, slots=True)
+class PlacementReplayAuthorization:
+    """Scoped permission for ONE original-key placement replay, never a new order.
+
+    The authorizer MUST independently validate account/order trust and exclusive
+    ownership. Fields alone are not a signature or a LIVE release credential.
+    """
+
+    logical_operation_id: str
+    tournament_id: str
+    idempotency_key: str
+    payload_sha256: str
+    issued_at_utc: datetime
+    expires_at_utc: datetime
+    authority_id: str
+
+
+ReplayPermission = Callable[[ExecutionEnvelope], PlacementReplayAuthorization | None]
+_MAX_REPLAY_GRANT_AGE = timedelta(seconds=30)
+_MAX_REPLAY_OPERATION_AGE = timedelta(minutes=5)
+
+
+def _placement_replay_authorised(
+    envelope: ExecutionEnvelope,
+    *,
+    permission: ReplayPermission | None,
+    wall_clock: WallClock,
+    journal: ExecutionJournal,
+) -> bool:
+    """Default DENY, including stale/forged-shape grants and unavailable clocks.
+
+    Invoke again before *every* attempt by startup recovery's outer retry loop.
+    A caller-supplied permission object is not authenticated by this module.
+    """
+    if permission is None:
+        return False
+    try:
+        grant = permission(envelope)
+        now = wall_clock()
+        if type(grant) is not PlacementReplayAuthorization:
+            return False
+        if now.tzinfo is None or now.utcoffset() is None:
+            return False
+        if grant.issued_at_utc.tzinfo is None or grant.issued_at_utc.utcoffset() is None:
+            return False
+        if grant.expires_at_utc.tzinfo is None or grant.expires_at_utc.utcoffset() is None:
+            return False
+        issued = grant.issued_at_utc.astimezone(UTC)
+        expiry = grant.expires_at_utc.astimezone(UTC)
+        instant = now.astimezone(UTC)
+        original_created = journal.operation_created_at(envelope.logical_operation_id)
+        if original_created is None:
+            return False
+        operation_age = instant - original_created
+        return (
+            timedelta(0) <= operation_age <= _MAX_REPLAY_OPERATION_AGE
+            and bool(grant.authority_id.strip())
+            and isinstance(envelope.idempotency_key, str)
+            and bool(envelope.idempotency_key.strip())
+            and grant.logical_operation_id == envelope.logical_operation_id
+            and grant.tournament_id == envelope.tournament_id
+            and grant.idempotency_key == envelope.idempotency_key
+            and grant.payload_sha256 == envelope.payload_sha256
+            and issued <= instant < expiry
+            and timedelta(0) < expiry - issued <= _MAX_REPLAY_GRANT_AGE
+        )
+    except Exception:
+        # An unexpected authorizer, database or clock exception is not consent.
+        return False
 
 
 class RecoveryRest(Protocol):
@@ -115,13 +186,16 @@ async def recover_startup(
     exchange_ids_by_market: dict[str, tuple[str, ...]] | None = None,
     reservations: ExecutionReservationBook | None = None,
     market_by_exchange: dict[str, str] | None = None,
+    placement_replay_allowed: ReplayPermission | None = None,
 ) -> StartupRecoveryResult:
     """Reconcile unresolved operations from paginated tournament snapshots.
 
     Order and fill projections are read in bulk. Only acknowledged orders still
     open in the authoritative snapshot are cancelled individually. Callers may
     run this coroutine in the background and keep only returned exchange IDs
-    blocked while reconciliation is in flight.
+    blocked while reconciliation is in flight. Placement re-dispatch is default
+    DENY until a trusted, time-bounded, exact-identity authorizer is supplied.
+    Denial does not imply the original request failed or release its reservation.
     """
     if authoritative_snapshot is None:
         try:
@@ -196,6 +270,15 @@ async def recover_startup(
             current = _unresolved_envelope(journal, envelope.logical_operation_id)
             if current is None:
                 continue
+            if not _placement_replay_authorised(
+                current,
+                permission=placement_replay_allowed,
+                wall_clock=wall_clock,
+                journal=journal,
+            ):
+                # Never mutate a journaled pending/uncertain obligation simply
+                # because there is no authenticated permission to re-send.
+                continue
             if current.lifecycle_state is not LifecycleState.RECONCILING:
                 journal.mark_state(
                     current.logical_operation_id,
@@ -209,6 +292,15 @@ async def recover_startup(
             async def recover_placement(
                 current_envelope: ExecutionEnvelope = replay_envelope,
             ) -> object:
+                # Re-check after 408/429/5xx retry delays and any authorizer
+                # revocation: the first grant is not perpetual authority.
+                if not _placement_replay_authorised(
+                    current_envelope,
+                    permission=placement_replay_allowed,
+                    wall_clock=wall_clock,
+                    journal=journal,
+                ):
+                    raise PermissionError("startup placement replay permission denied")
                 return await live_sink.dispatch_recovery(current_envelope)
 
             await _retry_recovery_sig_operation(
@@ -216,7 +308,8 @@ async def recover_startup(
                 recover_placement,
             )
             replayed = True
-        except SigApiError:
+        except (SigApiError, PermissionError):
+            # Do not release the old economic reservation or fresh-dispatch.
             continue
 
     if replayed:
