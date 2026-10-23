@@ -407,12 +407,14 @@ def test_broadcast_queue_overflow_exits_for_authoritative_resync(
     asyncio.run(scenario())
 
 
-def test_queued_old_broadcast_causes_safe_reconnect(
+def test_delayed_fifo_broadcast_does_not_force_unnecessary_reconnect(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def scenario() -> None:
         client = _install_fake_client(monkeypatch, follow_up_status=None)
-        processed: list[int] = []
+        stop_event = asyncio.Event()
+        processed: list[tuple[int, datetime]] = []
+        received_at = datetime.now(UTC)
 
         def enqueue_two() -> None:
             assert client.fake_channel.broadcast_callback is not None
@@ -422,27 +424,30 @@ def test_queued_old_broadcast_causes_safe_reconnect(
         async def slow_first_batch(
             topic: str, payload: object, observed_at: datetime
         ) -> None:
-            del topic, observed_at
+            del topic
             assert isinstance(payload, dict)
-            processed.append(payload["index"])
-            await asyncio.sleep(0.04)
+            processed.append((payload["index"], observed_at))
+            if payload["index"] == 1:
+                await asyncio.sleep(0.04)
+            else:
+                stop_event.set()
 
         subscriber = SupabaseTournamentSubscriber(
             topic="tournament:cup",
             token=_token(expires_at=datetime.now(UTC) + timedelta(hours=2)),
             max_queued_payload_age_seconds=0.015,
+            clock=lambda: received_at,
         )
         outcome = await asyncio.wait_for(
             subscriber.run(
                 on_batch=slow_first_batch,
                 on_connected=enqueue_two,
-                stop_event=asyncio.Event(),
+                stop_event=stop_event,
             ),
             timeout=2.0,
         )
-
-        assert outcome == SubscriberExit.DISCONNECTED
-        assert processed == [1]  # Never feed the stale second event to the maker.
+        assert outcome == SubscriberExit.STOPPED
+        assert processed == [(1, received_at), (2, received_at)]
         assert client.realtime.removed is True
 
     asyncio.run(scenario())
