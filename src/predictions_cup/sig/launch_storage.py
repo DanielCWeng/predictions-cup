@@ -792,23 +792,36 @@ class LaunchSigRecorder(SigRealtimeRecorder):
         best_bid = book.bids[0].price if book.bids else None
         best_ask = book.asks[0].price if book.asks else None
         spread = None if best_bid is None or best_ask is None else best_ask - best_bid
+        # Both REST to_canonical() and versioned realtime books currently put
+        # local receipt time into book.timestamp. Neither source establishes
+        # an exchange event timestamp, so never promote that value to venue
+        # time. Realtime asOf sequence/time remains in book.revision and raw
+        # events for separate independent causal continuity verification.
+        realtime = book.source == "sig-realtime"
         self._emit_normalized(
             event_type="DEPTH_SNAPSHOT",
             tournament_id=tournament_id,
             exchange_id=book.exchange_id,
             market_id=market_id,
-            venue_timestamp=book.timestamp,
+            venue_timestamp=None,
             observed_at=observed_at,
             revision=triggering_revision,
-            provenance="SIG_REST_AUTHORITATIVE",
-            evidence_label="AUTHORITATIVE_DEPTH",
+            provenance=(
+                "SIG_REALTIME_VERSIONED" if realtime else "SIG_REST_AUTHORITATIVE"
+            ),
+            evidence_label=(
+                "VERSIONED_PUSH_DEPTH_UNVERIFIED"
+                if realtime else "AUTHORITATIVE_DEPTH"
+            ),
             best_bid=_decimal(best_bid),
             best_ask=_decimal(best_ask),
             spread=_decimal(spread),
             reason=reason,
             payload=book.model_dump(mode="json"),
         )
-        if previous is not None:
+        # A change from REST snapshot to push book (or vice versa) is a
+        # source transition, not evidence of a causally timed liquidity event.
+        if previous is not None and previous.source == book.source:
             self._emit_liquidity_changes(
                 previous=previous,
                 current=book,
@@ -875,6 +888,10 @@ class LaunchSigRecorder(SigRealtimeRecorder):
     ) -> None:
         """Start a new socket/subscription epoch inside one process session."""
         self._connection_epoch += 1
+        # After a disconnect or token re-subscription, the first observed book
+        # is a fresh baseline. Never compare it with an earlier epoch: unseen
+        # fills/cancels would look like causally observed liquidity changes.
+        self._last_books.clear()
         self._emit_normalized(
             event_type="CONNECTION_BOUNDARY",
             observed_at=observed_at,
