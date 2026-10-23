@@ -964,7 +964,8 @@ def test_reconnect_does_not_block_on_76_depth_reads_or_claim_trust(
     async def scenario() -> None:
         rest = FakeRest(market_count=76)
         tracked = {f"e-{index}" for index in range(76)}
-        engine, recorder = _engine(tmp_path, rest, tracked=tracked)
+        # Match West's configured 180-second depth cadence: 76/180 < 1 rps.
+        engine, recorder = _engine(tmp_path, rest, tracked=tracked, max_age=180.0)
         await engine.initialize()
         rest.calls.clear()
         rest.orderbook_priorities.clear()
