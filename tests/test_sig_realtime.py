@@ -1737,6 +1737,7 @@ def test_tournament_markets_batch_dispatches_split_markets_and_suppresses_duplic
             },
             observed,
         )
+        await asyncio.gather(*tuple(engine._market_resync_tasks.values()))
         assert engine.health.revision_gap_count == 1
         assert rest.market_calls == ["27"]
         assert engine.topic_revisions[engine.market_topic("26")] == 11
