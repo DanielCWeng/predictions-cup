@@ -945,11 +945,52 @@ def test_lifecycle_recovery_only_reseeds_tracked_depth(tmp_path: Path) -> None:
             SubscriptionReason.SOCKET_ERROR,
         ):
             await engine.prepare_subscription(reason)
+            await asyncio.gather(*tuple(engine._reconcile_tasks.values()))
 
         assert engine.health.reconnect_count == 1
         assert len(rest.calls) == initial_calls + 3
         assert engine.states["36"].trusted
         assert engine.states["37"].depth_state == DepthState.UNTRACKED_DEPTH
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
+def test_reconnect_does_not_block_on_76_depth_reads_or_claim_trust(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        rest = FakeRest(market_count=76)
+        tracked = {f"e-{index}" for index in range(76)}
+        engine, recorder = _engine(tmp_path, rest, tracked=tracked)
+        await engine.initialize()
+        rest.calls.clear()
+        rest.orderbook_priorities.clear()
+        rest.bulk_priorities.clear()
+        rest.block_exchange = "e-0"
+        rest.block_started.clear()
+        rest.block_release.clear()
+
+        # Reconnect must complete even if an individual authoritative depth
+        # read never replies. It must not trust that unreconciled book.
+        await asyncio.wait_for(
+            engine.prepare_subscription(SubscriptionReason.RECONNECT),
+            timeout=1.0,
+        )
+        await asyncio.wait_for(rest.block_started.wait(), timeout=1.0)
+        assert engine.states["e-0"].depth_state == DepthState.TRACKED_UNTRUSTED
+        assert rest.bulk_priorities == [RestPriority.NORMAL]
+        assert RestPriority.HIGH not in rest.orderbook_priorities
+
+        rest.block_release.set()
+        await asyncio.wait_for(
+            asyncio.gather(*tuple(engine._reconcile_tasks.values())),
+            timeout=3.0,
+        )
+        assert len(rest.calls) == 76
+        assert all(priority == RestPriority.BACKGROUND for priority in rest.orderbook_priorities)
+        assert engine.states["e-0"].trusted
         await engine.aclose()
         recorder.close()
 
