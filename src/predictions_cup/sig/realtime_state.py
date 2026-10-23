@@ -274,6 +274,12 @@ class SigRealtimeStateEngine:
         self._untracked_refetch_market_id: dict[str, str | None] = {}
         self.book_refetch_coalesced_count = 0
         self._background_tasks: set[asyncio.Task[None]] = set()
+        # Per-market REST recovery must not block the single Realtime FIFO.
+        # Keep only one task per market; newer gaps supersede earlier ones.
+        self._market_resync_tasks: dict[str, asyncio.Task[None]] = {}
+        self._market_resync_requests: dict[
+            str, tuple[TrustTransition, str, int | None]
+        ] = {}
 
     def refetch_metrics(self) -> tuple[int, int]:
         """Return active per-exchange refetches and coalesced invalidations."""
@@ -725,7 +731,7 @@ class SigRealtimeStateEngine:
             )
             logger.warning("SIG Realtime payload rejected: %s", type(exc).__name__)
             if market_id is not None:
-                await self._resync_market(
+                self._schedule_market_resync(
                     market_id,
                     transition=TrustTransition.UNTRUSTED_MALFORMED_PAYLOAD,
                     reason="malformed_payload",
@@ -775,7 +781,7 @@ class SigRealtimeStateEngine:
                 ),
             )
             if market_id is not None:
-                await self._resync_market(
+                self._schedule_market_resync(
                     market_id,
                     transition=TrustTransition.UNTRUSTED_REVISION_GAP,
                     reason="revision_gap",
@@ -802,7 +808,7 @@ class SigRealtimeStateEngine:
             # market from REST.
             if not revision_gap_recovered:
                 if market_id is not None:
-                    await self._resync_market(
+                    self._schedule_market_resync(
                         market_id,
                         transition=TrustTransition.UNTRUSTED_REVISION_GAP,
                         reason="resync_required",
@@ -1321,6 +1327,68 @@ class SigRealtimeStateEngine:
             raise ValueError("market topic bookDirty marketId mismatch")
         if any(item.market_id != market_id for item in batch.market_settled):
             raise ValueError("market topic marketSettled marketId mismatch")
+
+    def _schedule_market_resync(
+        self,
+        market_id: str,
+        *,
+        transition: TrustTransition,
+        reason: str,
+        triggering_revision: int | None,
+    ) -> None:
+        """Fail closed immediately, then recover scoped REST state off the FIFO.
+
+        A revision gap does not justify serially awaiting SIG REST from the
+        single stream consumer. Preserve the latest invalidation per market and
+        process it in order through one coalesced background worker. Settlement
+        recovery remains synchronous and authoritative.
+        """
+        affected = (
+            exchange_id
+            for exchange_id, state in self.states.items()
+            if state.market_id == market_id
+        )
+        self._mark_untrusted(affected, transition, revision=triggering_revision)
+        request = (transition, reason, triggering_revision)
+        self._market_resync_requests[market_id] = request
+        existing = self._market_resync_tasks.get(market_id)
+        if existing is not None and not existing.done():
+            self.book_refetch_coalesced_count += 1
+            return
+
+        async def worker() -> None:
+            try:
+                while True:
+                    current = self._market_resync_requests[market_id]
+                    await self._resync_market(
+                        market_id,
+                        transition=current[0],
+                        reason=current[1],
+                        triggering_revision=current[2],
+                    )
+                    if self._market_resync_requests.get(market_id) is current:
+                        return
+                    # A newer gap arrived while REST was in flight. Never
+                    # publish the earlier reconciliation as final trust.
+                    newer = self._market_resync_requests[market_id]
+                    self._mark_untrusted(
+                        (
+                            exchange_id
+                            for exchange_id, state in self.states.items()
+                            if state.market_id == market_id
+                        ),
+                        newer[0],
+                        revision=newer[2],
+                    )
+            finally:
+                self._market_resync_tasks.pop(market_id, None)
+                self._market_resync_requests.pop(market_id, None)
+
+        task = asyncio.create_task(
+            worker(), name=f"sig-market-resync-{market_id}"
+        )
+        self._market_resync_tasks[market_id] = task
+        self._track_background_task(task)
 
     async def _resync_market(
         self,
