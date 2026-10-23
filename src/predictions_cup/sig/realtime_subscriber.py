@@ -24,8 +24,8 @@ MaintenanceHandler = Callable[[datetime], Awaitable[None]]
 ConnectedHandler = Callable[[], None]
 logger = logging.getLogger(__name__)
 _MAX_PENDING_BROADCASTS = 512
-# A delayed market invalidation must never be treated as current. Abandon the
-# backlogged socket and re-establish REST-authoritative state instead.
+# Queue-delay telemetry threshold only: receipt timestamps are never
+# refreshed when a delayed payload is eventually processed.
 _MAX_QUEUED_PAYLOAD_AGE_SECONDS = 5.0
 _MAX_PENDING_STATUSES = 1_024
 _METRICS_INTERVAL_SECONDS = 60.0
@@ -132,6 +132,8 @@ class SupabaseTournamentSubscriber:
         )
         queue_depth_max = 0
         processing_seconds: deque[float] = deque(maxlen=_PROCESSING_SAMPLE_LIMIT)
+        queued_seconds: deque[float] = deque(maxlen=_PROCESSING_SAMPLE_LIMIT)
+        delayed_payloads = 0
         status_queue: asyncio.Queue[
             tuple[str, RealtimeSubscribeStates, Exception | None]
         ] = asyncio.Queue(
@@ -143,10 +145,11 @@ class SupabaseTournamentSubscriber:
         metrics_at = time.monotonic() + _METRICS_INTERVAL_SECONDS
 
         def emit_metrics_if_due(now_monotonic: float) -> None:
-            nonlocal queue_depth_max, metrics_at
+            nonlocal queue_depth_max, metrics_at, delayed_payloads
             if now_monotonic < metrics_at:
                 return
             samples = sorted(processing_seconds)
+            queue_wait_samples = sorted(queued_seconds)
             p50 = _percentile(samples, 0.50)
             p99 = _percentile(samples, 0.99)
             in_flight, coalesced = (
@@ -155,17 +158,22 @@ class SupabaseTournamentSubscriber:
             logger.info(
                 "SIG Realtime consumer metrics queue_depth_max=%s queue_depth_current=%s "
                 "payload_processing_p50_ms=%.3f payload_processing_p99_ms=%.3f "
+                "queue_wait_p99_ms=%.3f queue_delayed_count=%d "
                 "refetch_in_flight=%s refetch_coalesced=%s samples=%s",
                 queue_depth_max,
                 payload_queue.qsize(),
                 p50 * 1_000,
                 p99 * 1_000,
+                _percentile(queue_wait_samples, 0.99) * 1_000,
+                delayed_payloads,
                 in_flight,
                 coalesced,
                 len(samples),
             )
             queue_depth_max = payload_queue.qsize()
             processing_seconds.clear()
+            queued_seconds.clear()
+            delayed_payloads = 0
             metrics_at = now_monotonic + _METRICS_INTERVAL_SECONDS
 
         def broadcast_handler(
@@ -354,15 +362,15 @@ class SupabaseTournamentSubscriber:
                     emit_metrics_if_due(time.monotonic())
                     continue
                 processing_started = time.monotonic()
-                queued_age = processing_started - queued_at
+                queued_age = max(0.0, processing_started - queued_at)
+                queued_seconds.append(queued_age)
                 if queued_age > self._max_queued_payload_age_seconds:
-                    logger.warning(
-                        "SIG Realtime payload queue stale age_seconds=%.3f "
-                        "remaining=%d; reconnecting for authoritative REST resync",
-                        queued_age,
-                        payload_queue.qsize(),
-                    )
-                    return SubscriberExit.DISCONNECTED
+                    # A slow FIFO consumer has not necessarily missed a message.
+                    # Keep processing in order with the ORIGINAL receive time:
+                    # downstream 15-second BBO/account trust fences must reject
+                    # stale observations. Only queue overflow, socket loss, or
+                    # revision discontinuity warrant a forced REST resync.
+                    delayed_payloads += 1
                 try:
                     if event_name == self._event_name:
                         await on_batch(topic, payload, observed_at)
