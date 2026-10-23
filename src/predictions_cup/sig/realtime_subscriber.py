@@ -23,7 +23,10 @@ EventHandler = Callable[[str, str, object, datetime], Awaitable[None]]
 MaintenanceHandler = Callable[[datetime], Awaitable[None]]
 ConnectedHandler = Callable[[], None]
 logger = logging.getLogger(__name__)
-_MAX_PENDING_BROADCASTS = 4_096
+_MAX_PENDING_BROADCASTS = 512
+# A delayed market invalidation must never be treated as current. Abandon the
+# backlogged socket and re-establish REST-authoritative state instead.
+_MAX_QUEUED_PAYLOAD_AGE_SECONDS = 5.0
 _MAX_PENDING_STATUSES = 1_024
 _METRICS_INTERVAL_SECONDS = 60.0
 _PROCESSING_SAMPLE_LIMIT = 10_000
@@ -69,6 +72,7 @@ class SupabaseTournamentSubscriber:
         token_refresh_margin_seconds: float = 300.0,
         subscribe_timeout_seconds: float = 15.0,
         maintenance_interval_seconds: float = 1.0,
+        max_queued_payload_age_seconds: float = _MAX_QUEUED_PAYLOAD_AGE_SECONDS,
         event_name: str = "market_batch",
         event_names: Sequence[str] | None = None,
         max_channels_per_connection: int = DEFAULT_MAX_CHANNELS_PER_CONNECTION,
@@ -84,6 +88,8 @@ class SupabaseTournamentSubscriber:
             raise ValueError("token refresh margin must be positive")
         if maintenance_interval_seconds <= 0:
             raise ValueError("maintenance interval must be positive")
+        if max_queued_payload_age_seconds <= 0:
+            raise ValueError("queued payload maximum age must be positive")
         if max_channels_per_connection < 1:
             raise ValueError("max_channels_per_connection must be positive")
         self._topics = resolved
@@ -91,6 +97,7 @@ class SupabaseTournamentSubscriber:
         self._refresh_margin = timedelta(seconds=token_refresh_margin_seconds)
         self._subscribe_timeout_seconds = subscribe_timeout_seconds
         self._maintenance_interval = timedelta(seconds=maintenance_interval_seconds)
+        self._max_queued_payload_age_seconds = max_queued_payload_age_seconds
         if not event_name.strip():
             raise ValueError("event_name must not be blank")
         self._event_name = event_name
@@ -120,7 +127,7 @@ class SupabaseTournamentSubscriber:
         on_event: EventHandler | None = None,
         refetch_metrics: Callable[[], tuple[int, int]] | None = None,
     ) -> SubscriberExit:
-        payload_queue: asyncio.Queue[tuple[str, str, object, datetime]] = asyncio.Queue(
+        payload_queue: asyncio.Queue[tuple[str, str, object, datetime, float]] = asyncio.Queue(
             maxsize=_MAX_PENDING_BROADCASTS
         )
         queue_depth_max = 0
@@ -146,10 +153,11 @@ class SupabaseTournamentSubscriber:
                 (0, 0) if refetch_metrics is None else refetch_metrics()
             )
             logger.info(
-                "SIG Realtime consumer metrics queue_depth_max=%s "
+                "SIG Realtime consumer metrics queue_depth_max=%s queue_depth_current=%s "
                 "payload_processing_p50_ms=%.3f payload_processing_p99_ms=%.3f "
                 "refetch_in_flight=%s refetch_coalesced=%s samples=%s",
                 queue_depth_max,
+                payload_queue.qsize(),
                 p50 * 1_000,
                 p99 * 1_000,
                 in_flight,
@@ -171,7 +179,7 @@ class SupabaseTournamentSubscriber:
                     return
                 try:
                     payload_queue.put_nowait(
-                        (topic, event_name, filtered_payload, self._clock())
+                        (topic, event_name, filtered_payload, self._clock(), time.monotonic())
                     )
                     queue_depth_max = max(queue_depth_max, payload_queue.qsize())
                 except asyncio.QueueFull:
@@ -339,13 +347,22 @@ class SupabaseTournamentSubscriber:
                         return SubscriberExit.DISCONNECTED
 
                 try:
-                    topic, event_name, payload, observed_at = await asyncio.wait_for(
+                    topic, event_name, payload, observed_at, queued_at = await asyncio.wait_for(
                         payload_queue.get(), timeout=0.25
                     )
                 except TimeoutError:
                     emit_metrics_if_due(time.monotonic())
                     continue
                 processing_started = time.monotonic()
+                queued_age = processing_started - queued_at
+                if queued_age > self._max_queued_payload_age_seconds:
+                    logger.warning(
+                        "SIG Realtime payload queue stale age_seconds=%.3f "
+                        "remaining=%d; reconnecting for authoritative REST resync",
+                        queued_age,
+                        payload_queue.qsize(),
+                    )
+                    return SubscriberExit.DISCONNECTED
                 try:
                     if event_name == self._event_name:
                         await on_batch(topic, payload, observed_at)
