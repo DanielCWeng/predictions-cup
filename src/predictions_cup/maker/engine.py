@@ -29,6 +29,9 @@ from predictions_cup.maker.policies import with_quote_math
 from predictions_cup.runtime.models import SIG_TICK
 
 _TICK = float(SIG_TICK)
+# The regular maker and fill-seeking mode retain the hard maker-cap lane limit.
+# Deep ladder uses its own configurable cap, which defaults to this value.
+HARD_PROJECTED_POSITION_CAP = 200.0
 # Fill-seeking shrinks risk-increasing size once projected inventory passes
 # this fraction of the configured maker inventory cap.
 FILL_SEEKING_INVENTORY_SKEW_FRACTION = 0.75
@@ -168,6 +171,8 @@ class MakerEngine:
         max_abs_inventory = self._config.max_abs_inventory
         if self._config.deep_ladder_enabled:
             max_abs_inventory = min(max_abs_inventory, self._config.deep_ladder_position_cap)
+        else:
+            max_abs_inventory = min(max_abs_inventory, HARD_PROJECTED_POSITION_CAP)
         context = QuoteContext(
             snapshot=snapshot,
             raw_fair_value=fair_value,
