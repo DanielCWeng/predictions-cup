@@ -1,0 +1,217 @@
+{
+  "schema": "LANE3_005I_FROZEN_ECONOMIC_EVIDENCE_20261014_V1",
+  "as_of_utc": "2026-10-14T20:01:53Z",
+  "audit_mode": "HOST_READ_ONLY; NO_SIG_API; NO_SERVICE_CHANGE; NO_DB_OR_WAL_MODIFICATION; NO_ORDERS",
+  "verdict": "DATA_BLOCKED",
+  "scope": "2026-10-12 through 2026-10-14 prospective source readiness; old sealed HOLDOUT economics not rerun",
+  "repository": "DanielCWeng/predictions-cup",
+  "issue": 205,
+  "master_issue": 201,
+  "primary_existing_pr": 209,
+  "dependent_prs": [
+    214,
+    223
+  ],
+  "input_provenance": {
+    "host": "connected West host ip-172-31-19-67.us-west-1.compute.internal",
+    "deployed_checkout_head": "fb4f6c66",
+    "sig_db": "data/sig_realtime.sqlite3 (SQLite mode=ro; query_only=ON; live WAL read without writes)",
+    "pm_health_db": "data/004c_c_crossvenue/polymarket_operational.sqlite3 (mode=ro; query_only=ON)",
+    "pm_parquet": "data/004c_c_crossvenue/polymarket_research",
+    "mapping": "data/mappings/sig_polymarket_2026.json",
+    "mapping_sha256": "9bc3d55317ace5e7e56eb0e4deaf2d36d09421b2861b7104977a96bedfc16df2",
+    "acceptance": "data/mappings/sig_polymarket_2026_acceptance.json",
+    "acceptance_sha256": "fa59331a45897f7971454835e86f67a65313a2efff8ca387a3b2cf1ea99b19e5",
+    "frozen_train": "data/experiments/experiment_005i/OFI_TRAIN_MODEL_FREEZE.json",
+    "split": "TRAIN 2026-09-01..10; DEV 2026-09-11..20; sealed HOLDOUT 2026-09-21..28"
+  },
+  "historical_predictive_only": {
+    "five_minute_reversal_rate": 0.6726057102,
+    "dependent_sample_n": 55340,
+    "holdout_2026_09_21_through_28": true,
+    "ofi_full_panel_logloss_improvement": 0.0041653583,
+    "comment": "Predictive targets, not usable economic sample or actual SIG profits."
+  },
+  "mapping_denominator": {
+    "total_sig_mapping_records": 237,
+    "verified_exact_pairs": 140,
+    "non_verified_exact_records": 97,
+    "unique_accepted_sig_exchange_ids": 140,
+    "accepted_exact_token_smoke_matches": 140,
+    "accepted_exact_pair_native_settlement_reaudit": "NOT_PERFORMED_ON_THIS_HOST"
+  },
+  "source_coverage": {
+    "sig": {
+      "captured_full_depth_book_observations_rows": 0,
+      "tracked_depth_exchange_count": 0,
+      "untracked_depth_exchange_count": 237,
+      "trusted_tracked_count": 0,
+      "full_book_refresh_count": 0,
+      "bounded_book_refresh_count": 0,
+      "scalar_price_feed_active": true,
+      "latest_capture_health_utc": "2026-10-14T20:01:52.899918+00:00",
+      "connection_epoch": 51,
+      "native_SIG_source_event_time_available": false,
+      "native_SIG_source_revision_available": false,
+      "maker_depth_mirror_source_merged_but_disabled": true,
+      "mirror_snapshot_file_from_live_run": "NOT_OBSERVED"
+    },
+    "polymarket": {
+      "subscribed_tokens_in_health": 140,
+      "subscribed_markets_in_health": 140,
+      "depth_parquet_shards_at_audit": 4245,
+      "book_change_parquet_shards_at_audit": 5711,
+      "earliest_depth_shard_utc": "2026-10-11T19:17:00Z",
+      "latest_inspected_depth_shard_utc": "2026-10-14T20:00:00Z",
+      "latest_health_utc": "2026-10-14T20:01:47.381387+00:00",
+      "book_uninitialized_delta_count_cumulative": 25098926,
+      "websocket_connected": true,
+      "book_seed_epoch_and_gap_integrity": "NOT_INDEPENDENTLY_CERTIFIED",
+      "note": "Parquet shards/visible BBO do not imply continuous valid order-book states."
+    }
+  },
+  "denominator_waterfall": [
+    {
+      "gate": "historical direction-only 005I HOLDOUT",
+      "n": 55340,
+      "unit": "dependent minute-state observations",
+      "economic_eligible": false
+    },
+    {
+      "gate": "current mapping registry",
+      "n": 237,
+      "unit": "SIG exchanges",
+      "economic_eligible": false
+    },
+    {
+      "gate": "accepted VERIFIED EXACT orientation+smoke",
+      "n": 140,
+      "unit": "SIG/PM exchange-token pairs",
+      "economic_eligible": false
+    },
+    {
+      "gate": "prospective qualifying frozen 005I signals",
+      "n": null,
+      "unit": "disjoint prospective episodes",
+      "status": "NOT_COMPUTED; no verified causal PM depth feature tape"
+    },
+    {
+      "gate": "features with independently reliable availability+PM continuity",
+      "n": null,
+      "unit": "episodes",
+      "status": "NOT_CERTIFIABLE; orphaned PM book deltas and missing seed/epoch audit"
+    },
+    {
+      "gate": "independently trustworthy SIG decision full-depth",
+      "n": 0,
+      "unit": "book records in authorised collector",
+      "status": "ZERO OBSERVED; sig book_observations empty; tracked depth 0"
+    },
+    {
+      "gate": "independently certified paired executable decision opportunities",
+      "n": 0,
+      "unit": "certified observed pairs in inspected collector",
+      "status": "ZERO SOURCE-CERTIFIABLE; not estimated profitable opportunities"
+    },
+    {
+      "gate": "source-attested SIG post-latency arrival depth",
+      "n": 0,
+      "unit": "certifiable episodes",
+      "status": "ABSENT when source SIG depth is absent"
+    },
+    {
+      "gate": "source-attested SIG post-latency exits 5s/30s/5m/1h",
+      "n": 0,
+      "unit": "certifiable episodes",
+      "status": "ABSENT when source SIG depth is absent"
+    },
+    {
+      "gate": "realistically executable entry/exit sequences",
+      "n": null,
+      "unit": "fills",
+      "status": "UNKNOWN; no prospective order/fill sequence calibration evaluated"
+    }
+  ],
+  "rejection_accounting": {
+    "non_EXACT_mapping_records": 97,
+    "certified_SIG_book_rows_missing_from_collector": true,
+    "rejected_signal_count_at_SIG_book_gate": null,
+    "reason": "Prospective feature candidate population not measured; do not assign a fabricated numeric signal count.",
+    "independent_accepted_paired_trade_observation_count": 0,
+    "reason_codes": [
+      "NO_SIG_TRACKED_FULL_DEPTH",
+      "NO_SIG_NATIVE_SOURCE_CLOCK_OR_REVISION",
+      "PM_UNINITIALIZED_DELTAS_CONTINUITY_UNCERTIFIED",
+      "NO_POST_LATENCY_BOOK",
+      "NO_SUPPORTED_5S_30S_5M_1H_EXIT",
+      "UNKNOWN_ACK_FILL_FEE_LATENCY",
+      "UNKNOWN_CAPITAL_HEADROOM"
+    ],
+    "reason_priority": "Report all source failures; never mutually exclusive signal-level counts without per-row input ledger."
+  },
+  "economic_scorecard": {
+    "whole_share_sizes": [
+      1,
+      5,
+      10,
+      20
+    ],
+    "decision_marginal_ask_or_no_complement": null,
+    "decision_vwap": null,
+    "placeable_marginal_IOC_limit": null,
+    "verified_arrival_executable_quantity": null,
+    "measured_fill_probability": null,
+    "verified_fee_schedule": null,
+    "measured_ACK_latency": null,
+    "funding_FX_uncertainty": null,
+    "net_after_cost_SUSQies": null,
+    "net_markout_5s": null,
+    "net_markout_30s": null,
+    "net_markout_5m": null,
+    "net_markout_1h": null,
+    "partial_fills_and_locked_residuals": null,
+    "zero_recovery_downside": null,
+    "one_two_five_x_slippage_stresses": [
+      null,
+      null,
+      null
+    ],
+    "frequency": null,
+    "size_capacity": null,
+    "conservative_net_LCB_95pct": null,
+    "confidence_interpretation": "NOT ESTIMABLE. No synthetic touch may be counted as actual fill.",
+    "admissible_zero_recovery_formula": "For a hypothetical BUY of q shares with placeable marginal limit L and unknown fee f>=0, zero-recovery loss could reach q*L*(1+f); not a measured market price or PnL."
+  },
+  "baselines": {
+    "NO_TRADE": {
+      "incremental_order_pnl_susqies": 0,
+      "definition": "zero order, zero incremental trade PnL; does not value existing portfolio"
+    },
+    "DIRECT_PM_FAIR_VALUE": null,
+    "SIG_MOMENTUM": null,
+    "UNCONDITIONAL_REVERSAL": null,
+    "FROZEN_OFI_BASELINE": null,
+    "OPPOSITE_SIGN": null,
+    "RANDOM_TIME": null,
+    "explanation": "No common certified SIG arrival/exit sample exists; control comparisons cannot be computed."
+  },
+  "preregistered_gate": {
+    "required_independent_days": 5,
+    "required_independent_events": 10,
+    "required_disjoint_valid_signals": 100,
+    "certified_economic_days": 0,
+    "certified_economic_events": 0,
+    "certified_disjoint_valid_signals": 0,
+    "day_event_clustered_lower_bound": null,
+    "promotion": "BLOCKED"
+  },
+  "safe_next_test": "Using existing SIG scalar BBO and accepted PM token panel, a slower completed-minute/30m-1h predictive lag/reversion test may be run read-only with native availability/health controls, but it must remain non-economic until execution depth, fee and fills are independently supported.",
+  "limitations": [
+    "No source-native SIG book clock/revision or vetted full depth; cannot infer post-latency book from scalar BBO.",
+    "Polymarket book snapshots are present, but seed/epoch continuity remains unproven given orphaned deltas.",
+    "No actual IOC fill guarantees; old maker-fill model 487 predicted vs 149 observed is not a calibrated 005I fill rate.",
+    "All measured zero counts are SOURCE-CERTIFIABILITY counts, not measured zero trade opportunities or zero alpha.",
+    "Host inspection did not query SIG APIs, deploy code, touch execution journals, or activate recorder."
+  ],
+  "decision": "NO PROMOTION. No return in actual earned SUSQies established."
+}
