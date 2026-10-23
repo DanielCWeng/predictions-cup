@@ -1438,20 +1438,20 @@ def test_market_revision_gap_does_not_block_fifo_on_slow_rest(
         await engine.initialize()
         topic = engine.market_topic("26")
         now = datetime.now(UTC)
-        payload = _batch(revision=1, previous=0)
+        payload = _batch(revision=1, previous=0, source_from=1, source_through=1)
         await engine.handle_raw_batch(topic, payload, now)
 
         rest.block_exchange = "36"
         rest.block_started.clear()
         rest.block_release.clear()
-        gap = _batch(revision=3, previous=2)
+        gap = _batch(revision=3, previous=2, source_from=2, source_through=2)
         await asyncio.wait_for(engine.handle_raw_batch(topic, gap, now), timeout=0.5)
         assert engine.states["36"].depth_state == DepthState.TRACKED_UNTRUSTED
         await asyncio.wait_for(rest.block_started.wait(), timeout=0.5)
         # The next message on the same stream must progress without awaiting
         # a blocked authoritative GET. There is no invented trust in the gap.
         await asyncio.wait_for(
-            engine.handle_raw_batch(topic, _batch(revision=4, previous=3), now),
+            engine.handle_raw_batch(topic, _batch(revision=4, previous=3, source_from=3, source_through=3), now),
             timeout=0.5,
         )
         assert engine.topic_revisions[topic] == 4
