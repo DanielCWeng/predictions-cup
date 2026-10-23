@@ -1248,18 +1248,23 @@ class SigRealtimeStateEngine:
             priority=RestPriority.HIGH,
         )
         self._validate_tracked_configuration()
+        if refresh_bulk_prices:
+            # Restore a fresh scalar BBO ahead of non-critical depth recovery.
+            await self.refresh_bulk_prices(
+                reason=reason,
+                priority=RestPriority.NORMAL,
+            )
+        # A tournament-wide revision gap may invalidate dozens of books.
+        # Block trading on each untrusted book, not the whole market-feed loop
+        # on 76 HIGH-priority REST GETs.
         await self._reconcile_many(
             self.tracked_depth_exchange_ids,
             reason=reason,
             final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
             triggering_revision=triggering_revision,
-            priority=RestPriority.HIGH,
+            priority=RestPriority.BACKGROUND,
+            wait=False,
         )
-        if refresh_bulk_prices:
-            await self.refresh_bulk_prices(
-                reason=reason,
-                priority=RestPriority.BACKGROUND,
-            )
 
     async def _ensure_known_exchanges(self, batch: MarketBatchDto) -> None:
         referenced = {trade.exchange_id for trade in batch.trades} | {
