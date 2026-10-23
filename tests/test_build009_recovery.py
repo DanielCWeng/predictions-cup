@@ -4,7 +4,7 @@ import asyncio
 import json
 import sqlite3
 from collections.abc import AsyncIterator, Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
 
@@ -1668,6 +1668,14 @@ def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
                 clock_ns=iter(range(900, 1200)).__next__,
                 observation_emitter=emitter,
                 observation_process_instance_id="recovery-test-process",
+                # Explicitly proven-current replay (never the default on restart).
+                placement_replay_allowed=lambda envelope: (
+                    envelope.logical_operation_id == plan.envelope.logical_operation_id
+                ),
+                wall_clock=lambda: (
+                    journal.operation_created_at(plan.envelope.logical_operation_id)
+                    or datetime.now(UTC)
+                ),
             )
         )
         emitter.close()
@@ -1693,6 +1701,110 @@ def test_startup_recovery_uses_durable_authority_with_fresh_empty_reservations(
         emitter.close()
         journal.close()
 
+
+
+@pytest.mark.parametrize(
+    ("clock_scenario", "authority"),
+    [
+        ("fresh", None),
+        ("fresh", False),
+        ("old", True),
+        ("rollback", True),
+        ("naive", True),
+    ],
+)
+def test_startup_unacked_placement_replay_default_denied_and_reservation_kept(
+    tmp_path: Path,
+    clock_scenario: str,
+    authority: bool | None,
+) -> None:
+    """An old/unauthorised price may never be resent on a process restart."""
+    from predictions_cup.execution.models import RuntimeOrderIntent
+
+    intent = RuntimeOrderIntent(
+        intent_id="deny-replay-intent", exchange_id="36", market_id="m1",
+        tournament_id="t1", outcome_side=OutcomeSide.YES, action=OrderAction.BUY,
+        quantity=1, limit_price_ticks=99, strategy_id="fixture",
+        decision_observation_ns=123,
+    )
+    decision = RiskDecision(
+        approved=True, reason="approved", execution_mode=ExecutionMode.LIVE,
+        operation_kind=OperationKind.SINGLE_PLACEMENT, intents=(intent,),
+        strategy_family="FV-TAKE", strategy_id="fixture", signal_value=0.01,
+        fair_value=0.51, decision_observation_ns=123,
+    )
+    plan = build_execution_plan(
+        decision, logical_operation_id="deny-replay-op",
+        created_monotonic_ns=100,
+    )
+    journal = ExecutionJournal(tmp_path / "deny-replay.sqlite3")
+    journal.record_before_dispatch(plan.envelope, plan.intents)
+    journal.mark_state("deny-replay-op", LifecycleState.UNCERTAIN, 200)
+    created_at = journal.operation_created_at("deny-replay-op")
+    assert created_at is not None
+    current_time = {
+        "fresh": created_at,
+        "old": created_at + timedelta(seconds=11),
+        "rollback": created_at - timedelta(seconds=1),
+        "naive": created_at.replace(tzinfo=None),
+    }[clock_scenario]
+
+    reservations = ExecutionReservationBook()
+    trading = _RecoveryTradingFixture()
+    rest = _OpenOrderRecoveryRest()
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, trading), journal=journal,
+        permit=_recovery_permit(), reservations=reservations,
+    )
+    try:
+        result = asyncio.run(recover_startup(
+            journal=journal,
+            rest=cast(RecoveryRest, rest),
+            live_sink=sink,
+            tournament_id="t1",
+            tournament_slug="cup",
+            reservations=reservations,
+            market_by_exchange={"36": "m1"},
+            exchange_ids_by_market={"m1": ("36",)},
+            wall_clock=lambda: current_time,
+            placement_replay_allowed=(
+                None if authority is None else lambda _envelope: authority
+            ),
+        ))
+        assert trading.payloads == []
+        held = [
+            e for e in journal.events("deny-replay-op")
+            if e.event_type == "RECOVERY_PLACEMENT_HELD"
+        ]
+        assert len(held) == 1
+        proof = json.loads(held[0].detail_json or "{}")
+        assert proof["eligibility_proven"] is (authority is True)
+        assert proof["fresh"] is (clock_scenario == "fresh")
+        assert journal.lifecycle_state("deny-replay-op") is LifecycleState.UNCERTAIN
+        assert reservations.contains_operation("deny-replay-op", ("deny-replay-intent",))
+        assert result.safe_to_resume_live is False
+        assert "deny-replay-op" in result.unresolved_operation_ids
+    finally:
+        journal.close()
+
+
+@pytest.mark.parametrize("invalid", [0.0, -1.0, float("inf"), float("nan")])
+def test_startup_replay_window_must_be_finite_and_positive(
+    tmp_path: Path, invalid: float,
+) -> None:
+    journal = ExecutionJournal(tmp_path / "invalid-window.sqlite3")
+    try:
+        with pytest.raises(ValueError, match="finite and positive"):
+            asyncio.run(recover_startup(
+                journal=journal,
+                rest=cast(RecoveryRest, _OpenOrderRecoveryRest()),
+                live_sink=cast(SigLiveSink, object()),
+                tournament_id="t1",
+                tournament_slug="cup",
+                max_placement_replay_age_seconds=invalid,
+            ))
+    finally:
+        journal.close()
 
 
 def test_order_fills_accepts_live_sig_item_shape() -> None:
