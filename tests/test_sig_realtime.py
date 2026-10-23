@@ -1451,7 +1451,11 @@ def test_market_revision_gap_does_not_block_fifo_on_slow_rest(
         # The next message on the same stream must progress without awaiting
         # a blocked authoritative GET. There is no invented trust in the gap.
         await asyncio.wait_for(
-            engine.handle_raw_batch(topic, _batch(revision=4, previous=3, source_from=3, source_through=3), now),
+            engine.handle_raw_batch(
+                topic,
+                _batch(revision=4, previous=3, source_from=3, source_through=3),
+                now,
+            ),
             timeout=0.5,
         )
         assert engine.topic_revisions[topic] == 4
