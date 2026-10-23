@@ -922,6 +922,7 @@ def test_revision_gap_recovery_on_237_markets_does_not_create_book_storm(
             observed + timedelta(seconds=1),
         )
 
+        await asyncio.gather(*tuple(engine._reconcile_tasks.values()))
         assert engine.health.revision_gap_count == 1
         assert len(rest.calls) == initial_books + 2
         assert len(rest.bulk_calls) == initial_bulk + 3
