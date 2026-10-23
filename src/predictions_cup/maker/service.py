@@ -443,7 +443,10 @@ class MakerService:
                 bulk_price_refresh_seconds=_maker_bulk_price_refresh_seconds(
                     self.settings.sig_realtime_bulk_price_refresh_seconds
                 ),
-                periodic_bulk_price_priority=RestPriority.BACKGROUND,
+                # LIVE execution depends on fresh scalar/BBO quotes, not
+                # optional depth maintenance. Keep account/exec HIGH reserved,
+                # but do not starve the maker price fallback behind depth.
+                periodic_bulk_price_priority=RestPriority.NORMAL,
                 governed_rate_per_second=(self.settings.sig_rest_governor_rate_per_second),
                 governor_snapshot=rest.governor_snapshot,
                 bulk_prices_tracked_only=True,
