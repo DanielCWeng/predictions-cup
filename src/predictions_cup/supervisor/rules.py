@@ -506,6 +506,49 @@ def _maker_findings(
             )
         )
 
+    # A live PID producing MAKE outcomes is insufficient evidence of a
+    # functioning executable feed. Watch the existing bounded 100-outcome,
+    # current-PID journal sample without making any SIG REST requests.
+    sampled = _integer(maker.get("outcomes_sampled"))
+    bbo_rejections = _integer(maker.get("bbo_rejections_sampled"))
+    gross_rejections = _integer(maker.get("gross_cap_rejections_sampled"))
+    if sampled is not None and sampled >= 30:
+        if (
+            bbo_rejections is not None
+            and 0 <= bbo_rejections <= sampled
+            and bbo_rejections / sampled >= 0.60
+        ):
+            findings.append(
+                Finding(
+                    "MAKER_BBO_STARVATION",
+                    Severity.CRITICAL,
+                    "MAKE is running but most decisions reject stale/untrusted SIG BBO",
+                    {
+                        "sampled_outcomes": sampled,
+                        "bbo_rejections": bbo_rejections,
+                        "fraction": bbo_rejections / sampled,
+                        "main_pid": maker.get("main_pid"),
+                    },
+                )
+            )
+        if (
+            gross_rejections is not None
+            and 0 <= gross_rejections <= sampled
+            and gross_rejections / sampled >= 0.60
+        ):
+            findings.append(
+                Finding(
+                    "MAKER_GROSS_CAP_SATURATION",
+                    Severity.WARN,
+                    "MAKE decisions are predominantly blocked at the gross cap",
+                    {
+                        "sampled_outcomes": sampled,
+                        "gross_cap_rejections": gross_rejections,
+                        "fraction": gross_rejections / sampled,
+                    },
+                )
+            )
+
     if maker.get("kill_latched") is True:
         findings.append(
             Finding(
