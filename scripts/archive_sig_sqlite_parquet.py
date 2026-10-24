@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+from collections.abc import Callable
 import hashlib
 import json
 import os
@@ -23,7 +24,7 @@ import shutil
 import sqlite3
 import subprocess
 import time
-from typing import Any, Callable
+from typing import Any
 
 import pyarrow as pa
 import pyarrow.parquet as pq
