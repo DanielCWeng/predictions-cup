@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 import pytest
-from scripts.archive_sig_sqlite_parquet import archive, verify
+
+from predictions_cup.sig.sqlite_archive import archive, verify
 
 
 def _fixture_db(path: Path) -> None:
