@@ -15,15 +15,15 @@ from __future__ import annotations
 
 import argparse
 import base64
-from collections.abc import Callable
 import hashlib
 import json
 import os
-from pathlib import Path
 import shutil
 import sqlite3
 import subprocess
 import time
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
