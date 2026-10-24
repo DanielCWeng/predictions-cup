@@ -2,6 +2,5 @@
 
 from predictions_cup.sig.sqlite_archive import main
 
-
 if __name__ == "__main__":
     main()
