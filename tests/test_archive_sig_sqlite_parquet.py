@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import base64
-from pathlib import Path
 import sqlite3
+from pathlib import Path
 
 import pyarrow.parquet as pq
 import pytest
