@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 import pytest
-
 from scripts.archive_sig_sqlite_parquet import archive, verify
 
 
