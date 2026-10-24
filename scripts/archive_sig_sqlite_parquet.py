@@ -104,6 +104,7 @@ def archive(
     if source.resolve() == destination.resolve():
         raise ValueError("source and destination must differ")
     manifest_path = destination / "manifest.json"
+    manifest: dict[str, Any]
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if manifest.get("version") != 1 or manifest.get("source") != str(source.resolve()):
