@@ -3174,4 +3174,5 @@ def test_deep_ladder_canary_scope_keeps_other_exchanges_unchanged() -> None:
     ).quote(snapshot)
     assert control.desired == out_scope.desired
     assert in_scope.desired is not None and control.desired is not None
+    assert control.desired.ask_ticks is not None
     assert in_scope.desired.ask_ticks == control.desired.ask_ticks - 1
