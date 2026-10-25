@@ -318,6 +318,36 @@ def _with_inventory(snapshot: MakerMarketSnapshot, quantity: float) -> MakerMark
     return replace(snapshot, runtime=replace(snapshot.runtime, portfolio=portfolio))
 
 
+def test_economics_rejection_does_not_consume_live_cooldown() -> None:
+    harness = _Harness(economics_gate_enabled=True)
+    ready = _snapshot()
+    # A depth-trust rejection is not an attempted order. It must not block
+    # the same signal when verified depth arrives within the 15s cooldown.
+    untrusted = replace(
+        ready,
+        sig_depth_trusted=False,
+        runtime=replace(
+            ready.runtime,
+            books=(replace(ready.runtime.books[0], trusted_depth=False),),
+        ),
+    )
+    harness.run(untrusted)
+    assert harness.plans == []
+    harness.run(ready, sequence=2)
+    assert len(harness.plans) == 1
+    harness.run(ready, sequence=3)
+    assert len(harness.plans) == 1  # Submitted order consumes cooldown.
+
+
+def test_position_cap_rejection_does_not_consume_live_cooldown() -> None:
+    harness = _Harness()
+    harness.coordinator._max_position = 200
+    harness.run(_with_inventory(_snapshot(), 200.0))
+    assert harness.plans == []
+    harness.run(_with_inventory(_snapshot(), 0.0), sequence=2)
+    assert len(harness.plans) == 1
+
+
 def test_position_cap_clips_and_blocks_only_inventory_increasing_takes() -> None:
     clipped = _Harness()
     clipped.coordinator._max_position = 200
@@ -519,7 +549,7 @@ def test_taker_liveness_recheck_logs_completed_evaluation(
     asyncio.run(harness.coordinator.run_liveness(stop_event=stop_event, recheck=recheck))
 
     assert harness.coordinator.evaluation_cycles == 2
-    assert "TAKE heartbeat evaluated=1 input_ready=1 signals=1 cycles=1" in caplog.text
+    assert "TAKE heartbeat evaluated=1 input_ready=1 signals=1 attempts=1 cycles=1 skipped={}" in caplog.text
 
 
 def test_taker_liveness_recovers_from_one_slow_evaluation(
