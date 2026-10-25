@@ -46,6 +46,8 @@ class MakerConfig:
     deep_ladder_level_offsets: tuple[float, ...] = (0.01, 0.02, 0.04)
     deep_ladder_level_sizes: tuple[int, ...] = (50, 100, 150)
     deep_ladder_position_cap: int = 200
+    deep_ladder_reduce_improve_ticks: int = 0
+    deep_ladder_reduce_improve_exchange_ids: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         if not self.strategy_id.strip() or not self.strategy_version.strip():
@@ -80,6 +82,8 @@ class MakerConfig:
             raise ValueError("deep ladder offsets/sizes must be positive matching tuples")
         if self.deep_ladder_position_cap < 1:
             raise ValueError("deep ladder cap must be positive")
+        if self.deep_ladder_reduce_improve_ticks not in (0, 1):
+            raise ValueError("deep ladder reduction improvement must be 0 or 1 tick")
 
 
 class MakerEngine:
@@ -504,6 +508,31 @@ class MakerEngine:
             if best_bid < ask <= 199:
                 ask_ticks.append(ask)
                 previous_ask = ask + 1
+
+        # Only improve the FIRST rung when the entire inventory interval is
+        # strictly on one side of zero. This makes a genuine inventory
+        # reduction more competitive inside SIG's spread, while preserving
+        # the SAME external bid/ask cushion as the original deep ladder.
+        # The feature defaults off and does not change sizes or risk limits.
+        improve = self._config.deep_ladder_reduce_improve_ticks
+        if improve and (
+            not self._config.deep_ladder_reduce_improve_exchange_ids
+            or snapshot.exchange_id in self._config.deep_ladder_reduce_improve_exchange_ids
+        ):
+            low, high = snapshot.runtime.portfolio.worst_case_inventory_bounds(
+                snapshot.exchange_id, snapshot.tournament_id
+            )
+            first_offset = self._config.deep_ladder_level_offsets[0]
+            if low > 0.0 and ask_ticks:
+                pm_floor = math.ceil((external_quote.best_ask + first_offset) / _TICK - 1e-9)
+                better = max(pm_floor, best_bid + 1, ask_ticks[0] - improve)
+                if better < ask_ticks[0]:
+                    ask_ticks[0] = better
+            if high < 0.0 and bid_ticks:
+                pm_ceiling = math.floor((external_quote.best_bid - first_offset) / _TICK + 1e-9)
+                better = min(pm_ceiling, best_ask - 1, bid_ticks[0] + improve)
+                if better > bid_ticks[0]:
+                    bid_ticks[0] = better
 
         if bid_ticks and ask_ticks and bid_ticks[0] >= ask_ticks[0]:
             return (), ()

@@ -81,8 +81,7 @@ def build_maker_components(
             crosswalk=load_swing_crosswalk(
                 mapping,
                 mapping_path=(
-                    settings.risk_swing_accepted_mapping_path
-                    or settings.maker_mapping_path
+                    settings.risk_swing_accepted_mapping_path or settings.maker_mapping_path
                 ),
             ),
             mark_provider=swing_mark_provider,
@@ -142,6 +141,12 @@ def build_maker_components(
             deep_ladder_level_offsets=settings.maker_deep_ladder_level_offsets,
             deep_ladder_level_sizes=settings.maker_deep_ladder_level_sizes,
             deep_ladder_position_cap=settings.maker_deep_ladder_position_cap,
+            deep_ladder_reduce_improve_ticks=settings.maker_deep_ladder_reduce_improve_ticks,
+            deep_ladder_reduce_improve_exchange_ids=frozenset(
+                value.strip()
+                for value in settings.maker_deep_ladder_reduce_improve_exchange_ids.split(",")
+                if value.strip()
+            ),
         ),
         market_token_ids=market_token_ids,
     )
@@ -171,9 +176,7 @@ def build_maker_components(
             # gaps/reconnects/fills revoke portfolio trust and force REST reconciliation.
             max_account_age_ns=None,
             max_mark_age_ns=settings.risk_max_mark_age_ms * ms,
-            mark_fallback_max_age_ns=(
-                settings.risk_mark_fallback_max_age_seconds * 1_000_000_000
-            ),
+            mark_fallback_max_age_ns=(settings.risk_mark_fallback_max_age_seconds * 1_000_000_000),
             max_unmarked_fraction=settings.risk_max_unmarked_fraction,
             require_capital_state=settings.risk_capital_control_enabled,
             exposure_groups=exposure_groups,

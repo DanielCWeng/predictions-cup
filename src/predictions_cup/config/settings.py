@@ -89,6 +89,8 @@ class AppSettings(BaseSettings):
     maker_deep_ladder_level_offsets: tuple[float, ...] = (0.01, 0.02, 0.04)
     maker_deep_ladder_level_sizes: tuple[int, ...] = (50, 100, 150)
     maker_deep_ladder_position_cap: int = Field(default=200, gt=0)
+    maker_deep_ladder_reduce_improve_ticks: int = Field(default=0, ge=0, le=1)
+    maker_deep_ladder_reduce_improve_exchange_ids: str = ""
     maker_inventory_risk_aversion: float = Field(default=0.02, ge=0.0)
     maker_uncertainty_multiplier: float = Field(default=1.0, ge=0.0)
     maker_volatility_multiplier: float = Field(default=0.5, ge=0.0)
@@ -524,9 +526,7 @@ class AppSettings(BaseSettings):
             "sig_realtime_bulk_price_refresh_seconds": (
                 self.sig_realtime_bulk_price_refresh_seconds
             ),
-            "sig_capture_bulk_price_refresh_seconds": (
-                self.sig_capture_bulk_price_refresh_seconds
-            ),
+            "sig_capture_bulk_price_refresh_seconds": (self.sig_capture_bulk_price_refresh_seconds),
             "sig_realtime_token_refresh_margin_seconds": (
                 self.sig_realtime_token_refresh_margin_seconds
             ),
@@ -560,9 +560,7 @@ class AppSettings(BaseSettings):
                     "risk_swing_cap_enabled": True,
                     "risk_swing_shock_points": self.risk_swing_shock_points,
                     "risk_swing_max_loss": self.risk_swing_max_loss,
-                    "risk_swing_max_pm_mark_age_ms": (
-                        self.risk_swing_max_pm_mark_age_ms
-                    ),
+                    "risk_swing_max_pm_mark_age_ms": (self.risk_swing_max_pm_mark_age_ms),
                 }
             )
         return result
