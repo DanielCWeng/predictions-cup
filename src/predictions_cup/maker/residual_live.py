@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+from collections import Counter
 from collections.abc import Awaitable, Callable, Mapping
 from contextlib import suppress
 from dataclasses import replace
@@ -138,6 +139,8 @@ class ResidualTakerLiveCoordinator:
         self._evaluated_markets = 0
         self._input_ready_markets = 0
         self._signals = 0
+        self._attempted_orders = 0
+        self._skipped_signals: Counter[str] = Counter()
         self._evaluation_changed = asyncio.Event()
 
     @property
@@ -158,11 +161,13 @@ class ResidualTakerLiveCoordinator:
 
     def log_heartbeat(self) -> None:
         _LOG.info(
-            "TAKE heartbeat evaluated=%d input_ready=%d signals=%d cycles=%d",
+            "TAKE heartbeat evaluated=%d input_ready=%d signals=%d attempts=%d cycles=%d skipped=%s",
             self._evaluated_markets,
             self._input_ready_markets,
             self._signals,
+            self._attempted_orders,
             self._evaluation_cycles,
+            dict(self._skipped_signals),
         )
 
     async def run_liveness(
@@ -249,7 +254,7 @@ class ResidualTakerLiveCoordinator:
             if state is None or not (self._min_fair_value <= state.pm_mid <= self._max_fair_value):
                 continue
             self._input_ready_markets += 1
-            signal = self._signal.on_state(state)
+            signal = self._signal.on_state(state, commit_cooldown=False)
             if signal is None:
                 continue
             self._signals += 1
@@ -314,7 +319,8 @@ class ResidualTakerLiveCoordinator:
             require_reducing=reduce_only,
         )
         if quantity < 1:
-            _LOG.info(
+            self._skipped_signals["position_cap"] += 1
+            _LOG.debug(
                 "TAKE skip exchange=%s direction=%s reason=position_cap",
                 exchange_id,
                 signal.direction,
@@ -340,7 +346,8 @@ class ResidualTakerLiveCoordinator:
         economics_net = None
         if fair_bound is None:
             if self._economics_gate_enabled:
-                _LOG.info("TAKE economics deny exchange=%s reason=fair_missing", exchange_id)
+                self._skipped_signals["fair_missing"] += 1
+                _LOG.debug("TAKE economics deny exchange=%s reason=fair_missing", exchange_id)
                 return ()
         else:
             levels = book.asks if action is OrderAction.BUY else book.bids
@@ -374,7 +381,8 @@ class ResidualTakerLiveCoordinator:
                     else book.asks[0].price_ticks
                 ),
             )
-            _LOG.info(
+            _LOG.log(
+                logging.INFO if economics.admissible else logging.DEBUG,
                 "TAKE economics %s exchange=%s direction=%s reason=%s qty=%d "
                 "net_per_share=%.5f net_total=%.4f max_loss=%.2f "
                 "limit=%s maker_conditional=%s",
@@ -391,13 +399,15 @@ class ResidualTakerLiveCoordinator:
             )
             if self._economics_gate_enabled:
                 if not economics.admissible:
+                    self._skipped_signals["economics_" + economics.reason] += 1
                     return ()
                 quantity = economics.quantity
                 economics_net = economics.net_edge_per_share
                 assert economics.limit_price_ticks is not None
                 ticks = economics.limit_price_ticks
         if self._crosses_own_quote(exchange_id, action, ticks):
-            _LOG.info(
+            self._skipped_signals["own_quote_at_touch"] += 1
+            _LOG.debug(
                 "TAKE skip exchange=%s direction=%s reason=own_quote_at_touch",
                 exchange_id,
                 signal.direction,
@@ -434,7 +444,8 @@ class ResidualTakerLiveCoordinator:
             context,
         )
         if not risk.approved:
-            _LOG.info(
+            self._skipped_signals["risk_" + str(risk.reason)] += 1
+            _LOG.debug(
                 "TAKE denied exchange=%s direction=%s residual=%.4f reason=%s",
                 exchange_id,
                 signal.direction,
@@ -450,6 +461,10 @@ class ResidualTakerLiveCoordinator:
             created_monotonic_ns=change.observed_monotonic_ns,
         )
         self._reservations.reserve(logical_operation_id, plan.intents)
+        # No cooldown was consumed by failed economics/position/risk gates.
+        # Reserve first; then throttle before awaiting the network dispatch.
+        self._signal.record_submission(signal)
+        self._attempted_orders += 1
         _LOG.info(
             "TAKE placing exchange=%s direction=%s ticks=%d qty=%d residual=%.4f pm_mid=%.4f",
             exchange_id,
