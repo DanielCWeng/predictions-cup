@@ -69,6 +69,7 @@ from predictions_cup.models.registry import default_model_registry
 from predictions_cup.models.runtime import LiveModelCoordinator, ModelRuntime
 from predictions_cup.observe import (
     BoundedObservationEmitter,
+    NullObservationEmitter,
     CaptureObservationSink,
     CompetitionContextSampler,
     ObservationHealthProvider,
@@ -266,10 +267,12 @@ class MakerService:
         governor = build_rest_governor(self.settings)
         rest = GovernedSigRestClient(self.settings, governor=governor)
         sig_recorder = cast(SigRealtimeRecorder, NoopSigRealtimeRecorder())
-        # Research capture is optional: bad destinations and resource failures
-        # disable the mirror, never maker startup or risk/order recovery.
+        # Research is opt-in. Do not create a depth mirror during production-only operation.
         depth_mirror: MakerDepthMirror | None = None
-        if self.settings.maker_depth_mirror_output_file is not None:
+        if (
+            self.settings.research_collection_enabled
+            and self.settings.maker_depth_mirror_output_file is not None
+        ):
             try:
                 depth_mirror = MakerDepthMirror(self.settings.maker_depth_mirror_output_file)
             except Exception as exc:
@@ -278,31 +281,42 @@ class MakerService:
                     "Optional SIG depth mirror constructor failed (%s); capture disabled",
                     type(exc).__name__,
                 )
-        observe_recorder = ObservationCaptureRecorder(
-            self.settings.sig_research_path,
-            queue_max=max(1_024, min(self.settings.sig_capture_queue_max, 65_536)),
-            shard_seconds=self.settings.sig_capture_parquet_shard_seconds,
-            max_rows_per_shard=self.settings.sig_capture_parquet_max_rows_per_shard,
-        )
-        observation_emitter = BoundedObservationEmitter(
-            CaptureObservationSink(observe_recorder),
-            queue_max=max(1_024, min(self.settings.sig_capture_queue_max, 65_536)),
-        )
-        self._observation_health_provider = ObservationHealthProvider(
-            observation_emitter,
-            observe_recorder,
-        )
-        self._observation_health_publisher = ObservationHealthStatusPublisher(
-            default_observation_health_status_path(self.settings.sig_research_path),
-            process_instance_id=observe_recorder.session_id,
-            owner="predictions-cup-maker.service",
-        )
-        self._publish_observation_health(force=True)
-        context_sampler = CompetitionContextSampler(
-            SigOfficialCompetitionContextProvider(rest, tournament_id=tournament_id),
-            observe_recorder.record_competition_context,
-            interval_seconds=60.0,
-        )
+        # Keep operational SIG/PM feeds, BUILD-009 journal and risk state intact.
+        # Research-off mode creates no parquet thread, observation queue,
+        # optional REST context sampler or research-health status file.
+        observe_recorder: ObservationCaptureRecorder | None = None
+        context_sampler: CompetitionContextSampler | None = None
+        if self.settings.research_collection_enabled:
+            observe_recorder = ObservationCaptureRecorder(
+                self.settings.sig_research_path,
+                queue_max=max(1_024, min(self.settings.sig_capture_queue_max, 65_536)),
+                shard_seconds=self.settings.sig_capture_parquet_shard_seconds,
+                max_rows_per_shard=self.settings.sig_capture_parquet_max_rows_per_shard,
+            )
+            observation_emitter = BoundedObservationEmitter(
+                CaptureObservationSink(observe_recorder),
+                queue_max=max(1_024, min(self.settings.sig_capture_queue_max, 65_536)),
+            )
+            observation_process_instance_id = observe_recorder.session_id
+            self._observation_health_provider = ObservationHealthProvider(
+                observation_emitter,
+                observe_recorder,
+            )
+            self._observation_health_publisher = ObservationHealthStatusPublisher(
+                default_observation_health_status_path(self.settings.sig_research_path),
+                process_instance_id=observation_process_instance_id,
+                owner="predictions-cup-maker.service",
+            )
+            self._publish_observation_health(force=True)
+            context_sampler = CompetitionContextSampler(
+                SigOfficialCompetitionContextProvider(rest, tournament_id=tournament_id),
+                observe_recorder.record_competition_context,
+                interval_seconds=60.0,
+            )
+        else:
+            observation_emitter = NullObservationEmitter()
+            observation_process_instance_id = "make-research-disabled"
+            _LOG.info("MAKE historical research capture disabled (live feeds unchanged)")
         journal: ExecutionJournal | None = None
         trading: SigTradingClient | None = None
         sig_state: SigRealtimeStateEngine | None = None
@@ -456,7 +470,7 @@ class MakerService:
                     if value.strip()
                 ),
                 observation_emitter=observation_emitter,
-                observation_process_instance_id=observe_recorder.session_id,
+                observation_process_instance_id=observation_process_instance_id,
                 depth_capture=(None if depth_mirror is None else depth_mirror.record),
             )
             await _retry_startup_sig_operation(
@@ -475,7 +489,7 @@ class MakerService:
                 allowed_exchange_ids=self._live_exchange_ids,
             )
 
-            if self.settings.shadow_enabled:
+            if self.settings.shadow_enabled and self.settings.research_collection_enabled:
                 shadow_runtime = build_live_shadow_runtime(self.settings, self.core)
                 await shadow_runtime.start()
                 self._observe_005f_books(
@@ -504,7 +518,7 @@ class MakerService:
                     permit=recovery_permit,
                     reservations=self.core.reservations,
                     observation_emitter=observation_emitter,
-                    observation_process_instance_id=observe_recorder.session_id,
+                    observation_process_instance_id=observation_process_instance_id,
                 )
                 assert live_sink is not None
                 startup_live_sink = live_sink
@@ -573,7 +587,7 @@ class MakerService:
                                 operation_ids=operation_ids,
                                 authoritative_snapshot=snapshot,
                                 observation_emitter=observation_emitter,
-                                observation_process_instance_id=observe_recorder.session_id,
+                                observation_process_instance_id=observation_process_instance_id,
                                 exchange_ids_by_market=exchange_ids_by_market,
                                 market_by_exchange=market_by_exchange,
                                 reservations=self.core.reservations,
@@ -755,7 +769,7 @@ class MakerService:
                     journal=journal,
                     quotes=self.core.quotes,
                     observation_emitter=observation_emitter,
-                    observation_process_instance_id=observe_recorder.session_id,
+                    observation_process_instance_id=observation_process_instance_id,
                 )
 
             model_execution_observer: ExecutionObserver | None = None
@@ -892,7 +906,7 @@ class MakerService:
                 ),
                 kill_switch=self.core.kill_switch,
                 observation_emitter=observation_emitter,
-                observation_process_instance_id=observe_recorder.session_id,
+                observation_process_instance_id=observation_process_instance_id,
             )
             runtime = MakerRuntimeLoop(
                 bridge=bridge,
@@ -1054,7 +1068,7 @@ class MakerService:
                 refresh_interval_seconds=(self.settings.maker_account_refresh_interval_seconds),
                 execution_journal=journal,
                 observation_emitter=observation_emitter,
-                observation_process_instance_id=observe_recorder.session_id,
+                observation_process_instance_id=observation_process_instance_id,
             )
             # The startup REST snapshot was sufficient for LIVE permit/recovery,
             # but new maker placements must wait for a subscribed account socket
@@ -1190,10 +1204,12 @@ class MakerService:
                     journal.close()
                 if risk_store is not None:
                     risk_store.close()
-                with suppress(Exception):
-                    await context_sampler.aclose()
+                if context_sampler is not None:
+                    with suppress(Exception):
+                        await context_sampler.aclose()
                 observation_emitter.close()
-                observe_recorder.close()
+                if observe_recorder is not None:
+                    observe_recorder.close()
                 await rest.aclose()
             finally:
                 # Research cleanup also runs if unrelated LIVE teardown raises.
@@ -1519,7 +1535,7 @@ class MakerService:
         sig_state: SigRealtimeStateEngine,
         rest: GovernedSigRestClient,
         runtime: MakerRuntimeLoop,
-        context_sampler: CompetitionContextSampler,
+        context_sampler: CompetitionContextSampler | None,
         *,
         risk_context_source: RiskContextSource | None = None,
         risk_service: CapitalControlService | None = None,
@@ -1663,7 +1679,8 @@ class MakerService:
 
                 async def maintenance(observed_at: datetime) -> None:
                     await sig_state.maintenance(observed_at)
-                    context_sampler.maybe_schedule(observed_at)
+                    if context_sampler is not None:
+                        context_sampler.maybe_schedule(observed_at)
                     await self._checkpoint_realtime_risk_transition(
                         source=risk_context_source,
                         service=risk_service,
