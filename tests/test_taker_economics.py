@@ -32,6 +32,7 @@ def test_buy_walks_full_depth_and_stops_before_unprofitable_level() -> None:
     assert result.admissible
     assert result.quantity == 30
     assert result.limit_price_ticks == 101
+    assert result.vwap is not None
     assert result.vwap == pytest.approx((10 * 0.5 + 20 * 0.505) / 30)
     assert result.net_expected_value == pytest.approx(30 * (0.53 - result.vwap - 0.011))
     assert result.total_slippage == pytest.approx(20 * 0.005)
