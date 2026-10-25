@@ -4,15 +4,12 @@
 from __future__ import annotations
 
 import argparse
-import base64
-import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
 import time
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -56,7 +53,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     action = data.get("action")
     if action not in {
         "auth_check", "run", "status", "output", "logs", "dataset_files", "dataset_probe",
-        "dataset_fetch", "dataset_analysis", "artifact_analysis", "credential_relay"
+        "dataset_fetch", "dataset_analysis", "artifact_analysis"
     }:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
@@ -545,44 +542,6 @@ def run_kernel(data: dict[str, Any], output_dir: Path) -> None:
     )
 
 
-
-def credential_relay(data: dict[str, Any], output_dir: Path) -> None:
-    """Wrap a GitHub Actions Kaggle token for the holder of an ephemeral RSA key.
-
-    Only ciphertext goes to CI logs/artifacts; no token value or private key
-    is placed into the repository or returned to ChatGPT.
-    """
-    public_pem = str(data["public_key_pem"])
-    expected_sha = str(data["public_key_sha256"]).lower()
-    if hashlib.sha256(public_pem.encode("utf-8")).hexdigest() != expected_sha:
-        raise RuntimeError("Kaggle relay public-key fingerprint mismatch")
-    if not public_pem.startswith("-----BEGIN PUBLIC KEY-----\n"):
-        raise RuntimeError("Invalid public key")
-    token = os.environ["KAGGLE_API_TOKEN"].encode("utf-8")
-    if not token or len(token) > 300:
-        raise RuntimeError("Unexpected Kaggle token size")
-    with tempfile.TemporaryDirectory(prefix="kaggle-relay-") as temp:
-        key_path = Path(temp) / "relay-public.pem"
-        key_path.write_text(public_pem, encoding="utf-8")
-        result = subprocess.run(
-            [
-                "openssl", "pkeyutl", "-encrypt", "-pubin",
-                "-inkey", str(key_path),
-                "-pkeyopt", "rsa_padding_mode:oaep",
-                "-pkeyopt", "rsa_oaep_md:sha256",
-            ],
-            input=token,
-            capture_output=True,
-            check=False,
-        )
-    if result.returncode != 0 or len(result.stdout) != 384:
-        raise RuntimeError("Encrypted relay failed, no secret printed")
-    ciphertext = base64.b64encode(result.stdout).decode("ascii")
-    (output_dir / "encrypted_envelope.b64").write_text(ciphertext + "\n", encoding="utf-8")
-    print("KAGGLE_RELAY_ENVELOPE_B64=" + ciphertext)
-    write_summary(["## Kaggle encrypted credential relay", "", "One-time RSA-OAEP sealed envelope generated. No plaintext token disclosed."])
-
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", required=True)
@@ -628,8 +587,6 @@ def main() -> int:
         dataset_analysis(data, output_dir)
     elif action == "artifact_analysis":
         artifact_analysis(data, output_dir)
-    elif action == "credential_relay":
-        credential_relay(data, output_dir)
 
     return 0
 
