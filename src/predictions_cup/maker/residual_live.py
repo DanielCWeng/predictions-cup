@@ -320,6 +320,11 @@ class ResidualTakerLiveCoordinator:
                 signal.direction,
             )
             return ()
+        # Only inventory guaranteed to shrink under every partial fill may
+        # offset new collateral in the conservative cash screen.
+        held = self._reservations.overlay_portfolio(snapshot.runtime.portfolio)
+        low, high = held.worst_case_inventory_bounds(snapshot.exchange_id, snapshot.tournament_id)
+        reducible = max(0, math.floor(-high if action is OrderAction.BUY else low))
         # Shadow on every signal, or fail closed as an opt-in pre-risk gate.
         # Verified SAME/EXACT mapping was already checked by the signal input.
         record = self._mapping.get(exchange_id)
@@ -362,6 +367,7 @@ class ResidualTakerLiveCoordinator:
                     if snapshot.runtime.portfolio.account_proxy_cash_balance is None
                     else float(snapshot.runtime.portfolio.account_proxy_cash_balance)
                 ),
+                reducible_inventory_shares=reducible,
                 maker_price_ticks=(
                     book.bids[0].price_ticks
                     if action is OrderAction.BUY
@@ -370,7 +376,8 @@ class ResidualTakerLiveCoordinator:
             )
             _LOG.info(
                 "TAKE economics %s exchange=%s direction=%s reason=%s qty=%d "
-                "net_per_share=%.5f net_total=%.4f limit=%s maker_conditional=%s",
+                "net_per_share=%.5f net_total=%.4f max_loss=%.2f "
+                "limit=%s maker_conditional=%s",
                 "gate" if self._economics_gate_enabled else "shadow",
                 exchange_id,
                 signal.direction,
@@ -378,6 +385,7 @@ class ResidualTakerLiveCoordinator:
                 economics.quantity,
                 economics.net_edge_per_share,
                 economics.net_expected_value,
+                economics.worst_case_settlement_loss,
                 economics.limit_price_ticks,
                 economics.maker_conditional_edge_per_share,
             )

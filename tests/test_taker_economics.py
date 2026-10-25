@@ -92,3 +92,32 @@ def test_no_additional_levels_after_min_edge():
     )
     assert result.quantity == 3
     assert result.limit_price_ticks == 100
+
+
+def test_sell_no_buy_uses_complementary_collateral() -> None:
+    result = _eval(
+        direction="SELL",
+        levels=(RuntimeLevel(110, 50),),
+        conservative_fair=0.50,
+        available_cash=9.5,
+    )
+    assert result.admissible
+    assert result.quantity == 21
+    assert result.worst_case_settlement_loss == pytest.approx(21 * 0.45 + 21 * 0.001)
+
+
+def test_provably_reducing_inventory_needs_no_new_collateral() -> None:
+    sale = _eval(
+        direction="SELL",
+        levels=(RuntimeLevel(110, 50),),
+        conservative_fair=0.50,
+        available_cash=0,
+        reducible_inventory_shares=15,
+    )
+    assert sale.quantity == 15
+    buy = _eval(available_cash=0, reducible_inventory_shares=7)
+    assert buy.quantity == 7
+
+
+def test_negative_reducible_inventory_fails_closed() -> None:
+    assert _eval(reducible_inventory_shares=-1).reason == "invalid_inventory"

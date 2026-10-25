@@ -28,6 +28,7 @@ class TakerEconomics:
     net_edge_per_share: float = 0.0
     net_expected_value: float = 0.0
     total_slippage: float = 0.0
+    worst_case_settlement_loss: float = 0.0
     # Passive price is conditional on a fill; queue probability is unknown.
     maker_conditional_edge_per_share: float | None = None
 
@@ -52,6 +53,7 @@ def evaluate_taker_economics(
     adverse_selection_haircut: float = 0.005,
     min_net_edge_per_share: float = 0.005,
     available_cash: float | None = None,
+    reducible_inventory_shares: int = 0,
     maker_price_ticks: int | None = None,
 ) -> TakerEconomics:
     """Evaluate marginal depth, rather than assuming every share fills at touch.
@@ -90,6 +92,8 @@ def evaluate_taker_economics(
         return reject("invalid_economics")
     if desired_quantity < 1 or not levels:
         return reject("no_quantity_or_depth")
+    if reducible_inventory_shares < 0:
+        return reject("invalid_inventory")
     if available_cash is not None and (not math.isfinite(available_cash) or available_cash < 0.0):
         return reject("cash_untrusted")
     cushion = fee_per_share + latency_haircut + adverse_selection_haircut
@@ -123,9 +127,16 @@ def evaluate_taker_economics(
         if marginal < min_net_edge_per_share - 1e-12:
             break
         take = min(max(0, int(math.floor(level.quantity))), desired_quantity - qty)
-        if direction == "BUY" and available_cash is not None and price > 0:
-            # Entire sweep must fit the *limit*, not an optimistic VWAP.
-            take = min(take, max(0, int(available_cash // price) - qty))
+        if available_cash is not None:
+            # For SIG, flat YES sells canonicalise to NO buys. Cash capacity
+            # uses complementary NO collateral; already-held opposite shares
+            # that are *provably* reduced consume no new collateral.
+            new_share_collateral = price if direction == "BUY" else 1.0 - price
+            if new_share_collateral > 0.0:
+                budgeted = reducible_inventory_shares + math.floor(
+                    available_cash / new_share_collateral
+                )
+                take = min(take, max(0, budgeted - qty))
         if take <= 0:
             break
         qty += take
@@ -151,6 +162,9 @@ def evaluate_taker_economics(
             net_edge_per_share=net_per,
             net_expected_value=qty * net_per,
             total_slippage=max(0.0, slippage),
+            worst_case_settlement_loss=(
+                qty * (vwap if direction == "BUY" else 1.0 - vwap) + qty * fee_per_share
+            ),
             maker_conditional_edge_per_share=maker_edge,
         )
         if qty >= desired_quantity:

@@ -20,8 +20,8 @@ nice -n 15 ionice -c3 python scripts/ops/lane3_fill_markouts.py \
 
 `predictions_cup.maker.taker_economics.evaluate_taker_economics` is a **pure, read-only** decision prefilter. Inputs: signed YES direction, verified conservative fair bound (external best bid when buying YES, external best ask when selling YES), SIG full book levels, trusted-depth marker, book/reference ages, desired shares, available cash if known, fee and latency/adverse-selection buffers, and a minimum net edge. The evaluator:
 - rejects stale/untrusted depth or external prices and malformed/off-grid books;
-- sweeps true executable levels, clips to positive marginal after-cost edge and available size, recomputes VWAP and slippage, and applies conservative cash sizing at the worst touched price when a known cash amount exists;
-- returns net expected value *conditional on fill*, limit tick, size, and maker-price alternative *conditional on a maker fill*. It never calls order APIs;
+- sweeps true executable levels, clips to positive marginal after-cost edge and available size, recomputes VWAP and slippage, and applies conservative cash sizing at the worst touched price when a known cash amount exists (including complementary NO collateral on YES SELL, with exemptions only for provable inventory reductions);
+- returns net expected value *conditional on fill*, limit tick, size, maximum settlement loss on the traded leg and maker-price alternative *conditional on a maker fill*. It never calls order APIs;
 - does not assert an independent fair value, settlement guarantee, calibrated passive fill probability, or positive probability-weighted real-world edge from PM midpoint alone.
 
 Current defaults: additional 0.005 latency + 0.005 adverse-selection per share, 0.005 minimum net edge, zero separately configured SIG fee (SIG experimental backtests also use zero fee; validate tournament fee schedule before gate activation), 1.5s SIG depth age, 5s external reference age. This is a **conservative heuristic**, not an empirically calibrated lower confidence bound.
@@ -41,4 +41,4 @@ The opt-in `PREDICTIONS_CUP_RESIDUAL_TAKER_ECONOMICS_GATE_ENABLED` setting defau
 
 ## Tests
 
-15 dedicated pure-economics tests and three coordinator integration cases added. Targeted suite: **35 passed** (25 Oct 2026), including old coordinator tests. Ruff checks passed. Existing live checkout and unit service were not changed.
+18 dedicated pure-economics tests and three coordinator integration cases added. Targeted suite: **38 passed** (25 Oct 2026), including old coordinator tests. Ruff checks passed. Existing live checkout and unit service were not changed.
