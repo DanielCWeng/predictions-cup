@@ -184,7 +184,11 @@ class AppSettings(BaseSettings):
     # every process on the host also draws from one flock-guarded token bucket
     # at this combined rate; HIGH (execution) priority keeps a reserved token.
     sig_rest_account_budget_path: Path | None = None
-    sig_rest_account_rate_per_second: float = Field(default=3.0, gt=0.0, le=100.0)
+    sig_rest_account_rate_per_second: float = Field(default=1.6, gt=0.0, le=100.0)
+    # Independent write admission; reserve the write limit for cancels and taker.
+    # 0.45/s with a two-request burst stays below 30 writes in any 60s window.
+    sig_rest_write_governor_rate_per_second: float = Field(default=0.45, gt=0.0, le=1.0)
+    sig_rest_write_account_rate_per_second: float = Field(default=0.45, gt=0.0, le=1.0)
     sig_rest_shared_cooldown_max_seconds: float = Field(default=8.0, ge=0.5, le=120.0)
     sig_realtime_open_book_refresh_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
     sig_realtime_bulk_price_refresh_seconds: float = Field(default=10.0, ge=1.0, le=300.0)
@@ -530,6 +534,13 @@ class AppSettings(BaseSettings):
                 }
             ),
             "sig_rest_governor_rate_per_second": self.sig_rest_governor_rate_per_second,
+            "sig_rest_account_rate_per_second": self.sig_rest_account_rate_per_second,
+            "sig_rest_write_governor_rate_per_second": (
+                self.sig_rest_write_governor_rate_per_second
+            ),
+            "sig_rest_write_account_rate_per_second": (
+                self.sig_rest_write_account_rate_per_second
+            ),
             "sig_rest_shared_cooldown_max_seconds": (self.sig_rest_shared_cooldown_max_seconds),
             "sig_realtime_open_book_refresh_seconds": (self.sig_realtime_open_book_refresh_seconds),
             "sig_realtime_bulk_price_refresh_seconds": (
