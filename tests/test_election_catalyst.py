@@ -4,7 +4,7 @@ from time import perf_counter_ns
 import pytest
 
 from predictions_cup.maker.election_catalyst import (
-    CatalystReport, CatalystWakeHandoff, ElectionCatalystGate, MarketView,
+    CatalystReport, CatalystWakeHandoff, ElectionCatalystGate, ElectionCatalystRouter, MarketView,
 )
 from predictions_cup.runtime.models import RuntimeLevel
 
@@ -195,3 +195,20 @@ def test_hot_path_micro_latency_smoke():
         assert decision is not None
     durations.sort()
     assert durations[237] < 20_000_000  # 20 ms p95 regression ceiling, not a guarantee
+
+
+def test_ingress_router_once():
+    seen=[]
+    route=ElectionCatalystRouter(gate(),current_market_view=lambda ident: market(exchange_id=ident),notify_sig=lambda ids, *, observed_monotonic_ns: seen.append((ids,observed_monotonic_ns)),utc_ms=lambda:EPOCH,monotonic_ns=lambda:NOW)
+    assert route.on_verified_report(report())[1] is None
+    assert route.on_verified_report(report('virginia'))[1] is not None
+    assert route.on_verified_report(report('virginia'))[1] is None
+    assert seen==[(('844',),NOW)]
+
+
+def test_delayed_snapshot_rejected():
+    g=gate()
+    ingest(g,report())
+    stale=market(now_monotonic_ns=NOW-400_000_000,depth_observed_ns=NOW-500_000_000)
+    reason,decision=ingest(g,report('virginia'),view=stale)
+    assert reason=='market_or_account_untrusted' and decision is None
