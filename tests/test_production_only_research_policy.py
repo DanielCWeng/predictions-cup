@@ -101,7 +101,7 @@ def test_supervisor_can_opt_in_to_capture_recovery(
         polymarket_capture_enabled=True,
     )
     config = SupervisorRuntimeConfig.from_env(
-        settings, repo_root=tmp_path, role_override=HostRole.EAST_CAPTURE
+        settings, repo_root=tmp_path, role_override=HostRole.EAST_ARCHIVE
     )
     assert "predictions-cup-sig-capture.service" in config.expected_services
     assert "predictions-cup-polymarket-capture.service" in config.expected_services
