@@ -505,6 +505,29 @@ class MakerEngine:
                 ask_ticks.append(ask)
                 previous_ask = ask + 1
 
+        # At substantial, *unambiguously reducing* inventory, compete for the
+        # first fill rather than leaving every resting level behind SIG's touch.
+        # This uses the existing PM exit-edge threshold and passive-price
+        # clamps; it never improves the risk-increasing side or relaxes a gate.
+        low, high = snapshot.runtime.portfolio.worst_case_inventory_bounds(
+            snapshot.exchange_id,
+            snapshot.tournament_id,
+        )
+        pressure = (
+            min(self._config.max_abs_inventory, self._config.deep_ladder_position_cap)
+            * FILL_SEEKING_INVENTORY_SKEW_FRACTION
+        )
+        if (low > pressure and ask_ticks) or (high < -pressure and bid_ticks):
+            nearer_bid, nearer_ask = self._fill_seeking_ticks(
+                snapshot,
+                external_quote=external_quote,
+                min_edge=self._config.fill_seeking_min_edge,
+            )
+            if low > pressure and nearer_ask is not None and nearer_ask < ask_ticks[0]:
+                ask_ticks[0] = nearer_ask
+            if high < -pressure and nearer_bid is not None and nearer_bid > bid_ticks[0]:
+                bid_ticks[0] = nearer_bid
+
         if bid_ticks and ask_ticks and bid_ticks[0] >= ask_ticks[0]:
             return (), ()
         return tuple(bid_ticks), tuple(ask_ticks)
