@@ -90,6 +90,85 @@ def _pm_snapshot(observed_at: datetime) -> BookSnapshot:
     )
 
 
+def test_bridge_build_many_reuses_one_portfolio_per_cycle_and_refreshes_next_cycle() -> None:
+    wall_now = datetime(2026, 9, 29, 14, 0, tzinfo=UTC)
+    observed = wall_now - timedelta(milliseconds=5)
+    records = tuple(
+        _mapping().records[0].model_copy(
+            update={"sig_exchange_id": str(i), "sig_market_id": f"m{i}"}
+        )
+        for i in range(36, 112)
+    )
+    sig = _SigState(
+        tournament_id="t1",
+        states={
+            str(i): ExchangeRuntimeState(
+                exchange_id=str(i), market_id=f"m{i}", tournament_id="t1",
+                depth_state=DepthState.UNTRACKED_DEPTH,
+                scalar_best_bid=Decimal("0.49"),
+                scalar_best_ask=Decimal("0.51"),
+                last_scalar_observed_at=observed,
+            )
+            for i in range(36, 112)
+        },
+        market_states={
+            f"m{i}": MarketRuntimeState(
+                market_id=f"m{i}", title="fixture", status="open",
+                settled_with=None, last_rest_observed_at=observed,
+            )
+            for i in range(36, 112)
+        },
+        health=RuntimeHealth(connected=True),
+    )
+    account = _AccountState(
+        tournament_id="t1",
+        last_accepted_observed_at=observed,
+        portfolio=RuntimePortfolio(account_trusted=True),
+    )
+    calls = 0
+    original = account.runtime_portfolio
+
+    def counting_portfolio() -> RuntimePortfolio:
+        nonlocal calls
+        calls += 1
+        return original()
+
+    account.runtime_portfolio = counting_portfolio  # type: ignore[method-assign]
+    bridge = MakerSourceBridge(
+        mapping=MappingDocument(tournament_id="t1", records=records),
+        sig_state=sig,
+        account_state=account,
+        polymarket_books=_PmBooks({"yes-token": _pm_snapshot(observed)}),
+    )
+    exchanges = tuple(str(i) for i in range(36, 112))
+    batch = bridge.build_many(
+        exchanges, wall_now=wall_now, monotonic_now_ns=1_000_000_000,
+        polymarket_feed_trusted=True,
+    )
+    assert len(batch) == 76
+    assert calls == 1
+    assert all(x.runtime.portfolio is batch["36"].runtime.portfolio for x in batch.values())
+    assert all(x.sig_bbo_trusted for x in batch.values())
+
+    # Account reconciliations between cycles must never be masked by caching.
+    account.portfolio = RuntimePortfolio(account_trusted=False)
+    refreshed = bridge.build_many(
+        exchanges, wall_now=wall_now, monotonic_now_ns=1_000_000_100,
+        polymarket_feed_trusted=True,
+    )
+    assert calls == 2
+    assert all(not x.runtime.portfolio.account_trusted for x in refreshed.values())
+
+    # Ad-hoc single-market builds remain independent and fresh.
+    account.portfolio = RuntimePortfolio(account_trusted=True)
+    direct = bridge.build(
+        "36", wall_now=wall_now, monotonic_now_ns=1_000_000_200,
+        polymarket_feed_trusted=True,
+    )
+    assert direct is not None and direct.runtime.portfolio.account_trusted
+    assert calls == 3
+
+
 def test_bridge_builds_bounded_scalar_bbo_snapshot_with_separate_freshness() -> None:
     wall_now = datetime(2026, 9, 29, 14, 0, tzinfo=UTC)
     sig_observed = wall_now - timedelta(milliseconds=20)

@@ -164,6 +164,9 @@ class MakerCoordinator:
         actions: list[QuoteLifecycleAction] = []
         risk_decisions: list[RiskDecision] = []
         events: list[ExecutionEvent] = []
+        # Revalue once while successive no-op decisions have not yielded.
+        # After an execution/cancel await, refresh before the next market.
+        risk_context_snapshot: RiskContext | None = None
 
         for exchange_id in exchange_ids:
             snapshot = snapshots.get(exchange_id)
@@ -176,11 +179,13 @@ class MakerCoordinator:
             decision = self._engine.quote(snapshot)
             decisions.append(decision)
             current = self._registry.state(exchange_id)
-            current_risk_context = (
-                self._risk_context_source()
-                if callable(self._risk_context_source)
-                else self._risk_context_source
-            )
+            if risk_context_snapshot is None:
+                risk_context_snapshot = (
+                    self._risk_context_source()
+                    if callable(self._risk_context_source)
+                    else self._risk_context_source
+                )
+            current_risk_context = risk_context_snapshot
             capital = current_risk_context.capital_state
             mark_state_stale = (
                 capital is not None
@@ -282,6 +287,7 @@ class MakerCoordinator:
                 )
                 logical_id = f"{change.event_id}:make-cancel:{exchange_id}:{action.slot}"
                 try:
+                    risk_context_snapshot = None
                     event = await self._cancel_dispatch(
                         active,
                         logical_id,
@@ -445,6 +451,7 @@ class MakerCoordinator:
                 )
 
             try:
+                risk_context_snapshot = None
                 event = await self._placement_dispatch(plan, snapshot)
             except SigExecutionUncertainError as exc:
                 # Same-key retries/reconciliation own the unresolved economics.

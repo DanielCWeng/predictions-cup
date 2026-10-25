@@ -132,9 +132,16 @@ class MakerSourceBridge:
         polymarket_feed_trusted: bool,
         volatility_by_exchange: dict[str, float] | None = None,
     ) -> dict[str, MakerMarketSnapshot]:
+        # No asyncio account updates can interleave with this synchronous
+        # batch. Materialise the account positions/orders once per cycle,
+        # instead of 76 times for a typical LIVE global recheck.
+        selected = sorted(set(exchange_ids).intersection(self._records))
+        if not selected:
+            return {}
+        portfolio = self._canonical_portfolio()
         return {
             exchange_id: snapshot
-            for exchange_id in sorted(set(exchange_ids))
+            for exchange_id in selected
             if (
                 snapshot := self.build(
                     exchange_id,
@@ -146,6 +153,7 @@ class MakerSourceBridge:
                         if volatility_by_exchange is None
                         else volatility_by_exchange.get(exchange_id)
                     ),
+                    _cycle_portfolio=portfolio,
                 )
             )
             is not None
@@ -159,6 +167,7 @@ class MakerSourceBridge:
         monotonic_now_ns: int,
         polymarket_feed_trusted: bool,
         volatility: float | None = None,
+        _cycle_portfolio: RuntimePortfolio | None = None,
     ) -> MakerMarketSnapshot | None:
         if wall_now.tzinfo is None or wall_now.utcoffset() is None:
             raise ValueError("wall_now must be timezone-aware")
@@ -217,7 +226,11 @@ class MakerSourceBridge:
                 observed_monotonic_ns=0,
             )
 
-        portfolio = self._canonical_portfolio()
+        portfolio = (
+            self._canonical_portfolio()
+            if _cycle_portfolio is None
+            else _cycle_portfolio
+        )
         account_observed = (
             self._account.last_accepted_observed_at or self._account.last_authoritative_observed_at
         )

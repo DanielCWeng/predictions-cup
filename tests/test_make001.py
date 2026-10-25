@@ -1783,6 +1783,52 @@ def test_shadow_coordinator_uses_central_risk_and_does_not_duplicate_quote() -> 
     assert all(action.kind is QuoteLifecycleActionKind.KEEP for action in second.lifecycle_actions)
 
 
+def test_coordinator_reuses_risk_context_only_until_dispatch_yields() -> None:
+    adapter = ShadowMakerExecutionAdapter()
+    calls = 0
+
+    def source() -> RiskContext:
+        nonlocal calls
+        calls += 1
+        return RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+        )
+
+    coordinator = MakerCoordinator(
+        engine=_engine(),
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=QuoteRegistry(),
+        risk_context=source,
+        placement_dispatch=adapter.place,
+        cancel_dispatch=adapter.cancel,
+    )
+    # Coordinator validates its risk source once during construction.
+    calls = 0
+    blocked = _maker_snapshot(bbo_trusted=False)
+    other = replace(blocked, exchange_id="37")
+    change = MakerStateChange(
+        event_id="no-op-context-1", observed_monotonic_ns=NOW,
+        exchange_ids=frozenset({"36", "37"}),
+    )
+    result = asyncio.run(coordinator.on_state_change(change, {"36": blocked, "37": other}))
+    assert result.execution_events == ()
+    assert calls == 1
+
+    # The first exchange now places; the yielding dispatch must invalidate
+    # the risk cache before the second market is considered.
+    active = _maker_snapshot()
+    change = MakerStateChange(
+        event_id="placing-context-2", observed_monotonic_ns=NOW + 1,
+        exchange_ids=frozenset({"36", "37"}),
+    )
+    result = asyncio.run(coordinator.on_state_change(change, {"36": active, "37": other}))
+    assert result.execution_events
+    assert calls == 3
+
+
 class _DeadlineBridge:
     tradeable_exchange_ids = frozenset({"36"})
 
