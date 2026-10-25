@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -50,7 +51,13 @@ from predictions_cup.maker.safety import MakerKillSwitch
 from predictions_cup.maker.service import MakerService
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.risk.core import RiskDecision
-from predictions_cup.runtime.models import OrderAction, OutcomeSide
+from predictions_cup.runtime.models import (
+    OrderAction,
+    OutcomeSide,
+    RuntimeOrderState,
+    RuntimePortfolio,
+    RuntimePosition,
+)
 from predictions_cup.runtime.telemetry import HotPathTelemetry
 from predictions_cup.shadow.live import LiveShadowRuntime
 from predictions_cup.sig.account_reconciliation import AccountAuthoritativeSnapshot
@@ -971,8 +978,10 @@ def test_sig_market_callback_rest_failure_retries_without_kill_or_drain(
             topic: str,
             payload: object,
             observed_at: datetime,
+            *,
+            validated_batch: object | None = None,
         ) -> None:
-            del topic, payload, observed_at
+            del topic, payload, observed_at, validated_batch
             raise SigTemporaryServiceError(
                 status_code=None,
                 code=None,
@@ -1143,8 +1152,10 @@ def test_sig_market_callback_internal_failure_still_kills_and_exits(
             topic: str,
             payload: object,
             observed_at: datetime,
+            *,
+            validated_batch: object | None = None,
         ) -> None:
-            del topic, payload, observed_at
+            del topic, payload, observed_at, validated_batch
             raise internal_error
 
         def mark_disconnected(self) -> None:
@@ -1525,3 +1536,88 @@ def test_maker_pm_handler_reconnects_when_required_token_is_unseeded() -> None:
                 cast(MakerRuntimeLoop, _PmNotifyRuntime()),
             )
         )
+
+def test_lazy_portfolio_inventory_index_preserves_all_worst_case_exposures() -> None:
+    positions = tuple(
+        RuntimePosition(
+            exchange_id=str(875 + i % 76),
+            market_id=f"m{i % 76}",
+            tournament_id="cup" if i % 6 else "other",
+            gross_exposure=float(i + 1),
+            signed_quantity=float((i % 11) - 5),
+        )
+        for i in range(160)
+    )
+    orders = tuple(
+        RuntimeOrderState(
+            logical_intent_id=f"order-{i}",
+            exchange_id=str(875 + i % 76),
+            market_id=f"m{i % 76}",
+            tournament_id="cup" if i % 8 else "other",
+            reserved_exposure=float((i % 9) + 1),
+            open=i % 4 != 0,
+            uncertain=i % 7 == 0,
+            signed_quantity=(
+                0.0 if i % 3 == 0 else
+                float((i % 9) + 1) * (1 if i % 3 == 1 else -1)
+            ),
+        )
+        for i in range(260)
+    )
+    portfolio = RuntimePortfolio(positions=positions, orders=orders, account_trusted=True)
+    assert portfolio._inventory_lookup is None
+
+    for tournament_id in ("cup", "other", "unknown"):
+        for exchange_id in (str(875 + i) for i in range(76)):
+            signed = sum(
+                p.signed_quantity
+                for p in positions
+                if p.exchange_id == exchange_id and p.tournament_id == tournament_id
+            )
+            positive = 0.0
+            negative = 0.0
+            unknown = 0.0
+            for order in orders:
+                if not (order.open or order.uncertain):
+                    continue
+                if order.exchange_id != exchange_id or order.tournament_id != tournament_id:
+                    continue
+                if order.signed_quantity > 0:
+                    positive += order.signed_quantity
+                elif order.signed_quantity < 0:
+                    negative += order.signed_quantity
+                else:
+                    unknown += order.reserved_exposure
+            assert portfolio.signed_inventory(exchange_id, tournament_id) == signed
+            assert portfolio.worst_case_inventory_bounds(exchange_id, tournament_id) == (
+                signed + negative - unknown,
+                signed + positive + unknown,
+            )
+    assert portfolio._inventory_lookup is not None
+    assert portfolio.worst_case_inventory_bounds("missing", "cup") == (0, 0)
+
+    # A new authoritative portfolio cannot inherit an older snapshot's index.
+    fresh = replace(portfolio, positions=())
+    assert fresh._inventory_lookup is None
+    assert fresh.signed_inventory("876", "cup") == 0.0
+    assert fresh.worst_case_inventory_bounds("876", "cup") != (
+        portfolio.worst_case_inventory_bounds("876", "cup")
+    )
+
+
+def test_inventory_cache_is_immutable_and_not_part_of_portfolio_identity() -> None:
+    portfolio = RuntimePortfolio(
+        positions=(RuntimePosition("36", "m1", "t1", 3.0, signed_quantity=-3.0),),
+    )
+    original_hash = hash(portfolio)
+    other = RuntimePortfolio(positions=portfolio.positions)
+    assert portfolio.worst_case_inventory_bounds("36", "t1") == (-3.0, -3.0)
+    assert portfolio == other
+    assert hash(portfolio) == original_hash == hash(other)
+    assert portfolio._inventory_lookup is not None
+    mutable_view = cast(
+        dict[tuple[str, str], tuple[float, float, float]],
+        portfolio._inventory_lookup,
+    )
+    with pytest.raises(TypeError):
+        mutable_view[("36", "t1")] = (0, 0, 0)
