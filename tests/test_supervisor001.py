@@ -530,6 +530,20 @@ def test_sig_capture_liveness_accepts_either_recent_signal(
     assert liveness_findings == (set() if expected_code is None else {expected_code})
 
 
+def test_retired_optional_capture_does_not_hold_live_supervisor() -> None:
+    collection = _healthy_collection()
+    statuses = tuple(
+        _status("sig_capture", required=False, available=False)
+        if item.source_id == "sig_capture" else item
+        for item in collection.statuses
+    )
+    sections = dict(collection.sections)
+    sections["sig_capture"] = {}
+    findings = evaluate(SourceCollection(statuses, sections), SupervisorPolicy())
+    assert not any(item.code.startswith("SIG_CAPTURE_ACTIVITY_") for item in findings)
+    assert severity_and_gate(findings) == (Severity.OK, LaunchGate.PASS)
+
+
 def test_restart_budget_excess_is_critical() -> None:
     collection = _healthy_collection()
     sections = dict(collection.sections)
