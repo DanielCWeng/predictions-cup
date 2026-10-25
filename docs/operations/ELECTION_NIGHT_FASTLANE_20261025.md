@@ -74,3 +74,7 @@ Required before LIVE deployment:
 5. Deploy once, verify quote/taker health, then freeze ahead of election night.
 
 No live trades or risk-limit changes occurred during this analysis.
+
+CI integration note (25 October): PR #354 restored upstream taker lint and
+strict typing before review of this fast-lane PR. The final combined merge
+must pass GitHub CI; a prior rerun on the old merge SHA was not sufficient.
