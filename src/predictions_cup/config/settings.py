@@ -29,6 +29,9 @@ class AppSettings(BaseSettings):
 
     environment: str = "development"
     log_level: LogLevel = "INFO"
+    # Production trading does not need a separate historical research recorder.
+    # Explicitly opt in for offline collection; never gate live maker, risk or execution.
+    research_collection_enabled: bool = False
     sig_api_base_url: AnyHttpUrl = AnyHttpUrl("https://www.thesuper.market/api/v1")
     sig_read_credential: SecretStr | None = None
     sig_trade_credential: SecretStr | None = None

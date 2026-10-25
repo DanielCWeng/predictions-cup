@@ -22,9 +22,14 @@ class EmitterHealth:
 
 
 class NullObservationEmitter:
+    """Drop optional research observations without queues, threads or I/O."""
+
     def emit(self, observation: VenueObservation) -> bool:
         del observation
         return True
+
+    def close(self) -> None:
+        return None
 
 
 class InMemoryObservationSink:
