@@ -44,7 +44,7 @@ from predictions_cup.maker.safety import MakerKillSwitch
 from predictions_cup.maker.taker_economics import evaluate_taker_economics
 from predictions_cup.mapping.models import MappingDocument
 from predictions_cup.risk.core import RiskContext, evaluate_risk
-from predictions_cup.runtime.models import OrderAction, OutcomeSide
+from predictions_cup.runtime.models import OrderAction, OutcomeSide, RuntimePortfolio
 from predictions_cup.sig.errors import SigApiError, SigExecutionUncertainError
 from predictions_cup.strategy.core import CandidateLeg, Opportunity, StrategyFamily
 
@@ -269,8 +269,10 @@ class ResidualTakerLiveCoordinator:
         action: OrderAction,
         quantity: int,
         require_reducing: bool = False,
+        portfolio: RuntimePortfolio | None = None,
     ) -> int:
-        portfolio = self._reservations.overlay_portfolio(snapshot.runtime.portfolio)
+        if portfolio is None:
+            portfolio = self._reservations.overlay_portfolio(snapshot.runtime.portfolio)
         if self._max_position is None and (require_reducing or portfolio.proxy_active):
             low, high = portfolio.worst_case_inventory_bounds(
                 snapshot.exchange_id,
@@ -311,12 +313,29 @@ class ResidualTakerLiveCoordinator:
             action, ticks = OrderAction.BUY, book.asks[0].price_ticks
         else:
             action, ticks = OrderAction.SELL, book.bids[0].price_ticks
+        # A trusted full-depth snapshot is mandatory for gated taking.
+        # Cheaply reject stale/untrusted depth BEFORE portfolio and reservation
+        # overlays. The economics gate repeats these checks defensively.
+        if self._economics_gate_enabled:
+            if not (snapshot.sig_depth_trusted and book.trusted_depth):
+                self._skipped_signals["economics_depth_untrusted"] += 1
+                return ()
+            depth_ns = snapshot.sig_depth_observed_ns
+            if (
+                depth_ns is None
+                or snapshot.now_monotonic_ns < depth_ns
+                or snapshot.now_monotonic_ns - depth_ns > self._max_sig_depth_age_ns
+            ):
+                self._skipped_signals["economics_stale_data"] += 1
+                return ()
         reduce_only = bbo_proxy or snapshot.runtime.portfolio.proxy_active
+        held = self._reservations.overlay_portfolio(snapshot.runtime.portfolio)
         quantity = self._capped_quantity(
             snapshot,
             action,
             signal.quantity,
             require_reducing=reduce_only,
+            portfolio=held,
         )
         if quantity < 1:
             self._skipped_signals["position_cap"] += 1
@@ -328,7 +347,6 @@ class ResidualTakerLiveCoordinator:
             return ()
         # Only inventory guaranteed to shrink under every partial fill may
         # offset new collateral in the conservative cash screen.
-        held = self._reservations.overlay_portfolio(snapshot.runtime.portfolio)
         low, high = held.worst_case_inventory_bounds(snapshot.exchange_id, snapshot.tournament_id)
         reducible = max(0, math.floor(-high if action is OrderAction.BUY else low))
         # Shadow on every signal, or fail closed as an opt-in pre-risk gate.
