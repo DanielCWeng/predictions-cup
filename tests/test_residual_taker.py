@@ -83,6 +83,19 @@ def test_frozen_validation_replay_matches_battery_trade_list() -> None:
     assert exact / len(expected) == 1.0
 
 
+def test_live_signal_can_defer_cooldown_until_execution_submission() -> None:
+    engine = ResidualTakerSignal()
+    first = engine.on_state(_state(0), commit_cooldown=False)
+    assert first is not None
+    assert engine.on_state(_state(1), commit_cooldown=False) is not None
+    engine.record_submission(first)
+    assert engine.on_state(_state(59), commit_cooldown=False) is None
+    assert engine.on_state(_state(60), commit_cooldown=False) is not None
+    # The frozen replay still commits cooldown by default.
+    assert engine.on_state(_state(60)) is not None
+    assert engine.on_state(_state(61)) is None
+
+
 def test_cooldown_is_per_market_and_direction() -> None:
     engine = ResidualTakerSignal()
     assert engine.on_state(_state(0)) is not None
