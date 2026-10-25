@@ -1783,6 +1783,39 @@ def test_shadow_coordinator_uses_central_risk_and_does_not_duplicate_quote() -> 
     assert all(action.kind is QuoteLifecycleActionKind.KEEP for action in second.lifecycle_actions)
 
 
+def test_no_place_logging_throttles_repeats_but_reports_gate_changes(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    clock = [100.0]
+    monkeypatch.setattr(
+        "predictions_cup.maker.coordinator.time.monotonic",
+        lambda: clock[0],
+    )
+    coordinator = MakerCoordinator(
+        engine=_engine(),
+        lifecycle=QuoteLifecycleManager(),
+        quote_registry=QuoteRegistry(),
+        risk_context=RiskContext(
+            mode=ExecutionMode.SHADOW,
+            kill_switch=False,
+            limits=None,
+            max_state_age_ns=100_000_000,
+        ),
+        placement_dispatch=ShadowMakerExecutionAdapter().place,
+        cancel_dispatch=ShadowMakerExecutionAdapter().cancel,
+    )
+    with caplog.at_level("INFO", logger="predictions_cup.maker.coordinator"):
+        stale = "no_place gate=CANCEL reason=sig_bbo_stale desired=False"
+        coordinator._log_outcome("36", stale)
+        clock[0] = 120.0
+        coordinator._log_outcome("36", stale)
+        coordinator._log_outcome("36", "no_place gate=CANCEL reason=fv_stale desired=False")
+        clock[0] = 181.0
+        coordinator._log_outcome("36", stale)
+    assert len([record for record in caplog.records if "MAKE outcome" in record.message]) == 3
+
+
 def test_coordinator_reuses_risk_context_only_until_dispatch_yields() -> None:
     adapter = ShadowMakerExecutionAdapter()
     calls = 0
