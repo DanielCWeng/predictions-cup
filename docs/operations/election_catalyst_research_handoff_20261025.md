@@ -29,13 +29,14 @@ Maintain `published_epoch_ms` (source's published time, if reliably provided) an
 
 - `maker/election_catalyst.py`: in-memory bounded evidence registry (max 128 active event keys), exact SIG exchange allowlist, configured exact source URL host and reporting family, rejection of duplicate/future/stale/conflicting evidence, two different reporting families before qualification, conservative lower-bound BUY / upper-bound SELL, existing `evaluate_taker_economics` with trusted book depth, fee/slippage/latency, cash and reducible inventory. **The probability bounds are externally supplied and must have a separately validated provenance**. The module does NOT convert vote percentages into win probabilities, authenticate news content, query networks, make trade orders or override risk.
 - `CatalystWakeHandoff` accepts the actual `MakerRuntimeLoop.notify_sig` keyword-only interface, waking the same maker/taker observer path. It does **not** submit or pre-authorize an order. Existing residual taker still uses trusted PM/SIG fair-value logic and may reject a catalyst even if the independent fair bound differs materially. **That is an intentional safe limitation of this first integration seam.**
+- `maker/election_catalyst_bridge.py` builds the decision-time `MarketView` from the actual maker snapshot and reservation-adjusted worst-case signed inventory, checking open/tradeable status, BBO/depth trust/age and authoritative/proxy cash availability. When cash is unknown the gate fails closed.
 - Production remains **off**. There is no licensed live producer, authenticated evidence adapter, venue live book wire or production service registration in this branch. A full direct-priced catalyst order path should be considered only with the Infrastructure Lane and separate RISK-002 review.
 
 ## 5. Deterministic validation
 
 West isolated test path `/home/ec2-user/catalyst-lane-isolated/`, independent of the dirty live checkout:
-- **26 deterministic tests passed**: duplicate reports, two apparent sources from the same wire family, direction contradiction quarantine, nonoverlapping probability bounds, stale/future publications, forged-looking hostnames, market suspension, BBO/depth/account trust, insufficient cash, no executable edge, SELL bound and 300-event burst / bounded memory.
-- One initial burst test correctly found an off-by-one capacity error (129 rather than 128). Fixed, then **26/26 passed**.
+- **30 deterministic tests passed**: duplicate reports, two apparent sources from the same wire family, direction contradiction quarantine, nonoverlapping probability bounds, stale/future publications, forged-looking hostnames, market suspension, BBO/depth/account trust, insufficient cash, no executable edge, SELL bound and 300-event burst / bounded memory.
+- One initial burst test correctly found an off-by-one capacity error (129 rather than 128). Fixed, then **30/30 passed**.
 - 3,000 synthetic *two-report CPU-only* qualifications on West: **p50 0.035 ms, p95 0.0432 ms, p99 0.0723 ms**. This does not include network/verification/dispatch/ACK.
 - No real election night event has occurred. **ZERO independently verified actionable opportunities and ZERO profitable fills are claimed**.
 
