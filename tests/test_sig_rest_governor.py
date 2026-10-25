@@ -489,6 +489,7 @@ def test_governor_waits_on_shared_budget(tmp_path: Path) -> None:
 
 def test_read_and_write_budget_paths_are_independent_and_capped(tmp_path: Path) -> None:
     from predictions_cup.sig.governed_client import build_rest_governor, build_write_governor
+    from predictions_cup.sig.shared_budget import HostSharedRestBudget
 
     settings = AppSettings(
         sig_read_credential=SecretStr("read-secret"),
@@ -502,8 +503,8 @@ def test_read_and_write_budget_paths_are_independent_and_capped(tmp_path: Path) 
     writes = build_write_governor(settings)
     assert reads.rate_per_second == pytest.approx(1.6)
     assert writes.rate_per_second == pytest.approx(0.45)
-    assert reads._shared_budget is not None
-    assert writes._shared_budget is not None
+    assert isinstance(reads._shared_budget, HostSharedRestBudget)
+    assert isinstance(writes._shared_budget, HostSharedRestBudget)
     assert reads._shared_budget.path == tmp_path / "sig-budget.json"
     assert writes._shared_budget.path == tmp_path / "sig-budget.json.writes"
 
