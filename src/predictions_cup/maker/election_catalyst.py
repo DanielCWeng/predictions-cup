@@ -176,6 +176,8 @@ class ElectionCatalystGate:
             return self._count("contradictory_reports"), None
         family_reports[report.source_family] = report
         self._evidence.move_to_end(key)
+        while len(self._evidence) > _MAX_EVENTS:
+            self._evidence.popitem(last=False)
         if len(family_reports) < 2:
             return self._count("awaiting_independent_confirmation"), None
         reports = tuple(family_reports.values())
