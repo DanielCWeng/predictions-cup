@@ -155,6 +155,7 @@ class _Harness:
         resting: bool = True,
         cancel_failures: int = 0,
         allow_bbo_proxy: bool = False,
+        economics_gate_enabled: bool = False,
     ) -> None:
         self.journal = _Journal()
         self.quotes = QuoteRegistry()
@@ -178,6 +179,7 @@ class _Harness:
             kill_switch=self.kill_switch,
             allow_bbo_proxy=allow_bbo_proxy,
             max_sig_bbo_age_ns=1_000_000_000,
+            economics_gate_enabled=economics_gate_enabled,
         )
 
     async def _dispatch(self, plan: ExecutionPlan) -> ExecutionEvent:
@@ -569,3 +571,24 @@ def test_taker_liveness_fails_loudly_when_recheck_never_evaluates(
         )
 
     assert "TAKE liveness stalled evaluated=0 input_ready=0 signals=0 cycles=0" in caplog.text
+
+
+def test_economics_gate_passes_depth_qualified_buy_through_same_risk_engine() -> None:
+    harness = _Harness(economics_gate_enabled=True)
+    harness.run(_snapshot(ask_qty=30.0))
+    assert len(harness.plans) == 1
+    (intent,) = harness.plans[0].intents
+    assert intent.quantity == 30
+    assert intent.limit_price_ticks == 140
+
+
+def test_economics_gate_denies_untrusted_depth_without_dispatch() -> None:
+    harness = _Harness(economics_gate_enabled=True)
+    harness.run(replace(_snapshot(), sig_depth_trusted=False))
+    assert not harness.plans
+
+
+def test_economics_gate_denies_residual_without_after_cost_edge() -> None:
+    harness = _Harness(economics_gate_enabled=True)
+    harness.run(_snapshot(pm_bid=0.712, pm_ask=0.732))
+    assert not harness.plans

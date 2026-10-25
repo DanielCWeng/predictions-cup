@@ -40,6 +40,7 @@ from predictions_cup.maker.residual_taker import (
     residual_input_from_snapshot,
 )
 from predictions_cup.maker.safety import MakerKillSwitch
+from predictions_cup.maker.taker_economics import evaluate_taker_economics
 from predictions_cup.mapping.models import MappingDocument
 from predictions_cup.risk.core import RiskContext, evaluate_risk
 from predictions_cup.runtime.models import OrderAction, OutcomeSide
@@ -84,6 +85,13 @@ class ResidualTakerLiveCoordinator:
         pm_spread_cap: float = PM_SPREAD_CAP,
         min_pm_depth: float = MIN_PM_DEPTH,
         cooldown_ns: int = COOLDOWN_NS,
+        economics_gate_enabled: bool = False,
+        min_net_edge: float = 0.005,
+        fee_per_share: float = 0.0,
+        latency_haircut: float = 0.005,
+        adverse_haircut: float = 0.005,
+        max_sig_depth_age_ns: int = 1_500_000_000,
+        max_fair_age_ns: int = 5_000_000_000,
     ) -> None:
         if not tracked_exchange_ids:
             raise ValueError("LIVE residual taker requires an explicit universe")
@@ -115,6 +123,13 @@ class ResidualTakerLiveCoordinator:
         # Per-market cap on signed YES inventory the taker may build; trades
         # that reduce inventory are never blocked.
         self._max_position = max_position
+        self._economics_gate_enabled = economics_gate_enabled
+        self._min_net_edge = min_net_edge
+        self._fee_per_share = fee_per_share
+        self._latency_haircut = latency_haircut
+        self._adverse_haircut = adverse_haircut
+        self._max_sig_depth_age_ns = max_sig_depth_age_ns
+        self._max_fair_age_ns = max_fair_age_ns
         self._allow_bbo_proxy = allow_bbo_proxy
         # Remainder cancels that did not conclude; retried every cycle so a
         # taker order is never left resting at a stale price.
@@ -271,11 +286,7 @@ class ResidualTakerLiveCoordinator:
             snapshot.exchange_id,
             snapshot.tournament_id,
         )
-        room = (
-            self._max_position - high
-            if action is OrderAction.BUY
-            else self._max_position + low
-        )
+        room = self._max_position - high if action is OrderAction.BUY else self._max_position + low
         return max(0, min(quantity, math.floor(room)))
 
     async def _take(
@@ -309,6 +320,82 @@ class ResidualTakerLiveCoordinator:
                 signal.direction,
             )
             return ()
+        # Only inventory guaranteed to shrink under every partial fill may
+        # offset new collateral in the conservative cash screen.
+        held = self._reservations.overlay_portfolio(snapshot.runtime.portfolio)
+        low, high = held.worst_case_inventory_bounds(snapshot.exchange_id, snapshot.tournament_id)
+        reducible = max(0, math.floor(-high if action is OrderAction.BUY else low))
+        # Shadow on every signal, or fail closed as an opt-in pre-risk gate.
+        # Verified SAME/EXACT mapping was already checked by the signal input.
+        record = self._mapping.get(exchange_id)
+        external = (
+            None
+            if record is None or record.direct_polymarket is None
+            else snapshot.external_quotes.get(record.direct_polymarket.mapped_token_id)
+        )
+        if external is not None:
+            fair_bound = external.best_bid if action is OrderAction.BUY else external.best_ask
+        else:
+            fair_bound = None
+        economics_net = None
+        if fair_bound is None:
+            if self._economics_gate_enabled:
+                _LOG.info("TAKE economics deny exchange=%s reason=fair_missing", exchange_id)
+                return ()
+        else:
+            levels = book.asks if action is OrderAction.BUY else book.bids
+            economics = evaluate_taker_economics(
+                direction=signal.direction,
+                levels=levels,
+                conservative_fair=fair_bound,
+                desired_quantity=quantity,
+                trusted_depth=bool(snapshot.sig_depth_trusted and book.trusted_depth),
+                book_age_ns=(
+                    -1
+                    if snapshot.sig_depth_observed_ns is None
+                    else snapshot.now_monotonic_ns - snapshot.sig_depth_observed_ns
+                ),
+                reference_age_ns=snapshot.now_monotonic_ns - external.observed_monotonic_ns,
+                max_book_age_ns=self._max_sig_depth_age_ns,
+                max_reference_age_ns=self._max_fair_age_ns,
+                fee_per_share=self._fee_per_share,
+                latency_haircut=self._latency_haircut,
+                adverse_selection_haircut=self._adverse_haircut,
+                min_net_edge_per_share=self._min_net_edge,
+                available_cash=(
+                    None
+                    if snapshot.runtime.portfolio.account_proxy_cash_balance is None
+                    else float(snapshot.runtime.portfolio.account_proxy_cash_balance)
+                ),
+                reducible_inventory_shares=reducible,
+                maker_price_ticks=(
+                    book.bids[0].price_ticks
+                    if action is OrderAction.BUY
+                    else book.asks[0].price_ticks
+                ),
+            )
+            _LOG.info(
+                "TAKE economics %s exchange=%s direction=%s reason=%s qty=%d "
+                "net_per_share=%.5f net_total=%.4f max_loss=%.2f "
+                "limit=%s maker_conditional=%s",
+                "gate" if self._economics_gate_enabled else "shadow",
+                exchange_id,
+                signal.direction,
+                economics.reason,
+                economics.quantity,
+                economics.net_edge_per_share,
+                economics.net_expected_value,
+                economics.worst_case_settlement_loss,
+                economics.limit_price_ticks,
+                economics.maker_conditional_edge_per_share,
+            )
+            if self._economics_gate_enabled:
+                if not economics.admissible:
+                    return ()
+                quantity = economics.quantity
+                economics_net = economics.net_edge_per_share
+                assert economics.limit_price_ticks is not None
+                ticks = economics.limit_price_ticks
         if self._crosses_own_quote(exchange_id, action, ticks):
             _LOG.info(
                 "TAKE skip exchange=%s direction=%s reason=own_quote_at_touch",
@@ -337,8 +424,8 @@ class ResidualTakerLiveCoordinator:
                     limit_price_ticks=ticks,
                 ),
             ),
-            gross_edge=signal.residual,
-            fair_value=signal.pm_mid,
+            gross_edge=signal.residual if economics_net is None else economics_net,
+            fair_value=signal.pm_mid if economics_net is None else fair_bound,
             decision_observation_ns=signal.observed_monotonic_ns,
         )
         risk = evaluate_risk(
@@ -368,7 +455,7 @@ class ResidualTakerLiveCoordinator:
             exchange_id,
             signal.direction,
             ticks,
-            signal.quantity,
+            quantity,
             signal.residual,
             signal.pm_mid,
         )
