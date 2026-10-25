@@ -15,6 +15,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from contextlib import suppress
 from dataclasses import replace
 from datetime import datetime
+from typing import cast
 
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.models import (
@@ -42,7 +43,7 @@ from predictions_cup.maker.residual_taker import (
     residual_input_from_snapshot,
 )
 from predictions_cup.maker.safety import MakerKillSwitch
-from predictions_cup.maker.taker_economics import evaluate_taker_economics
+from predictions_cup.maker.taker_economics import Direction, evaluate_taker_economics
 from predictions_cup.mapping.models import MappingDocument
 from predictions_cup.risk.core import RiskContext, evaluate_risk
 from predictions_cup.runtime.models import OrderAction, OutcomeSide, RuntimePortfolio
@@ -403,9 +404,14 @@ class ResidualTakerLiveCoordinator:
                 _LOG.debug("TAKE economics deny exchange=%s reason=fair_missing", exchange_id)
                 return ()
         else:
+            # fair_bound is only assigned from a verified external quote.
+            assert external is not None
+            if signal.direction not in ("BUY", "SELL"):
+                self._skipped_signals["invalid_direction"] += 1
+                return ()
             levels = book.asks if action is OrderAction.BUY else book.bids
             economics = evaluate_taker_economics(
-                direction=signal.direction,
+                direction=cast(Direction, signal.direction),
                 levels=levels,
                 conservative_fair=fair_bound,
                 desired_quantity=quantity,
