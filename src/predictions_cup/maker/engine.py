@@ -157,13 +157,8 @@ class MakerEngine:
                 predictive_shift=prediction.probability_shift,
             )
 
-        signed_inventory = sum(
-            position.signed_quantity
-            for position in snapshot.runtime.portfolio.positions
-            if (
-                position.exchange_id == snapshot.exchange_id
-                and position.tournament_id == snapshot.tournament_id
-            )
+        signed_inventory = snapshot.runtime.portfolio.signed_inventory(
+            snapshot.exchange_id, snapshot.tournament_id
         )
         max_abs_inventory = self._config.max_abs_inventory
         if self._config.deep_ladder_enabled:
