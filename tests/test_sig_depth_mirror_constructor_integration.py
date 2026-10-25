@@ -29,6 +29,7 @@ def _exercise_early_startup(
     # recorder. Execute its actual run() function until the next startup stage.
     maker = object.__new__(MakerService)
     maker.settings = cast(AppSettings, SimpleNamespace(
+        research_collection_enabled=True,
         maker_depth_mirror_output_file=output,
         sig_research_path=Path("/unused/offline-research"),
         sig_capture_queue_max=1024,
