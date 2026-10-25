@@ -148,7 +148,14 @@ class SupervisorSources:
             ("live_learn", self._read_live_learn),
             ("clock", self._read_clock),
         ):
-            status, section = reader()
+            if not self.settings.research_collection_enabled and name in {
+                "sig_capture", "polymarket_capture", "observe", "shadow", "live_learn"
+            }:
+                now = utc_now()
+                status = SourceStatus(name, False, False, True, True, None, now, None)
+                section = {"enabled": False, "state": "DISABLED_BY_RESEARCH_POLICY"}
+            else:
+                status, section = reader()
             statuses.append(status)
             sections[name] = section
         return SourceCollection(tuple(statuses), sections)
