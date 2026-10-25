@@ -75,12 +75,22 @@ class SupervisorRuntimeConfig:
             repo_root,
             Path(_env("PREDICTIONS_CUP_SUPERVISOR_OUTPUT_ROOT") or "data/supervisor"),
         )
-        defaults = ["predictions-cup-sig-capture.service"]
-        if settings.polymarket_capture_enabled:
+        # Historical collectors are not dependencies of LIVE execution. Even
+        # explicit old allowlists must not restart them in production-only mode.
+        research_units = frozenset({
+            "predictions-cup-sig-capture.service",
+            "predictions-cup-polymarket-capture.service",
+        })
+        defaults = ["predictions-cup-sig-capture.service"] if settings.research_collection_enabled else []
+        if settings.research_collection_enabled and settings.polymarket_capture_enabled:
             defaults.append("predictions-cup-polymarket-capture.service")
         expected_services = _csv("PREDICTIONS_CUP_SUPERVISOR_EXPECTED_SERVICES")
         if not expected_services:
             expected_services = tuple(defaults)
+        if not settings.research_collection_enabled:
+            expected_services = tuple(
+                service for service in expected_services if service not in research_units
+            )
         if host_role is HostRole.WEST_EXECUTION and settings.maker_enabled:
             expected_services = tuple(
                 dict.fromkeys(
@@ -91,6 +101,10 @@ class SupervisorRuntimeConfig:
         safe_restart = _csv("PREDICTIONS_CUP_SUPERVISOR_SAFE_RESTART_SERVICES")
         if not safe_restart:
             safe_restart = tuple(defaults)
+        if not settings.research_collection_enabled:
+            safe_restart = tuple(
+                service for service in safe_restart if service not in research_units
+            )
         nonessential = _csv("PREDICTIONS_CUP_SUPERVISOR_NONESSENTIAL_SERVICES")
         safe_caches = tuple(
             Path(item).expanduser()
@@ -192,9 +206,13 @@ class SupervisorRuntimeConfig:
             max_level=remediation_level,
             host_role=host_role,
             supervisor_root=output_root,
+            # Never prune user-owned historical research in production-only mode.
             hot_capture_roots=(
-                _resolve(repo_root, settings.sig_research_path),
-                _resolve(repo_root, settings.polymarket_research_path),
+                (
+                    _resolve(repo_root, settings.sig_research_path),
+                    _resolve(repo_root, settings.polymarket_research_path),
+                )
+                if settings.research_collection_enabled else ()
             ),
             hot_capture_retention_hours=_float(
                 "PREDICTIONS_CUP_SUPERVISOR_HOT_CAPTURE_RETENTION_HOURS", 24.0
