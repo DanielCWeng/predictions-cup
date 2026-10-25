@@ -43,11 +43,38 @@ def build_rest_governor(
         if settings.sig_rest_account_budget_path is None
         else HostSharedRestBudget(
             settings.sig_rest_account_budget_path,
-            rate_per_second=settings.sig_rest_account_rate_per_second,
+            rate_per_second=min(settings.sig_rest_account_rate_per_second, 1.6),
         )
     )
     return SigRestGovernor(
-        rate_per_second=settings.sig_rest_governor_rate_per_second,
+        rate_per_second=min(settings.sig_rest_governor_rate_per_second, 1.6),
+        max_shared_cooldown_seconds=settings.sig_rest_shared_cooldown_max_seconds,
+        sleep=sleep,
+        shared_budget=shared,
+    )
+
+
+def build_write_governor(
+    settings: AppSettings,
+    *,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> SigRestGovernor:
+    """Independent bounded write pacing shared by maker, taker and cancels.
+
+    A two-token bucket at no more than 0.45/s admits <=29 writes per
+    rolling minute from one host.  The shared file is separate from reads.
+    """
+    path = settings.sig_rest_account_budget_path
+    shared = (
+        None
+        if path is None
+        else HostSharedRestBudget(
+            path.with_name(path.name + ".writes"),
+            rate_per_second=min(settings.sig_rest_write_account_rate_per_second, 0.45),
+        )
+    )
+    return SigRestGovernor(
+        rate_per_second=min(settings.sig_rest_write_governor_rate_per_second, 0.45),
         max_shared_cooldown_seconds=settings.sig_rest_shared_cooldown_max_seconds,
         sleep=sleep,
         shared_budget=shared,
@@ -66,6 +93,7 @@ class GovernedSigRestClient(SigRestClient):
         transport: httpx.AsyncBaseTransport | None = None,
         sleep: SleepFn = asyncio.sleep,
         governor: SigRestGovernor | None = None,
+        write_governor: SigRestGovernor | None = None,
     ) -> None:
         super().__init__(
             settings,
@@ -75,6 +103,7 @@ class GovernedSigRestClient(SigRestClient):
             sleep=sleep,
         )
         self._rest_governor = governor or build_rest_governor(settings, sleep=sleep)
+        self._write_governor = write_governor or self._rest_governor
         self._priority: ContextVar[RestPriority] = ContextVar(
             "sig_rest_priority", default=RestPriority.NORMAL
         )
@@ -179,7 +208,8 @@ class GovernedSigRestClient(SigRestClient):
         raise AssertionError("unreachable retry loop")
 
     async def _post_json(self, path: str, *, route_template: str) -> object:
-        await self._rest_governor.acquire(self._priority.get())
+        # Realtime-token POST is a write, not a free read-budget request.
+        await self._write_governor.acquire(RestPriority.HIGH)
         started = time.monotonic()
         try:
             response = await self._client.post(path)
@@ -215,7 +245,7 @@ class GovernedSigRestClient(SigRestClient):
                 "sig_latency_ms": round((time.monotonic() - started) * 1000, 3),
             },
         )
-        self._rest_governor.record_response(
+        self._write_governor.record_response(
             response.status_code,
             retry_after_seconds=_retry_after_seconds(response),
         )

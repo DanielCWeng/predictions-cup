@@ -118,7 +118,11 @@ from predictions_cup.sig.errors import (
     SigTemporaryServiceError,
     SigTransportError,
 )
-from predictions_cup.sig.governed_client import GovernedSigRestClient, build_rest_governor
+from predictions_cup.sig.governed_client import (
+    GovernedSigRestClient,
+    build_rest_governor,
+    build_write_governor,
+)
 from predictions_cup.sig.launch_storage import ObservationCaptureRecorder
 from predictions_cup.sig.realtime_models import MarketBatchDto
 from predictions_cup.sig.realtime_state import SigRealtimeStateEngine, SubscriptionReason
@@ -265,7 +269,10 @@ class MakerService:
     async def run(self) -> None:
         tournament_id, tournament_slug = self._tournament_context()
         governor = build_rest_governor(self.settings)
-        rest = GovernedSigRestClient(self.settings, governor=governor)
+        write_governor = build_write_governor(self.settings)
+        rest = GovernedSigRestClient(
+            self.settings, governor=governor, write_governor=write_governor
+        )
         sig_recorder = cast(SigRealtimeRecorder, NoopSigRealtimeRecorder())
         # Research is opt-in. Do not create a depth mirror during production-only operation.
         depth_mirror: MakerDepthMirror | None = None
@@ -507,7 +514,7 @@ class MakerService:
                 journal = ExecutionJournal(self.settings.execution_journal_path)
                 trading = SigTradingClient(
                     self.settings,
-                    governor=governor,
+                    governor=write_governor,
                 )
                 recovery_permit = assert_live_recovery_interlocks(
                     self.settings,
@@ -835,13 +842,15 @@ class MakerService:
                 taker_sink = live_sink
 
                 async def dispatch_taker_plan(plan: ExecutionPlan) -> ExecutionEvent:
-                    try:
-                        return await taker_sink.dispatch(plan)
-                    except SigExecutionUncertainError:
-                        return await taker_sink.dispatch_recovery(
-                            plan.envelope,
-                            plan=plan,
-                        )
+                    assert trading is not None
+                    async with trading.priority(RestPriority.HIGH):
+                        try:
+                            return await taker_sink.dispatch(plan)
+                        except SigExecutionUncertainError:
+                            return await taker_sink.dispatch_recovery(
+                                plan.envelope,
+                                plan=plan,
+                            )
 
                 taker = ResidualTakerLiveCoordinator(
                     mapping=self.core.mapping,
@@ -1213,6 +1222,7 @@ class MakerService:
                 if observe_recorder is not None:
                     observe_recorder.close()
                 await rest.aclose()
+                await write_governor.aclose()
             finally:
                 # Research cleanup also runs if unrelated LIVE teardown raises.
                 if depth_mirror is not None:

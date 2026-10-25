@@ -658,3 +658,57 @@ def test_delayed_fill_after_rest_snapshot_does_not_double_apply_or_assume_direct
     after = state.runtime_portfolio()
     assert after.positions[0].gross_exposure == 5.0
 
+
+
+def test_trading_write_priority_taker_over_maker_cancel_over_both() -> None:
+    from predictions_cup.sig.rest_governor import RestPriority
+
+    async def scenario() -> None:
+        priorities: list[RestPriority] = []
+
+        class RecordingGovernor:
+            async def acquire(self, priority: RestPriority) -> None:
+                priorities.append(priority)
+
+            def record_response(
+                self, status_code: int, *, retry_after_seconds: float | None = None
+            ) -> None:
+                del status_code, retry_after_seconds
+
+        async with SigTradingClient(
+            _settings(),
+            governor=RecordingGovernor(),  # type: ignore[arg-type]
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, json={"ok": True})
+            ),
+        ) as client:
+            async def post_once() -> None:
+                await client._request_json(
+                    "POST",
+                    "orders",
+                    route_template="/orders",
+                    resolved_payload={"sample": True},
+                    accepted_statuses=frozenset({200}),
+                    execution_can_be_uncertain=False,
+                )
+
+            await post_once()
+            async with client.priority(RestPriority.HIGH):
+                await post_once()
+                await client._request_json(
+                    "DELETE",
+                    "orders/123",
+                    route_template="/orders/{id}",
+                    resolved_payload=None,
+                    accepted_statuses=frozenset({200}),
+                    execution_can_be_uncertain=False,
+                )
+            # ContextVar resets after the taker opportunity.
+            await post_once()
+
+        assert priorities == [
+            RestPriority.NORMAL, RestPriority.HIGH,
+            RestPriority.HIGH, RestPriority.NORMAL,
+        ]
+
+    asyncio.run(scenario())

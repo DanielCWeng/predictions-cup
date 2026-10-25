@@ -149,7 +149,16 @@ class SigRestGovernor:
     async def acquire(self, priority: RestPriority = RestPriority.NORMAL) -> None:
         if self._closed:
             raise RuntimeError("SIG REST governor is closed")
-        if self._queue.full():
+        # Preserve admission room for cancellations and trusted taker requests
+        # even when optional background depth reads flood the backlog.
+        high_reserve = min(8, max(0, (self._queue_max - 1) // 4))
+        normal_reserve = min(8, max(0, (self._queue_max - high_reserve - 1) // 4))
+        max_queue = self._queue_max
+        if priority is RestPriority.BACKGROUND:
+            max_queue -= high_reserve + normal_reserve
+        elif priority is RestPriority.NORMAL:
+            max_queue -= high_reserve
+        if self._queue.qsize() >= max_queue:
             raise RestGovernorQueueFullError(
                 f"SIG REST governor backlog is full (capacity={self._queue_max})"
             )
