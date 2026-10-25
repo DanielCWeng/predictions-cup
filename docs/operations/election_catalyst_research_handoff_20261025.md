@@ -34,8 +34,8 @@ Maintain `published_epoch_ms` (source's published time, if reliably provided) an
 ## 5. Deterministic validation
 
 West isolated test path `/home/ec2-user/catalyst-lane-isolated/`, independent of the dirty live checkout:
-- **24 deterministic tests passed**: duplicate reports, two apparent sources from the same wire family, direction contradiction quarantine, nonoverlapping probability bounds, stale/future publications, forged-looking hostnames, market suspension, BBO/depth/account trust, insufficient cash, no executable edge, SELL bound and 300-event burst / bounded memory.
-- One initial burst test correctly found an off-by-one capacity error (129 rather than 128). Fixed, then **24/24 passed**.
+- **26 deterministic tests passed**: duplicate reports, two apparent sources from the same wire family, direction contradiction quarantine, nonoverlapping probability bounds, stale/future publications, forged-looking hostnames, market suspension, BBO/depth/account trust, insufficient cash, no executable edge, SELL bound and 300-event burst / bounded memory.
+- One initial burst test correctly found an off-by-one capacity error (129 rather than 128). Fixed, then **26/26 passed**.
 - 3,000 synthetic *two-report CPU-only* qualifications on West: **p50 0.035 ms, p95 0.0432 ms, p99 0.0723 ms**. This does not include network/verification/dispatch/ACK.
 - No real election night event has occurred. **ZERO independently verified actionable opportunities and ZERO profitable fills are claimed**.
 
