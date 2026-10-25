@@ -36,6 +36,7 @@ PlacementDispatcher = Callable[
 CancelDispatcher = Callable[[ActiveQuote, str, str], Awaitable[ExecutionEvent]]
 logger = logging.getLogger(__name__)
 _OUTCOME_LOG_INTERVAL_SECONDS = 10.0
+_NO_PLACE_LOG_INTERVAL_SECONDS = 60.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,12 +140,18 @@ class MakerCoordinator:
             last = {}
             self._outcome_log = last
         now = time.monotonic()
-        key = (exchange_id, outcome.split(" ", 1)[0])
+        category = outcome.split(" ", 1)[0]
+        key = (exchange_id, category)
         previous = last.get(key)
+        interval = (
+            _NO_PLACE_LOG_INTERVAL_SECONDS
+            if category == "no_place"
+            else _OUTCOME_LOG_INTERVAL_SECONDS
+        )
         if (
             previous is not None
             and previous[0] == outcome
-            and now - previous[1] < _OUTCOME_LOG_INTERVAL_SECONDS
+            and now - previous[1] < interval
         ):
             return
         last[key] = (outcome, now)
@@ -167,6 +174,7 @@ class MakerCoordinator:
         # Revalue once while successive no-op decisions have not yielded.
         # After an execution/cancel await, refresh before the next market.
         risk_context_snapshot: RiskContext | None = None
+        unmarked_positions: set[tuple[str, str]] = set()
 
         for exchange_id in exchange_ids:
             snapshot = snapshots.get(exchange_id)
@@ -185,6 +193,12 @@ class MakerCoordinator:
                     if callable(self._risk_context_source)
                     else self._risk_context_source
                 )
+                capital_snapshot = risk_context_snapshot.capital_state
+                unmarked_positions = (
+                    set(capital_snapshot.unmarked_positions)
+                    if capital_snapshot is not None
+                    else set()
+                )
             current_risk_context = risk_context_snapshot
             capital = current_risk_context.capital_state
             mark_state_stale = (
@@ -199,7 +213,7 @@ class MakerCoordinator:
             )
             market_mark_untrusted = (
                 capital is not None
-                and (exchange_id, snapshot.market_id) in set(capital.unmarked_positions)
+                and (exchange_id, snapshot.market_id) in unmarked_positions
             )
             # Invalid/stale portfolio valuation is different from a transient
             # account resync. Existing resting quotes can add exposure while they
@@ -361,8 +375,7 @@ class MakerCoordinator:
                     exchange_id,
                     f"no_place gate={decision.gate.mode.value} "
                     f"reason={decision.gate.reason} "
-                    f"desired={decision.desired is not None} "
-                    f"actions={[(a.kind.value, a.side.value, a.reason) for a in side_actions]}",
+                    f"desired={decision.desired is not None}",
                 )
                 continue
 

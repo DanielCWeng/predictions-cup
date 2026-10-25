@@ -709,13 +709,22 @@ class SigRealtimeStateEngine:
         topic: str,
         payload: object,
         observed_at: datetime,
+        *,
+        validated_batch: MarketBatchDto | None = None,
     ) -> None:
         market_id = self._topic_market_id(topic)
         monotonic_receive_ns = time.monotonic_ns()
         self.health.last_realtime_receive = observed_at
 
         try:
-            batch = MarketBatchDto.model_validate(payload)
+            # Maker has already validated this payload to collect affected
+            # exchanges. Preserve the ORIGINAL wire payload for recorder and
+            # still apply topic/tournament checks before accepting it.
+            batch = (
+                MarketBatchDto.model_validate(payload)
+                if validated_batch is None
+                else validated_batch
+            )
             self._validate_batch_tournament(batch)
             if market_id is not None:
                 self._validate_batch_market(batch, market_id)

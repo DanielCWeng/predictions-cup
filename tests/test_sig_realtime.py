@@ -1378,6 +1378,38 @@ def test_engine_subscribes_per_market_topics_not_tournament_topic(
     asyncio.run(scenario())
 
 
+def test_prevalidated_maker_delivery_does_not_reparse_or_change_wire_record(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        engine, recorder = _engine(tmp_path, FakeRest())
+        await engine.initialize()
+        engine.mark_connected()
+        raw = _live_market_batch(revision=141, previous=140)
+        validated = MarketBatchDto.model_validate(raw)
+        observed = datetime(2026, 10, 1, 16, 10, 28, tzinfo=UTC)
+
+        def no_second_parse(cls: type[MarketBatchDto], payload: object) -> MarketBatchDto:
+            del cls, payload
+            raise AssertionError("market batch must be validated once only")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(MarketBatchDto, "model_validate", classmethod(no_second_parse))
+            await engine.handle_raw_batch(
+                engine.market_topic("26"), raw, observed, validated_batch=validated
+            )
+        assert engine.topic_revisions[engine.market_topic("26")] == 141
+        connection = sqlite3.connect(tmp_path / "sig.sqlite3")
+        count = connection.execute("SELECT count(*) FROM realtime_trades").fetchone()
+        connection.close()
+        assert count == (1,)
+        await engine.aclose()
+        recorder.close()
+
+    asyncio.run(scenario())
+
+
 def test_market_topic_batches_record_trades_with_topic_local_revisions(
     tmp_path: Path,
 ) -> None:
