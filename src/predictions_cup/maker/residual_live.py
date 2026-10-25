@@ -15,6 +15,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from contextlib import suppress
 from dataclasses import replace
 from datetime import datetime
+from typing import cast
 
 from predictions_cup.execution.journal import ExecutionJournal
 from predictions_cup.execution.models import (
@@ -34,15 +35,15 @@ from predictions_cup.maker.residual_taker import (
     COOLDOWN_NS,
     MIN_PM_DEPTH,
     PM_SPREAD_CAP,
+    SIG_TICK_PROBABILITY,
     STRATEGY_ID,
     THRESHOLD,
     ResidualSignal,
     ResidualTakerSignal,
-    SIG_TICK_PROBABILITY,
     residual_input_from_snapshot,
 )
 from predictions_cup.maker.safety import MakerKillSwitch
-from predictions_cup.maker.taker_economics import evaluate_taker_economics
+from predictions_cup.maker.taker_economics import Direction, evaluate_taker_economics
 from predictions_cup.mapping.models import MappingDocument
 from predictions_cup.risk.core import RiskContext, evaluate_risk
 from predictions_cup.runtime.models import OrderAction, OutcomeSide, RuntimePortfolio
@@ -163,7 +164,8 @@ class ResidualTakerLiveCoordinator:
 
     def log_heartbeat(self) -> None:
         _LOG.info(
-            "TAKE heartbeat evaluated=%d candidate_ready=%d no_residual=%d signals=%d attempts=%d cycles=%d skipped=%s",
+            "TAKE heartbeat evaluated=%d candidate_ready=%d no_residual=%d signals=%d "
+            "attempts=%d cycles=%d skipped=%s",
             self._evaluated_markets,
             self._candidate_ready_markets,
             self._no_residual_markets,
@@ -213,7 +215,8 @@ class ResidualTakerLiveCoordinator:
                         _LOG.warning("TAKE liveness delayed; forcing one bounded recheck")
                         continue
                     _LOG.critical(
-                        "TAKE liveness stalled evaluated=%d candidate_ready=%d signals=%d cycles=%d",
+                        "TAKE liveness stalled evaluated=%d candidate_ready=%d "
+                        "signals=%d cycles=%d",
                         self._evaluated_markets,
                         self._candidate_ready_markets,
                         self._signals,
@@ -401,9 +404,14 @@ class ResidualTakerLiveCoordinator:
                 _LOG.debug("TAKE economics deny exchange=%s reason=fair_missing", exchange_id)
                 return ()
         else:
+            # fair_bound is only assigned from a verified external quote.
+            assert external is not None
+            if signal.direction not in ("BUY", "SELL"):
+                self._skipped_signals["invalid_direction"] += 1
+                return ()
             levels = book.asks if action is OrderAction.BUY else book.bids
             economics = evaluate_taker_economics(
-                direction=signal.direction,
+                direction=cast(Direction, signal.direction),
                 levels=levels,
                 conservative_fair=fair_bound,
                 desired_quantity=quantity,
