@@ -72,7 +72,7 @@ def test_two_independent_sources_qualify_and_wake_existing_taker():
     assert candidate.quantity == 20 and candidate.limit_price_ticks == 140
     assert candidate.net_expected_value > 0
     wakes = []
-    bridge = CatalystWakeHandoff(lambda ids, received: wakes.append((ids, received)))
+    bridge = CatalystWakeHandoff(lambda ids, *, observed_monotonic_ns: wakes.append((ids, observed_monotonic_ns)))
     bridge.forward(candidate)
     assert wakes == [(("844",), NOW)]
     assert bridge.forwarded == 1
