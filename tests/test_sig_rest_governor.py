@@ -485,3 +485,63 @@ def test_governor_waits_on_shared_budget(tmp_path: Path) -> None:
         await governor.aclose()
 
     asyncio.run(scenario())
+
+
+def test_read_and_write_budget_paths_are_independent_and_capped(tmp_path: Path) -> None:
+    from predictions_cup.sig.governed_client import build_rest_governor, build_write_governor
+
+    settings = AppSettings(
+        sig_read_credential=SecretStr("read-secret"),
+        sig_rest_account_budget_path=tmp_path / "sig-budget.json",
+        sig_rest_governor_rate_per_second=3.0,
+        sig_rest_account_rate_per_second=3.0,
+        sig_rest_write_governor_rate_per_second=0.9,
+        sig_rest_write_account_rate_per_second=0.9,
+    )
+    reads = build_rest_governor(settings)
+    writes = build_write_governor(settings)
+    assert reads.rate_per_second == pytest.approx(1.6)
+    assert writes.rate_per_second == pytest.approx(0.45)
+    assert reads._shared_budget is not None
+    assert writes._shared_budget is not None
+    assert reads._shared_budget.path == tmp_path / "sig-budget.json"
+    assert writes._shared_budget.path == tmp_path / "sig-budget.json.writes"
+
+
+def test_reserved_queue_admission_keeps_urgent_capacity() -> None:
+    async def scenario() -> None:
+        governor = SigRestGovernor(rate_per_second=1, queue_max=32)
+        queued = asyncio.get_running_loop().create_future()
+        for index in range(19):
+            governor._queue.put_nowait((int(RestPriority.BACKGROUND), index, queued))
+        governor._sequence = 19
+        with pytest.raises(RestGovernorQueueFullError):
+            await governor.acquire(RestPriority.BACKGROUND)
+        # A high-priority cancellation can still join a busy backlog.
+        task = asyncio.create_task(governor.acquire(RestPriority.HIGH))
+        await asyncio.sleep(0)
+        assert task.done() or governor.snapshot().pending_high_priority_reads == 1
+        await governor.aclose()
+        await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(scenario())
+
+
+def test_realtime_token_post_uses_write_budget_without_spending_read_budget() -> None:
+    async def scenario() -> None:
+        reads = SigRestGovernor(rate_per_second=100)
+        writes = SigRestGovernor(rate_per_second=100)
+        async with GovernedSigRestClient(
+            _settings(),
+            governor=reads,
+            write_governor=writes,
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, json={"token": "test"})
+            ),
+        ) as client:
+            await client._post_json("realtime/token", route_template="/realtime/token")
+            assert reads.snapshot().requests_total == 0
+            assert writes.snapshot().requests_total == 1
+        await writes.aclose()
+
+    asyncio.run(scenario())
