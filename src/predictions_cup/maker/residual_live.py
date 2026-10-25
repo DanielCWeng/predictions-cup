@@ -34,11 +34,11 @@ from predictions_cup.maker.residual_taker import (
     COOLDOWN_NS,
     MIN_PM_DEPTH,
     PM_SPREAD_CAP,
+    SIG_TICK_PROBABILITY,
     STRATEGY_ID,
     THRESHOLD,
     ResidualSignal,
     ResidualTakerSignal,
-    SIG_TICK_PROBABILITY,
     residual_input_from_snapshot,
 )
 from predictions_cup.maker.safety import MakerKillSwitch
@@ -163,7 +163,8 @@ class ResidualTakerLiveCoordinator:
 
     def log_heartbeat(self) -> None:
         _LOG.info(
-            "TAKE heartbeat evaluated=%d candidate_ready=%d no_residual=%d signals=%d attempts=%d cycles=%d skipped=%s",
+            "TAKE heartbeat evaluated=%d candidate_ready=%d no_residual=%d signals=%d "
+            "attempts=%d cycles=%d skipped=%s",
             self._evaluated_markets,
             self._candidate_ready_markets,
             self._no_residual_markets,
@@ -213,7 +214,8 @@ class ResidualTakerLiveCoordinator:
                         _LOG.warning("TAKE liveness delayed; forcing one bounded recheck")
                         continue
                     _LOG.critical(
-                        "TAKE liveness stalled evaluated=%d candidate_ready=%d signals=%d cycles=%d",
+                        "TAKE liveness stalled evaluated=%d candidate_ready=%d "
+                        "signals=%d cycles=%d",
                         self._evaluated_markets,
                         self._candidate_ready_markets,
                         self._signals,
