@@ -127,6 +127,14 @@ class AppSettings(BaseSettings):
     residual_taker_pm_spread_cap: float = Field(default=0.02, ge=0.0, le=1.0)
     residual_taker_min_pm_depth: float = Field(default=50.0, ge=0.0)
     residual_taker_cooldown_seconds: float = Field(default=60.0, ge=0.0, le=3_600.0)
+    # Disabled until live depth/fair freshness and shadow economics are certified.
+    residual_taker_economics_gate_enabled: bool = False
+    residual_taker_min_net_edge: float = Field(default=0.005, ge=0.0, le=1.0)
+    residual_taker_fee_per_share: float = Field(default=0.0, ge=0.0, le=1.0)
+    residual_taker_latency_haircut: float = Field(default=0.005, ge=0.0, le=1.0)
+    residual_taker_adverse_haircut: float = Field(default=0.005, ge=0.0, le=1.0)
+    residual_taker_max_sig_depth_age_ms: int = Field(default=1500, gt=0)
+    residual_taker_max_fair_age_ms: int = Field(default=5000, gt=0)
 
     # SHADOW-002 is disabled by default and has no order-write capability.
     shadow_enabled: bool = False
@@ -524,9 +532,7 @@ class AppSettings(BaseSettings):
             "sig_realtime_bulk_price_refresh_seconds": (
                 self.sig_realtime_bulk_price_refresh_seconds
             ),
-            "sig_capture_bulk_price_refresh_seconds": (
-                self.sig_capture_bulk_price_refresh_seconds
-            ),
+            "sig_capture_bulk_price_refresh_seconds": (self.sig_capture_bulk_price_refresh_seconds),
             "sig_realtime_token_refresh_margin_seconds": (
                 self.sig_realtime_token_refresh_margin_seconds
             ),
@@ -560,9 +566,7 @@ class AppSettings(BaseSettings):
                     "risk_swing_cap_enabled": True,
                     "risk_swing_shock_points": self.risk_swing_shock_points,
                     "risk_swing_max_loss": self.risk_swing_max_loss,
-                    "risk_swing_max_pm_mark_age_ms": (
-                        self.risk_swing_max_pm_mark_age_ms
-                    ),
+                    "risk_swing_max_pm_mark_age_ms": (self.risk_swing_max_pm_mark_age_ms),
                 }
             )
         return result

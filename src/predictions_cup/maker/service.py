@@ -852,6 +852,15 @@ class MakerService:
                     pm_spread_cap=self.settings.residual_taker_pm_spread_cap,
                     min_pm_depth=self.settings.residual_taker_min_pm_depth,
                     cooldown_ns=int(self.settings.residual_taker_cooldown_seconds * 1_000_000_000),
+                    economics_gate_enabled=self.settings.residual_taker_economics_gate_enabled,
+                    min_net_edge=self.settings.residual_taker_min_net_edge,
+                    fee_per_share=self.settings.residual_taker_fee_per_share,
+                    latency_haircut=self.settings.residual_taker_latency_haircut,
+                    adverse_haircut=self.settings.residual_taker_adverse_haircut,
+                    max_sig_depth_age_ns=(
+                        self.settings.residual_taker_max_sig_depth_age_ms * 1_000_000
+                    ),
+                    max_fair_age_ns=self.settings.residual_taker_max_fair_age_ms * 1_000_000,
                     allow_bbo_proxy=self.settings.account_proxy_enabled,
                     max_sig_bbo_age_ns=(self.settings.maker_max_bbo_age_ms * 1_000_000),
                 )
