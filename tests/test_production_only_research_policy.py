@@ -14,11 +14,11 @@ from typing import cast
 import pytest
 
 from predictions_cup.config import AppSettings
+from predictions_cup.external.polymarket import recorder as pm_capture
 from predictions_cup.maker import service as maker_module
 from predictions_cup.maker.service import MakerService
 from predictions_cup.observe.emitter import NullObservationEmitter
 from predictions_cup.sig import capture as sig_capture
-from predictions_cup.external.polymarket import recorder as pm_capture
 from predictions_cup.supervisor.config import SupervisorRuntimeConfig
 from predictions_cup.supervisor.contracts import HostRole
 
