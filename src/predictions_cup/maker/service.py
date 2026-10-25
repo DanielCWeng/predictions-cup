@@ -286,6 +286,7 @@ class MakerService:
         # optional REST context sampler or research-health status file.
         observe_recorder: ObservationCaptureRecorder | None = None
         context_sampler: CompetitionContextSampler | None = None
+        observation_emitter: BoundedObservationEmitter | NullObservationEmitter
         if self.settings.research_collection_enabled:
             observe_recorder = ObservationCaptureRecorder(
                 self.settings.sig_research_path,
@@ -293,7 +294,7 @@ class MakerService:
                 shard_seconds=self.settings.sig_capture_parquet_shard_seconds,
                 max_rows_per_shard=self.settings.sig_capture_parquet_max_rows_per_shard,
             )
-            observation_emitter: BoundedObservationEmitter | NullObservationEmitter = BoundedObservationEmitter(
+            observation_emitter = BoundedObservationEmitter(
                 CaptureObservationSink(observe_recorder),
                 queue_max=max(1_024, min(self.settings.sig_capture_queue_max, 65_536)),
             )
