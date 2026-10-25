@@ -89,7 +89,13 @@ def evaluate(
     _maker_findings(
         collection.sections.get("maker_liveness"), policy, findings
     )
-    _sig_activity_findings(collection.sections.get("sig_capture"), policy, findings)
+    # The retired research recorder is optional in production-only mode.
+    # Do not HOLD live trading merely because its SQLite history is absent.
+    if any(
+        source.source_id == "sig_capture" and source.required
+        for source in collection.statuses
+    ):
+        _sig_activity_findings(collection.sections.get("sig_capture"), policy, findings)
     _observe_findings(collection.sections.get("observe"), findings)
     _risk_findings(collection.sections.get("risk"), policy, findings)
     _execution_findings(collection.sections.get("execution"), findings)
