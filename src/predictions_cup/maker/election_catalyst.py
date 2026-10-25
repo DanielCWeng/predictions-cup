@@ -197,6 +197,7 @@ class ElectionCatalystGate:
             view.exchange_id == report.exchange_id and view.market_open
             and view.account_trusted and view.bbo_trusted
             and view.depth_trusted and view.available_cash is not None
+            and 0 <= now_monotonic_ns - view.now_monotonic_ns <= 250_000_000
         ):
             return self._count("market_or_account_untrusted"), None
         levels = view.asks if report.direction == "BUY" else view.bids
@@ -252,3 +253,44 @@ class CatalystWakeHandoff:
     def forward(self, candidate: QualifiedCatalyst) -> None:
         self._notify((candidate.exchange_id,), observed_monotonic_ns=candidate.decision_monotonic_ns)
         self.forwarded += 1
+
+
+class ElectionCatalystRouter:
+    """Event-driven, in-process connector to the existing taker wake path.
+
+    Upstream MUST authenticate and independently verify event content and fair
+    bounds before calling on_verified_report. No order API is exposed here.
+    """
+
+    def __init__(
+        self,
+        gate: ElectionCatalystGate,
+        *,
+        current_market_view: Callable[[str], MarketView | None],
+        notify_sig: Callable[..., None],
+        utc_ms: Callable[[], int],
+        monotonic_ns: Callable[[], int],
+    ) -> None:
+        self.gate = gate
+        self._get_market_view = current_market_view
+        self._wake = CatalystWakeHandoff(notify_sig)
+        self._utc_ms = utc_ms
+        self._mono_ns = monotonic_ns
+
+    def on_verified_report(
+        self, report: CatalystReport
+    ) -> tuple[str, QualifiedCatalyst | None]:
+        now_ns = self._mono_ns()
+        reason, candidate = self.gate.consider(
+            report,
+            now_epoch_ms=self._utc_ms(),
+            now_monotonic_ns=now_ns,
+            view=self._get_market_view(report.exchange_id),
+        )
+        if candidate is not None:
+            self._wake.forward(candidate)
+        return reason, candidate
+
+    @property
+    def forwarded(self) -> int:
+        return self._wake.forwarded
