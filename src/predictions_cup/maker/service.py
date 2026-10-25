@@ -1640,7 +1640,8 @@ class MakerService:
                             except ValidationError:
                                 parsed = None
                             await sig_state.handle_raw_batch(
-                                delivery_topic, batch_payload, observed_at
+                                delivery_topic, batch_payload, observed_at,
+                                validated_batch=parsed,
                             )
                             if parsed is None:
                                 malformed = True
