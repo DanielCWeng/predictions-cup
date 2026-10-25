@@ -20,8 +20,11 @@ from predictions_cup.execution.recovery import RecoveryRest
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.sig.account_reconciliation import reconcile_account
 from predictions_cup.sig.errors import SigApiError, SigExecutionUncertainError
-from predictions_cup.sig.governed_client import GovernedSigRestClient
-from predictions_cup.sig.rest_governor import SigRestGovernor
+from predictions_cup.sig.governed_client import (
+    GovernedSigRestClient,
+    build_rest_governor,
+    build_write_governor,
+)
 from predictions_cup.sig.trading_client import SigTradingClient
 
 
@@ -137,12 +140,12 @@ async def flatten_tournament(
     if tournament_id is None or tournament_slug is None:
         raise ValueError("flatten requires explicit tournament_id and tournament_slug")
 
-    governor = SigRestGovernor(
-        rate_per_second=settings.sig_rest_governor_rate_per_second,
-        max_shared_cooldown_seconds=settings.sig_rest_shared_cooldown_max_seconds,
+    governor = build_rest_governor(settings)
+    write_governor = build_write_governor(settings)
+    rest = GovernedSigRestClient(
+        settings, governor=governor, write_governor=write_governor
     )
-    rest = GovernedSigRestClient(settings, governor=governor)
-    trading = SigTradingClient(settings, governor=governor)
+    trading = SigTradingClient(settings, governor=write_governor)
     journal = ExecutionJournal(settings.execution_journal_path)
     try:
         permit = assert_live_recovery_interlocks(
@@ -167,3 +170,4 @@ async def flatten_tournament(
         journal.close()
         await trading.aclose()
         await rest.aclose()
+        await write_governor.aclose()
