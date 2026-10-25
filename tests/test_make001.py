@@ -1406,6 +1406,41 @@ def test_aggressive_maker_modes_enforce_configured_projected_position_cap(
     assert 190 + bid_size <= 200
 
 
+@pytest.mark.parametrize(
+    ("inventory", "expected_bid", "expected_ask"),
+    [(175.0, 90, 109), (-175.0, 91, 110), (0.0, 90, 110)],
+)
+def test_deep_ladder_improves_only_pressured_inventory_reducing_touch(
+    inventory: float,
+    expected_bid: int,
+    expected_ask: int,
+) -> None:
+    snapshot = _maker_snapshot(
+        signed_inventory=inventory,
+        external={"token-yes": _external(bid=0.48, ask=0.52)},
+    )
+    book = RuntimeBook(
+        exchange_id="36",
+        market_id="m1",
+        tournament_id=TOURNAMENT,
+        bids=(RuntimeLevel(price_ticks=90, quantity=20.0),),
+        asks=(RuntimeLevel(price_ticks=110, quantity=20.0),),
+        trusted_depth=True,
+        observed_monotonic_ns=NOW,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, books=(book,)))
+    decision = _engine(max_inventory=200.0, deep_ladder_enabled=True).quote(snapshot)
+
+    assert decision.desired is not None
+    assert decision.desired.bid_ticks == expected_bid
+    assert decision.desired.ask_ticks == expected_ask
+    assert expected_bid < expected_ask
+    assert expected_bid * 0.005 <= 0.48 - 0.02
+    assert expected_ask * 0.005 >= 0.52 + 0.02
+    assert sum(level.size for level in decision.desired.bid_levels) <= max(0, 200 - inventory)
+    assert sum(level.size for level in decision.desired.ask_levels) <= max(0, 200 + inventory)
+
+
 def test_deep_ladder_joins_sig_touch_and_caps_all_resting_levels() -> None:
     snapshot = _maker_snapshot(
         external={"token-yes": _external(bid=0.48, ask=0.52)},
