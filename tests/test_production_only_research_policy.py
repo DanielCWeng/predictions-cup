@@ -16,7 +16,9 @@ import pytest
 from predictions_cup.config import AppSettings
 from predictions_cup.external.polymarket import recorder as pm_capture
 from predictions_cup.maker import service as maker_module
+from predictions_cup.maker.factory import MakerRuntimeComponents
 from predictions_cup.maker.service import MakerService
+from predictions_cup.observe.contracts import VenueObservation
 from predictions_cup.observe.emitter import NullObservationEmitter
 from predictions_cup.sig import capture as sig_capture
 from predictions_cup.supervisor.config import SupervisorRuntimeConfig
@@ -28,14 +30,14 @@ class PastResearchInitialization(BaseException):
 
 
 def test_research_defaults_off_and_can_be_explicitly_enabled() -> None:
-    assert AppSettings(_env_file=None).research_collection_enabled is False
-    assert AppSettings(_env_file=None, research_collection_enabled=True).research_collection_enabled
+    assert AppSettings().research_collection_enabled is False
+    assert AppSettings( research_collection_enabled=True).research_collection_enabled
 
 
 def test_sig_historical_capture_disabled_without_network_or_disk(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    settings = AppSettings(_env_file=None, research_collection_enabled=False)
+    settings = AppSettings( research_collection_enabled=False)
     monkeypatch.setattr(sig_capture, "load_settings", lambda **kwargs: settings)
     monkeypatch.setattr(sys, "argv", ["sig.capture", "--runtime-env-only"])
 
@@ -43,7 +45,7 @@ def test_sig_historical_capture_disabled_without_network_or_disk(
         raise AssertionError("SIG capture must not initialise")
 
     monkeypatch.setattr(sig_capture, "_run", unexpected)
-    monkeypatch.setattr(sig_capture.asyncio, "run", unexpected)
+    monkeypatch.setattr(asyncio, "run", unexpected)
     assert sig_capture.main() == 0
 
 
@@ -51,7 +53,7 @@ def test_polymarket_historical_capture_disabled_even_with_old_enable_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings = AppSettings(
-        _env_file=None,
+        
         research_collection_enabled=False,
         polymarket_capture_enabled=True,
     )
@@ -61,7 +63,7 @@ def test_polymarket_historical_capture_disabled_even_with_old_enable_flag(
         raise AssertionError("Polymarket capture must not initialise")
 
     monkeypatch.setattr(pm_capture, "PolymarketRecorder", unexpected)
-    monkeypatch.setattr(pm_capture.asyncio, "run", unexpected)
+    monkeypatch.setattr(asyncio, "run", unexpected)
     assert pm_capture.main(["--runtime-env-only", "--require-explicit-universe"]) == 0
 
 
@@ -77,7 +79,7 @@ def test_supervisor_does_not_restart_or_prune_retired_research(
         "predictions-cup-sig-capture.service,predictions-cup-polymarket-capture.service",
     )
     settings = AppSettings(
-        _env_file=None,
+        
         research_collection_enabled=False,
         polymarket_capture_enabled=True,
         maker_enabled=True,
@@ -96,7 +98,7 @@ def test_supervisor_can_opt_in_to_capture_recovery(
     monkeypatch.delenv("PREDICTIONS_CUP_SUPERVISOR_EXPECTED_SERVICES", raising=False)
     monkeypatch.delenv("PREDICTIONS_CUP_SUPERVISOR_SAFE_RESTART_SERVICES", raising=False)
     settings = AppSettings(
-        _env_file=None,
+        
         research_collection_enabled=True,
         polymarket_capture_enabled=True,
     )
@@ -122,7 +124,7 @@ def test_maker_research_off_skips_optional_capture_initialization(
         def __getattr__(self, name: str) -> None:
             raise PastResearchInitialization(name)
 
-    maker.core = cast(object, StopBeforeTrading())
+    maker.core = cast(MakerRuntimeComponents, StopBeforeTrading())
     monkeypatch.setattr(MakerService, "_tournament_context", lambda self: ("offline", "offline"))
     monkeypatch.setattr(maker_module, "build_rest_governor", lambda settings: object())
     monkeypatch.setattr(
@@ -143,5 +145,5 @@ def test_maker_research_off_skips_optional_capture_initialization(
 
 def test_null_observation_emitter_does_not_start_worker_or_save_data() -> None:
     emitter = NullObservationEmitter()
-    assert emitter.emit(cast(object, object()))
+    assert emitter.emit(cast(VenueObservation, object()))
     emitter.close()
