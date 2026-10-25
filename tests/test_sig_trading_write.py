@@ -682,15 +682,19 @@ def test_trading_write_priority_taker_over_maker_cancel_over_both() -> None:
                 lambda request: httpx.Response(200, json={"ok": True})
             ),
         ) as client:
-            args = dict(
-                route_template="/orders",
-                resolved_payload={"sample": True},
-                accepted_statuses=frozenset({200}),
-                execution_can_be_uncertain=False,
-            )
-            await client._request_json("POST", "orders", **args)
+            async def post_once() -> None:
+                await client._request_json(
+                    "POST",
+                    "orders",
+                    route_template="/orders",
+                    resolved_payload={"sample": True},
+                    accepted_statuses=frozenset({200}),
+                    execution_can_be_uncertain=False,
+                )
+
+            await post_once()
             async with client.priority(RestPriority.HIGH):
-                await client._request_json("POST", "orders", **args)
+                await post_once()
                 await client._request_json(
                     "DELETE",
                     "orders/123",
@@ -700,7 +704,7 @@ def test_trading_write_priority_taker_over_maker_cancel_over_both() -> None:
                     execution_can_be_uncertain=False,
                 )
             # ContextVar resets after the taker opportunity.
-            await client._request_json("POST", "orders", **args)
+            await post_once()
 
         assert priorities == [
             RestPriority.NORMAL, RestPriority.HIGH,
