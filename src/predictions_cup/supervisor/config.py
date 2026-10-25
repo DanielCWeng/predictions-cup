@@ -81,7 +81,10 @@ class SupervisorRuntimeConfig:
             "predictions-cup-sig-capture.service",
             "predictions-cup-polymarket-capture.service",
         })
-        defaults = ["predictions-cup-sig-capture.service"] if settings.research_collection_enabled else []
+        defaults = (
+            ["predictions-cup-sig-capture.service"]
+            if settings.research_collection_enabled else []
+        )
         if settings.research_collection_enabled and settings.polymarket_capture_enabled:
             defaults.append("predictions-cup-polymarket-capture.service")
         expected_services = _csv("PREDICTIONS_CUP_SUPERVISOR_EXPECTED_SERVICES")
