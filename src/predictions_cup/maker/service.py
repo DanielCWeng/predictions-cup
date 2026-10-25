@@ -72,7 +72,6 @@ from predictions_cup.observe import (
     CaptureObservationSink,
     CompetitionContextSampler,
     NullObservationEmitter,
-    ObservationEmitter,
     ObservationHealthProvider,
     ObservationHealthSnapshot,
     ObservationHealthStatusPublisher,
@@ -294,7 +293,7 @@ class MakerService:
                 shard_seconds=self.settings.sig_capture_parquet_shard_seconds,
                 max_rows_per_shard=self.settings.sig_capture_parquet_max_rows_per_shard,
             )
-            observation_emitter: ObservationEmitter = BoundedObservationEmitter(
+            observation_emitter: BoundedObservationEmitter | NullObservationEmitter = BoundedObservationEmitter(
                 CaptureObservationSink(observe_recorder),
                 queue_max=max(1_024, min(self.settings.sig_capture_queue_max, 65_536)),
             )
